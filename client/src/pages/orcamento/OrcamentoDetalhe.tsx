@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -234,25 +234,22 @@ export default function OrcamentoDetalhe() {
 
   // ── Totais agregados para grupos com valores zerados no banco ──
   // Para cada grupo, soma os valores de todos os itens folha descendentes.
-  const groupTotals = useMemo(() => {
-    const map: Record<string, { mat: number; mdo: number; custo: number; venda: number }> = {};
-    itens.forEach(item => {
-      if (!childMap[item.eapCodigo]) return;          // só grupos
-      if (n(item.custoTotal) > 0) return;             // já tem valor no banco
-      const prefix = item.eapCodigo + ".";
-      let mat = 0, mdo = 0, custo = 0, venda = 0;
-      itens.forEach(child => {
-        if (!child.eapCodigo.startsWith(prefix)) return;
-        if (childMap[child.eapCodigo]) return;        // ignora sub-grupos intermediários
-        mat   += n(child.custoTotalMat);
-        mdo   += n(child.custoTotalMdo);
-        custo += n(child.custoTotal);
-        venda += n(child.vendaTotal);
-      });
-      map[item.eapCodigo] = { mat, mdo, custo, venda };
+  const groupTotals: Record<string, { mat: number; mdo: number; custo: number; venda: number }> = {};
+  itens.forEach(item => {
+    if (!childMap[item.eapCodigo]) return;          // só grupos
+    if (n(item.custoTotal) > 0) return;             // já tem valor no banco
+    const prefix = item.eapCodigo + ".";
+    let mat = 0, mdo = 0, custo = 0, venda = 0;
+    itens.forEach(child => {
+      if (!child.eapCodigo.startsWith(prefix)) return;
+      if (childMap[child.eapCodigo]) return;        // ignora sub-grupos intermediários
+      mat   += n(child.custoTotalMat);
+      mdo   += n(child.custoTotalMdo);
+      custo += n(child.custoTotal);
+      venda += n(child.vendaTotal);
     });
-    return map;
-  }, [itens, childMap]);
+    groupTotals[item.eapCodigo] = { mat, mdo, custo, venda };
+  });
 
   const visibleItems = itens.filter(item => {
     if (item.nivel === 1) return true;
