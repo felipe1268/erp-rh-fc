@@ -12,7 +12,6 @@ import {
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
 } from "lucide-react";
 import { toast } from "sonner";
-import OrcamentistaWidget from "./OrcamentistaWidget";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -656,52 +655,6 @@ export default function OrcamentoDetalhe() {
 
 
       </div>
-
-      {/* ── Widget IA ── */}
-      <OrcamentistaWidget
-        contexto={{
-          codigo:            orc.codigo,
-          descricao:         orc.descricao,
-          cliente:           orc.cliente,
-          local:             orc.local,
-          revisao:           orc.revisao,
-          status:            orc.status,
-          bdiPercentual:     n(orc.bdiPercentual),
-          metaPercentual:    n(orc.metaPercentual),
-          totalVenda,
-          totalCusto,
-          totalMeta,
-          totalMateriais:    n(orc.totalMateriais),
-          totalMdo:          n(orc.totalMdo),
-          totalEquipamentos: n(orc.totalEquipamentos),
-          itemCount:         itens.length,
-          topItens: itens
-            .filter(i => !childMap[i.eapCodigo])
-            .sort((a, b) => n(b.custoTotal) - n(a.custoTotal))
-            .slice(0, 20)
-            .map(i => ({
-              eapCodigo:       i.eapCodigo,
-              descricao:       i.descricao,
-              unidade:         i.unidade,
-              quantidade:      n(i.quantidade),
-              custoTotal:      n(i.custoTotal),
-              vendaTotal:      n(i.vendaTotal),
-              custoTotalMat:   n(i.custoTotalMat),
-              custoTotalMdo:   n(i.custoTotalMdo),
-              percentualCusto: totalCusto > 0 ? n(i.custoTotal) / totalCusto * 100 : 0,
-            })),
-          topInsumos: insumos.slice(0, 30).map(i => ({
-            descricao:            i.descricao,
-            tipo:                 i.tipo,
-            unidade:              i.unidade,
-            custoTotal:           n(i.custoTotal),
-            quantidadeTotal:      n(i.quantidadeTotal),
-            precoUnitComEncargos: n(i.precoUnitComEncargos),
-            curvaAbc:             i.curvaAbc,
-            percentualTotal:      n(i.percentualTotal),
-          })),
-        }}
-      />
 
     </DashboardLayout>
   );
