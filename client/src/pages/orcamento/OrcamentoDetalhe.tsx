@@ -256,10 +256,20 @@ export default function OrcamentoDetalhe() {
     const agg = groupTotals[i.eapCodigo];
     return r2(s + (agg ? agg.venda : r2(n(i.vendaTotal))));
   }, 0));
+  const calcMat = r2(nivel1.reduce((s, i) => {
+    const agg = groupTotals[i.eapCodigo];
+    return r2(s + (agg ? agg.mat : r2(n(i.custoTotalMat))));
+  }, 0));
+  const calcMdo = r2(nivel1.reduce((s, i) => {
+    const agg = groupTotals[i.eapCodigo];
+    return r2(s + (agg ? agg.mdo : r2(n(i.custoTotalMdo))));
+  }, 0));
 
   const totalCusto = r2(n(orc.totalCusto) || calcCusto);
   const totalVenda = r2(n(orc.totalVenda) || calcVenda);
   const totalMeta  = r2(n(orc.totalMeta)  || r2(totalCusto * (1 - metaPct / 100)));
+  const totalMat   = calcMat;
+  const totalMdo   = calcMdo;
 
   const visibleItems = itens.filter(item => {
     if (item.nivel === 1) return true;
@@ -470,6 +480,52 @@ export default function OrcamentoDetalhe() {
                 </div>
               );
             })()}
+
+            {/* ── Barra de totais acima da tabela ── */}
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="rounded-lg border bg-blue-50 border-blue-200 px-4 py-2.5 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500">Total Material</p>
+                  <p className="text-sm font-bold text-blue-700 tabular-nums mt-0.5">{formatBRL(totalMat)}</p>
+                </div>
+                <div className="text-[10px] text-blue-400 font-medium">
+                  {totalCusto > 0 ? `${((totalMat / totalCusto) * 100).toFixed(1)}%` : "—"}
+                </div>
+              </div>
+              <div className="rounded-lg border bg-orange-50 border-orange-200 px-4 py-2.5 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-orange-500">Total Mão de Obra</p>
+                  <p className="text-sm font-bold text-orange-700 tabular-nums mt-0.5">{formatBRL(totalMdo)}</p>
+                </div>
+                <div className="text-[10px] text-orange-400 font-medium">
+                  {totalCusto > 0 ? `${((totalMdo / totalCusto) * 100).toFixed(1)}%` : "—"}
+                </div>
+              </div>
+              <div className={`rounded-lg border px-4 py-2.5 flex items-center justify-between ${
+                versao === "venda" ? "bg-emerald-50 border-emerald-200" :
+                versao === "meta"  ? "bg-purple-50 border-purple-200" :
+                                    "bg-slate-50 border-slate-200"
+              }`}>
+                <div>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider ${
+                    versao === "venda" ? "text-emerald-600" :
+                    versao === "meta"  ? "text-purple-600" : "text-slate-500"
+                  }`}>Total {cfg.label}</p>
+                  <p className={`text-sm font-bold tabular-nums mt-0.5 ${
+                    versao === "venda" ? "text-emerald-700" :
+                    versao === "meta"  ? "text-purple-700" : "text-slate-700"
+                  }`}>{formatBRL(
+                    versao === "venda" ? totalVenda :
+                    versao === "meta"  ? totalMeta  : totalCusto
+                  )}</p>
+                </div>
+                {versao === "venda" && totalCusto > 0 && (
+                  <div className="text-[10px] text-emerald-500 font-medium">
+                    BDI {bdiPct.toFixed(1)}%
+                  </div>
+                )}
+              </div>
+            </div>
 
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">
