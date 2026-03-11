@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
-  UploadCloud, RefreshCw, FileSpreadsheet, X,
+  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -269,11 +269,17 @@ export default function OrcamentoDetalhe() {
               <span className="text-purple-600 font-medium">Meta −{metaPct.toFixed(0)}% do custo</span>
             </div>
           </div>
-          {/* Botão atualizar planilha */}
-          <Button size="sm" variant="outline" className="gap-2 shrink-0"
-            onClick={() => { setReuploadOpen(true); setReuploadFile(null); setReuploadAnalise(null); }}>
-            <RefreshCw className="h-4 w-4" /> Atualizar Planilha
-          </Button>
+          {/* Botões de ação */}
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" className="gap-2"
+              onClick={() => window.open(`/orcamento/${id}/print`, "_blank")}>
+              <Printer className="h-4 w-4" /> Imprimir / PDF
+            </Button>
+            <Button size="sm" variant="outline" className="gap-2"
+              onClick={() => { setReuploadOpen(true); setReuploadFile(null); setReuploadAnalise(null); }}>
+              <RefreshCw className="h-4 w-4" /> Atualizar Planilha
+            </Button>
+          </div>
         </div>
 
         {/* ── Cards de versão: Meta | Custo | Venda ── */}

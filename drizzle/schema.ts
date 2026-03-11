@@ -3907,6 +3907,31 @@ export const orcamentoBdi = pgTable("orcamento_bdi", {
 ]);
 
 // ============================================================
+// CONTROLE DE REVISÕES DE ORÇAMENTO
+// Registra o diff entre versões a cada reimportação de planilha.
+// ============================================================
+
+export const orcamentoRevisoes = pgTable("orcamento_revisoes", {
+  id:               serial().notNull(),
+  orcamentoId:      integer("orcamento_id").notNull(),
+  companyId:        integer("company_id").notNull(),
+  revisaoLabel:     varchar("revisao_label", { length: 50 }),
+  userName:         varchar("user_name", { length: 100 }),
+  createdAt:        timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  totalCustoAntes:  numeric("total_custo_antes",  { precision: 18, scale: 2 }).default('0'),
+  totalCustoDepois: numeric("total_custo_depois", { precision: 18, scale: 2 }).default('0'),
+  totalVendaAntes:  numeric("total_venda_antes",  { precision: 18, scale: 2 }).default('0'),
+  totalVendaDepois: numeric("total_venda_depois", { precision: 18, scale: 2 }).default('0'),
+  itensAdicionados: integer("itens_adicionados").default(0),
+  itensRemovidos:   integer("itens_removidos").default(0),
+  itensAlterados:   integer("itens_alterados").default(0),
+  resumo:           text(),
+  diffJson:         text("diff_json"),
+}, (table) => [
+  index("idx_orc_revisoes_orc").on(table.orcamentoId),
+]);
+
+// ============================================================
 // CATÁLOGO GLOBAL DE INSUMOS E COMPOSIÇÕES
 // Populado automaticamente a cada importação de orçamento.
 // Serve como base para criação de orçamentos diretamente no sistema.
