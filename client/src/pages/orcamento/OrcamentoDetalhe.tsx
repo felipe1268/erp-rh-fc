@@ -325,16 +325,6 @@ export default function OrcamentoDetalhe() {
           >
             ORÇAMENTO
           </button>
-          <button
-            onClick={() => setActiveTab("bdi")}
-            className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${
-              activeTab === "bdi"
-                ? "bg-orange-500 text-white shadow"
-                : "bg-muted text-muted-foreground hover:bg-orange-100 hover:text-orange-700"
-            }`}
-          >
-            BDI
-          </button>
         </div>
 
         {/* ── Cabeçalho ── */}
@@ -489,8 +479,8 @@ export default function OrcamentoDetalhe() {
             <TabsTrigger value="insumos">
               Insumos {insumos.length > 0 && `(${insumos.length})`}
             </TabsTrigger>
-            <TabsTrigger value="bdi">BDI</TabsTrigger>
-            {insumos.length > 0 && <TabsTrigger value="abc">Curva ABC</TabsTrigger>}
+            {insumos.length > 0 && <TabsTrigger value="abc">Curva ABC Insumos</TabsTrigger>}
+            {insumos.length > 0 && <TabsTrigger value="abc-cat">Curva ABC por Categoria</TabsTrigger>}
           </TabsList>
 
           {/* ═══ ABA EAP ═══════════════════════════════════════════════ */}
@@ -755,129 +745,6 @@ export default function OrcamentoDetalhe() {
             )}
           </TabsContent>
 
-          {/* ═══ ABA BDI ═══════════════════════════════════════════════ */}
-          <TabsContent value="bdi" className="mt-3 space-y-4">
-            {!orc.bdiLinhas?.length ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">
-                <p>Nenhum dado de BDI importado.</p>
-                <p className="text-xs mt-1">Use a aba Importar para carregar a planilha de BDI.</p>
-              </div>
-            ) : (() => {
-              // Agrupar por aba
-              const grupos: Record<string, any[]> = {};
-              for (const b of orc.bdiLinhas) {
-                const aba = b.nomeAba || "BDI";
-                if (!grupos[aba]) grupos[aba] = [];
-                grupos[aba].push(b);
-              }
-
-              return (
-                <>
-                  {/* ── Card de controle do BDI total ── */}
-                  <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 flex flex-wrap items-center gap-4">
-                    <div className="flex-1 min-w-[200px]">
-                      <p className="text-xs text-muted-foreground uppercase font-medium mb-1">BDI Total (B-02)</p>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number" step="0.01" min={0} max={200}
-                          value={(localBdiPct * 100).toFixed(4)}
-                          onChange={e => {
-                            const v = parseFloat(e.target.value);
-                            if (!isNaN(v)) setLocalBdiPct(v / 100);
-                          }}
-                          className="h-9 w-36 text-right font-bold text-amber-700 text-base border-amber-300"
-                        />
-                        <span className="text-lg font-bold text-amber-700">%</span>
-                        <p className="text-xs text-muted-foreground ml-2">
-                          Venda = Custo × {(1 + localBdiPct).toFixed(4)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 items-end">
-                      <p className="text-xs text-muted-foreground">
-                        Total Venda estimado:{" "}
-                        <strong className="text-green-700">{formatBRL(totalCusto * (1 + localBdiPct))}</strong>
-                      </p>
-                      <Button
-                        className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
-                        disabled={aplicarBdiMutation.isPending}
-                        onClick={() => aplicarBdiMutation.mutate({ orcamentoId: id, bdiPercentual: localBdiPct })}
-                      >
-                        {aplicarBdiMutation.isPending
-                          ? <Loader2 className="h-4 w-4 animate-spin" />
-                          : <Save className="h-4 w-4" />}
-                        Aplicar BDI ao Orçamento
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* ── Tabelas por aba ── */}
-                  {Object.entries(grupos).map(([aba, linhas]) => (
-                    <Card key={aba} className="overflow-hidden">
-                      <div className="px-4 py-2 bg-slate-700 text-white text-xs font-semibold uppercase tracking-wider">
-                        {aba}
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs min-w-[500px]">
-                          <thead>
-                            <tr className="border-b bg-muted/40 text-muted-foreground">
-                              <th className="text-left pl-4 py-2 w-24">Código</th>
-                              <th className="text-left px-3 py-2">Descrição</th>
-                              <th className="text-right px-3 py-2 w-40">Percentual (%)</th>
-                              <th className="text-right pr-4 py-2 w-28">Valor Abs.</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {linhas.map((b: any) => {
-                              const editKey      = b.id;
-                              const rawPct       = n(b.percentual);
-                              const displayVal   = bdiEdits[editKey] ?? (rawPct * 100).toFixed(4);
-                              const isB02        = /^b-?02$/i.test(b.codigo || "");
-
-                              return (
-                                <tr key={b.id}
-                                  className={`border-b hover:bg-muted/20 transition-colors ${isB02 ? "bg-amber-50 font-bold" : ""}`}>
-                                  <td className={`pl-4 py-1.5 font-mono ${isB02 ? "text-amber-700" : "text-muted-foreground"}`}>
-                                    {b.codigo}
-                                  </td>
-                                  <td className="px-3 py-1.5">
-                                    <span className={isB02 ? "text-amber-800" : ""}>{b.descricao}</span>
-                                  </td>
-                                  <td className="px-3 py-1.5 text-right">
-                                    <div className="flex items-center justify-end gap-1">
-                                      <Input
-                                        type="number" step="0.0001"
-                                        value={displayVal}
-                                        onChange={e => setBdiEdits(prev => ({ ...prev, [editKey]: e.target.value }))}
-                                        onBlur={e => {
-                                          const v = parseFloat(e.target.value);
-                                          if (!isNaN(v)) {
-                                            const dec = v / 100;
-                                            updateBdiMutation.mutate({ id: b.id, percentual: dec });
-                                            if (isB02) setLocalBdiPct(dec);
-                                          }
-                                        }}
-                                        className={`h-6 w-28 text-right text-xs ${isB02 ? "border-amber-400 font-bold text-amber-700" : ""}`}
-                                      />
-                                      <span className="text-muted-foreground text-[10px]">%</span>
-                                    </div>
-                                  </td>
-                                  <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
-                                    {n(b.valorAbsoluto) !== 0 ? formatBRL(n(b.valorAbsoluto)) : "—"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </Card>
-                  ))}
-                </>
-              );
-            })()}
-          </TabsContent>
-
           {/* ═══ ABA CURVA ABC ═════════════════════════════════════════ */}
           {insumos.length > 0 && (
             <TabsContent value="abc" className="mt-3">
@@ -940,6 +807,83 @@ export default function OrcamentoDetalhe() {
               </Card>
             </TabsContent>
           )}
+
+          {/* ═══ ABA CURVA ABC POR CATEGORIA ════════════════════════════ */}
+          {insumos.length > 0 && (() => {
+            const totalGeral = insumos.reduce((s: number, i: any) => s + n(i.custoTotal), 0);
+            const porCategoria: Record<string, { tipo: string; custo: number; qtd: number }> = {};
+            for (const ins of insumos) {
+              const cat = ins.tipo || "Sem categoria";
+              if (!porCategoria[cat]) porCategoria[cat] = { tipo: cat, custo: 0, qtd: 0 };
+              porCategoria[cat].custo += n(ins.custoTotal);
+              porCategoria[cat].qtd += 1;
+            }
+            const categorias = Object.values(porCategoria).sort((a, b) => b.custo - a.custo);
+            let acumulado = 0;
+            const catComAbc = categorias.map(c => {
+              acumulado += c.custo;
+              const pct = totalGeral > 0 ? acumulado / totalGeral : 0;
+              const cls = pct <= 0.8 ? "A" : pct <= 0.95 ? "B" : "C";
+              return { ...c, pct: totalGeral > 0 ? c.custo / totalGeral : 0, cls };
+            });
+            return (
+              <TabsContent value="abc-cat" className="mt-3">
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {(["A", "B", "C"] as const).map(cls => {
+                    const group = catComAbc.filter(c => c.cls === cls);
+                    const total = group.reduce((s, c) => s + c.custo, 0);
+                    const colors = {
+                      A: "bg-green-100 border-green-400 text-green-800",
+                      B: "bg-amber-100 border-amber-400 text-amber-800",
+                      C: "bg-zinc-100 border-zinc-400 text-zinc-700",
+                    };
+                    return (
+                      <div key={cls} className={`rounded-xl border-2 p-4 ${colors[cls]}`}>
+                        <div className="text-2xl font-bold">{cls}</div>
+                        <div className="text-sm font-medium mt-1">{group.length} categorias</div>
+                        <div className="text-base font-bold mt-1">{formatBRL(total)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <Card>
+                  <CardContent className="py-3 px-0 overflow-x-auto">
+                    <table className="w-full text-xs min-w-[400px]">
+                      <thead>
+                        <tr className="border-b bg-muted/50 text-muted-foreground">
+                          <th className="text-left pl-4 py-2 w-8">Cl</th>
+                          <th className="text-left px-3 py-2">Categoria</th>
+                          <th className="text-right px-3 py-2 w-16">Qtd</th>
+                          <th className="text-right px-3 py-2 w-32">Custo Total</th>
+                          <th className="text-right pr-4 py-2 w-16">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {catComAbc.map(c => (
+                          <tr key={c.tipo} className="border-b hover:bg-muted/30">
+                            <td className="pl-4 py-1.5">
+                              <span className={`inline-block w-5 h-5 rounded text-center font-bold leading-5 text-white text-xs
+                                ${c.cls === "A" ? "bg-green-600" : c.cls === "B" ? "bg-amber-500" : "bg-zinc-400"}`}>
+                                {c.cls}
+                              </span>
+                            </td>
+                            <td className="px-3 py-1.5 font-medium">{c.tipo}</td>
+                            <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">{c.qtd}</td>
+                            <td className="px-3 py-1.5 text-right font-medium text-amber-600 tabular-nums">
+                              {formatBRL(c.custo)}
+                            </td>
+                            <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
+                              {(c.pct * 100).toFixed(2)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            );
+          })()}
         </Tabs>
 
       </div>
