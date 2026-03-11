@@ -390,6 +390,35 @@ function parsearAbaInsumos(rows: any[][], companyId: number) {
 }
 
 // ============================================================
+// PARSER ABA INSUMOS PARA CATÁLOGO STANDALONE
+// Importa TODOS os insumos da planilha (mesmo sem uso / qty=0).
+// Col[1]=código, [2]=desc, [3]=unidade, [4]=preçoBase, [5]=comEncargos, [6]=subGrupo
+// ============================================================
+function parsearAbaInsumosParaCatalogo(rows: any[][], companyId: number) {
+  const result: {
+    companyId: number; codigo: string; descricao: string; unidade: string; tipo: string;
+    precoBase: number; precoComEncargos: number; quantidadeTotal: number; custoTotal: number;
+  }[] = [];
+
+  for (const row of rows) {
+    const codigo    = String(row[1] || '').trim();
+    const descricao = String(row[2] || '').trim();
+    // Exige código no padrão nn.nn.nn e descrição não vazia
+    if (!codigo || !descricao || !/^\d{2}\.\d{2}/.test(codigo)) continue;
+    const unidade          = String(row[3] || '').trim();
+    const precoBase        = toNum(row[4]);
+    const precoComEncargos = toNum(row[5]);
+    const tipo             = String(row[6] || '').trim();
+    const quantidadeTotal  = toNum(row[7]);
+    const custoTotal       = toNum(row[8]);
+    // Exige pelo menos um preço válido
+    if (precoBase <= 0 && precoComEncargos <= 0) continue;
+    result.push({ companyId, codigo, descricao, unidade, tipo, precoBase, precoComEncargos, quantidadeTotal, custoTotal });
+  }
+  return result;
+}
+
+// ============================================================
 // PARSER ABA CPUs (Composições de Preços Unitários)
 // Colunas: [0]=tipo(S/INS), [1]=Cód_1, [2]=Cód_Aux, [3]=Cód_Insumo,
 //          [4]=Descrição, [5]=Un, [6]=Qtd, [7]=PU_insumo,
@@ -1158,6 +1187,87 @@ export const orcamentoRouter = router({
         .where(eq(insumosCatalogo.companyId, input.companyId))
         .orderBy(desc(insumosCatalogo.ultimaAtualizacao))
         .limit(1000);
+    }),
+
+  // ── Importar insumos direto de planilha para o catálogo ─────
+  importarInsumosCatalogo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fileBase64: z.string().min(10),
+      fileName: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco de dados não disponível.' });
+
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const wb = XLSX.read(buffer, { type: 'buffer' });
+
+      const insTab = wb.SheetNames.find(n => n.toLowerCase() === 'insumos');
+      if (!insTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "Insumos" não encontrada na planilha.' });
+
+      const dataIns = XLSX.utils.sheet_to_json(wb.Sheets[insTab], { header: 1, defval: '' }) as any[][];
+      const insumos = parsearAbaInsumosParaCatalogo(dataIns, input.companyId);
+      if (insumos.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum insumo com preço válido encontrado na aba "Insumos".' });
+
+      let inseridos = 0;
+      let atualizados = 0;
+
+      for (const ins of insumos) {
+        const chave = normalizarTexto(ins.descricao);
+        const preco = ins.precoComEncargos > 0 ? ins.precoComEncargos : ins.precoBase;
+
+        // 1) Busca por código
+        let existente: any = null;
+        const byCode = await db.select().from(insumosCatalogo)
+          .where(and(eq(insumosCatalogo.companyId, input.companyId), eq(insumosCatalogo.codigo, ins.codigo)))
+          .limit(1);
+        existente = byCode[0];
+
+        // 2) Busca por chave normalizada
+        if (!existente) {
+          const byKey = await db.select().from(insumosCatalogo)
+            .where(and(eq(insumosCatalogo.companyId, input.companyId), eq(insumosCatalogo.chaveNorm, chave)))
+            .limit(1);
+          existente = byKey[0];
+        }
+
+        if (existente) {
+          // Atualiza preços e tipo (mantém histórico de orçamentos intacto)
+          await db.update(insumosCatalogo).set({
+            codigo:           ins.codigo.substring(0, 100),
+            descricao:        ins.descricao.substring(0, 1000),
+            unidade:          ins.unidade.substring(0, 30) || existente.unidade,
+            tipo:             ins.tipo.substring(0, 100) || existente.tipo,
+            precoUnitario:    fix4(preco),
+            precoMin:         fix4(Math.min(parseFloat(existente.precoMin || String(preco)), preco)),
+            precoMax:         fix4(Math.max(parseFloat(existente.precoMax || '0'), preco)),
+            precoMedio:       fix4(preco),
+            ultimaAtualizacao: new Date().toISOString(),
+          }).where(eq(insumosCatalogo.id, existente.id));
+          atualizados++;
+        } else {
+          await db.insert(insumosCatalogo).values({
+            companyId:        input.companyId,
+            codigo:           ins.codigo.substring(0, 100),
+            descricao:        ins.descricao.substring(0, 1000),
+            unidade:          ins.unidade.substring(0, 30) || null,
+            tipo:             ins.tipo.substring(0, 100) || null,
+            precoUnitario:    fix4(preco),
+            precoMin:         fix4(preco),
+            precoMax:         fix4(preco),
+            precoMedio:       fix4(preco),
+            totalOrcamentos:  0,
+            totalQuantidade:  fix4(ins.quantidadeTotal),
+            chaveNorm:        chave,
+            ultimaAtualizacao: new Date().toISOString(),
+            criadoEm:         new Date().toISOString(),
+          });
+          inseridos++;
+        }
+      }
+
+      return { total: insumos.length, inseridos, atualizados };
     }),
 
   listarComposicoesCatalogo: protectedProcedure
