@@ -329,17 +329,29 @@ export default function OrcamentoDetalhe() {
 
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-xs min-w-[560px]">
+                <table className="w-full border-collapse text-xs min-w-[1100px]">
                   <thead>
                     <tr className="bg-slate-700 text-white text-[11px] sticky top-0 z-20">
                       <th className="text-left px-3 py-2 w-36 sticky left-0 bg-slate-700">Item</th>
-                      <th className="text-left px-3 py-2">Descrição</th>
-                      <th className="text-center px-2 py-2 w-12">Un</th>
-                      <th className="text-right px-3 py-2 w-28">Quantidade</th>
-                      <th className={`text-right px-3 py-2 w-36 font-bold ${cfg.thClass}`}>
+                      <th className="text-left px-3 py-2 min-w-[200px]">Descrição</th>
+                      <th className="text-center px-2 py-2 w-16">Unidade</th>
+                      <th className="text-right px-3 py-2 w-24">Quantidade</th>
+                      <th className="text-right px-3 py-2 w-28 text-blue-200">
+                        Preço Unit.<br/>Material
+                      </th>
+                      <th className="text-right px-3 py-2 w-28 text-orange-200">
+                        Preço Unit.<br/>MO
+                      </th>
+                      <th className="text-right px-3 py-2 w-28 text-blue-200">
+                        Preço Total<br/>Material
+                      </th>
+                      <th className="text-right px-3 py-2 w-28 text-orange-200">
+                        Preço total<br/>MO
+                      </th>
+                      <th className={`text-right px-3 py-2 w-32 font-bold ${cfg.thClass}`}>
                         {cfg.label}
                       </th>
-                      <th className="text-right px-2 py-2 w-14">ABC%</th>
+                      <th className="text-right px-2 py-2 w-16">ABC Serv</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -349,6 +361,10 @@ export default function OrcamentoDetalhe() {
                       const indent  = Math.max(0, item.nivel - 1) * 16;
                       const rowBg   = NIVEL_BG[item.nivel] ?? "bg-white";
                       const qty     = n(item.quantidade);
+                      const puMat   = n(item.custoUnitMat);
+                      const puMdo   = n(item.custoUnitMdo);
+                      const ptMat   = n(item.custoTotalMat);
+                      const ptMdo   = n(item.custoTotalMdo);
 
                       const totalVal = versao === "venda"
                         ? n(item.vendaTotal)
@@ -395,12 +411,32 @@ export default function OrcamentoDetalhe() {
                               : ""}
                           </td>
 
-                          {/* Valor da versão selecionada */}
+                          {/* Preço Unit. Material */}
+                          <td className="px-3 py-1.5 text-right text-blue-600 tabular-nums">
+                            {isLeaf && puMat > 0 ? formatBRL(puMat) : <span className="text-slate-300">—</span>}
+                          </td>
+
+                          {/* Preço Unit. MO */}
+                          <td className="px-3 py-1.5 text-right text-orange-500 tabular-nums">
+                            {isLeaf && puMdo > 0 ? formatBRL(puMdo) : <span className="text-slate-300">—</span>}
+                          </td>
+
+                          {/* Preço Total Material */}
+                          <td className="px-3 py-1.5 text-right text-blue-600 font-medium tabular-nums">
+                            {ptMat > 0 ? formatBRL(ptMat) : <span className="text-slate-300">—</span>}
+                          </td>
+
+                          {/* Preço Total MO */}
+                          <td className="px-3 py-1.5 text-right text-orange-500 font-medium tabular-nums">
+                            {ptMdo > 0 ? formatBRL(ptMdo) : <span className="text-slate-300">—</span>}
+                          </td>
+
+                          {/* Custo / Venda / Meta */}
                           <td className={`px-3 py-1.5 text-right font-semibold tabular-nums ${cfg.valueClass}`}>
                             {totalVal > 0 ? formatBRL(totalVal) : <span className="text-slate-300 font-normal">—</span>}
                           </td>
 
-                          {/* ABC % */}
+                          {/* ABC Serv */}
                           <td className="px-2 py-1.5 text-right text-muted-foreground font-mono text-[10px]">
                             {item.abcServico || ""}
                           </td>
