@@ -401,18 +401,29 @@ export default function OrcamentoDetalhe() {
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground w-4 shrink-0">R$</span>
                 <Input
-                  type="number" min={0} step={0.01}
-                  value={metaValInput !== "" ? metaValInput : r2(totalCusto * (1 - localMetaPerc / 100))}
+                  type="text"
+                  value={metaValInput !== ""
+                    ? metaValInput
+                    : r2(totalCusto * (1 - localMetaPerc / 100))
+                        .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   onChange={e => {
                     const str = e.target.value;
                     setMetaValInput(str);
-                    const val = parseFloat(str);
+                    const val = parseFloat(str.replace(/\./g, "").replace(",", "."));
                     if (!isNaN(val) && val > 0 && totalCusto > 0) {
                       const pct = r2((1 - val / totalCusto) * 100);
                       if (pct >= 0 && pct < 100) {
                         setLocalMetaPerc(pct);
                         setMetaInput(String(pct));
                       }
+                    }
+                  }}
+                  onBlur={e => {
+                    const val = parseFloat(e.target.value.replace(/\./g, "").replace(",", "."));
+                    if (!isNaN(val) && val > 0) {
+                      setMetaValInput(val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                    } else {
+                      setMetaValInput("");
                     }
                   }}
                   className="h-7 text-sm text-right font-semibold text-purple-700"
