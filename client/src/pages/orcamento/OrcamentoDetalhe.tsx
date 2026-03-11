@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -7,11 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
+  UploadCloud, RefreshCw, FileSpreadsheet, X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -63,7 +66,9 @@ export default function OrcamentoDetalhe() {
   const [, params] = useRoute("/orcamento/:id");
   const [, navigate] = useLocation();
   const { user } = useAuth();
+  const { company } = useCompany();
   const id = parseInt(params?.id ?? "0");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [versao, setVersao]         = useState<Versao>("custo");
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
@@ -84,6 +89,74 @@ export default function OrcamentoDetalhe() {
     },
     onError: e => { toast.error(e.message || "Erro ao salvar meta"); setSavingMeta(false); },
   });
+
+  // Re-upload (atualizar planilha)
+  const [reuploadOpen, setReuploadOpen] = useState(false);
+  const [reuploadFile, setReuploadFile] = useState<File | null>(null);
+  const [reuploadAnalise, setReuploadAnalise] = useState<{ itens: number; arquivo: string } | null>(null);
+  const [reuploadLoading, setReuploadLoading] = useState(false);
+
+  const reimportarMutation = trpc.orcamento.reimportar.useMutation({
+    onSuccess: (res) => {
+      toast.success(`Orçamento atualizado! ${res.itemCount} itens reimportados.`);
+      setReuploadOpen(false);
+      setReuploadFile(null);
+      setReuploadAnalise(null);
+      refetch();
+    },
+    onError: e => {
+      toast.error(e.message || "Erro ao atualizar orçamento");
+      setReuploadLoading(false);
+    },
+  });
+
+  const handleReuploadFile = async (file: File) => {
+    setReuploadFile(file);
+    setReuploadAnalise(null);
+    setReuploadLoading(true);
+    try {
+      const xlsxMod = await import("xlsx");
+      const XLSX = xlsxMod.default ?? xlsxMod;
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const orcTab = wb.SheetNames.find((n: string) =>
+        n.toLowerCase().replace(/[^a-z]/g, "").startsWith("or") ||
+        n.toLowerCase().includes("orcamento") ||
+        n.toLowerCase().includes("orçamento")
+      );
+      if (!orcTab) {
+        toast.error('Aba "Orçamento" não encontrada na planilha.');
+        setReuploadLoading(false);
+        return;
+      }
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], { header: 1, defval: "" }) as any[][];
+      const itensCount = rows.filter((r: any[]) => {
+        const col = String(r[9] || r[10] || "").trim();
+        return col.match(/^\d+\.\d+/) || col.match(/^\d+$/);
+      }).length;
+      setReuploadAnalise({ itens: itensCount, arquivo: file.name });
+    } catch {
+      toast.error("Erro ao ler planilha.");
+    }
+    setReuploadLoading(false);
+  };
+
+  const confirmarReupload = async () => {
+    if (!reuploadFile) return;
+    setReuploadLoading(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const b64 = (e.target?.result as string).split(",")[1];
+      reimportarMutation.mutate({
+        orcamentoId: id,
+        companyId:   (company as any)?.id ?? 0,
+        fileBase64:  b64,
+        fileName:    reuploadFile.name,
+        userName:    (user as any)?.username || (user as any)?.name || "sistema",
+      });
+    };
+    reader.readAsDataURL(reuploadFile);
+  };
 
   // BDI edição local
   const [bdiEdits, setBdiEdits]       = useState<Record<number, string>>({});
@@ -196,6 +269,11 @@ export default function OrcamentoDetalhe() {
               <span className="text-purple-600 font-medium">Meta −{metaPct.toFixed(0)}% do custo</span>
             </div>
           </div>
+          {/* Botão atualizar planilha */}
+          <Button size="sm" variant="outline" className="gap-2 shrink-0"
+            onClick={() => { setReuploadOpen(true); setReuploadFile(null); setReuploadAnalise(null); }}>
+            <RefreshCw className="h-4 w-4" /> Atualizar Planilha
+          </Button>
         </div>
 
         {/* ── Cards de versão: Meta | Custo | Venda ── */}
@@ -689,8 +767,98 @@ export default function OrcamentoDetalhe() {
           )}
         </Tabs>
 
-
       </div>
+
+      {/* ── Dialog re-upload de planilha ── */}
+      <Dialog open={reuploadOpen} onOpenChange={open => { if (!reimportarMutation.isPending) setReuploadOpen(open); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-blue-600" />
+              Atualizar Planilha do Orçamento
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Faça upload de uma nova versão da planilha. Os itens da EAP e insumos existentes serão
+              <strong className="text-red-600"> substituídos</strong>. Os metadados do orçamento
+              (código, cliente, BDI%) serão preservados.
+            </p>
+
+            {/* Zona de upload */}
+            <div
+              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                reuploadFile ? "border-green-400 bg-green-50" : "border-border hover:border-primary hover:bg-muted/30"
+              }`}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault();
+                const f = e.dataTransfer.files[0];
+                if (f) handleReuploadFile(f);
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleReuploadFile(f); }}
+              />
+              {reuploadLoading ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">Analisando planilha...</p>
+                </div>
+              ) : reuploadFile && reuploadAnalise ? (
+                <div className="flex flex-col items-center gap-2">
+                  <FileSpreadsheet className="h-8 w-8 text-green-600" />
+                  <p className="text-sm font-semibold text-green-700">{reuploadAnalise.arquivo}</p>
+                  <p className="text-xs text-muted-foreground">
+                    ~{reuploadAnalise.itens} linhas detectadas na aba Orçamento
+                  </p>
+                  <Button size="sm" variant="ghost" className="text-xs text-muted-foreground mt-1"
+                    onClick={e => { e.stopPropagation(); setReuploadFile(null); setReuploadAnalise(null); }}>
+                    <X className="h-3 w-3 mr-1" /> Trocar arquivo
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <UploadCloud className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm font-medium">Clique ou arraste a planilha aqui</p>
+                  <p className="text-xs text-muted-foreground">.xlsx ou .xls com aba "Orçamento"</p>
+                </div>
+              )}
+            </div>
+
+            {/* Aviso */}
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3">
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800">
+                Esta ação <strong>substitui todos os itens</strong> do orçamento. O BDI e insumos da nova planilha
+                serão usados se disponíveis; caso contrário, o BDI atual ({bdiPct.toFixed(2)}%) é mantido.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReuploadOpen(false)}
+              disabled={reimportarMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!reuploadFile || !reuploadAnalise || reimportarMutation.isPending}
+              onClick={confirmarReupload}
+              className="gap-2"
+            >
+              {reimportarMutation.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Atualizando...</>
+                : <><RefreshCw className="h-4 w-4" /> Confirmar Atualização</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </DashboardLayout>
   );
