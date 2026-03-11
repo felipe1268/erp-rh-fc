@@ -222,6 +222,23 @@ function extrairMetadados(rows: any[][]): {
   return { cliente, local, obra, revisao, areaIntervencao, tempoObraMeses };
 }
 
+// Extrai os totais gerais diretamente da linha "TOTAIS GERAIS" da planilha.
+// Essa linha tem os valores em precisão total (sem arredondamento de 2 casas),
+// que arredondados dão exatamente os valores exibidos na planilha.
+// Colunas: mat=col[22], mdo=col[23], total=col[24]
+function extrairTotaisPlanilha(rows: any[][]): { totalMat: number; totalMdo: number; totalCusto: number } | null {
+  for (const row of rows) {
+    const label = String(row[10] || '').trim().toUpperCase();
+    if (label.includes('TOTAI') && label.includes('GERA')) {
+      const totalMat   = toNum(row[22]);
+      const totalMdo   = toNum(row[23]);
+      const totalCusto = toNum(row[24]);
+      if (totalCusto > 0) return { totalMat, totalMdo, totalCusto };
+    }
+  }
+  return null;
+}
+
 // Parseia a aba Orçamento e retorna array de itens
 // bdiPercentual: decimal fraction (ex: 0.2456 = 24.56%)
 // Venda = Custo × (1 + BDI%)   |   Meta = Custo × (1 − Meta%)
@@ -550,13 +567,15 @@ export const orcamentoRouter = router({
         ? parsearAbaCPUs(XLSX.utils.sheet_to_json(wb.Sheets[cpusTab], { header: 1, defval: '' }) as any[][], input.companyId)
         : { composicoes: [], linhasInsumos: [] };
 
-      // Calcular totais pelos itens de nível 1
-      const nivel1 = itens.filter(i => i.nivel === 1);
+      // Totais: lê a linha "TOTAIS GERAIS" da planilha (precisão total, sem arredondamento intermediário).
+      // Fallback para somas das folhas apenas se a linha não existir.
+      const totaisGerais  = extrairTotaisPlanilha(dataOrc);
+      const nivel1        = itens.filter(i => i.nivel === 1);
       const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal),    0);
-      const totalCusto    = nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
+      const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
+      const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
+      const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
       const totalMeta     = totalCusto * (1 - input.metaPercentual);
-      const totalMateriais = nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
-      const totalMdo      = nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
 
       const codigo = input.fileName.replace(/\.[^/.]+$/, '').substring(0, 100);
 
@@ -745,13 +764,14 @@ export const orcamentoRouter = router({
         ? parsearAbaInsumos(XLSX.utils.sheet_to_json(wb.Sheets[insumosTab], { header: 1, defval: '' }) as any[][], input.companyId)
         : [];
 
-      // Totais
+      // Totais: lê a linha "TOTAIS GERAIS" da planilha (precisão total, sem arredondamento intermediário).
+      const totaisGerais  = extrairTotaisPlanilha(dataOrc);
       const nivel1        = itens.filter(i => i.nivel === 1);
-      const totalCusto    = nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
-      const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal),    0);
+      const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
+      const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
+      const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
+      const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
       const totalMeta     = totalCusto * (1 - metaPerc);
-      const totalMateriais = nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
-      const totalMdo      = nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
 
       // Apagar dados antigos
       await db.delete(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
