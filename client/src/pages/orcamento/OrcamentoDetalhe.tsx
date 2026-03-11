@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -231,6 +231,28 @@ export default function OrcamentoDetalhe() {
       childMap[item.eapCodigo] = true;
     }
   });
+
+  // ── Totais agregados para grupos com valores zerados no banco ──
+  // Para cada grupo, soma os valores de todos os itens folha descendentes.
+  const groupTotals = useMemo(() => {
+    const map: Record<string, { mat: number; mdo: number; custo: number; venda: number }> = {};
+    itens.forEach(item => {
+      if (!childMap[item.eapCodigo]) return;          // só grupos
+      if (n(item.custoTotal) > 0) return;             // já tem valor no banco
+      const prefix = item.eapCodigo + ".";
+      let mat = 0, mdo = 0, custo = 0, venda = 0;
+      itens.forEach(child => {
+        if (!child.eapCodigo.startsWith(prefix)) return;
+        if (childMap[child.eapCodigo]) return;        // ignora sub-grupos intermediários
+        mat   += n(child.custoTotalMat);
+        mdo   += n(child.custoTotalMdo);
+        custo += n(child.custoTotal);
+        venda += n(child.vendaTotal);
+      });
+      map[item.eapCodigo] = { mat, mdo, custo, venda };
+    });
+    return map;
+  }, [itens, childMap]);
 
   const visibleItems = itens.filter(item => {
     if (item.nivel === 1) return true;
@@ -478,14 +500,19 @@ export default function OrcamentoDetalhe() {
                       const qty     = n(item.quantidade);
                       const puMat   = n(item.custoUnitMat);
                       const puMdo   = n(item.custoUnitMdo);
-                      const ptMat   = n(item.custoTotalMat);
-                      const ptMdo   = n(item.custoTotalMdo);
+
+                      // Para grupos: usar totais calculados (soma filhos) ou armazenados
+                      const agg    = groupTotals[item.eapCodigo];
+                      const ptMat  = agg?.mat   ?? n(item.custoTotalMat);
+                      const ptMdo  = agg?.mdo   ?? n(item.custoTotalMdo);
+                      const ptCusto = agg?.custo ?? n(item.custoTotal);
+                      const ptVenda = agg?.venda ?? n(item.vendaTotal);
 
                       const totalVal = versao === "venda"
-                        ? n(item.vendaTotal)
+                        ? ptVenda
                         : versao === "meta"
-                          ? n(item.custoTotal) * (1 - localMetaPerc / 100)
-                          : n(item.custoTotal);
+                          ? ptCusto * (1 - localMetaPerc / 100)
+                          : ptCusto;
 
                       return (
                         <tr key={item.id}
