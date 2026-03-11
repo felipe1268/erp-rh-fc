@@ -145,7 +145,7 @@ export default function OrcamentoLista() {
             </Button>
             <Link href="/orcamento/importar">
               <Button size="sm" className="gap-2">
-                <Upload className="h-4 w-4" /> Importar Planilha
+                <Upload className="h-4 w-4" /> Novo Orçamento
               </Button>
             </Link>
           </div>
@@ -172,7 +172,7 @@ export default function OrcamentoLista() {
             {!busca && (
               <Link href="/orcamento/importar">
                 <Button size="sm" className="mt-4">
-                  <Upload className="h-3 w-3 mr-1" /> Importar primeiro orçamento
+                  <Upload className="h-3 w-3 mr-1" /> Criar primeiro orçamento
                 </Button>
               </Link>
             )}
