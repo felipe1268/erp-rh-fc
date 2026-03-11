@@ -204,9 +204,10 @@ export default function OrcamentoDetalhe() {
 
   useEffect(() => {
     if (data) {
-      const pct = Math.round(parseFloat((data as any).metaPercentual || "0") * 100);
+      const pct = parseFloat((data as any).metaPercentual || "0") * 100; // precisão total — sem arredondamento
       setLocalMetaPerc(pct);
-      setMetaInput(String(pct));
+      setMetaInput(r2(pct).toFixed(2));
+      setLocalMetaVal(null); // reseta R$ fixo ao recarregar dados
       setLocalBdiPct(parseFloat((data as any).bdiPercentual || "0"));
     }
   }, [data]);
@@ -283,7 +284,10 @@ export default function OrcamentoDetalhe() {
 
   const totalCusto = r2(calcCusto || n(orc.totalCusto));
   const totalVenda = r2(calcVenda || n(orc.totalVenda));
-  const totalMeta  = r2(n(orc.totalMeta) || r2(totalCusto * (1 - metaPct / 100)));
+  // totalMeta sempre derivado do estado local (localMetaVal ou localMetaPerc) para evitar divergência com o banco
+  const totalMeta  = localMetaVal !== null
+    ? r2(localMetaVal)
+    : r2(totalCusto * (1 - localMetaPerc / 100));
   const totalMat   = calcMat;
   const totalMdo   = calcMdo;
 
@@ -440,7 +444,11 @@ export default function OrcamentoDetalhe() {
                   disabled={savingMeta || updateMetaMutation.isPending}
                   onClick={() => {
                     setSavingMeta(true);
-                    updateMetaMutation.mutate({ id, metaPercentual: localMetaPerc / 100 });
+                    updateMetaMutation.mutate({
+                      id,
+                      metaPercentual: localMetaPerc / 100,
+                      ...(localMetaVal !== null ? { totalMetaExato: localMetaVal } : {}),
+                    });
                   }}
                 >
                   {savingMeta
