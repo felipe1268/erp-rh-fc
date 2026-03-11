@@ -565,8 +565,7 @@ export default function OrcamentoDetalhe() {
 
       {/* ── Widget IA ── */}
       <OrcamentistaWidget
-        orcamentoId={id}
-        orcamentoContext={{
+        contexto={{
           codigo:            orc.codigo,
           descricao:         orc.descricao,
           cliente:           orc.cliente,
