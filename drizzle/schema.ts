@@ -3895,6 +3895,7 @@ export const orcamentoBdi = pgTable("orcamento_bdi", {
   id: serial().notNull(),
   orcamentoId: integer().notNull(),
   companyId: integer().notNull(),
+  nomeAba: varchar({ length: 100 }).default('BDI'),
   codigo: varchar({ length: 30 }),
   descricao: varchar({ length: 255 }),
   percentual: numeric({ precision: 10, scale: 6 }),
@@ -3903,4 +3904,52 @@ export const orcamentoBdi = pgTable("orcamento_bdi", {
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
   index("orbdi_orcamento").on(table.orcamentoId),
+]);
+
+// ============================================================
+// CATÁLOGO GLOBAL DE INSUMOS E COMPOSIÇÕES
+// Populado automaticamente a cada importação de orçamento.
+// Serve como base para criação de orçamentos diretamente no sistema.
+// ============================================================
+
+export const insumosCatalogo = pgTable("insumos_catalogo", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  codigo: varchar({ length: 100 }),
+  descricao: varchar({ length: 1000 }).notNull(),
+  unidade: varchar({ length: 30 }),
+  tipo: varchar({ length: 100 }),
+  precoUnitario: numeric({ precision: 18, scale: 4 }),
+  precoMin: numeric({ precision: 18, scale: 4 }),
+  precoMax: numeric({ precision: 18, scale: 4 }),
+  precoMedio: numeric({ precision: 18, scale: 4 }),
+  totalOrcamentos: integer().default(0).notNull(),
+  totalQuantidade: numeric({ precision: 18, scale: 4 }),
+  chaveNorm: varchar({ length: 500 }).notNull(),
+  ultimaAtualizacao: timestamp({ mode: 'string' }).defaultNow().notNull(),
+  criadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  index("insc_company").on(table.companyId),
+  index("insc_codigo").on(table.codigo),
+  index("insc_chave").on(table.chaveNorm),
+]);
+
+export const composicoesCatalogo = pgTable("composicoes_catalogo", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  codigo: varchar({ length: 100 }),
+  descricao: varchar({ length: 1000 }).notNull(),
+  unidade: varchar({ length: 30 }),
+  tipo: varchar({ length: 100 }),
+  custoUnitMat: numeric({ precision: 18, scale: 4 }),
+  custoUnitMdo: numeric({ precision: 18, scale: 4 }),
+  custoUnitTotal: numeric({ precision: 18, scale: 4 }),
+  totalOrcamentos: integer().default(0).notNull(),
+  chaveNorm: varchar({ length: 500 }).notNull(),
+  ultimaAtualizacao: timestamp({ mode: 'string' }).defaultNow().notNull(),
+  criadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  index("compc_company").on(table.companyId),
+  index("compc_codigo").on(table.codigo),
+  index("compc_chave").on(table.chaveNorm),
 ]);

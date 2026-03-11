@@ -74,7 +74,15 @@ function EapRow({ item, versao, expanded, onToggle, hasChildren }: {
         {item.descricao}
       </span>
       {item.unidade && item.nivel >= 3 && (
-        <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">{item.quantidade} {item.unidade}</span>
+        <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">
+          {parseFloat(item.quantidade || "0").toFixed(2)} {item.unidade}
+        </span>
+      )}
+      {item.nivel >= 3 && (versao === "custo" || versao === "venda") && (
+        <span className="text-xs text-muted-foreground shrink-0 hidden md:flex flex-col items-end leading-tight">
+          <span className="text-blue-500">Mat {formatBRL(parseFloat(item.custoTotalMat || "0"))}</span>
+          <span className="text-orange-500">MO {formatBRL(parseFloat(item.custoTotalMdo || "0"))}</span>
+        </span>
       )}
       <span className={`text-xs font-semibold shrink-0 ${cfg.valueClass}`}>
         {formatBRL(valor)}
@@ -328,42 +336,56 @@ export default function OrcamentoDetalhe() {
             )}
           </TabsContent>
 
-          <TabsContent value="bdi" className="mt-4">
+          <TabsContent value="bdi" className="mt-4 space-y-4">
             {!orc.bdiLinhas?.length ? (
               <div className="text-center py-12 text-muted-foreground text-sm">Nenhuma linha de BDI extraída.</div>
-            ) : (
-              <Card>
-                <CardContent className="py-3 px-0">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b text-muted-foreground">
-                        <th className="text-left pl-4 py-2">Código</th>
-                        <th className="text-left px-3 py-2">Descrição</th>
-                        <th className="text-right px-3 py-2">%</th>
-                        <th className="text-right pr-4 py-2">Valor</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orc.bdiLinhas.map((b: any) => (
-                        <tr key={b.id}
-                          className={`border-b hover:bg-muted/30 ${b.codigo === "B-02" ? "font-semibold text-amber-600" : ""}`}>
-                          <td className="pl-4 py-2 font-mono text-muted-foreground">{b.codigo}</td>
-                          <td className="px-3 py-2">{b.descricao}</td>
-                          <td className="px-3 py-2 text-right">
-                            {(parseFloat(b.percentual || "0") * 100).toFixed(4)}%
-                          </td>
-                          <td className="pr-4 py-2 text-right text-amber-600">
-                            {parseFloat(b.valorAbsoluto || "0") > 0
-                              ? formatBRL(parseFloat(b.valorAbsoluto))
-                              : "—"}
-                          </td>
+            ) : (() => {
+              // Agrupar por aba de origem
+              const grupos: Record<string, any[]> = {};
+              for (const b of orc.bdiLinhas) {
+                const aba = b.nomeAba || 'BDI';
+                if (!grupos[aba]) grupos[aba] = [];
+                grupos[aba].push(b);
+              }
+              return Object.entries(grupos).map(([aba, linhas]) => (
+                <Card key={aba}>
+                  <CardHeader className="pb-2 pt-3">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                      Aba: {aba}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="py-0 px-0 pb-2">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b text-muted-foreground">
+                          <th className="text-left pl-4 py-2">Código</th>
+                          <th className="text-left px-3 py-2">Descrição</th>
+                          <th className="text-right px-3 py-2 w-20">%</th>
+                          <th className="text-right pr-4 py-2 w-28">Valor</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </CardContent>
-              </Card>
-            )}
+                      </thead>
+                      <tbody>
+                        {linhas.map((b: any) => (
+                          <tr key={b.id}
+                            className={`border-b hover:bg-muted/30 ${b.codigo === "B-02" ? "font-semibold text-amber-600" : ""}`}>
+                            <td className="pl-4 py-1.5 font-mono text-muted-foreground">{b.codigo}</td>
+                            <td className="px-3 py-1.5">{b.descricao}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">
+                              {(parseFloat(b.percentual || "0") * 100).toFixed(2)}%
+                            </td>
+                            <td className="pr-4 py-1.5 text-right text-amber-600 tabular-nums">
+                              {parseFloat(b.valorAbsoluto || "0") > 0
+                                ? formatBRL(parseFloat(b.valorAbsoluto))
+                                : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              ));
+            })()}
           </TabsContent>
 
           {insumos.length > 0 && (

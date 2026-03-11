@@ -6,14 +6,21 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calculator, Upload, Eye, Trash2, FolderOpen, RefreshCw, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Calculator, Upload, Eye, Trash2, Pencil,
+  FolderOpen, RefreshCw, Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -26,21 +33,87 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secon
   fechado:              { label: "Fechado",        variant: "secondary" },
 };
 
+interface EditForm {
+  id: number;
+  codigo: string;
+  descricao: string;
+  cliente: string;
+  local: string;
+  revisao: string;
+  dataBase: string;
+  obraId: string;
+  tempoObraMeses: string;
+}
+
+const EMPTY_FORM: EditForm = {
+  id: 0, codigo: "", descricao: "", cliente: "",
+  local: "", revisao: "", dataBase: "", obraId: "", tempoObraMeses: "",
+};
+
 export default function OrcamentoLista() {
   const { selectedCompanyId: selCompId } = useCompany();
   const companyId = selCompId ? parseInt(selCompId) : undefined;
   const [, navigate] = useLocation();
   const [busca, setBusca] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [form, setForm] = useState<EditForm>(EMPTY_FORM);
 
   const { data: lista = [], isLoading, refetch } = trpc.orcamento.list.useQuery(
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
   );
 
+  const { data: obras = [] } = trpc.obras.list.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: !!companyId }
+  );
+
   const deleteMutation = trpc.orcamento.delete.useMutation({
-    onSuccess: () => { toast.success("Orçamento excluído com sucesso."); refetch(); },
+    onSuccess: () => { toast.success("Orçamento excluído."); refetch(); },
     onError: (e) => toast.error(e.message || "Erro ao excluir"),
   });
+
+  const updateMutation = trpc.orcamento.update.useMutation({
+    onSuccess: () => {
+      toast.success("Orçamento atualizado com sucesso.");
+      setEditOpen(false);
+      refetch();
+    },
+    onError: (e) => toast.error(e.message || "Erro ao salvar"),
+  });
+
+  const openEdit = (orc: any) => {
+    setForm({
+      id:            orc.id,
+      codigo:        orc.codigo        || "",
+      descricao:     orc.descricao     || "",
+      cliente:       orc.cliente       || "",
+      local:         orc.local         || "",
+      revisao:       orc.revisao       || "",
+      dataBase:      orc.dataBase      || "",
+      obraId:        orc.obraId        ? String(orc.obraId) : "",
+      tempoObraMeses: orc.tempoObraMeses ? String(orc.tempoObraMeses) : "",
+    });
+    setEditOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!form.codigo.trim()) { toast.error("Código é obrigatório."); return; }
+    updateMutation.mutate({
+      id:             form.id,
+      codigo:         form.codigo.trim(),
+      descricao:      form.descricao.trim() || undefined,
+      cliente:        form.cliente.trim()   || undefined,
+      local:          form.local.trim()     || undefined,
+      revisao:        form.revisao.trim()   || undefined,
+      dataBase:       form.dataBase.trim()  || undefined,
+      obraId:         form.obraId ? parseInt(form.obraId) : null,
+      tempoObraMeses: form.tempoObraMeses ? parseInt(form.tempoObraMeses) : null,
+    });
+  };
+
+  const set = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [field]: e.target.value }));
 
   const filtrado = lista.filter((o: any) => {
     const q = busca.toLowerCase();
@@ -67,7 +140,7 @@ export default function OrcamentoLista() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => refetch()} className="gap-2">
+            <Button variant="ghost" size="sm" onClick={() => refetch()}>
               <RefreshCw className="h-4 w-4" />
             </Button>
             <Link href="/orcamento/importar">
@@ -123,8 +196,8 @@ export default function OrcamentoLista() {
                         <p className="text-xs text-muted-foreground mt-1 truncate">{orc.descricao || "—"}</p>
                         <div className="flex gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                           {orc.cliente && <span>Cliente: {orc.cliente}</span>}
-                          {orc.local && <span>Local: {orc.local}</span>}
-                          {bdi && <span className="text-amber-600 font-medium">{bdi}</span>}
+                          {orc.local   && <span>Local: {orc.local}</span>}
+                          {bdi  && <span className="text-amber-600 font-medium">{bdi}</span>}
                           {meta && <span className="text-purple-600 font-medium">{meta}</span>}
                         </div>
                       </div>
@@ -142,20 +215,28 @@ export default function OrcamentoLista() {
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
                         <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0"
+                          size="sm" variant="ghost" className="h-8 w-8 p-0"
                           onClick={() => navigate(`/orcamento/${orc.id}`)}
+                          title="Visualizar"
                         >
                           <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          onClick={() => openEdit(orc)}
+                          disabled={orc.status === "fechado"}
+                          title="Editar"
+                        >
+                          <Pencil className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
-                              size="sm"
-                              variant="ghost"
+                              size="sm" variant="ghost"
                               className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
                               disabled={orc.status === "fechado"}
+                              title="Excluir"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -186,8 +267,85 @@ export default function OrcamentoLista() {
             })}
           </div>
         )}
-
       </div>
+
+      {/* ── Dialog de Edição ── */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-blue-600" />
+              Editar Orçamento
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="col-span-2 space-y-1">
+              <Label>Código <span className="text-destructive">*</span></Label>
+              <Input value={form.codigo} onChange={set("codigo")} placeholder="Ex: ORC_747" />
+            </div>
+
+            <div className="col-span-2 space-y-1">
+              <Label>Descrição / Obra</Label>
+              <Input value={form.descricao} onChange={set("descricao")} placeholder="Nome da obra ou serviço" />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Cliente</Label>
+              <Input value={form.cliente} onChange={set("cliente")} placeholder="Nome do cliente" />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Local / Município</Label>
+              <Input value={form.local} onChange={set("local")} placeholder="Ex: São Paulo - SP" />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Revisão</Label>
+              <Input value={form.revisao} onChange={set("revisao")} placeholder="Ex: R05" />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Data Base</Label>
+              <Input value={form.dataBase} onChange={set("dataBase")} placeholder="Ex: Jan/2026" />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Prazo (meses)</Label>
+              <Input
+                type="number" min={1}
+                value={form.tempoObraMeses}
+                onChange={set("tempoObraMeses")}
+                placeholder="Ex: 24"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Obra vinculada</Label>
+              <select
+                value={form.obraId}
+                onChange={set("obraId")}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">— Nenhuma —</option>
+                {obras.map((o: any) => (
+                  <option key={o.id} value={o.id}>
+                    {o.codigo ? `${o.codigo} · ` : ""}{o.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Salvando..." : "Salvar alterações"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </DashboardLayout>
   );
 }
