@@ -39,9 +39,10 @@ export default function OrcamentoPrint() {
     );
   }
 
-  const orc    = data as any;
-  const obra   = orc.obra as any | null;   // dados da obra vinculada
-  const itens  = (orc.itens ?? []) as any[];
+  const orc     = data as any;
+  const obra    = orc.obra    as any | null;
+  const empresa = orc.empresa as any | null;
+  const itens   = (orc.itens ?? []) as any[];
 
   const totalCusto = n(orc.totalCusto);
   const totalVenda = n(orc.totalVenda);
@@ -199,10 +200,10 @@ export default function OrcamentoPrint() {
         .nivel-3 td { }
 
         .col-item { width: 52px; text-align: center; }
-        .col-desc { text-align: left; }
+        .col-desc { width: 220px; max-width: 220px; text-align: left; overflow: hidden; }
         .col-un   { width: 26px; text-align: center; }
         .col-qtd  { width: 44px; text-align: right; }
-        .col-num  { width: 60px; text-align: right; }
+        .col-num  { width: 66px; text-align: right; }
         .col-abc  { width: 22px; text-align: center; }
 
         .val-mat  { color: #1a5276; font-weight: 500; }
@@ -236,15 +237,25 @@ export default function OrcamentoPrint() {
       <div className="header-wrap">
         <div className="header-top">
           <div className="header-title">
-            <h1>FC Engenharia e Consultoria Ltda</h1>
+            <h1>{empresa?.razaoSocial || empresa?.nomeFantasia || "FC Engenharia e Consultoria Ltda"}</h1>
             <p>Planilha Orçamentária Analítica</p>
             <p className="rev">{orc.revisao || "—"}</p>
           </div>
           <div className="header-logo">
-            <div className="logo-circle">
-              <span className="logo-fc">FC</span>
-              <span className="logo-sub">ENGENHARIA</span>
-            </div>
+            {empresa?.logoUrl ? (
+              <img
+                src={empresa.logoUrl}
+                alt="Logo"
+                style={{ maxWidth: 68, maxHeight: 56, objectFit: "contain" }}
+              />
+            ) : (
+              <div className="logo-circle">
+                <span className="logo-fc">
+                  {(empresa?.razaoSocial || "FC").substring(0, 2).toUpperCase()}
+                </span>
+                <span className="logo-sub">ENGENHARIA</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -358,7 +369,7 @@ export default function OrcamentoPrint() {
 
       {/* Rodapé */}
       <div style={{ marginTop: 6, fontSize: "6.5pt", color: "#666", borderTop: "0.5px solid #ccc", paddingTop: 3, display: "flex", justifyContent: "space-between" }}>
-        <span>FC Engenharia e Consultoria Ltda — Orçamento {orc.codigo} {orc.revisao || ""}</span>
+        <span>{empresa?.razaoSocial || "FC Engenharia e Consultoria Ltda"} — Orçamento {orc.codigo} {orc.revisao || ""}</span>
         <span>Impresso em {today}</span>
       </div>
     </>
