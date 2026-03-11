@@ -490,6 +490,94 @@ function parsearAbaCPUs(rows: any[][], companyId: number) {
 }
 
 // ============================================================
+// IN-MEMORY JOB STORE (importação de insumos em background)
+// ============================================================
+interface ImportJob {
+  total: number;
+  done: number;
+  inseridos: number;
+  atualizados: number;
+  status: 'running' | 'done' | 'error';
+  error?: string;
+  createdAt: number;
+}
+const importJobs = new Map<string, ImportJob>();
+
+// Limpeza automática de jobs com mais de 10 min
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  for (const [id, job] of importJobs) {
+    if (job.createdAt < cutoff) importJobs.delete(id);
+  }
+}, 5 * 60 * 1000);
+
+// Função auxiliar que processa insumos em background (sem bloquear o HTTP)
+async function processarImportacaoBackground(
+  jobId: string, insumos: ReturnType<typeof parsearAbaInsumosParaCatalogo>,
+  companyId: number, db: any,
+) {
+  const job = importJobs.get(jobId)!;
+  try {
+    for (const ins of insumos) {
+      const chave = normalizarTexto(ins.descricao);
+      const preco = ins.precoComEncargos > 0 ? ins.precoComEncargos : ins.precoBase;
+
+      let existente: any = null;
+      const byCode = await db.select().from(insumosCatalogo)
+        .where(and(eq(insumosCatalogo.companyId, companyId), eq(insumosCatalogo.codigo, ins.codigo)))
+        .limit(1);
+      existente = byCode[0];
+
+      if (!existente) {
+        const byKey = await db.select().from(insumosCatalogo)
+          .where(and(eq(insumosCatalogo.companyId, companyId), eq(insumosCatalogo.chaveNorm, chave)))
+          .limit(1);
+        existente = byKey[0];
+      }
+
+      if (existente) {
+        await db.update(insumosCatalogo).set({
+          codigo:            ins.codigo.substring(0, 100),
+          descricao:         ins.descricao.substring(0, 1000),
+          unidade:           ins.unidade.substring(0, 30) || existente.unidade,
+          tipo:              ins.tipo.substring(0, 100) || existente.tipo,
+          precoUnitario:     fix4(preco),
+          precoMin:          fix4(Math.min(parseFloat(existente.precoMin || String(preco)), preco)),
+          precoMax:          fix4(Math.max(parseFloat(existente.precoMax || '0'), preco)),
+          precoMedio:        fix4(preco),
+          ultimaAtualizacao: new Date().toISOString(),
+        }).where(eq(insumosCatalogo.id, existente.id));
+        job.atualizados++;
+      } else {
+        await db.insert(insumosCatalogo).values({
+          companyId,
+          codigo:            ins.codigo.substring(0, 100),
+          descricao:         ins.descricao.substring(0, 1000),
+          unidade:           ins.unidade.substring(0, 30) || null,
+          tipo:              ins.tipo.substring(0, 100) || null,
+          precoUnitario:     fix4(preco),
+          precoMin:          fix4(preco),
+          precoMax:          fix4(preco),
+          precoMedio:        fix4(preco),
+          totalOrcamentos:   0,
+          totalQuantidade:   fix4(ins.quantidadeTotal),
+          chaveNorm:         chave,
+          ultimaAtualizacao: new Date().toISOString(),
+          criadoEm:          new Date().toISOString(),
+        });
+        job.inseridos++;
+      }
+
+      job.done++;
+    }
+    job.status = 'done';
+  } catch (err: any) {
+    job.status = 'error';
+    job.error = err?.message ?? 'Erro desconhecido';
+  }
+}
+
+// ============================================================
 // ROUTER
 // ============================================================
 
@@ -1189,7 +1277,7 @@ export const orcamentoRouter = router({
         .limit(1000);
     }),
 
-  // ── Importar insumos direto de planilha para o catálogo ─────
+  // ── Importar insumos: inicia o job em background e retorna jobId ──
   importarInsumosCatalogo: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -1200,74 +1288,41 @@ export const orcamentoRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco de dados não disponível.' });
 
+      // Importação dinâmica do xlsx (igual às outras procedures)
+      const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
       const wb = XLSX.read(buffer, { type: 'buffer' });
 
-      const insTab = wb.SheetNames.find(n => n.toLowerCase() === 'insumos');
+      const insTab = wb.SheetNames.find((n: string) => n.toLowerCase() === 'insumos');
       if (!insTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "Insumos" não encontrada na planilha.' });
 
       const dataIns = XLSX.utils.sheet_to_json(wb.Sheets[insTab], { header: 1, defval: '' }) as any[][];
       const insumos = parsearAbaInsumosParaCatalogo(dataIns, input.companyId);
       if (insumos.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum insumo com preço válido encontrado na aba "Insumos".' });
 
-      let inseridos = 0;
-      let atualizados = 0;
+      // Cria job e inicia processamento em background (não bloqueia o HTTP)
+      const jobId = `imp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      importJobs.set(jobId, { total: insumos.length, done: 0, inseridos: 0, atualizados: 0, status: 'running', createdAt: Date.now() });
+      processarImportacaoBackground(jobId, insumos, input.companyId, db);
 
-      for (const ins of insumos) {
-        const chave = normalizarTexto(ins.descricao);
-        const preco = ins.precoComEncargos > 0 ? ins.precoComEncargos : ins.precoBase;
+      return { jobId, total: insumos.length };
+    }),
 
-        // 1) Busca por código
-        let existente: any = null;
-        const byCode = await db.select().from(insumosCatalogo)
-          .where(and(eq(insumosCatalogo.companyId, input.companyId), eq(insumosCatalogo.codigo, ins.codigo)))
-          .limit(1);
-        existente = byCode[0];
-
-        // 2) Busca por chave normalizada
-        if (!existente) {
-          const byKey = await db.select().from(insumosCatalogo)
-            .where(and(eq(insumosCatalogo.companyId, input.companyId), eq(insumosCatalogo.chaveNorm, chave)))
-            .limit(1);
-          existente = byKey[0];
-        }
-
-        if (existente) {
-          // Atualiza preços e tipo (mantém histórico de orçamentos intacto)
-          await db.update(insumosCatalogo).set({
-            codigo:           ins.codigo.substring(0, 100),
-            descricao:        ins.descricao.substring(0, 1000),
-            unidade:          ins.unidade.substring(0, 30) || existente.unidade,
-            tipo:             ins.tipo.substring(0, 100) || existente.tipo,
-            precoUnitario:    fix4(preco),
-            precoMin:         fix4(Math.min(parseFloat(existente.precoMin || String(preco)), preco)),
-            precoMax:         fix4(Math.max(parseFloat(existente.precoMax || '0'), preco)),
-            precoMedio:       fix4(preco),
-            ultimaAtualizacao: new Date().toISOString(),
-          }).where(eq(insumosCatalogo.id, existente.id));
-          atualizados++;
-        } else {
-          await db.insert(insumosCatalogo).values({
-            companyId:        input.companyId,
-            codigo:           ins.codigo.substring(0, 100),
-            descricao:        ins.descricao.substring(0, 1000),
-            unidade:          ins.unidade.substring(0, 30) || null,
-            tipo:             ins.tipo.substring(0, 100) || null,
-            precoUnitario:    fix4(preco),
-            precoMin:         fix4(preco),
-            precoMax:         fix4(preco),
-            precoMedio:       fix4(preco),
-            totalOrcamentos:  0,
-            totalQuantidade:  fix4(ins.quantidadeTotal),
-            chaveNorm:        chave,
-            ultimaAtualizacao: new Date().toISOString(),
-            criadoEm:         new Date().toISOString(),
-          });
-          inseridos++;
-        }
-      }
-
-      return { total: insumos.length, inseridos, atualizados };
+  // ── Consultar progresso de um job de importação ────────────
+  progressoImportacao: protectedProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(({ input }) => {
+      const job = importJobs.get(input.jobId);
+      if (!job) return null;
+      return {
+        total:      job.total,
+        done:       job.done,
+        inseridos:  job.inseridos,
+        atualizados: job.atualizados,
+        status:     job.status,
+        error:      job.error,
+        pct:        job.total > 0 ? Math.round((job.done / job.total) * 100) : 0,
+      };
     }),
 
   listarComposicoesCatalogo: protectedProcedure

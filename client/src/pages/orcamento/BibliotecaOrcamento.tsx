@@ -98,7 +98,8 @@ function ComposicoesView({ companyId }: { companyId: number }) {
 /* ── INSUMOS ─────────────────────────────────────────────────── */
 function InsumosView({ companyId }: { companyId: number }) {
   const [search, setSearch] = useState("");
-  const [importResult, setImportResult] = useState<{ total: number; inseridos: number; atualizados: number } | null>(null);
+  const [jobId, setJobId]   = useState<string | null>(null);
+  const [jobTotal, setJobTotal] = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -106,22 +107,41 @@ function InsumosView({ companyId }: { companyId: number }) {
   const { data: insumos = [], isLoading } =
     trpc.orcamento.listarInsumosCatalogo.useQuery({ companyId }, { enabled: companyId > 0 });
 
+  // Polling do progresso enquanto jobId existir e status = 'running'
+  const { data: progresso } = trpc.orcamento.progressoImportacao.useQuery(
+    { jobId: jobId ?? "" },
+    {
+      enabled: !!jobId,
+      refetchInterval: (data: any) => {
+        if (!data || data.status === 'running') return 600;
+        return false;
+      },
+      onSuccess: (data: any) => {
+        if (data?.status === 'done') {
+          utils.orcamento.listarInsumosCatalogo.invalidate({ companyId });
+        }
+        if (data?.status === 'error') {
+          setImportError(data.error ?? 'Erro desconhecido');
+        }
+      },
+    }
+  );
+
   const importMut = trpc.orcamento.importarInsumosCatalogo.useMutation({
     onSuccess: (res) => {
-      setImportResult(res);
+      setJobId(res.jobId);
+      setJobTotal(res.total);
       setImportError(null);
-      utils.orcamento.listarInsumosCatalogo.invalidate({ companyId });
     },
     onError: (err) => {
       setImportError(err.message);
-      setImportResult(null);
     },
   });
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImportResult(null);
+    setJobId(null);
     setImportError(null);
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -130,9 +150,13 @@ function InsumosView({ companyId }: { companyId: number }) {
       importMut.mutate({ companyId, fileBase64: base64, fileName: file.name });
     };
     reader.readAsDataURL(file);
-    // Reset input so same file can be reimportado
     e.target.value = "";
   }
+
+  const isImporting = importMut.isPending || (!!jobId && progresso?.status === 'running');
+  const pct = progresso?.pct ?? 0;
+  const done = progresso?.done ?? 0;
+  const total = progresso?.total ?? jobTotal;
 
   const q = search.toLowerCase();
   const filt = insumos.filter((i: any) =>
@@ -162,25 +186,49 @@ function InsumosView({ companyId }: { companyId: number }) {
           variant="outline"
           className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
           onClick={() => fileRef.current?.click()}
-          disabled={importMut.isPending}
+          disabled={isImporting}
         >
-          {importMut.isPending
+          {isImporting
             ? <><Loader2 className="h-4 w-4 animate-spin" /> Importando...</>
             : <><Upload className="h-4 w-4" /> Importar Planilha</>
           }
         </Button>
       </div>
 
-      {/* Resultado da importação */}
-      {importResult && (
+      {/* Barra de progresso */}
+      {jobId && progresso && progresso.status !== 'done' && progresso.status !== 'error' && (
+        <div className="mb-4 p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+          <div className="flex items-center justify-between text-sm text-emerald-800 mb-2">
+            <span className="font-medium flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Importando insumos...
+            </span>
+            <span className="font-mono font-bold">{pct}%</span>
+          </div>
+          <div className="w-full bg-emerald-200 rounded-full h-3 overflow-hidden">
+            <div
+              className="bg-emerald-500 h-3 rounded-full transition-all duration-300"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="text-xs text-emerald-700 mt-1.5">
+            {done} de {total} insumos processados
+            {progresso.inseridos > 0 && ` · ${progresso.inseridos} inseridos`}
+            {progresso.atualizados > 0 && ` · ${progresso.atualizados} atualizados`}
+          </p>
+        </div>
+      )}
+
+      {/* Resultado final */}
+      {progresso?.status === 'done' && jobId && (
         <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-800">
           <CheckCircle className="h-4 w-4 flex-shrink-0" />
           <span>
-            Importação concluída: <strong>{importResult.total}</strong> insumos processados —{" "}
-            <strong>{importResult.inseridos}</strong> inseridos,{" "}
-            <strong>{importResult.atualizados}</strong> atualizados.
+            Importação concluída: <strong>{progresso.total}</strong> insumos —{" "}
+            <strong>{progresso.inseridos}</strong> inseridos,{" "}
+            <strong>{progresso.atualizados}</strong> atualizados.
           </span>
-          <button onClick={() => setImportResult(null)} className="ml-auto text-emerald-600 hover:text-emerald-800">✕</button>
+          <button onClick={() => setJobId(null)} className="ml-auto text-emerald-600 hover:text-emerald-800">✕</button>
         </div>
       )}
       {importError && (
