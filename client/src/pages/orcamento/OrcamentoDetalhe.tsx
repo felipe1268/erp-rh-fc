@@ -83,6 +83,7 @@ export default function OrcamentoDetalhe() {
   const [savingMeta, setSavingMeta] = useState(false);
   const [localMetaVal, setLocalMetaVal] = useState<number | null>(null); // R$ exato digitado
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+  const [expandedComps, setExpandedComps] = useState<Set<string>>(new Set());
 
   const { data, isLoading, refetch } = trpc.orcamento.getById.useQuery(
     { id },
@@ -176,6 +177,12 @@ export default function OrcamentoDetalhe() {
     { orcamentoId: id, companyId: bibCompanyId },
     { enabled: bibLoaded && id > 0 && bibCompanyId > 0, staleTime: 0 }
   );
+
+  const composicoesQuery = trpc.orcamento.getComposicoesCatalogo.useQuery(
+    { orcamentoId: id, companyId: bibCompanyId },
+    { enabled: activeTab === "composicoes" && id > 0 && bibCompanyId > 0, staleTime: 30_000 }
+  );
+  const composicoesCatalogo = (composicoesQuery.data ?? []) as any[];
 
   const enviarMutation = trpc.orcamento.enviarParaBiblioteca.useMutation({
     onSuccess: res => {
@@ -509,7 +516,7 @@ export default function OrcamentoDetalhe() {
               Insumos {insumos.length > 0 && `(${insumos.length})`}
             </TabsTrigger>
             <TabsTrigger value="composicoes">
-              Composições {leafItems.length > 0 && `(${leafItems.length})`}
+              Composições {composicoesCatalogo.length > 0 ? `(${composicoesCatalogo.length})` : leafItems.length > 0 ? `(${leafItems.length})` : ""}
             </TabsTrigger>
             {insumos.length > 0 && <TabsTrigger value="abc">Curva ABC Insumos</TabsTrigger>}
             {insumos.length > 0 && <TabsTrigger value="abc-cat">Curva ABC por Categoria</TabsTrigger>}
@@ -779,51 +786,112 @@ export default function OrcamentoDetalhe() {
 
           {/* ═══ ABA COMPOSIÇÕES ════════════════════════════════════════ */}
           <TabsContent value="composicoes" className="mt-3">
-            {leafItems.length === 0 ? (
+            {composicoesQuery.isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin opacity-40" />
+                <p className="text-sm">Carregando composições...</p>
+              </div>
+            ) : composicoesCatalogo.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Wrench className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
-                <p className="text-sm">Nenhuma composição encontrada.</p>
+                <p className="text-sm font-medium">Nenhuma composição encontrada.</p>
+                <p className="text-xs mt-1 text-muted-foreground/70">
+                  As composições são importadas automaticamente da aba CPUs da planilha.<br/>
+                  Se este orçamento foi importado antes desta funcionalidade, reimporte a planilha.
+                </p>
               </div>
             ) : (
               <Card>
-                <CardContent className="py-3 px-0 overflow-x-auto">
-                  <table className="w-full text-xs min-w-[700px]">
+                <CardContent className="py-0 px-0 overflow-x-auto">
+                  <table className="w-full text-xs min-w-[900px]">
                     <thead>
                       <tr className="border-b bg-muted/50 text-muted-foreground">
-                        <th className="text-left pl-4 py-2 w-28">Código EAP</th>
+                        <th className="text-left pl-2 py-2 w-6"></th>
+                        <th className="text-left pl-2 py-2 w-28">EAP / CPU</th>
                         <th className="text-left px-3 py-2">Descrição</th>
                         <th className="text-left px-3 py-2 w-12">Un</th>
                         <th className="text-right px-3 py-2 w-20">Qtd</th>
-                        <th className="text-right px-3 py-2 w-28">Mat</th>
-                        <th className="text-right px-3 py-2 w-28">MO</th>
-                        <th className="text-right px-3 py-2 w-28">Custo Total</th>
+                        <th className="text-right px-3 py-2 w-28 text-blue-700">Mat Total</th>
+                        <th className="text-right px-3 py-2 w-28 text-purple-700">MO Total</th>
+                        <th className="text-right px-3 py-2 w-28 text-amber-600">Custo Total</th>
                         <th className="text-right pr-4 py-2 w-14">%</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {[...leafItems].sort((a, b) => n(b.custoTotal) - n(a.custoTotal)).map(item => {
-                        const pct = totalCusto > 0 ? (n(item.custoTotal) / totalCusto) * 100 : 0;
+                      {composicoesCatalogo.map((comp: any) => {
+                        const pct = totalCusto > 0 ? (n(comp.custoTotal) / totalCusto) * 100 : 0;
+                        const isExpanded = expandedComps.has(comp.eapCodigo ?? '');
+                        const hasInsumos = (comp.insumos ?? []).length > 0;
                         return (
-                          <tr key={item.id} className="border-b hover:bg-muted/30">
-                            <td className="pl-4 py-1.5 font-mono text-muted-foreground">{item.eapCodigo}</td>
-                            <td className="px-3 py-1.5 max-w-xs truncate">{item.descricao}</td>
-                            <td className="px-3 py-1.5 text-muted-foreground">{item.unidade}</td>
-                            <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
-                              {n(item.quantidade).toFixed(2)}
-                            </td>
-                            <td className="px-3 py-1.5 text-right tabular-nums text-blue-700">
-                              {formatBRL(n(item.custoTotalMat))}
-                            </td>
-                            <td className="px-3 py-1.5 text-right tabular-nums text-purple-700">
-                              {formatBRL(n(item.custoTotalMdo))}
-                            </td>
-                            <td className="px-3 py-1.5 text-right font-medium text-amber-600 tabular-nums">
-                              {formatBRL(n(item.custoTotal))}
-                            </td>
-                            <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
-                              {pct.toFixed(2)}%
-                            </td>
-                          </tr>
+                          <React.Fragment key={comp.eapCodigo ?? comp.servicoCodigo}>
+                            {/* Linha da composição */}
+                            <tr
+                              className={`border-b ${hasInsumos ? 'cursor-pointer hover:bg-muted/30' : 'hover:bg-muted/20'} ${isExpanded ? 'bg-blue-50/40' : ''}`}
+                              onClick={() => {
+                                if (!hasInsumos) return;
+                                setExpandedComps(prev => {
+                                  const s = new Set(prev);
+                                  s.has(comp.eapCodigo) ? s.delete(comp.eapCodigo) : s.add(comp.eapCodigo);
+                                  return s;
+                                });
+                              }}
+                            >
+                              <td className="pl-2 py-1.5 text-center text-muted-foreground w-6">
+                                {hasInsumos ? (isExpanded ? "▾" : "▸") : ""}
+                              </td>
+                              <td className="pl-2 py-1.5 font-mono text-muted-foreground">
+                                <div>{comp.eapCodigo}</div>
+                                {comp.servicoCodigo && (
+                                  <div className="text-[10px] text-blue-500">{comp.servicoCodigo}</div>
+                                )}
+                              </td>
+                              <td className="px-3 py-1.5 font-medium max-w-xs">
+                                <span className="line-clamp-2">{comp.descricao}</span>
+                              </td>
+                              <td className="px-3 py-1.5 text-muted-foreground">{comp.unidade}</td>
+                              <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
+                                {n(comp.quantidade).toFixed(2)}
+                              </td>
+                              <td className="px-3 py-1.5 text-right tabular-nums text-blue-700">
+                                {formatBRL(n(comp.custoTotalMat))}
+                              </td>
+                              <td className="px-3 py-1.5 text-right tabular-nums text-purple-700">
+                                {formatBRL(n(comp.custoTotalMdo))}
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-amber-600 tabular-nums">
+                                {formatBRL(n(comp.custoTotal))}
+                              </td>
+                              <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
+                                {pct.toFixed(2)}%
+                              </td>
+                            </tr>
+                            {/* Linhas dos insumos — expandíveis */}
+                            {isExpanded && (comp.insumos ?? []).map((ins: any, idx: number) => (
+                              <tr key={idx} className="bg-slate-50 border-b border-dashed hover:bg-slate-100/80">
+                                <td className="pl-2 py-1"></td>
+                                <td className="pl-4 py-1 font-mono text-[10px] text-slate-400">{ins.insumoCodigo}</td>
+                                <td className="px-3 py-1 text-slate-600 max-w-xs">
+                                  <span className="line-clamp-2">{ins.insumoDescricao}</span>
+                                </td>
+                                <td className="px-3 py-1 text-slate-400 text-[10px]">{ins.unidade}</td>
+                                <td className="px-3 py-1 text-right tabular-nums text-slate-500">
+                                  {n(ins.quantidade).toFixed(4)}
+                                </td>
+                                <td className="px-3 py-1 text-right tabular-nums text-blue-600/70">
+                                  {n(ins.custoTotalMat) > 0 ? formatBRL(n(ins.custoTotalMat)) : "—"}
+                                </td>
+                                <td className="px-3 py-1 text-right tabular-nums text-purple-600/70">
+                                  {n(ins.custoTotalMdo) > 0 ? formatBRL(n(ins.custoTotalMdo)) : "—"}
+                                </td>
+                                <td className="px-3 py-1 text-right tabular-nums text-slate-500">
+                                  {formatBRL(n(ins.custoTotal))}
+                                </td>
+                                <td className="pr-4 py-1 text-right text-[10px] text-slate-400">
+                                  PU: {formatBRL(n(ins.precoUnitario))}
+                                </td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
                         );
                       })}
                     </tbody>

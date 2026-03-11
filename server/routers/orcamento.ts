@@ -10,6 +10,7 @@ import {
   orcamentoRevisoes,
   insumosCatalogo,
   composicoesCatalogo,
+  composicaoInsumos,
   obras,
   companies,
 } from "../../drizzle/schema";
@@ -372,6 +373,77 @@ function parsearAbaInsumos(rows: any[][], companyId: number) {
 }
 
 // ============================================================
+// PARSER ABA CPUs (Composições de Preços Unitários)
+// Colunas: [0]=tipo(S/INS), [1]=Cód_1, [2]=Cód_Aux, [3]=Cód_Insumo,
+//          [4]=Descrição, [5]=Un, [6]=Qtd, [7]=PU_insumo,
+//          [8]=Alocação_MAT, [9]=Alocação_MO, [12]=PU_Total
+// ============================================================
+function parsearAbaCPUs(rows: any[][], companyId: number) {
+  const composicoes: {
+    companyId: number; codigo: string; descricao: string; unidade: string;
+    custoUnitMat: string; custoUnitMdo: string; custoUnitTotal: string;
+    tipo: string; chaveNorm: string;
+  }[] = [];
+
+  const linhasInsumos: {
+    companyId: number; composicaoCodigo: string; insumoCodigo: string;
+    insumoDescricao: string; unidade: string; quantidade: string;
+    precoUnitario: string; alocacaoMat: string; alocacaoMdo: string;
+    custoUnitTotal: string;
+  }[] = [];
+
+  let currentCod = '';
+
+  for (const row of rows) {
+    const tipo = String(row[0] || '').trim();
+    if (tipo === 'S') {
+      currentCod = String(row[1] || '').trim();
+      if (!currentCod) continue;
+      const descricao = String(row[4] || '').trim();
+      const unidade   = String(row[5] || '').trim();
+      const puMat     = toNum(row[10]);
+      const puMdo     = toNum(row[11]);
+      const puTotal   = toNum(row[12]);
+      composicoes.push({
+        companyId,
+        codigo:        currentCod.substring(0, 100),
+        descricao:     descricao.substring(0, 1000),
+        unidade:       unidade.substring(0, 30),
+        custoUnitMat:  fix4(puMat),
+        custoUnitMdo:  fix4(puMdo),
+        custoUnitTotal: fix4(puTotal),
+        tipo:          'CPU',
+        chaveNorm:     (descricao.toLowerCase().replace(/[^a-z0-9]/g, '')).substring(0, 500),
+      });
+    } else if (tipo === 'INS' && currentCod) {
+      const insumoCodigo   = String(row[3] || '').trim();
+      const insumoDescricao = String(row[4] || '').trim();
+      const unidade         = String(row[5] || '').trim();
+      const quantidade      = toNum(row[6]);
+      const precoUnitario   = toNum(row[7]);
+      const alocacaoMat     = toNum(row[8]);
+      const alocacaoMdo     = toNum(row[9]);
+      const custoUnit       = toNum(row[12]);
+      if (!insumoCodigo && !insumoDescricao) continue;
+      linhasInsumos.push({
+        companyId,
+        composicaoCodigo: currentCod.substring(0, 100),
+        insumoCodigo:     insumoCodigo.substring(0, 100),
+        insumoDescricao:  insumoDescricao.substring(0, 1000),
+        unidade:          unidade.substring(0, 30),
+        quantidade:       fix6(quantidade),
+        precoUnitario:    fix4(precoUnitario),
+        alocacaoMat:      fix6(alocacaoMat),
+        alocacaoMdo:      fix6(alocacaoMdo),
+        custoUnitTotal:   fix6(custoUnit),
+      });
+    }
+  }
+
+  return { composicoes, linhasInsumos };
+}
+
+// ============================================================
 // ROUTER
 // ============================================================
 
@@ -472,6 +544,12 @@ export const orcamentoRouter = router({
         ? parsearAbaInsumos(XLSX.utils.sheet_to_json(wb.Sheets[insumosTab], { header: 1, defval: '' }) as any[][], input.companyId)
         : [];
 
+      // CPUs — Composições de Preços Unitários (aba "CPUs" se existir)
+      const cpusTab = wb.SheetNames.find(n => n === 'CPUs' || n === 'Cpus' || n.toLowerCase() === 'cpus');
+      const cpusParsed = cpusTab
+        ? parsearAbaCPUs(XLSX.utils.sheet_to_json(wb.Sheets[cpusTab], { header: 1, defval: '' }) as any[][], input.companyId)
+        : { composicoes: [], linhasInsumos: [] };
+
       // Calcular totais pelos itens de nível 1
       const nivel1 = itens.filter(i => i.nivel === 1);
       const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal),    0);
@@ -536,8 +614,38 @@ export const orcamentoRouter = router({
         }
       }
 
+      // CPUs: upsert composições e seus insumos no catálogo global da empresa
+      if (cpusParsed.composicoes.length > 0) {
+        // 1) Apagar as composições anteriores desta empresa (reimporta limpo)
+        await db.delete(composicoesCatalogo).where(eq(composicoesCatalogo.companyId, input.companyId));
+        await db.delete(composicaoInsumos).where(eq(composicaoInsumos.companyId, input.companyId));
+
+        // 2) Inserir composições
+        for (let i = 0; i < cpusParsed.composicoes.length; i += BATCH) {
+          await db.insert(composicoesCatalogo).values(
+            cpusParsed.composicoes.slice(i, i + BATCH).map(c => ({
+              ...c,
+              totalOrcamentos: 1,
+              ultimaAtualizacao: new Date().toISOString(),
+              criadoEm: new Date().toISOString(),
+            }))
+          );
+        }
+
+        // 3) Inserir insumos de cada composição
+        for (let i = 0; i < cpusParsed.linhasInsumos.length; i += BATCH) {
+          await db.insert(composicaoInsumos).values(
+            cpusParsed.linhasInsumos.slice(i, i + BATCH)
+          );
+        }
+      }
+
       // Catálogo NÃO é atualizado automaticamente — usuário decide via "Enviar para Biblioteca"
-      return { id: orcamentoId, codigo, totalVenda, totalCusto, totalMeta, itemCount: itens.length };
+      return {
+        id: orcamentoId, codigo, totalVenda, totalCusto, totalMeta,
+        itemCount: itens.length,
+        composicoesCount: cpusParsed.composicoes.length,
+      };
     }),
 
   // ── Atualizar percentual Meta (admin_master) ──────────────
@@ -1041,6 +1149,114 @@ export const orcamentoRouter = router({
         .where(eq(composicoesCatalogo.companyId, input.companyId))
         .orderBy(desc(composicoesCatalogo.ultimaAtualizacao))
         .limit(1000);
+    }),
+
+  // ── Composições com insumos de um orçamento ───────────────────
+  // Busca as composições (CPUs) usadas nos itens folha deste orçamento,
+  // junto com seus insumos detalhados do catálogo da empresa.
+  getComposicoesCatalogo: protectedProcedure
+    .input(z.object({ orcamentoId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      // Pega todos os itens do orçamento para encontrar os servicoCodigos únicos
+      const itens = await db.select({
+        eapCodigo:    orcamentoItens.eapCodigo,
+        descricao:    orcamentoItens.descricao,
+        unidade:      orcamentoItens.unidade,
+        quantidade:   orcamentoItens.quantidade,
+        nivel:        orcamentoItens.nivel,
+        custoTotal:   orcamentoItens.custoTotal,
+        custoTotalMat: orcamentoItens.custoTotalMat,
+        custoTotalMdo: orcamentoItens.custoTotalMdo,
+        servicoCodigo: (orcamentoItens as any).servicoCodigo,
+      }).from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
+        .orderBy(orcamentoItens.ordem);
+
+      // Identifica folhas (sem filhos — itens que nenhum outro item começa com seu código + ".")
+      const folhas = itens.filter(i => {
+        const cod = i.eapCodigo ?? '';
+        return !itens.some(j => {
+          const jcod = j.eapCodigo ?? '';
+          return jcod !== cod && jcod.startsWith(cod + '.');
+        });
+      });
+
+      // Pega os servicoCodigos únicos das folhas
+      const serviceCodes = [...new Set(
+        folhas.map(i => i.servicoCodigo).filter(Boolean) as string[]
+      )];
+
+      if (serviceCodes.length === 0) return [];
+
+      // Busca as composições do catálogo por esses códigos
+      const comps = await db.select().from(composicoesCatalogo)
+        .where(and(
+          eq(composicoesCatalogo.companyId, input.companyId),
+          inArray(composicoesCatalogo.codigo, serviceCodes)
+        ));
+
+      // Busca os insumos de cada composição
+      const compCodigos = comps.map(c => c.codigo).filter(Boolean) as string[];
+      const insumosRows = compCodigos.length > 0
+        ? await db.select().from(composicaoInsumos)
+            .where(and(
+              eq(composicaoInsumos.companyId, input.companyId),
+              inArray(composicaoInsumos.composicaoCodigo, compCodigos)
+            ))
+        : [];
+
+      // Monta mapa de insumos por composição
+      const insMap = new Map<string, typeof insumosRows>();
+      for (const ins of insumosRows) {
+        const list = insMap.get(ins.composicaoCodigo) ?? [];
+        list.push(ins);
+        insMap.set(ins.composicaoCodigo, list);
+      }
+
+      // Para cada folha EAP, une com sua composição + insumos
+      return folhas
+        .filter(f => f.servicoCodigo)
+        .sort((a, b) => parseFloat(b.custoTotal ?? '0') - parseFloat(a.custoTotal ?? '0'))
+        .map(f => {
+          const comp = comps.find(c => c.codigo === f.servicoCodigo);
+          const insumos = insMap.get(f.servicoCodigo ?? '') ?? [];
+          const qtdOrcada = parseFloat(f.quantidade ?? '1') || 1;
+          return {
+            eapCodigo:    f.eapCodigo,
+            descricao:    f.descricao,
+            unidade:      f.unidade,
+            quantidade:   f.quantidade,
+            custoTotal:   f.custoTotal,
+            custoTotalMat: f.custoTotalMat,
+            custoTotalMdo: f.custoTotalMdo,
+            servicoCodigo: f.servicoCodigo,
+            comp: comp ? {
+              codigo:        comp.codigo,
+              descricao:     comp.descricao,
+              unidade:       comp.unidade,
+              custoUnitMat:  comp.custoUnitMat,
+              custoUnitMdo:  comp.custoUnitMdo,
+              custoUnitTotal: comp.custoUnitTotal,
+            } : null,
+            insumos: insumos.map(ins => ({
+              insumoCodigo:   ins.insumoCodigo,
+              insumoDescricao: ins.insumoDescricao,
+              unidade:        ins.unidade,
+              quantidade:     ins.quantidade,
+              precoUnitario:  ins.precoUnitario,
+              alocacaoMat:    ins.alocacaoMat,
+              alocacaoMdo:    ins.alocacaoMdo,
+              custoUnitTotal: ins.custoUnitTotal,
+              // Custo total = custo_unit × qtd orçada
+              custoTotalMat:  (parseFloat(ins.alocacaoMat ?? '0') * qtdOrcada).toFixed(2),
+              custoTotalMdo:  (parseFloat(ins.alocacaoMdo ?? '0') * qtdOrcada).toFixed(2),
+              custoTotal:     (parseFloat(ins.custoUnitTotal ?? '0') * qtdOrcada).toFixed(2),
+            })),
+          };
+        });
     }),
 
   // ── Resumo para o painel ──────────────────────────────────
