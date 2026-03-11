@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
-  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen,
+  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -479,6 +479,9 @@ export default function OrcamentoDetalhe() {
             <TabsTrigger value="insumos">
               Insumos {insumos.length > 0 && `(${insumos.length})`}
             </TabsTrigger>
+            <TabsTrigger value="composicoes">
+              Composições {leafItems.length > 0 && `(${leafItems.length})`}
+            </TabsTrigger>
             {insumos.length > 0 && <TabsTrigger value="abc">Curva ABC Insumos</TabsTrigger>}
             {insumos.length > 0 && <TabsTrigger value="abc-cat">Curva ABC por Categoria</TabsTrigger>}
           </TabsList>
@@ -745,6 +748,62 @@ export default function OrcamentoDetalhe() {
             )}
           </TabsContent>
 
+          {/* ═══ ABA COMPOSIÇÕES ════════════════════════════════════════ */}
+          <TabsContent value="composicoes" className="mt-3">
+            {leafItems.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Wrench className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
+                <p className="text-sm">Nenhuma composição encontrada.</p>
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-3 px-0 overflow-x-auto">
+                  <table className="w-full text-xs min-w-[700px]">
+                    <thead>
+                      <tr className="border-b bg-muted/50 text-muted-foreground">
+                        <th className="text-left pl-4 py-2 w-28">Código EAP</th>
+                        <th className="text-left px-3 py-2">Descrição</th>
+                        <th className="text-left px-3 py-2 w-12">Un</th>
+                        <th className="text-right px-3 py-2 w-20">Qtd</th>
+                        <th className="text-right px-3 py-2 w-28">Mat</th>
+                        <th className="text-right px-3 py-2 w-28">MO</th>
+                        <th className="text-right px-3 py-2 w-28">Custo Total</th>
+                        <th className="text-right pr-4 py-2 w-14">%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...leafItems].sort((a, b) => n(b.custoTotal) - n(a.custoTotal)).map(item => {
+                        const pct = totalCusto > 0 ? (n(item.custoTotal) / totalCusto) * 100 : 0;
+                        return (
+                          <tr key={item.id} className="border-b hover:bg-muted/30">
+                            <td className="pl-4 py-1.5 font-mono text-muted-foreground">{item.eapCodigo}</td>
+                            <td className="px-3 py-1.5 max-w-xs truncate">{item.descricao}</td>
+                            <td className="px-3 py-1.5 text-muted-foreground">{item.unidade}</td>
+                            <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
+                              {n(item.quantidade).toFixed(2)}
+                            </td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-blue-700">
+                              {formatBRL(n(item.custoTotalMat))}
+                            </td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-purple-700">
+                              {formatBRL(n(item.custoTotalMdo))}
+                            </td>
+                            <td className="px-3 py-1.5 text-right font-medium text-amber-600 tabular-nums">
+                              {formatBRL(n(item.custoTotal))}
+                            </td>
+                            <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
+                              {pct.toFixed(2)}%
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
           {/* ═══ ABA CURVA ABC ═════════════════════════════════════════ */}
           {insumos.length > 0 && (
             <TabsContent value="abc" className="mt-3">
@@ -780,7 +839,7 @@ export default function OrcamentoDetalhe() {
                       </tr>
                     </thead>
                     <tbody>
-                      {insumos.map((ins: any) => (
+                      {[...insumos].sort((a: any, b: any) => n(b.custoTotal) - n(a.custoTotal)).map((ins: any) => (
                         <tr key={ins.id} className="border-b hover:bg-muted/30">
                           <td className="pl-4 py-1.5">
                             <span className={`inline-block w-5 h-5 rounded text-center font-bold leading-5 text-white text-xs
