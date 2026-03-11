@@ -1277,6 +1277,104 @@ export const orcamentoRouter = router({
         .limit(10000);
     }),
 
+  // ── Gerar próximo código único para insumo manual ────────────
+  // Reserva o espaço 99.XX.XX para insumos criados manualmente
+  gerarCodigoInsumo: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return '99.00.01';
+      const rows = await db.select({ codigo: insumosCatalogo.codigo })
+        .from(insumosCatalogo)
+        .where(eq(insumosCatalogo.companyId, input.companyId));
+      // Filtra códigos no padrão 99.XX.XX
+      const manual = rows
+        .map(r => r.codigo ?? '')
+        .filter(c => /^99\.\d{2}\.\d{2}$/.test(c))
+        .map(c => {
+          const parts = c.split('.');
+          return parseInt(parts[1]) * 100 + parseInt(parts[2]);
+        })
+        .sort((a, b) => b - a);
+      const next = (manual[0] ?? 0) + 1;
+      const sub  = Math.floor(next / 100).toString().padStart(2, '0');
+      const item = (next % 100 === 0 ? 1 : next % 100).toString().padStart(2, '0');
+      // Gera formato nn.nn.nn sempre único
+      const seq = manual.length > 0 ? manual[0] + 1 : 1;
+      const sub2  = Math.floor((seq - 1) / 99 + 1).toString().padStart(2, '0');
+      const item2 = ((seq - 1) % 99 + 1).toString().padStart(2, '0');
+      return `99.${sub2}.${item2}`;
+    }),
+
+  // ── Salvar insumo (criar ou editar) ─────────────────────────
+  salvarInsumo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      id:        z.number().optional(),
+      codigo:    z.string().max(100),
+      descricao: z.string().min(1).max(1000),
+      unidade:   z.string().max(30).optional().default(''),
+      tipo:      z.string().max(100).optional().default(''),
+      precoUnitario: z.string().optional().default('0'),
+      precoMin:      z.string().optional().default('0'),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      const chave = normalizarTexto(input.descricao);
+      const preco = parseFloat(input.precoUnitario || '0');
+
+      if (input.id) {
+        // Atualizar existente
+        await db.update(insumosCatalogo).set({
+          codigo:            input.codigo.trim(),
+          descricao:         input.descricao.trim(),
+          unidade:           (input.unidade ?? '').trim() || null,
+          tipo:              (input.tipo ?? '').trim() || null,
+          precoUnitario:     fix4(preco),
+          precoMin:          fix4(parseFloat(input.precoMin || '0')),
+          precoMedio:        fix4(preco),
+          chaveNorm:         chave,
+          ultimaAtualizacao: new Date().toISOString(),
+        }).where(and(eq(insumosCatalogo.id, input.id), eq(insumosCatalogo.companyId, input.companyId)));
+      } else {
+        // Verificar se código já existe
+        const existing = await db.select({ id: insumosCatalogo.id })
+          .from(insumosCatalogo)
+          .where(and(eq(insumosCatalogo.companyId, input.companyId), eq(insumosCatalogo.codigo, input.codigo.trim())))
+          .limit(1);
+        if (existing.length > 0) throw new TRPCError({ code: 'CONFLICT', message: `Código "${input.codigo}" já existe.` });
+        await db.insert(insumosCatalogo).values({
+          companyId:         input.companyId,
+          codigo:            input.codigo.trim(),
+          descricao:         input.descricao.trim(),
+          unidade:           (input.unidade ?? '').trim() || null,
+          tipo:              (input.tipo ?? '').trim() || null,
+          precoUnitario:     fix4(preco),
+          precoMin:          fix4(parseFloat(input.precoMin || '0')),
+          precoMax:          fix4(preco),
+          precoMedio:        fix4(preco),
+          totalOrcamentos:   0,
+          totalQuantidade:   '0',
+          chaveNorm:         chave,
+          ultimaAtualizacao: new Date().toISOString(),
+          criadoEm:          new Date().toISOString(),
+        });
+      }
+      return { ok: true };
+    }),
+
+  // ── Excluir insumo do catálogo ───────────────────────────────
+  excluirInsumo: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      await db.delete(insumosCatalogo)
+        .where(and(eq(insumosCatalogo.id, input.id), eq(insumosCatalogo.companyId, input.companyId)));
+      return { ok: true };
+    }),
+
   // ── Importar insumos: inicia o job em background e retorna jobId ──
   importarInsumosCatalogo: protectedProcedure
     .input(z.object({
