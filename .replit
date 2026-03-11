@@ -14,6 +14,8 @@ VITE_APP_TITLE = "ERP RH & DP - FC Engenharia"
 VITE_APP_LOGO = "/fc-logo.png"
 NODE_ENV = "development"
 OAUTH_SERVER_URL = "https://forge.manus.ai"
+VITE_OAUTH_PORTAL_URL = "https://manus.im"
+VITE_APP_ID = "W4MM458SKqYRWRGGQrfw8A"
 
 [workflows]
 runButton = "Project"
