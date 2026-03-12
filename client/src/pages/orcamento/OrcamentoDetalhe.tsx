@@ -211,10 +211,18 @@ export default function OrcamentoDetalhe() {
 
   useEffect(() => {
     if (data) {
-      const pct = parseFloat((data as any).metaPercentual || "0") * 100; // precisão total — sem arredondamento
+      const pct = parseFloat((data as any).metaPercentual || "0") * 100;
       setLocalMetaPerc(pct);
       setMetaInput(r2(pct).toFixed(2));
-      setLocalMetaVal(null); // reseta R$ fixo ao recarregar dados
+      // Restaura o R$ exato salvo no banco — evita desvio por recálculo via %
+      const savedMeta = parseFloat((data as any).totalMeta || "0");
+      if (savedMeta > 0) {
+        setLocalMetaVal(savedMeta);
+        setMetaValInput(savedMeta.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      } else {
+        setLocalMetaVal(null);
+        setMetaValInput("");
+      }
       setLocalBdiPct(parseFloat((data as any).bdiPercentual || "0"));
     }
   }, [data]);
