@@ -395,7 +395,9 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
 //                  CD-01..CD-03, CI-01..CI-08, DI-01..DI-10,
 //                  B-01, B-02, B-04, L-01..L-04, "CD + CI ="
 // Ordem importa: padrões mais específicos ANTES dos curtos (CD-01 antes de CD)
-const BDI_COD_VALIDO = /^(CD-\d{2}|CI-\d{2}|DI-\d{2}|B-\d{2}|L-\d{2}|V\d{1,2}|PV-\d|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
+// B-03 e B-05 excluídos (duplicatas erradas — L-01..L-04 são os corretos)
+// PV aceita espaços: "PV - 2" e "PV-2" equivalentes; Sub-códigos CD-02.1, CI-01.x permitidos
+const BDI_COD_VALIDO = /^(CD-\d{2}(\.\d+)?|CI-\d{2}(\.\d+)?|DI-\d{2}|B-0[124]|L-\d{2}|V\d{1,2}|PV\s*-\s*[23]|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
 
 function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
   let bdiPercentual = 0;
