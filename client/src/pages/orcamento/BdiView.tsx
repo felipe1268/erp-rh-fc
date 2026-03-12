@@ -31,67 +31,206 @@ const TD = ({ children, className = "" }: { children: React.ReactNode; className
 );
 
 // ─────────────────────────────────────────────────────────────
-// ABA BDI (principal) — somente leitura, mostra grupos CD/CI/DI/B
+// ABA BDI (principal) — somente leitura, layout fiel à planilha
 // ─────────────────────────────────────────────────────────────
-const BDI_GRUPOS: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  CD: { label: "Custo Direto",        bg: "bg-slate-100",   text: "text-slate-800",  border: "border-slate-300" },
-  CI: { label: "Custo Indireto",      bg: "bg-blue-50",     text: "text-blue-800",   border: "border-blue-200"  },
-  DI: { label: "Despesas Indiretas",  bg: "bg-amber-50",    text: "text-amber-800",  border: "border-amber-200" },
-  B:  { label: "Bonificações",        bg: "bg-green-50",    text: "text-green-800",  border: "border-green-200" },
+
+// Define a aparência de cada grupo de linhas
+type GrupoStyle = {
+  headerBg: string; headerText: string; headerBorder: string;
+  rowBg: string; rowBgAlt: string; codColor: string;
 };
 
+const GRUPO_STYLES: Record<string, GrupoStyle> = {
+  CD:  { headerBg: "bg-slate-300", headerText: "text-slate-900",   headerBorder: "border-t-2 border-slate-400",
+         rowBg: "bg-white", rowBgAlt: "bg-slate-50", codColor: "text-slate-600" },
+  CI:  { headerBg: "bg-blue-200",  headerText: "text-blue-900",    headerBorder: "border-t-2 border-blue-400",
+         rowBg: "bg-white", rowBgAlt: "bg-blue-50/30", codColor: "text-blue-600" },
+  DI:  { headerBg: "bg-yellow-200",headerText: "text-amber-900",   headerBorder: "border-t-2 border-yellow-400",
+         rowBg: "bg-white", rowBgAlt: "bg-yellow-50/30", codColor: "text-amber-700" },
+  B:   { headerBg: "bg-green-200", headerText: "text-green-900",   headerBorder: "border-t-2 border-green-400",
+         rowBg: "bg-white", rowBgAlt: "bg-green-50/30", codColor: "text-green-700" },
+  J:   { headerBg: "bg-slate-200", headerText: "text-slate-800",   headerBorder: "border-t-2 border-slate-300",
+         rowBg: "bg-white", rowBgAlt: "bg-slate-50", codColor: "text-slate-600" },
+  V:   { headerBg: "bg-slate-100", headerText: "text-slate-700",   headerBorder: "border-t border-slate-200",
+         rowBg: "bg-white", rowBgAlt: "bg-slate-50", codColor: "text-slate-500" },
+  PV:  { headerBg: "bg-yellow-300",headerText: "text-slate-900",   headerBorder: "border-t-2 border-yellow-500",
+         rowBg: "bg-yellow-50", rowBgAlt: "bg-yellow-100/50", codColor: "text-amber-700" },
+  PVN: { headerBg: "bg-yellow-200",headerText: "text-slate-900",   headerBorder: "border-t-2 border-yellow-400",
+         rowBg: "bg-yellow-50", rowBgAlt: "bg-yellow-50", codColor: "text-amber-700" },
+  L:   { headerBg: "bg-teal-200",  headerText: "text-teal-900",    headerBorder: "border-t-2 border-teal-400",
+         rowBg: "bg-white", rowBgAlt: "bg-teal-50/20", codColor: "text-teal-700" },
+};
+
+// Apenas esses códigos exatos são cabeçalhos de grupo (com sub-itens)
+const HEADER_CODES = new Set(["CD","CI","DI","B","L","J","JF"]);
+
+function getGrupoKey(codigo: string): string {
+  if (codigo === "PVN") return "PVN";
+  if (codigo.startsWith("PV")) return "PV";
+  const prefix = codigo.split("-")[0].toUpperCase();
+  // V1, V2... → grupo "V"
+  if (prefix.match(/^V\d*$/)) return "V";
+  return prefix;
+}
+
+function isGroupHeader(codigo: string): boolean {
+  return HEADER_CODES.has(codigo.toUpperCase());
+}
+
+function pct2(v: string | number | null | undefined) {
+  const n = fmt(v);
+  if (n === 0) return "—";
+  return (n * 100).toFixed(2) + "%";
+}
+
 function AbaBdi({ linhas }: { linhas: any[] }) {
-  const getGrupoCod = (codigo: string) => codigo.split("-")[0];
-  const isHeader    = (codigo: string) => !codigo.includes("-") && BDI_GRUPOS[codigo];
+  // Encontra orçamento totais: linha BDI total é B-02
+  const bdiLinha = linhas.find((l: any) => l.codigo === "B-02");
+  const bdiTotal  = bdiLinha ? fmt(bdiLinha.percentual) : 0;
+
+  // Detecta linhas separadoras (ex: "CD + CI =")
+  const isSumRow = (cod: string) => cod.includes("+") || cod.includes("=") || cod.startsWith("CD+");
 
   return (
     <div className="space-y-0 text-sm">
+      {/* Banner somente leitura */}
       <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
         <Lock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
         <span>Valores somente leitura — editável apenas na aba de origem correspondente</span>
       </div>
-      <Card>
+
+      <Card className="overflow-hidden border-slate-300">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full text-sm border-collapse" style={{ borderSpacing: 0 }}>
+              <colgroup>
+                <col style={{ width: "80px" }}  />
+                <col style={{ minWidth: "300px" }} />
+                <col style={{ width: "90px" }}  />
+                <col style={{ width: "130px" }} />
+              </colgroup>
               <thead>
-                <tr className="bg-blue-700 text-white text-xs uppercase">
-                  <TH className="text-white w-24">Código</TH>
-                  <TH className="text-white">Descrição</TH>
-                  <TH className="text-white text-right w-28">%</TH>
-                  <TH className="text-white text-right w-36">Valor R$</TH>
+                <tr className="bg-slate-700 text-white text-xs">
+                  <th className="px-3 py-2 text-center font-bold uppercase tracking-wide border-r border-slate-600">Cód.</th>
+                  <th className="px-3 py-2 text-left font-bold uppercase tracking-wide border-r border-slate-600">Descrição</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wide border-r border-slate-600">%</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wide">Valor R$</th>
                 </tr>
               </thead>
               <tbody>
                 {linhas.map((l: any, idx: number) => {
-                  const g = BDI_GRUPOS[getGrupoCod(l.codigo)];
-                  const header = isHeader(l.codigo);
+                  const key    = getGrupoKey(l.codigo);
+                  const g      = GRUPO_STYLES[key] ?? GRUPO_STYLES["CD"];
+                  const header = isGroupHeader(l.codigo);
+                  const sumRow = isSumRow(l.codigo);
                   const isBdi  = l.codigo === "B-02";
-                  if (header) {
+                  const isPV2  = l.codigo === "PV-2" || l.codigo === "PV-3";
+                  const hasVal = fmt(l.valorAbsoluto) !== 0;
+                  const hasPct = fmt(l.percentual) !== 0;
+
+                  // ── Linha de soma (ex: CD + CI = ...)
+                  if (sumRow) {
                     return (
-                      <tr key={l.id ?? idx} className={`${g?.bg ?? "bg-slate-50"} border-t-2 ${g?.border ?? "border-slate-200"}`}>
-                        <TD className={`font-bold font-mono text-xs ${g?.text ?? ""}`}>{l.codigo}</TD>
-                        <TD className={`font-bold uppercase tracking-wide ${g?.text ?? ""}`}>{l.descricao}</TD>
-                        <TD className={`text-right font-mono font-bold ${g?.text ?? ""}`}>{pct(l.percentual)}</TD>
-                        <TD className={`text-right font-mono font-bold ${g?.text ?? ""}`}>{brl(l.valorAbsoluto)}</TD>
+                      <tr key={l.id ?? idx} className="bg-slate-200 border-t-2 border-b-2 border-slate-400">
+                        <td colSpan={2} className="px-4 py-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">{l.descricao}</td>
+                        <td className="px-3 py-1.5 text-right text-xs font-bold font-mono text-slate-700"></td>
+                        <td className="px-3 py-1.5 text-right font-bold font-mono text-slate-900 bg-yellow-200 border-l border-yellow-300">
+                          {hasVal ? brl(l.valorAbsoluto) : "—"}
+                        </td>
                       </tr>
                     );
                   }
+
+                  // ── Cabeçalho de grupo (CD, CI, DI, B, L, JF, V, PV...)
+                  if (header) {
+                    return (
+                      <tr key={l.id ?? idx} className={`${g.headerBg} ${g.headerBorder}`}>
+                        <td className={`px-3 py-2 font-bold font-mono text-xs text-center ${g.headerText} border-r border-slate-200`}>
+                          {l.codigo}
+                        </td>
+                        <td className={`px-3 py-2 font-bold uppercase tracking-wide text-sm ${g.headerText} border-r border-slate-200`}>
+                          {l.descricao}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-bold font-mono text-sm ${g.headerText} border-r border-slate-200`}>
+                          {hasPct ? pct2(l.percentual) : ""}
+                        </td>
+                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-slate-900 bg-yellow-200">
+                          {hasVal ? brl(l.valorAbsoluto) : ""}
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  // ── BDI Total (B-02) — destaque especial
+                  if (isBdi) {
+                    return (
+                      <tr key={l.id ?? idx} className="border-b-2 border-blue-400 bg-blue-50">
+                        <td className="px-3 py-2.5 font-bold font-mono text-sm text-center text-blue-700 border-r border-blue-200">
+                          {l.codigo}
+                        </td>
+                        <td className="px-3 py-2.5 font-bold text-blue-900 text-sm border-r border-blue-200">
+                          {l.descricao}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-bold font-mono text-xl text-blue-700 border-r border-blue-200">
+                          {pct2(l.percentual)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-bold font-mono text-sm text-slate-900 bg-yellow-300">
+                          {hasVal ? brl(l.valorAbsoluto) : ""}
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  // ── PV-2 / PV-3 — linhas totais com fator multiplicativo
+                  if (isPV2) {
+                    return (
+                      <tr key={l.id ?? idx} className="border-b border-yellow-300 bg-yellow-50">
+                        <td className="px-3 py-2 font-bold font-mono text-xs text-center text-amber-700 border-r border-yellow-200">
+                          {l.codigo}
+                        </td>
+                        <td className="px-3 py-2 font-bold text-amber-900 border-r border-yellow-200">
+                          {l.descricao}
+                        </td>
+                        <td className="px-3 py-2 text-right font-bold font-mono text-amber-800 border-r border-yellow-200">
+                          {hasPct ? pct2(l.percentual) : ""}
+                        </td>
+                        <td className="px-3 py-2 text-right font-bold font-mono text-slate-900 bg-yellow-300">
+                          {hasVal ? brl(l.valorAbsoluto) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  // ── Linha normal de sub-item
+                  const isEven = idx % 2 === 0;
                   return (
-                    <tr key={l.id ?? idx} className={`border-b transition-colors ${isBdi ? "bg-blue-50 font-semibold" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"} hover:bg-blue-50/30`}>
-                      <TD className="font-mono text-xs text-muted-foreground">{l.codigo}</TD>
-                      <TD>
+                    <tr key={l.id ?? idx} className={`border-b border-slate-100 ${isEven ? g.rowBg : g.rowBgAlt} hover:bg-blue-50/20 transition-colors`}>
+                      <td className={`px-3 py-1.5 font-mono text-xs text-center font-medium ${g.codColor} border-r border-slate-100`}>
+                        {l.codigo}
+                      </td>
+                      <td className="px-3 py-1.5 text-slate-700 border-r border-slate-100">
                         {l.descricao}
-                        {isBdi && <span className="ml-2 text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded-full">BDI TOTAL</span>}
-                      </TD>
-                      <TD className="text-right font-mono text-xs">{pct(l.percentual)}</TD>
-                      <TD className="text-right font-mono text-xs">{fmt(l.valorAbsoluto) !== 0 ? brl(l.valorAbsoluto) : "—"}</TD>
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-600 border-r border-slate-100">
+                        {hasPct ? pct2(l.percentual) : "—"}
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-700">
+                        {hasVal ? brl(l.valorAbsoluto) : "—"}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+
+          {/* Rodapé com BDI total */}
+          {bdiTotal > 0 && (
+            <div className="flex items-center justify-end gap-4 px-4 py-3 bg-slate-50 border-t border-slate-200">
+              <span className="text-xs text-muted-foreground">BDI Total (B-02):</span>
+              <span className="text-2xl font-bold text-blue-700 font-mono">{(bdiTotal * 100).toFixed(2)}%</span>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
