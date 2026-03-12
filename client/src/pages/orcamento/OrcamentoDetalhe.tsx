@@ -293,13 +293,6 @@ export default function OrcamentoDetalhe() {
 
   const bdiPct  = n(orc.bdiPercentual)  * 100;
   const metaPct = n(orc.metaPercentual) * 100;
-  // Margem de lucro do BDI (Taxa de Comercialização / LC)
-  // margemLucroBdi vem do servidor como soma dos percentuais da aba "Taxa de Comercialização"
-  const margemLucroPct = n(orc.margemLucroBdi) > 0
-    ? n(orc.margemLucroBdi)                                       // dados reais do BDI
-    : (n(orc.totalVenda) > 0 && n(orc.totalCusto) > 0             // fallback: derivado do BDI global
-        ? (n(orc.totalVenda) - n(orc.totalCusto)) / n(orc.totalVenda)
-        : 0);
 
   // ── Mapa de grupos (item tem filhos) ──
   // Constrói de baixo pra cima: cada item com "." no código marca seu pai como grupo.
@@ -353,6 +346,13 @@ export default function OrcamentoDetalhe() {
   const totalMeta  = localMetaVal !== null
     ? r2(localMetaVal)
     : r2(totalCusto * (1 - localMetaPerc / 100));
+
+  // Margem de lucro do BDI (Taxa de Comercialização / LC)
+  // margemLucroBdi vem do servidor como soma dos percentuais da aba "Taxa de Comercialização"
+  // Fallback: se a aba ainda não foi importada, calcula a partir do BDI global (venda - custo) / venda
+  const margemLucroPct = n(orc.margemLucroBdi) > 0
+    ? n(orc.margemLucroBdi)
+    : (totalVenda > 0 && totalCusto > 0 ? (totalVenda - totalCusto) / totalVenda : 0);
 
   const visibleItems = itens.filter(item => {
     if (item.nivel === 1) return true;
