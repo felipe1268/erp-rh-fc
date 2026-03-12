@@ -1237,11 +1237,16 @@ export const orcamentoRouter = router({
       if (!db) return null;
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
       if (!orc) return null;
-      const [itens, insumos, bdiLinhas] = await Promise.all([
+      const [itens, insumos, bdiLinhas, tcLinhas] = await Promise.all([
         db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.id)).orderBy(orcamentoItens.ordem),
         db.select().from(orcamentoInsumos).where(eq(orcamentoInsumos.orcamentoId, input.id)).orderBy(desc(orcamentoInsumos.percentualTotal)),
         db.select().from(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.id)).orderBy(orcamentoBdi.ordem),
+        db.select().from(bdiTaxaComercializacao).where(eq(bdiTaxaComercializacao.orcamentoId, input.id)),
       ]);
+      // Soma dos percentuais de Lucro (L-0x) da taxa de comercialização → margem de lucro do BDI
+      const margemLucroBdi = tcLinhas
+        .filter(l => !l.isHeader)
+        .reduce((s, l) => s + parseFloat(l.percentual || '0'), 0);
       // Buscar obra e empresa em paralelo
       const [obraRes, empresaRes] = await Promise.all([
         orc.obraId
@@ -1258,7 +1263,7 @@ export const orcamentoRouter = router({
           logoUrl:     companies.logoUrl,
         }).from(companies).where(eq(companies.id, orc.companyId)).then(r => r[0] ?? null),
       ]);
-      return { ...orc, itens, insumos, bdiLinhas, obra: obraRes, empresa: empresaRes };
+      return { ...orc, itens, insumos, bdiLinhas, margemLucroBdi, obra: obraRes, empresa: empresaRes };
     }),
 
   // ── Importar planilha Excel (base64) ──────────────────────
