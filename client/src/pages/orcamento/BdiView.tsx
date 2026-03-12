@@ -196,7 +196,7 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                       <tr key={l.id ?? idx} className="bg-slate-200 border-t-2 border-b-2 border-slate-400">
                         <td colSpan={2} className="px-4 py-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">{l.descricao}</td>
                         <td className="px-3 py-1.5 text-right text-xs font-bold font-mono text-slate-700"></td>
-                        <td className="px-3 py-1.5 text-right font-bold font-mono text-slate-900 bg-yellow-200 border-l border-yellow-300">
+                        <td className="px-3 py-1.5 text-right font-bold font-mono text-slate-900 border-l border-slate-200" style={hasVal ? { backgroundColor: "#F7F797" } : {}}>
                           {hasVal ? brl(l.valorAbsoluto) : "—"}
                         </td>
                       </tr>
@@ -227,7 +227,7 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                         <td className={`px-3 py-2 text-right font-bold font-mono text-sm ${g.headerText} border-r border-slate-500`}>
                           {hasPct ? pct2(l.percentual) : ""}
                         </td>
-                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-slate-900" style={{ backgroundColor: "#F7F797" }}>
+                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-slate-900" style={hasVal ? { backgroundColor: "#F7F797" } : {}}>
                           {hasVal ? brl(l.valorAbsoluto) : ""}
                         </td>
                       </tr>
@@ -239,20 +239,21 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                     return null;
                   }
 
-                  // ── BDI Total (B-02) — linha de destaque, sempre visível, nunca editável
+                  // ── B-02 (BDI) — linha normal, sem destaque especial
                   if (isBdi) {
+                    const isEven = idx % 2 === 0;
                     return (
-                      <tr key={l.id ?? idx} className="border-y-2 border-blue-300 bg-blue-50">
-                        <td className="px-3 py-2 font-bold font-mono text-xs text-center text-blue-700 border-r border-blue-200">
+                      <tr key={l.id ?? idx} className={`border-b border-slate-100 ${isEven ? "bg-white" : "bg-slate-50"}`}>
+                        <td className={`px-3 py-1.5 font-mono text-xs text-center font-medium ${g.codColor} border-r border-slate-100`}>
                           {l.codigo}
                         </td>
-                        <td className="px-3 py-2 font-bold text-blue-900 text-sm border-r border-blue-200">
+                        <td className="px-3 py-1.5 font-semibold text-slate-700 border-r border-slate-100">
                           {l.descricao}
                         </td>
-                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-blue-700 border-r border-blue-200">
-                          {pct2(l.percentual)}
+                        <td className="px-3 py-1.5 text-right font-bold font-mono text-xs text-slate-700 border-r border-slate-100">
+                          {hasPct ? pct2(l.percentual) : "—"}
                         </td>
-                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-slate-900" style={{ backgroundColor: "#F7F797" }}>
+                        <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-700">
                           {hasVal ? brl(l.valorAbsoluto) : "—"}
                         </td>
                       </tr>
@@ -272,7 +273,7 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                         <td className="px-3 py-2 text-right font-bold font-mono text-amber-800 border-r border-yellow-200">
                           {hasPct ? pct2(l.percentual) : ""}
                         </td>
-                        <td className="px-3 py-2 text-right font-bold font-mono text-slate-900 bg-yellow-300">
+                        <td className="px-3 py-2 text-right font-bold font-mono text-slate-900" style={hasVal ? { backgroundColor: "#F7F797" } : {}}>
                           {hasVal ? brl(l.valorAbsoluto) : "—"}
                         </td>
                       </tr>
