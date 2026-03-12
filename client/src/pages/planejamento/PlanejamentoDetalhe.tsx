@@ -1682,8 +1682,10 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
     const medMap: Record<string, any> = {};
     medicoes.forEach((m: any) => { medMap[m.competencia] = m; });
 
+    // Usa valorBase (valor_negociado do orçamento) como denominador para %
     const totalVendaCruz = cruzamento?.totalVenda ?? 0;
-    const base = totalVendaCruz > 0 ? totalVendaCruz : (valorContrato || 1);
+    const valorBaseOrc   = (cruzamento as any)?.valorBase ?? 0;
+    const base = valorBaseOrc > 0 ? valorBaseOrc : (totalVendaCruz > 0 ? totalVendaCruz : (valorContrato || 1));
 
     let cumPrev = 0;
     let cumReal = 0;
@@ -1773,9 +1775,9 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
         <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs text-emerald-700">
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
           <span>
-            <b>{qtdCruz.toLocaleString("pt-BR")}</b> atividades cruzadas com o orçamento —
-            valores planejados baseados no orçamento real ({fmt(cruzamento?.totalVenda ?? 0)} em vendas,
-            {fmt(cruzamento?.totalMat ?? 0)} em materiais, {fmt(cruzamento?.totalMdo ?? 0)} em M.O.)
+            <b>{qtdCruz.toLocaleString("pt-BR")}</b> itens cruzados orçamento × cronograma —
+            valor negociado <b>{fmt((cruzamento as any)?.valorBase ?? 0)}</b> normalizado
+            ({fmt(cruzamento?.totalMat ?? 0)} materiais · {fmt(cruzamento?.totalMdo ?? 0)} M.O.)
           </span>
         </div>
       )}
@@ -1793,8 +1795,11 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
           <p className="text-base font-bold text-slate-800">{fmt(valorContrato)}</p>
         </div>
         <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Venda Prevista (orç.)</p>
-          <p className="text-base font-bold text-orange-600">{fmt(totalPrev)}</p>
+          <p className="text-[10px] text-slate-400">Valor Negociado (orç.)</p>
+          <p className="text-base font-bold text-orange-600">{fmt((cruzamento as any)?.valorBase ?? totalPrev)}</p>
+          {(cruzamento as any)?.valorBase > 0 && (
+            <p className="text-[9px] text-slate-400 mt-0.5">distribuído: {fmt(totalPrev)}</p>
+          )}
         </div>
         <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
           <p className="text-[10px] text-slate-400">Custo Material Total</p>
