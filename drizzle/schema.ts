@@ -3907,6 +3907,104 @@ export const orcamentoBdi = pgTable("orcamento_bdi", {
 ]);
 
 // ============================================================
+// BDI SUB-ABAS — tabelas dedicadas por aba da planilha BDI
+// Cada aba tem estrutura própria; BDI principal agrega delas.
+// ============================================================
+
+export const bdiIndiretos = pgTable("bdi_indiretos", {
+  id:                    serial("id").primaryKey(),
+  orcamentoId:           integer("orcamento_id").notNull(),
+  companyId:             integer("company_id").notNull(),
+  secao:                 varchar("secao",              { length: 20  }),
+  codigo:                varchar("codigo",             { length: 30  }),
+  descricao:             varchar("descricao",          { length: 255 }),
+  modalidade:            varchar("modalidade",         { length: 50  }),
+  tipoContrato:          varchar("tipo_contrato",      { length: 30  }),
+  quantidade:            numeric("quantidade",         { precision: 10, scale: 3 }).default("0"),
+  mesesObra:             numeric("meses_obra",         { precision: 10, scale: 2 }).default("0"),
+  salarioBase:           numeric("salario_base",       { precision: 18, scale: 2 }).default("0"),
+  bonusMensal:           numeric("bonus_mensal",       { precision: 18, scale: 2 }).default("0"),
+  decimoTerceiroFerias:  numeric("decimo_terceiro_ferias", { precision: 18, scale: 2 }).default("0"),
+  valorHora:             numeric("valor_hora",         { precision: 18, scale: 6 }).default("0"),
+  totalMes:              numeric("total_mes",          { precision: 18, scale: 2 }).default("0"),
+  totalObra:             numeric("total_obra",         { precision: 18, scale: 2 }).default("0"),
+  isHeader:              boolean("is_header").default(false),
+  ordem:                 integer("ordem").default(0),
+  createdAt:             timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_bdind_orc").on(t.orcamentoId)]);
+
+export const bdiFd = pgTable("bdi_fd", {
+  id:            serial("id").primaryKey(),
+  orcamentoId:   integer("orcamento_id").notNull(),
+  companyId:     integer("company_id").notNull(),
+  codigoInsumo:  varchar("codigo_insumo", { length: 30  }),
+  descricao:     varchar("descricao",     { length: 255 }),
+  unidade:       varchar("unidade",       { length: 20  }),
+  qtdOrcada:     numeric("qtd_orcada",    { precision: 18, scale: 4 }).default("0"),
+  precoUnit:     numeric("preco_unit",    { precision: 18, scale: 6 }).default("0"),
+  total:         numeric("total",         { precision: 18, scale: 2 }).default("0"),
+  fornecedor:    varchar("fornecedor",    { length: 255 }),
+  ordem:         integer("ordem").default(0),
+  createdAt:     timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_bdifd_orc").on(t.orcamentoId)]);
+
+export const bdiAdmCentral = pgTable("bdi_adm_central", {
+  id:          serial("id").primaryKey(),
+  orcamentoId: integer("orcamento_id").notNull(),
+  companyId:   integer("company_id").notNull(),
+  codigo:      varchar("codigo",    { length: 30  }),
+  descricao:   varchar("descricao", { length: 255 }),
+  base:        numeric("base",      { precision: 18, scale: 2 }).default("0"),
+  tempoObra:   numeric("tempo_obra",{ precision: 10, scale: 2 }).default("0"),
+  encargos:    numeric("encargos",  { precision: 18, scale: 4 }).default("0"),
+  beneficios:  numeric("beneficios",{ precision: 18, scale: 2 }).default("0"),
+  total:       numeric("total",     { precision: 18, scale: 2 }).default("0"),
+  isHeader:    boolean("is_header").default(false),
+  ordem:       integer("ordem").default(0),
+  createdAt:   timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_bdiadm_orc").on(t.orcamentoId)]);
+
+export const bdiDespesasFinanceiras = pgTable("bdi_despesas_financeiras", {
+  id:          serial("id").primaryKey(),
+  orcamentoId: integer("orcamento_id").notNull(),
+  companyId:   integer("company_id").notNull(),
+  codigo:      varchar("codigo",    { length: 30  }),
+  descricao:   varchar("descricao", { length: 255 }),
+  valor:       numeric("valor",     { precision: 18, scale: 8 }).default("0"),
+  unidade:     varchar("unidade",   { length: 50  }),
+  isHeader:    boolean("is_header").default(false),
+  ordem:       integer("ordem").default(0),
+  createdAt:   timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_bdidf_orc").on(t.orcamentoId)]);
+
+export const bdiTributos = pgTable("bdi_tributos", {
+  id:              serial("id").primaryKey(),
+  orcamentoId:     integer("orcamento_id").notNull(),
+  companyId:       integer("company_id").notNull(),
+  codigo:          varchar("codigo",          { length: 30  }),
+  descricao:       varchar("descricao",       { length: 255 }),
+  aliquota:        numeric("aliquota",        { precision: 10, scale: 8 }).default("0"),
+  baseCalculo:     varchar("base_calculo",    { length: 50  }),
+  valorCalculado:  numeric("valor_calculado", { precision: 18, scale: 2 }).default("0"),
+  isHeader:        boolean("is_header").default(false),
+  ordem:           integer("ordem").default(0),
+  createdAt:       timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_bditrib_orc").on(t.orcamentoId)]);
+
+export const bdiTaxaComercializacao = pgTable("bdi_taxa_comercializacao", {
+  id:          serial("id").primaryKey(),
+  orcamentoId: integer("orcamento_id").notNull(),
+  companyId:   integer("company_id").notNull(),
+  codigo:      varchar("codigo",    { length: 30  }),
+  descricao:   varchar("descricao", { length: 255 }),
+  percentual:  numeric("percentual",{ precision: 10, scale: 8 }).default("0"),
+  valor:       numeric("valor",     { precision: 18, scale: 2 }).default("0"),
+  isHeader:    boolean("is_header").default(false),
+  ordem:       integer("ordem").default(0),
+  createdAt:   timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_bditc_orc").on(t.orcamentoId)]);
+
+// ============================================================
 // CONTROLE DE REVISÕES DE ORÇAMENTO
 // Registra o diff entre versões a cada reimportação de planilha.
 // ============================================================

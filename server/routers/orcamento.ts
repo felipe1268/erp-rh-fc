@@ -16,6 +16,12 @@ import {
   encargosSociais,
   obras,
   companies,
+  bdiIndiretos,
+  bdiFd,
+  bdiAdmCentral,
+  bdiDespesasFinanceiras,
+  bdiTributos,
+  bdiTaxaComercializacao,
 } from "../../drizzle/schema";
 
 const ENCARGOS_DEFAULTS = [
@@ -418,6 +424,228 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
     }
   }
   return { bdiPercentual, linhas };
+}
+
+// ── Parsers dedicados por aba BDI ────────────────────────────────────────
+// Cada aba tem estrutura completamente diferente no Excel.
+// Esses parsers extraem dados nos campos certos de cada tabela dedicada.
+
+function parsearAbaIndiretos(rows: any[][], companyId: number, orcamentoId: number) {
+  const linhas: any[] = [];
+  let secao = '';
+  let ordem = 0;
+
+  for (const row of rows) {
+    const c3 = String(row[3] || '').trim();
+    const c4 = String(row[4] || '').trim();
+    const c0 = String(row[0] || '').trim();
+
+    // Cabeçalho de seção: col[3] = 'CI-01', 'CI-02', etc.
+    if (c3.match(/^CI-\d+$/) && c4.length > 2) {
+      secao = c3;
+      linhas.push({
+        orcamentoId, companyId, secao, isHeader: true,
+        codigo: c3, descricao: c4.substring(0, 255),
+        quantidade: '0', mesesObra: '0', salarioBase: '0',
+        bonusMensal: '0', decimoTerceiroFerias: '0', valorHora: '0',
+        totalMes: '0', totalObra: '0', modalidade: '', tipoContrato: '', ordem: ordem++,
+      });
+      continue;
+    }
+
+    // Linha de funcionário: col[0] é dígito E col[3] tem padrão N.NN
+    if (c0.match(/^\d+$/) && c3.match(/^\d+\.\d+/) && c4.length > 2) {
+      const qty       = toNum(row[9]);
+      const meses     = toNum(row[11]);
+      const sal       = toNum(row[12]);
+      const bonus     = toNum(row[13]);
+      const decTer    = toNum(row[14]);
+      const vh        = toNum(row[15]);
+      const totalMes  = toNum(row[16]) || toNum(row[17]) || (sal + bonus);
+      const totalObra = totalMes * (meses || 1);
+      linhas.push({
+        orcamentoId, companyId, secao, isHeader: false,
+        codigo:               c3.substring(0, 30),
+        descricao:            c4.substring(0, 255),
+        modalidade:           String(row[7] || '').trim().substring(0, 50),
+        tipoContrato:         String(row[8] || '').trim().substring(0, 30),
+        quantidade:           fix2(qty || 1),
+        mesesObra:            fix2(meses),
+        salarioBase:          fix2(sal),
+        bonusMensal:          fix2(bonus),
+        decimoTerceiroFerias: fix2(decTer),
+        valorHora:            fix6(vh),
+        totalMes:             fix2(totalMes),
+        totalObra:            fix2(totalObra),
+        ordem:                ordem++,
+      });
+    }
+  }
+  return linhas;
+}
+
+function parsearAbaFd(rows: any[][], companyId: number, orcamentoId: number) {
+  const linhas: any[] = [];
+  let ordem = 0;
+  for (const row of rows) {
+    const cod  = String(row[0] || '').trim();
+    const desc = String(row[1] || '').trim();
+    const un   = String(row[2] || '').trim();
+    // Linha de material: código tipo 'XX.XX.XX' ou similar
+    if (cod.match(/^\d{2}\.\d{2}/) && desc.length > 2) {
+      const qty   = toNum(row[3]);
+      const pu    = toNum(row[4]);
+      const total = toNum(row[5]) || fix2(qty * pu);
+      const forn  = String(row[6] || '').trim();
+      linhas.push({
+        orcamentoId, companyId,
+        codigoInsumo: cod.substring(0, 30),
+        descricao:    desc.substring(0, 255),
+        unidade:      un.substring(0, 20),
+        qtdOrcada:    fix2(qty),
+        precoUnit:    fix6(pu),
+        total:        fix2(parseFloat(total)),
+        fornecedor:   forn.substring(0, 255),
+        ordem:        ordem++,
+      });
+    }
+  }
+  return linhas;
+}
+
+function parsearAbaAdmCentral(rows: any[][], companyId: number, orcamentoId: number) {
+  const linhas: any[] = [];
+  let ordem = 0;
+  for (const row of rows) {
+    const c1 = String(row[1] || '').trim();
+    const c4 = String(row[4] || '').trim();
+    const c5 = String(row[5] || '').trim();
+    // Linha de pessoal: c1 é número sequencial, c4 é código X.XX
+    if (c1.match(/^\d+$/) && c4.match(/^\d+\.\d+/) && c5.length > 2) {
+      const base     = toNum(row[9]);
+      const tempo    = toNum(row[8]);
+      const encargos = toNum(row[9]);
+      const benef    = toNum(row[10]);
+      const total    = toNum(row[11]);
+      linhas.push({
+        orcamentoId, companyId, isHeader: false,
+        codigo:    c4.substring(0, 30),
+        descricao: c5.substring(0, 255),
+        base:      fix2(base),
+        tempoObra: fix2(tempo),
+        encargos:  fix6(encargos),
+        beneficios: fix2(benef),
+        total:     fix2(total),
+        ordem:     ordem++,
+      });
+    }
+  }
+  return linhas;
+}
+
+function parsearAbaDespesasFinanceiras(rows: any[][], companyId: number, orcamentoId: number) {
+  const linhas: any[] = [];
+  let ordem = 0;
+  for (const row of rows) {
+    const c1 = String(row[1] || '').trim();
+    const c2 = String(row[2] || '').trim();
+    // Linha com código de 1 letra seguido de ' -' e descrição
+    if ((c1.match(/^[a-zA-Z]\s*[-–]/) || c1.match(/^[a-zA-Z]$/)) && c2.length > 3) {
+      const val = toNum(row[4]) || toNum(row[5]);
+      linhas.push({
+        orcamentoId, companyId, isHeader: false,
+        codigo:    c1.substring(0, 30),
+        descricao: c2.substring(0, 255),
+        valor:     fix6(val),
+        unidade:   String(row[3] || '').trim().substring(0, 50),
+        ordem:     ordem++,
+      });
+    }
+    // Parâmetros principais: Taxa de custo financeiro, Custo Direto, ΣMj
+    if (c2.match(/^(Taxa de custo|Custo Direto|ΣMj|ΣMj=)/i) && row[2]) {
+      const val = toNum(row[5]) || toNum(row[2]) || toNum(row[3]);
+      linhas.push({
+        orcamentoId, companyId, isHeader: false,
+        codigo:    (ordem+1).toString(),
+        descricao: c2.substring(0, 255),
+        valor:     fix6(val),
+        unidade:   '',
+        ordem:     ordem++,
+      });
+    }
+  }
+  return linhas;
+}
+
+function parsearAbaTributos(rows: any[][], companyId: number, orcamentoId: number) {
+  const linhas: any[] = [];
+  let ordem = 0;
+  for (const row of rows) {
+    const c1 = String(row[1] || '').trim();
+    const c2 = String(row[2] || '').trim();
+    // Cabeçalho de grupo: 'A', 'B', etc.
+    if (c1.match(/^[A-Z]$/) && c2.length > 3 && !c1.match(/^\d/)) {
+      linhas.push({
+        orcamentoId, companyId, isHeader: true,
+        codigo: c1, descricao: c2.substring(0, 255),
+        aliquota: '0', baseCalculo: '', valorCalculado: '0', ordem: ordem++,
+      });
+      continue;
+    }
+    // Linha de tributo: c1 = 'A.1', 'A.2', 'B.1' etc.
+    if (c1.match(/^[A-Z]\.\d+/) && c2.length > 2) {
+      const aliq = toNum(row[5]) || toNum(row[8]);
+      const base = String(row[7] || '').trim();
+      const calc = toNum(row[9]);
+      linhas.push({
+        orcamentoId, companyId, isHeader: false,
+        codigo:         c1.substring(0, 30),
+        descricao:      c2.substring(0, 255),
+        aliquota:       fix6(aliq),
+        baseCalculo:    base.substring(0, 50),
+        valorCalculado: fix2(calc),
+        ordem:          ordem++,
+      });
+    }
+    // Sub-total
+    if (c2.toLowerCase().startsWith('subtotal') && toNum(row[5]) !== 0) {
+      linhas.push({
+        orcamentoId, companyId, isHeader: true,
+        codigo: 'Σ', descricao: c2.substring(0, 255),
+        aliquota: fix6(toNum(row[5])), baseCalculo: '', valorCalculado: '0', ordem: ordem++,
+      });
+    }
+  }
+  return linhas;
+}
+
+function parsearAbaTaxaComercializacao(rows: any[][], companyId: number, orcamentoId: number) {
+  const linhas: any[] = [];
+  let ordem = 0;
+  for (const row of rows) {
+    const nonEmpty = row.filter((c: any) => String(c).trim() !== '');
+    if (nonEmpty.length < 2) continue;
+    // Procura linhas com código e descrição e valor numérico
+    const col1 = String(row[1] || '').trim();
+    const col2 = String(row[2] || '').trim();
+    const col3 = String(row[3] || '').trim();
+    if ((col1 || col2) && (col2 || col3).length > 2) {
+      const desc = col2.length > 2 ? col2 : col3;
+      const pct  = toNum(row[5]) || toNum(row[4]) || toNum(row[6]);
+      const val  = toNum(row[7]) || toNum(row[8]) || toNum(row[9]);
+      if (desc.length > 2 && (pct !== 0 || val !== 0)) {
+        linhas.push({
+          orcamentoId, companyId, isHeader: false,
+          codigo:     (col1 || (ordem + 1).toString()).substring(0, 30),
+          descricao:  desc.substring(0, 255),
+          percentual: fix6(pct),
+          valor:      fix2(val),
+          ordem:      ordem++,
+        });
+      }
+    }
+  }
+  return linhas;
 }
 
 // Parseia aba Insumos para curva ABC
@@ -1277,86 +1505,228 @@ export const orcamentoRouter = router({
       const buffer = Buffer.from(input.fileBase64, 'base64');
       const wb = XLSX.read(buffer, { type: 'buffer' });
 
-      // ── Processar TODAS as abas da planilha BDI ─────────────────
-      // A aba principal de BDI é identificada pelo nome que contém "bdi".
-      // As demais abas (Resumo, Composição, Lucratividade, etc.) são
-      // importadas com o mesmo parser e armazenadas com o nomeAba original.
-      const todasLinhas: any[] = [];
-      let bdiPercentual = 0;
-      const abas = wb.SheetNames;
+      const cid = input.companyId;
+      const oid = input.orcamentoId;
+      const BATCH = 200;
 
-      // Abas que não são EAP nem insumos — ignorar apenas aba de orçamento principal
-      const abasIgnorar = ['orçamento', 'orcamento', 'orc', 'insumos', 'abc', 'resumo geral'];
+      // Helpers para identificar cada aba pelo nome normalizado
+      const findSheet = (...keys: string[]) =>
+        wb.SheetNames.find(n => keys.some(k => n.toLowerCase().replace(/\s+/g,'').includes(k)));
 
-      for (const aba of abas) {
-        const nomeLower = aba.toLowerCase();
-        if (abasIgnorar.some(k => nomeLower === k)) continue;
+      const getRows = (name: string) =>
+        XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' }) as any[][];
 
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[aba], { header: 1, defval: '' }) as any[][];
-        const { bdiPercentual: bdiAba, linhas } = parsearAbaBdi(rows, input.companyId, aba);
+      // ── 1. Aba BDI (resumo principal) ──────────────────────────
+      const bdtSheet = findSheet('bdi');
+      if (!bdtSheet) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba BDI não encontrada na planilha.' });
 
-        if (linhas.length > 0) {
-          todasLinhas.push(...linhas);
-          // O BDI total é extraído preferencialmente da aba que contém "bdi" no nome
-          if (!bdiPercentual && bdiAba > 0 && nomeLower.includes('bdi')) {
-            bdiPercentual = bdiAba;
-          }
-          if (!bdiPercentual && bdiAba > 0) {
-            bdiPercentual = bdiAba;
-          }
-        }
+      const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(getRows(bdtSheet), cid, 'BDI');
+
+      // ── 2. Indiretos ────────────────────────────────────────────
+      const indiSheet = findSheet('indiretos');
+      const indiLinhas = indiSheet ? parsearAbaIndiretos(getRows(indiSheet), cid, oid) : [];
+
+      // ── 3. F.D. ─────────────────────────────────────────────────
+      const fdSheet = findSheet('f.d.', 'fd', 'faturamentodireto');
+      const fdLinhas = fdSheet ? parsearAbaFd(getRows(fdSheet), cid, oid) : [];
+
+      // ── 4. Adm Central ──────────────────────────────────────────
+      const admSheet = findSheet('admcentral', 'admcentral', 'central');
+      const admLinhas = admSheet ? parsearAbaAdmCentral(getRows(admSheet), cid, oid) : [];
+
+      // ── 5. Despesas Financeiras ─────────────────────────────────
+      const dfSheet = findSheet('despesasfinanceiras', 'financeiras', 'despesas');
+      const dfLinhas = dfSheet ? parsearAbaDespesasFinanceiras(getRows(dfSheet), cid, oid) : [];
+
+      // ── 6. Tributos Fiscais ─────────────────────────────────────
+      const tribSheet = findSheet('tributosfiscais', 'tributos', 'fiscais');
+      const tribLinhas = tribSheet ? parsearAbaTributos(getRows(tribSheet), cid, oid) : [];
+
+      // ── 7. Taxa de Comercialização ──────────────────────────────
+      const tcSheet = findSheet('taxadecomercialização', 'taxacomercializacao', 'comercialização', 'comercializacao');
+      const tcLinhas = tcSheet ? parsearAbaTaxaComercializacao(getRows(tcSheet), cid, oid) : [];
+
+      if (!bdiLinhas.length && !indiLinhas.length && !fdLinhas.length) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhuma linha BDI encontrada na planilha.' });
       }
 
-      if (!todasLinhas.length) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhuma linha encontrada nas abas da planilha.' });
-      }
+      // ── Limpar dados antigos ────────────────────────────────────
+      await db.delete(orcamentoBdi)               .where(eq(orcamentoBdi.orcamentoId,               oid));
+      await db.delete(bdiIndiretos)               .where(eq(bdiIndiretos.orcamentoId,               oid));
+      await db.delete(bdiFd)                      .where(eq(bdiFd.orcamentoId,                      oid));
+      await db.delete(bdiAdmCentral)              .where(eq(bdiAdmCentral.orcamentoId,              oid));
+      await db.delete(bdiDespesasFinanceiras)     .where(eq(bdiDespesasFinanceiras.orcamentoId,     oid));
+      await db.delete(bdiTributos)                .where(eq(bdiTributos.orcamentoId,                oid));
+      await db.delete(bdiTaxaComercializacao)     .where(eq(bdiTaxaComercializacao.orcamentoId,     oid));
 
-      // Limpar BDI anterior e inserir tudo novo
-      await db.delete(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.orcamentoId));
+      // ── Inserir dados novos ─────────────────────────────────────
+      for (let i = 0; i < bdiLinhas.length; i += BATCH)
+        await db.insert(orcamentoBdi).values(bdiLinhas.slice(i, i + BATCH).map(b => ({ ...b, orcamentoId: oid })));
 
-      const BATCH = 500;
-      for (let i = 0; i < todasLinhas.length; i += BATCH) {
-        await db.insert(orcamentoBdi).values(
-          todasLinhas.slice(i, i + BATCH).map(b => ({ ...b, orcamentoId: input.orcamentoId }))
-        );
-      }
+      for (let i = 0; i < indiLinhas.length; i += BATCH)
+        await db.insert(bdiIndiretos).values(indiLinhas.slice(i, i + BATCH));
 
-      // Recalcular Venda de todos os itens: Venda = Custo × (1 + BDI%)
+      for (let i = 0; i < fdLinhas.length; i += BATCH)
+        await db.insert(bdiFd).values(fdLinhas.slice(i, i + BATCH));
+
+      for (let i = 0; i < admLinhas.length; i += BATCH)
+        await db.insert(bdiAdmCentral).values(admLinhas.slice(i, i + BATCH));
+
+      for (let i = 0; i < dfLinhas.length; i += BATCH)
+        await db.insert(bdiDespesasFinanceiras).values(dfLinhas.slice(i, i + BATCH));
+
+      for (let i = 0; i < tribLinhas.length; i += BATCH)
+        await db.insert(bdiTributos).values(tribLinhas.slice(i, i + BATCH));
+
+      for (let i = 0; i < tcLinhas.length; i += BATCH)
+        await db.insert(bdiTaxaComercializacao).values(tcLinhas.slice(i, i + BATCH));
+
+      // ── Recalcular Venda dos itens com novo BDI% ───────────────
       if (bdiPercentual > 0) {
-        const itens = await db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
-
+        const itens = await db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, oid));
         for (let i = 0; i < itens.length; i += BATCH) {
-          const batch = itens.slice(i, i + BATCH);
-          for (const item of batch) {
+          for (const item of itens.slice(i, i + BATCH)) {
             const custo     = parseFloat(item.custoTotal     || '0');
             const custoUnit = parseFloat(item.custoUnitTotal || '0');
-            const venda     = custo     * (1 + bdiPercentual);
-            const vendaUnit = custoUnit * (1 + bdiPercentual);
             await db.update(orcamentoItens).set({
-              vendaTotal:     fix2(venda),
-              vendaUnitTotal: fix4(vendaUnit),
+              vendaTotal:     fix2(custo     * (1 + bdiPercentual)),
+              vendaUnitTotal: fix4(custoUnit * (1 + bdiPercentual)),
             }).where(eq(orcamentoItens.id, item.id));
           }
         }
-
-        // Atualizar totais do orçamento
-        const nivel1     = itens.filter(i => i.nivel === 1);
-        const totalVenda = nivel1.reduce((s, i) => s + parseFloat(i.custoTotal || '0') * (1 + bdiPercentual), 0);
-
+        const nivel1 = itens.filter(i => i.nivel === 1);
         await db.update(orcamentos).set({
           bdiPercentual: fix6(bdiPercentual),
-          totalVenda:    fix2(totalVenda),
-        }).where(eq(orcamentos.id, input.orcamentoId));
+          totalVenda:    fix2(nivel1.reduce((s, i) => s + parseFloat(i.custoTotal || '0') * (1 + bdiPercentual), 0)),
+        }).where(eq(orcamentos.id, oid));
       }
 
-      const abasImportadas = [...new Set(todasLinhas.map(l => l.nomeAba))];
+      const abasImportadas = [
+        bdtSheet  ? 'BDI'                    : null,
+        indiSheet ? 'Indiretos'              : null,
+        fdSheet   ? 'F.D.'                   : null,
+        admSheet  ? 'Adm Central'            : null,
+        dfSheet   ? 'Despesas Financeiras'   : null,
+        tribSheet ? 'Tributos Fiscais'       : null,
+        tcSheet   ? 'Taxa de Comercialização': null,
+      ].filter(Boolean) as string[];
 
       return {
         success: true,
-        linhasCount:    todasLinhas.length,
+        linhasCount:    bdiLinhas.length + indiLinhas.length + fdLinhas.length + admLinhas.length + dfLinhas.length + tribLinhas.length + tcLinhas.length,
         bdiPercentual,
         abasImportadas,
       };
+    }),
+
+  // ── Buscar todos os dados detalhados BDI de um orçamento ──────
+  getBdiDetalhes: protectedProcedure
+    .input(z.object({ orcamentoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const oid = input.orcamentoId;
+      const [bdi, indiretos, fd, adm, despFinanc, tributos, taxaComercializacao] = await Promise.all([
+        db.select().from(orcamentoBdi)           .where(eq(orcamentoBdi.orcamentoId,           oid)).orderBy(orcamentoBdi.ordem),
+        db.select().from(bdiIndiretos)           .where(eq(bdiIndiretos.orcamentoId,           oid)).orderBy(bdiIndiretos.ordem),
+        db.select().from(bdiFd)                  .where(eq(bdiFd.orcamentoId,                  oid)).orderBy(bdiFd.ordem),
+        db.select().from(bdiAdmCentral)          .where(eq(bdiAdmCentral.orcamentoId,          oid)).orderBy(bdiAdmCentral.ordem),
+        db.select().from(bdiDespesasFinanceiras) .where(eq(bdiDespesasFinanceiras.orcamentoId, oid)).orderBy(bdiDespesasFinanceiras.ordem),
+        db.select().from(bdiTributos)            .where(eq(bdiTributos.orcamentoId,            oid)).orderBy(bdiTributos.ordem),
+        db.select().from(bdiTaxaComercializacao) .where(eq(bdiTaxaComercializacao.orcamentoId, oid)).orderBy(bdiTaxaComercializacao.ordem),
+      ]);
+      return { bdi, indiretos, fd, adm, despFinanc, tributos, taxaComercializacao };
+    }),
+
+  // ── Update endpoints — cada sub-aba tem o seu ──────────────────
+  updateBdiIndiretosLinha: protectedProcedure
+    .input(z.object({ id: z.number(), quantidade: z.number().optional(), salarioBase: z.number().optional(), bonusMensal: z.number().optional(), decimoTerceiroFerias: z.number().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const { id, quantidade, salarioBase, bonusMensal, decimoTerceiroFerias } = input;
+      const upd: any = {};
+      if (quantidade              !== undefined) upd.quantidade              = fix2(quantidade);
+      if (salarioBase             !== undefined) upd.salarioBase             = fix2(salarioBase);
+      if (bonusMensal             !== undefined) upd.bonusMensal             = fix2(bonusMensal);
+      if (decimoTerceiroFerias    !== undefined) upd.decimoTerceiroFerias    = fix2(decimoTerceiroFerias);
+      if (Object.keys(upd).length > 0)
+        await db.update(bdiIndiretos).set(upd).where(eq(bdiIndiretos.id, id));
+      return { success: true };
+    }),
+
+  updateBdiFdLinha: protectedProcedure
+    .input(z.object({ id: z.number(), qtdOrcada: z.number().optional(), precoUnit: z.number().optional(), fornecedor: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const { id, qtdOrcada, precoUnit, fornecedor } = input;
+      const upd: any = {};
+      if (qtdOrcada  !== undefined) { upd.qtdOrcada = fix2(qtdOrcada); }
+      if (precoUnit  !== undefined) { upd.precoUnit = fix6(precoUnit); }
+      if (fornecedor !== undefined) { upd.fornecedor = fornecedor.substring(0, 255); }
+      if (upd.qtdOrcada !== undefined || upd.precoUnit !== undefined) {
+        const [cur] = await db.select().from(bdiFd).where(eq(bdiFd.id, id));
+        if (cur) {
+          const qty = upd.qtdOrcada !== undefined ? parseFloat(upd.qtdOrcada) : parseFloat(cur.qtdOrcada || '0');
+          const pu  = upd.precoUnit  !== undefined ? parseFloat(upd.precoUnit)  : parseFloat(cur.precoUnit  || '0');
+          upd.total = fix2(qty * pu);
+        }
+      }
+      if (Object.keys(upd).length > 0)
+        await db.update(bdiFd).set(upd).where(eq(bdiFd.id, id));
+      return { success: true };
+    }),
+
+  updateBdiAdmCentralLinha: protectedProcedure
+    .input(z.object({ id: z.number(), base: z.number().optional(), encargos: z.number().optional(), beneficios: z.number().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const { id, base, encargos, beneficios } = input;
+      const upd: any = {};
+      if (base       !== undefined) upd.base       = fix2(base);
+      if (encargos   !== undefined) upd.encargos   = fix6(encargos);
+      if (beneficios !== undefined) upd.beneficios = fix2(beneficios);
+      if (upd.base !== undefined || upd.encargos !== undefined || upd.beneficios !== undefined) {
+        const [cur] = await db.select().from(bdiAdmCentral).where(eq(bdiAdmCentral.id, id));
+        if (cur) {
+          const b = upd.base       ?? parseFloat(cur.base       || '0');
+          const e = upd.encargos   ?? parseFloat(cur.encargos   || '0');
+          const n = upd.beneficios ?? parseFloat(cur.beneficios || '0');
+          upd.total = fix2(parseFloat(b) * (1 + parseFloat(e)) + parseFloat(n));
+        }
+      }
+      if (Object.keys(upd).length > 0)
+        await db.update(bdiAdmCentral).set(upd).where(eq(bdiAdmCentral.id, id));
+      return { success: true };
+    }),
+
+  updateBdiDespesasFinanceirasLinha: protectedProcedure
+    .input(z.object({ id: z.number(), valor: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      await db.update(bdiDespesasFinanceiras).set({ valor: fix6(input.valor) }).where(eq(bdiDespesasFinanceiras.id, input.id));
+      return { success: true };
+    }),
+
+  updateBdiTributosLinha: protectedProcedure
+    .input(z.object({ id: z.number(), aliquota: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      await db.update(bdiTributos).set({ aliquota: fix6(input.aliquota) }).where(eq(bdiTributos.id, input.id));
+      return { success: true };
+    }),
+
+  updateBdiTaxaComercializacaoLinha: protectedProcedure
+    .input(z.object({ id: z.number(), percentual: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      await db.update(bdiTaxaComercializacao).set({ percentual: fix6(input.percentual) }).where(eq(bdiTaxaComercializacao.id, input.id));
+      return { success: true };
     }),
 
   // ── Atualizar percentual de linha BDI ─────────────────────
