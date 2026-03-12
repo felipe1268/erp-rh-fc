@@ -1531,6 +1531,187 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
 }
 
 /* ════════════════════════════════════════════════════════════════
+   COMPONENTE: EncargosView
+   ════════════════════════════════════════════════════════════════ */
+function EncargosView({ companyId }: { companyId: number }) {
+  const utils = trpc.useUtils();
+  const { data: rows = [], isLoading } = trpc.orcamento.listarEncargos.useQuery(
+    { companyId }, { enabled: companyId > 0 }
+  );
+  const salvarMut = trpc.orcamento.salvarEncargo.useMutation({
+    onSuccess: () => utils.orcamento.listarEncargos.invalidate({ companyId }),
+  });
+
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editVal, setEditVal] = useState("");
+
+  function startEdit(id: number, val: string) {
+    setEditingId(id);
+    setEditVal(parseFloat(val || '0').toFixed(2).replace('.', ','));
+  }
+
+  function commitEdit(id: number) {
+    const v = parseFloat(editVal.replace(',', '.')) || 0;
+    salvarMut.mutate({ companyId, id, valor: v.toFixed(4) });
+    setEditingId(null);
+  }
+
+  const byGrupo = (g: string) => rows.filter(r => r.grupo === g);
+  const subTotal = (g: string) => byGrupo(g).reduce((s, r) => s + parseFloat(r.valor || '0'), 0);
+  const subA = subTotal('A'), subB = subTotal('B'), subC = subTotal('C');
+  const subE = subTotal('E'), subF = subTotal('F');
+  const groupD = (subA * subB) / 100;
+  const total = subA + subB + subC + groupD + subE + subF;
+
+  const fmtPct = (v: number) => v.toFixed(2).replace('.', ',') + '%';
+
+  function GrupoHeader({ label, descricao, color }: { label: string; descricao: string; color: string }) {
+    return (
+      <tr className={color}>
+        <td className="px-4 py-2 w-12 font-bold text-xs">{label}</td>
+        <td className="px-4 py-2 font-bold text-xs" colSpan={2}>{descricao}</td>
+        <td className="px-4 py-2 w-36 text-right font-bold text-xs">Mensalistas</td>
+      </tr>
+    );
+  }
+
+  function ItemRows({ grupo }: { grupo: string }) {
+    return (
+      <>
+        {byGrupo(grupo).map(r => (
+          <tr key={r.id} className="border-b hover:bg-slate-50 group">
+            <td className="px-4 py-1.5 text-xs text-slate-500 font-mono w-12">{r.codigo}</td>
+            <td className={`px-4 py-1.5 text-xs ${['A1','A7','A9'].includes(r.codigo) ? 'text-red-600' : 'text-slate-700'}`}>
+              {r.descricao}
+            </td>
+            <td className="px-4 py-1.5 w-8" />
+            <td className="px-4 py-1.5 text-right w-36">
+              {editingId === r.id ? (
+                <input
+                  autoFocus
+                  className="w-20 border rounded px-1.5 py-0.5 text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-400 ml-auto block"
+                  value={editVal}
+                  onChange={e => setEditVal(e.target.value)}
+                  onBlur={() => commitEdit(r.id)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitEdit(r.id);
+                    if (e.key === 'Escape') setEditingId(null);
+                  }}
+                />
+              ) : (
+                <button
+                  onClick={() => startEdit(r.id, r.valor ?? '0')}
+                  className="text-xs tabular-nums text-slate-600 hover:text-blue-600 hover:underline cursor-pointer group-hover:font-medium"
+                  title="Clique para editar">
+                  {fmtPct(parseFloat(r.valor || '0'))}
+                </button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </>
+    );
+  }
+
+  function SubtotalRow({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
+    return (
+      <tr className={highlight ? "bg-yellow-50 border-b border-yellow-200" : "border-b bg-slate-50"}>
+        <td className="px-4 py-1.5" colSpan={3}>
+          <span className="text-xs font-semibold text-slate-700">{label}</span>
+        </td>
+        <td className={`px-4 py-1.5 text-right text-xs font-bold tabular-nums ${highlight ? 'text-yellow-700' : 'text-slate-700'}`}>
+          {fmtPct(value)}
+        </td>
+      </tr>
+    );
+  }
+
+  if (isLoading) return (
+    <div className="flex justify-center py-20">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">Encargos Sociais</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Clique em qualquer percentual para editar. O total é aplicado automaticamente nos insumos de mão de obra (Un = h).
+          </p>
+        </div>
+        <div className="text-right">
+          <div className="text-xs text-slate-500">Total L.S.</div>
+          <div className="text-2xl font-bold text-blue-700 tabular-nums">{fmtPct(total)}</div>
+        </div>
+      </div>
+
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            {/* ── GRUPO A ── */}
+            <tbody>
+              <GrupoHeader label="A" descricao="Encargos Sociais Básicos" color="bg-slate-100 border-b border-slate-200" />
+              <ItemRows grupo="A" />
+              <SubtotalRow label="Subtotal A" value={subA} highlight />
+
+              {/* ── GRUPO B ── */}
+              <GrupoHeader label="B" descricao="Encargos que recebem incidência de A" color="bg-slate-100 border-b border-slate-200" />
+              <ItemRows grupo="B" />
+              <SubtotalRow label="Subtotal B" value={subB} highlight />
+
+              {/* ── GRUPO C ── */}
+              <GrupoHeader label="C" descricao="Encargos ligados à demissão do trabalhador" color="bg-slate-100 border-b border-slate-200" />
+              <ItemRows grupo="C" />
+              <SubtotalRow label="Subtotal D" value={subC} highlight />
+
+              {/* ── GRUPO D (calculado) ── */}
+              <tr className="bg-slate-100 border-b border-slate-200">
+                <td className="px-4 py-2 w-12 font-bold text-xs">D</td>
+                <td className="px-4 py-2 font-bold text-xs" colSpan={3}>Grupo D = (A×B)</td>
+              </tr>
+              <tr className="border-b bg-slate-50">
+                <td className="px-4 py-1.5 text-xs text-slate-400 font-mono w-12">D</td>
+                <td className="px-4 py-1.5 text-xs text-slate-500 italic">
+                  Incidência dos encargos do grupo A sobre o grupo B
+                  <span className="ml-2 text-[10px] text-slate-400 not-italic">(= {fmtPct(subA)} × {fmtPct(subB)} / 100)</span>
+                </td>
+                <td className="px-4 py-1.5 w-8" />
+                <td className="px-4 py-1.5 text-right text-xs tabular-nums text-slate-500">{fmtPct(groupD)}</td>
+              </tr>
+              <SubtotalRow label="Subtotal D" value={groupD} highlight />
+
+              {/* ── GRUPO E ── */}
+              <GrupoHeader label="E" descricao="Grupo E" color="bg-slate-100 border-b border-slate-200" />
+              <ItemRows grupo="E" />
+              <SubtotalRow label="Subtotal D'" value={subE} highlight />
+
+              {/* ── GRUPO F ── */}
+              <GrupoHeader label="F" descricao="Complementares" color="bg-slate-100 border-b border-slate-200" />
+              <ItemRows grupo="F" />
+              <SubtotalRow label="Subtotal E" value={subF} highlight />
+
+              {/* ── TOTAL ── */}
+              <tr className="bg-blue-700 text-white">
+                <td className="px-4 py-3" colSpan={3}>
+                  <span className="font-bold text-sm">Total A + B + C + D + D' + E</span>
+                </td>
+                <td className="px-4 py-3 text-right font-bold text-sm tabular-nums">{fmtPct(total)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <p className="mt-3 text-[10px] text-slate-400">
+        * Grupo D é calculado automaticamente como (Subtotal A × Subtotal B) / 100. Os demais valores são editáveis.
+      </p>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
    PÁGINA PRINCIPAL
    ════════════════════════════════════════════════════════════════ */
 export default function BibliotecaOrcamento() {
@@ -1538,6 +1719,7 @@ export default function BibliotecaOrcamento() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
   const isInsumos = typeof window !== "undefined" && window.location.pathname.includes("insumos");
   const [showCategorias, setShowCategorias] = useState(false);
+  const [insumoTab, setInsumoTab] = useState<'lista' | 'encargos'>('lista');
 
   return (
     <DashboardLayout>
@@ -1555,7 +1737,35 @@ export default function BibliotecaOrcamento() {
             <CategoriasView companyId={companyId} />
           </div>
         ) : (
-          <InsumosView companyId={companyId} onGerenciarCategorias={() => setShowCategorias(true)} />
+          <>
+            {/* ── Tab bar ── */}
+            <div className="flex gap-1 border-b mb-6">
+              <button
+                onClick={() => setInsumoTab('lista')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  insumoTab === 'lista'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}>
+                Insumos
+              </button>
+              <button
+                onClick={() => setInsumoTab('encargos')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  insumoTab === 'encargos'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}>
+                Encargos Sociais
+              </button>
+            </div>
+
+            {insumoTab === 'lista' ? (
+              <InsumosView companyId={companyId} onGerenciarCategorias={() => setShowCategorias(true)} />
+            ) : (
+              <EncargosView companyId={companyId} />
+            )}
+          </>
         )}
       </div>
     </DashboardLayout>
