@@ -90,6 +90,17 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
   // Remove linhas inválidas (dados de importação antiga com lixo do Excel)
   const linhasValidas = linhas.filter((l: any) => VALID_BDI.test(String(l.codigo || "").trim()));
 
+  // Controle de grupos colapsados — inicia com todos expandidos
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  function toggleGrupo(key: string) {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
   // Encontra BDI total (B-02)
   const bdiLinha = linhasValidas.find((l: any) => l.codigo === "B-02");
   const bdiTotal  = bdiLinha ? fmt(bdiLinha.percentual) : 0;
@@ -97,12 +108,15 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
   // Detecta linha de soma (ex: "CD + CI =")
   const isSumRow = (cod: string) => /CD\s*\+/.test(cod);
 
+  // Rastreia o grupo atual enquanto iteramos (para saber se linhas estão colapsadas)
+  let currentGroupKey = "";
+
   return (
     <div className="space-y-0 text-sm">
       {/* Banner somente leitura */}
       <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
         <Lock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-        <span>Valores somente leitura — editável apenas na aba de origem correspondente</span>
+        <span>Valores somente leitura — editável apenas na aba de origem correspondente. Clique no cabeçalho do grupo para expandir/fechar.</span>
       </div>
 
       <Card className="overflow-hidden border-slate-300">
@@ -134,8 +148,9 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                   const hasVal = fmt(l.valorAbsoluto) !== 0;
                   const hasPct = fmt(l.percentual) !== 0;
 
-                  // ── Linha de soma (ex: CD + CI = ...)
+                  // ── Linha de soma (ex: CD + CI = ...) — sempre visível
                   if (sumRow) {
+                    currentGroupKey = "";
                     return (
                       <tr key={l.id ?? idx} className="bg-slate-200 border-t-2 border-b-2 border-slate-400">
                         <td colSpan={2} className="px-4 py-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">{l.descricao}</td>
@@ -147,12 +162,23 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                     );
                   }
 
-                  // ── Cabeçalho de grupo (CD, CI, DI, B, L, JF, V, PV...)
+                  // ── Cabeçalho de grupo (CD, CI, DI, B, L, JF, V, PV...) — clicável
                   if (header) {
+                    currentGroupKey = key;
+                    const isCollapsed = collapsed.has(key);
                     return (
-                      <tr key={l.id ?? idx} className={`${g.headerBg} ${g.headerBorder}`}>
+                      <tr
+                        key={l.id ?? idx}
+                        className={`${g.headerBg} ${g.headerBorder} cursor-pointer select-none hover:brightness-95 transition-all`}
+                        onClick={() => toggleGrupo(key)}
+                      >
                         <td className={`px-3 py-2 font-bold font-mono text-xs text-center ${g.headerText} border-r border-slate-200`}>
-                          {l.codigo}
+                          <div className="flex items-center justify-center gap-1">
+                            {isCollapsed
+                              ? <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                              : <ChevronDown  className="h-3.5 w-3.5 shrink-0" />}
+                            {l.codigo}
+                          </div>
                         </td>
                         <td className={`px-3 py-2 font-bold uppercase tracking-wide text-sm ${g.headerText} border-r border-slate-200`}>
                           {l.descricao}
@@ -167,7 +193,12 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                     );
                   }
 
-                  // ── BDI Total (B-02) — destaque especial
+                  // ── Linhas filhas — ocultas se o grupo estiver colapsado
+                  if (!isBdi && !isPV2 && currentGroupKey && collapsed.has(currentGroupKey)) {
+                    return null;
+                  }
+
+                  // ── BDI Total (B-02) — destaque especial, sempre visível
                   if (isBdi) {
                     return (
                       <tr key={l.id ?? idx} className="border-b-2 border-blue-400 bg-blue-50">
@@ -187,7 +218,7 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                     );
                   }
 
-                  // ── PV-2 / PV-3 — linhas totais com fator multiplicativo
+                  // ── PV-2 / PV-3 — linhas totais com fator multiplicativo, sempre visíveis
                   if (isPV2) {
                     return (
                       <tr key={l.id ?? idx} className="border-b border-yellow-300 bg-yellow-50">
