@@ -42,6 +42,7 @@ type Step = "obra" | "custo" | "bdi" | "done";
 type AnalyzeResult = {
   ok: boolean;
   abas: string[];
+  abasIgnoradas: string[];
   rowCount: number;
   errors: string[];
   warnings: string[];
@@ -76,18 +77,29 @@ async function analisarCusto(
   const wb = XLSX.read(buffer, { type: "array" });
   setProgress(70);
 
-  const abas = wb.SheetNames;
+  const todasAbas = wb.SheetNames as string[];
   const errors: string[] = [];
   const warnings: string[] = [];
   let rowCount = 0;
 
-  const orcTab = abas.find((n: string) => {
-    const l = n.toLowerCase();
-    return l.includes("orçamento") || l.includes("orcamento") || l === "orc";
-  });
+  const isOrc  = (n: string) => { const l = n.toLowerCase(); return l.includes("orçamento") || l.includes("orcamento") || l === "orc"; };
+  const isIns  = (n: string) => n.toLowerCase() === "insumos";
+  const isCpu  = (n: string) => { const l = n.toLowerCase(); return l === "cpus" || l === "cpu" || l.includes("composiç") || l.includes("composic"); };
+
+  const orcTab  = todasAbas.find(isOrc);
+  const insTab  = todasAbas.find(isIns);
+  const cpuTab  = todasAbas.find(isCpu);
+
+  const abasReconhecidas: string[] = [];
+  const abasIgnoradas: string[]    = [];
+
+  for (const n of todasAbas) {
+    if (isOrc(n) || isIns(n) || isCpu(n)) abasReconhecidas.push(n);
+    else abasIgnoradas.push(n);
+  }
 
   if (!orcTab) {
-    errors.push('Aba "Orçamento" não encontrada na planilha');
+    errors.push('Aba "Orçamento" não encontrada — é obrigatória');
   } else {
     const data = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], {
       header: 1, defval: "",
@@ -107,11 +119,11 @@ async function analisarCusto(
     }
   }
 
-  if (!abas.find(n => n.toLowerCase() === "insumos"))
-    warnings.push('Aba "Insumos" não encontrada — curva ABC não será gerada automaticamente');
+  if (!insTab) warnings.push('Aba "Insumos" não encontrada — Curva ABC será gerada a partir dos dados do orçamento');
+  if (!cpuTab) warnings.push('Aba "CPUs" não encontrada — composições unitárias não serão importadas');
 
   setProgress(100);
-  return { ok: errors.length === 0, abas, rowCount, errors, warnings };
+  return { ok: errors.length === 0, abas: abasReconhecidas, abasIgnoradas, rowCount, errors, warnings };
 }
 
 /* ─── Análise da planilha BDI ─────────────────────────────────── */
@@ -157,7 +169,7 @@ async function analisarBdi(
   }
 
   setProgress(100);
-  return { ok: errors.length === 0, abas: bdiAbas, rowCount, errors, warnings };
+  return { ok: errors.length === 0, abas: bdiAbas, abasIgnoradas: [], rowCount, errors, warnings };
 }
 
 /* ─── Barra de progresso ──────────────────────────────────────── */
@@ -179,7 +191,7 @@ function ProgressBar({ value, label, color = "bg-blue-500" }: {
 }
 
 /* ─── Resultado de análise ────────────────────────────────────── */
-function AnalyzePanel({ result, abas }: { result: AnalyzeResult; abas?: string[] }) {
+function AnalyzePanel({ result }: { result: AnalyzeResult }) {
   return (
     <div className={`rounded-lg border p-3 space-y-2 text-xs ${result.ok ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"}`}>
       <div className="flex items-center gap-2 font-semibold">
@@ -204,10 +216,21 @@ function AnalyzePanel({ result, abas }: { result: AnalyzeResult; abas?: string[]
         </div>
       ))}
       {result.ok && result.abas.length > 0 && (
-        <div className="flex flex-wrap gap-1 pt-1">
-          {result.abas.map(a => (
-            <span key={a} className="px-2 py-0.5 rounded bg-green-200 text-green-800 font-medium">{a}</span>
-          ))}
+        <div className="space-y-1.5 pt-1">
+          <div className="flex flex-wrap gap-1">
+            <span className="text-[10px] text-green-600 font-medium uppercase tracking-wide self-center mr-1">Importando:</span>
+            {result.abas.map(a => (
+              <span key={a} className="px-2 py-0.5 rounded bg-green-200 text-green-800 font-medium">{a}</span>
+            ))}
+          </div>
+          {result.abasIgnoradas.length > 0 && (
+            <div className="flex flex-wrap gap-1 items-center">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wide self-center mr-1">Ignoradas:</span>
+              {result.abasIgnoradas.map(a => (
+                <span key={a} className="px-2 py-0.5 rounded bg-slate-100 text-slate-400 line-through">{a}</span>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

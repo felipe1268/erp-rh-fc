@@ -371,8 +371,9 @@ export default function OrcamentoDetalhe() {
               <RefreshCw className="h-4 w-4" /> Atualizar Planilha
             </Button>
             <Button size="sm" variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"
-              onClick={() => { setBibOpen(true); setBibLoaded(true); }}>
-              <BookOpen className="h-4 w-4" /> Biblioteca
+              onClick={() => { setBibOpen(true); setBibLoaded(true); }}
+              title="Envia os preços e composições deste orçamento para atualizar a base central do sistema">
+              <BookOpen className="h-4 w-4" /> Atualizar Base
             </Button>
           </div>
         </div>
@@ -1186,8 +1187,13 @@ export default function OrcamentoDetalhe() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-amber-600" />
-              Enviar para Biblioteca
+              Atualizar Base do Sistema
             </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Os preços e composições deste orçamento serão enviados para a base central da empresa.
+              Itens novos serão cadastrados e os existentes terão seus preços médios recalculados.
+              Os valores dentro deste orçamento permanecem isolados — a base só é atualizada ao confirmar.
+            </p>
           </DialogHeader>
 
           <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
