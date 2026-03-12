@@ -897,6 +897,19 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
                 // Ocultar se seção colapsada
                 if (l.secao && collapsed.has(l.secao)) return null;
 
+                // ── Sub-cabeçalho de grupo dentro de uma seção (ex: "REFEIÇÕES:", "TRANSPORTES:")
+                if (l.tipoContrato === 'SUBHDR') {
+                  return (
+                    <tr key={l.id ?? idx} className="border-t border-slate-300 bg-amber-50">
+                      <td className="border-r border-slate-200"></td>
+                      <td className="px-2 py-1 font-mono text-xs text-amber-700 border-r border-slate-200 whitespace-nowrap">{l.codigo}</td>
+                      <td colSpan={COLS - 2} className="px-2 py-1 font-bold text-xs text-amber-800 uppercase tracking-wide">
+                        {l.descricao}
+                      </td>
+                    </tr>
+                  );
+                }
+
                 const isEven = idx % 2 === 0;
                 const hasTotal = fmt(l.totalObra) !== 0;
                 const hasMes   = fmt(l.totalMes) !== 0;
