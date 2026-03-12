@@ -4006,3 +4006,12 @@ export const composicaoInsumos = pgTable("composicao_insumos", {
   index("ci_comp").on(table.composicaoCodigo),
   index("ci_insumo").on(table.insumoCodigo),
 ]);
+
+export const orcamentoParametros = pgTable("orcamento_parametros", {
+  id:           serial().notNull().primaryKey(),
+  companyId:    integer().notNull().unique(),
+  ls:           numeric({ precision: 10, scale: 4 }).notNull().default('0'),
+  he:           numeric({ precision: 10, scale: 4 }).notNull().default('0'),
+  criadoEm:     timestamp({ mode: 'string' }).defaultNow().notNull(),
+  atualizadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
+});

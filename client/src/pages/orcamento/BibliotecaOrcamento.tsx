@@ -1025,11 +1025,26 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
   const [selected, setSelected]    = useState<Set<number>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Parâmetros de encargos ──────────────────────────────────
+  const [editingParams, setEditingParams] = useState(false);
+  const [lsEdit, setLsEdit] = useState("");
+  const [heEdit, setHeEdit] = useState("");
+
   const utils = trpc.useUtils();
   const { data: insumos = [], isLoading } =
     trpc.orcamento.listarInsumosCatalogo.useQuery({ companyId }, { enabled: companyId > 0 });
   const { data: grupos = [] } =
     trpc.orcamento.listarGruposInsumos.useQuery({ companyId }, { enabled: companyId > 0 });
+
+  const { data: params } = trpc.orcamento.getParametros.useQuery({ companyId }, { enabled: companyId > 0 });
+  const salvarParamsMut = trpc.orcamento.salvarParametros.useMutation({
+    onSuccess: () => { utils.orcamento.getParametros.invalidate({ companyId }); setEditingParams(false); },
+  });
+
+  const ls = parseFloat(params?.ls ?? '0');
+  const he = parseFloat(params?.he ?? '0');
+  const fatorEnc = (1 + ls / 100) * (1 + he / 100);
+  const precoEnc = (base: number) => base * fatorEnc;
 
   const { data: novoCodigo } = trpc.orcamento.gerarCodigoInsumo.useQuery(
     { companyId }, { enabled: companyId > 0 && editingId === "new" }
@@ -1187,8 +1202,12 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
               grupos={grupos as any[]} className="w-40" />
           </td>
           <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
+          <td className="px-2 py-1 text-right">
+            <span className="text-xs font-semibold text-blue-700 tabular-nums px-1.5">
+              {formatBRL(precoEnc(parseBRL(editForm.precoUnitario)))}
+            </span>
+          </td>
           <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
-          <td className="px-2 py-1">{field("precoMin", "w-24 text-right")}</td>
           <td className="px-2 py-1 text-center">
             <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
               {i.totalOrcamentos}
@@ -1225,8 +1244,8 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
           {i.tipo && <Badge variant="outline" className="text-[10px]">{i.tipo}</Badge>}
         </td>
         <td className="px-3 py-2 text-center text-muted-foreground">{i.unidade || "—"}</td>
-        <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatBRL(n(i.precoMedio))}</td>
-        <td className="px-3 py-2 text-right text-slate-400 tabular-nums">{formatBRL(n(i.precoMin))}</td>
+        <td className="px-3 py-2 text-right font-semibold tabular-nums text-blue-700">{formatBRL(precoEnc(n(i.precoMedio)))}</td>
+        <td className="px-3 py-2 text-right text-slate-400 tabular-nums">{formatBRL(n(i.precoMedio))}</td>
         <td className="px-3 py-2 text-center">
           <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
             {i.totalOrcamentos}
@@ -1321,6 +1340,66 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
         <GrupoFiltro value={catFilter} onChange={setCatFilter} grupos={grupos as any[]} />
       </div>
 
+      {/* ── Banner de Encargos Sociais ──────────────────────────── */}
+      <div className="mb-4 px-5 py-3 rounded-lg border border-blue-100 bg-blue-50/60 flex items-center gap-6 flex-wrap">
+        {editingParams ? (
+          <>
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Encargos Sociais</span>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-slate-600">L.S. =</label>
+              <input autoFocus
+                className="w-20 border rounded px-2 py-0.5 text-sm text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+                value={lsEdit} onChange={e => setLsEdit(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") salvarParamsMut.mutate({ companyId, ls: String(parseBRL(lsEdit)), he: String(parseBRL(heEdit)) }); if (e.key === "Escape") setEditingParams(false); }}
+              />
+              <span className="text-xs text-slate-500">%</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-slate-600">H.E. (reajuste) =</label>
+              <input
+                className="w-20 border rounded px-2 py-0.5 text-sm text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+                value={heEdit} onChange={e => setHeEdit(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") salvarParamsMut.mutate({ companyId, ls: String(parseBRL(lsEdit)), he: String(parseBRL(heEdit)) }); if (e.key === "Escape") setEditingParams(false); }}
+              />
+              <span className="text-xs text-slate-500">%</span>
+            </div>
+            <div className="flex items-center gap-1 ml-auto">
+              <button
+                onClick={() => salvarParamsMut.mutate({ companyId, ls: String(parseBRL(lsEdit)), he: String(parseBRL(heEdit)) })}
+                disabled={salvarParamsMut.isPending}
+                className="p-1.5 rounded hover:bg-blue-200 text-blue-700">
+                {salvarParamsMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              </button>
+              <button onClick={() => setEditingParams(false)} className="p-1.5 rounded hover:bg-slate-200 text-slate-500">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Encargos Sociais</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-bold text-slate-700">L.S. =</span>
+              <span className="text-sm font-bold text-blue-700 tabular-nums">{ls.toFixed(2).replace('.', ',')}%</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-bold text-slate-700">H.E. (reajuste) =</span>
+              <span className="text-sm font-bold text-blue-700 tabular-nums">{he.toFixed(2).replace('.', ',')}%</span>
+            </div>
+            {(ls > 0 || he > 0) && (
+              <span className="text-xs text-slate-400">
+                Fator: ×{fatorEnc.toFixed(4)}
+              </span>
+            )}
+            <button
+              onClick={() => { setLsEdit(ls.toFixed(2).replace('.', ',')); setHeEdit(he.toFixed(2).replace('.', ',')); setEditingParams(true); }}
+              className="ml-auto flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 hover:underline">
+              <Pencil className="h-3 w-3" /> Editar
+            </button>
+          </>
+        )}
+      </div>
+
       {/* Tabela */}
       {isLoading ? (
         <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -1346,7 +1425,16 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
                   <th className="text-left px-3 py-2 min-w-[260px]">Descrição</th>
                   <th className="text-left px-3 py-2 w-36">Grupo</th>
                   <th className="text-center px-3 py-2 w-12">Un</th>
-                  <th className="text-right px-3 py-2 w-28 font-semibold">Preço (c/enc.)</th>
+                  <th className="text-right px-3 py-2 w-28 font-semibold">
+                    <span>Preço c/enc.</span>
+                    {(ls > 0 || he > 0) && (
+                      <div className="text-[9px] font-normal text-blue-500 leading-tight">
+                        {ls > 0 && <span>LS {ls.toFixed(2)}%</span>}
+                        {ls > 0 && he > 0 && <span> · </span>}
+                        {he > 0 && <span>HE {he.toFixed(2)}%</span>}
+                      </div>
+                    )}
+                  </th>
                   <th className="text-right px-3 py-2 w-28 text-slate-500">Preço Base</th>
                   <th className="text-center px-3 py-2 w-20">Orçamentos</th>
                   <th className="w-16" />
@@ -1364,8 +1452,12 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
                         grupos={grupos as any[]} className="w-40" />
                     </td>
                     <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
+                    <td className="px-2 py-1 text-right">
+                      <span className="text-xs font-semibold text-blue-700 tabular-nums px-1.5">
+                        {formatBRL(precoEnc(parseBRL(editForm.precoUnitario)))}
+                      </span>
+                    </td>
                     <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
-                    <td className="px-2 py-1">{field("precoMin", "w-24 text-right")}</td>
                     <td className="px-2 py-1" />
                     <td className="px-2 py-1">
                       <div className="flex items-center gap-1">
