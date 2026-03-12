@@ -134,9 +134,10 @@ const MODULES: Module[] = [
     features: ["Parceiros Conveniados", "Lançamentos", "Aprovações RH", "Guia de Descontos", "Pagamentos"],
   },
   {
-    id: "planejamento", title: "Planejamento", subtitle: "Controle de Obras",
-    description: "Cronogramas, alocação de recursos e indicadores de desempenho.",
-    icon: CalendarRange, accentFrom: "#8B5CF6", accentTo: "#7C3AED", accentGlow: "", iconBg: "", path: "", active: false, features: [],
+    id: "planejamento", title: "Planejamento", subtitle: "Gestão de Projetos",
+    description: "Projetos vinculados a orçamentos, Curva S, avanço físico semanal, revisões de cronograma e REFIS.",
+    icon: CalendarRange, accentFrom: "#22C55E", accentTo: "#16A34A", accentGlow: "", iconBg: "", path: "/planejamento", active: true,
+    features: ["Curva S (4 linhas)", "Avanço Semanal", "Revisões / Baseline", "REFIS"],
   },
   {
     id: "financeiro", title: "Financeiro", subtitle: "Gestão Financeira",

@@ -121,6 +121,10 @@ const OrcamentoPrint     = lazy(() => import("./pages/orcamento/OrcamentoPrint")
 const BibliotecaOrcamento = lazy(() => import("./pages/orcamento/BibliotecaOrcamento"));
 const OrcamentoDashPage  = lazy(() => import("./pages/orcamento/OrcamentoDashPage"));
 
+// Planejamento
+const PlanejamentoLista   = lazy(() => import("./pages/planejamento/PlanejamentoLista"));
+const PlanejamentoDetalhe = lazy(() => import("./pages/planejamento/PlanejamentoDetalhe"));
+
 // Sprint 6 - IA
 const ComparativoConvencoes = lazy(() => import("./pages/ComparativoConvencoes"));
 
@@ -258,6 +262,9 @@ function Router() {
         <Route path="/orcamento/:id/dash"         component={OrcamentoDashPage} />
         <Route path="/orcamento/dash"             component={OrcamentoDashPage} />
         <Route path="/orcamento/:id"              component={OrcamentoDetalhe} />
+        {/* Planejamento */}
+        <Route path="/planejamento"              component={PlanejamentoLista} />
+        <Route path="/planejamento/:id"          component={PlanejamentoDetalhe} />
         {/* Sprint 6 - IA */}
         <Route path="/comparativo-convencoes" component={ComparativoConvencoes} />
         <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />

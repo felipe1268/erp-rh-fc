@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -68,6 +68,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/orcamento/composicoes":  "orcamento" as ModuleId,
   "/orcamento/insumos":      "orcamento" as ModuleId,
   "/orcamento/biblioteca":   "orcamento" as ModuleId,
+  "/planejamento":           "planejamento" as ModuleId,
   "/comparativo-convencoes": "rh-dp" as ModuleId,
   // Shared routes (appear in all modules)
   "/empresas": "all",
@@ -89,6 +90,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "terceiros": "Terceiros",
   "parceiros": "Parceiros",
   "orcamento": "Orçamento",
+  "planejamento": "Planejamento",
   "all": "Todos os Módulos",
 };
 
@@ -98,7 +100,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp"; // Default to RH & DP

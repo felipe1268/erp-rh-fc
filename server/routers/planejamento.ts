@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
-import { db } from "../db";
-import { sql, eq, and, desc, asc } from "drizzle-orm";
+import { router, protectedProcedure } from "../_core/trpc";
+import { getDb } from "../db";
+import { eq, and, desc, asc } from "drizzle-orm";
 import {
   planejamentoProjetos,
   planejamentoRevisoes,
@@ -19,6 +19,7 @@ export const planejamentoRouter = router({
   listarProjetos: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
+      const db = await getDb();
       return db.select().from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.companyId, input.companyId))
         .orderBy(desc(planejamentoProjetos.criadoEm));
@@ -39,6 +40,7 @@ export const planejamentoRouter = router({
       descricao:             z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      const db = await getDb();
       const [projeto] = await db.insert(planejamentoProjetos).values({
         companyId:             input.companyId,
         orcamentoId:           input.orcamentoId ?? null,
@@ -82,6 +84,7 @@ export const planejamentoRouter = router({
       descricao:             z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      const db = await getDb();
       const { id, ...data } = input;
       const updates: any = { atualizadoEm: new Date() };
       if (data.nome !== undefined)                  updates.nome = data.nome;
@@ -91,7 +94,7 @@ export const planejamentoRouter = router({
       if (data.dataInicio !== undefined)            updates.dataInicio = data.dataInicio;
       if (data.dataTerminoContratual !== undefined) updates.dataTerminoContratual = data.dataTerminoContratual;
       if (data.valorContrato !== undefined)         updates.valorContrato = String(data.valorContrato);
-      if (data.status !== undefined)               updates.status = data.status;
+      if (data.status !== undefined)                updates.status = data.status;
       if (data.descricao !== undefined)             updates.descricao = data.descricao;
       await db.update(planejamentoProjetos).set(updates).where(eq(planejamentoProjetos.id, id));
       return { success: true };
@@ -100,6 +103,7 @@ export const planejamentoRouter = router({
   excluirProjeto: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
+      const db = await getDb();
       await db.delete(planejamentoAvancos).where(eq(planejamentoAvancos.projetoId, input.id));
       await db.delete(planejamentoAtividades).where(eq(planejamentoAtividades.projetoId, input.id));
       await db.delete(planejamentoRevisoes).where(eq(planejamentoRevisoes.projetoId, input.id));
@@ -112,6 +116,7 @@ export const planejamentoRouter = router({
   getProjetoById: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
+      const db = await getDb();
       const [projeto] = await db.select().from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.id, input.id));
       if (!projeto) throw new Error("Projeto não encontrado");
@@ -131,15 +136,15 @@ export const planejamentoRouter = router({
   // ── Revisões ──────────────────────────────────────────────────────────────
   criarRevisao: protectedProcedure
     .input(z.object({
-      projetoId:  z.number(),
-      motivo:     z.string(),
-      responsavel: z.string().optional(),
-      dataRevisao: z.string(),
-      observacao:  z.string().optional(),
+      projetoId:        z.number(),
+      motivo:           z.string(),
+      responsavel:      z.string().optional(),
+      dataRevisao:      z.string(),
+      observacao:       z.string().optional(),
       copiarAtividades: z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
-      // Número sequencial
+      const db = await getDb();
       const existentes = await db.select().from(planejamentoRevisoes)
         .where(eq(planejamentoRevisoes.projetoId, input.projetoId))
         .orderBy(desc(planejamentoRevisoes.numero));
@@ -157,7 +162,6 @@ export const planejamentoRouter = router({
         status:      "pendente",
       }).returning();
 
-      // Copia atividades da revisão mais recente aprovada, se solicitado
       if (input.copiarAtividades) {
         const revisaoAnterior = existentes.find(r => r.status === "aprovada");
         if (revisaoAnterior) {
@@ -193,16 +197,18 @@ export const planejamentoRouter = router({
   aprovarRevisao: protectedProcedure
     .input(z.object({ id: z.number(), aprovadoPor: z.string().optional() }))
     .mutation(async ({ input }) => {
+      const db = await getDb();
       await db.update(planejamentoRevisoes)
         .set({ status: "aprovada", aprovadoPor: input.aprovadoPor ?? null })
         .where(eq(planejamentoRevisoes.id, input.id));
       return { success: true };
     }),
 
-  // ── Atividades ───────────────────────────────────────────────────────────
+  // ── Atividades ────────────────────────────────────────────────────────────
   listarAtividades: protectedProcedure
     .input(z.object({ revisaoId: z.number() }))
     .query(async ({ input }) => {
+      const db = await getDb();
       return db.select().from(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId))
         .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
@@ -230,7 +236,7 @@ export const planejamentoRouter = router({
       })),
     }))
     .mutation(async ({ input }) => {
-      // Apaga e recria (simples para MVP)
+      const db = await getDb();
       await db.delete(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
 
@@ -262,6 +268,7 @@ export const planejamentoRouter = router({
   listarAvancos: protectedProcedure
     .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
     .query(async ({ input }) => {
+      const db = await getDb();
       return db.select().from(planejamentoAvancos)
         .where(and(
           eq(planejamentoAvancos.projetoId, input.projetoId),
@@ -282,6 +289,7 @@ export const planejamentoRouter = router({
       criadoPor:           z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      const db = await getDb();
       const existing = await db.select().from(planejamentoAvancos).where(and(
         eq(planejamentoAvancos.atividadeId, input.atividadeId),
         eq(planejamentoAvancos.semana, input.semana),
@@ -312,6 +320,7 @@ export const planejamentoRouter = router({
   listarRefis: protectedProcedure
     .input(z.object({ projetoId: z.number() }))
     .query(async ({ input }) => {
+      const db = await getDb();
       return db.select().from(planejamentoRefis)
         .where(eq(planejamentoRefis.projetoId, input.projetoId))
         .orderBy(desc(planejamentoRefis.semana));
@@ -335,6 +344,7 @@ export const planejamentoRouter = router({
       criadoPor:              z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      const db = await getDb();
       const existing = await db.select().from(planejamentoRefis).where(and(
         eq(planejamentoRefis.projetoId, input.projetoId),
         eq(planejamentoRefis.semana, input.semana),
@@ -357,26 +367,26 @@ export const planejamentoRouter = router({
         await db.update(planejamentoRefis).set(values)
           .where(eq(planejamentoRefis.id, existing[0].id));
       } else {
-        // Próximo número sequencial
         const todos = await db.select().from(planejamentoRefis)
           .where(eq(planejamentoRefis.projetoId, input.projetoId));
         const numero = todos.length + 1;
         await db.insert(planejamentoRefis).values({
-          projetoId: input.projetoId,
-          semana:    input.semana,
+          projetoId:   input.projetoId,
+          semana:      input.semana,
           numero,
           dataEmissao: new Date().toISOString().split("T")[0],
           ...values,
-          criadoPor: input.criadoPor ?? null,
+          criadoPor:   input.criadoPor ?? null,
         });
       }
       return { success: true };
     }),
 
-  // ── Curva S — dados computados ───────────────────────────────────────────
+  // ── Curva S ───────────────────────────────────────────────────────────────
   getCurvaS: protectedProcedure
     .input(z.object({ projetoId: z.number(), revisaoId: z.number(), baselineId: z.number() }))
     .query(async ({ input }) => {
+      const db = await getDb();
       const [atividades, baseline, avancos] = await Promise.all([
         db.select().from(planejamentoAtividades)
           .where(eq(planejamentoAtividades.revisaoId, input.revisaoId))
@@ -392,11 +402,6 @@ export const planejamentoRouter = router({
           .orderBy(asc(planejamentoAvancos.semana)),
       ]);
 
-      // Calcula peso total
-      const pesoTotal = atividades.filter(a => !a.isGrupo)
-        .reduce((s, a) => s + n(a.pesoFinanceiro), 0) || 100;
-
-      // Gera pontos semanais para a curva revisada (planejado)
       function gerarCurvaPlanejada(ativs: typeof atividades) {
         if (!ativs.length) return [];
         const dates: Map<string, number> = new Map();
@@ -405,8 +410,8 @@ export const planejamentoRouter = router({
 
         ativs.filter(a => !a.isGrupo && a.dataInicio && a.dataFim).forEach(a => {
           const inicio = new Date(a.dataInicio!);
-          const fim = new Date(a.dataFim!);
-          const dur = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (7 * 86400000)));
+          const fim    = new Date(a.dataFim!);
+          const dur    = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (7 * 86400000)));
           const semPeso = n(a.pesoFinanceiro) / dur / peso * 100;
           let cur = new Date(inicio);
           for (let i = 0; i < dur; i++) {
@@ -427,7 +432,7 @@ export const planejamentoRouter = router({
       const curvaPlanejada = gerarCurvaPlanejada(atividades);
       const curvaBaseline  = gerarCurvaPlanejada(baseline);
 
-      // Curva realizada — agrupa avanços por semana (média ponderada)
+      // Curva realizada
       const avancoMap: Map<string, { soma: number; cont: number }> = new Map();
       avancos.forEach(av => {
         const k = av.semana;
@@ -445,29 +450,29 @@ export const planejamentoRouter = router({
           return { semana, acumulado: +acumReal.toFixed(2) };
         });
 
-      // Linha de tendência — regressão linear
+      // Linha de tendência por regressão linear
       let curvaTendencia: { semana: string; acumulado: number }[] = [];
       if (curvaRealizada.length >= 2) {
-        const n2 = curvaRealizada.length;
+        const nn = curvaRealizada.length;
         const xs = curvaRealizada.map((_, i) => i);
         const ys = curvaRealizada.map(p => p.acumulado);
         const sumX  = xs.reduce((a, b) => a + b, 0);
         const sumY  = ys.reduce((a, b) => a + b, 0);
         const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
         const sumX2 = xs.reduce((s, x) => s + x * x, 0);
-        const slope = (n2 * sumXY - sumX * sumY) / (n2 * sumX2 - sumX * sumX);
-        const inter = (sumY - slope * sumX) / n2;
+        const slope = (nn * sumXY - sumX * sumY) / (nn * sumX2 - sumX * sumX);
+        const inter = (sumY - slope * sumX) / nn;
 
         const lastReal = curvaRealizada[curvaRealizada.length - 1];
         const lastDate = new Date(lastReal.semana);
         curvaTendencia = curvaRealizada.map(p => ({ ...p }));
 
-        for (let w = 1; w <= 12; w++) {
-          const proj = inter + slope * (n2 - 1 + w);
+        for (let w = 1; w <= 16; w++) {
+          const proj = inter + slope * (nn - 1 + w);
           if (proj >= 100) break;
           const d = new Date(lastDate.getTime() + w * 7 * 86400000);
           curvaTendencia.push({
-            semana: d.toISOString().split("T")[0],
+            semana:    d.toISOString().split("T")[0],
             acumulado: Math.min(100, +proj.toFixed(2)),
           });
         }
