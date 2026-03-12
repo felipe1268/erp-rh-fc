@@ -100,13 +100,11 @@ export default function OrcamentoDashTab({
     return grupos
       .map(g => {
         const prefix = g.eapCodigo + ".";
-        const custo = n(g.custoTotal) || itens
-          .filter(c => c.eapCodigo.startsWith(prefix) && !childMap[c.eapCodigo])
-          .reduce((s, c) => s + n(c.custoTotal), 0);
-        const venda = n(g.vendaTotal) || itens
-          .filter(c => c.eapCodigo.startsWith(prefix) && !childMap[c.eapCodigo])
-          .reduce((s, c) => s + n(c.vendaTotal), 0);
-        return { label: g.descricao?.slice(0, 28) ?? g.eapCodigo, custo, venda };
+        const leaves = itens.filter(c => c.eapCodigo.startsWith(prefix) && !childMap[c.eapCodigo]);
+        const custo = n(g.custoTotal) || leaves.reduce((s, c) => s + n(c.custoTotal), 0);
+        const venda = n(g.vendaTotal) || leaves.reduce((s, c) => s + n(c.vendaTotal), 0);
+        const meta  = n((g as any).metaTotal) || leaves.reduce((s, c) => s + n((c as any).metaTotal), 0);
+        return { label: g.descricao?.slice(0, 28) ?? g.eapCodigo, custo, meta, venda };
       })
       .filter(d => d.custo > 0)
       .sort((a, b) => b.custo - a.custo)
@@ -242,16 +240,17 @@ export default function OrcamentoDashTab({
       {/* ── Row 2: EAP Nível 1 ──────────────────────────────────── */}
       {hasEap && (
         <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Custo por Grupo EAP (Nível 1)</p>
-          <ResponsiveContainer width="100%" height={Math.max(220, eapLvl1.length * 36)}>
+          <p className="text-sm font-semibold text-slate-700 mb-3">Custo / Meta / Venda por Grupo EAP (Nível 1)</p>
+          <ResponsiveContainer width="100%" height={Math.max(220, eapLvl1.length * 48)}>
             <BarChart data={eapLvl1} layout="vertical" margin={{ top: 0, right: 80, left: 8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
               <XAxis type="number" tickFormatter={v => `R$${(v/1e6).toFixed(2)}M`} tick={{ fontSize: 10 }} />
               <YAxis dataKey="label" type="category" width={190} tick={{ fontSize: 10 }} />
               <Tooltip content={<CustomTooltipBRL formatter={formatBRL} />} />
-              <Legend formatter={v => v === "custo" ? "Custo" : "Venda"} />
-              <Bar dataKey="custo" name="custo" fill="#f59e0b" radius={[0,3,3,0]} barSize={12} />
-              <Bar dataKey="venda" name="venda" fill="#3b82f6" radius={[0,3,3,0]} barSize={12} />
+              <Legend formatter={v => v === "custo" ? "Custo" : v === "meta" ? "Meta" : "Venda"} />
+              <Bar dataKey="custo" name="custo" fill="#f59e0b" radius={[0,3,3,0]} barSize={10} />
+              <Bar dataKey="meta"  name="meta"  fill="#22c55e" radius={[0,3,3,0]} barSize={10} />
+              <Bar dataKey="venda" name="venda" fill="#3b82f6" radius={[0,3,3,0]} barSize={10} />
             </BarChart>
           </ResponsiveContainer>
         </div>
