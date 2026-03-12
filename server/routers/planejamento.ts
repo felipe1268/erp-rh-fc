@@ -8,6 +8,8 @@ import {
   planejamentoAtividades,
   planejamentoAvancos,
   planejamentoRefis,
+  planejamentoCompras,
+  planejamentoMedicoes,
   orcamentos,
 } from "../../drizzle/schema";
 
@@ -501,5 +503,139 @@ export const planejamentoRouter = router({
       }
 
       return { curvaPlanejada, curvaBaseline, curvaRealizada, curvaTendencia };
+    }),
+
+  // ── Cronograma de Compras ──────────────────────────────────────────────────
+  listarCompras: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select().from(planejamentoCompras)
+        .where(eq(planejamentoCompras.projetoId, input.projetoId))
+        .orderBy(asc(planejamentoCompras.dataNecessaria));
+    }),
+
+  criarCompra: protectedProcedure
+    .input(z.object({
+      projetoId:      z.number(),
+      item:           z.string(),
+      unidade:        z.string().optional(),
+      quantidade:     z.number().optional(),
+      custoUnitario:  z.number().optional(),
+      dataNecessaria: z.string(),
+      status:         z.string().optional(),
+      fornecedor:     z.string().optional(),
+      observacoes:    z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      return db.insert(planejamentoCompras).values({
+        projetoId:      input.projetoId,
+        item:           input.item,
+        unidade:        input.unidade ?? "un",
+        quantidade:     String(input.quantidade ?? 1),
+        custoUnitario:  String(input.custoUnitario ?? 0),
+        dataNecessaria: input.dataNecessaria,
+        status:         input.status ?? "pendente",
+        fornecedor:     input.fornecedor,
+        observacoes:    input.observacoes,
+      }).returning();
+    }),
+
+  atualizarCompra: protectedProcedure
+    .input(z.object({
+      id:             z.number(),
+      item:           z.string().optional(),
+      unidade:        z.string().optional(),
+      quantidade:     z.number().optional(),
+      custoUnitario:  z.number().optional(),
+      dataNecessaria: z.string().optional(),
+      dataPedido:     z.string().nullable().optional(),
+      status:         z.string().optional(),
+      fornecedor:     z.string().nullable().optional(),
+      observacoes:    z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const { id, ...rest } = input;
+      const upd: any = { atualizadoEm: new Date() };
+      if (rest.item           !== undefined) upd.item           = rest.item;
+      if (rest.unidade        !== undefined) upd.unidade        = rest.unidade;
+      if (rest.quantidade     !== undefined) upd.quantidade     = String(rest.quantidade);
+      if (rest.custoUnitario  !== undefined) upd.custoUnitario  = String(rest.custoUnitario);
+      if (rest.dataNecessaria !== undefined) upd.dataNecessaria = rest.dataNecessaria;
+      if (rest.dataPedido     !== undefined) upd.dataPedido     = rest.dataPedido;
+      if (rest.status         !== undefined) upd.status         = rest.status;
+      if (rest.fornecedor     !== undefined) upd.fornecedor     = rest.fornecedor;
+      if (rest.observacoes    !== undefined) upd.observacoes    = rest.observacoes;
+      return db.update(planejamentoCompras).set(upd)
+        .where(eq(planejamentoCompras.id, id)).returning();
+    }),
+
+  excluirCompra: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      return db.delete(planejamentoCompras)
+        .where(eq(planejamentoCompras.id, input.id));
+    }),
+
+  // ── Medições Financeiras ───────────────────────────────────────────────────
+  listarMedicoes: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select().from(planejamentoMedicoes)
+        .where(eq(planejamentoMedicoes.projetoId, input.projetoId))
+        .orderBy(asc(planejamentoMedicoes.competencia));
+    }),
+
+  salvarMedicao: protectedProcedure
+    .input(z.object({
+      projetoId:          z.number(),
+      competencia:        z.string(),
+      numero:             z.number().optional(),
+      valorPrevisto:      z.number().optional(),
+      valorMedido:        z.number().optional(),
+      percentualPrevisto: z.number().optional(),
+      percentualMedido:   z.number().optional(),
+      status:             z.string().optional(),
+      observacoes:        z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const existing = await db.select().from(planejamentoMedicoes)
+        .where(and(
+          eq(planejamentoMedicoes.projetoId, input.projetoId),
+          eq(planejamentoMedicoes.competencia, input.competencia),
+        )).limit(1);
+
+      const data = {
+        projetoId:          input.projetoId,
+        competencia:        input.competencia,
+        numero:             input.numero ?? 0,
+        valorPrevisto:      String(input.valorPrevisto ?? 0),
+        valorMedido:        String(input.valorMedido ?? 0),
+        percentualPrevisto: String(input.percentualPrevisto ?? 0),
+        percentualMedido:   String(input.percentualMedido ?? 0),
+        status:             input.status ?? "pendente",
+        observacoes:        input.observacoes ?? null,
+        atualizadoEm:       new Date(),
+      };
+
+      if (existing.length > 0) {
+        return db.update(planejamentoMedicoes).set(data)
+          .where(eq(planejamentoMedicoes.id, existing[0].id)).returning();
+      } else {
+        return db.insert(planejamentoMedicoes).values(data).returning();
+      }
+    }),
+
+  excluirMedicao: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      return db.delete(planejamentoMedicoes)
+        .where(eq(planejamentoMedicoes.id, input.id));
     }),
 });

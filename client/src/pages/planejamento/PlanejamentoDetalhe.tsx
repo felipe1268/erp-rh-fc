@@ -15,6 +15,8 @@ import {
   TrendingUp, Plus, Save, GitBranch, BarChart3, FileText, ClipboardList,
   Activity, AlertTriangle, CheckCircle2, Clock, Edit3, ChevronRight,
   ChevronDown, Minus, Upload, XCircle, GripVertical,
+  ShoppingCart, AlertOctagon, Cloud, CloudRain, Wind, Sun, Droplets,
+  MapPin, Package, Filter, Trash2, Pencil, X,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell,
@@ -26,7 +28,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "curva-s" | "avanco" | "revisoes" | "refis";
+type Tab = "visao-geral" | "cronograma" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -76,12 +78,15 @@ function labelSemana(s: string, idx: number) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "visao-geral", label: "Visão Geral",    Icon: BarChart3 },
-  { id: "cronograma",  label: "Cronograma",     Icon: CalendarRange },
-  { id: "curva-s",     label: "Curva S",        Icon: TrendingUp },
-  { id: "avanco",      label: "Avanço Semanal", Icon: Activity },
-  { id: "revisoes",    label: "Revisões",       Icon: GitBranch },
-  { id: "refis",       label: "REFIS",          Icon: FileText },
+  { id: "visao-geral",          label: "Visão Geral",        Icon: BarChart3 },
+  { id: "cronograma",           label: "Cronograma",         Icon: CalendarRange },
+  { id: "cronograma-financeiro",label: "Crono. Financeiro",  Icon: DollarSign },
+  { id: "curva-s",              label: "Curva S",            Icon: TrendingUp },
+  { id: "avanco",               label: "Avanço Semanal",     Icon: Activity },
+  { id: "caminho-critico",      label: "Caminho Crítico",    Icon: AlertOctagon },
+  { id: "compras",              label: "Compras",            Icon: ShoppingCart },
+  { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
+  { id: "refis",                label: "REFIS",              Icon: FileText },
 ];
 const TAB_IDS = TAB_DEFS.map(t => t.id);
 const LS_KEY  = "plan-tab-order";
@@ -89,8 +94,12 @@ const LS_KEY  = "plan-tab-order";
 function loadTabOrder(): Tab[] {
   try {
     const saved = JSON.parse(localStorage.getItem(LS_KEY) ?? "null") as Tab[];
-    if (Array.isArray(saved) && saved.length === TAB_IDS.length && TAB_IDS.every(id => saved.includes(id)))
-      return saved;
+    if (Array.isArray(saved) && saved.length > 0) {
+      const validSaved = saved.filter(id => TAB_IDS.includes(id));
+      const missing = TAB_IDS.filter(id => !validSaved.includes(id));
+      if (missing.length === 0) return validSaved;
+      return [...validSaved, ...missing];
+    }
   } catch {}
   return TAB_IDS;
 }
@@ -348,9 +357,203 @@ export default function PlanejamentoDetalhe() {
             fPct={fPct}
           />
         )}
+        {aba === "cronograma-financeiro" && (
+          <CronogramaFinanceiro
+            projetoId={projetoId}
+            proj={proj}
+            atividades={atividades}
+            avancos={avancos}
+            utils={utils}
+            fmt={fmt}
+            fPct={fPct}
+          />
+        )}
+        {aba === "caminho-critico" && (
+          <CaminhoCritico
+            proj={proj}
+            atividades={atividades}
+            avancos={avancos}
+          />
+        )}
+        {aba === "compras" && (
+          <Compras
+            projetoId={projetoId}
+            proj={proj}
+            utils={utils}
+            fmt={fmt}
+          />
+        )}
 
       </div>
     </DashboardLayout>
+  );
+}
+
+// ── Coordenadas de cidades BR (simplificado) ──────────────────────────────
+const CIDADES_BR: Record<string, [number, number]> = {
+  "rio de janeiro": [-22.9, -43.17],
+  "sao paulo": [-23.55, -46.63],
+  "são paulo": [-23.55, -46.63],
+  "belo horizonte": [-19.92, -43.94],
+  "brasilia": [-15.78, -47.93],
+  "brasília": [-15.78, -47.93],
+  "salvador": [-12.97, -38.5],
+  "fortaleza": [-3.72, -38.54],
+  "recife": [-8.05, -34.88],
+  "porto alegre": [-30.03, -51.23],
+  "manaus": [-3.12, -60.02],
+  "belem": [-1.46, -48.49],
+  "belém": [-1.46, -48.49],
+  "goiania": [-16.68, -49.25],
+  "goiânia": [-16.68, -49.25],
+  "curitiba": [-25.43, -49.27],
+  "campinas": [-22.9, -47.06],
+  "niteroi": [-22.88, -43.1],
+  "niterói": [-22.88, -43.1],
+};
+function getCoordsFromLocal(local: string | null | undefined): [number, number] {
+  if (!local) return [-22.9, -43.17];
+  const lower = local.toLowerCase();
+  for (const [key, coords] of Object.entries(CIDADES_BR)) {
+    if (lower.includes(key)) return coords;
+  }
+  return [-22.9, -43.17];
+}
+
+const WMO_CODE: Record<number, { label: string; icon: string; crit: boolean }> = {
+  0:  { label: "Céu limpo",            icon: "☀️",  crit: false },
+  1:  { label: "Predomin. limpo",      icon: "🌤️",  crit: false },
+  2:  { label: "Parcialmente nublado", icon: "⛅",  crit: false },
+  3:  { label: "Nublado",              icon: "☁️",  crit: false },
+  45: { label: "Neblina",              icon: "🌫️",  crit: false },
+  48: { label: "Geada",                icon: "🌫️",  crit: false },
+  51: { label: "Garoa leve",           icon: "🌦️",  crit: true  },
+  53: { label: "Garoa moderada",       icon: "🌦️",  crit: true  },
+  55: { label: "Garoa intensa",        icon: "🌧️",  crit: true  },
+  61: { label: "Chuva leve",           icon: "🌧️",  crit: true  },
+  63: { label: "Chuva moderada",       icon: "🌧️",  crit: true  },
+  65: { label: "Chuva forte",          icon: "🌧️",  crit: true  },
+  80: { label: "Pancadas leves",       icon: "🌦️",  crit: true  },
+  81: { label: "Pancadas moderadas",   icon: "🌧️",  crit: true  },
+  82: { label: "Pancadas fortes",      icon: "⛈️",  crit: true  },
+  95: { label: "Tempestade",           icon: "⛈️",  crit: true  },
+  96: { label: "Tempestade c/ granizo",icon: "⛈️",  crit: true  },
+  99: { label: "Tempestade c/ granizo",icon: "⛈️",  crit: true  },
+};
+function wmoInfo(code: number) {
+  return WMO_CODE[code] ?? { label: `Cód ${code}`, icon: "🌡️", crit: false };
+}
+
+const DIAS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function WeatherWidget({ local }: { local: string | null | undefined }) {
+  const [dados, setDados] = useState<any>(null);
+  const [erro, setErro] = useState(false);
+  const [coords, setCoords] = useState<[number, number]>(getCoordsFromLocal(local));
+
+  useEffect(() => { setCoords(getCoordsFromLocal(local)); }, [local]);
+
+  useEffect(() => {
+    const [lat, lon] = coords;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=America%2FSao_Paulo&forecast_days=7`;
+    fetch(url)
+      .then(r => r.json())
+      .then(d => setDados(d))
+      .catch(() => setErro(true));
+  }, [coords]);
+
+  if (erro) return null;
+  if (!dados) return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex items-center gap-2 text-xs text-slate-400">
+      <Loader2 className="h-4 w-4 animate-spin" /> Carregando previsão do tempo...
+    </div>
+  );
+
+  const { daily } = dados;
+  if (!daily) return null;
+
+  // Filtrar apenas dias úteis (Seg-Sex) dos próximos 7 dias
+  const diasUteis = daily.time.map((dt: string, i: number) => {
+    const d = new Date(dt + "T12:00:00");
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) return null;
+    return {
+      dt, dow,
+      code:   daily.weather_code[i],
+      chuva:  parseFloat(daily.precipitation_sum[i] ?? "0"),
+      probChuva: parseInt(daily.precipitation_probability_max[i] ?? "0"),
+      vento:  parseFloat(daily.wind_speed_10m_max[i] ?? "0"),
+    };
+  }).filter(Boolean).slice(0, 5);
+
+  const alertas: string[] = [];
+  diasUteis.forEach((d: any) => {
+    const info = wmoInfo(d.code);
+    const dayName = DIAS_PT[d.dow];
+    if (d.code >= 95)        alertas.push(`⛈️ ${dayName}: Tempestade prevista — recomendável paralisar operações externas e içamentos`);
+    else if (d.chuva > 10)   alertas.push(`🌧️ ${dayName}: Chuva > 10mm — atividades externas e armação impactadas`);
+    else if (d.probChuva > 70) alertas.push(`🌦️ ${dayName}: Alta probabilidade de chuva (${d.probChuva}%) — planeje atividades internas como alternativa`);
+    if (d.vento > 50)        alertas.push(`💨 ${dayName}: Ventos muito fortes (${d.vento.toFixed(0)} km/h) — paralisar içamentos e andaimes`);
+    else if (d.vento > 30)   alertas.push(`💨 ${dayName}: Ventos fortes (${d.vento.toFixed(0)} km/h) — atenção com guindaste e estruturas temporárias`);
+  });
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <Cloud className="h-4 w-4 text-blue-500" />
+          Previsão do Tempo — Semana Útil
+        </p>
+        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+          <MapPin className="h-3 w-3" />
+          {local ?? "Rio de Janeiro"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-5 gap-2">
+        {diasUteis.map((d: any) => {
+          const info = wmoInfo(d.code);
+          const isCrit = info.crit || d.probChuva > 70 || d.vento > 30;
+          return (
+            <div key={d.dt} className={`rounded-lg p-2 text-center border ${isCrit ? "border-amber-200 bg-amber-50" : "border-slate-100 bg-slate-50"}`}>
+              <p className="text-[10px] font-semibold text-slate-500">{DIAS_PT[d.dow]}</p>
+              <p className="text-[10px] text-slate-400">{new Date(d.dt + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</p>
+              <p className="text-2xl my-1">{info.icon}</p>
+              <p className="text-[9px] text-slate-600 leading-tight">{info.label}</p>
+              <div className="mt-1 space-y-0.5">
+                {d.probChuva > 0 && (
+                  <p className="text-[9px] text-blue-600 flex items-center justify-center gap-0.5">
+                    <Droplets className="h-2.5 w-2.5" />{d.probChuva}%
+                  </p>
+                )}
+                {d.chuva > 0 && (
+                  <p className="text-[9px] text-blue-700 font-semibold">{d.chuva.toFixed(1)}mm</p>
+                )}
+                <p className="text-[9px] text-slate-500 flex items-center justify-center gap-0.5">
+                  <Wind className="h-2.5 w-2.5" />{d.vento.toFixed(0)} km/h
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {alertas.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1.5">
+          <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" /> Pontos de Atenção ({alertas.length})
+          </p>
+          {alertas.map((a, i) => (
+            <p key={i} className="text-xs text-amber-700">{a}</p>
+          ))}
+        </div>
+      )}
+      {alertas.length === 0 && (
+        <p className="text-xs text-emerald-600 flex items-center gap-1.5">
+          <CheckCircle2 className="h-3.5 w-3.5" /> Sem alertas meteorológicos para a semana — condições favoráveis para trabalhos externos
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -452,6 +655,9 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
         </div>
       </div>
 
+      {/* Previsão do tempo */}
+      <WeatherWidget local={proj.local} />
+
       {/* Últimos REFIs */}
       {refisLista.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 overflow-x-auto">
@@ -499,6 +705,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   const [editando, setEditando] = useState(false);
   const [linhas, setLinhas] = useState<any[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [nivelAtivo, setNivelAtivo] = useState<number | null>(null);
 
   const avMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -628,29 +835,41 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
       {/* Linha 2 — controles de nível (só fora do modo edição e se há grupos) */}
       {!editando && gruposEap.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] text-slate-400 mr-0.5">Nível:</span>
-          {Array.from({ length: maxNivel }, (_, i) => i + 1).map(lvl => (
-            <button
-              key={lvl}
-              onClick={() => expandirAteNivel(lvl + 1)}
-              className="h-6 w-7 text-[11px] font-mono rounded border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-400 text-slate-600 transition-colors"
-            >
-              {lvl}
-            </button>
-          ))}
+          <span className="text-[11px] text-slate-500 font-medium mr-1">Nível:</span>
+          {Array.from({ length: maxNivel }, (_, i) => i + 1).map(lvl => {
+            const isAtivo = nivelAtivo === lvl;
+            return (
+              <button
+                key={lvl}
+                title={`Expandir até nível ${lvl}`}
+                onClick={() => { expandirAteNivel(lvl + 1); setNivelAtivo(lvl); }}
+                className={`h-6 min-w-[28px] px-1.5 text-[11px] font-semibold rounded border transition-colors
+                  ${isAtivo
+                    ? "bg-slate-700 text-white border-slate-700 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-400"}`}
+              >
+                N{lvl}
+              </button>
+            );
+          })}
           <div className="w-px h-4 bg-slate-200 mx-0.5" />
           <button
-            onClick={() => setCollapsed(new Set())}
-            className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center gap-1 transition-colors"
+            onClick={() => { setCollapsed(new Set()); setNivelAtivo(null); }}
+            className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-emerald-50 hover:border-emerald-300 text-slate-600 hover:text-emerald-700 flex items-center gap-1 transition-colors"
           >
-            <ChevronDown className="h-3 w-3" /> Expandir tudo
+            <ChevronDown className="h-3 w-3" /> Tudo
           </button>
           <button
-            onClick={() => setCollapsed(new Set(gruposEap))}
-            className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center gap-1 transition-colors"
+            onClick={() => { setCollapsed(new Set(gruposEap)); setNivelAtivo(0); }}
+            className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-400 text-slate-600 flex items-center gap-1 transition-colors"
           >
-            <ChevronRight className="h-3 w-3" /> Recolher tudo
+            <ChevronRight className="h-3 w-3" /> Recolher
           </button>
+          {nivelAtivo !== null && (
+            <span className="text-[10px] text-slate-400 ml-1">
+              {nivelAtivo === 0 ? "Tudo recolhido" : `Mostrando até N${nivelAtivo}`}
+            </span>
+          )}
         </div>
       )}
 
@@ -882,6 +1101,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   const [importando, setImportando] = useState(false);
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [filtrarSemana, setFiltrarSemana] = useState(true);
   const fileRef   = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -914,6 +1134,19 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   }, [semanas]);
 
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
+
+  // Filtra atividades ativas na semana selecionada (Seg-Sex)
+  const folhasNaSemana = useMemo(() => {
+    if (!filtrarSemana) return folhas;
+    const mon = new Date(semanaAtual + "T12:00:00");
+    const fri = new Date(mon.getTime() + 4 * 86400000);
+    const monStr = semanaAtual;
+    const friStr = fri.toISOString().split("T")[0];
+    return folhas.filter((a: any) => {
+      if (!a.dataInicio || !a.dataFim) return true;
+      return a.dataInicio <= friStr && a.dataFim >= monStr;
+    });
+  }, [folhas, semanaAtual, filtrarSemana]);
 
   // % realizado ponderado por semana (para indicador no seletor)
   const semanasComDados = useMemo(() => {
@@ -1142,6 +1375,16 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
           </div>
         </div>
         <div className="flex gap-2 items-center">
+          {/* Filtro por semana */}
+          <Button
+            size="sm" variant="outline"
+            className={`gap-1.5 ${filtrarSemana ? "bg-blue-50 border-blue-300 text-blue-700" : "text-slate-500"}`}
+            onClick={() => setFiltrarSemana(v => !v)}
+            title={filtrarSemana ? "Mostrando apenas atividades da semana selecionada" : "Mostrando todas as atividades"}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            {filtrarSemana ? `Semana (${folhasNaSemana.length})` : `Todas (${folhas.length})`}
+          </Button>
           {/* Botão importar MS Project */}
           <Button
             size="sm" variant="outline"
@@ -1263,7 +1506,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
               <th className="py-2 px-3 text-left w-24">Fim</th>
               <th className="py-2 px-3 text-right w-20">Previsto%</th>
               <th className="py-2 px-3 text-right w-24">% Anterior</th>
-              <th className="py-2 px-3 text-center w-44">% Acumulado</th>
+              <th className="py-2 px-3 text-center w-72">% Acumulado</th>
             </tr>
           </thead>
           <tbody>
@@ -1272,7 +1515,12 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
                 Nenhuma atividade. Cadastre no Cronograma primeiro.
               </td></tr>
             )}
-            {folhas.map((a: any, idx: number) => {
+            {folhasNaSemana.length === 0 && folhas.length > 0 && (
+              <tr><td colSpan={7} className="py-8 text-center text-slate-400">
+                Nenhuma atividade ativa nesta semana. Clique em "Todas" para ver todas.
+              </td></tr>
+            )}
+            {folhasNaSemana.map((a: any, idx: number) => {
               const atual    = getAvanco(a.id);
               const anterior = avancoAnterior[a.id] ?? 0;
               const alterado = avancoLocal[a.id] !== undefined;
@@ -1302,25 +1550,26 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
                   <td className="py-2 px-3 text-right text-orange-600 font-medium">{prevInd.toFixed(0)}%</td>
                   <td className="py-2 px-3 text-right text-slate-500">{fPct(anterior)}</td>
                   <td className="py-2 px-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-[220px]">
                       <input
                         type="range" min="0" max="100" step="1"
                         value={atual}
                         onChange={e => setAvancoLocal(l => ({ ...l, [a.id]: parseFloat(e.target.value) }))}
-                        className="flex-1 accent-blue-600"
+                        className="flex-1 accent-blue-600 cursor-pointer"
+                        style={{ minWidth: 80 }}
                       />
-                      <div className="flex items-center gap-1 w-16">
-                        <Input
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <input
                           type="number" min="0" max="100" step="1"
                           value={atual}
                           onChange={e => setAvancoLocal(l => ({ ...l, [a.id]: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) }))}
-                          className="h-6 text-xs text-right w-14 font-semibold"
+                          className="h-6 text-xs text-right font-bold border border-slate-200 rounded px-1.5 bg-white"
+                          style={{ width: 52 }}
                         />
-                        <span className="text-slate-400">%</span>
+                        <span className="text-slate-400 text-xs ml-0.5">%</span>
                       </div>
                     </div>
                     <div className="relative w-full bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-                      {/* Linha de previsto */}
                       <div className="absolute top-0 h-full w-px bg-orange-400 z-10"
                         style={{ left: `${Math.min(100, prevInd)}%` }} />
                       <div className={`h-full rounded-full ${atual >= 100 ? "bg-emerald-500" : atual >= prevInd ? "bg-blue-500" : "bg-amber-500"}`}
@@ -1342,6 +1591,697 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
         <div className="flex items-center gap-1"><div className="h-px w-3 bg-orange-400" /> Linha prevista</div>
         <div className="flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-amber-500" /> Atrasado &gt;5%</div>
       </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ABA: CRONOGRAMA FINANCEIRO
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Dias que um intervalo [ini, fim] tem no mês [ano,mes] (1-based) */
+function diasNoMes(ini: string, fim: string, ano: number, mes: number): number {
+  const mesIni = new Date(ano, mes - 1, 1);
+  const mesFim = new Date(ano, mes, 0); // último dia do mês
+  const aIni = new Date(ini + "T00:00:00");
+  const aFim = new Date(fim + "T00:00:00");
+  const sobreIni = new Date(Math.max(aIni.getTime(), mesIni.getTime()));
+  const sobreFim = new Date(Math.min(aFim.getTime(), mesFim.getTime()));
+  if (sobreFim < sobreIni) return 0;
+  return Math.round((sobreFim.getTime() - sobreIni.getTime()) / 86400000) + 1;
+}
+
+function mesesRange(from: string | null, to: string | null): string[] {
+  const s = from ? new Date(from + "-01") : new Date();
+  const e = to   ? new Date(to   + "-01") : new Date();
+  const meses: string[] = [];
+  let cur = new Date(s.getFullYear(), s.getMonth(), 1);
+  const end = new Date(e.getFullYear(), e.getMonth(), 1);
+  while (cur <= end) {
+    meses.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`);
+    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+  }
+  return meses;
+}
+
+const STATUS_MED = [
+  { v: "pendente",  l: "Pendente",  c: "bg-slate-100 text-slate-600" },
+  { v: "medida",    l: "Medida",    c: "bg-blue-100 text-blue-700" },
+  { v: "aprovada",  l: "Aprovada",  c: "bg-emerald-100 text-emerald-700" },
+  { v: "rejeitada", l: "Rejeitada", c: "bg-red-100 text-red-700" },
+];
+
+function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt, fPct }: any) {
+  const valorContrato = n(proj.valorContrato);
+  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim), [atividades]);
+
+  const { data: medicoes = [], refetch } = trpc.planejamento.listarMedicoes.useQuery(
+    { projetoId }, { enabled: !!projetoId });
+
+  const salvarMut  = trpc.planejamento.salvarMedicao.useMutation({ onSuccess: () => refetch() });
+  const excluirMut = trpc.planejamento.excluirMedicao.useMutation({ onSuccess: () => refetch() });
+
+  // Calcula planejado mensalmente a partir das atividades
+  const dadosMensais = useMemo(() => {
+    const dataInis = folhas.map((a: any) => a.dataInicio).sort();
+    const dataFins = folhas.map((a: any) => a.dataFim).sort();
+    const priData = dataInis[0]?.substring(0, 7) ?? null;
+    const ultData = dataFins[dataFins.length - 1]?.substring(0, 7) ?? null;
+    if (!priData || !ultData) return [];
+
+    const meses = mesesRange(priData, ultData);
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
+
+    return meses.map(mes => {
+      const [ano, m] = mes.split("-").map(Number);
+      let planejadoMes = 0;
+
+      folhas.forEach((a: any) => {
+        const durTotal = Math.max(1, Math.round((new Date(a.dataFim).getTime() - new Date(a.dataInicio).getTime()) / 86400000) + 1);
+        const diasMes = diasNoMes(a.dataInicio, a.dataFim, ano, m);
+        if (diasMes === 0) return;
+        const peso = n(a.pesoFinanceiro) || 1;
+        const valorAtiv = (peso / pesoTotal) * valorContrato;
+        planejadoMes += valorAtiv * (diasMes / durTotal);
+      });
+
+      return { mes, planejadoMes };
+    });
+  }, [folhas, valorContrato]);
+
+  // Combina com medições reais
+  const rows = useMemo(() => {
+    const medMap: Record<string, any> = {};
+    medicoes.forEach((m: any) => { medMap[m.competencia] = m; });
+
+    let cumPrev = 0;
+    let cumReal = 0;
+    return dadosMensais.map((d, idx) => {
+      const med = medMap[d.mes];
+      const valorReal = n(med?.valorMedido ?? 0);
+      const percPrev = valorContrato > 0 ? (d.planejadoMes / valorContrato * 100) : 0;
+      const percReal = valorContrato > 0 ? (valorReal / valorContrato * 100) : 0;
+      cumPrev += percPrev;
+      cumReal += percReal;
+      return {
+        ...d,
+        nomeMes: new Date(`${d.mes}-15`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+        percPrev: Math.min(100, percPrev),
+        percReal: Math.min(100, percReal),
+        cumPrev:  Math.min(100, cumPrev),
+        cumReal:  Math.min(100, cumReal),
+        valorReal,
+        status:  med?.status ?? "pendente",
+        medId:   med?.id ?? null,
+        numMed:  med?.numero ?? idx + 1,
+        obs:     med?.observacoes ?? "",
+      };
+    });
+  }, [dadosMensais, medicoes, valorContrato]);
+
+  // Editando inline
+  const [editMes, setEditMes] = useState<string | null>(null);
+  const [editVal, setEditVal] = useState(0);
+  const [editStatus, setEditStatus] = useState("medida");
+  const [editObs, setEditObs] = useState("");
+
+  function abrirEdit(row: any) {
+    setEditMes(row.mes);
+    setEditVal(row.valorReal);
+    setEditStatus(row.status !== "pendente" ? row.status : "medida");
+    setEditObs(row.obs);
+  }
+  function salvar() {
+    if (!editMes) return;
+    const row = rows.find(r => r.mes === editMes)!;
+    salvarMut.mutate({
+      projetoId,
+      competencia: editMes,
+      numero: row.numMed,
+      valorPrevisto: row.planejadoMes,
+      valorMedido: editVal,
+      percentualPrevisto: row.percPrev,
+      percentualMedido: valorContrato > 0 ? editVal / valorContrato * 100 : 0,
+      status: editStatus,
+      observacoes: editObs || null,
+    });
+    setEditMes(null);
+  }
+
+  const hoje = new Date().toISOString().substring(0, 7);
+  const totalPrev = rows.reduce((s, r) => s + r.planejadoMes, 0);
+  const totalReal = rows.reduce((s, r) => s + r.valorReal, 0);
+  const qtdMed   = medicoes.length;
+
+  // Dados para o gráfico (resumido para não sobrecarregar)
+  const chartData = rows.map(r => ({
+    mes:     r.nomeMes,
+    Previsto: +r.planejadoMes.toFixed(2),
+    Medido:   +r.valorReal.toFixed(2),
+    "Prev. Acum.": +r.cumPrev.toFixed(2),
+    "Real. Acum.": +r.cumReal.toFixed(2),
+  }));
+
+  return (
+    <div className="space-y-5">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Valor do Contrato</p>
+          <p className="text-base font-bold text-slate-800">{fmt(valorContrato)}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Previsto (total meses)</p>
+          <p className="text-base font-bold text-orange-600">{fmt(totalPrev)}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Medido (total)</p>
+          <p className="text-base font-bold text-emerald-600">{fmt(totalReal)}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Medições realizadas</p>
+          <p className="text-base font-bold text-blue-600">{qtdMed} / {rows.length}</p>
+        </div>
+      </div>
+
+      {/* Gráfico Barras + Linha */}
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+          <p className="text-sm font-semibold text-slate-700 mb-4">Previsto × Realizado por Período</p>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={chartData} margin={{ top: 4, right: 48, bottom: 0, left: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} />
+              <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
+              <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 100]} />
+              <Tooltip formatter={(v: any, name: string) => name.includes("Acum") ? `${Number(v).toFixed(1)}%` : fmt(Number(v))} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar yAxisId="val" dataKey="Previsto" fill="#f97316" fillOpacity={0.7} radius={[3,3,0,0]} />
+              <Bar yAxisId="val" dataKey="Medido"   fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
+              <Line yAxisId="pct" type="monotone" dataKey="Prev. Acum." stroke="#f97316" strokeWidth={2} dot={false} />
+              <Line yAxisId="pct" type="monotone" dataKey="Real. Acum." stroke="#10b981" strokeWidth={2} dot={false} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Tabela mensal */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
+        <div className="bg-slate-700 text-white px-4 py-2.5 flex items-center justify-between rounded-t-xl">
+          <p className="text-xs font-semibold">Cronograma de Medições</p>
+          <p className="text-[10px] text-slate-300">Clique em "Registrar" para lançar uma medição</p>
+        </div>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="py-2 px-3 text-left w-20">N° Med.</th>
+              <th className="py-2 px-3 text-left w-24">Competência</th>
+              <th className="py-2 px-3 text-right w-32">Prev. (R$)</th>
+              <th className="py-2 px-3 text-right w-16">Prev. %</th>
+              <th className="py-2 px-3 text-right w-16">Prev.Acum%</th>
+              <th className="py-2 px-3 text-right w-32">Medido (R$)</th>
+              <th className="py-2 px-3 text-right w-16">Med. %</th>
+              <th className="py-2 px-3 text-right w-16">Med.Acum%</th>
+              <th className="py-2 px-3 text-right w-32">Desvio (R$)</th>
+              <th className="py-2 px-3 text-center w-24">Status</th>
+              <th className="py-2 px-3 w-20" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, idx) => {
+              const desvio = r.valorReal - r.planejadoMes;
+              const isEdit = editMes === r.mes;
+              const isPast = r.mes <= hoje;
+              return (
+                <React.Fragment key={r.mes}>
+                  <tr className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} ${isEdit ? "bg-blue-50" : ""}`}>
+                    <td className="py-2 px-3 font-mono text-slate-500">
+                      {r.valorReal > 0 ? `M-${String(r.numMed).padStart(2, "0")}` : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 font-semibold text-slate-700">
+                      {new Date(`${r.mes}-15`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+                    </td>
+                    <td className="py-2 px-3 text-right text-orange-600">{fmt(r.planejadoMes)}</td>
+                    <td className="py-2 px-3 text-right text-orange-500">{r.percPrev.toFixed(2)}%</td>
+                    <td className="py-2 px-3 text-right text-orange-400">{r.cumPrev.toFixed(1)}%</td>
+                    <td className="py-2 px-3 text-right font-semibold text-emerald-700">
+                      {r.valorReal > 0 ? fmt(r.valorReal) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-right text-emerald-600">
+                      {r.percReal > 0 ? `${r.percReal.toFixed(2)}%` : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-2 px-3 text-right text-emerald-500">
+                      {r.cumReal > 0 ? `${r.cumReal.toFixed(1)}%` : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className={`py-2 px-3 text-right font-semibold ${r.valorReal > 0 ? (desvio >= 0 ? "text-emerald-600" : "text-red-600") : "text-slate-300"}`}>
+                      {r.valorReal > 0 ? `${desvio >= 0 ? "+" : ""}${fmt(desvio)}` : "—"}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      {(() => {
+                        const s = STATUS_MED.find(x => x.v === r.status) ?? STATUS_MED[0];
+                        return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.c}`}>{s.l}</span>;
+                      })()}
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex gap-1 justify-end">
+                        {!isEdit && (
+                          <button
+                            className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors
+                              ${isPast ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200" : "bg-slate-50 text-slate-400 border border-slate-200"}`}
+                            onClick={() => abrirEdit(r)}
+                          >
+                            {r.valorReal > 0 ? "Editar" : "Registrar"}
+                          </button>
+                        )}
+                        {r.medId && !isEdit && (
+                          <button className="text-[10px] px-1.5 py-0.5 rounded text-red-400 hover:bg-red-50 border border-red-100"
+                            onClick={() => excluirMut.mutate({ id: r.medId })}>
+                            <Trash2 className="h-2.5 w-2.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {isEdit && (
+                    <tr className="bg-blue-50 border-b border-blue-100">
+                      <td colSpan={11} className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs font-medium text-slate-600">Valor Medido (R$):</label>
+                            <input
+                              type="number" min="0" step="0.01"
+                              value={editVal}
+                              onChange={e => setEditVal(parseFloat(e.target.value) || 0)}
+                              className="h-7 text-xs border border-blue-300 rounded px-2 w-32 text-right bg-white"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs font-medium text-slate-600">Status:</label>
+                            <select value={editStatus} onChange={e => setEditStatus(e.target.value)}
+                              className="h-7 text-xs border border-blue-300 rounded px-2 bg-white">
+                              {STATUS_MED.filter(s => s.v !== "pendente").map(s =>
+                                <option key={s.v} value={s.v}>{s.l}</option>)}
+                            </select>
+                          </div>
+                          <div className="flex items-center gap-2 flex-1 min-w-[160px]">
+                            <label className="text-xs font-medium text-slate-600 shrink-0">Obs.:</label>
+                            <input type="text" value={editObs} onChange={e => setEditObs(e.target.value)}
+                              placeholder="Observações opcionais"
+                              className="h-7 text-xs border border-blue-300 rounded px-2 flex-1 bg-white" />
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => setEditMes(null)}
+                              className="h-7 px-3 text-xs border border-slate-300 rounded text-slate-600 hover:bg-slate-50">
+                              Cancelar
+                            </button>
+                            <button onClick={salvar} disabled={salvarMut.isPending}
+                              className="h-7 px-3 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1">
+                              {salvarMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                              Salvar Medição
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+        {rows.length === 0 && (
+          <div className="py-12 text-center text-slate-400 text-sm">
+            Nenhum mês calculado. Verifique se há atividades com datas e valor de contrato cadastrado.
+          </div>
+        )}
+      </div>
+
+      <p className="text-[10px] text-slate-400 text-center">
+        * Previsto calculado proporcionalmente à distribuição temporal das atividades. Medido = valor lançado manualmente por medição mensal.
+      </p>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ABA: CAMINHO CRÍTICO
+// ═════════════════════════════════════════════════════════════════════════════
+function CaminhoCritico({ proj, atividades, avancos }: any) {
+  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim), [atividades]);
+
+  const avMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    avancos.forEach((av: any) => { m[av.atividadeId] = n(av.percentualAcumulado); });
+    return m;
+  }, [avancos]);
+
+  const projectEnd = useMemo(() => {
+    const datas = folhas.map((a: any) => a.dataFim).sort();
+    return datas[datas.length - 1] ?? proj.dataTerminoContratual ?? null;
+  }, [folhas, proj]);
+
+  const projectStart = useMemo(() => {
+    const datas = folhas.map((a: any) => a.dataInicio).sort();
+    return datas[0] ?? proj.dataInicio ?? null;
+  }, [folhas, proj]);
+
+  const totalDays = useMemo(() => {
+    if (!projectStart || !projectEnd) return 1;
+    return Math.max(1, (new Date(projectEnd).getTime() - new Date(projectStart).getTime()) / 86400000);
+  }, [projectStart, projectEnd]);
+
+  const atividadesComFloat = useMemo(() => {
+    if (!projectEnd) return [];
+    return folhas.map((a: any) => {
+      const float = Math.round((new Date(projectEnd).getTime() - new Date(a.dataFim).getTime()) / 86400000);
+      const dur = Math.round((new Date(a.dataFim).getTime() - new Date(a.dataInicio).getTime()) / 86400000) + 1;
+      return { ...a, float, dur, avanco: avMap[a.id] ?? 0 };
+    }).sort((a: any, b: any) => a.float - b.float);
+  }, [folhas, projectEnd, avMap]);
+
+  const criticas    = atividadesComFloat.filter((a: any) => a.float === 0);
+  const quaseCrit   = atividadesComFloat.filter((a: any) => a.float > 0 && a.float <= 14);
+  const comFolga    = atividadesComFloat.filter((a: any) => a.float > 14);
+
+  const hoje = new Date().toISOString().split("T")[0];
+
+  function GanttBar({ a }: { a: any }) {
+    if (!projectStart || !projectEnd) return null;
+    const startPct = Math.max(0, (new Date(a.dataInicio).getTime() - new Date(projectStart).getTime()) / 86400000 / totalDays * 100);
+    const widthPct = Math.min(100 - startPct, a.dur / totalDays * 100);
+    const color = a.float === 0 ? "bg-red-500" : a.float <= 14 ? "bg-amber-400" : "bg-blue-300";
+    const avancoPct = a.avanco;
+    return (
+      <div className="relative w-full h-5 bg-slate-100 rounded overflow-hidden">
+        <div className={`absolute h-full rounded ${color} opacity-60`} style={{ left: `${startPct}%`, width: `${Math.max(widthPct, 0.5)}%` }}>
+          <div className="h-full bg-current opacity-60 rounded" style={{ width: `${avancoPct}%` }} />
+        </div>
+        {a.dataFim >= hoje && a.dataInicio <= hoje && (
+          <div className="absolute top-0 h-full w-0.5 bg-slate-700 z-10 opacity-60"
+            style={{ left: `${Math.max(0, (new Date(hoje).getTime() - new Date(projectStart).getTime()) / 86400000 / totalDays * 100)}%` }} />
+        )}
+      </div>
+    );
+  }
+
+  function AtivList({ list, badge, badgeClass }: { list: any[]; badge: string; badgeClass: string }) {
+    const [exp, setExp] = useState(false);
+    const shown = exp ? list : list.slice(0, 15);
+    return (
+      <div className="space-y-1">
+        {shown.map((a: any) => (
+          <div key={a.id} className="grid gap-x-2 items-center text-xs" style={{ gridTemplateColumns: "2rem 1fr 6rem 4.5rem 5rem" }}>
+            <span className="font-mono text-slate-400 truncate">{a.eapCodigo ?? ""}</span>
+            <span className="text-slate-700 truncate" title={a.nome}>{a.nome}</span>
+            <GanttBar a={a} />
+            <span className="text-right text-slate-500">{a.dataFim}</span>
+            <div className="flex items-center justify-end gap-1">
+              <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div className={`h-full rounded-full ${a.avanco >= 100 ? "bg-emerald-500" : a.float === 0 ? "bg-red-400" : "bg-blue-400"}`} style={{ width: `${a.avanco}%` }} />
+              </div>
+              <span className={`font-semibold shrink-0 ${badgeClass}`}>{a.avanco.toFixed(0)}%</span>
+            </div>
+          </div>
+        ))}
+        {list.length > 15 && (
+          <button className="text-[10px] text-blue-600 hover:underline mt-1" onClick={() => setExp(v => !v)}>
+            {exp ? "Ver menos" : `Ver mais ${list.length - 15} atividades...`}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+          <p className="text-2xl font-bold text-red-600">{criticas.length}</p>
+          <p className="text-xs text-red-700 mt-0.5">Caminho Crítico</p>
+          <p className="text-[10px] text-red-400">Float = 0 dias</p>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+          <p className="text-2xl font-bold text-amber-600">{quaseCrit.length}</p>
+          <p className="text-xs text-amber-700 mt-0.5">Quase Crítico</p>
+          <p className="text-[10px] text-amber-400">Float ≤ 14 dias</p>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+          <p className="text-2xl font-bold text-blue-600">{comFolga.length}</p>
+          <p className="text-xs text-blue-700 mt-0.5">Com Folga</p>
+          <p className="text-[10px] text-blue-400">Float &gt; 14 dias</p>
+        </div>
+      </div>
+
+      {/* Legenda Gantt */}
+      <div className="flex items-center gap-1 text-[10px] text-slate-400 bg-white border border-slate-100 rounded-lg p-2 shadow-sm">
+        <span className="font-medium text-slate-500 mr-2">Gantt:</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded bg-red-400 opacity-60" /> Crítico</span>
+        <span className="flex items-center gap-1 ml-2"><span className="inline-block w-3 h-2 rounded bg-amber-400 opacity-60" /> Quase crítico</span>
+        <span className="flex items-center gap-1 ml-2"><span className="inline-block w-3 h-2 rounded bg-blue-300 opacity-60" /> Com folga</span>
+        <span className="flex items-center gap-1 ml-2"><span className="inline-block w-px h-3 bg-slate-700 opacity-60" /> Hoje</span>
+        <span className="ml-auto text-slate-400">Período: {projectStart} → {projectEnd}</span>
+      </div>
+
+      {criticas.length > 0 && (
+        <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4">
+          <p className="text-sm font-semibold text-red-700 mb-3 flex items-center gap-2">
+            <AlertOctagon className="h-4 w-4" />
+            Caminho Crítico — {criticas.length} atividades (Float = 0)
+          </p>
+          <AtivList list={criticas} badge="0d" badgeClass="text-red-600" />
+        </div>
+      )}
+
+      {quaseCrit.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
+          <p className="text-sm font-semibold text-amber-700 mb-3 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Quase Crítico — {quaseCrit.length} atividades (Float ≤ 14 dias)
+          </p>
+          <AtivList list={quaseCrit} badge="" badgeClass="text-amber-600" />
+        </div>
+      )}
+
+      {comFolga.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-blue-500" />
+            Com Folga — {comFolga.length} atividades (Float &gt; 14 dias)
+          </p>
+          <AtivList list={comFolga} badge="" badgeClass="text-blue-600" />
+        </div>
+      )}
+
+      <p className="text-[10px] text-slate-400 text-center">
+        * Float calculado como diferença entre a data fim da atividade e a data fim do projeto. Sem dados de predecessoras, esta é uma aproximação heurística.
+      </p>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ABA: CRONOGRAMA DE COMPRAS
+// ═════════════════════════════════════════════════════════════════════════════
+const STATUS_COMPRA = [
+  { value: "pendente",    label: "Pendente",     color: "bg-slate-100 text-slate-700" },
+  { value: "em_cotacao",  label: "Em Cotação",   color: "bg-blue-100 text-blue-700" },
+  { value: "em_pedido",   label: "Em Pedido",    color: "bg-amber-100 text-amber-700" },
+  { value: "entregue",    label: "Entregue",     color: "bg-emerald-100 text-emerald-700" },
+  { value: "cancelado",   label: "Cancelado",    color: "bg-red-100 text-red-700" },
+];
+
+function badgeCompra(status: string) {
+  const s = STATUS_COMPRA.find(x => x.value === status) ?? STATUS_COMPRA[0];
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.color}`}>{s.label}</span>;
+}
+
+function Compras({ projetoId, proj, utils, fmt }: any) {
+  const [modal, setModal] = useState<null | "novo" | "edit">(null);
+  const [editItem, setEditItem] = useState<any>(null);
+  const emptyForm = { item: "", unidade: "un", quantidade: 1, custoUnitario: 0, dataNecessaria: new Date().toISOString().split("T")[0], status: "pendente", fornecedor: "", observacoes: "" };
+  const [form, setForm] = useState(emptyForm);
+
+  const { data: compras = [], refetch } = trpc.planejamento.listarCompras.useQuery({ projetoId }, { enabled: !!projetoId });
+
+  const criarMut  = trpc.planejamento.criarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
+  const editarMut = trpc.planejamento.atualizarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
+  const excluirMut = trpc.planejamento.excluirCompra.useMutation({ onSuccess: () => refetch() });
+
+  function abrirNovo() { setForm(emptyForm); setModal("novo"); }
+  function abrirEdit(c: any) {
+    setEditItem(c);
+    setForm({ item: c.item, unidade: c.unidade ?? "un", quantidade: parseFloat(c.quantidade ?? "1"), custoUnitario: parseFloat(c.custoUnitario ?? "0"), dataNecessaria: c.dataNecessaria, status: c.status ?? "pendente", fornecedor: c.fornecedor ?? "", observacoes: c.observacoes ?? "" });
+    setModal("edit");
+  }
+  function salvar() {
+    if (!form.item.trim() || !form.dataNecessaria) return;
+    if (modal === "novo") {
+      criarMut.mutate({ projetoId, ...form, quantidade: Number(form.quantidade), custoUnitario: Number(form.custoUnitario) });
+    } else if (editItem) {
+      editarMut.mutate({ id: editItem.id, ...form, quantidade: Number(form.quantidade), custoUnitario: Number(form.custoUnitario) });
+    }
+  }
+
+  const totalPrevisto = compras.reduce((s: number, c: any) => s + n(c.quantidade) * n(c.custoUnitario), 0);
+  const pendentes  = compras.filter((c: any) => c.status === "pendente" || c.status === "em_cotacao").length;
+  const entregues  = compras.filter((c: any) => c.status === "entregue").length;
+
+  // Agrupar por mês
+  const porMes = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    compras.forEach((c: any) => {
+      const mes = (c.dataNecessaria ?? "").substring(0, 7);
+      if (!map[mes]) map[mes] = [];
+      map[mes].push(c);
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [compras]);
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Total de Itens</p>
+          <p className="text-xl font-bold text-slate-800">{compras.length}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Pendentes / Em Cotação</p>
+          <p className="text-xl font-bold text-amber-600">{pendentes}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Entregues</p>
+          <p className="text-xl font-bold text-emerald-600">{entregues}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Custo Previsto</p>
+          <p className="text-xl font-bold text-blue-600">{fmt(totalPrevisto)}</p>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700">Cronograma de Compras</p>
+        <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700" onClick={abrirNovo}>
+          <Plus className="h-3.5 w-3.5" /> Novo Item
+        </Button>
+      </div>
+
+      {compras.length === 0 ? (
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-12 text-center text-slate-400">
+          <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Nenhum item de compra cadastrado</p>
+          <p className="text-xs mt-1">Clique em "Novo Item" para adicionar</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {porMes.map(([mes, items]) => {
+            const [ano, m] = mes.split("-");
+            const nomeMes = new Date(`${mes}-15`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+            const totalMes = items.reduce((s: number, c: any) => s + n(c.quantidade) * n(c.custoUnitario), 0);
+            return (
+              <div key={mes} className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="bg-slate-700 text-white px-4 py-2 flex items-center justify-between">
+                  <span className="text-xs font-semibold capitalize">{nomeMes}</span>
+                  <span className="text-xs text-slate-300">{fmt(totalMes)}</span>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100">
+                      <th className="py-2 px-3 text-left">Item</th>
+                      <th className="py-2 px-3 text-right w-16">Qtd</th>
+                      <th className="py-2 px-3 text-left w-14">Un</th>
+                      <th className="py-2 px-3 text-right w-28">Custo Unit.</th>
+                      <th className="py-2 px-3 text-right w-28">Total</th>
+                      <th className="py-2 px-3 text-left w-28">Necessário em</th>
+                      <th className="py-2 px-3 text-left w-32">Fornecedor</th>
+                      <th className="py-2 px-3 text-center w-28">Status</th>
+                      <th className="py-2 px-3 w-16" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((c: any, idx: number) => (
+                      <tr key={c.id} className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                        <td className="py-2 px-3 text-slate-700">{c.item}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{parseFloat(c.quantidade ?? "1").toLocaleString("pt-BR")}</td>
+                        <td className="py-2 px-3 text-slate-400">{c.unidade ?? "un"}</td>
+                        <td className="py-2 px-3 text-right text-slate-600">{fmt(n(c.custoUnitario))}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-slate-700">{fmt(n(c.quantidade) * n(c.custoUnitario))}</td>
+                        <td className="py-2 px-3 text-slate-500">{c.dataNecessaria}</td>
+                        <td className="py-2 px-3 text-slate-500 truncate max-w-[120px]">{c.fornecedor ?? "—"}</td>
+                        <td className="py-2 px-3 text-center">{badgeCompra(c.status ?? "pendente")}</td>
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-1 justify-end">
+                            <button className="p-1 hover:bg-blue-50 rounded text-blue-500" onClick={() => abrirEdit(c)}><Pencil className="h-3 w-3" /></button>
+                            <button className="p-1 hover:bg-red-50 rounded text-red-400" onClick={() => excluirMut.mutate({ id: c.id })}><Trash2 className="h-3 w-3" /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal Novo/Editar */}
+      <Dialog open={!!modal} onOpenChange={open => !open && setModal(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{modal === "novo" ? "Novo Item de Compra" : "Editar Item"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label className="text-xs">Item / Material *</Label>
+              <Input value={form.item} onChange={e => setForm(v => ({ ...v, item: e.target.value }))} placeholder="Ex: Cimento CP-II" className="mt-1 h-8 text-sm" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">Quantidade</Label>
+                <Input type="number" value={form.quantidade} onChange={e => setForm(v => ({ ...v, quantidade: parseFloat(e.target.value) || 0 }))} className="mt-1 h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Unidade</Label>
+                <Input value={form.unidade} onChange={e => setForm(v => ({ ...v, unidade: e.target.value }))} className="mt-1 h-8 text-sm" placeholder="un" />
+              </div>
+              <div>
+                <Label className="text-xs">Custo Unitário (R$)</Label>
+                <Input type="number" value={form.custoUnitario} onChange={e => setForm(v => ({ ...v, custoUnitario: parseFloat(e.target.value) || 0 }))} className="mt-1 h-8 text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Data Necessária *</Label>
+                <Input type="date" value={form.dataNecessaria} onChange={e => setForm(v => ({ ...v, dataNecessaria: e.target.value }))} className="mt-1 h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Status</Label>
+                <select value={form.status} onChange={e => setForm(v => ({ ...v, status: e.target.value }))}
+                  className="mt-1 h-8 text-sm w-full border border-input rounded-md px-2 bg-background">
+                  {STATUS_COMPRA.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Fornecedor</Label>
+              <Input value={form.fornecedor} onChange={e => setForm(v => ({ ...v, fornecedor: e.target.value }))} placeholder="Nome do fornecedor" className="mt-1 h-8 text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs">Observações</Label>
+              <Input value={form.observacoes} onChange={e => setForm(v => ({ ...v, observacoes: e.target.value }))} placeholder="Notas adicionais" className="mt-1 h-8 text-sm" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setModal(null)}>Cancelar</Button>
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={salvar} disabled={criarMut.isPending || editarMut.isPending}>
+                {(criarMut.isPending || editarMut.isPending) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
