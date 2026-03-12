@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
-  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench,
+  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -74,6 +74,8 @@ export default function OrcamentoDetalhe() {
   const id = parseInt(params?.id ?? "0");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [activePage, setActivePage] = useState<"orcamento" | "bdi">("orcamento");
+  const [bdiSubTab, setBdiSubTab]   = useState<string>("");
   const [activeTab, setActiveTab]   = useState<string>("eap");
   const [versao, setVersao]         = useState<Versao>("custo");
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
@@ -196,6 +198,9 @@ export default function OrcamentoDetalhe() {
   // BDI edição local
   const [bdiEdits, setBdiEdits]       = useState<Record<number, string>>({});
   const [localBdiPct, setLocalBdiPct] = useState(0);   // decimal: 0.2456
+  const [bdiUploadOpen, setBdiUploadOpen] = useState(false);
+  const [bdiUploadFile, setBdiUploadFile] = useState<File | null>(null);
+  const bdiFileRef = useRef<HTMLInputElement>(null);
 
   const updateBdiMutation = trpc.orcamento.updateBdiLinha.useMutation({
     onError: e => toast.error(e.message || "Erro ao salvar linha BDI"),
@@ -208,6 +213,33 @@ export default function OrcamentoDetalhe() {
     },
     onError: e => toast.error(e.message || "Erro ao aplicar BDI"),
   });
+
+  const importarBdiMutation = trpc.orcamento.importarBdi.useMutation({
+    onSuccess: (res) => {
+      toast.success(`BDI importado! ${res.linhasCount} linhas em ${res.abasImportadas.length} aba(s).`);
+      setBdiUploadOpen(false);
+      setBdiUploadFile(null);
+      const firstAba = res.abasImportadas[0] ?? "";
+      setBdiSubTab(firstAba);
+      refetch();
+    },
+    onError: e => toast.error(e.message || "Erro ao importar BDI"),
+  });
+
+  const confirmarUploadBdi = async () => {
+    if (!bdiUploadFile) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const b64 = (e.target?.result as string).split(",")[1];
+      importarBdiMutation.mutate({
+        orcamentoId: id,
+        companyId:   Number(orc?.companyId ?? 0),
+        fileBase64:  b64,
+        fileName:    bdiUploadFile.name,
+      });
+    };
+    reader.readAsDataURL(bdiUploadFile);
+  };
 
   useEffect(() => {
     if (data) {
@@ -224,6 +256,14 @@ export default function OrcamentoDetalhe() {
         setMetaValInput("");
       }
       setLocalBdiPct(parseFloat((data as any).bdiPercentual || "0"));
+      // Inicializa sub-aba BDI com a primeira aba importada
+      const linhas: any[] = (data as any).bdiLinhas ?? [];
+      if (linhas.length > 0 && !bdiSubTab) {
+        const BDI_ORDER = ["BDI","Indiretos","F.D.","Adm Central","Despesas Financeiras","Tributos Fiscais","Taxa de Comercialização"];
+        const abas = [...new Set(linhas.map((l: any) => l.nomeAba))];
+        const primeiro = BDI_ORDER.find(a => abas.includes(a)) ?? abas[0];
+        setBdiSubTab(primeiro);
+      }
     }
   }, [data]);
 
@@ -341,14 +381,32 @@ export default function OrcamentoDetalhe() {
         {/* ── Navegação rápida de abas no topo ── */}
         <div className="flex gap-1 mb-4">
           <button
-            onClick={() => setActiveTab("eap")}
+            onClick={() => { setActivePage("orcamento"); setActiveTab("eap"); }}
             className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${
-              activeTab === "eap"
+              activePage === "orcamento"
                 ? "bg-orange-500 text-white shadow"
                 : "bg-muted text-muted-foreground hover:bg-orange-100 hover:text-orange-700"
             }`}
           >
             ORÇAMENTO
+          </button>
+          <button
+            onClick={() => setActivePage("bdi")}
+            className={`px-5 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-1.5 ${
+              activePage === "bdi"
+                ? "bg-blue-600 text-white shadow"
+                : "bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+            }`}
+          >
+            <Percent className="h-3.5 w-3.5" />
+            BDI
+            {bdiPct > 0 && (
+              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                activePage === "bdi" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700"
+              }`}>
+                {bdiPct.toFixed(2)}%
+              </span>
+            )}
           </button>
         </div>
 
@@ -518,7 +576,7 @@ export default function OrcamentoDetalhe() {
 
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        {activePage === "orcamento" && <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="eap">EAP</TabsTrigger>
             <TabsTrigger value="insumos">
@@ -1094,9 +1152,288 @@ export default function OrcamentoDetalhe() {
               </TabsContent>
             );
           })()}
-        </Tabs>
+        </Tabs>}
+
+        {/* ════════════════════════════════════════════════════════════
+            ABA BDI — sub-abas por planilha importada
+        ════════════════════════════════════════════════════════════ */}
+        {activePage === "bdi" && (() => {
+          const bdiLinhas: any[] = orc.bdiLinhas ?? [];
+          const BDI_ORDER = ["BDI","Indiretos","F.D.","Adm Central","Despesas Financeiras","Tributos Fiscais","Taxa de Comercialização"];
+          const abasPresentes = [...new Set(bdiLinhas.map((l: any) => l.nomeAba as string))];
+          const abas = [
+            ...BDI_ORDER.filter(a => abasPresentes.includes(a)),
+            ...abasPresentes.filter(a => !BDI_ORDER.includes(a)),
+          ];
+          const abaAtiva = bdiSubTab || abas[0] || "";
+          const linhasDaAba = bdiLinhas.filter((l: any) => l.nomeAba === abaAtiva);
+
+          // Grupos para a aba principal BDI
+          const BDI_GRUPOS: Record<string, { label: string; color: string }> = {
+            CD: { label: "Custo Direto",        color: "bg-slate-100 text-slate-800" },
+            CI: { label: "Custo Indireto",      color: "bg-blue-50  text-blue-800"  },
+            DI: { label: "Despesas Indiretas",  color: "bg-amber-50 text-amber-800" },
+            B:  { label: "Bonificações",        color: "bg-green-50 text-green-800" },
+          };
+
+          const getGrupo = (codigo: string) => {
+            const p = codigo.split("-")[0];
+            return BDI_GRUPOS[p] ?? null;
+          };
+
+          // Para a aba BDI, agrupa os itens por prefixo (CD, CI, DI, B)
+          const isBdiPrincipal = abaAtiva === "BDI" || abaAtiva.toLowerCase() === "bdi";
+
+          const saveBdiLinha = (id: number, val: string) => {
+            const num = parseFloat(val.replace(",", "."));
+            if (isNaN(num)) return;
+            updateBdiMutation.mutate({ id, percentual: num });
+          };
+
+          return (
+            <div>
+              {/* Barra de sub-abas */}
+              {abas.length > 0 ? (
+                <>
+                  <div className="flex flex-wrap gap-1 border-b pb-0 mb-4">
+                    {abas.map(aba => (
+                      <button
+                        key={aba}
+                        onClick={() => setBdiSubTab(aba)}
+                        className={`px-4 py-2 text-sm font-semibold rounded-t-md border-b-2 transition-all ${
+                          abaAtiva === aba
+                            ? "border-blue-600 text-blue-700 bg-blue-50"
+                            : "border-transparent text-muted-foreground hover:text-blue-600 hover:bg-blue-50/50"
+                        }`}
+                      >
+                        {aba}
+                      </button>
+                    ))}
+                    <div className="ml-auto flex items-center gap-2 pb-1">
+                      {bdiPct > 0 && (
+                        <span className="text-sm text-muted-foreground">
+                          BDI total: <strong className="text-blue-700">{(bdiPct).toFixed(2)}%</strong>
+                        </span>
+                      )}
+                      <Button
+                        size="sm" variant="outline"
+                        className="gap-1.5 text-xs"
+                        onClick={() => setBdiUploadOpen(true)}
+                      >
+                        <UploadCloud className="h-3.5 w-3.5" />
+                        Importar BDI
+                      </Button>
+                      {bdiPct > 0 && (
+                        <Button
+                          size="sm"
+                          className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                          disabled={aplicarBdiMutation.isPending}
+                          onClick={() => aplicarBdiMutation.mutate({ orcamentoId: id, bdiPercentual: n(orc.bdiPercentual) })}
+                        >
+                          {aplicarBdiMutation.isPending
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <CheckCircle2 className="h-3.5 w-3.5" />}
+                          Aplicar BDI ao Orçamento
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tabela da aba selecionada */}
+                  <Card>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-blue-700 text-white text-xs uppercase">
+                              <th className="px-3 py-2 text-left w-24">Código</th>
+                              <th className="px-3 py-2 text-left">Descrição</th>
+                              <th className="px-3 py-2 text-right w-32">% (decimal)</th>
+                              <th className="px-3 py-2 text-right w-36">Valor R$</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {linhasDaAba.map((linha: any, idx: number) => {
+                              const grupo = isBdiPrincipal ? getGrupo(linha.codigo) : null;
+                              const isGrupoHeader = grupo && linha.codigo === linha.codigo.split("-")[0];
+                              const pct = parseFloat(linha.percentual || "0");
+                              const val = parseFloat(linha.valorAbsoluto || "0");
+                              const editKey = `bdi-${linha.id}`;
+                              const editVal = bdiEdits[linha.id];
+
+                              if (isGrupoHeader) {
+                                return (
+                                  <tr key={linha.id} className={`${grupo.color} font-bold border-t-2 border-blue-200`}>
+                                    <td className="px-3 py-2 font-mono text-xs">{linha.codigo}</td>
+                                    <td className="px-3 py-2 uppercase tracking-wide">{linha.descricao}</td>
+                                    <td className="px-3 py-2 text-right font-mono">
+                                      {pct !== 0 ? (pct * 100).toFixed(4) + "%" : "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-mono">
+                                      {val !== 0 ? formatBRL(val) : "—"}
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
+                              return (
+                                <tr
+                                  key={linha.id}
+                                  className={`border-b hover:bg-muted/40 transition-colors ${
+                                    idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"
+                                  } ${linha.codigo === "B-02" ? "bg-blue-50 font-bold" : ""}`}
+                                >
+                                  <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground">
+                                    {linha.codigo}
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    {linha.descricao}
+                                    {linha.codigo === "B-02" && (
+                                      <span className="ml-2 text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded-full">BDI TOTAL</span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-1 text-right">
+                                    <Input
+                                      className="h-6 w-28 text-right text-xs ml-auto font-mono"
+                                      value={editVal !== undefined
+                                        ? editVal
+                                        : pct !== 0 ? String((pct * 100).toFixed(4)) : ""}
+                                      placeholder="0.0000"
+                                      onChange={e => setBdiEdits(prev => ({ ...prev, [linha.id]: e.target.value }))}
+                                      onBlur={() => {
+                                        if (editVal !== undefined) {
+                                          const num = parseFloat(editVal.replace(",", "."));
+                                          if (!isNaN(num)) {
+                                            saveBdiLinha(linha.id, String(num / 100));
+                                          }
+                                          setBdiEdits(prev => { const n = { ...prev }; delete n[linha.id]; return n; });
+                                        }
+                                      }}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                        if (e.key === "Escape") setBdiEdits(prev => { const n = { ...prev }; delete n[linha.id]; return n; });
+                                      }}
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1.5 text-right font-mono text-xs">
+                                    {val !== 0 ? formatBRL(val) : "—"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {linhasDaAba.length === 0 && (
+                              <tr>
+                                <td colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
+                                  Nenhuma linha nesta aba.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                /* Sem dados BDI ainda */
+                <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+                  <div className="rounded-full bg-blue-50 p-6">
+                    <Percent className="h-10 w-10 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-lg text-slate-700">Nenhuma planilha BDI importada</p>
+                    <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                      Faça upload da planilha BDI para visualizar e editar as abas:<br/>
+                      BDI, Indiretos, F.D., Adm Central, Despesas Financeiras, Tributos Fiscais, Taxa de Comercialização
+                    </p>
+                  </div>
+                  <Button
+                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={() => setBdiUploadOpen(true)}
+                  >
+                    <UploadCloud className="h-4 w-4" />
+                    Importar Planilha BDI
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       </div>
+
+      {/* ── Dialog Upload BDI ── */}
+      <Dialog open={bdiUploadOpen} onOpenChange={open => { if (!importarBdiMutation.isPending) { setBdiUploadOpen(open); if (!open) setBdiUploadFile(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Percent className="h-5 w-5 text-blue-600" />
+              Importar Planilha BDI
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Selecione a planilha BDI (.xlsx / .xlsm). Todas as abas serão importadas:
+              <strong className="text-slate-700"> BDI, Indiretos, F.D., Adm Central, Despesas Financeiras, Tributos Fiscais, Taxa de Comercialização</strong>.
+            </p>
+            <div
+              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                bdiUploadFile ? "border-blue-400 bg-blue-50" : "border-border hover:border-blue-400 hover:bg-blue-50/30"
+              }`}
+              onClick={() => bdiFileRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault();
+                const f = e.dataTransfer.files[0];
+                if (f) setBdiUploadFile(f);
+              }}
+            >
+              <input
+                ref={bdiFileRef}
+                type="file"
+                accept=".xlsx,.xls,.xlsm,.xlsb"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) setBdiUploadFile(f); }}
+              />
+              {bdiUploadFile ? (
+                <div className="flex flex-col items-center gap-2">
+                  <FileSpreadsheet className="h-8 w-8 text-blue-600" />
+                  <p className="text-sm font-semibold text-blue-700">{bdiUploadFile.name}</p>
+                  <Button size="sm" variant="ghost" className="text-xs text-muted-foreground"
+                    onClick={e => { e.stopPropagation(); setBdiUploadFile(null); }}>
+                    <X className="h-3 w-3 mr-1" /> Trocar arquivo
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <UploadCloud className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm font-medium">Clique ou arraste a planilha aqui</p>
+                  <p className="text-xs text-muted-foreground">.xlsx, .xls ou .xlsm</p>
+                </div>
+              )}
+            </div>
+            {importarBdiMutation.isPending && (
+              <div className="flex items-center gap-2 text-sm text-blue-600">
+                <Loader2 className="h-4 w-4 animate-spin" /> Importando planilha BDI...
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBdiUploadOpen(false)} disabled={importarBdiMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!bdiUploadFile || importarBdiMutation.isPending}
+              onClick={confirmarUploadBdi}
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {importarBdiMutation.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Importando...</>
+                : <><UploadCloud className="h-4 w-4" /> Confirmar Import</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Dialog re-upload de planilha ── */}
       <Dialog open={reuploadOpen} onOpenChange={open => { if (!reimportarMutation.isPending) setReuploadOpen(open); }}>
