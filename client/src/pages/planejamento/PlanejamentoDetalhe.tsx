@@ -14,7 +14,7 @@ import {
   ArrowLeft, Loader2, CalendarRange, Building2, User, DollarSign,
   TrendingUp, Plus, Save, GitBranch, BarChart3, FileText, ClipboardList,
   Activity, AlertTriangle, CheckCircle2, Clock, Edit3, ChevronRight,
-  ChevronDown, Minus, Upload, XCircle,
+  ChevronDown, Minus, Upload, XCircle, GripVertical,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -61,11 +61,35 @@ function labelSemana(s: string, idx: number) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "visao-geral", label: "Visão Geral",    Icon: BarChart3 },
+  { id: "cronograma",  label: "Cronograma",     Icon: CalendarRange },
+  { id: "curva-s",     label: "Curva S",        Icon: TrendingUp },
+  { id: "avanco",      label: "Avanço Semanal", Icon: Activity },
+  { id: "revisoes",    label: "Revisões",       Icon: GitBranch },
+  { id: "refis",       label: "REFIS",          Icon: FileText },
+];
+const TAB_IDS = TAB_DEFS.map(t => t.id);
+const LS_KEY  = "plan-tab-order";
+
+function loadTabOrder(): Tab[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEY) ?? "null") as Tab[];
+    if (Array.isArray(saved) && saved.length === TAB_IDS.length && TAB_IDS.every(id => saved.includes(id)))
+      return saved;
+  } catch {}
+  return TAB_IDS;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function PlanejamentoDetalhe() {
   const [, params]    = useRoute("/planejamento/:id");
   const [, setLoc]    = useLocation();
   const projetoId     = params?.id ? parseInt(params.id) : 0;
   const [aba, setAba] = useState<Tab>("visao-geral");
+  const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
+  const [dragIdx, setDragIdx]   = useState<number | null>(null);
+  const [overIdx, setOverIdx]   = useState<number | null>(null);
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const utils = trpc.useUtils();
@@ -200,28 +224,52 @@ export default function PlanejamentoDetalhe() {
           )}
         </div>
 
-        {/* ── Abas ─────────────────────────────────────────────────────── */}
-        <div className="flex gap-1 mb-4 border-b border-slate-200 overflow-x-auto">
-          {([
-            { id: "visao-geral", label: "Visão Geral",      icon: <BarChart3 className="h-3.5 w-3.5" /> },
-            { id: "cronograma",  label: "Cronograma",       icon: <CalendarRange className="h-3.5 w-3.5" /> },
-            { id: "curva-s",     label: "Curva S",          icon: <TrendingUp className="h-3.5 w-3.5" /> },
-            { id: "avanco",      label: "Avanço Semanal",   icon: <Activity className="h-3.5 w-3.5" /> },
-            { id: "revisoes",    label: "Revisões",         icon: <GitBranch className="h-3.5 w-3.5" /> },
-            { id: "refis",       label: "REFIS",            icon: <FileText className="h-3.5 w-3.5" /> },
-          ] as { id: Tab; label: string; icon: React.ReactNode }[]).map(t => (
-            <button
-              key={t.id}
-              onClick={() => setAba(t.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
-                aba === t.id
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {t.icon}{t.label}
-            </button>
-          ))}
+        {/* ── Abas (drag-and-drop para reordenar) ──────────────────────── */}
+        <div className="flex gap-0 mb-4 border-b border-slate-200 overflow-x-auto select-none">
+          {tabOrder.map((id, idx) => {
+            const t = TAB_DEFS.find(d => d.id === id);
+            if (!t) return null;
+            const isActive  = aba === id;
+            const isDragged = dragIdx === idx;
+            const isOver    = overIdx === idx;
+            return (
+              <button
+                key={id}
+                draggable
+                onDragStart={e => {
+                  setDragIdx(idx);
+                  e.dataTransfer.effectAllowed = "move";
+                  // ghost image
+                  e.dataTransfer.setDragImage(e.currentTarget, 20, 16);
+                }}
+                onDragOver={e => { e.preventDefault(); setOverIdx(idx); }}
+                onDragEnter={e => { e.preventDefault(); setOverIdx(idx); }}
+                onDragLeave={() => setOverIdx(null)}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (dragIdx !== null && dragIdx !== idx) {
+                    const next = [...tabOrder];
+                    const [moved] = next.splice(dragIdx, 1);
+                    next.splice(idx, 0, moved);
+                    setTabOrder(next);
+                    try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
+                  }
+                  setDragIdx(null); setOverIdx(null);
+                }}
+                onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                onClick={() => setAba(id)}
+                className={`group flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-all cursor-grab active:cursor-grabbing ${
+                  isActive
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                } ${isDragged ? "opacity-40" : ""} ${isOver && dragIdx !== idx ? "border-b-2 border-blue-400 bg-blue-50/60" : ""}`}
+              >
+                <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-30 shrink-0 -ml-1 mr-0.5 transition-opacity" />
+                <t.Icon className="h-3.5 w-3.5 shrink-0" />
+                {t.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* ── Conteúdo das abas ────────────────────────────────────────── */}
