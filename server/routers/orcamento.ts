@@ -1748,6 +1748,20 @@ export const orcamentoRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      // Pré-agrega totalOrcamentos em uma única passada (evita N subqueries correlacionadas)
+      const countsSub = db.select({
+        codigo: orcamentoItens.servicoCodigo,
+        total:  sql<number>`CAST(COUNT(DISTINCT ${orcamentoItens.orcamentoId}) AS INT)`.as('total'),
+      }).from(orcamentoItens).groupBy(orcamentoItens.servicoCodigo).as('cnt');
+
+      // Pré-agrega totalInsumos por composição (para mostrar no botão de expand)
+      const insumosSub = db.select({
+        composicaoCodigo: composicaoInsumos.composicaoCodigo,
+        total: sql<number>`CAST(COUNT(*) AS INT)`.as('total'),
+      }).from(composicaoInsumos)
+        .where(eq(composicaoInsumos.companyId, input.companyId))
+        .groupBy(composicaoInsumos.composicaoCodigo).as('ins_cnt');
+
       return db.select({
         id:               composicoesCatalogo.id,
         companyId:        composicoesCatalogo.companyId,
@@ -1760,13 +1774,12 @@ export const orcamentoRouter = router({
         custoUnitTotal:   composicoesCatalogo.custoUnitTotal,
         ultimaAtualizacao: composicoesCatalogo.ultimaAtualizacao,
         criadoEm:         composicoesCatalogo.criadoEm,
-        totalOrcamentos:  sql<number>`(
-          SELECT COUNT(DISTINCT oi."orcamentoId")
-          FROM orcamento_itens oi
-          WHERE oi."servicoCodigo" = ${composicoesCatalogo.codigo}
-        )`.as('totalOrcamentos'),
+        totalOrcamentos:  sql<number>`COALESCE(cnt.total, 0)`.as('totalOrcamentos'),
+        totalInsumos:     sql<number>`COALESCE(ins_cnt.total, 0)`.as('totalInsumos'),
       })
         .from(composicoesCatalogo)
+        .leftJoin(countsSub, eq(composicoesCatalogo.codigo, countsSub.codigo))
+        .leftJoin(insumosSub, eq(composicoesCatalogo.codigo, insumosSub.composicaoCodigo))
         .where(eq(composicoesCatalogo.companyId, input.companyId))
         .orderBy(composicoesCatalogo.tipo, composicoesCatalogo.codigo)
         .limit(5000);
@@ -1906,10 +1919,13 @@ export const orcamentoRouter = router({
 
   // ── Lista todos os insumos de todas as composições do catálogo ─
   listarComposicaoInsumosCatalogo: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), composicaoCodigo: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      const where = input.composicaoCodigo
+        ? and(eq(composicaoInsumos.companyId, input.companyId), eq(composicaoInsumos.composicaoCodigo, input.composicaoCodigo))
+        : eq(composicaoInsumos.companyId, input.companyId);
       return db.select({
         id:               composicaoInsumos.id,
         composicaoCodigo: composicaoInsumos.composicaoCodigo,
@@ -1923,7 +1939,7 @@ export const orcamentoRouter = router({
         custoUnitTotal:   composicaoInsumos.custoUnitTotal,
       })
         .from(composicaoInsumos)
-        .where(eq(composicaoInsumos.companyId, input.companyId))
+        .where(where)
         .orderBy(composicaoInsumos.composicaoCodigo, composicaoInsumos.id);
     }),
 

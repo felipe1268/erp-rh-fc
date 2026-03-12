@@ -345,10 +345,182 @@ function CategoriasView({ companyId }: { companyId: number }) {
 }
 
 /* ════════════════════════════════════════════════════════════════
+   InsumoSubRows — carregado sob demanda quando a composição é expandida
+   ════════════════════════════════════════════════════════════════ */
+function InsumoSubRows({ companyId, composicaoCodigo }: { companyId: number; composicaoCodigo: string }) {
+  const [editingInsId, setEditingInsId] = useState<number | null>(null);
+  const [editInsQty,   setEditInsQty]   = useState("");
+  const [addingIns,    setAddingIns]    = useState(false);
+  const [insSearch,    setInsSearch]    = useState("");
+  const [insSelected,  setInsSelected]  = useState<any | null>(null);
+  const [addInsQty,    setAddInsQty]    = useState("1");
+  const [showInsDrop,  setShowInsDrop]  = useState(false);
+
+  const utils = trpc.useUtils();
+  const { data: linhas = [], isLoading } = trpc.orcamento.listarComposicaoInsumosCatalogo.useQuery(
+    { companyId, composicaoCodigo },
+    { enabled: companyId > 0 }
+  );
+  const { data: insumosSearch = [] } = trpc.orcamento.buscarInsumosCatalogo.useQuery(
+    { companyId, q: insSearch },
+    { enabled: companyId > 0 && addingIns }
+  );
+
+  const inv = () => utils.orcamento.listarComposicaoInsumosCatalogo.invalidate({ companyId, composicaoCodigo });
+  const atualizarQtyMut = trpc.orcamento.atualizarQuantidadeInsumoComposicao.useMutation({
+    onSuccess: () => { inv(); setEditingInsId(null); setEditInsQty(""); },
+  });
+  const adicionarInsMut = trpc.orcamento.adicionarInsumoComposicao.useMutation({
+    onSuccess: () => { inv(); setAddingIns(false); setInsSearch(""); setInsSelected(null); setAddInsQty("1"); setShowInsDrop(false); },
+  });
+  const removerInsMut = trpc.orcamento.removerInsumoComposicao.useMutation({ onSuccess: inv });
+
+  if (isLoading) {
+    return (
+      <tr className="border-b border-dashed bg-slate-50/70 text-[10px] text-slate-400">
+        <td colSpan={11} className="px-8 py-2 flex items-center gap-2">
+          <Loader2 className="h-3 w-3 animate-spin" /> Carregando insumos...
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <>
+      {(linhas as any[]).map((ins: any, idx: number) => {
+        const isEditingQty = editingInsId === ins.id;
+        return (
+          <tr key={`ins-${ins.id}-${idx}`}
+            className="border-b border-dashed bg-slate-50/70 text-[10px] text-slate-600 group/ins">
+            <td className="px-2" />
+            <td className="px-1 py-1.5">
+              <div className="flex justify-center">
+                <div className="w-px h-full min-h-[12px] bg-blue-200 mx-auto" />
+              </div>
+            </td>
+            <td className="px-2 py-1.5 font-mono text-[9px] text-slate-400">{ins.insumoCodigo || "—"}</td>
+            <td className="px-3 py-1.5 text-slate-600">{ins.insumoDescricao || "—"}</td>
+            <td className="px-3 py-1.5 tabular-nums">
+              {isEditingQty ? (
+                <div className="flex items-center gap-1">
+                  <input autoFocus
+                    className="w-20 border rounded px-1 py-0.5 text-[10px] text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={editInsQty}
+                    onChange={e => setEditInsQty(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") atualizarQtyMut.mutate({ companyId, id: ins.id, quantidade: editInsQty });
+                      if (e.key === "Escape") { setEditingInsId(null); setEditInsQty(""); }
+                    }}
+                  />
+                  <button onClick={() => atualizarQtyMut.mutate({ companyId, id: ins.id, quantidade: editInsQty })}
+                    disabled={atualizarQtyMut.isPending}
+                    className="p-0.5 rounded hover:bg-blue-100 text-blue-600">
+                    {atualizarQtyMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  </button>
+                  <button onClick={() => { setEditingInsId(null); setEditInsQty(""); }}
+                    className="p-0.5 rounded hover:bg-slate-200 text-slate-400">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <span className="cursor-pointer hover:underline hover:text-blue-600"
+                  title="Clique para editar quantidade"
+                  onClick={() => { setEditingInsId(ins.id); setEditInsQty(n(ins.quantidade).toFixed(4)); }}>
+                  {n(ins.quantidade).toFixed(4)}
+                </span>
+              )}
+            </td>
+            <td className="px-3 py-1.5 text-center text-slate-400">{ins.unidade || "—"}</td>
+            <td className="px-3 py-1.5 text-right text-blue-500 tabular-nums">{formatBRL(n(ins.precoUnitario))}</td>
+            <td className="px-3 py-1.5 text-right text-slate-400 tabular-nums">{n(ins.alocacaoMat).toFixed(4)}</td>
+            <td className="px-3 py-1.5 text-right text-slate-400 tabular-nums">{n(ins.alocacaoMdo).toFixed(4)}</td>
+            <td className="px-3 py-1.5 text-right font-semibold text-slate-600 tabular-nums">{formatBRL(n(ins.custoUnitTotal))}</td>
+            <td className="px-2 py-1.5">
+              <button title="Remover insumo da composição"
+                onClick={() => { if (confirm("Remover este insumo da composição?")) removerInsMut.mutate({ companyId, id: ins.id }); }}
+                className="opacity-0 group-hover/ins:opacity-100 transition-opacity p-0.5 rounded hover:bg-red-100 text-red-400">
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </td>
+          </tr>
+        );
+      })}
+
+      {/* Linha de adicionar insumo */}
+      {addingIns ? (
+        <tr className="border-b border-dashed bg-blue-50/60 text-[10px]">
+          <td className="px-2" />
+          <td className="px-1 py-2">
+            <div className="flex justify-center">
+              <div className="w-px h-full min-h-[12px] bg-blue-200 mx-auto" />
+            </div>
+          </td>
+          <td colSpan={3} className="px-2 py-2">
+            <div className="relative flex flex-col gap-1">
+              <div className="flex items-center gap-1.5">
+                <input autoFocus placeholder="Buscar insumo por código ou descrição..."
+                  className="flex-1 border rounded px-2 py-1 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                  value={insSearch}
+                  onChange={e => { setInsSearch(e.target.value); setInsSelected(null); setShowInsDrop(true); }}
+                  onFocus={() => setShowInsDrop(true)}
+                />
+                <input type="text" placeholder="Qtd"
+                  className="w-16 border rounded px-1 py-1 text-[10px] text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                  value={addInsQty}
+                  onChange={e => setAddInsQty(e.target.value)}
+                />
+                <button disabled={!insSelected || adicionarInsMut.isPending}
+                  onClick={() => { if (insSelected) adicionarInsMut.mutate({ companyId, composicaoCodigo, insumoCodigo: insSelected.codigo, quantidade: addInsQty }); }}
+                  className="p-1 rounded hover:bg-blue-200 text-blue-600 disabled:opacity-30">
+                  {adicionarInsMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                </button>
+                <button onClick={() => { setAddingIns(false); setInsSearch(""); setInsSelected(null); setShowInsDrop(false); }}
+                  className="p-1 rounded hover:bg-slate-200 text-slate-400">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {showInsDrop && (insumosSearch as any[]).length > 0 && !insSelected && (
+                <div className="absolute top-8 left-0 right-20 z-50 bg-white border rounded shadow-lg max-h-48 overflow-y-auto">
+                  {(insumosSearch as any[]).map((ins: any) => (
+                    <button key={ins.id}
+                      className="w-full text-left px-2 py-1.5 hover:bg-blue-50 border-b last:border-b-0 flex items-center gap-2"
+                      onMouseDown={e => { e.preventDefault(); setInsSelected(ins); setInsSearch(`[${ins.codigo}] ${ins.descricao}`); setShowInsDrop(false); }}>
+                      <span className="font-mono text-[9px] text-slate-400 w-16 shrink-0">{ins.codigo}</span>
+                      <span className="text-[10px] text-slate-700 truncate">{ins.descricao}</span>
+                      <span className="ml-auto text-[9px] text-slate-400 shrink-0">{ins.unidade}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {insSelected && (
+                <p className="text-[9px] text-blue-600">✓ {insSelected.descricao} — {formatBRL(n(insSelected.precoUnitario))}/{insSelected.unidade}</p>
+              )}
+            </div>
+          </td>
+          <td colSpan={6} />
+        </tr>
+      ) : (
+        <tr className="border-b border-dashed bg-slate-50/40 text-[10px]">
+          <td colSpan={11} className="px-4 py-1.5">
+            <button onClick={() => { setAddingIns(true); setInsSearch(""); setInsSelected(null); setAddInsQty("1"); setShowInsDrop(false); }}
+              className="flex items-center gap-1 text-blue-500 hover:text-blue-700 hover:underline">
+              <Plus className="h-3 w-3" /> Adicionar insumo à composição
+            </button>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
    SUB-VIEW: Composições
    ════════════════════════════════════════════════════════════════ */
+const PAGE_SIZE = 50;
+
 function ComposicoesView({ companyId }: { companyId: number }) {
   const [search, setSearch]        = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [tipoFilter, setTipoFilter] = useState<string | null>(null);
   const [expanded, setExpanded]    = useState<Set<number>>(new Set());
   const [editingId, setEditingId]  = useState<number | "new" | null>(null);
@@ -358,33 +530,21 @@ function ComposicoesView({ companyId }: { companyId: number }) {
   const [jobTotal, setJobTotal]    = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
   const [selected, setSelected]    = useState<Set<number>>(new Set());
+  const [page, setPage]            = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  /* ── Estados de edição de insumos dentro de composições ── */
-  const [editingInsId, setEditingInsId] = useState<number | null>(null);
-  const [editInsQty,   setEditInsQty]   = useState("");
-  const [addingInsFor, setAddingInsFor] = useState<string | null>(null); // composicaoCodigo
-  const [insSearch,    setInsSearch]    = useState("");
-  const [insSelected,  setInsSelected]  = useState<any | null>(null);
-  const [addInsQty,    setAddInsQty]    = useState("1");
-  const [showInsDrop,  setShowInsDrop]  = useState(false);
+  // Debounce de 300ms no filtro de busca
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(0); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset página ao trocar filtro de tipo
+  useEffect(() => { setPage(0); }, [tipoFilter]);
 
   const utils = trpc.useUtils();
   const { data: composicoes = [], isLoading } =
     trpc.orcamento.listarComposicoesCatalogo.useQuery({ companyId }, { enabled: companyId > 0 });
-  const { data: todosLinhasInsumos = [] } =
-    trpc.orcamento.listarComposicaoInsumosCatalogo.useQuery({ companyId }, { enabled: companyId > 0 });
-
-  // Agrupa insumos pelo código da composição
-  const insumosMap = useMemo(() => {
-    const map = new Map<string, any[]>();
-    for (const ins of todosLinhasInsumos as any[]) {
-      const arr = map.get(ins.composicaoCodigo) ?? [];
-      arr.push(ins);
-      map.set(ins.composicaoCodigo, arr);
-    }
-    return map;
-  }, [todosLinhasInsumos]);
 
   function toggleExpand(id: number) {
     setExpanded(prev => {
@@ -440,28 +600,6 @@ function ComposicoesView({ companyId }: { companyId: number }) {
   const excluirTodosMut = trpc.orcamento.excluirTodasComposicoes.useMutation({
     onSuccess: () => { invalidate(); setSelected(new Set()); },
   });
-
-  /* ── Mutations de insumos dentro de composições ── */
-  const invalidateIns = () => utils.orcamento.listarComposicaoInsumosCatalogo.invalidate({ companyId });
-
-  const atualizarQtyMut = trpc.orcamento.atualizarQuantidadeInsumoComposicao.useMutation({
-    onSuccess: () => { invalidateIns(); setEditingInsId(null); setEditInsQty(""); },
-  });
-  const adicionarInsMut = trpc.orcamento.adicionarInsumoComposicao.useMutation({
-    onSuccess: () => {
-      invalidateIns();
-      setAddingInsFor(null); setInsSearch(""); setInsSelected(null); setAddInsQty("1"); setShowInsDrop(false);
-    },
-  });
-  const removerInsMut = trpc.orcamento.removerInsumoComposicao.useMutation({
-    onSuccess: () => invalidateIns(),
-  });
-
-  /* ── Busca de insumos para autocomplete ── */
-  const { data: insumosSearch = [] } = trpc.orcamento.buscarInsumosCatalogo.useQuery(
-    { companyId, q: insSearch },
-    { enabled: companyId > 0 && addingInsFor !== null }
-  );
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -525,11 +663,13 @@ function ComposicoesView({ companyId }: { companyId: number }) {
   const tiposDisponiveis = Array.from(new Set((composicoes as any[]).map((c: any) => c.tipo).filter(Boolean))).sort();
   const tipoGrupos = tiposDisponiveis.map((t: any) => ({ id: 0, nome: t }));
 
-  const q = search.toLowerCase();
+  const q = debouncedSearch.toLowerCase();
   const filt = (composicoes as any[]).filter(c =>
     (!tipoFilter || c.tipo === tipoFilter) &&
     (!q || c.descricao?.toLowerCase().includes(q) || c.codigo?.toLowerCase().includes(q) || c.tipo?.toLowerCase().includes(q))
   );
+  const totalPages = Math.ceil(filt.length / PAGE_SIZE);
+  const pageFilt   = filt.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const filtIds = filt.map((c: any) => c.id as number);
   const allFiltSelected = filtIds.length > 0 && filtIds.every(id => selected.has(id));
@@ -571,8 +711,7 @@ function ComposicoesView({ companyId }: { companyId: number }) {
   function renderCompRow(c: any) {
     const isSel  = selected.has(c.id);
     const isExp  = expanded.has(c.id);
-    const linhas = insumosMap.get(c.codigo ?? '') ?? [];
-    const hasIns = linhas.length > 0;
+    const hasIns = (c.totalInsumos ?? 0) > 0;
 
     /* Modo edição */
     if (editingId === c.id) {
@@ -625,7 +764,7 @@ function ComposicoesView({ companyId }: { companyId: number }) {
               {isExp
                 ? <ChevronDown className="h-3.5 w-3.5" />
                 : <ChevronRight className="h-3.5 w-3.5" />}
-              {hasIns && <span className="text-[9px] ml-0.5 text-slate-400">{linhas.length}</span>}
+              {hasIns && <span className="text-[9px] ml-0.5 text-slate-400">{c.totalInsumos}</span>}
             </button>
           </td>
           {/* Código */}
@@ -663,165 +802,9 @@ function ComposicoesView({ companyId }: { companyId: number }) {
           </td>
         </tr>
 
-        {/* ── Sub-linhas de insumos (expandidas) ── */}
-        {isExp && linhas.map((ins: any, idx: number) => {
-          const isEditingQty = editingInsId === ins.id;
-          return (
-            <tr key={`ins-${ins.id}-${idx}`}
-              className="border-b border-dashed bg-slate-50/70 text-[10px] text-slate-600 group/ins">
-              {/* Indent decorativo */}
-              <td className="px-2" />
-              <td className="px-1 py-1.5">
-                <div className="flex justify-center">
-                  <div className="w-px h-full min-h-[12px] bg-blue-200 mx-auto" />
-                </div>
-              </td>
-              {/* Código insumo */}
-              <td className="px-2 py-1.5 font-mono text-[9px] text-slate-400">{ins.insumoCodigo || "—"}</td>
-              {/* Descrição insumo */}
-              <td className="px-3 py-1.5 text-slate-600">{ins.insumoDescricao || "—"}</td>
-              {/* Quantidade — editável inline */}
-              <td className="px-3 py-1.5 tabular-nums">
-                {isEditingQty ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      autoFocus
-                      className="w-20 border rounded px-1 py-0.5 text-[10px] text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      value={editInsQty}
-                      onChange={e => setEditInsQty(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter") atualizarQtyMut.mutate({ companyId, id: ins.id, quantidade: editInsQty });
-                        if (e.key === "Escape") { setEditingInsId(null); setEditInsQty(""); }
-                      }}
-                    />
-                    <button
-                      onClick={() => atualizarQtyMut.mutate({ companyId, id: ins.id, quantidade: editInsQty })}
-                      disabled={atualizarQtyMut.isPending}
-                      className="p-0.5 rounded hover:bg-blue-100 text-blue-600">
-                      {atualizarQtyMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                    </button>
-                    <button onClick={() => { setEditingInsId(null); setEditInsQty(""); }}
-                      className="p-0.5 rounded hover:bg-slate-200 text-slate-400">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <span
-                    className="cursor-pointer hover:underline hover:text-blue-600"
-                    title="Clique para editar quantidade"
-                    onClick={() => { setEditingInsId(ins.id); setEditInsQty(n(ins.quantidade).toFixed(4)); }}>
-                    {n(ins.quantidade) !== 0 ? n(ins.quantidade).toFixed(4) : "0.0000"}
-                  </span>
-                )}
-              </td>
-              {/* Un */}
-              <td className="px-3 py-1.5 text-center text-slate-400">{ins.unidade || "—"}</td>
-              {/* Preço Unit */}
-              <td className="px-3 py-1.5 text-right text-blue-500 tabular-nums">{formatBRL(n(ins.precoUnitario))}</td>
-              {/* Aloc Mat */}
-              <td className="px-3 py-1.5 text-right text-slate-400 tabular-nums">{n(ins.alocacaoMat).toFixed(4)}</td>
-              {/* Aloc MO */}
-              <td className="px-3 py-1.5 text-right text-slate-400 tabular-nums">{n(ins.alocacaoMdo).toFixed(4)}</td>
-              {/* Custo total */}
-              <td className="px-3 py-1.5 text-right font-semibold text-slate-600 tabular-nums">{formatBRL(n(ins.custoUnitTotal))}</td>
-              {/* Botão excluir insumo */}
-              <td className="px-2 py-1.5">
-                <button
-                  title="Remover insumo da composição"
-                  onClick={() => { if (confirm("Remover este insumo da composição?")) removerInsMut.mutate({ companyId, id: ins.id }); }}
-                  className="opacity-0 group-hover/ins:opacity-100 transition-opacity p-0.5 rounded hover:bg-red-100 text-red-400">
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </td>
-            </tr>
-          );
-        })}
+        {/* ── Sub-linhas de insumos carregadas sob demanda ── */}
+        {isExp && <InsumoSubRows companyId={companyId} composicaoCodigo={c.codigo ?? ''} />}
 
-        {/* ── Linha de adicionar insumo ── */}
-        {isExp && (
-          <>
-            {addingInsFor === c.codigo ? (
-              <tr className="border-b border-dashed bg-blue-50/60 text-[10px]">
-                <td className="px-2" />
-                <td className="px-1 py-2">
-                  <div className="flex justify-center">
-                    <div className="w-px h-full min-h-[12px] bg-blue-200 mx-auto" />
-                  </div>
-                </td>
-                <td colSpan={3} className="px-2 py-2">
-                  <div className="relative flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        autoFocus
-                        placeholder="Buscar insumo por código ou descrição..."
-                        className="flex-1 border rounded px-2 py-1 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
-                        value={insSearch}
-                        onChange={e => { setInsSearch(e.target.value); setInsSelected(null); setShowInsDrop(true); }}
-                        onFocus={() => setShowInsDrop(true)}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Qtd"
-                        className="w-16 border rounded px-1 py-1 text-[10px] text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
-                        value={addInsQty}
-                        onChange={e => setAddInsQty(e.target.value)}
-                      />
-                      <button
-                        disabled={!insSelected || adicionarInsMut.isPending}
-                        onClick={() => {
-                          if (!insSelected) return;
-                          adicionarInsMut.mutate({ companyId, composicaoCodigo: c.codigo, insumoCodigo: insSelected.codigo, quantidade: addInsQty });
-                        }}
-                        className="p-1 rounded hover:bg-blue-200 text-blue-600 disabled:opacity-30">
-                        {adicionarInsMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      </button>
-                      <button onClick={() => { setAddingInsFor(null); setInsSearch(""); setInsSelected(null); setShowInsDrop(false); }}
-                        className="p-1 rounded hover:bg-slate-200 text-slate-400">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    {/* Dropdown de resultados */}
-                    {showInsDrop && (insumosSearch as any[]).length > 0 && !insSelected && (
-                      <div className="absolute top-8 left-0 right-20 z-50 bg-white border rounded shadow-lg max-h-48 overflow-y-auto">
-                        {(insumosSearch as any[]).map((ins: any) => (
-                          <button
-                            key={ins.id}
-                            className="w-full text-left px-2 py-1.5 hover:bg-blue-50 border-b last:border-b-0 flex items-center gap-2"
-                            onMouseDown={e => {
-                              e.preventDefault();
-                              setInsSelected(ins);
-                              setInsSearch(`[${ins.codigo}] ${ins.descricao}`);
-                              setShowInsDrop(false);
-                            }}>
-                            <span className="font-mono text-[9px] text-slate-400 w-16 shrink-0">{ins.codigo}</span>
-                            <span className="text-[10px] text-slate-700 truncate">{ins.descricao}</span>
-                            <span className="ml-auto text-[9px] text-slate-400 shrink-0">{ins.unidade}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {insSelected && (
-                      <p className="text-[9px] text-blue-600">
-                        ✓ {insSelected.descricao} — {formatBRL(n(insSelected.precoUnitario))}/{insSelected.unidade}
-                      </p>
-                    )}
-                  </div>
-                </td>
-                <td colSpan={6} />
-              </tr>
-            ) : (
-              <tr className="border-b border-dashed bg-slate-50/40 text-[10px]">
-                <td colSpan={11} className="px-4 py-1.5">
-                  <button
-                    onClick={() => { setAddingInsFor(c.codigo); setInsSearch(""); setInsSelected(null); setAddInsQty("1"); setShowInsDrop(false); }}
-                    className="flex items-center gap-1 text-blue-500 hover:text-blue-700 hover:underline">
-                    <Plus className="h-3 w-3" /> Adicionar insumo à composição
-                  </button>
-                </td>
-              </tr>
-            )}
-          </>
-        )}
       </>
     );
   }
@@ -970,10 +953,30 @@ function ComposicoesView({ companyId }: { companyId: number }) {
                       {!search && !tipoFilter && <p className="text-xs mt-1">Use "Importar" ou clique em "Nova Composição".</p>}
                     </td>
                   </tr>
-                ) : filt.map((c: any) => renderCompRow(c))}
+                ) : pageFilt.map((c: any) => renderCompRow(c))}
               </tbody>
             </table>
           </div>
+
+          {/* Paginação */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+              <span>
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filt.length)} de {filt.length} composições
+              </span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPage(0)} disabled={page === 0}
+                  className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-30 text-xs">«</button>
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                  className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-30 text-xs">‹ Anterior</button>
+                <span className="px-3 font-medium text-xs">{page + 1} / {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                  className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-30 text-xs">Próxima ›</button>
+                <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}
+                  className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-30 text-xs">»</button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 
