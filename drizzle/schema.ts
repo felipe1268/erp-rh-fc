@@ -4130,6 +4130,92 @@ export const encargosSociais = pgTable("encargos_sociais", {
   ordem:     integer("ordem").notNull().default(0),
 });
 
+// ── Módulo Planejamento ────────────────────────────────────────────────────
+export const planejamentoProjetos = pgTable("planejamento_projetos", {
+  id:                     serial().primaryKey(),
+  companyId:              integer("company_id").notNull(),
+  orcamentoId:            integer("orcamento_id"),
+  nome:                   varchar({ length: 300 }).notNull(),
+  cliente:                varchar({ length: 200 }),
+  local:                  varchar({ length: 200 }),
+  responsavel:            varchar({ length: 200 }),
+  dataInicio:             date("data_inicio"),
+  dataTerminoContratual:  date("data_termino_contratual"),
+  valorContrato:          numeric("valor_contrato", { precision: 18, scale: 2 }).default("0"),
+  status:                 varchar({ length: 50 }).default("Em andamento"),
+  descricao:              text(),
+  criadoEm:               timestamp("criado_em").defaultNow(),
+  atualizadoEm:           timestamp("atualizado_em").defaultNow(),
+});
+
+export const planejamentoRevisoes = pgTable("planejamento_revisoes", {
+  id:           serial().primaryKey(),
+  projetoId:    integer("projeto_id").notNull(),
+  numero:       integer().notNull().default(0),
+  descricao:    varchar({ length: 200 }),
+  dataRevisao:  date("data_revisao").notNull(),
+  motivo:       text(),
+  responsavel:  varchar({ length: 200 }),
+  aprovadoPor:  varchar("aprovado_por", { length: 200 }),
+  status:       varchar({ length: 50 }).default("aprovada"),
+  observacao:   text(),
+  isBaseline:   boolean("is_baseline").default(false),
+  criadoEm:     timestamp("criado_em").defaultNow(),
+});
+
+export const planejamentoAtividades = pgTable("planejamento_atividades", {
+  id:                   serial().primaryKey(),
+  revisaoId:            integer("revisao_id").notNull(),
+  projetoId:            integer("projeto_id").notNull(),
+  eapCodigo:            varchar("eap_codigo", { length: 50 }),
+  nome:                 varchar({ length: 500 }).notNull(),
+  nivel:                integer().default(1),
+  dataInicio:           date("data_inicio"),
+  dataFim:              date("data_fim"),
+  duracaoDias:          integer("duracao_dias").default(0),
+  predecessora:         varchar({ length: 100 }),
+  pesoFinanceiro:       numeric("peso_financeiro", { precision: 10, scale: 4 }).default("0"),
+  recursoPrincipal:     varchar("recurso_principal", { length: 200 }),
+  quantidadePlanejada:  numeric("quantidade_planejada", { precision: 18, scale: 4 }).default("0"),
+  unidade:              varchar({ length: 30 }),
+  ordem:                integer().default(0),
+  isGrupo:              boolean("is_grupo").default(false),
+  criadoEm:             timestamp("criado_em").defaultNow(),
+});
+
+export const planejamentoAvancos = pgTable("planejamento_avancos", {
+  id:                   serial().primaryKey(),
+  projetoId:            integer("projeto_id").notNull(),
+  atividadeId:          integer("atividade_id").notNull(),
+  revisaoId:            integer("revisao_id").notNull(),
+  semana:               date().notNull(),
+  percentualAcumulado:  numeric("percentual_acumulado", { precision: 8, scale: 4 }).default("0"),
+  percentualSemanal:    numeric("percentual_semanal", { precision: 8, scale: 4 }).default("0"),
+  observacao:           text(),
+  criadoEm:             timestamp("criado_em").defaultNow(),
+  criadoPor:            varchar("criado_por", { length: 200 }),
+});
+
+export const planejamentoRefis = pgTable("planejamento_refis", {
+  id:                       serial().primaryKey(),
+  projetoId:                integer("projeto_id").notNull(),
+  semana:                   date().notNull(),
+  numero:                   integer(),
+  dataEmissao:              date("data_emissao"),
+  avancoPrevisto:           numeric("avanco_previsto", { precision: 8, scale: 4 }).default("0"),
+  avancoRealizado:          numeric("avanco_realizado", { precision: 8, scale: 4 }).default("0"),
+  avancoSemanalPrevisto:    numeric("avanco_semanal_previsto", { precision: 8, scale: 4 }).default("0"),
+  avancoSemanalRealizado:   numeric("avanco_semanal_realizado", { precision: 8, scale: 4 }).default("0"),
+  spi:                      numeric({ precision: 10, scale: 4 }).default("1"),
+  cpi:                      numeric({ precision: 10, scale: 4 }).default("1"),
+  custoPrevisto:            numeric("custo_previsto", { precision: 18, scale: 2 }).default("0"),
+  custoRealizado:           numeric("custo_realizado", { precision: 18, scale: 2 }).default("0"),
+  observacoes:              text(),
+  status:                   varchar({ length: 50 }).default("rascunho"),
+  criadoEm:                 timestamp("criado_em").defaultNow(),
+  criadoPor:                varchar("criado_por", { length: 200 }),
+});
+
 export const orcamentoParametros = pgTable("orcamento_parametros", {
   id:           serial().notNull().primaryKey(),
   companyId:    integer().notNull().unique(),
