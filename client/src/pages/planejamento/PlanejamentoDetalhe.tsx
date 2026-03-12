@@ -881,7 +881,20 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [importando, setImportando] = useState(false);
   const [confirmLimpar, setConfirmLimpar] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const fileRef   = useRef<HTMLInputElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [pickerOpen]);
 
   // Semanas abrangendo todo o projeto (do menor dataInicio ao maior dataFim das atividades)
   const semanas = useMemo(() => {
@@ -901,6 +914,26 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   }, [semanas]);
 
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
+
+  // % realizado ponderado por semana (para indicador no seletor)
+  const semanasComDados = useMemo(() => {
+    const result: Record<string, number> = {};
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
+    const bySem: Record<string, Record<number, number>> = {};
+    avancos.forEach((av: any) => {
+      if (!bySem[av.semana]) bySem[av.semana] = {};
+      bySem[av.semana][av.atividadeId] = n(av.percentualAcumulado);
+    });
+    Object.entries(bySem).forEach(([sem, m]) => {
+      let soma = 0;
+      folhas.forEach((a: any) => {
+        const peso = n(a.pesoFinanceiro) || 1;
+        soma += (m[a.id] ?? 0) * (peso / pesoTotal);
+      });
+      result[sem] = +Math.min(100, soma).toFixed(1);
+    });
+    return result;
+  }, [avancos, folhas]);
 
   // Pré-carrega avanços existentes da semana selecionada
   const avancoExistente = useMemo(() => {
@@ -1051,15 +1084,62 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <p className="text-sm font-semibold text-slate-700">Avanço Físico Semanal</p>
-          <select
-            value={semanaAtual}
-            onChange={e => { setSemanaAtual(e.target.value); setAvancoLocal({}); setImportStatus(null); }}
-            className="border border-input rounded-md px-3 py-1.5 text-xs bg-background"
-          >
-            {semanas.map((s, i) => (
-              <option key={s} value={s}>{labelSemana(s, i)}</option>
-            ))}
-          </select>
+
+          {/* ── Seletor customizado de semana ─────────────────────────────── */}
+          <div ref={pickerRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setPickerOpen(v => !v)}
+              className="border border-input rounded-md px-3 py-1.5 text-xs bg-background flex items-center gap-2 min-w-[260px] justify-between hover:bg-slate-50"
+            >
+              <span className="flex items-center gap-1.5 truncate">
+                {semanasComDados[semanaAtual] !== undefined
+                  ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                  : <span className="w-3.5 h-3.5 shrink-0" />}
+                <span className={semanasComDados[semanaAtual] !== undefined ? "text-emerald-700 font-medium" : ""}>
+                  {labelSemana(semanaAtual, semanas.indexOf(semanaAtual))}
+                </span>
+                {semanasComDados[semanaAtual] !== undefined && (
+                  <span className="text-emerald-600 font-semibold shrink-0">
+                    — {semanasComDados[semanaAtual].toFixed(1)}%
+                  </span>
+                )}
+              </span>
+              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform ${pickerOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {pickerOpen && (
+              <div className="absolute top-full mt-1 left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-xl max-h-80 overflow-y-auto min-w-[320px]">
+                {semanas.map((s, i) => {
+                  const pct    = semanasComDados[s];
+                  const temDados = pct !== undefined;
+                  const isAtual  = s === semanaAtual;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => { setSemanaAtual(s); setAvancoLocal({}); setImportStatus(null); setPickerOpen(false); }}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left transition-colors
+                        ${isAtual ? "bg-blue-50" : "hover:bg-slate-50"}
+                        ${temDados ? "text-emerald-800" : "text-slate-700"}`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {temDados
+                          ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          : <span className="w-3.5 h-3.5 shrink-0 border border-slate-200 rounded-full" />}
+                        <span className={isAtual ? "font-semibold" : ""}>{labelSemana(s, i)}</span>
+                      </span>
+                      {temDados && (
+                        <span className="ml-3 font-bold text-emerald-600 shrink-0 bg-emerald-50 px-1.5 py-0.5 rounded">
+                          {pct.toFixed(1)}%
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex gap-2 items-center">
           {/* Botão importar MS Project */}
