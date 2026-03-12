@@ -749,14 +749,6 @@ export default function OrcamentoDetalhe() {
                   <p className="text-[10px] text-muted-foreground">Valor em R$</p>
                   <p className={`text-lg font-bold ${corValor}`}>{formatBRL(lucroR)}</p>
                 </div>
-                {versao !== "custo" && Math.abs(lucroR - lucroR_custo) > 1 && (
-                  <div className="text-center">
-                    <p className="text-[10px] text-muted-foreground">vs. BDI original</p>
-                    <p className={`text-sm font-semibold ${lucroR > lucroR_custo ? "text-green-600" : "text-red-500"}`}>
-                      {lucroR > lucroR_custo ? "+" : ""}{formatBRL(lucroR - lucroR_custo)}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           );
