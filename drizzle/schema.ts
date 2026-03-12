@@ -4216,6 +4216,37 @@ export const planejamentoRefis = pgTable("planejamento_refis", {
   criadoPor:                varchar("criado_por", { length: 200 }),
 });
 
+export const planejamentoMedicoes = pgTable("planejamento_medicoes", {
+  id:                   serial().primaryKey(),
+  projetoId:            integer("projeto_id").notNull(),
+  numero:               integer().notNull().default(0),
+  competencia:          varchar({ length: 7 }).notNull(),
+  valorPrevisto:        numeric("valor_previsto",        { precision: 18, scale: 2 }).default("0"),
+  valorMedido:          numeric("valor_medido",          { precision: 18, scale: 2 }).default("0"),
+  percentualPrevisto:   numeric("percentual_previsto",   { precision: 10, scale: 4 }).default("0"),
+  percentualMedido:     numeric("percentual_medido",     { precision: 10, scale: 4 }).default("0"),
+  status:               varchar({ length: 50 }).default("pendente"),
+  observacoes:          text(),
+  criadoEm:             timestamp("criado_em").defaultNow(),
+  atualizadoEm:         timestamp("atualizado_em").defaultNow(),
+});
+
+export const planejamentoCompras = pgTable("planejamento_compras", {
+  id:             serial().primaryKey(),
+  projetoId:      integer("projeto_id").notNull(),
+  item:           varchar({ length: 300 }).notNull(),
+  unidade:        varchar({ length: 50 }).default("un"),
+  quantidade:     numeric({ precision: 18, scale: 3 }).default("1"),
+  custoUnitario:  numeric("custo_unitario", { precision: 18, scale: 2 }).default("0"),
+  dataNecessaria: date("data_necessaria").notNull(),
+  dataPedido:     date("data_pedido"),
+  status:         varchar({ length: 50 }).default("pendente"),
+  fornecedor:     varchar({ length: 200 }),
+  observacoes:    text(),
+  criadoEm:       timestamp("criado_em").defaultNow(),
+  atualizadoEm:   timestamp("atualizado_em").defaultNow(),
+});
+
 export const orcamentoParametros = pgTable("orcamento_parametros", {
   id:           serial().notNull().primaryKey(),
   companyId:    integer().notNull().unique(),
