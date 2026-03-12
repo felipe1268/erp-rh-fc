@@ -53,6 +53,13 @@ function ultimasSemanas(n: number) {
   return [...new Set(semanas)];
 }
 
+function labelSemana(s: string, idx: number) {
+  const ini = new Date(s + "T12:00:00");
+  const fim = new Date(ini.getTime() + 6 * 86400000);
+  const br  = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return `${idx + 1}ª Semana — ${br(ini)} até ${br(fim)}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PlanejamentoDetalhe() {
   const [, params]    = useRoute("/planejamento/:id");
@@ -479,6 +486,23 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     return false;
   }
 
+  // Nível máximo de grupos + lista de EAPs de grupos (para expand/collapse global)
+  const maxNivel = useMemo(() =>
+    atividades.filter((a: any) => a.isGrupo).reduce((m: number, a: any) => Math.max(m, a.nivel ?? 1), 1),
+  [atividades]);
+
+  const gruposEap = useMemo(() =>
+    atividades.filter((a: any) => a.isGrupo && a.eapCodigo).map((a: any) => a.eapCodigo as string),
+  [atividades]);
+
+  function expandirAteNivel(nivel: number) {
+    setCollapsed(new Set(
+      atividades
+        .filter((a: any) => a.isGrupo && a.eapCodigo && (a.nivel ?? 1) >= nivel)
+        .map((a: any) => a.eapCodigo as string)
+    ));
+  }
+
   if (loadingAtiv) return (
     <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
       <Loader2 className="h-5 w-5 animate-spin" /><span>Carregando cronograma...</span>
@@ -495,7 +519,8 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      {/* Linha 1 — título + botões de ação */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold text-slate-700">
             Cronograma — Rev. {String(revisaoAtiva.numero).padStart(2, "0")}
@@ -503,7 +528,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
           </p>
           <span className="text-xs text-slate-400">{atividades.length} atividades</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {editando ? (
             <>
               <Button variant="outline" size="sm" onClick={() => setEditando(false)}>Cancelar</Button>
@@ -533,6 +558,35 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
           )}
         </div>
       </div>
+
+      {/* Linha 2 — controles de nível (só fora do modo edição e se há grupos) */}
+      {!editando && gruposEap.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] text-slate-400 mr-0.5">Nível:</span>
+          {Array.from({ length: maxNivel }, (_, i) => i + 1).map(lvl => (
+            <button
+              key={lvl}
+              onClick={() => expandirAteNivel(lvl + 1)}
+              className="h-6 w-7 text-[11px] font-mono rounded border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-400 text-slate-600 transition-colors"
+            >
+              {lvl}
+            </button>
+          ))}
+          <div className="w-px h-4 bg-slate-200 mx-0.5" />
+          <button
+            onClick={() => setCollapsed(new Set())}
+            className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center gap-1 transition-colors"
+          >
+            <ChevronDown className="h-3 w-3" /> Expandir tudo
+          </button>
+          <button
+            onClick={() => setCollapsed(new Set(gruposEap))}
+            className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center gap-1 transition-colors"
+          >
+            <ChevronRight className="h-3 w-3" /> Recolher tudo
+          </button>
+        </div>
+      )}
 
       {/* Tabela */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
@@ -911,8 +965,8 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
             onChange={e => { setSemanaAtual(e.target.value); setAvancoLocal({}); setImportStatus(null); }}
             className="border border-input rounded-md px-3 py-1.5 text-xs bg-background"
           >
-            {semanas.map(s => (
-              <option key={s} value={s}>Semana {s}</option>
+            {semanas.map((s, i) => (
+              <option key={s} value={s}>{labelSemana(s, i)}</option>
             ))}
           </select>
         </div>
@@ -1319,8 +1373,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             onChange={e => { setSemana(e.target.value); setObs(""); }}
             className="border border-input rounded-md px-3 py-1.5 text-xs bg-background"
           >
-            {semanas.map(s => (
-              <option key={s} value={s}>Semana {s}{refisLista.find((r: any) => r.semana === s) ? " ✓" : ""}</option>
+            {semanas.map((s, i) => (
+              <option key={s} value={s}>{labelSemana(s, i)}{refisLista.find((r: any) => r.semana === s) ? " ✓" : ""}</option>
             ))}
           </select>
         </div>
