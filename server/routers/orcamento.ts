@@ -1648,6 +1648,166 @@ export const orcamentoRouter = router({
       return { bdi, indiretos, fd, adm, despFinanc, tributos, taxaComercializacao };
     }),
 
+  // ── QUADRO 01 + 02: buscar parâmetros do orçamento ─────────────
+  getBdiOrcamentoParams: protectedProcedure
+    .input(z.object({ orcamentoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const rows = await db.execute(
+        `SELECT id, "tempoObraMeses", data_inicio, eventual_atraso_meses,
+                dissidio_pct, dissidio_data, dissidio_incidencia_meses,
+                hora_extra_uteis_pct, hora_extra_sabados_pct, hora_extra_domingos_pct,
+                adicional_noturno_pct, incidencia_dissidio_meses, mdo_local_pct,
+                dias_uteis_mes, horas_trab_sabados_mes, dias_uteis_noturno_mes, dom_trab_noturno_mes,
+                presenca_mdo_uteis_d_pct, presenca_mdo_sab_d_pct, presenca_mdo_dom_d_pct,
+                presenca_mdo_uteis_n_pct, presenca_mdo_sab_n_pct, presenca_mdo_dom_n_pct,
+                nr_media_homens_mes, nr_qtd_bacia, nr_qtd_maximo,
+                nr_ambulatorio, nr_tec_seg, nr_eng_seg,
+                q2_cafe_manha, q2_almoco, q2_lanche_pct, q2_jantar_valor, q2_cestas_pct, q2_ref_coord,
+                q2_cap_casa, q2_tarifa_mun, q2_tarifa_mun_pct, q2_tarifa_interbano, q2_tarifa_inter_pct,
+                q2_transp_pub_prod, q2_transp_pub_sup, q2_transp_pub_coord,
+                q2_transp_prop_prod, q2_transp_prop_sup, q2_transp_prop_coord,
+                q2_mdo_aloj_prod, q2_mdo_aloj_sup, q2_mdo_aloj_coord,
+                q2_aloj_prod, q2_aloj_sup, q2_aloj_coord,
+                q2_naloj_prod, q2_naloj_sup, q2_naloj_coord
+         FROM orcamentos WHERE id = ${input.orcamentoId} LIMIT 1`
+      );
+      return (rows.rows?.[0] ?? rows[0] ?? null) as any;
+    }),
+
+  updateBdiOrcamentoParams: protectedProcedure
+    .input(z.object({
+      orcamentoId: z.number(),
+      tempoObraMeses: z.number().optional(),
+      dataInicio: z.string().nullable().optional(),
+      eventualAtrasoMeses: z.number().optional(),
+      dissidioPct: z.number().optional(),
+      dissidioData: z.string().nullable().optional(),
+      dissidioIncidenciaMeses: z.number().optional(),
+      horaExtraUteisPct: z.number().optional(),
+      horaExtraSabadosPct: z.number().optional(),
+      horaExtraDomingosPct: z.number().optional(),
+      adicionalNoturnoPct: z.number().optional(),
+      incidenciaDissidioMeses: z.number().optional(),
+      mdoLocalPct: z.number().optional(),
+      diasUteisMes: z.number().optional(),
+      horasTrabSabadosMes: z.number().optional(),
+      diasUteisNoturnaMes: z.number().optional(),
+      domTrabNoturnaMes: z.number().optional(),
+      presencaMdoUteisDPct: z.number().optional(),
+      presencaMdoSabDPct: z.number().optional(),
+      presencaMdoDomDPct: z.number().optional(),
+      presencaMdoUteisNPct: z.number().optional(),
+      presencaMdoSabNPct: z.number().optional(),
+      presencaMdoDomNPct: z.number().optional(),
+      nrMediaHomens: z.number().optional(),
+      nrQtdBacia: z.number().optional(),
+      nrQtdMaximo: z.number().optional(),
+      nrAmbulatorio: z.string().optional(),
+      nrTecSeg: z.string().optional(),
+      nrEngSeg: z.string().optional(),
+      // QUADRO 02
+      q2CafeManha: z.number().optional(),
+      q2Almoco: z.number().optional(),
+      q2LanchePct: z.number().optional(),
+      q2JantarValor: z.number().optional(),
+      q2CestasPct: z.number().optional(),
+      q2RefCoord: z.number().optional(),
+      q2CapCasa: z.number().optional(),
+      q2TarifaMun: z.number().optional(),
+      q2TarifaMunPct: z.number().optional(),
+      q2TarifaInterbano: z.number().optional(),
+      q2TarifaInterPct: z.number().optional(),
+      q2TranspPubProd: z.number().optional(),
+      q2TranspPubSup: z.number().optional(),
+      q2TranspPubCoord: z.number().optional(),
+      q2TranspPropProd: z.number().optional(),
+      q2TranspPropSup: z.number().optional(),
+      q2TranspPropCoord: z.number().optional(),
+      q2MdoAlojProd: z.number().optional(),
+      q2MdoAlojSup: z.number().optional(),
+      q2MdoAlojCoord: z.number().optional(),
+      q2AlojProd: z.number().optional(),
+      q2AlojSup: z.number().optional(),
+      q2AlojCoord: z.number().optional(),
+      q2NalojProd: z.number().optional(),
+      q2NalojSup: z.number().optional(),
+      q2NalojCoord: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const { orcamentoId, ...fields } = input;
+      const sets: string[] = [];
+      const colMap: Record<string, string> = {
+        tempoObraMeses: '"tempoObraMeses"',
+        dataInicio: 'data_inicio',
+        eventualAtrasoMeses: 'eventual_atraso_meses',
+        dissidioPct: 'dissidio_pct',
+        dissidioData: 'dissidio_data',
+        dissidioIncidenciaMeses: 'dissidio_incidencia_meses',
+        horaExtraUteisPct: 'hora_extra_uteis_pct',
+        horaExtraSabadosPct: 'hora_extra_sabados_pct',
+        horaExtraDomingosPct: 'hora_extra_domingos_pct',
+        adicionalNoturnoPct: 'adicional_noturno_pct',
+        incidenciaDissidioMeses: 'incidencia_dissidio_meses',
+        mdoLocalPct: 'mdo_local_pct',
+        diasUteisMes: 'dias_uteis_mes',
+        horasTrabSabadosMes: 'horas_trab_sabados_mes',
+        diasUteisNoturnaMes: 'dias_uteis_noturno_mes',
+        domTrabNoturnaMes: 'dom_trab_noturno_mes',
+        presencaMdoUteisDPct: 'presenca_mdo_uteis_d_pct',
+        presencaMdoSabDPct: 'presenca_mdo_sab_d_pct',
+        presencaMdoDomDPct: 'presenca_mdo_dom_d_pct',
+        presencaMdoUteisNPct: 'presenca_mdo_uteis_n_pct',
+        presencaMdoSabNPct: 'presenca_mdo_sab_n_pct',
+        presencaMdoDomNPct: 'presenca_mdo_dom_n_pct',
+        nrMediaHomens: 'nr_media_homens_mes',
+        nrQtdBacia: 'nr_qtd_bacia',
+        nrQtdMaximo: 'nr_qtd_maximo',
+        nrAmbulatorio: 'nr_ambulatorio',
+        nrTecSeg: 'nr_tec_seg',
+        nrEngSeg: 'nr_eng_seg',
+        q2CafeManha: 'q2_cafe_manha',
+        q2Almoco: 'q2_almoco',
+        q2LanchePct: 'q2_lanche_pct',
+        q2JantarValor: 'q2_jantar_valor',
+        q2CestasPct: 'q2_cestas_pct',
+        q2RefCoord: 'q2_ref_coord',
+        q2CapCasa: 'q2_cap_casa',
+        q2TarifaMun: 'q2_tarifa_mun',
+        q2TarifaMunPct: 'q2_tarifa_mun_pct',
+        q2TarifaInterbano: 'q2_tarifa_interbano',
+        q2TarifaInterPct: 'q2_tarifa_inter_pct',
+        q2TranspPubProd: 'q2_transp_pub_prod',
+        q2TranspPubSup: 'q2_transp_pub_sup',
+        q2TranspPubCoord: 'q2_transp_pub_coord',
+        q2TranspPropProd: 'q2_transp_prop_prod',
+        q2TranspPropSup: 'q2_transp_prop_sup',
+        q2TranspPropCoord: 'q2_transp_prop_coord',
+        q2MdoAlojProd: 'q2_mdo_aloj_prod',
+        q2MdoAlojSup: 'q2_mdo_aloj_sup',
+        q2MdoAlojCoord: 'q2_mdo_aloj_coord',
+        q2AlojProd: 'q2_aloj_prod',
+        q2AlojSup: 'q2_aloj_sup',
+        q2AlojCoord: 'q2_aloj_coord',
+        q2NalojProd: 'q2_naloj_prod',
+        q2NalojSup: 'q2_naloj_sup',
+        q2NalojCoord: 'q2_naloj_coord',
+      };
+      for (const [key, col] of Object.entries(colMap)) {
+        const val = (fields as any)[key];
+        if (val === undefined) continue;
+        if (val === null) sets.push(`${col} = NULL`);
+        else if (typeof val === 'string') sets.push(`${col} = '${val.replace(/'/g, "''")}'`);
+        else sets.push(`${col} = ${val}`);
+      }
+      if (sets.length > 0)
+        await db.execute(`UPDATE orcamentos SET ${sets.join(', ')}, updated_at = NOW() WHERE id = ${orcamentoId}`);
+      return { success: true };
+    }),
+
   // ── Update endpoints — cada sub-aba tem o seu ──────────────────
   updateBdiIndiretosLinha: protectedProcedure
     .input(z.object({ id: z.number(), quantidade: z.number().optional(), salarioBase: z.number().optional(), bonusMensal: z.number().optional(), decimoTerceiroFerias: z.number().optional() }))
