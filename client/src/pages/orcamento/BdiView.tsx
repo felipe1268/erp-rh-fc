@@ -224,7 +224,7 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                         <td className={`px-3 py-2 text-right font-bold font-mono text-sm ${g.headerText} border-r border-slate-500`}>
                           {hasPct ? pct2(l.percentual) : ""}
                         </td>
-                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-slate-900 bg-yellow-100">
+                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-slate-900" style={{ backgroundColor: "#F7F797" }}>
                           {hasVal ? brl(l.valorAbsoluto) : ""}
                         </td>
                       </tr>
