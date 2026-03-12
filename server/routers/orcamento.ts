@@ -85,15 +85,12 @@ function fix6(v: number): string { return v.toFixed(6); }
 // CÁLCULO CI-01 — CLT vs Contrato (PJ)
 // Encargos sociais CLT fixos conforme planilha Excel (AA8:AA13)
 // ============================================================
-const ENCARGOS_CLT = {
-  decimoTerceiro: 1 / 12,                   // 8.33%  (Art. 142 §5 CLT)
-  ferias:         (1 + 1 / 3) / 12,         // 11.11% (Art. 142 §5 CLT)
-  avisoPrevio:    7 / 30 / 12,              // 1.94%  (Lei 605/49)
-  fgts:           0.08,                      // 8.00%  (Súmula 63 TST)
-  multaFgts:      0.4 * 0.08,               // 3.20%  (Súmula 63 TST)
-  dsr:            0.168316831683168,         // 16.83% (Lei 605/49)
-} as const;
-const TOTAL_ENCARGOS_CLT = Object.values(ENCARGOS_CLT).reduce((a, b) => a + b, 0); // ~49.42%
+// Encargos CLT completos para construção civil conforme planilha Excel:
+// Encargos básicos:   INSS patronal ~20% + SAT/RAT ~3% + Sistema S ~5.8% + outros
+// Encargos adicionais: 13°+férias+aviso+FGTS+multa+DSR ~49.42%
+// Reincidências sobre adicionais elevam o total para 112,69%
+// Valor extraído diretamente da planilha Excel de referência.
+const TOTAL_ENCARGOS_CLT = 1.1269; // 112,69%
 
 interface CI01Params {
   tempoObraMeses:         number; // prazo + eventual_atraso
