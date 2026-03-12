@@ -40,24 +40,29 @@ type GrupoStyle = {
   rowBg: string; rowBgAlt: string; codColor: string;
 };
 
+// Estilo comum de cabeçalho para todos os grupos (fundo escuro, texto branco em negrito)
+const HDR_BG   = "bg-slate-700";
+const HDR_TEXT = "text-white";
+const HDR_BRD  = "border-t-2 border-slate-500";
+
 const GRUPO_STYLES: Record<string, GrupoStyle> = {
-  CD:  { headerBg: "bg-slate-300", headerText: "text-slate-900",   headerBorder: "border-t-2 border-slate-400",
+  CD:  { headerBg: HDR_BG, headerText: HDR_TEXT, headerBorder: HDR_BRD,
          rowBg: "bg-white", rowBgAlt: "bg-slate-50", codColor: "text-slate-600" },
-  CI:  { headerBg: "bg-blue-200",  headerText: "text-blue-900",    headerBorder: "border-t-2 border-blue-400",
+  CI:  { headerBg: HDR_BG, headerText: HDR_TEXT, headerBorder: HDR_BRD,
          rowBg: "bg-white", rowBgAlt: "bg-blue-50/30", codColor: "text-blue-600" },
-  DI:  { headerBg: "bg-yellow-200",headerText: "text-amber-900",   headerBorder: "border-t-2 border-yellow-400",
+  DI:  { headerBg: HDR_BG, headerText: HDR_TEXT, headerBorder: HDR_BRD,
          rowBg: "bg-white", rowBgAlt: "bg-yellow-50/30", codColor: "text-amber-700" },
-  B:   { headerBg: "bg-green-200", headerText: "text-green-900",   headerBorder: "border-t-2 border-green-400",
+  B:   { headerBg: HDR_BG, headerText: HDR_TEXT, headerBorder: HDR_BRD,
          rowBg: "bg-white", rowBgAlt: "bg-green-50/30", codColor: "text-green-700" },
-  J:   { headerBg: "bg-slate-200", headerText: "text-slate-800",   headerBorder: "border-t-2 border-slate-300",
+  J:   { headerBg: HDR_BG, headerText: HDR_TEXT, headerBorder: HDR_BRD,
          rowBg: "bg-white", rowBgAlt: "bg-slate-50", codColor: "text-slate-600" },
-  V:   { headerBg: "bg-slate-100", headerText: "text-slate-700",   headerBorder: "border-t border-slate-200",
+  V:   { headerBg: HDR_BG, headerText: HDR_TEXT, headerBorder: HDR_BRD,
          rowBg: "bg-white", rowBgAlt: "bg-slate-50", codColor: "text-slate-500" },
-  PV:  { headerBg: "bg-yellow-300",headerText: "text-slate-900",   headerBorder: "border-t-2 border-yellow-500",
+  PV:  { headerBg: HDR_BG, headerText: HDR_TEXT, headerBorder: HDR_BRD,
          rowBg: "bg-yellow-50", rowBgAlt: "bg-yellow-100/50", codColor: "text-amber-700" },
-  PVN: { headerBg: "bg-yellow-200",headerText: "text-slate-900",   headerBorder: "border-t-2 border-yellow-400",
+  PVN: { headerBg: HDR_BG, headerText: HDR_TEXT, headerBorder: HDR_BRD,
          rowBg: "bg-yellow-50", rowBgAlt: "bg-yellow-50", codColor: "text-amber-700" },
-  L:   { headerBg: "bg-teal-200",  headerText: "text-teal-900",    headerBorder: "border-t-2 border-teal-400",
+  L:   { headerBg: HDR_BG, headerText: HDR_TEXT, headerBorder: HDR_BRD,
          rowBg: "bg-white", rowBgAlt: "bg-teal-50/20", codColor: "text-teal-700" },
 };
 
@@ -172,7 +177,7 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                         className={`${g.headerBg} ${g.headerBorder} cursor-pointer select-none hover:brightness-95 transition-all`}
                         onClick={() => toggleGrupo(key)}
                       >
-                        <td className={`px-3 py-2 font-bold font-mono text-xs text-center ${g.headerText} border-r border-slate-200`}>
+                        <td className={`px-3 py-2 font-bold font-mono text-xs text-center ${g.headerText} border-r border-slate-500`}>
                           <div className="flex items-center justify-center gap-1">
                             {isCollapsed
                               ? <ChevronRight className="h-3.5 w-3.5 shrink-0" />
@@ -180,13 +185,13 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                             {l.codigo}
                           </div>
                         </td>
-                        <td className={`px-3 py-2 font-bold uppercase tracking-wide text-sm ${g.headerText} border-r border-slate-200`}>
+                        <td className={`px-3 py-2 font-bold uppercase tracking-wide text-sm ${g.headerText} border-r border-slate-500`}>
                           {l.descricao}
                         </td>
-                        <td className={`px-3 py-2 text-right font-bold font-mono text-sm ${g.headerText} border-r border-slate-200`}>
+                        <td className={`px-3 py-2 text-right font-bold font-mono text-sm ${g.headerText} border-r border-slate-500`}>
                           {hasPct ? pct2(l.percentual) : ""}
                         </td>
-                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-slate-900 bg-yellow-200">
+                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-white bg-amber-500">
                           {hasVal ? brl(l.valorAbsoluto) : ""}
                         </td>
                       </tr>
