@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { removeAccents } from "@/lib/searchUtils";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,7 @@ import {
   Wrench, Package, Search, Loader2, Upload, CheckCircle,
   AlertCircle, Plus, Pencil, Trash2, X, Check, Tag,
   ChevronDown, ChevronRight, ChevronsDown, ChevronsUp,
-  Square, CheckSquare, MinusSquare,
+  Square, CheckSquare, MinusSquare, RotateCcw,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -53,7 +54,7 @@ function GrupoDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const filtrados = grupos.filter(g => !q || g.nome.toLowerCase().includes(q.toLowerCase()));
+  const filtrados = grupos.filter(g => !q || removeAccents(g.nome).includes(removeAccents(q)));
 
   function select(nome: string) {
     onChange(nome);
@@ -138,7 +139,7 @@ function GrupoFiltro({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const filtrados = grupos.filter(g => !q || g.nome.toLowerCase().includes(q.toLowerCase()));
+  const filtrados = grupos.filter(g => !q || removeAccents(g.nome).includes(removeAccents(q)));
 
   function select(nome: string | null) {
     onChange(nome);
@@ -663,10 +664,10 @@ function ComposicoesView({ companyId }: { companyId: number }) {
   const tiposDisponiveis = Array.from(new Set((composicoes as any[]).map((c: any) => c.tipo).filter(Boolean))).sort();
   const tipoGrupos = tiposDisponiveis.map((t: any) => ({ id: 0, nome: t }));
 
-  const q = debouncedSearch.toLowerCase();
+  const q = removeAccents(debouncedSearch);
   const filt = (composicoes as any[]).filter(c =>
     (!tipoFilter || c.tipo === tipoFilter) &&
-    (!q || c.descricao?.toLowerCase().includes(q) || c.codigo?.toLowerCase().includes(q) || c.tipo?.toLowerCase().includes(q))
+    (!q || removeAccents(c.descricao || '').includes(q) || removeAccents(c.codigo || '').includes(q) || removeAccents(c.tipo || '').includes(q))
   );
   const totalPages = Math.ceil(filt.length / PAGE_SIZE);
   const pageFilt   = filt.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -1150,10 +1151,10 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
   const done  = progresso?.done ?? 0;
   const total = progresso?.total ?? jobTotal;
 
-  const q = search.toLowerCase();
+  const q = removeAccents(search);
   const filt = (insumos as any[]).filter(i =>
     (!catFilter || i.tipo === catFilter) &&
-    (!q || i.descricao?.toLowerCase().includes(q) || i.codigo?.toLowerCase().includes(q) || i.tipo?.toLowerCase().includes(q))
+    (!q || removeAccents(i.descricao || '').includes(q) || removeAccents(i.codigo || '').includes(q) || removeAccents(i.tipo || '').includes(q))
   );
 
   const filtIds = filt.map((i: any) => i.id as number);
@@ -1541,6 +1542,12 @@ function EncargosView({ companyId }: { companyId: number }) {
   const salvarMut = trpc.orcamento.salvarEncargo.useMutation({
     onSuccess: () => utils.orcamento.listarEncargos.invalidate({ companyId }),
   });
+  const restaurarMut = trpc.orcamento.restaurarEncargos.useMutation({
+    onSuccess: () => {
+      utils.orcamento.listarEncargos.invalidate({ companyId });
+      utils.orcamento.getParametros.invalidate({ companyId });
+    },
+  });
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editVal, setEditVal] = useState("");
@@ -1634,16 +1641,32 @@ function EncargosView({ companyId }: { companyId: number }) {
 
   return (
     <div>
-      <div className="mb-5 flex items-start justify-between">
+      <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-slate-800">Encargos Sociais</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             Clique em qualquer percentual para editar. O total é aplicado automaticamente nos insumos de mão de obra (Un = h).
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-slate-500">Total L.S.</div>
-          <div className="text-2xl font-bold text-blue-700 tabular-nums">{fmtPct(total)}</div>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => {
+              if (window.confirm('Restaurar todos os encargos para os valores padrão do sistema? Isso sobrescreverá as alterações feitas.')) {
+                restaurarMut.mutate({ companyId });
+              }
+            }}
+            disabled={restaurarMut.isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300 rounded-md transition-colors"
+            title="Restaurar valores padrão da planilha">
+            {restaurarMut.isPending
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <RotateCcw className="h-3.5 w-3.5" />}
+            Restaurar Padrão
+          </button>
+          <div className="text-right">
+            <div className="text-xs text-slate-500">Total L.S.</div>
+            <div className="text-2xl font-bold text-blue-700 tabular-nums">{fmtPct(total)}</div>
+          </div>
         </div>
       </div>
 
@@ -1717,14 +1740,15 @@ function EncargosView({ companyId }: { companyId: number }) {
 export default function BibliotecaOrcamento() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
-  const isInsumos = typeof window !== "undefined" && window.location.pathname.includes("insumos");
+  const isInsumos   = typeof window !== "undefined" && window.location.pathname.includes("insumos");
+  const isEncargos  = typeof window !== "undefined" && window.location.pathname.includes("encargos");
   const [showCategorias, setShowCategorias] = useState(false);
-  const [insumoTab, setInsumoTab] = useState<'lista' | 'encargos'>('lista');
+  const [insumoTab, setInsumoTab] = useState<'lista' | 'encargos'>(isEncargos ? 'encargos' : 'lista');
 
   return (
     <DashboardLayout>
       <div className="p-6 max-w-screen-xl mx-auto">
-        {!isInsumos ? (
+        {!isInsumos && !isEncargos ? (
           <ComposicoesView companyId={companyId} />
         ) : showCategorias ? (
           <div>

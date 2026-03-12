@@ -252,6 +252,7 @@ function Router() {
         <Route path="/orcamento/biblioteca"       component={BibliotecaOrcamento} />
         <Route path="/orcamento/composicoes"      component={BibliotecaOrcamento} />
         <Route path="/orcamento/insumos"          component={BibliotecaOrcamento} />
+        <Route path="/orcamento/encargos"         component={BibliotecaOrcamento} />
         <Route path="/orcamento/:id/print"        component={OrcamentoPrint} />
         <Route path="/orcamento/:id"              component={OrcamentoDetalhe} />
         {/* Sprint 6 - IA */}

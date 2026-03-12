@@ -2286,6 +2286,35 @@ export const orcamentoRouter = router({
       return { ok: true, totalLs: totalLs.toFixed(2) };
     }),
 
+  // ── Restaurar encargos ao padrão ─────────────────────────
+  restaurarEncargos: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      await db.delete(encargosSociais).where(eq(encargosSociais.companyId, input.companyId));
+      await db.insert(encargosSociais).values(
+        ENCARGOS_DEFAULTS.map(d => ({ ...d, companyId: input.companyId }))
+      );
+      const subA = ENCARGOS_DEFAULTS.filter(d => d.grupo === 'A').reduce((s, d) => s + parseFloat(d.valor), 0);
+      const subB = ENCARGOS_DEFAULTS.filter(d => d.grupo === 'B').reduce((s, d) => s + parseFloat(d.valor), 0);
+      const subC = ENCARGOS_DEFAULTS.filter(d => d.grupo === 'C').reduce((s, d) => s + parseFloat(d.valor), 0);
+      const subE = ENCARGOS_DEFAULTS.filter(d => d.grupo === 'E').reduce((s, d) => s + parseFloat(d.valor), 0);
+      const subF = ENCARGOS_DEFAULTS.filter(d => d.grupo === 'F').reduce((s, d) => s + parseFloat(d.valor), 0);
+      const groupD  = (subA * subB) / 100;
+      const totalLs = subA + subB + subC + groupD + subE + subF;
+      const existing = await db.select().from(orcamentoParametros)
+        .where(eq(orcamentoParametros.companyId, input.companyId)).limit(1);
+      if (existing.length > 0) {
+        await db.update(orcamentoParametros)
+          .set({ ls: totalLs.toFixed(4), atualizadoEm: new Date().toISOString() })
+          .where(eq(orcamentoParametros.companyId, input.companyId));
+      } else {
+        await db.insert(orcamentoParametros).values({ companyId: input.companyId, ls: totalLs.toFixed(4), he: '0' });
+      }
+      return { ok: true, totalLs: totalLs.toFixed(2) };
+    }),
+
   // ── Resumo para o painel ──────────────────────────────────
   painel: protectedProcedure
     .input(z.object({ companyId: z.number() }))
