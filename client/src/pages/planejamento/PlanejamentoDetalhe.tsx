@@ -120,6 +120,69 @@ export default function PlanejamentoDetalhe() {
     { id: projetoId }, { enabled: !!projetoId }
   );
 
+  // ── Editar Projeto ─────────────────────────────────────────────────────────
+  const [editProjModal, setEditProjModal] = useState(false);
+  const [editProjForm, setEditProjForm] = useState({
+    nome: "", cliente: "", local: "", responsavel: "",
+    dataInicio: "", dataTerminoContratual: "", status: "Em andamento", valorContrato: "",
+  });
+  const [obraImportId, setObraImportId] = useState("");
+
+  const { data: obrasLista = [] } = trpc.obras.list.useQuery(
+    { companyId: proj?.companyId ?? 0 }, { enabled: !!proj?.companyId }
+  );
+
+  const atualizarProjetoMut = trpc.planejamento.atualizarProjeto.useMutation({
+    onSuccess: () => {
+      utils.planejamento.getProjetoById.invalidate({ id: projetoId });
+      setEditProjModal(false);
+    },
+  });
+
+  function abrirEditProjeto() {
+    setEditProjForm({
+      nome:                  proj?.nome ?? "",
+      cliente:               proj?.cliente ?? "",
+      local:                 proj?.local ?? "",
+      responsavel:           proj?.responsavel ?? "",
+      dataInicio:            proj?.dataInicio ?? "",
+      dataTerminoContratual: proj?.dataTerminoContratual ?? "",
+      status:                proj?.status ?? "Em andamento",
+      valorContrato:         proj?.valorContrato ? String(proj.valorContrato) : "",
+    });
+    setObraImportId("");
+    setEditProjModal(true);
+  }
+
+  function importarCidadeObra() {
+    const obra = (obrasLista as any[]).find(o => String(o.id) === obraImportId);
+    if (!obra) return;
+    const local = [obra.cidade, obra.estado].filter(Boolean).join(" / ") || obra.endereco || "";
+    setEditProjForm(v => ({
+      ...v,
+      nome:                  obra.nome || v.nome,
+      cliente:               obra.cliente || v.cliente,
+      local,
+      responsavel:           obra.responsavel || v.responsavel,
+      dataInicio:            obra.dataInicio || v.dataInicio,
+      dataTerminoContratual: obra.dataPrevisaoFim || v.dataTerminoContratual,
+    }));
+  }
+
+  function salvarProjeto() {
+    atualizarProjetoMut.mutate({
+      id: projetoId,
+      nome:                  editProjForm.nome || undefined,
+      cliente:               editProjForm.cliente || undefined,
+      local:                 editProjForm.local || undefined,
+      responsavel:           editProjForm.responsavel || undefined,
+      dataInicio:            editProjForm.dataInicio || undefined,
+      dataTerminoContratual: editProjForm.dataTerminoContratual || undefined,
+      status:                editProjForm.status || undefined,
+      valorContrato:         editProjForm.valorContrato ? parseFloat(editProjForm.valorContrato) : undefined,
+    });
+  }
+
   const revisaoAtiva = useMemo(() => {
     if (!proj?.revisoes) return null;
     const aprovadas = proj.revisoes.filter((r: any) => r.status === "aprovada");
@@ -385,6 +448,102 @@ export default function PlanejamentoDetalhe() {
         )}
 
       </div>
+
+      {/* ── Modal: Editar Dados do Projeto ──────────────────────────────── */}
+      <Dialog open={editProjModal} onOpenChange={open => !open && setEditProjModal(false)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-blue-600" /> Editar Dados do Projeto
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-1">
+
+            {/* Importar da Obra */}
+            {(obrasLista as any[]).length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" /> Importar cidade do Cadastro de Obras
+                </p>
+                <div className="flex gap-2">
+                  <select
+                    value={obraImportId}
+                    onChange={e => setObraImportId(e.target.value)}
+                    className="flex-1 text-xs border border-blue-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                    <option value="">Selecione uma obra...</option>
+                    {(obrasLista as any[]).map((o: any) => (
+                      <option key={o.id} value={String(o.id)}>
+                        {o.nome}{o.cidade ? ` — ${o.cidade}${o.estado ? `/${o.estado}` : ""}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <Button size="sm" variant="outline"
+                    disabled={!obraImportId}
+                    onClick={importarCidadeObra}
+                    className="border-blue-300 text-blue-700 hover:bg-blue-100 text-xs whitespace-nowrap">
+                    Copiar dados
+                  </Button>
+                </div>
+                <p className="text-[10px] text-blue-500 mt-1">
+                  Preenche automaticamente: nome, cliente, local (cidade/estado), responsável e datas.
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <Label className="text-xs">Nome da Obra *</Label>
+                <Input value={editProjForm.nome} onChange={e => setEditProjForm(v => ({ ...v, nome: e.target.value }))} className="mt-1 h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Cliente</Label>
+                <Input value={editProjForm.cliente} onChange={e => setEditProjForm(v => ({ ...v, cliente: e.target.value }))} className="mt-1 h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Local / Cidade</Label>
+                <Input value={editProjForm.local} onChange={e => setEditProjForm(v => ({ ...v, local: e.target.value }))} placeholder="Ex: São Paulo / SP" className="mt-1 h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Responsável</Label>
+                <Input value={editProjForm.responsavel} onChange={e => setEditProjForm(v => ({ ...v, responsavel: e.target.value }))} className="mt-1 h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Status</Label>
+                <select value={editProjForm.status}
+                  onChange={e => setEditProjForm(v => ({ ...v, status: e.target.value }))}
+                  className="mt-1 h-8 w-full text-sm border border-slate-200 rounded-md px-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                  {["Em andamento","Concluído","Suspenso","Atrasado","Planejamento"].map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Data Início</Label>
+                <Input type="date" value={editProjForm.dataInicio} onChange={e => setEditProjForm(v => ({ ...v, dataInicio: e.target.value }))} className="mt-1 h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Prazo Contratual</Label>
+                <Input type="date" value={editProjForm.dataTerminoContratual} onChange={e => setEditProjForm(v => ({ ...v, dataTerminoContratual: e.target.value }))} className="mt-1 h-8 text-sm" />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs">Valor do Contrato (R$)</Label>
+                <Input type="number" value={editProjForm.valorContrato} onChange={e => setEditProjForm(v => ({ ...v, valorContrato: e.target.value }))} className="mt-1 h-8 text-sm" placeholder="0,00" />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setEditProjModal(false)}>Cancelar</Button>
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+                disabled={atualizarProjetoMut.isPending || !editProjForm.nome.trim()}
+                onClick={salvarProjeto}>
+                {atualizarProjetoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </DashboardLayout>
   );
 }
@@ -634,19 +793,27 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
 
         {/* Informações do projeto */}
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Dados do Projeto</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-slate-700">Dados do Projeto</p>
+            <button onClick={abrirEditProjeto}
+              className="text-[10px] flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors">
+              <Pencil className="h-3 w-3" /> Editar
+            </button>
+          </div>
           <div className="space-y-2 text-xs">
             {[
               ["Obra", proj.nome],
               ["Cliente", proj.cliente ?? "—"],
-              ["Local", proj.local ?? "—"],
+              ["Local", proj.local
+                ? <span className="flex items-center gap-1 text-blue-600"><MapPin className="h-3 w-3" />{proj.local}</span>
+                : <span className="text-amber-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Não definido — clique em Editar</span>],
               ["Responsável", proj.responsavel ?? "—"],
               ["Início", proj.dataInicio ?? "—"],
               ["Prazo Contratual", proj.dataTerminoContratual ?? "—"],
               ["Status", proj.status ?? "—"],
               ["Vinculado ao Orçamento", proj.orcamento ? (proj.orcamento.descricao ?? `#${proj.orcamento.id}`) : "—"],
             ].map(([k, v]) => (
-              <div key={k} className="flex items-start gap-2">
+              <div key={String(k)} className="flex items-start gap-2">
                 <span className="text-slate-400 w-32 shrink-0">{k}:</span>
                 <span className="text-slate-700 font-medium">{v}</span>
               </div>
@@ -1124,6 +1291,10 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
     return s.length > 0 ? s : ultimasSemanas(12);
   }, [atividades]);
 
+  // Índice da semana selecionada (1-based para exibição)
+  const semanaIdx = semanas.indexOf(semanaAtual);
+  const semanaNum = semanaIdx >= 0 ? semanaIdx + 1 : 1;
+
   // Mantém semanaAtual dentro da faixa disponível
   useEffect(() => {
     if (semanas.length > 0 && !semanas.includes(semanaAtual)) {
@@ -1383,7 +1554,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
             title={filtrarSemana ? "Mostrando apenas atividades da semana selecionada" : "Mostrando todas as atividades"}
           >
             <Filter className="h-3.5 w-3.5" />
-            {filtrarSemana ? `Semana (${folhasNaSemana.length})` : `Todas (${folhas.length})`}
+            {filtrarSemana ? `${semanaNum}ª Sem. (${folhasNaSemana.length} ativ.)` : `Todas (${folhas.length})`}
           </Button>
           {/* Botão importar MS Project */}
           <Button
