@@ -75,6 +75,7 @@ function toNum(v: unknown): number {
   const n = Number(v);
   return isFinite(n) ? n : 0;
 }
+const n = toNum; // alias curto usado nos cálculos CI-01
 
 function fix2(v: number): string { return v.toFixed(2); }
 function fix4(v: number): string { return v.toFixed(4); }
