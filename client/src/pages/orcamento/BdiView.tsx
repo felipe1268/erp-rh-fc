@@ -1116,7 +1116,8 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
 }
 
 // ─────────────────────────────────────────────────────────────
-// ABA F.D. — Faturamento Direto (materiais)
+// ABA F.D. — Faturamento Direto (materiais — apenas insumos da curva ABC)
+// Regra: apenas materiais. MDO e serviços não entram automaticamente.
 // ─────────────────────────────────────────────────────────────
 function AbaFd({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: number }) {
   const [edits, setEdits] = useState<Record<number, Record<string, string>>>({});
@@ -1126,83 +1127,81 @@ function AbaFd({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: number }) 
   });
 
   const handleBlur = (id: number, field: string, raw: string) => {
-    const n = parseFloat(raw.replace(",", "."));
-    if (isNaN(n)) return;
-    updateMut.mutate({ id, [field]: n } as any);
+    const v = parseFloat(raw.replace(",", "."));
+    if (isNaN(v)) return;
+    updateMut.mutate({ id, [field]: v } as any);
     setEdits(p => { const c = { ...p }; if (c[id]) delete c[id][field]; return c; });
   };
 
-  const setEdit = (id: number, field: string, val: string) =>
+  const setEdit  = (id: number, field: string, val: string) =>
     setEdits(p => ({ ...p, [id]: { ...(p[id] ?? {}), [field]: val } }));
-
-  const getEdit = (id: number, field: string, fallback: any) =>
+  const getEdit  = (id: number, field: string, fallback: any) =>
     edits[id]?.[field] ?? String(fmt(fallback) !== 0 ? fmt(fallback) : "");
 
   const totalFD = linhas.reduce((s, l) => s + fmt(l.total), 0);
+  const inpCls  = "h-5 text-right text-xs font-mono bg-blue-50 border border-blue-200 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-400";
 
   return (
-    <div className="space-y-2">
-      <div className="flex justify-end">
-        <span className="text-sm font-medium text-muted-foreground">
-          Total F.D.: <strong className="text-blue-700">{brl(totalFD)}</strong>
-        </span>
-      </div>
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-blue-700 text-white text-xs uppercase sticky top-0">
-                  <TH className="text-white w-28">Cód. Insumo</TH>
-                  <TH className="text-white">Descrição</TH>
-                  <TH className="text-white w-16">Un</TH>
-                  <TH className="text-white text-right w-28">Qtd Orçada</TH>
-                  <TH className="text-white text-right w-32">Preço Unit</TH>
-                  <TH className="text-white text-right w-36">Total R$</TH>
-                  <TH className="text-white w-40">Fornecedor</TH>
+    <Card>
+      <CardContent className="p-0">
+        {/* Banner total */}
+        <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100 border-b border-slate-200">
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+            Total F.D. — Faturamento Direto (materiais curva ABC)
+          </span>
+          <span className="font-bold font-mono text-sm text-slate-900"
+            style={{ backgroundColor: "#F7F797", padding: "2px 8px", borderRadius: 3 }}>
+            {brl(totalFD)}
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs" style={{ minWidth: 900 }}>
+            <thead>
+              <tr className="bg-slate-700 text-white uppercase sticky top-0 z-10">
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-28">Cód. Insumo</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600" style={{ minWidth: 280 }}>Descrição</th>
+                <th className="px-2 py-1.5 text-center font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-14">Un</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-28">Qtd Orçada</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-32">Preço Unit</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-36">Total R$</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap w-40">Fornecedor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((l: any, idx: number) => (
+                <tr key={l.id ?? idx}
+                  className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
+                  <td className="px-2 py-1 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">{l.codigoInsumo}</td>
+                  <td className="px-2 py-1 text-slate-700 border-r border-slate-100">{l.descricao}</td>
+                  <td className="px-2 py-1 text-center text-slate-500 border-r border-slate-100">{l.unidade}</td>
+                  <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                    <input className={`${inpCls} w-28`}
+                      value={getEdit(l.id, "qtdOrcada", l.qtdOrcada)} placeholder="0"
+                      onChange={e => setEdit(l.id, "qtdOrcada", e.target.value)}
+                      onBlur={() => handleBlur(l.id, "qtdOrcada", edits[l.id]?.qtdOrcada ?? "")}
+                      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                  </td>
+                  <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                    <input className={`${inpCls} w-32`}
+                      value={getEdit(l.id, "precoUnit", l.precoUnit)} placeholder="0"
+                      onChange={e => setEdit(l.id, "precoUnit", e.target.value)}
+                      onBlur={() => handleBlur(l.id, "precoUnit", edits[l.id]?.precoUnit ?? "")}
+                      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono font-semibold text-slate-700 border-r border-slate-100">{brl(l.total)}</td>
+                  <td className="px-2 py-1 text-slate-500 truncate max-w-[160px]">{l.fornecedor}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {linhas.map((l: any, idx: number) => (
-                  <tr key={l.id ?? idx} className={`border-b hover:bg-blue-50/30 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                    <TD className="font-mono text-xs">{l.codigoInsumo}</TD>
-                    <TD className="font-medium">{l.descricao}</TD>
-                    <TD className="text-xs text-muted-foreground">{l.unidade}</TD>
-                    <TD className="text-right">
-                      <Input
-                        className="h-6 w-28 text-right text-xs ml-auto font-mono"
-                        value={getEdit(l.id, "qtdOrcada", l.qtdOrcada)}
-                        placeholder="0"
-                        onChange={e => setEdit(l.id, "qtdOrcada", e.target.value)}
-                        onBlur={() => handleBlur(l.id, "qtdOrcada", edits[l.id]?.qtdOrcada ?? "")}
-                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                      />
-                    </TD>
-                    <TD className="text-right">
-                      <Input
-                        className="h-6 w-32 text-right text-xs ml-auto font-mono"
-                        value={getEdit(l.id, "precoUnit", l.precoUnit)}
-                        placeholder="0"
-                        onChange={e => setEdit(l.id, "precoUnit", e.target.value)}
-                        onBlur={() => handleBlur(l.id, "precoUnit", edits[l.id]?.precoUnit ?? "")}
-                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                      />
-                    </TD>
-                    <TD className="text-right font-mono text-xs font-medium">{brl(l.total)}</TD>
-                    <TD className="text-xs text-muted-foreground truncate max-w-[160px]">{l.fornecedor}</TD>
-                  </tr>
-                ))}
-                <tr className="bg-blue-50 border-t-2 border-blue-200">
-                  <TD colSpan={5} className="font-bold text-right">TOTAL</TD>
-                  <TD className="text-right font-bold font-mono text-blue-700">{brl(totalFD)}</TD>
-                  <TD></TD>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+              ))}
+              <tr className="bg-slate-200 border-t-2 border-slate-400">
+                <td colSpan={5} className="px-3 py-1.5 text-right text-xs font-bold text-slate-700 uppercase">TOTAL F.D.</td>
+                <td className="px-2 py-1.5 text-right font-mono font-bold text-xs text-slate-900" style={{ backgroundColor: "#F7F797" }}>{brl(totalFD)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1217,95 +1216,87 @@ function AbaAdmCentral({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: nu
   });
 
   const handleBlur = (id: number, field: string, raw: string) => {
-    const n = parseFloat(raw.replace(",", "."));
-    if (isNaN(n)) return;
-    updateMut.mutate({ id, [field]: n } as any);
+    const v = parseFloat(raw.replace(",", "."));
+    if (isNaN(v)) return;
+    updateMut.mutate({ id, [field]: v } as any);
     setEdits(p => { const c = { ...p }; if (c[id]) delete c[id][field]; return c; });
   };
 
   const setEdit = (id: number, field: string, val: string) =>
     setEdits(p => ({ ...p, [id]: { ...(p[id] ?? {}), [field]: val } }));
-
   const getEdit = (id: number, field: string, fallback: any) =>
     edits[id]?.[field] ?? String(fmt(fallback) !== 0 ? fmt(fallback) : "");
 
   const totalAdm = linhas.filter(l => !l.isHeader).reduce((s, l) => s + fmt(l.total), 0);
+  const inpCls   = "h-5 text-right text-xs font-mono bg-blue-50 border border-blue-200 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-400";
 
   return (
-    <div className="space-y-2">
-      <div className="flex justify-end">
-        <span className="text-sm text-muted-foreground">
-          Total Adm Central: <strong className="text-blue-700">{brl(totalAdm)}</strong>
-        </span>
-      </div>
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-blue-700 text-white text-xs uppercase sticky top-0">
-                  <TH className="text-white w-20">Código</TH>
-                  <TH className="text-white">Descrição</TH>
-                  <TH className="text-white text-right w-24">Tempo (Obra)</TH>
-                  <TH className="text-white text-right w-28">Base</TH>
-                  <TH className="text-white text-right w-24">Encargos</TH>
-                  <TH className="text-white text-right w-28">Benefícios</TH>
-                  <TH className="text-white text-right w-32">Total</TH>
-                </tr>
-              </thead>
-              <tbody>
-                {linhas.map((l: any, idx: number) => {
-                  if (l.isHeader) return (
-                    <tr key={l.id ?? idx} className="bg-slate-100 border-t-2 border-slate-300">
-                      <TD className="font-bold font-mono text-xs">{l.codigo}</TD>
-                      <TD colSpan={6} className="font-bold uppercase tracking-wide text-slate-700">{l.descricao}</TD>
-                    </tr>
-                  );
-                  return (
-                    <tr key={l.id ?? idx} className={`border-b hover:bg-blue-50/30 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                      <TD className="font-mono text-xs text-muted-foreground">{l.codigo}</TD>
-                      <TD>{l.descricao}</TD>
-                      <TD className="text-right font-mono text-xs">{num(l.tempoObra)}</TD>
-                      <TD className="text-right">
-                        <Input
-                          className="h-6 w-28 text-right text-xs ml-auto font-mono"
-                          value={getEdit(l.id, "base", l.base)}
-                          placeholder="0"
-                          onChange={e => setEdit(l.id, "base", e.target.value)}
-                          onBlur={() => handleBlur(l.id, "base", edits[l.id]?.base ?? "")}
-                          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        />
-                      </TD>
-                      <TD className="text-right">
-                        <Input
-                          className="h-6 w-24 text-right text-xs ml-auto font-mono"
-                          value={getEdit(l.id, "encargos", l.encargos)}
-                          placeholder="0"
-                          onChange={e => setEdit(l.id, "encargos", e.target.value)}
-                          onBlur={() => handleBlur(l.id, "encargos", edits[l.id]?.encargos ?? "")}
-                          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        />
-                      </TD>
-                      <TD className="text-right">
-                        <Input
-                          className="h-6 w-28 text-right text-xs ml-auto font-mono"
-                          value={getEdit(l.id, "beneficios", l.beneficios)}
-                          placeholder="0"
-                          onChange={e => setEdit(l.id, "beneficios", e.target.value)}
-                          onBlur={() => handleBlur(l.id, "beneficios", edits[l.id]?.beneficios ?? "")}
-                          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        />
-                      </TD>
-                      <TD className="text-right font-mono text-xs font-medium">{brl(l.total)}</TD>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100 border-b border-slate-200">
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Administração Central</span>
+          <span className="font-bold font-mono text-sm text-slate-900"
+            style={{ backgroundColor: "#F7F797", padding: "2px 8px", borderRadius: 3 }}>
+            {brl(totalAdm)}
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs" style={{ minWidth: 800 }}>
+            <thead>
+              <tr className="bg-slate-700 text-white uppercase sticky top-0 z-10">
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide border-r border-slate-600 w-20">Código</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide border-r border-slate-600" style={{ minWidth: 240 }}>Descrição</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide border-r border-slate-600 w-24">Tempo (Obra)</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide border-r border-slate-600 w-28">Base</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide border-r border-slate-600 w-24">Encargos</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide border-r border-slate-600 w-28">Benefícios</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide w-32">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((l: any, idx: number) => {
+                if (l.isHeader) return (
+                  <tr key={l.id ?? idx} className="bg-slate-700 text-white border-t-2 border-slate-500">
+                    <td className="px-2 py-1 font-bold font-mono text-xs border-r border-slate-600">{l.codigo}</td>
+                    <td colSpan={6} className="px-2 py-1 font-bold text-xs uppercase tracking-wider">{l.descricao}</td>
+                  </tr>
+                );
+                return (
+                  <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
+                    <td className="px-2 py-1 font-mono text-slate-400 border-r border-slate-100 whitespace-nowrap">{l.codigo}</td>
+                    <td className="px-2 py-1 text-slate-700 border-r border-slate-100">{l.descricao}</td>
+                    <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100">{num(l.tempoObra)}</td>
+                    <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                      <input className={`${inpCls} w-28`} value={getEdit(l.id, "base", l.base)} placeholder="0"
+                        onChange={e => setEdit(l.id, "base", e.target.value)}
+                        onBlur={() => handleBlur(l.id, "base", edits[l.id]?.base ?? "")}
+                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                    </td>
+                    <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                      <input className={`${inpCls} w-24`} value={getEdit(l.id, "encargos", l.encargos)} placeholder="0"
+                        onChange={e => setEdit(l.id, "encargos", e.target.value)}
+                        onBlur={() => handleBlur(l.id, "encargos", edits[l.id]?.encargos ?? "")}
+                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                    </td>
+                    <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                      <input className={`${inpCls} w-28`} value={getEdit(l.id, "beneficios", l.beneficios)} placeholder="0"
+                        onChange={e => setEdit(l.id, "beneficios", e.target.value)}
+                        onBlur={() => handleBlur(l.id, "beneficios", edits[l.id]?.beneficios ?? "")}
+                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono font-semibold text-slate-700">{brl(l.total)}</td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-slate-200 border-t-2 border-slate-400">
+                <td colSpan={6} className="px-3 py-1.5 text-right text-xs font-bold text-slate-700 uppercase">TOTAL ADM CENTRAL</td>
+                <td className="px-2 py-1.5 text-right font-mono font-bold text-xs text-slate-900" style={{ backgroundColor: "#F7F797" }}>{brl(totalAdm)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1320,45 +1311,46 @@ function AbaDespesasFinanceiras({ linhas, orcamentoId }: { linhas: any[]; orcame
   });
 
   const handleBlur = (id: number, raw: string) => {
-    const n = parseFloat(raw.replace(",", "."));
-    if (isNaN(n)) return;
-    updateMut.mutate({ id, valor: n });
+    const v = parseFloat(raw.replace(",", "."));
+    if (isNaN(v)) return;
+    updateMut.mutate({ id, valor: v });
     setEdits(p => { const c = { ...p }; delete c[id]; return c; });
   };
+
+  const inpCls = "h-5 text-right text-xs font-mono bg-blue-50 border border-blue-200 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-400";
 
   return (
     <Card>
       <CardContent className="p-0">
+        <div className="flex items-center px-4 py-1.5 bg-slate-100 border-b border-slate-200">
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Despesas Financeiras</span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full border-collapse text-xs" style={{ minWidth: 640 }}>
             <thead>
-              <tr className="bg-blue-700 text-white text-xs uppercase sticky top-0">
-                <TH className="text-white w-20">Código</TH>
-                <TH className="text-white">Descrição</TH>
-                <TH className="text-white text-right w-36">Valor</TH>
-                <TH className="text-white w-24">Unidade</TH>
+              <tr className="bg-slate-700 text-white uppercase sticky top-0 z-10">
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide border-r border-slate-600 w-20">Código</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide border-r border-slate-600">Descrição</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide border-r border-slate-600 w-40">Valor</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide w-24">Unidade</th>
               </tr>
             </thead>
             <tbody>
               {linhas.map((l: any, idx: number) => (
-                <tr key={l.id ?? idx} className={`border-b hover:bg-blue-50/30 ${l.isHeader ? "bg-slate-100 font-semibold" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                  <TD className="font-mono text-xs text-muted-foreground">{l.codigo}</TD>
-                  <TD>{l.descricao}</TD>
-                  <TD className="text-right">
-                    {l.isHeader ? (
-                      <span className="font-mono text-xs">{num(l.valor, 6)}</span>
-                    ) : (
-                      <Input
-                        className="h-6 w-36 text-right text-xs ml-auto font-mono"
-                        value={edits[l.id] ?? (fmt(l.valor) !== 0 ? String(fmt(l.valor)) : "")}
-                        placeholder="0"
-                        onChange={e => setEdits(p => ({ ...p, [l.id]: e.target.value }))}
-                        onBlur={() => handleBlur(l.id, edits[l.id] ?? "")}
-                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                      />
-                    )}
-                  </TD>
-                  <TD className="text-xs text-muted-foreground">{l.unidade}</TD>
+                <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${
+                  l.isHeader ? "bg-slate-700 text-white" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
+                  <td className={`px-2 py-1 font-mono border-r border-slate-${l.isHeader ? '600' : '100'} whitespace-nowrap ${l.isHeader ? "text-white" : "text-slate-400"}`}>{l.codigo}</td>
+                  <td className={`px-2 py-1 border-r border-slate-${l.isHeader ? '600' : '100'} ${l.isHeader ? "font-bold text-white uppercase tracking-wide" : "text-slate-700"}`}>{l.descricao}</td>
+                  <td className={`px-1 py-0.5 text-right border-r border-slate-${l.isHeader ? '600' : '100'}`}>
+                    {l.isHeader
+                      ? <span className="font-mono text-white font-bold px-2">{num(l.valor, 6)}</span>
+                      : <input className={`${inpCls} w-36`}
+                          value={edits[l.id] ?? (fmt(l.valor) !== 0 ? String(fmt(l.valor)) : "")} placeholder="0"
+                          onChange={e => setEdits(p => ({ ...p, [l.id]: e.target.value }))}
+                          onBlur={() => handleBlur(l.id, edits[l.id] ?? "")}
+                          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />}
+                  </td>
+                  <td className={`px-2 py-1 ${l.isHeader ? "text-slate-300" : "text-slate-500"}`}>{l.unidade}</td>
                 </tr>
               ))}
             </tbody>
@@ -1380,67 +1372,67 @@ function AbaTributos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: numb
   });
 
   const handleBlur = (id: number, raw: string) => {
-    const n = parseFloat(raw.replace(",", ".")) / 100;
-    if (isNaN(n)) return;
-    updateMut.mutate({ id, aliquota: n });
+    const v = parseFloat(raw.replace(",", ".")) / 100;
+    if (isNaN(v)) return;
+    updateMut.mutate({ id, aliquota: v });
     setEdits(p => { const c = { ...p }; delete c[id]; return c; });
   };
 
   const totalAliq = linhas.filter(l => !l.isHeader && l.codigo !== 'Σ').reduce((s, l) => s + fmt(l.aliquota), 0);
+  const inpCls    = "h-5 text-right text-xs font-mono bg-blue-50 border border-blue-200 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-400";
 
   return (
-    <div className="space-y-2">
-      <div className="flex justify-end text-sm text-muted-foreground">
-        Total alíquota: <strong className="text-blue-700 ml-1">{(totalAliq * 100).toFixed(4)}%</strong>
-      </div>
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-blue-700 text-white text-xs uppercase sticky top-0">
-                  <TH className="text-white w-20">Código</TH>
-                  <TH className="text-white">Descrição</TH>
-                  <TH className="text-white w-40">Base Cálculo</TH>
-                  <TH className="text-white text-right w-32">Alíquota (%)</TH>
-                  <TH className="text-white text-right w-32">Valor Calc.</TH>
-                </tr>
-              </thead>
-              <tbody>
-                {linhas.map((l: any, idx: number) => {
-                  if (l.isHeader) return (
-                    <tr key={l.id ?? idx} className="bg-blue-50 border-t-2 border-blue-200">
-                      <TD className="font-bold font-mono text-xs">{l.codigo}</TD>
-                      <TD colSpan={2} className="font-bold text-blue-800">{l.descricao}</TD>
-                      <TD className="text-right font-bold font-mono text-blue-800">{pct(l.aliquota)}</TD>
-                      <TD></TD>
-                    </tr>
-                  );
-                  return (
-                    <tr key={l.id ?? idx} className={`border-b hover:bg-blue-50/30 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                      <TD className="font-mono text-xs text-muted-foreground">{l.codigo}</TD>
-                      <TD>{l.descricao}</TD>
-                      <TD className="text-xs text-muted-foreground">{l.baseCalculo}</TD>
-                      <TD className="text-right">
-                        <Input
-                          className="h-6 w-28 text-right text-xs ml-auto font-mono"
-                          value={edits[l.id] ?? (fmt(l.aliquota) !== 0 ? (fmt(l.aliquota) * 100).toFixed(4) : "")}
-                          placeholder="0.0000"
-                          onChange={e => setEdits(p => ({ ...p, [l.id]: e.target.value }))}
-                          onBlur={() => handleBlur(l.id, edits[l.id] ?? "")}
-                          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        />
-                      </TD>
-                      <TD className="text-right font-mono text-xs">{fmt(l.valorCalculado) !== 0 ? brl(l.valorCalculado) : "—"}</TD>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100 border-b border-slate-200">
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Tributos Fiscais</span>
+          <span className="font-bold font-mono text-sm text-slate-900"
+            style={{ backgroundColor: "#F7F797", padding: "2px 8px", borderRadius: 3 }}>
+            {(totalAliq * 100).toFixed(4)}%
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs" style={{ minWidth: 680 }}>
+            <thead>
+              <tr className="bg-slate-700 text-white uppercase sticky top-0 z-10">
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide border-r border-slate-600 w-20">Código</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide border-r border-slate-600">Descrição</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide border-r border-slate-600 w-40">Base Cálculo</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide border-r border-slate-600 w-32">Alíquota (%)</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide w-32">Valor Calc.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((l: any, idx: number) => {
+                if (l.isHeader) return (
+                  <tr key={l.id ?? idx} className="bg-slate-700 text-white border-t-2 border-slate-500">
+                    <td className="px-2 py-1 font-bold font-mono border-r border-slate-600">{l.codigo}</td>
+                    <td colSpan={2} className="px-2 py-1 font-bold uppercase tracking-wider border-r border-slate-600">{l.descricao}</td>
+                    <td className="px-2 py-1 text-right font-bold font-mono border-r border-slate-600">{pct(l.aliquota)}</td>
+                    <td></td>
+                  </tr>
+                );
+                return (
+                  <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
+                    <td className="px-2 py-1 font-mono text-slate-400 border-r border-slate-100 whitespace-nowrap">{l.codigo}</td>
+                    <td className="px-2 py-1 text-slate-700 border-r border-slate-100">{l.descricao}</td>
+                    <td className="px-2 py-1 text-slate-500 border-r border-slate-100">{l.baseCalculo}</td>
+                    <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                      <input className={`${inpCls} w-28`}
+                        value={edits[l.id] ?? (fmt(l.aliquota) !== 0 ? (fmt(l.aliquota) * 100).toFixed(4) : "")} placeholder="0.0000"
+                        onChange={e => setEdits(p => ({ ...p, [l.id]: e.target.value }))}
+                        onBlur={() => handleBlur(l.id, edits[l.id] ?? "")}
+                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono text-slate-700">{fmt(l.valorCalculado) !== 0 ? brl(l.valorCalculado) : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1455,41 +1447,46 @@ function AbaTaxaComercializacao({ linhas, orcamentoId }: { linhas: any[]; orcame
   });
 
   const handleBlur = (id: number, raw: string) => {
-    const n = parseFloat(raw.replace(",", ".")) / 100;
-    if (isNaN(n)) return;
-    updateMut.mutate({ id, percentual: n });
+    const v = parseFloat(raw.replace(",", ".")) / 100;
+    if (isNaN(v)) return;
+    updateMut.mutate({ id, percentual: v });
     setEdits(p => { const c = { ...p }; delete c[id]; return c; });
   };
+
+  const inpCls = "h-5 text-right text-xs font-mono bg-blue-50 border border-blue-200 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-400";
 
   return (
     <Card>
       <CardContent className="p-0">
+        <div className="flex items-center px-4 py-1.5 bg-slate-100 border-b border-slate-200">
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Taxa de Comercialização</span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full border-collapse text-xs" style={{ minWidth: 580 }}>
             <thead>
-              <tr className="bg-blue-700 text-white text-xs uppercase sticky top-0">
-                <TH className="text-white w-20">Código</TH>
-                <TH className="text-white">Descrição</TH>
-                <TH className="text-white text-right w-32">% Taxa</TH>
-                <TH className="text-white text-right w-36">Valor R$</TH>
+              <tr className="bg-slate-700 text-white uppercase sticky top-0 z-10">
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide border-r border-slate-600 w-20">Código</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide border-r border-slate-600">Descrição</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide border-r border-slate-600 w-32">% Taxa</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide w-36">Valor R$</th>
               </tr>
             </thead>
             <tbody>
               {linhas.map((l: any, idx: number) => (
-                <tr key={l.id ?? idx} className={`border-b hover:bg-blue-50/30 ${l.isHeader ? "bg-slate-100 font-semibold" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                  <TD className="font-mono text-xs text-muted-foreground">{l.codigo}</TD>
-                  <TD>{l.descricao}</TD>
-                  <TD className="text-right">
-                    <Input
-                      className="h-6 w-28 text-right text-xs ml-auto font-mono"
-                      value={edits[l.id] ?? (fmt(l.percentual) !== 0 ? (fmt(l.percentual) * 100).toFixed(4) : "")}
-                      placeholder="0.0000"
-                      onChange={e => setEdits(p => ({ ...p, [l.id]: e.target.value }))}
-                      onBlur={() => handleBlur(l.id, edits[l.id] ?? "")}
-                      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                    />
-                  </TD>
-                  <TD className="text-right font-mono text-xs">{fmt(l.valor) !== 0 ? brl(l.valor) : "—"}</TD>
+                <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${
+                  l.isHeader ? "bg-slate-700 text-white" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
+                  <td className={`px-2 py-1 font-mono border-r border-slate-${l.isHeader ? '600' : '100'} whitespace-nowrap ${l.isHeader ? "text-white" : "text-slate-400"}`}>{l.codigo}</td>
+                  <td className={`px-2 py-1 border-r border-slate-${l.isHeader ? '600' : '100'} ${l.isHeader ? "font-bold uppercase tracking-wider text-white" : "text-slate-700"}`}>{l.descricao}</td>
+                  <td className={`px-1 py-0.5 text-right border-r border-slate-${l.isHeader ? '600' : '100'}`}>
+                    {l.isHeader
+                      ? <span className="font-mono text-white font-bold px-2">{pct(l.percentual)}</span>
+                      : <input className={`${inpCls} w-28`}
+                          value={edits[l.id] ?? (fmt(l.percentual) !== 0 ? (fmt(l.percentual) * 100).toFixed(4) : "")} placeholder="0.0000"
+                          onChange={e => setEdits(p => ({ ...p, [l.id]: e.target.value }))}
+                          onBlur={() => handleBlur(l.id, edits[l.id] ?? "")}
+                          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />}
+                  </td>
+                  <td className={`px-2 py-1 text-right font-mono ${l.isHeader ? "text-white font-bold" : "text-slate-700"}`}>{fmt(l.valor) !== 0 ? brl(l.valor) : "—"}</td>
                 </tr>
               ))}
             </tbody>
