@@ -1865,6 +1865,29 @@ export const orcamentoRouter = router({
       return { ok: true };
     }),
 
+  // ── Lista todos os insumos de todas as composições do catálogo ─
+  listarComposicaoInsumosCatalogo: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select({
+        id:               composicaoInsumos.id,
+        composicaoCodigo: composicaoInsumos.composicaoCodigo,
+        insumoCodigo:     composicaoInsumos.insumoCodigo,
+        insumoDescricao:  composicaoInsumos.insumoDescricao,
+        unidade:          composicaoInsumos.unidade,
+        quantidade:       composicaoInsumos.quantidade,
+        precoUnitario:    composicaoInsumos.precoUnitario,
+        alocacaoMat:      composicaoInsumos.alocacaoMat,
+        alocacaoMdo:      composicaoInsumos.alocacaoMdo,
+        custoUnitTotal:   composicaoInsumos.custoUnitTotal,
+      })
+        .from(composicaoInsumos)
+        .where(eq(composicaoInsumos.companyId, input.companyId))
+        .orderBy(composicaoInsumos.composicaoCodigo, composicaoInsumos.id);
+    }),
+
   // ── Composições com insumos de um orçamento ───────────────────
   // Busca as composições (CPUs) usadas nos itens folha deste orçamento,
   // junto com seus insumos detalhados do catálogo da empresa.
