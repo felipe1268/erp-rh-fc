@@ -410,7 +410,7 @@ function ParamInput({
 
 // ABA INDIRETOS — quadro de mão de obra indireta por seção CI
 // ─────────────────────────────────────────────────────────────
-function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: number }) {
+function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; orcamentoId: number; refetchLinhas?: () => void }) {
   const [edits, setEdits] = useState<Record<number, Record<string, string>>>({});
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -419,8 +419,16 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
     { enabled: orcamentoId > 0 }
   );
 
+  const recalcular = trpc.orcamento.recalcularBdiCI01.useMutation({
+    onSuccess: (r) => {
+      toast.success(`${(r as any).updated} linhas CI-01 recalculadas`);
+      refetchLinhas?.();
+    },
+    onError: e => toast.error(e.message || "Erro ao recalcular"),
+  });
+
   const updateParams = trpc.orcamento.updateBdiOrcamentoParams.useMutation({
-    onSuccess: () => refetchParams(),
+    onSuccess: () => { refetchParams(); refetchLinhas?.(); },
     onError: e => toast.error(e.message || "Erro ao salvar parâmetro"),
   });
 
@@ -437,13 +445,16 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
   const dataFim = addMonths(params?.data_inicio, mesesObra);
 
   const updateMut = trpc.orcamento.updateBdiIndiretosLinha.useMutation({
+    onSuccess: () => refetchLinhas?.(),
     onError: e => toast.error(e.message || "Erro ao salvar"),
   });
 
   const handleBlur = (id: number, field: string, raw: string) => {
-    const n = parseFloat(raw.replace(",", "."));
-    if (isNaN(n)) return;
-    updateMut.mutate({ id, [field]: n } as any);
+    const parsed = parseFloat(raw.replace(",", "."));
+    if (isNaN(parsed)) return;
+    // TX Transferência: user enters percentage (ex: 10), saved as fraction (0.10)
+    const value = field === "txTransferencia" ? parsed / 100 : parsed;
+    updateMut.mutate({ id, [field]: value } as any);
     setEdits(p => { const c = { ...p }; if (c[id]) delete c[id][field]; return c; });
   };
 
@@ -481,8 +492,8 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
     );
   };
 
-  // 13 colunas: chevron | cod | descrição | modalidade | tipo | qtd | meses | salário | bônus | 13°+férias | val/h | total/mês | total/obra
-  const COLS = 13;
+  // 14 colunas: chevron | cod | descrição | modalidade | tipo | qtd | meses | salário | bônus | TX.Transf | 13°+férias | val/h | total/mês | total/obra
+  const COLS = 14;
 
   // ── helpers de formatação para os quadros ──────────────────
   const fmtPct = (v: any, d = 0) => {
@@ -840,7 +851,17 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
 
         {/* Grand total banner */}
         <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100 border-b border-slate-200">
-          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Total Geral de Custos Indiretos</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Total Geral de Custos Indiretos</span>
+            <button
+              onClick={() => recalcular.mutate({ orcamentoId })}
+              disabled={recalcular.isLoading}
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded transition-colors disabled:opacity-60"
+              title="Recalcula CLT/PJ usando os parâmetros atuais (dissídio, prazo, TX transferência)"
+            >
+              {recalcular.isLoading ? "..." : "⟳ Recalcular CI-01"}
+            </button>
+          </div>
           <span className="font-bold font-mono text-sm text-slate-900" style={{ backgroundColor: "#F7F797", padding: "2px 8px", borderRadius: 3 }}>
             {brl(totalGeral)}
           </span>
@@ -852,13 +873,14 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
                 <th className="w-7 px-1 py-1.5 border-r border-slate-600"></th>
                 <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-14">Cód.</th>
                 <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600" style={{ minWidth: 220 }}>Cargo / Função</th>
-                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-24">Modalidade</th>
-                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-20">Tipo</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-24">Equipe</th>
+                <th className="px-2 py-1.5 text-center font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-20">Tipo</th>
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-16">Qtd</th>
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-12">Meses</th>
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-28">Salário Base</th>
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-24">Bônus Mensal</th>
-                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-24">13°+Férias</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-20" title="Taxa de Transferência de Base">TX.Transf %</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-28" title="CLT: incluso nos encargos | PJ: 13°+Férias proporcionais">13°+Férias</th>
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-20">Valor/h</th>
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-28">Total/Mês</th>
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap w-28 border-l border-slate-600">Total/Obra</th>
@@ -881,7 +903,7 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
                         {open ? <ChevronDown className="h-3.5 w-3.5 inline" /> : <ChevronRight className="h-3.5 w-3.5 inline" />}
                       </td>
                       <td className="px-2 py-1.5 font-bold font-mono text-xs border-r border-slate-500">{l.codigo}</td>
-                      <td colSpan={9} className="px-2 py-1.5 font-bold text-xs uppercase tracking-wider border-r border-slate-500">
+                      <td colSpan={10} className="px-2 py-1.5 font-bold text-xs uppercase tracking-wider border-r border-slate-500">
                         {l.descricao}
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono font-bold text-xs border-r border-slate-500">
@@ -913,19 +935,34 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
                 const isEven = idx % 2 === 0;
                 const hasTotal = fmt(l.totalObra) !== 0;
                 const hasMes   = fmt(l.totalMes) !== 0;
+                const isCLT    = String(l.tipoContrato ?? '').toLowerCase() === 'clt';
+                const isPJ     = String(l.tipoContrato ?? '').toLowerCase() === 'contrato';
+                const isCI01   = l.secao === 'CI-01';
 
                 return (
                   <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${isEven ? "bg-white" : "bg-slate-50/60"}`}>
                     <td className="border-r border-slate-100"></td>
                     <td className="px-2 py-1 font-mono text-xs text-slate-500 border-r border-slate-100 whitespace-nowrap">{l.codigo}</td>
                     <td className="px-2 py-1 text-slate-700 border-r border-slate-100">{l.descricao}</td>
-                    <td className="px-2 py-1 text-slate-500 border-r border-slate-100 whitespace-nowrap">{l.modalidade}</td>
-                    <td className="px-2 py-1 text-slate-400 border-r border-slate-100 whitespace-nowrap">{l.tipoContrato}</td>
+                    {/* Equipe (Produção/Supervisão/Coordenação) */}
+                    <td className="px-2 py-1 text-xs text-slate-500 border-r border-slate-100 whitespace-nowrap">{l.modalidade}</td>
+                    {/* Tipo contrato — CLT verde, Contrato azul */}
+                    <td className="px-2 py-0.5 text-center border-r border-slate-100 whitespace-nowrap">
+                      {isCLT && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">CLT</span>
+                      )}
+                      {isPJ && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">PJ</span>
+                      )}
+                      {!isCLT && !isPJ && (
+                        <span className="text-slate-400 text-xs">{l.tipoContrato || "—"}</span>
+                      )}
+                    </td>
                     {/* Qtd — editável */}
                     <td className="px-1 py-0.5 text-right border-r border-slate-100">
                       <Inp id={l.id} field="quantidade" val={l.quantidade} w="w-14" />
                     </td>
-                    {/* Meses — read-only */}
+                    {/* Meses — read-only (vem dos params) */}
                     <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100">
                       {fmt(l.mesesObra) !== 0 ? num(l.mesesObra, 0) : "—"}
                     </td>
@@ -937,9 +974,17 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
                     <td className="px-1 py-0.5 text-right border-r border-slate-100">
                       <Inp id={l.id} field="bonusMensal" val={l.bonusMensal} w="w-24" money />
                     </td>
-                    {/* 13°+Férias — calculado, read-only */}
-                    <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100">
-                      {fmt(l.decimoTerceiroFerias) !== 0 ? brl(l.decimoTerceiroFerias) : "—"}
+                    {/* TX Transferência — editável em %, somente CI-01 CLT/PJ */}
+                    <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                      {isCI01 && (isCLT || isPJ) ? (
+                        <Inp id={l.id} field="txTransferencia" val={fmt(l.txTransferencia) * 100} w="w-16" />
+                      ) : <span className="text-slate-300 text-xs">—</span>}
+                    </td>
+                    {/* 13°+Férias — CLT: "encargos" (não soma separado) | PJ: valor calculado */}
+                    <td className={`px-2 py-1 text-right font-mono border-r border-slate-100 ${isCLT ? "text-slate-400 italic" : "text-slate-700"}`}>
+                      {isCI01 && isCLT
+                        ? <span className="text-[10px] text-slate-400 italic" title="CLT: já incluso nos encargos sociais (49,42%)">nos encargos</span>
+                        : (fmt(l.decimoTerceiroFerias) !== 0 ? brl(l.decimoTerceiroFerias) : "—")}
                     </td>
                     {/* Valor/h — calculado, read-only */}
                     <td className="px-2 py-1 text-right font-mono text-slate-500 border-r border-slate-100">
@@ -949,7 +994,7 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
                     <td className="px-2 py-1 text-right font-mono text-slate-700 border-r border-slate-100">
                       {hasMes ? brl(l.totalMes) : "—"}
                     </td>
-                    {/* Total/Obra — sem amarelo nas linhas normais */}
+                    {/* Total/Obra */}
                     <td className="px-2 py-1 text-right font-mono font-semibold text-slate-700 border-l border-slate-100">
                       {hasTotal ? brl(l.totalObra) : "—"}
                     </td>
@@ -1482,7 +1527,7 @@ export default function BdiView({ orcamentoId, bdiPct, aplicarBdiMutation, onImp
 
       {/* Conteúdo da aba ativa */}
       {activeTab === "bdi" && <AbaBdi linhas={bdiValidas} />}
-      {activeTab === "indiretos" && counts.indiretos > 0 && <AbaIndiretos linhas={det?.indiretos ?? []} orcamentoId={orcamentoId} />}
+      {activeTab === "indiretos" && counts.indiretos > 0 && <AbaIndiretos linhas={det?.indiretos ?? []} orcamentoId={orcamentoId} refetchLinhas={refetch} />}
       {activeTab === "fd"        && counts.fd        > 0 && <AbaFd linhas={det?.fd ?? []} orcamentoId={orcamentoId} />}
       {activeTab === "adm"       && counts.adm       > 0 && <AbaAdmCentral linhas={det?.adm ?? []} orcamentoId={orcamentoId} />}
       {activeTab === "despFinanc" && counts.despFinanc > 0 && <AbaDespesasFinanceiras linhas={det?.despFinanc ?? []} orcamentoId={orcamentoId} />}

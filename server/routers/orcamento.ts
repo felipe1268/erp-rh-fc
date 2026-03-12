@@ -81,6 +81,85 @@ function fix4(v: number): string { return v.toFixed(4); }
 function fix6(v: number): string { return v.toFixed(6); }
 
 // ============================================================
+// CÁLCULO CI-01 — CLT vs Contrato (PJ)
+// Encargos sociais CLT fixos conforme planilha Excel (AA8:AA13)
+// ============================================================
+const ENCARGOS_CLT = {
+  decimoTerceiro: 1 / 12,                   // 8.33%  (Art. 142 §5 CLT)
+  ferias:         (1 + 1 / 3) / 12,         // 11.11% (Art. 142 §5 CLT)
+  avisoPrevio:    7 / 30 / 12,              // 1.94%  (Lei 605/49)
+  fgts:           0.08,                      // 8.00%  (Súmula 63 TST)
+  multaFgts:      0.4 * 0.08,               // 3.20%  (Súmula 63 TST)
+  dsr:            0.168316831683168,         // 16.83% (Lei 605/49)
+} as const;
+const TOTAL_ENCARGOS_CLT = Object.values(ENCARGOS_CLT).reduce((a, b) => a + b, 0); // ~49.42%
+
+interface CI01Params {
+  tempoObraMeses:         number; // prazo + eventual_atraso
+  dissidioPct:            number; // ex: 0.05 = 5%
+  incidenciaDissidioMeses: number; // meses do dissídio que incidem na obra
+}
+
+interface CI01Row {
+  salarioBase:     number;
+  bonusMensal:     number;
+  quantidade:      number;
+  tipoContrato:    string; // 'CLT' ou 'Contrato'
+  txTransferencia: number; // ex: 0.10 = 10%
+}
+
+interface CI01Resultado {
+  valorHora:            number;
+  decimoTerceiroFerias: number;
+  totalMes:             number;
+  totalObra:            number;
+  mesesObra:            number;
+}
+
+function calcCI01Linha(row: CI01Row, params: CI01Params): CI01Resultado {
+  const sal    = row.salarioBase;
+  const bonus  = row.bonusMensal;
+  const qtd    = row.quantidade;
+  const meses  = params.tempoObraMeses;
+  const txTr   = row.txTransferencia;
+  const isCLT  = row.tipoContrato?.toLowerCase() === 'clt';
+
+  if (sal === 0 || qtd === 0 || meses === 0) {
+    return { valorHora: 0, decimoTerceiroFerias: 0, totalMes: 0, totalObra: 0, mesesObra: meses };
+  }
+
+  // 1. Valor hora base (com ou sem encargos CLT)
+  let vhBase = sal / 220;
+  if (isCLT) vhBase = vhBase * (1 + TOTAL_ENCARGOS_CLT);
+
+  // 2. Com taxa de transferência de base
+  const vhTransf = vhBase * (1 + txTr);
+
+  // 3. Com dissídio coletivo (proporcional aos meses que incidem)
+  const dissidioFator = meses > 0
+    ? (params.incidenciaDissidioMeses / meses) * params.dissidioPct
+    : 0;
+  const valorHora = vhTransf * (1 + dissidioFator);
+
+  // 4. 13°+Férias — só para Contrato (PJ); CLT já tem nos encargos
+  const decimoTerceiroFerias = isCLT ? 0 : meses * (sal / 12) * 2;
+
+  // 5. Total mensal e da obra
+  // CLT: custo mensal = valor_hora × 220h + bônus
+  // PJ:  custo mensal = valor_hora × 220h + bônus + 13°+Férias proporcionais
+  const totalMes = valorHora * 220 + bonus + (isCLT ? 0 : decimoTerceiroFerias / meses);
+  const totalObra = totalMes * meses * qtd;
+
+  return {
+    valorHora:            Math.round(valorHora * 1e6) / 1e6,
+    decimoTerceiroFerias: Math.round(decimoTerceiroFerias * 100) / 100,
+    totalMes:             Math.round(totalMes * 100) / 100,
+    totalObra:            Math.round(totalObra * 100) / 100,
+    mesesObra:            meses,
+  };
+}
+
+// ============================================================
 // PROPAGAÇÃO: quando o preço de um insumo é alterado,
 // atualiza precoUnitario e custoUnitTotal em TODAS as
 // composicao_insumos que referenciam aquele insumo.
@@ -1805,24 +1884,150 @@ export const orcamentoRouter = router({
       }
       if (sets.length > 0)
         await db.execute(`UPDATE orcamentos SET ${sets.join(', ')}, updated_at = NOW() WHERE id = ${orcamentoId}`);
+
+      // Recalcular CI-01 automaticamente quando parâmetros mudam
+      const pRows = await db.execute(
+        `SELECT "tempoObraMeses", eventual_atraso_meses, dissidio_pct, incidencia_dissidio_meses
+         FROM orcamentos WHERE id = ${orcamentoId} LIMIT 1`
+      );
+      const p = (pRows.rows?.[0] ?? (pRows as any)[0]) as any;
+      if (p) {
+        const params: CI01Params = {
+          tempoObraMeses:          (n(p.tempoObraMeses) || 0) + n(p.eventual_atraso_meses),
+          dissidioPct:             n(p.dissidio_pct),
+          incidenciaDissidioMeses: n(p.incidencia_dissidio_meses),
+        };
+        const linhas = await db.select().from(bdiIndiretos).where(eq(bdiIndiretos.orcamentoId, orcamentoId));
+        for (const row of linhas) {
+          if (!row.secao || row.secao !== 'CI-01') continue;
+          if (!row.tipoContrato || row.tipoContrato === 'SUBHDR' || row.isHeader) continue;
+          const rowData: CI01Row = {
+            salarioBase:     n(row.salarioBase),
+            bonusMensal:     n(row.bonusMensal),
+            quantidade:      n(row.quantidade),
+            tipoContrato:    row.tipoContrato ?? '',
+            txTransferencia: n(row.txTransferencia ?? '0'),
+          };
+          const calc = calcCI01Linha(rowData, params);
+          await db.update(bdiIndiretos).set({
+            valorHora:            fix6(calc.valorHora),
+            decimoTerceiroFerias: fix2(calc.decimoTerceiroFerias),
+            totalMes:             fix2(calc.totalMes),
+            totalObra:            fix2(calc.totalObra),
+            mesesObra:            String(calc.mesesObra),
+          }).where(eq(bdiIndiretos.id, row.id));
+        }
+      }
+
       return { success: true };
     }),
 
   // ── Update endpoints — cada sub-aba tem o seu ──────────────────
   updateBdiIndiretosLinha: protectedProcedure
-    .input(z.object({ id: z.number(), quantidade: z.number().optional(), salarioBase: z.number().optional(), bonusMensal: z.number().optional(), decimoTerceiroFerias: z.number().optional() }))
+    .input(z.object({
+      id:                   z.number(),
+      quantidade:           z.number().optional(),
+      salarioBase:          z.number().optional(),
+      bonusMensal:          z.number().optional(),
+      txTransferencia:      z.number().optional(),
+      decimoTerceiroFerias: z.number().optional(),
+    }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
-      const { id, quantidade, salarioBase, bonusMensal, decimoTerceiroFerias } = input;
+      const { id, quantidade, salarioBase, bonusMensal, txTransferencia } = input;
       const upd: any = {};
-      if (quantidade              !== undefined) upd.quantidade              = fix2(quantidade);
-      if (salarioBase             !== undefined) upd.salarioBase             = fix2(salarioBase);
-      if (bonusMensal             !== undefined) upd.bonusMensal             = fix2(bonusMensal);
-      if (decimoTerceiroFerias    !== undefined) upd.decimoTerceiroFerias    = fix2(decimoTerceiroFerias);
-      if (Object.keys(upd).length > 0)
-        await db.update(bdiIndiretos).set(upd).where(eq(bdiIndiretos.id, id));
+      if (quantidade         !== undefined) upd.quantidade         = fix2(quantidade);
+      if (salarioBase        !== undefined) upd.salarioBase        = fix2(salarioBase);
+      if (bonusMensal        !== undefined) upd.bonusMensal        = fix2(bonusMensal);
+      if (txTransferencia    !== undefined) upd.txTransferencia    = fix6(txTransferencia);
+      if (Object.keys(upd).length === 0) return { success: true };
+      await db.update(bdiIndiretos).set(upd).where(eq(bdiIndiretos.id, id));
+
+      // Após salvar, recalcular valores derivados se for CI-01
+      const [row] = await db.select().from(bdiIndiretos).where(eq(bdiIndiretos.id, id));
+      if (row && row.secao === 'CI-01' && row.tipoContrato && row.tipoContrato !== 'SUBHDR') {
+        // Buscar parâmetros do orçamento
+        const pRows = await db.execute(
+          `SELECT "tempoObraMeses", eventual_atraso_meses, dissidio_pct, incidencia_dissidio_meses
+           FROM orcamentos WHERE id = ${row.orcamentoId} LIMIT 1`
+        );
+        const p = (pRows.rows?.[0] ?? (pRows as any)[0]) as any;
+        if (p) {
+          const params: CI01Params = {
+            tempoObraMeses:          (n(p.tempoObraMeses) || 0) + n(p.eventual_atraso_meses),
+            dissidioPct:             n(p.dissidio_pct),
+            incidenciaDissidioMeses: n(p.incidencia_dissidio_meses),
+          };
+          const rowData: CI01Row = {
+            salarioBase:     n(upd.salarioBase  ?? row.salarioBase),
+            bonusMensal:     n(upd.bonusMensal  ?? row.bonusMensal),
+            quantidade:      n(upd.quantidade   ?? row.quantidade),
+            tipoContrato:    row.tipoContrato ?? '',
+            txTransferencia: n(upd.txTransferencia ?? row.txTransferencia ?? '0'),
+          };
+          const calc = calcCI01Linha(rowData, params);
+          await db.update(bdiIndiretos).set({
+            valorHora:            fix6(calc.valorHora),
+            decimoTerceiroFerias: fix2(calc.decimoTerceiroFerias),
+            totalMes:             fix2(calc.totalMes),
+            totalObra:            fix2(calc.totalObra),
+            mesesObra:            String(calc.mesesObra),
+          }).where(eq(bdiIndiretos.id, id));
+        }
+      }
       return { success: true };
+    }),
+
+  recalcularBdiCI01: protectedProcedure
+    .input(z.object({ orcamentoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const { orcamentoId } = input;
+
+      // Parâmetros do orçamento
+      const pRows = await db.execute(
+        `SELECT "tempoObraMeses", eventual_atraso_meses, dissidio_pct, incidencia_dissidio_meses
+         FROM orcamentos WHERE id = ${orcamentoId} LIMIT 1`
+      );
+      const p = (pRows.rows?.[0] ?? (pRows as any)[0]) as any;
+      if (!p) return { updated: 0 };
+
+      const params: CI01Params = {
+        tempoObraMeses:          (n(p.tempoObraMeses) || 0) + n(p.eventual_atraso_meses),
+        dissidioPct:             n(p.dissidio_pct),
+        incidenciaDissidioMeses: n(p.incidencia_dissidio_meses),
+      };
+
+      // Buscar todas as linhas CI-01 com modalidade válida
+      const linhas = await db.select().from(bdiIndiretos).where(
+        eq(bdiIndiretos.orcamentoId, orcamentoId)
+      );
+      const ci01Linhas = linhas.filter(l =>
+        l.secao === 'CI-01' && l.tipoContrato && l.tipoContrato !== 'SUBHDR' && !l.isHeader
+      );
+
+      let updated = 0;
+      for (const row of ci01Linhas) {
+        const rowData: CI01Row = {
+          salarioBase:     n(row.salarioBase),
+          bonusMensal:     n(row.bonusMensal),
+          quantidade:      n(row.quantidade),
+          tipoContrato:    row.tipoContrato ?? '',
+          txTransferencia: n(row.txTransferencia ?? '0'),
+        };
+        const calc = calcCI01Linha(rowData, params);
+        await db.update(bdiIndiretos).set({
+          valorHora:            fix6(calc.valorHora),
+          decimoTerceiroFerias: fix2(calc.decimoTerceiroFerias),
+          totalMes:             fix2(calc.totalMes),
+          totalObra:            fix2(calc.totalObra),
+          mesesObra:            String(calc.mesesObra),
+        }).where(eq(bdiIndiretos.id, row.id));
+        updated++;
+      }
+      return { updated };
     }),
 
   updateBdiFdLinha: protectedProcedure

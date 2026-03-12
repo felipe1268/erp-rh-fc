@@ -3929,6 +3929,7 @@ export const bdiIndiretos = pgTable("bdi_indiretos", {
   mesesObra:             numeric("meses_obra",         { precision: 10, scale: 2 }).default("0"),
   salarioBase:           numeric("salario_base",       { precision: 18, scale: 2 }).default("0"),
   bonusMensal:           numeric("bonus_mensal",       { precision: 18, scale: 2 }).default("0"),
+  txTransferencia:       numeric("tx_transferencia",   { precision: 10, scale: 6 }).default("0"),
   decimoTerceiroFerias:  numeric("decimo_terceiro_ferias", { precision: 18, scale: 2 }).default("0"),
   valorHora:             numeric("valor_hora",         { precision: 18, scale: 6 }).default("0"),
   totalMes:              numeric("total_mes",          { precision: 18, scale: 2 }).default("0"),
