@@ -4232,19 +4232,36 @@ export const planejamentoMedicoes = pgTable("planejamento_medicoes", {
 });
 
 export const planejamentoCompras = pgTable("planejamento_compras", {
-  id:             serial().primaryKey(),
-  projetoId:      integer("projeto_id").notNull(),
-  item:           varchar({ length: 300 }).notNull(),
-  unidade:        varchar({ length: 50 }).default("un"),
-  quantidade:     numeric({ precision: 18, scale: 3 }).default("1"),
-  custoUnitario:  numeric("custo_unitario", { precision: 18, scale: 2 }).default("0"),
-  dataNecessaria: date("data_necessaria").notNull(),
-  dataPedido:     date("data_pedido"),
-  status:         varchar({ length: 50 }).default("pendente"),
-  fornecedor:     varchar({ length: 200 }),
-  observacoes:    text(),
-  criadoEm:       timestamp("criado_em").defaultNow(),
-  atualizadoEm:   timestamp("atualizado_em").defaultNow(),
+  id:                    serial().primaryKey(),
+  projetoId:             integer("projeto_id").notNull(),
+  revisao:               integer().notNull().default(1),
+  fonte:                 varchar({ length: 20 }).notNull().default("manual"),
+  item:                  varchar({ length: 300 }).notNull(),
+  unidade:               varchar({ length: 50 }).default("un"),
+  quantidade:            numeric({ precision: 18, scale: 3 }).default("1"),
+  custoUnitario:         numeric("custo_unitario", { precision: 18, scale: 2 }).default("0"),
+  dataNecessaria:        date("data_necessaria").notNull(),
+  atividadeDataInicio:   date("atividade_data_inicio"),
+  leadTime:              integer("lead_time").notNull().default(30),
+  eapCodigo:             varchar("eap_codigo", { length: 100 }),
+  dataPedido:            date("data_pedido"),
+  status:                varchar({ length: 50 }).default("pendente"),
+  fornecedor:            varchar({ length: 200 }),
+  observacoes:           text(),
+  criadoEm:              timestamp("criado_em").defaultNow(),
+  atualizadoEm:          timestamp("atualizado_em").defaultNow(),
+});
+
+export const planejamentoComprasRevisoes = pgTable("planejamento_compras_revisoes", {
+  id:                          serial().primaryKey(),
+  projetoId:                   integer("projeto_id").notNull(),
+  revisao:                     integer().notNull(),
+  descricao:                   text(),
+  leadTime:                    integer("lead_time").notNull().default(30),
+  totalItens:                  integer("total_itens").notNull().default(0),
+  totalCusto:                  numeric("total_custo", { precision: 18, scale: 2 }).notNull().default("0"),
+  geradoEm:                    timestamp("gerado_em").defaultNow(),
+  geradoPorRevisaoCronograma:  integer("gerado_por_revisao_cronograma"),
 });
 
 export const orcamentoParametros = pgTable("orcamento_parametros", {

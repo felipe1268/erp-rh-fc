@@ -16,7 +16,7 @@ import {
   Activity, AlertTriangle, CheckCircle2, Clock, Edit3, ChevronRight,
   ChevronDown, Minus, Upload, XCircle, GripVertical,
   ShoppingCart, AlertOctagon, Cloud, CloudRain, Wind, Sun, Droplets,
-  MapPin, Package, Filter, Trash2, Pencil, X,
+  MapPin, Package, Filter, Trash2, Pencil, X, RefreshCw,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell,
@@ -2186,62 +2186,42 @@ function badgeCompra(status: string) {
   return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.color}`}>{s.label}</span>;
 }
 
-function Compras({ projetoId, proj, utils, fmt }: any) {
-  const [modal, setModal] = useState<null | "novo" | "edit" | "importar">(null);
+function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }: any) {
+  const [modal, setModal] = useState<null | "novo" | "edit" | "gerar">(null);
   const [editItem, setEditItem] = useState<any>(null);
   const emptyForm = { item: "", unidade: "un", quantidade: 1, custoUnitario: 0, dataNecessaria: new Date().toISOString().split("T")[0], status: "pendente", fornecedor: "", observacoes: "" };
   const [form, setForm] = useState(emptyForm);
-  const [importSelecionados, setImportSelecionados] = useState<Set<number>>(new Set());
-  const [importando, setImportando] = useState(false);
+  const [revisaoSel, setRevisaoSel] = useState<number | null>(null); // null = latest
+  const [leadTime, setLeadTime] = useState(30);
+  const [descricaoGer, setDescricaoGer] = useState("");
+  const [gerandoErr, setGerandoErr] = useState<string | null>(null);
 
-  const { data: compras = [], refetch } = trpc.planejamento.listarCompras.useQuery({ projetoId }, { enabled: !!projetoId });
-  const { data: cruzamento, isLoading: loadCruz } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
-    { projetoId }, { enabled: modal === "importar" && !!projetoId });
+  // Revisões de compras (metadados)
+  const { data: revisoesCompras = [], refetch: refetchRevisoes } = (trpc.planejamento as any).listarRevisoesCompras.useQuery(
+    { projetoId }, { enabled: !!projetoId }) as { data: any[]; refetch: any };
 
-  const criarMut  = trpc.planejamento.criarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
-  const editarMut = trpc.planejamento.atualizarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
+  // Compras da revisão selecionada
+  const queryInput = revisaoSel !== null ? { projetoId, revisao: revisaoSel } : { projetoId };
+  const { data: compras = [], refetch } = trpc.planejamento.listarCompras.useQuery(queryInput as any, { enabled: !!projetoId });
+
+  const criarMut   = trpc.planejamento.criarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
+  const editarMut  = trpc.planejamento.atualizarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
   const excluirMut = trpc.planejamento.excluirCompra.useMutation({ onSuccess: () => refetch() });
+  const gerarMut   = (trpc.planejamento as any).gerarCronogramaCompras.useMutation({
+    onSuccess: (res: any) => {
+      refetch();
+      (utils.planejamento as any).listarRevisoesCompras?.invalidate?.({ projetoId });
+      setRevisaoSel(res.revisao);
+      setModal(null);
+      setGerandoErr(null);
+    },
+    onError: (e: any) => setGerandoErr(e.message ?? "Erro ao gerar"),
+  });
 
-  // Itens do orçamento com material disponíveis para importar
-  const itensImportaveis = useMemo(() => {
-    if (!cruzamento?.itens) return [];
-    return cruzamento.itens
-      .filter((i: any) => i.custoMat > 0 && i.dataInicio)
-      .map((i: any) => {
-        const dtAtiv = new Date(i.dataInicio + "T00:00:00");
-        dtAtiv.setDate(dtAtiv.getDate() - 30); // Lead-time 30 dias
-        const dtCompra = dtAtiv.toISOString().split("T")[0];
-        const qtd = i.quantidade > 0 ? i.quantidade : 1;
-        return {
-          ...i,
-          dataNecessaria: dtCompra,
-          custoUnitario: +(i.custoMat / qtd).toFixed(4),
-        };
-      });
-  }, [cruzamento]);
-
-  async function confirmarImportacao() {
-    const selecionados = itensImportaveis.filter((_: any, idx: number) => importSelecionados.has(idx));
-    if (selecionados.length === 0) return;
-    setImportando(true);
-    for (const it of selecionados) {
-      await criarMut.mutateAsync({
-        projetoId,
-        item: it.nome,
-        unidade: it.unidade ?? "un",
-        quantidade: it.quantidade > 0 ? it.quantidade : 1,
-        custoUnitario: it.custoUnitario,
-        dataNecessaria: it.dataNecessaria,
-        status: "pendente",
-        observacoes: `Importado do orçamento — EAP ${it.eap}`,
-      });
-    }
-    setImportando(false);
-    setModal(null);
-    setImportSelecionados(new Set());
+  function abrirNovo() {
+    setForm({ ...emptyForm });
+    setModal("novo");
   }
-
-  function abrirNovo() { setForm(emptyForm); setModal("novo"); }
   function abrirEdit(c: any) {
     setEditItem(c);
     setForm({ item: c.item, unidade: c.unidade ?? "un", quantidade: parseFloat(c.quantidade ?? "1"), custoUnitario: parseFloat(c.custoUnitario ?? "0"), dataNecessaria: c.dataNecessaria, status: c.status ?? "pendente", fornecedor: c.fornecedor ?? "", observacoes: c.observacoes ?? "" });
@@ -2255,12 +2235,18 @@ function Compras({ projetoId, proj, utils, fmt }: any) {
       editarMut.mutate({ id: editItem.id, ...form, quantidade: Number(form.quantidade), custoUnitario: Number(form.custoUnitario) });
     }
   }
+  function gerarCronograma() {
+    setGerandoErr(null);
+    gerarMut.mutate({ projetoId, leadTime, descricao: descricaoGer || undefined });
+  }
 
+  // Revisão exibida
+  const revExibida = revisoesCompras.find((r: any) => r.revisao === revisaoSel) ?? revisoesCompras[0] ?? null;
   const totalPrevisto = compras.reduce((s: number, c: any) => s + n(c.quantidade) * n(c.custoUnitario), 0);
-  const pendentes  = compras.filter((c: any) => c.status === "pendente" || c.status === "em_cotacao").length;
-  const entregues  = compras.filter((c: any) => c.status === "entregue").length;
+  const pendentes = compras.filter((c: any) => c.status === "pendente" || c.status === "em_cotacao").length;
+  const entregues = compras.filter((c: any) => c.status === "entregue").length;
+  const autoItens = compras.filter((c: any) => c.fonte === "auto").length;
 
-  // Agrupar por mês
   const porMes = useMemo(() => {
     const map: Record<string, any[]> = {};
     compras.forEach((c: any) => {
@@ -2273,82 +2259,129 @@ function Compras({ projetoId, proj, utils, fmt }: any) {
 
   return (
     <div className="space-y-4">
+
+      {/* Seletor de revisões */}
+      {revisoesCompras.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Revisão:</span>
+          {revisoesCompras.map((r: any) => {
+            const active = revisaoSel === r.revisao || (revisaoSel === null && r.revisao === revisoesCompras[0]?.revisao);
+            return (
+              <button key={r.revisao}
+                onClick={() => setRevisaoSel(r.revisao)}
+                className={`text-xs px-3 py-1 rounded-full border font-medium transition-colors
+                  ${active ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"}`}>
+                Rev. {r.revisao}
+                {r.geradoPorRevisaoCronograma && <span className="ml-1 text-[9px] opacity-60">(Crono {r.geradoPorRevisaoCronograma})</span>}
+              </button>
+            );
+          })}
+          {revExibida && (
+            <span className="text-[10px] text-slate-400 ml-2">
+              {revExibida.totalItens} itens · {fmt(revExibida.totalCusto)} ·{" "}
+              {revExibida.geradoEm ? new Date(revExibida.geradoEm).toLocaleDateString("pt-BR") : ""}
+              {revExibida.descricao ? ` — ${revExibida.descricao}` : ""}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Total de Itens</p>
-          <p className="text-xl font-bold text-slate-800">{compras.length}</p>
-        </div>
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Pendentes / Em Cotação</p>
-          <p className="text-xl font-bold text-amber-600">{pendentes}</p>
-        </div>
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Entregues</p>
-          <p className="text-xl font-bold text-emerald-600">{entregues}</p>
-        </div>
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Custo Previsto</p>
-          <p className="text-xl font-bold text-blue-600">{fmt(totalPrevisto)}</p>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {[
+          { label: "Total de Itens",        v: compras.length,   c: "text-slate-800",   f: (x: number) => x },
+          { label: "Gerados Automaticamente",v: autoItens,        c: "text-emerald-700", f: (x: number) => x },
+          { label: "Pendentes / Cotação",   v: pendentes,        c: "text-amber-600",   f: (x: number) => x },
+          { label: "Entregues",             v: entregues,        c: "text-emerald-600", f: (x: number) => x },
+          { label: "Custo Total",           v: totalPrevisto,    c: "text-blue-600",    f: fmt },
+        ].map((k, i) => (
+          <div key={i} className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+            <p className="text-[10px] text-slate-400">{k.label}</p>
+            <p className={`text-lg font-bold ${k.c}`}>{k.f(k.v)}</p>
+          </div>
+        ))}
       </div>
 
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm font-semibold text-slate-700">Cronograma de Compras</p>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" className="gap-1.5 border-purple-300 text-purple-700 hover:bg-purple-50"
-            onClick={() => { setImportSelecionados(new Set()); setModal("importar"); }}>
-            <Upload className="h-3.5 w-3.5" /> Importar do Orçamento
+        <div className="flex gap-2 flex-wrap">
+          <Button size="sm" variant="outline"
+            className="gap-1.5 border-emerald-400 text-emerald-700 hover:bg-emerald-50"
+            onClick={() => { setDescricaoGer(""); setLeadTime(30); setGerandoErr(null); setModal("gerar"); }}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Gerar do Orçamento
           </Button>
           <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700" onClick={abrirNovo}>
-            <Plus className="h-3.5 w-3.5" /> Novo Item
+            <Plus className="h-3.5 w-3.5" /> Novo Item Manual
           </Button>
         </div>
       </div>
 
-      {compras.length === 0 ? (
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-12 text-center text-slate-400">
+      {/* Infobanner quando não há itens */}
+      {compras.length === 0 && revisoesCompras.length === 0 && (
+        <div className="bg-white border border-dashed border-slate-200 rounded-xl p-12 text-center text-slate-400">
           <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Nenhum item de compra cadastrado</p>
-          <p className="text-xs mt-1">Clique em "Novo Item" para adicionar</p>
+          <p className="text-sm font-medium">Nenhum cronograma de compras gerado</p>
+          <p className="text-xs mt-1 max-w-sm mx-auto">
+            Clique em <b>"Gerar do Orçamento"</b> para criar automaticamente a partir do cruzamento EAP Orçamento × EAP Cronograma.
+            Cada vez que gerar, uma nova revisão é criada — as anteriores ficam preservadas para consulta.
+          </p>
+          <Button size="sm" className="mt-4 gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+            onClick={() => { setDescricaoGer(""); setLeadTime(30); setGerandoErr(null); setModal("gerar"); }}>
+            <RefreshCw className="h-3.5 w-3.5" /> Gerar do Orçamento
+          </Button>
         </div>
-      ) : (
+      )}
+
+      {/* Lista agrupada por mês */}
+      {compras.length > 0 && (
         <div className="space-y-4">
           {porMes.map(([mes, items]) => {
-            const [ano, m] = mes.split("-");
             const nomeMes = new Date(`${mes}-15`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
             const totalMes = items.reduce((s: number, c: any) => s + n(c.quantidade) * n(c.custoUnitario), 0);
             return (
               <div key={mes} className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
                 <div className="bg-slate-700 text-white px-4 py-2 flex items-center justify-between">
                   <span className="text-xs font-semibold capitalize">{nomeMes}</span>
-                  <span className="text-xs text-slate-300">{fmt(totalMes)}</span>
+                  <span className="text-xs text-slate-300">{items.length} itens · {fmt(totalMes)}</span>
                 </div>
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100">
-                      <th className="py-2 px-3 text-left">Item</th>
+                      <th className="py-2 px-3 text-left w-4" title="Fonte" />
+                      <th className="py-2 px-3 text-left">Item / EAP</th>
                       <th className="py-2 px-3 text-right w-16">Qtd</th>
-                      <th className="py-2 px-3 text-left w-14">Un</th>
+                      <th className="py-2 px-3 text-left w-12">Un</th>
                       <th className="py-2 px-3 text-right w-28">Custo Unit.</th>
                       <th className="py-2 px-3 text-right w-28">Total</th>
-                      <th className="py-2 px-3 text-left w-28">Necessário em</th>
+                      <th className="py-2 px-3 text-left w-28">Início Ativ.</th>
+                      <th className="py-2 px-3 text-left w-28">Nec. (−{items[0]?.leadTime ?? 30}d)</th>
                       <th className="py-2 px-3 text-left w-32">Fornecedor</th>
-                      <th className="py-2 px-3 text-center w-28">Status</th>
-                      <th className="py-2 px-3 w-16" />
+                      <th className="py-2 px-3 text-center w-24">Status</th>
+                      <th className="py-2 px-3 w-12" />
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((c: any, idx: number) => (
                       <tr key={c.id} className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
-                        <td className="py-2 px-3 text-slate-700">{c.item}</td>
+                        <td className="py-2 px-3 text-center">
+                          <span title={c.fonte === "auto" ? "Gerado automaticamente" : "Manual"}
+                            className={`text-[9px] font-bold px-1 py-0.5 rounded ${c.fonte === "auto" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                            {c.fonte === "auto" ? "AUTO" : "MAN"}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <p className="text-slate-700 truncate max-w-[240px]" title={c.item}>{c.item}</p>
+                          {c.eapCodigo && <p className="text-[9px] text-slate-400 font-mono">{c.eapCodigo}</p>}
+                        </td>
                         <td className="py-2 px-3 text-right text-slate-600">{parseFloat(c.quantidade ?? "1").toLocaleString("pt-BR")}</td>
                         <td className="py-2 px-3 text-slate-400">{c.unidade ?? "un"}</td>
                         <td className="py-2 px-3 text-right text-slate-600">{fmt(n(c.custoUnitario))}</td>
                         <td className="py-2 px-3 text-right font-semibold text-slate-700">{fmt(n(c.quantidade) * n(c.custoUnitario))}</td>
-                        <td className="py-2 px-3 text-slate-500">{c.dataNecessaria}</td>
-                        <td className="py-2 px-3 text-slate-500 truncate max-w-[120px]">{c.fornecedor ?? "—"}</td>
+                        <td className="py-2 px-3 text-slate-400 text-[10px]">{c.atividadeDataInicio ?? "—"}</td>
+                        <td className="py-2 px-3 text-blue-600 font-medium">{c.dataNecessaria}</td>
+                        <td className="py-2 px-3 text-slate-500 truncate max-w-[100px]">{c.fornecedor ?? "—"}</td>
                         <td className="py-2 px-3 text-center">{badgeCompra(c.status ?? "pendente")}</td>
                         <td className="py-2 px-3">
                           <div className="flex items-center gap-1 justify-end">
@@ -2366,100 +2399,59 @@ function Compras({ projetoId, proj, utils, fmt }: any) {
         </div>
       )}
 
-      {/* Modal Importar do Orçamento */}
-      <Dialog open={modal === "importar"} onOpenChange={open => !open && setModal(null)}>
-        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+      {/* Modal Gerar do Orçamento */}
+      <Dialog open={modal === "gerar"} onOpenChange={open => !open && setModal(null)}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Importar Itens do Orçamento</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-emerald-600" />
+              Gerar Cronograma de Compras
+            </DialogTitle>
           </DialogHeader>
-          {loadCruz ? (
-            <div className="flex items-center justify-center py-10 text-slate-400">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando orçamento...
+          <div className="space-y-4 mt-1">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800">
+              <p className="font-semibold mb-1">Como funciona</p>
+              <ul className="space-y-1 list-disc pl-4">
+                <li>Cruza a EAP do <b>Orçamento</b> com a EAP do <b>Cronograma</b> por nome</li>
+                <li>Extrai itens com custo de material &gt; 0</li>
+                <li>Calcula Data Necessária = Data Início da Atividade − Lead Time</li>
+                <li>Cria uma <b>nova revisão</b> preservando as anteriores para consulta</li>
+              </ul>
             </div>
-          ) : itensImportaveis.length === 0 ? (
-            <div className="py-10 text-center text-slate-400 text-sm">
-              Nenhum item com custo de material encontrado no cruzamento orçamento × cronograma.
+            <div>
+              <Label className="text-xs">Lead Time (dias antes do início da atividade)</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Input type="number" min={0} max={365} value={leadTime}
+                  onChange={e => setLeadTime(parseInt(e.target.value) || 0)}
+                  className="h-8 text-sm w-24" />
+                <span className="text-xs text-slate-500">dias de antecedência para compra</span>
+              </div>
             </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-slate-500">
-                  {itensImportaveis.length} itens com material — data de necessidade = início da atividade − 30 dias (lead-time)
-                </p>
-                <div className="flex gap-2">
-                  <button className="text-xs text-blue-600 hover:underline"
-                    onClick={() => setImportSelecionados(new Set(itensImportaveis.map((_: any, i: number) => i)))}>
-                    Selecionar tudo
-                  </button>
-                  <button className="text-xs text-slate-500 hover:underline"
-                    onClick={() => setImportSelecionados(new Set())}>
-                    Limpar
-                  </button>
-                </div>
+            <div>
+              <Label className="text-xs">Descrição da revisão (opcional)</Label>
+              <Input value={descricaoGer} onChange={e => setDescricaoGer(e.target.value)}
+                placeholder={`Rev. ${(revisoesCompras[0]?.revisao ?? 0) + 1} — Gerada automaticamente`}
+                className="mt-1 h-8 text-sm" />
+            </div>
+            {revisoesCompras.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800">
+                Já existem {revisoesCompras.length} revisão(ões). Esta ação criará a <b>Rev. {(revisoesCompras[0]?.revisao ?? 0) + 1}</b>.
+                As revisões anteriores são preservadas.
               </div>
-              <div className="overflow-y-auto flex-1 border rounded-lg text-xs">
-                <table className="w-full">
-                  <thead className="bg-slate-50 sticky top-0">
-                    <tr className="border-b border-slate-200">
-                      <th className="py-2 px-2 w-8"></th>
-                      <th className="py-2 px-2 text-left">EAP</th>
-                      <th className="py-2 px-2 text-left flex-1">Item</th>
-                      <th className="py-2 px-2 text-right">Qtd</th>
-                      <th className="py-2 px-2 text-left">Un</th>
-                      <th className="py-2 px-2 text-right">Custo Mat.</th>
-                      <th className="py-2 px-2 text-right">C.Unit.</th>
-                      <th className="py-2 px-2 text-right">Data Nec.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {itensImportaveis.map((it: any, idx: number) => {
-                      const sel = importSelecionados.has(idx);
-                      return (
-                        <tr key={idx} className={`border-b border-slate-50 cursor-pointer transition-colors ${sel ? "bg-purple-50" : "hover:bg-slate-50"}`}
-                          onClick={() => {
-                            const ns = new Set(importSelecionados);
-                            sel ? ns.delete(idx) : ns.add(idx);
-                            setImportSelecionados(ns);
-                          }}>
-                          <td className="py-1.5 px-2 text-center">
-                            <input type="checkbox" checked={sel} readOnly className="accent-purple-600 cursor-pointer" />
-                          </td>
-                          <td className="py-1.5 px-2 font-mono text-slate-400">{it.eap}</td>
-                          <td className="py-1.5 px-2 max-w-[260px]">
-                            <p className="truncate" title={it.nome}>{it.nome}</p>
-                          </td>
-                          <td className="py-1.5 px-2 text-right">{it.quantidade > 0 ? it.quantidade.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"}</td>
-                          <td className="py-1.5 px-2 text-slate-500">{it.unidade ?? "—"}</td>
-                          <td className="py-1.5 px-2 text-right text-purple-700 font-medium">{fmt(it.custoMat)}</td>
-                          <td className="py-1.5 px-2 text-right text-slate-600">{fmt(it.custoUnitario)}</td>
-                          <td className="py-1.5 px-2 text-right text-blue-600 font-medium">
-                            {new Date(it.dataNecessaria + "T00:00:00").toLocaleDateString("pt-BR")}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                <p className="text-xs text-slate-500">
-                  {importSelecionados.size} item(ns) selecionado(s) — Total: {fmt(
-                    itensImportaveis.filter((_: any, i: number) => importSelecionados.has(i)).reduce((s: number, it: any) => s + it.custoMat, 0)
-                  )}
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setModal(null)}>Cancelar</Button>
-                  <Button size="sm"
-                    className="bg-purple-600 hover:bg-purple-700 gap-1.5"
-                    disabled={importSelecionados.size === 0 || importando}
-                    onClick={confirmarImportacao}>
-                    {importando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                    Importar {importSelecionados.size > 0 ? `(${importSelecionados.size})` : ""} Itens
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
+            )}
+            {gerandoErr && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-700">{gerandoErr}</div>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setModal(null)}>Cancelar</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+                disabled={gerarMut.isPending}
+                onClick={gerarCronograma}>
+                {gerarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Gerar Cronograma
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
