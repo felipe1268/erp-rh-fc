@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -14,7 +14,7 @@ import {
   ArrowLeft, Loader2, CalendarRange, Building2, User, DollarSign,
   TrendingUp, Plus, Save, GitBranch, BarChart3, FileText, ClipboardList,
   Activity, AlertTriangle, CheckCircle2, Clock, Edit3, ChevronRight,
-  ChevronDown, Minus,
+  ChevronDown, Minus, Upload, XCircle,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -759,6 +759,9 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   const semanas = ultimasSemanas(12);
   const [semanaAtual, setSemanaAtual] = useState(semanas[semanas.length - 1]);
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
+  const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [importando, setImportando] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
 
@@ -783,6 +786,91 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
       .forEach((av: any) => { m[av.atividadeId] = n(av.percentualAcumulado); });
     return m;
   }, [avancos, semanaAtual, semanas]);
+
+  // ── Previsto para a semana (interpolação linear por datas) ─────────────────
+  const previsto = useMemo(() => {
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 100;
+    let soma = 0;
+    folhas.forEach((a: any) => {
+      if (!a.dataInicio || !a.dataFim) return;
+      const ini = new Date(a.dataInicio).getTime();
+      const fim = new Date(a.dataFim).getTime();
+      const ref = new Date(semanaAtual).getTime();
+      let exp = 0;
+      if (ref >= fim) exp = 100;
+      else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+      soma += (exp * n(a.pesoFinanceiro)) / pesoTotal;
+    });
+    return +soma.toFixed(1);
+  }, [folhas, semanaAtual]);
+
+  // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
+  const realizadoAcum = useMemo(() => {
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 100;
+    let soma = 0;
+    folhas.forEach((a: any) => {
+      soma += ((avancoExistente[a.id] ?? 0) * n(a.pesoFinanceiro)) / pesoTotal;
+    });
+    return +soma.toFixed(1);
+  }, [folhas, avancoExistente]);
+
+  const delta = +(realizadoAcum - previsto).toFixed(1);
+
+  // ── Import XML / XLSX do MS Project ───────────────────────────────────────
+  async function importarDoMSProject(file: File) {
+    setImportando(true);
+    setImportStatus(null);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const percentMap: Record<string, number> = {};
+
+      if (ext === "xml") {
+        const text = await file.text();
+        const doc  = new DOMParser().parseFromString(text, "text/xml");
+        doc.querySelectorAll("Task").forEach(task => {
+          const uid = task.querySelector("UID")?.textContent ?? "";
+          if (uid === "0") return;
+          const wbs = task.querySelector("WBS")?.textContent?.trim() ?? "";
+          const pct = parseInt(task.querySelector("PercentComplete")?.textContent ?? "0");
+          if (wbs) percentMap[wbs] = pct;
+        });
+      } else if (["xlsx", "xls", "xlsm"].includes(ext)) {
+        const buf     = await file.arrayBuffer();
+        const xlsxMod = await import("xlsx");
+        const XLSX    = (xlsxMod as any).default ?? xlsxMod;
+        const wb      = XLSX.read(buf, { type: "array" });
+        const ws      = wb.Sheets[wb.SheetNames[0]];
+        const rows    = XLSX.utils.sheet_to_json<any>(ws, { defval: "" });
+        if (rows.length) {
+          const keys   = Object.keys(rows[0]);
+          const wbsKey = keys.find(k => /wbs|eap|c[oó]digo/i.test(k));
+          const pctKey = keys.find(k => /percent|conclu|complete|pct/i.test(k));
+          if (wbsKey && pctKey) {
+            rows.forEach((row: any) => {
+              const wbs = String(row[wbsKey]).trim();
+              const pct = parseFloat(String(row[pctKey])) || 0;
+              if (wbs) percentMap[wbs] = pct;
+            });
+          }
+        }
+      } else {
+        throw new Error("Formato inválido. Use .xml ou .xlsx exportados do MS Project.");
+      }
+
+      const newLocal: Record<number, number> = {};
+      folhas.forEach((a: any) => {
+        const pct = percentMap[a.eapCodigo ?? ""];
+        if (pct !== undefined) newLocal[a.id] = Math.min(100, Math.max(0, pct));
+      });
+      const count = Object.keys(newLocal).length;
+      setAvancoLocal(prev => ({ ...prev, ...newLocal }));
+      setImportStatus({ ok: true, msg: `${count} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""} automaticamente. Revise e salve.` });
+    } catch (e: any) {
+      setImportStatus({ ok: false, msg: e.message ?? "Erro ao processar o arquivo." });
+    } finally {
+      setImportando(false);
+    }
+  }
 
   const salvarMutation = trpc.planejamento.salvarAvanco.useMutation({
     onSuccess: () => utils.planejamento.listarAvancos.invalidate(),
@@ -814,12 +902,13 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
 
   return (
     <div className="space-y-4">
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <p className="text-sm font-semibold text-slate-700">Avanço Físico Semanal</p>
           <select
             value={semanaAtual}
-            onChange={e => { setSemanaAtual(e.target.value); setAvancoLocal({}); }}
+            onChange={e => { setSemanaAtual(e.target.value); setAvancoLocal({}); setImportStatus(null); }}
             className="border border-input rounded-md px-3 py-1.5 text-xs bg-background"
           >
             {semanas.map(s => (
@@ -827,14 +916,85 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
             ))}
           </select>
         </div>
-        <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-          disabled={!temAlteracoes || salvarMutation.isPending}
-          onClick={salvarTudo}>
-          {salvarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-          Salvar Avanços
-        </Button>
+        <div className="flex gap-2 items-center">
+          {/* Botão importar MS Project */}
+          <Button
+            size="sm" variant="outline"
+            className="gap-1.5 border-purple-300 text-purple-700 hover:bg-purple-50"
+            disabled={importando}
+            onClick={() => fileRef.current?.click()}
+          >
+            {importando
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Upload className="h-3.5 w-3.5" />}
+            Importar MS Project
+          </Button>
+          <input
+            ref={fileRef} type="file" accept=".xml,.xlsx,.xls,.xlsm"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) importarDoMSProject(f); e.target.value = ""; }}
+          />
+          <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+            disabled={!temAlteracoes || salvarMutation.isPending}
+            onClick={salvarTudo}>
+            {salvarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Salvar Avanços
+          </Button>
+        </div>
       </div>
 
+      {/* ── Feedback do import ──────────────────────────────────────────────── */}
+      {importStatus && (
+        <div className={`flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2 border ${importStatus.ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"}`}>
+          <div className="flex items-center gap-2">
+            {importStatus.ok
+              ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              : <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
+            {importStatus.msg}
+          </div>
+          <button onClick={() => setImportStatus(null)}><XCircle className="h-3.5 w-3.5 opacity-50 hover:opacity-80" /></button>
+        </div>
+      )}
+
+      {/* ── Painel Previsto × Realizado ─────────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-3">
+        {/* Previsto */}
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1">
+          <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Previsto (semana)</p>
+          <p className="text-2xl font-bold text-orange-600">{previsto.toFixed(1)}%</p>
+          <div className="w-full bg-slate-100 rounded-full h-2 mt-1 overflow-hidden">
+            <div className="h-full rounded-full bg-orange-400" style={{ width: `${Math.min(100, previsto)}%` }} />
+          </div>
+          <p className="text-[10px] text-slate-400 mt-0.5">Baseado nas datas do cronograma</p>
+        </div>
+
+        {/* Realizado */}
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1">
+          <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Realizado (acum.)</p>
+          <p className="text-2xl font-bold text-emerald-600">{realizadoAcum.toFixed(1)}%</p>
+          <div className="w-full bg-slate-100 rounded-full h-2 mt-1 overflow-hidden">
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, realizadoAcum)}%` }} />
+          </div>
+          <p className="text-[10px] text-slate-400 mt-0.5">Ponderado pelo peso financeiro</p>
+        </div>
+
+        {/* Delta */}
+        <div className={`rounded-xl border shadow-sm p-4 flex flex-col gap-1 ${delta >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+          <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Variação (Real − Prev.)</p>
+          <p className={`text-2xl font-bold ${delta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+            {delta >= 0 ? "+" : ""}{delta.toFixed(1)}%
+          </p>
+          <div className="flex items-center gap-1.5 mt-1">
+            <div className={`h-2 w-2 rounded-full ${delta >= 0 ? "bg-emerald-500" : "bg-red-500"}`} />
+            <p className={`text-[10px] font-medium ${delta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+              {delta >= 0 ? "Adiantado" : "Atrasado"} em relação ao planejado
+            </p>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-0.5">Semana {semanaAtual}</p>
+        </div>
+      </div>
+
+      {/* ── Tabela de atividades ─────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -843,27 +1003,45 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
               <th className="py-2 px-3 text-left">Atividade</th>
               <th className="py-2 px-3 text-left w-24">Início</th>
               <th className="py-2 px-3 text-left w-24">Fim</th>
+              <th className="py-2 px-3 text-right w-20">Previsto%</th>
               <th className="py-2 px-3 text-right w-24">% Anterior</th>
-              <th className="py-2 px-3 text-center w-40">% Acumulado</th>
+              <th className="py-2 px-3 text-center w-44">% Acumulado</th>
             </tr>
           </thead>
           <tbody>
             {folhas.length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-slate-400">
+              <tr><td colSpan={7} className="py-8 text-center text-slate-400">
                 Nenhuma atividade. Cadastre no Cronograma primeiro.
               </td></tr>
             )}
             {folhas.map((a: any, idx: number) => {
-              const atual   = getAvanco(a.id);
+              const atual    = getAvanco(a.id);
               const anterior = avancoAnterior[a.id] ?? 0;
               const alterado = avancoLocal[a.id] !== undefined;
 
+              // Previsto individual
+              let prevInd = 0;
+              if (a.dataInicio && a.dataFim) {
+                const ini = new Date(a.dataInicio).getTime();
+                const fim = new Date(a.dataFim).getTime();
+                const ref = new Date(semanaAtual).getTime();
+                if (ref >= fim) prevInd = 100;
+                else if (ref > ini) prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+              }
+              const atrasada = !alterado && atual < prevInd - 5;
+
               return (
-                <tr key={a.id} className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"} ${alterado ? "bg-blue-50/60" : ""}`}>
+                <tr key={a.id} className={`border-b border-slate-50 ${alterado ? "bg-blue-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
                   <td className="py-2 px-3 font-mono text-slate-500">{a.eapCodigo ?? ""}</td>
-                  <td className="py-2 px-3 text-slate-700">{a.nome}</td>
+                  <td className="py-2 px-3 text-slate-700">
+                    <div className="flex items-center gap-1.5">
+                      {atrasada && <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />}
+                      {a.nome}
+                    </div>
+                  </td>
                   <td className="py-2 px-3 text-slate-500">{a.dataInicio ?? "—"}</td>
                   <td className="py-2 px-3 text-slate-500">{a.dataFim ?? "—"}</td>
+                  <td className="py-2 px-3 text-right text-orange-600 font-medium">{prevInd.toFixed(0)}%</td>
                   <td className="py-2 px-3 text-right text-slate-500">{fPct(anterior)}</td>
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-2">
@@ -883,8 +1061,11 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
                         <span className="text-slate-400">%</span>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-                      <div className={`h-full rounded-full ${atual >= 100 ? "bg-emerald-500" : "bg-blue-500"}`}
+                    <div className="relative w-full bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
+                      {/* Linha de previsto */}
+                      <div className="absolute top-0 h-full w-px bg-orange-400 z-10"
+                        style={{ left: `${Math.min(100, prevInd)}%` }} />
+                      <div className={`h-full rounded-full ${atual >= 100 ? "bg-emerald-500" : atual >= prevInd ? "bg-blue-500" : "bg-amber-500"}`}
                         style={{ width: `${atual}%` }} />
                     </div>
                   </td>
@@ -893,6 +1074,15 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* ── Legenda ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-4 text-[10px] text-slate-500 px-1">
+        <div className="flex items-center gap-1"><div className="h-2 w-3 rounded-sm bg-blue-500" /> Realizado ≥ Previsto</div>
+        <div className="flex items-center gap-1"><div className="h-2 w-3 rounded-sm bg-amber-500" /> Abaixo do previsto</div>
+        <div className="flex items-center gap-1"><div className="h-2 w-3 rounded-sm bg-emerald-500" /> Concluído (100%)</div>
+        <div className="flex items-center gap-1"><div className="h-px w-3 bg-orange-400" /> Linha prevista</div>
+        <div className="flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-amber-500" /> Atrasado &gt;5%</div>
       </div>
     </div>
   );
