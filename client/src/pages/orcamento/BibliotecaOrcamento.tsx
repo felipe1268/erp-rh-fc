@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import {
   Wrench, Package, Search, Loader2, Upload, CheckCircle,
   AlertCircle, Plus, Pencil, Trash2, X, Check, Tag,
-  ChevronDown, ChevronRight, Square, CheckSquare, MinusSquare,
+  ChevronDown, ChevronRight, ChevronsDown, ChevronsUp,
+  Square, CheckSquare, MinusSquare,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -557,6 +558,15 @@ function ComposicoesView({ companyId }: { companyId: number }) {
 
   const isBulkLoading = excluirBulkMut.isPending || excluirTodosMut.isPending;
 
+  const allFiltExpanded = filt.length > 0 && filt.every((c: any) => expanded.has(c.id));
+  function toggleExpandAll() {
+    if (allFiltExpanded) {
+      setExpanded(new Set());
+    } else {
+      setExpanded(new Set(filt.map((c: any) => c.id)));
+    }
+  }
+
   /* ── Renderiza linha de composição + sub-linhas de insumos ── */
   function renderCompRow(c: any) {
     const isSel  = selected.has(c.id);
@@ -904,7 +914,16 @@ function ComposicoesView({ companyId }: { companyId: number }) {
                           : <Square className="h-4 w-4" />}
                     </button>
                   </th>
-                  <th className="w-8" />
+                  <th className="w-8">
+                    <button
+                      onClick={toggleExpandAll}
+                      title={allFiltExpanded ? "Fechar todas" : "Expandir todas"}
+                      className="p-1 rounded hover:bg-blue-100 text-blue-400 transition-colors">
+                      {allFiltExpanded
+                        ? <ChevronsUp className="h-3.5 w-3.5" />
+                        : <ChevronsDown className="h-3.5 w-3.5" />}
+                    </button>
+                  </th>
                   <th className="text-left px-2 py-2 w-24">Código</th>
                   <th className="text-left px-3 py-2 min-w-[260px]">Descrição</th>
                   <th className="text-left px-3 py-2 w-28">Tipo / Qtd</th>
