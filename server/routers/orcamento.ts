@@ -527,7 +527,7 @@ function parsearAbaIndiretos(rows: any[][], companyId: number, orcamentoId: numb
     const c4 = String(row[4] || '').trim();
     const c0 = String(row[0] || '').trim();
 
-    // Cabeçalho de seção: col[3] = 'CI-01', 'CI-02', etc.
+    // ── Cabeçalho de seção: col[3] = 'CI-01', 'CI-02', etc. ──────────────
     if (c3.match(/^CI-\d+$/) && c4.length > 2) {
       secao = c3;
       linhas.push({
@@ -540,8 +540,13 @@ function parsearAbaIndiretos(rows: any[][], companyId: number, orcamentoId: numb
       continue;
     }
 
-    // Linha de funcionário: col[0] é dígito E col[3] tem padrão N.NN
-    if (c0.match(/^\d+$/) && c3.match(/^\d+\.\d+/) && c4.length > 2) {
+    // Linha de dados: col[3] tem padrão numérico (N.NN ou NN.NN.NN.NN)
+    if (!c3.match(/^\d+(\.\d+)+$/) || c4.length < 2) continue;
+
+    if (secao === 'CI-01') {
+      // ── CI-01: Mão de obra — col mapping original ─────────────────────────
+      // Só processa se col[0] for dígito (linha real, não sub-header)
+      if (!c0.match(/^\d+$/)) continue;
       const qty       = toNum(row[9]);
       const meses     = toNum(row[11]);
       const sal       = toNum(row[12]);
@@ -565,6 +570,49 @@ function parsearAbaIndiretos(rows: any[][], companyId: number, orcamentoId: numb
         totalMes:             fix2(totalMes),
         totalObra:            fix2(totalObra),
         ordem:                ordem++,
+      });
+
+    } else if (secao.match(/^CI-0[2-7]$/)) {
+      // ── CI-02+: Refeições / Transportes / Equipamentos / Despesas / Segurança / Consultoria
+      // Excel cols: I=unidade J=qty K=vida_util L=delta_t M=pct_incid N=tempo O=valor_unit P=total
+      // Array indices:           8        9         10         11         12        13       14       15
+      const unidade    = String(row[8]  || '').trim().substring(0, 20);
+      const qty        = toNum(row[9]);
+      const vidaUtil   = toNum(row[10]);
+      const deltaTRaw  = String(row[11] || '').trim();
+      const deltaT     = deltaTRaw === '' || deltaTRaw.toUpperCase() === 'N/A' ? null : toNum(row[11]);
+      const pctRaw     = toNum(row[12]);
+      // pct_incidencia: se delta_t é N/A → 1.0; se vem do Excel direto usa esse valor
+      const pctIncid   = deltaT === null ? 1.0 : (vidaUtil > 0 ? deltaT / vidaUtil : (pctRaw || 1.0));
+      const tempo      = toNum(row[13]); // meses_obra (N col)
+      const valorUnit  = toNum(row[14]);
+      const totalRaw   = toNum(row[15]);
+      // total = qty × pct × tempo × valorUnit   (se tempo=0, usa 1 para itens avulsos)
+      const tempoEfetivo = tempo || 1;
+      const totalCalc  = qty * pctIncid * tempoEfetivo * valorUnit;
+      const total      = totalRaw || totalCalc;
+
+      // Sub-headers (ex: "08.01 Refeição - Produção"): sem unidade e qty=0
+      const isSub = qty === 0 && valorUnit === 0 && !unidade;
+
+      linhas.push({
+        orcamentoId, companyId, secao, isHeader: isSub,
+        codigo:        c3.substring(0, 30),
+        descricao:     c4.substring(0, 255),
+        modalidade:    '',
+        tipoContrato:  '',
+        unidade,
+        quantidade:    fix2(qty),
+        mesesObra:     fix2(tempoEfetivo),
+        vidaUtil:      vidaUtil > 0 ? fix2(vidaUtil) : '0',
+        deltaT:        deltaT !== null ? fix2(deltaT) : null,
+        pctIncidencia: fix6(pctIncid),
+        valorUnit:     fix2(valorUnit),
+        totalLinha:    fix2(total),
+        // CI-01 fields zeroed for CI-02+
+        salarioBase: '0', bonusMensal: '0', decimoTerceiroFerias: '0',
+        valorHora: '0', totalMes: '0', totalObra: fix2(total),
+        ordem: ordem++,
       });
     }
   }
@@ -1924,60 +1972,102 @@ export const orcamentoRouter = router({
   updateBdiIndiretosLinha: protectedProcedure
     .input(z.object({
       id:                   z.number(),
+      // CI-01 fields
       quantidade:           z.number().optional(),
       salarioBase:          z.number().optional(),
       bonusMensal:          z.number().optional(),
       txTransferencia:      z.number().optional(),
       decimoTerceiroFerias: z.number().optional(),
       tipoContrato:         z.string().optional(),
+      // CI-02+ fields
+      vidaUtil:             z.number().optional(),
+      deltaT:               z.number().nullable().optional(),
+      pctIncidencia:        z.number().optional(),
+      valorUnit:            z.number().optional(),
+      mesesObra:            z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
-      const { id, quantidade, salarioBase, bonusMensal, txTransferencia, tipoContrato } = input;
+      const { id } = input;
       const upd: any = {};
-      if (quantidade         !== undefined) upd.quantidade         = fix2(quantidade);
-      if (salarioBase        !== undefined) upd.salarioBase        = fix2(salarioBase);
-      if (bonusMensal        !== undefined) upd.bonusMensal        = fix2(bonusMensal);
-      if (txTransferencia    !== undefined) upd.txTransferencia    = fix6(txTransferencia);
-      if (tipoContrato       !== undefined) upd.tipoContrato       = tipoContrato;
+      if (input.quantidade         !== undefined) upd.quantidade         = fix2(input.quantidade);
+      if (input.salarioBase        !== undefined) upd.salarioBase        = fix2(input.salarioBase);
+      if (input.bonusMensal        !== undefined) upd.bonusMensal        = fix2(input.bonusMensal);
+      if (input.txTransferencia    !== undefined) upd.txTransferencia    = fix6(input.txTransferencia);
+      if (input.tipoContrato       !== undefined) upd.tipoContrato       = input.tipoContrato;
+      if (input.vidaUtil           !== undefined) upd.vidaUtil           = fix2(input.vidaUtil);
+      if (input.deltaT             !== undefined) upd.deltaT             = input.deltaT !== null ? fix2(input.deltaT) : null;
+      if (input.pctIncidencia      !== undefined) upd.pctIncidencia      = fix6(input.pctIncidencia);
+      if (input.valorUnit          !== undefined) upd.valorUnit          = fix2(input.valorUnit);
+      if (input.mesesObra          !== undefined) upd.mesesObra          = fix2(input.mesesObra);
       if (Object.keys(upd).length === 0) return { success: true };
       await db.update(bdiIndiretos).set(upd).where(eq(bdiIndiretos.id, id));
 
-      // Após salvar, recalcular valores derivados para linhas de pessoal CLT/Contrato
+      // Recarregar linha atualizada
       const [row] = await db.select().from(bdiIndiretos).where(eq(bdiIndiretos.id, id));
-      const effectiveTipo = (tipoContrato ?? row?.tipoContrato ?? '');
-      const isPersonnel = effectiveTipo === 'CLT' || effectiveTipo === 'Contrato';
-      if (row && isPersonnel && !row.isHeader) {
-        // Buscar parâmetros do orçamento
-        const pRows = await db.execute(
-          `SELECT "tempoObraMeses", eventual_atraso_meses, dissidio_pct, incidencia_dissidio_meses
-           FROM orcamentos WHERE id = ${row.orcamentoId} LIMIT 1`
-        );
-        const p = (pRows.rows?.[0] ?? (pRows as any)[0]) as any;
-        if (p) {
-          const params: CI01Params = {
-            tempoObraMeses:          (n(p.tempoObraMeses) || 0) + n(p.eventual_atraso_meses),
-            dissidioPct:             n(p.dissidio_pct),
-            incidenciaDissidioMeses: n(p.incidencia_dissidio_meses),
-          };
-          const rowData: CI01Row = {
-            salarioBase:     n(upd.salarioBase  ?? row.salarioBase),
-            bonusMensal:     n(upd.bonusMensal  ?? row.bonusMensal),
-            quantidade:      n(upd.quantidade   ?? row.quantidade),
-            tipoContrato:    effectiveTipo,
-            txTransferencia: n(upd.txTransferencia ?? row.txTransferencia ?? '0'),
-          };
-          const calc = calcCI01Linha(rowData, params);
-          await db.update(bdiIndiretos).set({
-            valorHora:            fix6(calc.valorHora),
-            decimoTerceiroFerias: fix2(calc.decimoTerceiroFerias),
-            totalMes:             fix2(calc.totalMes),
-            totalObra:            fix2(calc.totalObra),
-            mesesObra:            String(calc.mesesObra),
-          }).where(eq(bdiIndiretos.id, id));
+      if (!row || row.isHeader) return { success: true };
+
+      const secao = row.secao ?? '';
+
+      if (secao === 'CI-01' || !secao) {
+        // ── CI-01: recalcular Valor/h, 13°+Férias, TotalMês, TotalObra ─────────
+        const effectiveTipo = (input.tipoContrato ?? row.tipoContrato ?? '');
+        const isPersonnel   = effectiveTipo === 'CLT' || effectiveTipo === 'Contrato';
+        if (isPersonnel) {
+          const pRows = await db.execute(
+            `SELECT "tempoObraMeses", eventual_atraso_meses, dissidio_pct, incidencia_dissidio_meses
+             FROM orcamentos WHERE id = ${row.orcamentoId} LIMIT 1`
+          );
+          const p = (pRows.rows?.[0] ?? (pRows as any)[0]) as any;
+          if (p) {
+            const params: CI01Params = {
+              tempoObraMeses:          (n(p.tempoObraMeses) || 0) + n(p.eventual_atraso_meses),
+              dissidioPct:             n(p.dissidio_pct),
+              incidenciaDissidioMeses: n(p.incidencia_dissidio_meses),
+            };
+            const rowData: CI01Row = {
+              salarioBase:     n(upd.salarioBase  ?? row.salarioBase),
+              bonusMensal:     n(upd.bonusMensal  ?? row.bonusMensal),
+              quantidade:      n(upd.quantidade   ?? row.quantidade),
+              tipoContrato:    effectiveTipo,
+              txTransferencia: n(upd.txTransferencia ?? row.txTransferencia ?? '0'),
+            };
+            const calc = calcCI01Linha(rowData, params);
+            await db.update(bdiIndiretos).set({
+              valorHora:            fix6(calc.valorHora),
+              decimoTerceiroFerias: fix2(calc.decimoTerceiroFerias),
+              totalMes:             fix2(calc.totalMes),
+              totalObra:            fix2(calc.totalObra),
+              mesesObra:            String(calc.mesesObra),
+            }).where(eq(bdiIndiretos.id, id));
+          }
         }
+
+      } else if (secao.match(/^CI-0[2-7]$/)) {
+        // ── CI-02+: recalcular total_linha = qty × pct × meses × valor_unit ──
+        const qty   = n(upd.quantidade   ?? row.quantidade);
+        const meses = n(upd.mesesObra    ?? row.mesesObra) || 1;
+        const vu    = n(upd.valorUnit    ?? row.valorUnit);
+        // pct: se delta_t mudou recalcula; senão usa pct_incidencia armazenado
+        let pct: number;
+        const newDeltaT  = upd.deltaT !== undefined ? (upd.deltaT !== null ? n(upd.deltaT) : null) : (row.deltaT !== null && row.deltaT !== undefined ? n(row.deltaT) : null);
+        const vidaUtilV  = n(upd.vidaUtil ?? row.vidaUtil);
+        if (newDeltaT === null) {
+          pct = 1.0; // N/A → 100%
+        } else if (upd.deltaT !== undefined || upd.vidaUtil !== undefined) {
+          pct = vidaUtilV > 0 ? newDeltaT / vidaUtilV : 1.0;
+        } else {
+          pct = n(upd.pctIncidencia ?? row.pctIncidencia) || 1.0;
+        }
+        const total = qty * pct * meses * vu;
+        await db.update(bdiIndiretos).set({
+          pctIncidencia: fix6(pct),
+          totalLinha:    fix2(total),
+          totalObra:     fix2(total),
+        }).where(eq(bdiIndiretos.id, id));
       }
+
       return { success: true };
     }),
 

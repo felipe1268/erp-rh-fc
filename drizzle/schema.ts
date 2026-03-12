@@ -3934,6 +3934,13 @@ export const bdiIndiretos = pgTable("bdi_indiretos", {
   valorHora:             numeric("valor_hora",         { precision: 18, scale: 6 }).default("0"),
   totalMes:              numeric("total_mes",          { precision: 18, scale: 2 }).default("0"),
   totalObra:             numeric("total_obra",         { precision: 18, scale: 2 }).default("0"),
+  // CI-02+ specific fields (Refeições, Transportes, Equipamentos, Despesas, Segurança, Consultoria)
+  unidade:               varchar("unidade",            { length: 20 }),
+  vidaUtil:              numeric("vida_util",          { precision: 10, scale: 2 }).default("0"),
+  deltaT:                numeric("delta_t",            { precision: 10, scale: 2 }),
+  pctIncidencia:         numeric("pct_incidencia",     { precision: 10, scale: 6 }).default("1"),
+  valorUnit:             numeric("valor_unit",         { precision: 18, scale: 2 }).default("0"),
+  totalLinha:            numeric("total_linha",        { precision: 18, scale: 2 }).default("0"),
   isHeader:              boolean("is_header").default(false),
   ordem:                 integer("ordem").default(0),
   createdAt:             timestamp("created_at", { mode: "string" }).defaultNow().notNull(),

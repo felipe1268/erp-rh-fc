@@ -903,10 +903,11 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
             </thead>
             <tbody>
               {groupedLinhas.map((l: any, idx: number) => {
-                const secKey = l.secao ?? l.codigo;
+                const secKey   = l.secao ?? l.codigo;
+                const isCIPlus = l.secao && l.secao !== 'CI-01'; // CI-02..CI-07
 
-                // ── Cabeçalho de seção (CI-01..CI-07)
-                if (l.isHeader) {
+                // ── Cabeçalho de seção principal (CI-01..CI-07) ─────────────────
+                if (l.isHeader && String(l.codigo).match(/^CI-\d+$/)) {
                   const open  = !collapsed.has(secKey);
                   const secTotal = linhas.filter(x => !x.isHeader && (x.secao === secKey || x.secao === l.codigo))
                                          .reduce((s, x) => s + fmt(x.totalObra), 0);
@@ -934,7 +935,25 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
                 // Ocultar se seção colapsada
                 if (l.secao && collapsed.has(l.secao)) return null;
 
-                // ── Sub-cabeçalho de grupo dentro de uma seção (ex: "REFEIÇÕES:", "TRANSPORTES:")
+                // ── Sub-cabeçalho de grupo CI-02+ (ex: "08.01 Refeição - Produção") ──
+                if (l.isHeader && isCIPlus) {
+                  const subTotal = linhas.filter(x => !x.isHeader && x.secao === l.secao && x.codigo.startsWith(l.codigo + '.'))
+                                         .reduce((s, x) => s + fmt(x.totalObra), 0);
+                  return (
+                    <tr key={l.id ?? idx} className="border-t border-slate-200 bg-slate-100">
+                      <td className="border-r border-slate-200"></td>
+                      <td className="px-2 py-1 font-mono text-xs text-slate-600 border-r border-slate-200 whitespace-nowrap">{l.codigo}</td>
+                      <td colSpan={9} className="px-2 py-1 font-semibold text-xs text-slate-700 uppercase tracking-wide border-r border-slate-200">
+                        {l.descricao}
+                      </td>
+                      <td colSpan={3} className="px-2 py-1 text-right font-mono text-xs font-semibold text-slate-600 border-r border-slate-200">
+                        {subTotal > 0 ? brl(subTotal) : ""}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                // ── Sub-cabeçalho de grupo dentro de CI-01 (ex: "REFEIÇÕES:", "TRANSPORTES:")
                 if (l.tipoContrato === 'SUBHDR') {
                   return (
                     <tr key={l.id ?? idx} className="border-t border-slate-300 bg-amber-50">
@@ -947,12 +966,67 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
                   );
                 }
 
-                const isEven = idx % 2 === 0;
+                const isEven   = idx % 2 === 0;
                 const hasTotal = fmt(l.totalObra) !== 0;
                 const hasMes   = fmt(l.totalMes) !== 0;
                 const isCLT    = String(l.tipoContrato ?? '').toLowerCase() === 'clt';
                 const isPJ     = String(l.tipoContrato ?? '').toLowerCase() === 'contrato';
 
+                // ── CI-02+ linha de dado (Refeições, Transporte, Equip. etc.) ─────
+                if (isCIPlus) {
+                  const totalLinha = fmt(l.totalLinha) !== 0 ? l.totalLinha : l.totalObra;
+                  const pct = fmt(l.pctIncidencia);
+                  const hasDeltaT = l.deltaT !== null && l.deltaT !== undefined && String(l.deltaT) !== '';
+                  return (
+                    <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors text-xs ${isEven ? "bg-white" : "bg-slate-50/60"}`}>
+                      <td className="border-r border-slate-100"></td>
+                      {/* Código */}
+                      <td className="px-2 py-1 font-mono text-slate-400 border-r border-slate-100 whitespace-nowrap">{l.codigo}</td>
+                      {/* Descrição */}
+                      <td className="px-2 py-1 text-slate-700 border-r border-slate-100">{l.descricao}</td>
+                      {/* Unidade */}
+                      <td className="px-2 py-1 text-center text-slate-500 border-r border-slate-100 whitespace-nowrap">{l.unidade || "—"}</td>
+                      {/* (vazio — tipo) */}
+                      <td className="border-r border-slate-100"></td>
+                      {/* Quantidade — editável */}
+                      <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                        <Inp id={l.id} field="quantidade" val={l.quantidade} w="w-14" />
+                      </td>
+                      {/* Meses (tempo N) */}
+                      <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100">
+                        {fmt(l.mesesObra) !== 0 ? num(l.mesesObra, 0) : "—"}
+                      </td>
+                      {/* Vida Útil (K) — editável */}
+                      <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                        <Inp id={l.id} field="vidaUtil" val={l.vidaUtil} w="w-16" />
+                      </td>
+                      {/* ΔT em obra (L) — editável */}
+                      <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                        {hasDeltaT
+                          ? <Inp id={l.id} field="deltaT" val={l.deltaT} w="w-14" />
+                          : <span className="text-slate-300 font-mono">N/A</span>}
+                      </td>
+                      {/* % Incidência (M) — calculado ou editável */}
+                      <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100">
+                        {(pct * 100).toFixed(0)}%
+                      </td>
+                      {/* (vazio — 13°+Férias) */}
+                      <td className="border-r border-slate-100"></td>
+                      {/* Valor Unitário (O) — editável */}
+                      <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                        <Inp id={l.id} field="valorUnit" val={l.valorUnit} w="w-24" money />
+                      </td>
+                      {/* (vazio — Total/Mês) */}
+                      <td className="border-r border-slate-100"></td>
+                      {/* Total (P) — calculado */}
+                      <td className="px-2 py-1 text-right font-mono font-semibold text-slate-700 border-l border-slate-100">
+                        {fmt(totalLinha) !== 0 ? brl(totalLinha) : "—"}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                // ── CI-01 linha de funcionário ───────────────────────────────────
                 return (
                   <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${isEven ? "bg-white" : "bg-slate-50/60"}`}>
                     <td className="border-r border-slate-100"></td>
@@ -1007,7 +1081,7 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
                     {/* 13°+Férias — CLT: "nos encargos" | PJ: valor calculado */}
                     <td className={`px-2 py-1 text-right font-mono border-r border-slate-100 ${isCLT ? "text-slate-400" : "text-slate-700"}`}>
                       {isCLT
-                        ? <span className="text-[10px] text-slate-400 italic" title="CLT: 13° e férias já inclusos nos encargos sociais (49,42%)">nos encargos</span>
+                        ? <span className="text-[10px] text-slate-400 italic" title="CLT: 13° e férias já inclusos nos encargos sociais (112,69%)">nos encargos</span>
                         : (fmt(l.decimoTerceiroFerias) !== 0 ? brl(l.decimoTerceiroFerias) : "—")}
                     </td>
                     {/* Valor/h — calculado, read-only */}
