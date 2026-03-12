@@ -30,6 +30,34 @@ function fix2(v: number): string { return v.toFixed(2); }
 function fix4(v: number): string { return v.toFixed(4); }
 function fix6(v: number): string { return v.toFixed(6); }
 
+// ============================================================
+// PROPAGAÇÃO: quando o preço de um insumo é alterado,
+// atualiza precoUnitario e custoUnitTotal em TODAS as
+// composicao_insumos que referenciam aquele insumo.
+// ============================================================
+async function propagarPrecoInsumo(
+  db: any,
+  companyId: number,
+  insumoCodigo: string,
+  novoPreco: number,
+  novaDescricao?: string,
+  novaUnidade?: string | null,
+) {
+  const updates: any = {
+    precoUnitario: fix4(novoPreco),
+    // Recalcula custo total = quantidade * novoPreco com 6 casas decimais
+    custoUnitTotal: sql`to_char(CAST(quantidade AS numeric) * ${novoPreco}, 'FM999999999.000000')`,
+  };
+  if (novaDescricao !== undefined) updates.insumoDescricao = novaDescricao;
+  if (novaUnidade   !== undefined) updates.unidade         = novaUnidade || null;
+  await db.update(composicaoInsumos)
+    .set(updates)
+    .where(and(
+      eq(composicaoInsumos.companyId,    companyId),
+      eq(composicaoInsumos.insumoCodigo, insumoCodigo),
+    ));
+}
+
 // ── Normalização para dedup do catálogo ───────────────────────
 // Remove acentos, pontuação, espaços duplos e converte para minúsculas.
 // Palavras funcionais curtas são preservadas para manter semântica.
@@ -537,10 +565,13 @@ async function processarImportacaoBackground(
       }
 
       if (existente) {
+        const codigoFinal   = ins.codigo.substring(0, 100);
+        const descricaoFinal = ins.descricao.substring(0, 1000);
+        const unidadeFinal  = ins.unidade.substring(0, 30) || existente.unidade;
         await db.update(insumosCatalogo).set({
-          codigo:            ins.codigo.substring(0, 100),
-          descricao:         ins.descricao.substring(0, 1000),
-          unidade:           ins.unidade.substring(0, 30) || existente.unidade,
+          codigo:            codigoFinal,
+          descricao:         descricaoFinal,
+          unidade:           unidadeFinal,
           tipo:              ins.tipo.substring(0, 100) || existente.tipo,
           precoUnitario:     fix4(preco),
           precoMin:          fix4(Math.min(parseFloat(existente.precoMin || String(preco)), preco)),
@@ -548,6 +579,8 @@ async function processarImportacaoBackground(
           precoMedio:        fix4(preco),
           ultimaAtualizacao: new Date().toISOString(),
         }).where(eq(insumosCatalogo.id, existente.id));
+        // Propaga preço atualizado para todas as composições que usam este insumo
+        await propagarPrecoInsumo(db, companyId, codigoFinal, preco, descricaoFinal, unidadeFinal);
         job.atualizados++;
       } else {
         await db.insert(insumosCatalogo).values({
@@ -1585,10 +1618,13 @@ export const orcamentoRouter = router({
 
       if (input.id) {
         // Atualizar existente
+        const novoCodigoTrimmed = input.codigo.trim();
+        const novaDescricao     = input.descricao.trim();
+        const novaUnidade       = (input.unidade ?? '').trim() || null;
         await db.update(insumosCatalogo).set({
-          codigo:            input.codigo.trim(),
-          descricao:         input.descricao.trim(),
-          unidade:           (input.unidade ?? '').trim() || null,
+          codigo:            novoCodigoTrimmed,
+          descricao:         novaDescricao,
+          unidade:           novaUnidade,
           tipo:              (input.tipo ?? '').trim() || null,
           precoUnitario:     fix4(preco),
           precoMin:          fix4(parseFloat(input.precoMin || '0')),
@@ -1596,6 +1632,9 @@ export const orcamentoRouter = router({
           chaveNorm:         chave,
           ultimaAtualizacao: new Date().toISOString(),
         }).where(and(eq(insumosCatalogo.id, input.id), eq(insumosCatalogo.companyId, input.companyId)));
+
+        // Propaga preço atualizado para todas as composições que usam este insumo
+        await propagarPrecoInsumo(db, input.companyId, novoCodigoTrimmed, preco, novaDescricao, novaUnidade);
       } else {
         // Verificar se código já existe
         const existing = await db.select({ id: insumosCatalogo.id })
