@@ -1552,6 +1552,20 @@ function EncargosView({ companyId }: { companyId: number }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editVal, setEditVal] = useState("");
 
+  const DEFAULT_VALORES: Record<string, number> = {
+    A1: 20.00, A2: 8.00,  A3: 2.50,  A4: 1.50,  A5: 1.00,
+    A6: 0.20,  A7: 3.00,  A8: 0.60,  A9: 0.00,  A10: 0.00,
+    B1: 8.33,  B2: 11.11, B3: 1.94,  B4: 1.39,  B5: 0.00,
+    B6: 0.00,  B7: 0.00,  B8: 0.00,  B9: 16.91, B10: 3.13, B11: 1.99,
+    C1: 9.12,  C2: 0.33,  C3: 3.20,  C4: 0.00,
+    E1: 0.73,  E2: 0.03,  E3: 0.00,
+    F1: 0.00,  F2: 0.00,  F3: 0.00,  F4: 0.00,  F5: 0.00,
+    F6: 1.17,  F7: 0.00,  F8: 0.00,  F9: 0.00,  F10: 0.00, F11: 0.00,
+  };
+  const isModified = (codigo: string, valor: string) =>
+    Math.abs(parseFloat(valor || '0') - (DEFAULT_VALORES[codigo] ?? 0)) > 0.0001;
+  const anyModified = rows.some(r => isModified(r.codigo ?? '', r.valor ?? '0'));
+
   function startEdit(id: number, val: string) {
     setEditingId(id);
     setEditVal(parseFloat(val || '0').toFixed(2).replace('.', ','));
@@ -1585,37 +1599,42 @@ function EncargosView({ companyId }: { companyId: number }) {
   function ItemRows({ grupo }: { grupo: string }) {
     return (
       <>
-        {byGrupo(grupo).map(r => (
-          <tr key={r.id} className="border-b hover:bg-slate-50 group">
-            <td className="px-4 py-1.5 text-xs text-slate-500 font-mono w-12">{r.codigo}</td>
-            <td className={`px-4 py-1.5 text-xs ${['A1','A7','A9'].includes(r.codigo) ? 'text-red-600' : 'text-slate-700'}`}>
-              {r.descricao}
-            </td>
-            <td className="px-4 py-1.5 w-8" />
-            <td className="px-4 py-1.5 text-right w-36">
-              {editingId === r.id ? (
-                <input
-                  autoFocus
-                  className="w-20 border rounded px-1.5 py-0.5 text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-400 ml-auto block"
-                  value={editVal}
-                  onChange={e => setEditVal(e.target.value)}
-                  onBlur={() => commitEdit(r.id)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') commitEdit(r.id);
-                    if (e.key === 'Escape') setEditingId(null);
-                  }}
-                />
-              ) : (
-                <button
-                  onClick={() => startEdit(r.id, r.valor ?? '0')}
-                  className="text-xs tabular-nums text-slate-600 hover:text-blue-600 hover:underline cursor-pointer group-hover:font-medium"
-                  title="Clique para editar">
-                  {fmtPct(parseFloat(r.valor || '0'))}
-                </button>
-              )}
-            </td>
-          </tr>
-        ))}
+        {byGrupo(grupo).map(r => {
+          const modified = isModified(r.codigo ?? '', r.valor ?? '0');
+          return (
+            <tr key={r.id} className={`border-b group ${modified ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-slate-50'}`}>
+              <td className={`px-4 py-1.5 text-xs font-mono w-12 ${modified ? 'text-red-700 font-semibold' : 'text-slate-500'}`}>
+                {r.codigo}
+              </td>
+              <td className={`px-4 py-1.5 text-xs ${modified ? 'text-red-700' : 'text-slate-800'}`}>
+                {r.descricao}
+              </td>
+              <td className="px-4 py-1.5 w-8" />
+              <td className="px-4 py-1.5 text-right w-36">
+                {editingId === r.id ? (
+                  <input
+                    autoFocus
+                    className="w-20 border rounded px-1.5 py-0.5 text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-400 ml-auto block"
+                    value={editVal}
+                    onChange={e => setEditVal(e.target.value)}
+                    onBlur={() => commitEdit(r.id)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') commitEdit(r.id);
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                  />
+                ) : (
+                  <button
+                    onClick={() => startEdit(r.id, r.valor ?? '0')}
+                    className={`text-xs tabular-nums hover:underline cursor-pointer group-hover:font-medium ${modified ? 'text-red-700 font-semibold' : 'text-slate-600 hover:text-blue-600'}`}
+                    title="Clique para editar">
+                    {fmtPct(parseFloat(r.valor || '0'))}
+                  </button>
+                )}
+              </td>
+            </tr>
+          );
+        })}
       </>
     );
   }
@@ -1727,9 +1746,18 @@ function EncargosView({ companyId }: { companyId: number }) {
         </div>
       </Card>
 
-      <p className="mt-3 text-[10px] text-slate-400">
-        * Grupo D é calculado automaticamente como (Subtotal A × Subtotal B) / 100. Os demais valores são editáveis.
-      </p>
+      <div className="mt-3 flex items-start gap-6 flex-wrap">
+        <p className="text-[10px] text-slate-400 flex-1">
+          * Grupo D é calculado automaticamente como (Subtotal A × Subtotal B) / 100. Os demais valores são editáveis (clique no percentual).
+        </p>
+        {anyModified && (
+          <div className="flex items-center gap-2 text-[11px] text-red-600 bg-red-50 border border-red-200 rounded px-3 py-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-400 flex-shrink-0" />
+            Linhas em vermelho indicam valores alterados em relação ao padrão do sistema.
+            Use <strong>Restaurar Padrão</strong> para reverter.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
