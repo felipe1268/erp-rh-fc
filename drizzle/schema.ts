@@ -3823,6 +3823,7 @@ export const orcamentos = pgTable("orcamentos", {
   bdiPercentual: numeric({ precision: 8, scale: 4 }),
   metaPercentual: numeric({ precision: 8, scale: 4 }).default('0.2000'),
   totalVenda: numeric({ precision: 18, scale: 2 }),
+  valorNegociado: numeric("valor_negociado", { precision: 18, scale: 2 }),
   totalCusto: numeric({ precision: 18, scale: 2 }),
   totalMeta: numeric({ precision: 18, scale: 2 }),
   totalMateriais: numeric({ precision: 18, scale: 2 }),

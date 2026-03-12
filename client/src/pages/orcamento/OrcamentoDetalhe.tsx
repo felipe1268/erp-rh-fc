@@ -87,6 +87,8 @@ export default function OrcamentoDetalhe() {
   const [editingMeta, setEditingMeta] = useState(false);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [expandedComps, setExpandedComps] = useState<Set<string>>(new Set());
+  const [editingNegociado, setEditingNegociado] = useState(false);
+  const [negociadoInput, setNegociadoInput]     = useState("");
 
   const { data, isLoading, refetch } = trpc.orcamento.getById.useQuery(
     { id },
@@ -101,6 +103,11 @@ export default function OrcamentoDetalhe() {
       refetch();
     },
     onError: e => { toast.error(e.message || "Erro ao salvar meta"); setSavingMeta(false); },
+  });
+
+  const setValorNegociadoMut = trpc.orcamento.setValorNegociado.useMutation({
+    onSuccess: () => { toast.success("Valor negociado salvo!"); refetch(); setEditingNegociado(false); },
+    onError: e => toast.error(e.message || "Erro ao salvar"),
   });
 
   // Re-upload (atualizar planilha)
@@ -329,9 +336,10 @@ export default function OrcamentoDetalhe() {
   const calcVenda = r2(leafItems.reduce((s, i) => r2(s) + r2(n(i.vendaTotal)),    0));
 
   // Preferir valor armazenado (importado do Excel) — só cair no calc se estiver zerado/ausente
-  const totalCusto = r2(n(orc.totalCusto) || calcCusto);
-  const totalVenda = r2(n(orc.totalVenda) || calcVenda);
-  const totalMat   = r2(n((orc as any).totalMateriais) || calcMat);
+  const totalCusto     = r2(n(orc.totalCusto) || calcCusto);
+  const totalVenda     = r2(n(orc.totalVenda) || calcVenda);
+  const valorNegociado = r2(n((orc as any).valorNegociado));   // 0 = não definido
+  const totalMat       = r2(n((orc as any).totalMateriais) || calcMat);
   const totalMdo   = r2(n((orc as any).totalMdo) || calcMdo);
   // totalMeta sempre derivado do estado local (localMetaVal ou localMetaPerc) para evitar divergência com o banco
   const totalMeta  = localMetaVal !== null
@@ -582,23 +590,91 @@ export default function OrcamentoDetalhe() {
           </button>
 
           {/* CARD VENDA (direita) */}
-          <button onClick={() => setVersao("venda")}
-            className={`text-left p-4 rounded-xl border-2 transition-all ${
-              versao === "venda" ? "border-green-500 bg-green-50" : "border-border bg-card hover:bg-muted/30"
-            }`}
-          >
+          <div className={`text-left p-4 rounded-xl border-2 transition-all ${
+            versao === "venda" ? "border-green-500 bg-green-50" : "border-border bg-card"
+          }`}>
+            {/* cabeçalho do card */}
             <div className="flex items-center gap-2 mb-1">
-              <DollarSign className={`h-4 w-4 ${versao === "venda" ? "text-green-600" : "text-muted-foreground"}`} />
-              <span className="text-xs text-muted-foreground font-medium uppercase">Venda</span>
-              {versao === "venda" && <CheckCircle2 className="h-3 w-3 ml-auto text-green-600" />}
+              <button className="flex items-center gap-2 flex-1" onClick={() => setVersao("venda")}>
+                <DollarSign className={`h-4 w-4 ${versao === "venda" ? "text-green-600" : "text-muted-foreground"}`} />
+                <span className="text-xs text-muted-foreground font-medium uppercase">Venda</span>
+                {valorNegociado > 0 && (
+                  <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5 font-semibold">Negociado</span>
+                )}
+              </button>
+              {!editingNegociado && (
+                <button className="p-0.5 rounded hover:bg-green-100 transition-colors"
+                  title={valorNegociado > 0 ? "Editar valor negociado" : "Definir valor negociado"}
+                  onClick={e => { e.stopPropagation(); setNegociadoInput(valorNegociado > 0 ? valorNegociado.toFixed(2).replace(".", ",") : ""); setEditingNegociado(true); }}>
+                  <Pencil className="h-3 w-3 text-green-500" />
+                </button>
+              )}
+              {versao === "venda" && !editingNegociado && <CheckCircle2 className="h-3 w-3 text-green-600" />}
             </div>
-            <p className={`text-base font-bold ${versao === "venda" ? "text-green-700" : "text-foreground"}`}>
-              {formatBRL(totalVenda)}
-            </p>
-            {bdiPct > 0
-              ? <p className="text-xs text-muted-foreground mt-0.5">BDI {bdiPct.toFixed(2)}%</p>
-              : <p className="text-xs text-muted-foreground mt-0.5">BDI não importado</p>}
-          </button>
+
+            {/* valor exibido */}
+            {!editingNegociado ? (
+              <button className="w-full text-left" onClick={() => setVersao("venda")}>
+                <p className={`text-base font-bold ${versao === "venda" ? "text-green-700" : "text-foreground"}`}>
+                  {formatBRL(valorNegociado > 0 ? valorNegociado : totalVenda)}
+                </p>
+                {valorNegociado > 0 ? (
+                  <>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-through">{formatBRL(totalVenda)}</p>
+                    <p className="text-xs text-amber-600 font-medium">
+                      Ajuste: {formatBRL(valorNegociado - totalVenda)}
+                    </p>
+                  </>
+                ) : (
+                  bdiPct > 0
+                    ? <p className="text-xs text-muted-foreground mt-0.5">BDI {bdiPct.toFixed(2)}%</p>
+                    : <p className="text-xs text-muted-foreground mt-0.5">BDI não importado</p>
+                )}
+              </button>
+            ) : (
+              /* formulário de edição inline */
+              <div className="mt-1 space-y-1.5" onClick={e => e.stopPropagation()}>
+                <p className="text-[10px] text-muted-foreground">Calculado: {formatBRL(totalVenda)}</p>
+                <input
+                  autoFocus
+                  className="w-full h-7 text-sm font-mono border border-green-300 rounded px-2 bg-white focus:outline-none focus:ring-1 focus:ring-green-400"
+                  placeholder="Ex: 9500000,00"
+                  value={negociadoInput}
+                  onChange={e => setNegociadoInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      const v = parseFloat(negociadoInput.replace(/\./g,"").replace(",","."));
+                      if (!isNaN(v) && v > 0) setValorNegociadoMut.mutate({ id, valorNegociado: v });
+                    }
+                    if (e.key === "Escape") setEditingNegociado(false);
+                  }}
+                />
+                <div className="flex gap-1">
+                  <button
+                    className="flex-1 h-6 text-[10px] font-semibold bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                    disabled={setValorNegociadoMut.isPending}
+                    onClick={() => {
+                      const v = parseFloat(negociadoInput.replace(/\./g,"").replace(",","."));
+                      if (!isNaN(v) && v > 0) setValorNegociadoMut.mutate({ id, valorNegociado: v });
+                    }}>
+                    Salvar
+                  </button>
+                  {valorNegociado > 0 && (
+                    <button
+                      className="flex-1 h-6 text-[10px] font-semibold border border-red-300 text-red-600 rounded hover:bg-red-50"
+                      onClick={() => setValorNegociadoMut.mutate({ id, valorNegociado: null })}>
+                      Limpar
+                    </button>
+                  )}
+                  <button
+                    className="px-2 h-6 text-[10px] border rounded text-muted-foreground hover:bg-muted"
+                    onClick={() => setEditingNegociado(false)}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
         </div>
 

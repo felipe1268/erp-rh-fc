@@ -1462,6 +1462,21 @@ export const orcamentoRouter = router({
       return { success: true };
     }),
 
+  // ── Definir Valor Negociado (por orçamento) ────────────────────────────
+  setValorNegociado: protectedProcedure
+    .input(z.object({
+      id:             z.number(),
+      valorNegociado: z.number().nullable(), // null = limpar/usar valor calculado
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      await db.update(orcamentos)
+        .set({ valorNegociado: input.valorNegociado !== null ? fix2(input.valorNegociado) : null })
+        .where(eq(orcamentos.id, input.id));
+      return { success: true };
+    }),
+
   // ── Re-importar planilha ORC (atualizar itens mantendo o orçamento) ──
   reimportar: protectedProcedure
     .input(z.object({
