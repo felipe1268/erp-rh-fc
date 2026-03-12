@@ -345,11 +345,96 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// ── Helpers de formatação de data ────────────────────────────
+function isoToBr(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+function addMonths(iso: string | null | undefined, months: number): string | null {
+  if (!iso) return null;
+  const d = new Date(iso + "T00:00:00");
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().substring(0, 10);
+}
+function brDateToIso(br: string): string | null {
+  const [d, m, y] = br.split("/");
+  if (!d || !m || !y) return null;
+  return `${y.length === 2 ? "20" + y : y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+}
+
+// ── Mini input editável para parâmetros ───────────────────────
+function ParamInput({
+  value, onSave, type = "number", width = "w-20", red = false, placeholder = "0",
+  step = "0.01", suffix = "",
+}: {
+  value: string | number | null | undefined;
+  onSave: (v: string) => void;
+  type?: "number" | "text" | "date";
+  width?: string;
+  red?: boolean;
+  placeholder?: string;
+  step?: string;
+  suffix?: string;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState("");
+  const display = value !== null && value !== undefined && String(value) !== "" ? String(value) : "";
+  const textColor = red ? "text-red-600 font-semibold" : "text-slate-800";
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type={type}
+        step={step}
+        value={draft}
+        placeholder={placeholder}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => { setEditing(false); if (draft !== "") onSave(draft); }}
+        onKeyDown={e => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
+        className={`${width} h-5 text-center text-xs font-mono bg-blue-50 border border-blue-400 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-500`}
+      />
+    );
+  }
+  return (
+    <span
+      onClick={() => { setDraft(display); setEditing(true); }}
+      className={`${width} inline-block text-center text-xs font-mono cursor-pointer hover:bg-blue-50 hover:underline rounded px-1 ${textColor}`}
+      title="Clique para editar"
+    >
+      {display || <span className="text-slate-300">—</span>}
+      {suffix && display ? <span className="text-slate-500 ml-0.5">{suffix}</span> : null}
+    </span>
+  );
+}
+
 // ABA INDIRETOS — quadro de mão de obra indireta por seção CI
 // ─────────────────────────────────────────────────────────────
 function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: number }) {
   const [edits, setEdits] = useState<Record<number, Record<string, string>>>({});
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const { data: params, refetch: refetchParams } = trpc.orcamento.getBdiOrcamentoParams.useQuery(
+    { orcamentoId },
+    { enabled: orcamentoId > 0 }
+  );
+
+  const updateParams = trpc.orcamento.updateBdiOrcamentoParams.useMutation({
+    onSuccess: () => refetchParams(),
+    onError: e => toast.error(e.message || "Erro ao salvar parâmetro"),
+  });
+
+  const saveParam = (field: string, raw: string) => {
+    const isNumField = !["dataInicio","dissidioData","nrAmbulatorio","nrTecSeg","nrEngSeg"].includes(field);
+    const val = isNumField ? parseFloat(raw.replace(",", ".")) : raw;
+    if (isNumField && isNaN(val as number)) return;
+    updateParams.mutate({ orcamentoId, [field]: val } as any);
+  };
+
+  const prazoMeses = fmt(params?.tempoObraMeses);
+  const eventoAtraso = fmt(params?.eventual_atraso_meses);
+  const mesesObra = prazoMeses + eventoAtraso;
+  const dataFim = addMonths(params?.data_inicio, mesesObra);
 
   const updateMut = trpc.orcamento.updateBdiIndiretosLinha.useMutation({
     onError: e => toast.error(e.message || "Erro ao salvar"),
@@ -399,9 +484,360 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
   // 13 colunas: chevron | cod | descrição | modalidade | tipo | qtd | meses | salário | bônus | 13°+férias | val/h | total/mês | total/obra
   const COLS = 13;
 
+  // ── helpers de formatação para os quadros ──────────────────
+  const fmtPct = (v: any, d = 0) => {
+    const n = fmt(v) * 100;
+    return n === 0 ? "0%" : n.toFixed(d) + "%";
+  };
+  const fmtN = (v: any, d = 2) => {
+    const n = fmt(v);
+    return n === 0 ? "0" : n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  };
+
   return (
     <Card className="overflow-hidden border-slate-200">
       <CardContent className="p-0">
+
+        {/* ══════════════════════════════════════════════════════════════ */}
+        {/* QUADRO 01 — MÃO DE OBRA                                       */}
+        {/* ══════════════════════════════════════════════════════════════ */}
+        <div className="border-b-2 border-slate-400">
+          {/* Cabeçalho do quadro */}
+          <div className="bg-slate-200 px-3 py-1 border-b border-slate-300">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">QUADRO 01 — MÃO DE OBRA</span>
+          </div>
+
+          <div className="flex flex-wrap gap-0 text-xs" style={{ minWidth: 1100 }}>
+            {/* ── Bloco A: Dados da obra ──────────────────────────────── */}
+            <div className="border-r border-slate-300 px-3 py-2" style={{ minWidth: 220 }}>
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Data de início =</td>
+                    <td className="py-0.5 text-center">
+                      <ParamInput value={isoToBr(params?.data_inicio)} red
+                        onSave={v => saveParam("dataInicio", brDateToIso(v) ?? v)}
+                        type="text" width="w-24" placeholder="DD/MM/AAAA" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Prazo de obra =</td>
+                    <td className="py-0.5 text-center">
+                      <ParamInput value={fmtN(params?.tempoObraMeses, 0)} width="w-16"
+                        onSave={v => saveParam("tempoObraMeses", v)} placeholder="0" step="1" />
+                      <span className="ml-1 text-slate-500">meses</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Eventual atraso =</td>
+                    <td className="py-0.5 text-center">
+                      <ParamInput value={fmtN(params?.eventual_atraso_meses, 0)} width="w-16"
+                        onSave={v => saveParam("eventualAtrasoMeses", v)} placeholder="0" step="1" />
+                      <span className="ml-1 text-slate-500">meses</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Meses da obra =</td>
+                    <td className="py-0.5 text-center">
+                      <span className="w-16 inline-block text-center font-mono font-semibold text-red-600">{mesesObra.toFixed(0)}</span>
+                      <span className="ml-1 text-slate-500">meses</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Dissídio coletivo =</td>
+                    <td className="py-0.5 text-center flex items-center gap-1">
+                      <ParamInput value={(fmt(params?.dissidio_pct) * 100).toFixed(2) + "%"} red width="w-16"
+                        onSave={v => saveParam("dissidioPct", String(parseFloat(v) / 100))} placeholder="0%" />
+                      <ParamInput value={isoToBr(params?.dissidio_data)} width="w-24"
+                        onSave={v => saveParam("dissidioData", brDateToIso(v) ?? v)}
+                        type="text" placeholder="DD/MM/AAAA" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Data de fim =</td>
+                    <td className="py-0.5 text-center">
+                      <span className="font-mono font-semibold text-red-600">{isoToBr(dataFim)}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Bloco B: Hora extra + MDO local ─────────────────────── */}
+            <div className="border-r border-slate-300 px-3 py-2" style={{ minWidth: 230 }}>
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  {[
+                    ["Hora extra dias úteis =", "horaExtraUteisPct", params?.hora_extra_uteis_pct, true],
+                    ["Hora extra sábados =",    "horaExtraSabadosPct", params?.hora_extra_sabados_pct, true],
+                    ["Hora extra domingos =",   "horaExtraDomingosPct", params?.hora_extra_domingos_pct, true],
+                    ["Adicional noturno =",     "adicionalNoturnoPct", params?.adicional_noturno_pct, true],
+                    ["Incidência do dissídio =","incidenciaDissidioMeses", params?.incidencia_dissidio_meses, false],
+                    ["% de MDO Local (h) =",   "mdoLocalPct", params?.mdo_local_pct, true],
+                  ].map(([label, field, val, isPct]: any[]) => (
+                    <tr key={field}>
+                      <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">{label}</td>
+                      <td className="py-0.5">
+                        <ParamInput
+                          value={isPct ? (fmt(val) * 100).toFixed(0) + "%" : fmtN(val, 0)}
+                          red={false} width="w-16"
+                          onSave={v => saveParam(field, isPct ? String(parseFloat(v) / 100) : v)}
+                          placeholder="0" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Bloco C: Dias trabalhados ────────────────────────────── */}
+            <div className="border-r border-slate-300 px-3 py-2" style={{ minWidth: 230 }}>
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  {[
+                    ["D. úteis trabalhados/mês =",  "diasUteisMes",         params?.dias_uteis_mes,         false],
+                    ["Horas trab. sábados/mês =",   "horasTrabSabadosMes",  params?.horas_trab_sabados_mes,  false],
+                    ["D. úteis trab. noturno/mês =","diasUteisNoturnaMes",  params?.dias_uteis_noturno_mes,  false],
+                    ["Dom trab. noturno/mês =",      "domTrabNoturnaMes",    params?.dom_trab_noturno_mes,    false],
+                  ].map(([label, field, val]: any[]) => (
+                    <tr key={field}>
+                      <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">{label}</td>
+                      <td className="py-0.5">
+                        <ParamInput value={fmtN(val, 0)} width="w-14"
+                          onSave={v => saveParam(field, v)} placeholder="0" step="1" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Bloco D: % Presença MDO ─────────────────────────────── */}
+            <div className="border-r border-slate-300 px-3 py-2" style={{ minWidth: 200 }}>
+              <div className="text-xs font-semibold text-slate-600 mb-1 text-center">% presença MDO p/ horas extras</div>
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  {[
+                    ["Em dias úteis diurno =",   "presencaMdoUteisDPct", params?.presenca_mdo_uteis_d_pct],
+                    ["Em sábados diurno =",       "presencaMdoSabDPct",  params?.presenca_mdo_sab_d_pct],
+                    ["Em domingos diurno =",      "presencaMdoDomDPct",  params?.presenca_mdo_dom_d_pct],
+                    ["Em dias úteis noturno =",   "presencaMdoUteisNPct",params?.presenca_mdo_uteis_n_pct],
+                    ["Em sábados noturno =",      "presencaMdoSabNPct",  params?.presenca_mdo_sab_n_pct],
+                    ["Em domingos noturno =",     "presencaMdoDomNPct",  params?.presenca_mdo_dom_n_pct],
+                  ].map(([label, field, val]: any[]) => (
+                    <tr key={field}>
+                      <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">{label}</td>
+                      <td className="py-0.5">
+                        <ParamInput
+                          value={(fmt(val) * 100).toFixed(0) + "%"} width="w-14"
+                          onSave={v => saveParam(field, String(parseFloat(v) / 100))}
+                          placeholder="0%" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Bloco E: Parâmetros NR ──────────────────────────────── */}
+            <div className="px-3 py-2" style={{ minWidth: 220 }}>
+              <div className="text-xs font-semibold text-slate-600 mb-1 text-center">Parâmetros Mín (NR-18 e NR-4)</div>
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  {[
+                    ["Média homens/mês =",       "nrMediaHomens",   params?.nr_media_homens_mes, false],
+                    ["Qtd mín Bacia e mic =",    "nrQtdBacia",      params?.nr_qtd_bacia,        false],
+                    ["Qtd máximo =",             "nrQtdMaximo",     params?.nr_qtd_maximo,       false],
+                  ].map(([label, field, val]: any[]) => (
+                    <tr key={field}>
+                      <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">{label}</td>
+                      <td className="py-0.5">
+                        <ParamInput value={fmtN(val)} width="w-16"
+                          onSave={v => saveParam(field, v)} placeholder="0" />
+                      </td>
+                    </tr>
+                  ))}
+                  {[
+                    ["Necessário Ambulatório =", "nrAmbulatorio", params?.nr_ambulatorio],
+                    ["Necessário Téc. Seg. =",   "nrTecSeg",      params?.nr_tec_seg],
+                    ["Necessário Eng. Seg. =",   "nrEngSeg",      params?.nr_eng_seg],
+                  ].map(([label, field, val]: any[]) => (
+                    <tr key={field}>
+                      <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">{label}</td>
+                      <td className="py-0.5">
+                        <ParamInput value={val ?? "—"} width="w-20" type="text"
+                          onSave={v => saveParam(field, v)} placeholder="SIM/NÃO"
+                          red={String(val).toUpperCase() === "SIM"} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════ */}
+        {/* QUADRO 02 — GERAL · Valor base conforme CCT                   */}
+        {/* ══════════════════════════════════════════════════════════════ */}
+        <div className="border-b-2 border-slate-400">
+          <div className="bg-slate-200 px-3 py-1 border-b border-slate-300">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              QUADRO 02 — GERAL · Valor base conforme Convenção Coletiva de Trabalho (CCT)
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-0 text-xs" style={{ minWidth: 1100 }}>
+            {/* ── Alimentação ─────────────────────────────────────────── */}
+            <div className="border-r border-slate-300 px-3 py-2" style={{ minWidth: 180 }}>
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  {[
+                    ["Café da manhã",   "q2CafeManha",  params?.q2_cafe_manha,  true],
+                    ["Almoço",          "q2Almoco",     params?.q2_almoco,      true],
+                    ["Lanche da tarde", "q2LanchePct",  params?.q2_lanche_pct,  false],
+                    ["Jantar (alojados)","q2JantarValor",params?.q2_jantar_valor,true],
+                    ["Cestas básicas",  "q2CestasPct",  params?.q2_cestas_pct,  false],
+                    ["Ref. para Coord.","q2RefCoord",   params?.q2_ref_coord,   true],
+                  ].map(([label, field, val, isMoney]: any[]) => (
+                    <tr key={field}>
+                      <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">{label} =</td>
+                      <td className="py-0.5 text-center">
+                        <ParamInput
+                          value={isMoney ? brl(val).replace("R$\u00a0","R$ ") : fmtPct(val)}
+                          width="w-20"
+                          onSave={v => saveParam(field, isMoney ? v : String(parseFloat(v) / 100))}
+                          placeholder={isMoney ? "R$ 0,00" : "0%"} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Casa X Hotel ────────────────────────────────────────── */}
+            <div className="border-r border-slate-300 px-3 py-2" style={{ minWidth: 220 }}>
+              <div className="text-xs font-semibold text-slate-600 mb-1 text-center">Casa X Hotel</div>
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Capacidade de casa (pessoas) =</td>
+                    <td className="py-0.5 text-center">
+                      <ParamInput value={String(params?.q2_cap_casa ?? 6)} width="w-12"
+                        onSave={v => saveParam("q2CapCasa", v)} step="1" placeholder="0" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Tarifa Municipal (dia) =</td>
+                    <td className="py-0.5 text-center">
+                      <ParamInput value={brl(params?.q2_tarifa_mun)} width="w-20" red
+                        onSave={v => saveParam("q2TarifaMun", v)} placeholder="R$ 0,00" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">% incidência =</td>
+                    <td className="py-0.5 text-center">
+                      <ParamInput value={fmtPct(params?.q2_tarifa_mun_pct)} width="w-14"
+                        onSave={v => saveParam("q2TarifaMunPct", String(parseFloat(v) / 100))} placeholder="0%" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Tarifa Interurbano (dia) =</td>
+                    <td className="py-0.5 text-center">
+                      <ParamInput value={brl(params?.q2_tarifa_interbano)} width="w-20" red
+                        onSave={v => saveParam("q2TarifaInterbano", v)} placeholder="R$ 0,00" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">% incidência =</td>
+                    <td className="py-0.5 text-center">
+                      <ParamInput value={fmtPct(params?.q2_tarifa_inter_pct)} width="w-14"
+                        onSave={v => saveParam("q2TarifaInterPct", String(parseFloat(v) / 100))} placeholder="0%" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-2 py-0.5 text-right text-slate-600 whitespace-nowrap">Tarifa média =</td>
+                    <td className="py-0.5 text-center font-mono text-slate-700">
+                      {fmtN((fmt(params?.q2_tarifa_mun) * fmt(params?.q2_tarifa_mun_pct) + fmt(params?.q2_tarifa_interbano) * fmt(params?.q2_tarifa_inter_pct)))}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Comparativo Transporte ───────────────────────────────── */}
+            <div className="border-r border-slate-300 px-3 py-2" style={{ minWidth: 340 }}>
+              <div className="text-xs font-semibold text-slate-600 mb-1 text-center">Comparativo Transporte Público × Próprio</div>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="px-1 py-0.5 text-left text-slate-600 font-semibold">Cargo</th>
+                    <th className="px-1 py-0.5 text-center text-slate-600 font-semibold">Transp. Público</th>
+                    <th className="px-1 py-0.5 text-center text-slate-600 font-semibold">Transp. Próprio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["Produção",    "q2TranspPubProd",  params?.q2_transp_pub_prod,  "q2TranspPropProd",  params?.q2_transp_prop_prod],
+                    ["Supervisão",  "q2TranspPubSup",   params?.q2_transp_pub_sup,   "q2TranspPropSup",   params?.q2_transp_prop_sup],
+                    ["Coordenação", "q2TranspPubCoord", params?.q2_transp_pub_coord, "q2TranspPropCoord", params?.q2_transp_prop_coord],
+                  ].map(([label, fPub, vPub, fProp, vProp]: any[]) => (
+                    <tr key={label}>
+                      <td className="px-1 py-0.5 text-slate-600">{label}</td>
+                      <td className="px-1 py-0.5 text-center">
+                        <ParamInput value={fmtN(vPub)} width="w-16"
+                          onSave={v => saveParam(fPub, v)} placeholder="0" />
+                      </td>
+                      <td className="px-1 py-0.5 text-center">
+                        <ParamInput value={fmtN(vProp)} width="w-16"
+                          onSave={v => saveParam(fProp, v)} placeholder="0" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── MDO alojada ─────────────────────────────────────────── */}
+            <div className="px-3 py-2" style={{ minWidth: 300 }}>
+              <div className="text-xs font-semibold text-slate-600 mb-1 text-center">MDO alojada</div>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="px-1 py-0.5 text-left text-slate-600 font-semibold">Cargo</th>
+                    <th className="px-1 py-0.5 text-center text-slate-600 font-semibold">% Aloj.</th>
+                    <th className="px-1 py-0.5 text-center text-slate-600 font-semibold">Alojado</th>
+                    <th className="px-1 py-0.5 text-center text-slate-600 font-semibold">Não Alojado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["Produção",    "q2MdoAlojProd",  params?.q2_mdo_aloj_prod,  "q2AlojProd",  params?.q2_aloj_prod,  "q2NalojProd",  params?.q2_naloj_prod],
+                    ["Supervisão",  "q2MdoAlojSup",   params?.q2_mdo_aloj_sup,   "q2AlojSup",   params?.q2_aloj_sup,   "q2NalojSup",   params?.q2_naloj_sup],
+                    ["Coordenação", "q2MdoAlojCoord", params?.q2_mdo_aloj_coord, "q2AlojCoord", params?.q2_aloj_coord, "q2NalojCoord", params?.q2_naloj_coord],
+                  ].map(([label, fPct, vPct, fAloj, vAloj, fNAloj, vNAloj]: any[]) => (
+                    <tr key={label}>
+                      <td className="px-1 py-0.5 text-slate-600">{label}</td>
+                      <td className="px-1 py-0.5 text-center">
+                        <ParamInput value={fmtPct(vPct)} width="w-12"
+                          onSave={v => saveParam(fPct, String(parseFloat(v) / 100))} placeholder="0%" />
+                      </td>
+                      <td className="px-1 py-0.5 text-center">
+                        <ParamInput value={String(vAloj ?? 0)} width="w-12" step="1"
+                          onSave={v => saveParam(fAloj, v)} placeholder="0" />
+                      </td>
+                      <td className="px-1 py-0.5 text-center">
+                        <ParamInput value={String(vNAloj ?? 0)} width="w-12" step="1"
+                          onSave={v => saveParam(fNAloj, v)} placeholder="0" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         {/* Grand total banner */}
         <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100 border-b border-slate-200">
           <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Total Geral de Custos Indiretos</span>
