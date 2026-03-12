@@ -1751,8 +1751,10 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const totalVenda = rows.reduce((s: number, r: any) => s + r.venda,     0);
   const totalMeta  = rows.reduce((s: number, r: any) => s + r.meta,      0);
   const totalCusto = rows.reduce((s: number, r: any) => s + r.custo,     0);
-  const totalLucro = totalVenda - totalCusto;
-  const margem     = totalVenda > 0 ? (totalLucro / totalVenda * 100) : 0;
+  const totalLucro         = totalVenda - totalCusto;  // Lucro Previsto = Venda − Custo
+  const totalLucroDesejado = totalVenda - totalMeta;   // Lucro Desejado = Venda − Meta
+  const margem             = totalVenda > 0 ? (totalLucro / totalVenda * 100) : 0;
+  const margemDesejada     = totalVenda > 0 ? (totalLucroDesejado / totalVenda * 100) : 0;
   const totalReal  = rows.reduce((s: number, r: any) => s + r.valorReal, 0);
   const cen = CENARIOS.find(c => c.id === cenario)!;
 
@@ -1760,8 +1762,8 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const chartData = rows.map((r: any) => {
     const base: any = { mes: r.nomeMes, Medido: +r.valorReal.toFixed(2) };
     if (cenario === "lucro") {
-      base["Lucro Previsto"] = +r.lucro.toFixed(2);
-      base["Margem (Meta-Venda)"] = +r.margemMeta.toFixed(2);
+      base["Lucro Previsto (V−C)"] = +r.lucro.toFixed(2);
+      base["Lucro Desejado (V−M)"] = +r.margemMeta.toFixed(2);
       base["Custo"] = +r.custo.toFixed(2);
       base["Venda Acum.%"] = +r.cumVenda.toFixed(2);
     } else {
@@ -1818,8 +1820,8 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
           { label: "Venda Negociada",   v: (cruzamento as any)?.valorBase ?? totalVenda,        c: "text-orange-600" },
           { label: "Meta Orçamento",    v: (cruzamento as any)?.valorBaseMeta ?? totalMeta,     c: "text-violet-600" },
           { label: "Custo Orçamento",   v: (cruzamento as any)?.valorBaseCusto ?? totalCusto,   c: "text-red-600"    },
-          { label: "Lucro Previsto",    v: totalLucro, c: totalLucro >= 0 ? "text-emerald-600" : "text-red-600" },
-          { label: `Margem (${margem.toFixed(1)}%)`, v: totalLucro, c: margem >= 0 ? "text-emerald-600" : "text-red-600" },
+          { label: `Lucro Previsto (${margem.toFixed(1)}%) V−C`,        v: totalLucro,         c: totalLucro >= 0         ? "text-emerald-600" : "text-red-600" },
+          { label: `Lucro Desejado (${margemDesejada.toFixed(1)}%) V−M`, v: totalLucroDesejado, c: totalLucroDesejado >= 0 ? "text-violet-600"  : "text-red-600" },
           { label: "Total Medido",      v: totalReal,  c: "text-blue-600"   },
         ].map((k, i) => (
           <div key={i} className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
@@ -1851,8 +1853,8 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               {cenario === "lucro" ? (<>
                 <Bar yAxisId="val" dataKey="Venda Acum.%" fill="transparent" hide />
                 <Bar yAxisId="val" dataKey="Custo"          fill="#ef4444" fillOpacity={0.5} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="Lucro Previsto" fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="Margem (Meta-Venda)" fill="#8b5cf6" fillOpacity={0.6} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="Lucro Previsto (V−C)" fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="Lucro Desejado (V−M)" fill="#8b5cf6" fillOpacity={0.6} radius={[3,3,0,0]} />
                 <Bar yAxisId="val" dataKey="Medido"         fill="#3b82f6" fillOpacity={0.7} radius={[3,3,0,0]} />
                 <Line yAxisId="pct" type="monotone" dataKey="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" />
               </>) : (<>
@@ -1882,8 +1884,8 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               <th className="py-2 px-3 text-right">Venda</th>
               <th className="py-2 px-3 text-right">Meta</th>
               <th className="py-2 px-3 text-right">Custo</th>
-              <th className="py-2 px-3 text-right text-emerald-700">Lucro Prev.</th>
-              <th className="py-2 px-3 text-right text-violet-700">Mg.Meta</th>
+              <th className="py-2 px-3 text-right text-emerald-700">Lucro Prev. <span className="font-normal opacity-60">(V−C)</span></th>
+              <th className="py-2 px-3 text-right text-violet-700">Lucro Des. <span className="font-normal opacity-60">(V−M)</span></th>
               <th className="py-2 px-3 text-right">Prev.Acum%</th>
               <th className="py-2 px-3 text-right text-blue-700">Medido</th>
               <th className="py-2 px-3 text-right">Real.Acum%</th>
@@ -1993,7 +1995,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                 <td className="py-2 px-3 text-right font-bold text-violet-300">{fmt(totalMeta)}</td>
                 <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(totalCusto)}</td>
                 <td className={`py-2 px-3 text-right font-bold ${totalLucro >= 0 ? "text-emerald-300" : "text-red-400"}`}>{totalLucro >= 0 ? "+" : ""}{fmt(totalLucro)}</td>
-                <td className="py-2 px-3 text-right text-slate-300">{margem.toFixed(1)}%</td>
+                <td className={`py-2 px-3 text-right font-bold ${totalLucroDesejado >= 0 ? "text-violet-300" : "text-red-400"}`}>{totalLucroDesejado >= 0 ? "+" : ""}{fmt(totalLucroDesejado)}</td>
                 <td className="py-2 px-3" />
                 <td className="py-2 px-3 text-right font-bold text-blue-300">{fmt(totalReal)}</td>
                 <td colSpan={4} />
@@ -2008,7 +2010,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
         )}
       </div>
       <p className="text-[10px] text-slate-400 text-center">
-        * Lucro = Venda − Custo | Mg.Meta = Venda − Meta | Valores normalizados ao orçamento (valor_negociado, totalMeta, totalCusto).
+        * Lucro Previsto (V−C) = Venda − Custo | Lucro Desejado (V−M) = Venda − Meta | Valores normalizados ao orçamento (valor_negociado, totalMeta, totalCusto).
       </p>
     </div>
   );
