@@ -587,56 +587,92 @@ export const planejamentoRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
 
-      // Busca atividades com o orçamento cruzado pelo nome (DISTINCT para evitar duplicatas)
+      // Cruzamento correto: para cada ITEM do orçamento, pega UMA atividade com nome igual.
+      // Isso evita multiplicar valores quando várias atividades têm o mesmo nome.
       const rows = await db.execute(sql`
         WITH matched AS (
-          SELECT
+          SELECT DISTINCT ON (i.id)
+            i.id                                   AS item_id,
+            i."eapCodigo"                          AS eap,
+            i.descricao                            AS nome,
+            i."vendaTotal"::numeric                AS venda_total,
+            i."custoTotalMat"::numeric             AS custo_mat,
+            i."custoTotalMdo"::numeric             AS custo_mdo,
+            i."custoTotal"::numeric                AS custo_total,
+            i.unidade                              AS unidade,
+            COALESCE(i.quantidade::numeric, 0)     AS quantidade,
             a.id                                   AS ativ_id,
-            a.eap_codigo                           AS eap,
-            a.nome                                 AS nome,
             a.data_inicio                          AS data_inicio,
             a.data_fim                             AS data_fim,
-            a.ordem                                AS ordem,
-            a.nivel                                AS nivel,
-            MAX(i."vendaTotal"::numeric)            AS venda_total,
-            MAX(i."custoTotalMat"::numeric)         AS custo_mat,
-            MAX(i."custoTotalMdo"::numeric)         AS custo_mdo,
-            MAX(i."custoTotal"::numeric)            AS custo_total,
-            MAX(i.unidade)                          AS unidade,
-            MAX(i.quantidade::numeric)              AS quantidade
-          FROM planejamento_atividades a
-          JOIN planejamento_projetos p ON p.id = a.projeto_id
-          JOIN orcamento_itens i
-            ON i."orcamentoId" = p.orcamento_id
+            a.ordem                                AS ordem
+          FROM orcamento_itens i
+          JOIN planejamento_projetos p
+            ON p.orcamento_id = i."orcamentoId"
+            AND p.id = ${input.projetoId}
+          JOIN planejamento_atividades a
+            ON a.projeto_id = ${input.projetoId}
+            AND NOT a.is_grupo
             AND LOWER(REGEXP_REPLACE(TRIM(a.nome), '[\\s]+', ' ', 'g'))
               = LOWER(REGEXP_REPLACE(TRIM(i.descricao), '[\\s]+', ' ', 'g'))
-          WHERE a.projeto_id = ${input.projetoId}
-            AND NOT a.is_grupo
-          GROUP BY a.id, a.eap_codigo, a.nome, a.data_inicio, a.data_fim, a.ordem, a.nivel
+          WHERE (i."vendaTotal"::numeric > 0 OR i."custoTotalMat"::numeric > 0)
+            AND a.data_inicio IS NOT NULL
+            AND a.data_fim IS NOT NULL
+          ORDER BY i.id, a.ordem ASC
         )
         SELECT * FROM matched ORDER BY ordem
       `);
 
-      const itens = (rows.rows as any[]).map(r => ({
+      // Busca valor_negociado do orçamento (é o teto de venda real do contrato)
+      const orcRes = await db.execute(sql`
+        SELECT COALESCE(o.valor_negociado::numeric, o."totalVenda"::numeric, o."totalMeta"::numeric, 0) AS valor_base,
+               o."totalMateriais"::numeric AS total_mat_orc,
+               o."totalMdo"::numeric       AS total_mdo_orc
+        FROM orcamentos o
+        JOIN planejamento_projetos p ON p.orcamento_id = o.id
+        WHERE p.id = ${input.projetoId}
+        LIMIT 1
+      `);
+      const orcRow   = (orcRes.rows as any[])[0];
+      const valorBase   = parseFloat(orcRow?.valor_base  ?? "0") || 0;
+      const totalMatOrc = parseFloat(orcRow?.total_mat_orc ?? "0") || 0;
+      const totalMdoOrc = parseFloat(orcRow?.total_mdo_orc ?? "0") || 0;
+
+      const rawItens = (rows.rows as any[]).map(r => ({
         ativId:     Number(r.ativ_id),
         eap:        String(r.eap ?? ""),
         nome:       String(r.nome ?? ""),
         dataInicio: r.data_inicio ? String(r.data_inicio).substring(0, 10) : null,
         dataFim:    r.data_fim    ? String(r.data_fim).substring(0, 10)    : null,
         ordem:      Number(r.ordem ?? 0),
-        vendaTotal: parseFloat(r.venda_total  ?? "0") || 0,
-        custoMat:   parseFloat(r.custo_mat    ?? "0") || 0,
-        custoMdo:   parseFloat(r.custo_mdo    ?? "0") || 0,
+        vendaRaw:   parseFloat(r.venda_total  ?? "0") || 0,
+        custoMatRaw:parseFloat(r.custo_mat    ?? "0") || 0,
+        custoMdoRaw:parseFloat(r.custo_mdo    ?? "0") || 0,
         custoTotal: parseFloat(r.custo_total  ?? "0") || 0,
         unidade:    r.unidade    ? String(r.unidade) : null,
         quantidade: parseFloat(r.quantidade   ?? "0") || 0,
       }));
 
-      const totalVenda  = itens.reduce((s, i) => s + i.vendaTotal, 0);
-      const totalMat    = itens.reduce((s, i) => s + i.custoMat,   0);
-      const totalMdo    = itens.reduce((s, i) => s + i.custoMdo,   0);
+      // Normaliza: escalona para que a soma de vendaTotal = valorBase
+      const sumVendaRaw = rawItens.reduce((s, i) => s + i.vendaRaw, 0);
+      const sumMatRaw   = rawItens.reduce((s, i) => s + i.custoMatRaw, 0);
+      const sumMdoRaw   = rawItens.reduce((s, i) => s + i.custoMdoRaw, 0);
 
-      return { itens, totalVenda, totalMat, totalMdo };
+      const escVenda = sumVendaRaw > 0 && valorBase > 0 ? valorBase / sumVendaRaw : 1;
+      const escMat   = sumMatRaw   > 0 && totalMatOrc > 0 ? totalMatOrc / sumMatRaw : escVenda;
+      const escMdo   = sumMdoRaw   > 0 && totalMdoOrc > 0 ? totalMdoOrc / sumMdoRaw : escVenda;
+
+      const itens = rawItens.map(i => ({
+        ...i,
+        vendaTotal: +(i.vendaRaw  * escVenda).toFixed(4),
+        custoMat:   +(i.custoMatRaw * escMat).toFixed(4),
+        custoMdo:   +(i.custoMdoRaw * escMdo).toFixed(4),
+      }));
+
+      const totalVenda = itens.reduce((s, i) => s + i.vendaTotal, 0);
+      const totalMat   = itens.reduce((s, i) => s + i.custoMat,   0);
+      const totalMdo   = itens.reduce((s, i) => s + i.custoMdo,   0);
+
+      return { itens, totalVenda, totalMat, totalMdo, valorBase };
     }),
 
   // ── Medições Financeiras ───────────────────────────────────────────────────
