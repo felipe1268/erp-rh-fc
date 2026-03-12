@@ -1202,12 +1202,12 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
               grupos={grupos as any[]} className="w-40" />
           </td>
           <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
+          <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
           <td className="px-2 py-1 text-right">
             <span className="text-xs font-semibold text-blue-700 tabular-nums px-1.5">
               {formatBRL(precoEnc(parseBRL(editForm.precoUnitario)))}
             </span>
           </td>
-          <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
           <td className="px-2 py-1 text-center">
             <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
               {i.totalOrcamentos}
@@ -1244,8 +1244,8 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
           {i.tipo && <Badge variant="outline" className="text-[10px]">{i.tipo}</Badge>}
         </td>
         <td className="px-3 py-2 text-center text-muted-foreground">{i.unidade || "—"}</td>
-        <td className="px-3 py-2 text-right font-semibold tabular-nums text-blue-700">{formatBRL(precoEnc(n(i.precoMedio)))}</td>
         <td className="px-3 py-2 text-right text-slate-400 tabular-nums">{formatBRL(n(i.precoMedio))}</td>
+        <td className="px-3 py-2 text-right font-semibold tabular-nums text-blue-700">{formatBRL(precoEnc(n(i.precoMedio)))}</td>
         <td className="px-3 py-2 text-center">
           <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
             {i.totalOrcamentos}
@@ -1425,6 +1425,7 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
                   <th className="text-left px-3 py-2 min-w-[260px]">Descrição</th>
                   <th className="text-left px-3 py-2 w-36">Grupo</th>
                   <th className="text-center px-3 py-2 w-12">Un</th>
+                  <th className="text-right px-3 py-2 w-28 text-slate-500">Preço Base</th>
                   <th className="text-right px-3 py-2 w-28 font-semibold">
                     <span>Preço c/enc.</span>
                     {(ls > 0 || he > 0) && (
@@ -1435,7 +1436,6 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
                       </div>
                     )}
                   </th>
-                  <th className="text-right px-3 py-2 w-28 text-slate-500">Preço Base</th>
                   <th className="text-center px-3 py-2 w-20">Orçamentos</th>
                   <th className="w-16" />
                 </tr>
@@ -1452,12 +1452,12 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
                         grupos={grupos as any[]} className="w-40" />
                     </td>
                     <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
+                    <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
                     <td className="px-2 py-1 text-right">
                       <span className="text-xs font-semibold text-blue-700 tabular-nums px-1.5">
                         {formatBRL(precoEnc(parseBRL(editForm.precoUnitario)))}
                       </span>
                     </td>
-                    <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
                     <td className="px-2 py-1" />
                     <td className="px-2 py-1">
                       <div className="flex items-center gap-1">
