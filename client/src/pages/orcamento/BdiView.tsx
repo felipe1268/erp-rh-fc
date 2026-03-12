@@ -370,19 +370,31 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
 
   const totalGeral = linhas.filter(l => !l.isHeader).reduce((s, l) => s + fmt(l.totalObra), 0);
 
-  // Editable number input — compact
-  const Inp = ({ id, field, val, w = "w-20" }: { id: number; field: string; val: any; w?: string }) => (
-    <input
-      type="number"
-      step="0.01"
-      value={getEdit(id, field, val)}
-      placeholder="0"
-      onChange={e => setEdit(id, field, e.target.value)}
-      onBlur={() => handleBlur(id, field, edits[id]?.[field] ?? "")}
-      onKeyDown={e => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
-      className={`${w} h-5 text-right text-xs font-mono bg-blue-50 border border-blue-200 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-400`}
-    />
-  );
+  // Editable number input — compact, with optional currency display
+  const Inp = ({ id, field, val, w = "w-20", money = false }: { id: number; field: string; val: any; w?: string; money?: boolean }) => {
+    const [focused, setFocused] = React.useState(false);
+    const rawEdit = edits[id]?.[field];
+    const numVal  = fmt(val);
+    // While focused: show raw edit or plain number; while blurred: show currency if money=true
+    const displayVal = focused
+      ? (rawEdit !== undefined ? rawEdit : (numVal !== 0 ? String(numVal) : ""))
+      : (rawEdit !== undefined
+          ? (money ? fmt(rawEdit.replace(",", ".")).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : rawEdit)
+          : (numVal !== 0 ? (money ? numVal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(numVal)) : ""));
+    return (
+      <input
+        type={focused ? "number" : "text"}
+        step="0.01"
+        value={displayVal}
+        placeholder={money ? "0,00" : "0"}
+        onChange={e => setEdit(id, field, e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => { setFocused(false); handleBlur(id, field, edits[id]?.[field] ?? ""); }}
+        onKeyDown={e => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
+        className={`${w} h-5 text-right text-xs font-mono bg-blue-50 border border-blue-200 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-400`}
+      />
+    );
+  };
 
   // 13 colunas: chevron | cod | descrição | modalidade | tipo | qtd | meses | salário | bônus | 13°+férias | val/h | total/mês | total/obra
   const COLS = 13;
@@ -413,7 +425,7 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-24">13°+Férias</th>
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-20">Valor/h</th>
                 <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-28">Total/Mês</th>
-                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap w-28" style={{ backgroundColor: "#e8e840" }}>Total/Obra</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap w-28 border-l border-slate-600">Total/Obra</th>
               </tr>
             </thead>
             <tbody>
@@ -468,13 +480,13 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
                     <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100">
                       {fmt(l.mesesObra) !== 0 ? num(l.mesesObra, 0) : "—"}
                     </td>
-                    {/* Salário Base — editável */}
+                    {/* Salário Base — editável, formato moeda */}
                     <td className="px-1 py-0.5 text-right border-r border-slate-100">
-                      <Inp id={l.id} field="salarioBase" val={l.salarioBase} w="w-24" />
+                      <Inp id={l.id} field="salarioBase" val={l.salarioBase} w="w-28" money />
                     </td>
-                    {/* Bônus Mensal — editável */}
+                    {/* Bônus Mensal — editável, formato moeda */}
                     <td className="px-1 py-0.5 text-right border-r border-slate-100">
-                      <Inp id={l.id} field="bonusMensal" val={l.bonusMensal} w="w-20" />
+                      <Inp id={l.id} field="bonusMensal" val={l.bonusMensal} w="w-24" money />
                     </td>
                     {/* 13°+Férias — calculado, read-only */}
                     <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100">
@@ -488,8 +500,8 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
                     <td className="px-2 py-1 text-right font-mono text-slate-700 border-r border-slate-100">
                       {hasMes ? brl(l.totalMes) : "—"}
                     </td>
-                    {/* Total/Obra — amarelo */}
-                    <td className="px-2 py-1 text-right font-mono font-semibold text-slate-900" style={hasTotal ? { backgroundColor: "#F7F797" } : {}}>
+                    {/* Total/Obra — sem amarelo nas linhas normais */}
+                    <td className="px-2 py-1 text-right font-mono font-semibold text-slate-700 border-l border-slate-100">
                       {hasTotal ? brl(l.totalObra) : "—"}
                     </td>
                   </tr>
