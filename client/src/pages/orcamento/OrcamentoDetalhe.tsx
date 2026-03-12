@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
-  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent,
+  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -84,6 +84,7 @@ export default function OrcamentoDetalhe() {
   const [metaValInput, setMetaValInput] = useState(""); // input R$ — vazio = usa valor calculado
   const [savingMeta, setSavingMeta] = useState(false);
   const [localMetaVal, setLocalMetaVal] = useState<number | null>(null); // R$ exato digitado
+  const [editingMeta, setEditingMeta] = useState(false);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [expandedComps, setExpandedComps] = useState<Set<string>>(new Set());
 
@@ -96,6 +97,7 @@ export default function OrcamentoDetalhe() {
     onSuccess: () => {
       toast.success("Meta atualizada!");
       setSavingMeta(false);
+      setEditingMeta(false);
       refetch();
     },
     onError: e => { toast.error(e.message || "Erro ao salvar meta"); setSavingMeta(false); },
@@ -437,6 +439,7 @@ export default function OrcamentoDetalhe() {
           <div className={`rounded-xl border-2 transition-all ${
             versao === "meta" ? "border-purple-500 bg-purple-50" : "border-border bg-card"
           }`}>
+            {/* Cabeçalho clicável — muda versão */}
             <button className="w-full text-left p-4 pb-2" onClick={() => setVersao("meta")}>
               <div className="flex items-center gap-2 mb-1">
                 <Target className={`h-4 w-4 ${versao === "meta" ? "text-purple-600" : "text-muted-foreground"}`} />
@@ -448,79 +451,116 @@ export default function OrcamentoDetalhe() {
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">−{localMetaPerc.toFixed(2)}% do custo</p>
             </button>
-            {/* Campos bidireccionais: % ↔ R$ */}
-            <div className="px-3 pb-3 space-y-1.5">
-              {/* Linha %  */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground w-4 shrink-0">%</span>
-                <Input
-                  type="number" min={0} max={99} step={0.01}
-                  value={metaInput}
-                  onChange={e => {
-                    const str = e.target.value;
-                    setMetaInput(str);
-                    setMetaValInput("");
-                    setLocalMetaVal(null); // limpa R$ fixo — % passa a ser fonte de verdade
-                    const v = parseFloat(str);
-                    if (!isNaN(v) && v >= 0 && v < 100) setLocalMetaPerc(v);
-                  }}
-                  className="h-7 text-sm text-right font-semibold text-purple-700"
-                />
-              </div>
-              {/* Linha R$ */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground w-4 shrink-0">R$</span>
-                <Input
-                  type="text"
-                  value={metaValInput !== ""
-                    ? metaValInput
-                    : r2(totalCusto * (1 - localMetaPerc / 100))
-                        .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  onChange={e => {
-                    const str = e.target.value;
-                    setMetaValInput(str);
-                    const val = parseFloat(str.replace(/\./g, "").replace(",", "."));
-                    if (!isNaN(val) && val > 0 && totalCusto > 0) {
-                      setLocalMetaVal(val); // guarda o R$ exato digitado
-                      const pct = (1 - val / totalCusto) * 100; // sem r2 — preserva precisão total
-                      if (pct >= 0 && pct < 100) {
-                        setLocalMetaPerc(pct);
-                        setMetaInput(r2(pct).toFixed(2));
-                      }
-                    }
-                  }}
-                  onBlur={e => {
-                    const val = parseFloat(e.target.value.replace(/\./g, "").replace(",", "."));
-                    if (!isNaN(val) && val > 0) {
-                      setLocalMetaVal(val);
-                      setMetaValInput(val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-                    } else {
-                      setMetaValInput("");
-                      setLocalMetaVal(null);
-                    }
-                  }}
-                  className="h-7 text-sm text-right font-semibold text-purple-700"
-                />
-              </div>
-              {/* Salvar */}
-              <div className="flex justify-end pt-0.5">
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-purple-600 hover:text-purple-800 text-xs gap-1"
-                  disabled={savingMeta || updateMetaMutation.isPending}
-                  onClick={() => {
-                    setSavingMeta(true);
-                    updateMetaMutation.mutate({
-                      id,
-                      metaPercentual: localMetaPerc / 100,
-                      ...(localMetaVal !== null ? { totalMetaExato: localMetaVal } : {}),
-                    });
-                  }}
-                >
-                  {savingMeta
-                    ? <Loader2 className="h-3 w-3 animate-spin" />
-                    : <Save className="h-3 w-3" />}
-                  Salvar
-                </Button>
-              </div>
+
+            {/* Área de valores — modo leitura ou edição */}
+            <div className="px-3 pb-3">
+              {!editingMeta ? (
+                /* ── MODO LEITURA: mostra valores + botão Editar ── */
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-xs text-muted-foreground w-4">%</span>
+                    <span className="font-semibold text-purple-700 text-right">{localMetaPerc.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-xs text-muted-foreground w-4">R$</span>
+                    <span className="font-semibold text-purple-700 text-right">
+                      {(localMetaVal !== null
+                        ? localMetaVal
+                        : r2(totalCusto * (1 - localMetaPerc / 100))
+                      ).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <Button size="sm" variant="ghost"
+                      className="h-6 px-2 text-purple-600 hover:text-purple-800 text-xs gap-1"
+                      onClick={e => { e.stopPropagation(); setEditingMeta(true); }}
+                    >
+                      <Pencil className="h-3 w-3" /> Editar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* ── MODO EDIÇÃO: campos + botões Salvar / Cancelar ── */
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground w-4 shrink-0">%</span>
+                    <Input
+                      type="number" min={0} max={99} step={0.01}
+                      value={metaInput}
+                      autoFocus
+                      onChange={e => {
+                        const str = e.target.value;
+                        setMetaInput(str);
+                        setMetaValInput("");
+                        setLocalMetaVal(null);
+                        const v = parseFloat(str);
+                        if (!isNaN(v) && v >= 0 && v < 100) setLocalMetaPerc(v);
+                      }}
+                      className="h-7 text-sm text-right font-semibold text-purple-700"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground w-4 shrink-0">R$</span>
+                    <Input
+                      type="text"
+                      value={metaValInput !== ""
+                        ? metaValInput
+                        : r2(totalCusto * (1 - localMetaPerc / 100))
+                            .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      onChange={e => {
+                        const str = e.target.value;
+                        setMetaValInput(str);
+                        const val = parseFloat(str.replace(/\./g, "").replace(",", "."));
+                        if (!isNaN(val) && val > 0 && totalCusto > 0) {
+                          setLocalMetaVal(val);
+                          const pct = (1 - val / totalCusto) * 100;
+                          if (pct >= 0 && pct < 100) {
+                            setLocalMetaPerc(pct);
+                            setMetaInput(r2(pct).toFixed(2));
+                          }
+                        }
+                      }}
+                      onBlur={e => {
+                        const val = parseFloat(e.target.value.replace(/\./g, "").replace(",", "."));
+                        if (!isNaN(val) && val > 0) {
+                          setLocalMetaVal(val);
+                          setMetaValInput(val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                        } else {
+                          setMetaValInput("");
+                          setLocalMetaVal(null);
+                        }
+                      }}
+                      className="h-7 text-sm text-right font-semibold text-purple-700"
+                    />
+                  </div>
+                  <div className="flex items-center justify-end gap-1 pt-0.5">
+                    <Button size="sm" variant="ghost"
+                      className="h-6 px-2 text-muted-foreground hover:text-foreground text-xs"
+                      onClick={() => setEditingMeta(false)}
+                      disabled={updateMetaMutation.isPending}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button size="sm" variant="ghost"
+                      className="h-6 px-2 text-purple-600 hover:text-purple-800 text-xs gap-1"
+                      disabled={savingMeta || updateMetaMutation.isPending}
+                      onClick={() => {
+                        setSavingMeta(true);
+                        updateMetaMutation.mutate({
+                          id,
+                          metaPercentual: localMetaPerc / 100,
+                          ...(localMetaVal !== null ? { totalMetaExato: localMetaVal } : {}),
+                        });
+                      }}
+                    >
+                      {updateMetaMutation.isPending
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Save className="h-3 w-3" />}
+                      Salvar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

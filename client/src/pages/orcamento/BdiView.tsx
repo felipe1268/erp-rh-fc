@@ -83,13 +83,19 @@ function pct2(v: string | number | null | undefined) {
   return (n * 100).toFixed(2) + "%";
 }
 
+// Filtra apenas códigos BDI válidos — descarta lixo de importações antigas
+const VALID_BDI = /^(CD-\d{2}|CI-\d{2}|DI-\d{2}|B-\d{2}|L-\d{2}|V\d{1,2}|PV-\d|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
+
 function AbaBdi({ linhas }: { linhas: any[] }) {
-  // Encontra orçamento totais: linha BDI total é B-02
-  const bdiLinha = linhas.find((l: any) => l.codigo === "B-02");
+  // Remove linhas inválidas (dados de importação antiga com lixo do Excel)
+  const linhasValidas = linhas.filter((l: any) => VALID_BDI.test(String(l.codigo || "").trim()));
+
+  // Encontra BDI total (B-02)
+  const bdiLinha = linhasValidas.find((l: any) => l.codigo === "B-02");
   const bdiTotal  = bdiLinha ? fmt(bdiLinha.percentual) : 0;
 
-  // Detecta linhas separadoras (ex: "CD + CI =")
-  const isSumRow = (cod: string) => cod.includes("+") || cod.includes("=") || cod.startsWith("CD+");
+  // Detecta linha de soma (ex: "CD + CI =")
+  const isSumRow = (cod: string) => /CD\s*\+/.test(cod);
 
   return (
     <div className="space-y-0 text-sm">
@@ -118,7 +124,7 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                 </tr>
               </thead>
               <tbody>
-                {linhas.map((l: any, idx: number) => {
+                {linhasValidas.map((l: any, idx: number) => {
                   const key    = getGrupoKey(l.codigo);
                   const g      = GRUPO_STYLES[key] ?? GRUPO_STYLES["CD"];
                   const header = isGroupHeader(l.codigo);
@@ -763,9 +769,10 @@ export default function BdiView({ orcamentoId, bdiPct, aplicarBdiMutation, onImp
   );
 
   const det = data as any;
-  const hasBdi = det?.bdi?.length > 0;
+  const bdiValidas = (det?.bdi ?? []).filter((l: any) => VALID_BDI.test(String(l.codigo || "").trim()));
+  const hasBdi = bdiValidas.length > 0;
   const counts: Record<string, number> = {
-    bdi:                det?.bdi?.length ?? 0,
+    bdi:                bdiValidas.length,
     indiretos:          det?.indiretos?.length ?? 0,
     fd:                 det?.fd?.length ?? 0,
     adm:                det?.adm?.length ?? 0,
@@ -855,7 +862,7 @@ export default function BdiView({ orcamentoId, bdiPct, aplicarBdiMutation, onImp
       </div>
 
       {/* Conteúdo da aba ativa */}
-      {activeTab === "bdi" && <AbaBdi linhas={det?.bdi ?? []} />}
+      {activeTab === "bdi" && <AbaBdi linhas={bdiValidas} />}
       {activeTab === "indiretos" && counts.indiretos > 0 && <AbaIndiretos linhas={det?.indiretos ?? []} orcamentoId={orcamentoId} />}
       {activeTab === "fd"        && counts.fd        > 0 && <AbaFd linhas={det?.fd ?? []} orcamentoId={orcamentoId} />}
       {activeTab === "adm"       && counts.adm       > 0 && <AbaAdmCentral linhas={det?.adm ?? []} orcamentoId={orcamentoId} />}
