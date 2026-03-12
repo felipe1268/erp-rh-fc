@@ -3198,15 +3198,94 @@ export const orcamentoRouter = router({
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) return { total: 0, totalVenda: 0, totalCusto: 0, totalMeta: 0, recentes: [] };
+      if (!db) return {
+        total: 0, totalVenda: 0, totalCusto: 0, totalMeta: 0, totalMat: 0, totalMdo: 0, totalEquip: 0,
+        bdiMedio: 0, margemMedia: 0, recentes: [], porStatus: [], porCliente: [], porBdi: [], porMargem: [], lista: [],
+      };
+
       const lista = await db.select().from(orcamentos)
         .where(and(eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt)))
-        .orderBy(desc(orcamentos.createdAt))
-        .limit(50);
+        .orderBy(desc(orcamentos.createdAt));
+
+      const n = (v: any) => parseFloat(v || '0');
+
+      // Totais gerais
       const total      = lista.length;
-      const totalVenda = lista.reduce((s, o) => s + parseFloat(o.totalVenda || '0'), 0);
-      const totalCusto = lista.reduce((s, o) => s + parseFloat(o.totalCusto || '0'), 0);
-      const totalMeta  = lista.reduce((s, o) => s + parseFloat(o.totalMeta  || '0'), 0);
-      return { total, totalVenda, totalCusto, totalMeta, recentes: lista.slice(0, 5) };
+      const totalVenda = lista.reduce((s, o) => s + n(o.totalVenda), 0);
+      const totalCusto = lista.reduce((s, o) => s + n(o.totalCusto), 0);
+      const totalMeta  = lista.reduce((s, o) => s + n(o.totalMeta),  0);
+      const totalMat   = lista.reduce((s, o) => s + n(o.totalMateriais), 0);
+      const totalMdo   = lista.reduce((s, o) => s + n(o.totalMdo),   0);
+      const totalEquip = lista.reduce((s, o) => s + n(o.totalEquipamentos), 0);
+
+      // BDI médio ponderado por custo
+      const bdiMedio = totalCusto > 0
+        ? lista.reduce((s, o) => s + n(o.bdiPercentual) * n(o.totalCusto), 0) / totalCusto
+        : 0;
+      const margemMedia = totalVenda > 0 ? (totalVenda - totalCusto) / totalVenda : 0;
+
+      // Por status
+      const statusMap: Record<string, { count: number; venda: number; custo: number }> = {};
+      for (const o of lista) {
+        const s = o.status || 'rascunho';
+        if (!statusMap[s]) statusMap[s] = { count: 0, venda: 0, custo: 0 };
+        statusMap[s].count++;
+        statusMap[s].venda += n(o.totalVenda);
+        statusMap[s].custo += n(o.totalCusto);
+      }
+      const porStatus = Object.entries(statusMap).map(([status, d]) => ({ status, ...d }));
+
+      // Top clientes por volume de venda
+      const clienteMap: Record<string, number> = {};
+      for (const o of lista) {
+        const c = o.cliente?.trim() || 'Sem cliente';
+        clienteMap[c] = (clienteMap[c] || 0) + n(o.totalVenda);
+      }
+      const porCliente = Object.entries(clienteMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([cliente, venda]) => ({ cliente: cliente.length > 20 ? cliente.slice(0, 20) + '…' : cliente, venda }));
+
+      // Por BDI
+      const porBdi = lista
+        .filter(o => n(o.bdiPercentual) > 0 && n(o.totalCusto) > 0)
+        .sort((a, b) => n(b.bdiPercentual) - n(a.bdiPercentual))
+        .slice(0, 10)
+        .map(o => ({
+          codigo: o.codigo.length > 12 ? o.codigo.slice(0, 12) + '…' : o.codigo,
+          bdi: Math.round(n(o.bdiPercentual) * 10000) / 100,
+          venda: n(o.totalVenda),
+          custo: n(o.totalCusto),
+        }));
+
+      // Por margem
+      const porMargem = lista
+        .filter(o => n(o.totalVenda) > 0 && n(o.totalCusto) > 0)
+        .sort((a, b) => n(b.totalVenda) - n(a.totalVenda))
+        .slice(0, 10)
+        .map(o => {
+          const venda = n(o.totalVenda);
+          const custo = n(o.totalCusto);
+          const margem = venda > 0 ? ((venda - custo) / venda) * 100 : 0;
+          return {
+            codigo: o.codigo.length > 12 ? o.codigo.slice(0, 12) + '…' : o.codigo,
+            venda, custo, meta: n(o.totalMeta),
+            margem: Math.round(margem * 100) / 100,
+            bdi: Math.round(n(o.bdiPercentual) * 10000) / 100,
+          };
+        });
+
+      return {
+        total, totalVenda, totalCusto, totalMeta, totalMat, totalMdo, totalEquip,
+        bdiMedio, margemMedia,
+        recentes: lista.slice(0, 5),
+        porStatus, porCliente, porBdi, porMargem,
+        lista: lista.slice(0, 50).map(o => ({
+          id: o.id, codigo: o.codigo, cliente: o.cliente, local: o.local,
+          status: o.status, bdiPercentual: o.bdiPercentual,
+          totalVenda: o.totalVenda, totalCusto: o.totalCusto, totalMeta: o.totalMeta,
+          createdAt: o.createdAt,
+        })),
+      };
     }),
 });
