@@ -362,92 +362,147 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
     setEdits(p => { const c = { ...p }; if (c[id]) delete c[id][field]; return c; });
   };
 
-  const setEdit = (id: number, field: string, val: string) => {
+  const setEdit = (id: number, field: string, val: string) =>
     setEdits(p => ({ ...p, [id]: { ...(p[id] ?? {}), [field]: val } }));
-  };
 
   const getEdit = (id: number, field: string, fallback: any) =>
     edits[id]?.[field] ?? String(fmt(fallback) !== 0 ? fmt(fallback) : "");
 
-  // Agrupar por seção
-  const secoes: string[] = [];
-  linhas.forEach(l => { if (l.isHeader && !secoes.includes(l.secao ?? l.codigo)) secoes.push(l.secao ?? l.codigo); });
+  const totalGeral = linhas.filter(l => !l.isHeader).reduce((s, l) => s + fmt(l.totalObra), 0);
 
-  const NumCell = ({ id, field, val }: { id: number; field: string; val: any }) => (
-    <Input
-      className="h-6 w-28 text-right text-xs ml-auto font-mono"
+  // Editable number input — compact
+  const Inp = ({ id, field, val, w = "w-20" }: { id: number; field: string; val: any; w?: string }) => (
+    <input
+      type="number"
+      step="0.01"
       value={getEdit(id, field, val)}
       placeholder="0"
       onChange={e => setEdit(id, field, e.target.value)}
       onBlur={() => handleBlur(id, field, edits[id]?.[field] ?? "")}
-      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      onKeyDown={e => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
+      className={`${w} h-5 text-right text-xs font-mono bg-blue-50 border border-blue-200 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-400`}
     />
   );
 
+  // 13 colunas: chevron | cod | descrição | modalidade | tipo | qtd | meses | salário | bônus | 13°+férias | val/h | total/mês | total/obra
+  const COLS = 13;
+
   return (
-    <Card className="overflow-hidden border-slate-300">
+    <Card className="overflow-hidden border-slate-200">
       <CardContent className="p-0">
+        {/* Grand total banner */}
+        <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100 border-b border-slate-200">
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Total Geral de Custos Indiretos</span>
+          <span className="font-bold font-mono text-sm text-slate-900" style={{ backgroundColor: "#F7F797", padding: "2px 8px", borderRadius: 3 }}>
+            {brl(totalGeral)}
+          </span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse" style={{ borderSpacing: 0 }}>
+          <table className="w-full border-collapse text-xs" style={{ minWidth: 1100 }}>
             <thead>
-              <tr className="bg-slate-700 text-white text-xs uppercase sticky top-0 z-10">
-                <th className="px-2 py-2 w-8 border-r border-slate-600"></th>
-                <TH className="text-white w-20 border-r border-slate-600">Seção</TH>
-                <TH className="text-white w-20 border-r border-slate-600">Código</TH>
-                <TH className="text-white min-w-[200px] border-r border-slate-600">Cargo / Função</TH>
-                <TH className="text-white border-r border-slate-600">Modalidade</TH>
-                <TH className="text-white border-r border-slate-600">Tipo</TH>
-                <TH className="text-white text-right w-16 border-r border-slate-600">Qtd</TH>
-                <TH className="text-white text-right w-16 border-r border-slate-600">Meses</TH>
-                <TH className="text-white text-right w-28 border-r border-slate-600">Salário Base</TH>
-                <TH className="text-white text-right w-28 border-r border-slate-600">13º+Férias</TH>
-                <TH className="text-white text-right w-24 border-r border-slate-600">Valor/h</TH>
-                <TH className="text-white text-right w-28 border-r border-slate-600">Total/mês</TH>
-                <TH className="text-white text-right w-32">Total/obra</TH>
+              <tr className="bg-slate-700 text-white uppercase sticky top-0 z-10">
+                <th className="w-7 px-1 py-1.5 border-r border-slate-600"></th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-14">Cód.</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600" style={{ minWidth: 220 }}>Cargo / Função</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-24">Modalidade</th>
+                <th className="px-2 py-1.5 text-left font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-20">Tipo</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-16">Qtd</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-12">Meses</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-28">Salário Base</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-24">Bônus Mensal</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-24">13°+Férias</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-20">Valor/h</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap border-r border-slate-600 w-28">Total/Mês</th>
+                <th className="px-2 py-1.5 text-right font-bold tracking-wide whitespace-nowrap w-28" style={{ backgroundColor: "#e8e840" }}>Total/Obra</th>
               </tr>
             </thead>
             <tbody>
               {linhas.map((l: any, idx: number) => {
                 const secKey = l.secao ?? l.codigo;
+
+                // ── Cabeçalho de seção (CI-01..CI-07)
                 if (l.isHeader) {
                   const open  = !collapsed.has(secKey);
-                  const total = linhas.filter(x => !x.isHeader && x.secao === secKey).reduce((s, x) => s + fmt(x.totalObra), 0);
+                  const secTotal = linhas.filter(x => !x.isHeader && (x.secao === secKey || x.secao === l.codigo))
+                                         .reduce((s, x) => s + fmt(x.totalObra), 0);
                   return (
                     <tr key={l.id ?? idx}
-                      className="bg-slate-700 text-white cursor-pointer select-none border-t-2 border-slate-500 hover:brightness-95 transition-all"
+                      className="bg-slate-700 text-white cursor-pointer select-none border-t-2 border-slate-500 hover:bg-slate-600 transition-colors"
                       onClick={() => setCollapsed(p => { const n = new Set(p); n.has(secKey) ? n.delete(secKey) : n.add(secKey); return n; })}>
-                      <td className="px-2 py-2 w-8 border-r border-slate-500">
-                        {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <td className="px-1 py-1.5 text-center border-r border-slate-500">
+                        {open ? <ChevronDown className="h-3.5 w-3.5 inline" /> : <ChevronRight className="h-3.5 w-3.5 inline" />}
                       </td>
-                      <td colSpan={11} className="px-3 py-2 font-bold text-sm uppercase tracking-wide border-r border-slate-500">
-                        {l.codigo} — {l.descricao}
+                      <td className="px-2 py-1.5 font-bold font-mono text-xs border-r border-slate-500">{l.codigo}</td>
+                      <td colSpan={9} className="px-2 py-1.5 font-bold text-xs uppercase tracking-wider border-r border-slate-500">
+                        {l.descricao}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono font-bold text-sm text-slate-900" style={{ backgroundColor: "#F7F797" }}>
-                        {brl(total)}
+                      <td className="px-2 py-1.5 text-right font-mono font-bold text-xs border-r border-slate-500">
+                        {secTotal > 0 ? brl(secTotal) : ""}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono font-bold text-xs text-slate-900" style={{ backgroundColor: secTotal > 0 ? "#F7F797" : "transparent" }}>
+                        {secTotal > 0 ? brl(secTotal) : ""}
                       </td>
                     </tr>
                   );
                 }
-                if (collapsed.has(l.secao ?? "")) return null;
+
+                // Ocultar se seção colapsada
+                if (l.secao && collapsed.has(l.secao)) return null;
+
                 const isEven = idx % 2 === 0;
+                const hasTotal = fmt(l.totalObra) !== 0;
+                const hasMes   = fmt(l.totalMes) !== 0;
+
                 return (
-                  <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/20 transition-colors ${isEven ? "bg-white" : "bg-slate-50"}`}>
-                    <TD className="border-r border-slate-100"></TD>
-                    <TD className="font-mono text-xs text-muted-foreground border-r border-slate-100">{l.secao}</TD>
-                    <TD className="font-mono text-xs border-r border-slate-100">{l.codigo}</TD>
-                    <TD className="font-medium border-r border-slate-100">{l.descricao}</TD>
-                    <TD className="text-muted-foreground text-xs border-r border-slate-100">{l.modalidade}</TD>
-                    <TD className="text-muted-foreground text-xs border-r border-slate-100">{l.tipoContrato}</TD>
-                    <TD className="text-right border-r border-slate-100"><NumCell id={l.id} field="quantidade" val={l.quantidade} /></TD>
-                    <TD className="text-right font-mono text-xs border-r border-slate-100">{num(l.mesesObra)}</TD>
-                    <TD className="text-right border-r border-slate-100"><NumCell id={l.id} field="salarioBase" val={l.salarioBase} /></TD>
-                    <TD className="text-right border-r border-slate-100"><NumCell id={l.id} field="decimoTerceiroFerias" val={l.decimoTerceiroFerias} /></TD>
-                    <TD className="text-right font-mono text-xs border-r border-slate-100">{num(l.valorHora, 4)}</TD>
-                    <TD className="text-right font-mono text-xs border-r border-slate-100">{brl(l.totalMes)}</TD>
-                    <TD className="text-right font-mono text-xs font-semibold">{brl(l.totalObra)}</TD>
+                  <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${isEven ? "bg-white" : "bg-slate-50/60"}`}>
+                    <td className="border-r border-slate-100"></td>
+                    <td className="px-2 py-1 font-mono text-xs text-slate-500 border-r border-slate-100 whitespace-nowrap">{l.codigo}</td>
+                    <td className="px-2 py-1 text-slate-700 border-r border-slate-100">{l.descricao}</td>
+                    <td className="px-2 py-1 text-slate-500 border-r border-slate-100 whitespace-nowrap">{l.modalidade}</td>
+                    <td className="px-2 py-1 text-slate-400 border-r border-slate-100 whitespace-nowrap">{l.tipoContrato}</td>
+                    {/* Qtd — editável */}
+                    <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                      <Inp id={l.id} field="quantidade" val={l.quantidade} w="w-14" />
+                    </td>
+                    {/* Meses — read-only */}
+                    <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100">
+                      {fmt(l.mesesObra) !== 0 ? num(l.mesesObra, 0) : "—"}
+                    </td>
+                    {/* Salário Base — editável */}
+                    <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                      <Inp id={l.id} field="salarioBase" val={l.salarioBase} w="w-24" />
+                    </td>
+                    {/* Bônus Mensal — editável */}
+                    <td className="px-1 py-0.5 text-right border-r border-slate-100">
+                      <Inp id={l.id} field="bonusMensal" val={l.bonusMensal} w="w-20" />
+                    </td>
+                    {/* 13°+Férias — calculado, read-only */}
+                    <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100">
+                      {fmt(l.decimoTerceiroFerias) !== 0 ? brl(l.decimoTerceiroFerias) : "—"}
+                    </td>
+                    {/* Valor/h — calculado, read-only */}
+                    <td className="px-2 py-1 text-right font-mono text-slate-500 border-r border-slate-100">
+                      {fmt(l.valorHora) !== 0 ? num(l.valorHora, 4) : "—"}
+                    </td>
+                    {/* Total/Mês — calculado, read-only */}
+                    <td className="px-2 py-1 text-right font-mono text-slate-700 border-r border-slate-100">
+                      {hasMes ? brl(l.totalMes) : "—"}
+                    </td>
+                    {/* Total/Obra — amarelo */}
+                    <td className="px-2 py-1 text-right font-mono font-semibold text-slate-900" style={hasTotal ? { backgroundColor: "#F7F797" } : {}}>
+                      {hasTotal ? brl(l.totalObra) : "—"}
+                    </td>
                   </tr>
                 );
               })}
+
+              {/* Linha de total geral */}
+              <tr className="bg-slate-200 border-t-2 border-slate-400">
+                <td colSpan={COLS - 1} className="px-3 py-1.5 text-right text-xs font-bold text-slate-700 uppercase">TOTAL GERAL</td>
+                <td className="px-2 py-1.5 text-right font-mono font-bold text-xs text-slate-900" style={{ backgroundColor: "#F7F797" }}>
+                  {brl(totalGeral)}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
