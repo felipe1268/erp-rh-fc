@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -466,6 +466,19 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
 
   const totalGeral = linhas.filter(l => !l.isHeader).reduce((s, l) => s + fmt(l.totalObra), 0);
 
+  // Reagrupa linhas: cada header CI-XX seguido imediatamente pelas suas sub-linhas.
+  // (No banco, os headers CI-02..CI-07 ficam juntos antes das sub-linhas; reagrupamos aqui.)
+  const groupedLinhas = useMemo(() => {
+    const noSecao = linhas.filter(l => !l.secao && !l.isHeader);
+    const headers  = linhas.filter(l => l.isHeader);
+    const result: any[] = [...noSecao];
+    for (const hdr of headers) {
+      result.push(hdr);
+      result.push(...linhas.filter(l => !l.isHeader && l.secao === hdr.secao));
+    }
+    return result;
+  }, [linhas]);
+
   // Editable number input — compact, with optional currency display
   const Inp = ({ id, field, val, w = "w-20", money = false }: { id: number; field: string; val: any; w?: string; money?: boolean }) => {
     const [focused, setFocused] = React.useState(false);
@@ -887,7 +900,7 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
               </tr>
             </thead>
             <tbody>
-              {linhas.map((l: any, idx: number) => {
+              {groupedLinhas.map((l: any, idx: number) => {
                 const secKey = l.secao ?? l.codigo;
 
                 // ── Cabeçalho de seção (CI-01..CI-07)
@@ -937,7 +950,6 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
                 const hasMes   = fmt(l.totalMes) !== 0;
                 const isCLT    = String(l.tipoContrato ?? '').toLowerCase() === 'clt';
                 const isPJ     = String(l.tipoContrato ?? '').toLowerCase() === 'contrato';
-                const isCI01   = l.secao === 'CI-01';
 
                 return (
                   <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${isEven ? "bg-white" : "bg-slate-50/60"}`}>
@@ -974,16 +986,16 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
                     <td className="px-1 py-0.5 text-right border-r border-slate-100">
                       <Inp id={l.id} field="bonusMensal" val={l.bonusMensal} w="w-24" money />
                     </td>
-                    {/* TX Transferência — editável em %, somente CI-01 CLT/PJ */}
+                    {/* TX Transferência — editável em %, somente linhas CLT/PJ */}
                     <td className="px-1 py-0.5 text-right border-r border-slate-100">
-                      {isCI01 && (isCLT || isPJ) ? (
+                      {(isCLT || isPJ) ? (
                         <Inp id={l.id} field="txTransferencia" val={fmt(l.txTransferencia) * 100} w="w-16" />
                       ) : <span className="text-slate-300 text-xs">—</span>}
                     </td>
-                    {/* 13°+Férias — CLT: "encargos" (não soma separado) | PJ: valor calculado */}
-                    <td className={`px-2 py-1 text-right font-mono border-r border-slate-100 ${isCLT ? "text-slate-400 italic" : "text-slate-700"}`}>
-                      {isCI01 && isCLT
-                        ? <span className="text-[10px] text-slate-400 italic" title="CLT: já incluso nos encargos sociais (49,42%)">nos encargos</span>
+                    {/* 13°+Férias — CLT: "nos encargos" | PJ: valor calculado */}
+                    <td className={`px-2 py-1 text-right font-mono border-r border-slate-100 ${isCLT ? "text-slate-400" : "text-slate-700"}`}>
+                      {isCLT
+                        ? <span className="text-[10px] text-slate-400 italic" title="CLT: 13° e férias já inclusos nos encargos sociais (49,42%)">nos encargos</span>
                         : (fmt(l.decimoTerceiroFerias) !== 0 ? brl(l.decimoTerceiroFerias) : "—")}
                     </td>
                     {/* Valor/h — calculado, read-only */}
