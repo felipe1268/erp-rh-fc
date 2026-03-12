@@ -1127,70 +1127,99 @@ export default function OrcamentoDetalhe() {
           </TabsContent>
 
           {/* ═══ ABA CURVA ABC ═════════════════════════════════════════ */}
-          {insumos.length > 0 && (
-            <TabsContent value="abc" className="mt-3">
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                {(["A", "B", "C"] as const).map(cls => {
-                  const ct = insumos.filter((i: any) => i.curvaAbc === cls);
-                  const cv = ct.reduce((s: number, i: any) => s + n(i.custoTotal), 0);
-                  const colors = {
-                    A: "bg-green-100 border-green-400 text-green-800",
-                    B: "bg-amber-100 border-amber-400 text-amber-800",
-                    C: "bg-zinc-100 border-zinc-400 text-zinc-700",
-                  };
-                  return (
-                    <div key={cls} className={`rounded-xl border-2 p-4 ${colors[cls]}`}>
-                      <div className="text-2xl font-bold">{cls}</div>
-                      <div className="text-sm font-medium mt-1">{ct.length} insumos</div>
-                      <div className="text-base font-bold mt-1">{formatBRL(cv)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <Card>
-                <CardContent className="py-3 px-0 overflow-x-auto">
-                  <table className="w-full text-xs min-w-[500px]">
-                    <thead>
-                      <tr className="border-b bg-muted/50 text-muted-foreground">
-                        <th className="text-left pl-4 py-2 w-8">Cl</th>
-                        <th className="text-left px-3 py-2">Descrição</th>
-                        <th className="text-left px-3 py-2 w-16">Un</th>
-                        <th className="text-right px-3 py-2 w-24">Qtd Total</th>
-                        <th className="text-right px-3 py-2 w-28">Custo Total</th>
-                        <th className="text-right pr-4 py-2 w-14">%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...insumos].sort((a: any, b: any) => n(b.custoTotal) - n(a.custoTotal)).map((ins: any) => (
-                        <tr key={ins.id} className="border-b hover:bg-muted/30">
-                          <td className="pl-4 py-1.5">
-                            <span className={`inline-block w-5 h-5 rounded text-center font-bold leading-5 text-white text-xs
-                              ${ins.curvaAbc === "A" ? "bg-green-600" : ins.curvaAbc === "B" ? "bg-amber-500" : "bg-zinc-400"}`}>
-                              {ins.curvaAbc}
-                            </span>
-                          </td>
-                          <td className="px-3 py-1.5 max-w-xs truncate">{ins.descricao}</td>
-                          <td className="px-3 py-1.5 text-muted-foreground">{ins.unidade}</td>
-                          <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
-                            {n(ins.quantidadeTotal).toFixed(2)}
-                          </td>
-                          <td className="px-3 py-1.5 text-right font-medium text-amber-600 tabular-nums">
-                            {formatBRL(n(ins.custoTotal))}
-                          </td>
-                          <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
-                            {(n(ins.percentualTotal) * 100).toFixed(2)}%
-                          </td>
+          {insumos.length > 0 && (() => {
+            // Factor para converter custoTotal → versão selecionada
+            const abcVendaRef = valorNegociado > 0 ? valorNegociado : totalVenda;
+            const abcFactor =
+              versao === "venda" ? (totalCusto > 0 ? abcVendaRef / totalCusto : 1)
+              : versao === "meta" ? (1 - localMetaPerc / 100)
+              : 1;
+            const abcColLabel =
+              versao === "venda" ? "Venda Total"
+              : versao === "meta"  ? "Meta Total"
+              : "Custo Total";
+            const abcValColor =
+              versao === "venda" ? "text-green-700"
+              : versao === "meta"  ? "text-purple-700"
+              : "text-amber-600";
+            return (
+              <TabsContent value="abc" className="mt-3">
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {(["A", "B", "C"] as const).map(cls => {
+                    const ct = insumos.filter((i: any) => i.curvaAbc === cls);
+                    const cv = ct.reduce((s: number, i: any) => s + n(i.custoTotal) * abcFactor, 0);
+                    const colors = {
+                      A: "bg-green-100 border-green-400 text-green-800",
+                      B: "bg-amber-100 border-amber-400 text-amber-800",
+                      C: "bg-zinc-100 border-zinc-400 text-zinc-700",
+                    };
+                    return (
+                      <div key={cls} className={`rounded-xl border-2 p-4 ${colors[cls]}`}>
+                        <div className="text-2xl font-bold">{cls}</div>
+                        <div className="text-sm font-medium mt-1">{ct.length} insumos</div>
+                        <div className="text-base font-bold mt-1">{formatBRL(cv)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <Card>
+                  <CardContent className="py-3 px-0 overflow-x-auto">
+                    <table className="w-full text-xs min-w-[500px]">
+                      <thead>
+                        <tr className="border-b bg-muted/50 text-muted-foreground">
+                          <th className="text-left pl-4 py-2 w-8">Cl</th>
+                          <th className="text-left px-3 py-2">Descrição</th>
+                          <th className="text-left px-3 py-2 w-16">Un</th>
+                          <th className="text-right px-3 py-2 w-24">Qtd Total</th>
+                          <th className={`text-right px-3 py-2 w-28 ${abcValColor}`}>{abcColLabel}</th>
+                          <th className="text-right pr-4 py-2 w-14">%</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
+                      </thead>
+                      <tbody>
+                        {[...insumos].sort((a: any, b: any) => n(b.custoTotal) - n(a.custoTotal)).map((ins: any) => (
+                          <tr key={ins.id} className="border-b hover:bg-muted/30">
+                            <td className="pl-4 py-1.5">
+                              <span className={`inline-block w-5 h-5 rounded text-center font-bold leading-5 text-white text-xs
+                                ${ins.curvaAbc === "A" ? "bg-green-600" : ins.curvaAbc === "B" ? "bg-amber-500" : "bg-zinc-400"}`}>
+                                {ins.curvaAbc}
+                              </span>
+                            </td>
+                            <td className="px-3 py-1.5 max-w-xs truncate">{ins.descricao}</td>
+                            <td className="px-3 py-1.5 text-muted-foreground">{ins.unidade}</td>
+                            <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
+                              {n(ins.quantidadeTotal).toFixed(2)}
+                            </td>
+                            <td className={`px-3 py-1.5 text-right font-medium tabular-nums ${abcValColor}`}>
+                              {formatBRL(n(ins.custoTotal) * abcFactor)}
+                            </td>
+                            <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
+                              {(n(ins.percentualTotal) * 100).toFixed(2)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            );
+          })()}
 
           {/* ═══ ABA CURVA ABC POR CATEGORIA ════════════════════════════ */}
           {insumos.length > 0 && (() => {
+            const abcVendaRef2 = valorNegociado > 0 ? valorNegociado : totalVenda;
+            const abcFactor2 =
+              versao === "venda" ? (totalCusto > 0 ? abcVendaRef2 / totalCusto : 1)
+              : versao === "meta" ? (1 - localMetaPerc / 100)
+              : 1;
+            const abcColLabel2 =
+              versao === "venda" ? "Venda Total"
+              : versao === "meta"  ? "Meta Total"
+              : "Custo Total";
+            const abcValColor2 =
+              versao === "venda" ? "text-green-700"
+              : versao === "meta"  ? "text-purple-700"
+              : "text-amber-600";
             const totalGeral = insumos.reduce((s: number, i: any) => s + n(i.custoTotal), 0);
             const porCategoria: Record<string, { tipo: string; custo: number; qtd: number }> = {};
             for (const ins of insumos) {
@@ -1212,7 +1241,7 @@ export default function OrcamentoDetalhe() {
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   {(["A", "B", "C"] as const).map(cls => {
                     const group = catComAbc.filter(c => c.cls === cls);
-                    const total = group.reduce((s, c) => s + c.custo, 0);
+                    const total = group.reduce((s, c) => s + c.custo * abcFactor2, 0);
                     const colors = {
                       A: "bg-green-100 border-green-400 text-green-800",
                       B: "bg-amber-100 border-amber-400 text-amber-800",
@@ -1235,7 +1264,7 @@ export default function OrcamentoDetalhe() {
                           <th className="text-left pl-4 py-2 w-8">Cl</th>
                           <th className="text-left px-3 py-2">Categoria / Insumo</th>
                           <th className="text-right px-3 py-2 w-16">Qtd</th>
-                          <th className="text-right px-3 py-2 w-32">Custo Total</th>
+                          <th className={`text-right px-3 py-2 w-32 ${abcValColor2}`}>{abcColLabel2}</th>
                           <th className="text-right pr-4 py-2 w-16">%</th>
                         </tr>
                       </thead>
@@ -1270,8 +1299,8 @@ export default function OrcamentoDetalhe() {
                                   </div>
                                 </td>
                                 <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">{c.qtd}</td>
-                                <td className="px-3 py-2 text-right font-semibold text-amber-600 tabular-nums">
-                                  {formatBRL(c.custo)}
+                                <td className={`px-3 py-2 text-right font-semibold tabular-nums ${abcValColor2}`}>
+                                  {formatBRL(c.custo * abcFactor2)}
                                 </td>
                                 <td className="pr-4 py-2 text-right text-muted-foreground tabular-nums">
                                   {(c.pct * 100).toFixed(2)}%
@@ -1291,8 +1320,8 @@ export default function OrcamentoDetalhe() {
                                     <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
                                       {n(ins.quantidadeTotal).toFixed(2)} {ins.unidade}
                                     </td>
-                                    <td className="px-3 py-1.5 text-right text-amber-600 tabular-nums">
-                                      {formatBRL(n(ins.custoTotal))}
+                                    <td className={`px-3 py-1.5 text-right tabular-nums ${abcValColor2}`}>
+                                      {formatBRL(n(ins.custoTotal) * abcFactor2)}
                                     </td>
                                     <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
                                       {insPct.toFixed(2)}%
