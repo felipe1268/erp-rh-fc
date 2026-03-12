@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  ChevronDown, ChevronRight, DollarSign, TrendingDown, Target,
+  ChevronDown, ChevronRight, DollarSign, TrendingDown, TrendingUp, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
   UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent, Pencil,
 } from "lucide-react";
@@ -293,6 +293,13 @@ export default function OrcamentoDetalhe() {
 
   const bdiPct  = n(orc.bdiPercentual)  * 100;
   const metaPct = n(orc.metaPercentual) * 100;
+  // Margem de lucro do BDI (Taxa de Comercialização / LC)
+  // margemLucroBdi vem do servidor como soma dos percentuais da aba "Taxa de Comercialização"
+  const margemLucroPct = n(orc.margemLucroBdi) > 0
+    ? n(orc.margemLucroBdi)                                       // dados reais do BDI
+    : (n(orc.totalVenda) > 0 && n(orc.totalCusto) > 0             // fallback: derivado do BDI global
+        ? (n(orc.totalVenda) - n(orc.totalCusto)) / n(orc.totalVenda)
+        : 0);
 
   // ── Mapa de grupos (item tem filhos) ──
   // Constrói de baixo pra cima: cada item com "." no código marca seu pai como grupo.
@@ -678,6 +685,82 @@ export default function OrcamentoDetalhe() {
           </div>
 
         </div>
+
+        {/* ── Banner Margem de Lucro ──────────────────────────────────── */}
+        {activePage === "orcamento" && margemLucroPct > 0 && (() => {
+          const vendaRef = valorNegociado > 0 ? valorNegociado : totalVenda;
+
+          // Lucro esperado pelo BDI (TC) aplicado sobre o preço de venda
+          const lucroR_custo = totalVenda  * margemLucroPct;
+          const lucroR_venda = vendaRef    * margemLucroPct;
+          // Na visão META: ganho total = diferença entre venda e custo real (meta de compras)
+          const lucroR_meta  = totalMeta > 0 ? totalVenda - totalMeta : lucroR_custo;
+
+          const lucroR =
+            versao === "venda" ? lucroR_venda
+            : versao === "meta"  ? lucroR_meta
+            : lucroR_custo;
+
+          // % efetiva varia por versão
+          const pctEfetiva =
+            versao === "venda" ? (vendaRef  > 0 ? (vendaRef  - totalCusto) / vendaRef  : 0)
+            : versao === "meta"  ? (totalVenda > 0 ? (totalVenda - (totalMeta || totalCusto)) / totalVenda : 0)
+            : margemLucroPct;
+
+          const labelDescricao =
+            versao === "venda" && valorNegociado > 0 ? "Lucro sobre valor negociado"
+            : versao === "meta"  ? "Lucro potencial (venda − meta de compras)"
+            : n(orc.margemLucroBdi) > 0 ? "Taxa de Comercialização (LC) do BDI"
+            : "Margem BDI (venda − custo)";
+
+          const cor =
+            versao === "venda" ? "border-green-200 bg-green-50/60 text-green-800"
+            : versao === "meta"  ? "border-purple-200 bg-purple-50/60 text-purple-800"
+            : "border-amber-200 bg-amber-50/60 text-amber-800";
+
+          const corValor =
+            versao === "venda" ? "text-green-700"
+            : versao === "meta"  ? "text-purple-700"
+            : "text-amber-700";
+
+          return (
+            <div className={`mt-4 rounded-xl border px-4 py-3 flex items-center justify-between flex-wrap gap-3 ${cor}`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <TrendingUp className={`h-4 w-4 shrink-0 ${corValor}`} />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide">Margem de Lucro</p>
+                  <p className="text-[10px] text-muted-foreground">{labelDescricao}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6 flex-wrap">
+                <div className="text-center">
+                  <p className="text-[10px] text-muted-foreground">% Esperada</p>
+                  <p className={`text-base font-bold ${corValor}`}>
+                    {(margemLucroPct * 100).toFixed(2)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-muted-foreground">% Efetiva ({versao === "venda" ? "negociada" : versao === "meta" ? "meta" : "custo"})</p>
+                  <p className={`text-base font-bold ${pctEfetiva >= margemLucroPct - 0.001 ? corValor : "text-red-600"}`}>
+                    {(pctEfetiva * 100).toFixed(2)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-muted-foreground">Valor em R$</p>
+                  <p className={`text-lg font-bold ${corValor}`}>{formatBRL(lucroR)}</p>
+                </div>
+                {versao !== "custo" && Math.abs(lucroR - lucroR_custo) > 1 && (
+                  <div className="text-center">
+                    <p className="text-[10px] text-muted-foreground">vs. BDI original</p>
+                    <p className={`text-sm font-semibold ${lucroR > lucroR_custo ? "text-green-600" : "text-red-500"}`}>
+                      {lucroR > lucroR_custo ? "+" : ""}{formatBRL(lucroR - lucroR_custo)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {activePage === "orcamento" && <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
