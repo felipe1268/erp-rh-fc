@@ -118,7 +118,8 @@ export default function OrcamentoDetalhe() {
 
   const reimportarMutation = trpc.orcamento.reimportar.useMutation({
     onSuccess: (res) => {
-      toast.success(`Orçamento atualizado! ${res.itemCount} itens reimportados.`);
+      const compMsg = res.composicoesCount ? ` ${res.composicoesCount} composições (CPUs) carregadas.` : '';
+      toast.success(`Orçamento atualizado! ${res.itemCount} itens reimportados.${compMsg}`);
       setReuploadOpen(false);
       setReuploadFile(null);
       setReuploadAnalise(null);

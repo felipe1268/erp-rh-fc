@@ -1525,6 +1525,12 @@ export const orcamentoRouter = router({
         ? parsearAbaInsumos(XLSX.utils.sheet_to_json(wb.Sheets[insumosTab], { header: 1, defval: '' }) as any[][], input.companyId)
         : [];
 
+      // CPUs opcionais — Composições de Preços Unitários
+      const cpusTabReimp = wb.SheetNames.find(n => n === 'CPUs' || n === 'Cpus' || n.toLowerCase() === 'cpus');
+      const cpusParsedReimp = cpusTabReimp
+        ? parsearAbaCPUs(XLSX.utils.sheet_to_json(wb.Sheets[cpusTabReimp], { header: 1, defval: '' }) as any[][], input.companyId)
+        : { composicoes: [], linhasInsumos: [] };
+
       // Totais: lê a linha "TOTAIS GERAIS" da planilha (precisão total, sem arredondamento intermediário).
       const totaisGerais  = extrairTotaisPlanilha(dataOrc);
       const nivel1        = itens.filter(i => i.nivel === 1);
@@ -1574,12 +1580,32 @@ export const orcamentoRouter = router({
         updatedAt:      new Date().toISOString(),
       }).where(eq(orcamentos.id, input.orcamentoId));
 
-      // Catálogo NÃO é atualizado automaticamente — usuário decide via "Enviar para Biblioteca"
+      // CPUs: upsert composições e seus insumos no catálogo global da empresa
+      if (cpusParsedReimp.composicoes.length > 0) {
+        await db.delete(composicoesCatalogo).where(eq(composicoesCatalogo.companyId, input.companyId));
+        await db.delete(composicaoInsumos).where(eq(composicaoInsumos.companyId, input.companyId));
+        for (let i = 0; i < cpusParsedReimp.composicoes.length; i += BATCH) {
+          await db.insert(composicoesCatalogo).values(
+            cpusParsedReimp.composicoes.slice(i, i + BATCH).map(c => ({
+              ...c,
+              totalOrcamentos: 1,
+              ultimaAtualizacao: new Date().toISOString(),
+              criadoEm: new Date().toISOString(),
+            }))
+          );
+        }
+        for (let i = 0; i < cpusParsedReimp.linhasInsumos.length; i += BATCH) {
+          await db.insert(composicaoInsumos).values(
+            cpusParsedReimp.linhasInsumos.slice(i, i + BATCH)
+          );
+        }
+      }
 
       return {
         success: true,
         itemCount:    itens.length,
         insumosCount: insumosItens.length,
+        composicoesCount: cpusParsedReimp.composicoes.length,
         totalCusto,
         totalVenda,
         bdiPercentual: bdiFinal,
