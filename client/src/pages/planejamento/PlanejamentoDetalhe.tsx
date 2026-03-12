@@ -17,8 +17,9 @@ import {
   ChevronDown, Minus, Upload, XCircle, GripVertical,
 } from "lucide-react";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, ReferenceLine,
+  LineChart, Line, BarChart, Bar, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend, ReferenceLine, LabelList,
 } from "recharts";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -325,6 +326,7 @@ export default function PlanejamentoDetalhe() {
             avancoAtual={avancoAtual}
             refisLista={refisLista}
             revisaoAtiva={revisaoAtiva}
+            curvaData={curvaData}
             utils={utils}
             fmt={fmt}
             fPct={fPct}
@@ -1322,7 +1324,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, utils, fmt, fPct: fPct_ }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_ }: any) {
   const semanas = ultimasSemanas(16);
   const [semana, setSemana] = useState(semanas[semanas.length - 1]);
   const [obs, setObs] = useState("");
@@ -1399,6 +1401,74 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const avancoRealSemanal = Math.max(0, avancoRealAtual - avancoRealAntes);
   const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 1;
 
+  // ── Mapa realizado por atividade (último avanço até a semana selecionada) ──
+  const realMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    const d: Record<number, string> = {};
+    avancos.filter((av: any) => av.semana <= semana).forEach((av: any) => {
+      const id = av.atividadeId;
+      if (!d[id] || av.semana > d[id]) {
+        m[id] = n(av.percentualAcumulado);
+        d[id] = av.semana;
+      }
+    });
+    return m;
+  }, [avancos, semana]);
+
+  // ── Agrupamento hierárquico por EAP para gráficos ─────────────────────────
+  const grupos = useMemo(() => {
+    const folhas = atividades.filter((a: any) => !a.isGrupo);
+
+    function prevInd(a: any) {
+      if (!a.dataInicio || !a.dataFim) return 0;
+      const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+      const fim = new Date(a.dataFim + "T12:00:00").getTime();
+      const ref = new Date(semana + "T12:00:00").getTime();
+      if (ref >= fim) return 100;
+      if (ref <= ini) return 0;
+      return ((ref - ini) / (fim - ini)) * 100;
+    }
+
+    function calc(leaves: any[]) {
+      const pt = leaves.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || leaves.length || 1;
+      let prev = 0, real = 0;
+      leaves.forEach(a => {
+        const p = n(a.pesoFinanceiro) || 1;
+        prev += prevInd(a) * p / pt;
+        real += (realMap[a.id] ?? 0) * p / pt;
+      });
+      return {
+        previsto:  +Math.min(100, prev).toFixed(1),
+        realizado: +Math.min(100, real).toFixed(1),
+      };
+    }
+
+    const g1 = atividades
+      .filter((a: any) => a.isGrupo && a.eapCodigo && (a.nivel === 1 || !String(a.eapCodigo).includes('.')))
+      .sort((a: any, b: any) => String(a.eapCodigo ?? '').localeCompare(String(b.eapCodigo ?? '')));
+
+    return g1.map((g: any) => {
+      const gEap   = String(g.eapCodigo ?? '');
+      const gDepth = gEap.split('.').length;
+      const gLeaves = folhas.filter((a: any) => String(a.eapCodigo ?? '').startsWith(gEap + '.'));
+
+      const etapas = atividades
+        .filter((a: any) =>
+          a.isGrupo && a.eapCodigo &&
+          String(a.eapCodigo).startsWith(gEap + '.') &&
+          String(a.eapCodigo).split('.').length === gDepth + 1
+        )
+        .sort((a: any, b: any) => String(a.eapCodigo ?? '').localeCompare(String(b.eapCodigo ?? '')))
+        .map((e: any) => {
+          const eEap   = String(e.eapCodigo ?? '');
+          const eLeaves = folhas.filter((a: any) => String(a.eapCodigo ?? '').startsWith(eEap + '.'));
+          return { ...e, ...calc(eLeaves), nLeaves: eLeaves.length };
+        });
+
+      return { ...g, ...calc(gLeaves), nLeaves: gLeaves.length, etapas };
+    }).filter((g: any) => g.nLeaves > 0);
+  }, [atividades, realMap, semana]);
+
   const existente = refisLista.find((r: any) => r.semana === semana);
 
   function emitirRefis() {
@@ -1418,9 +1488,25 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     });
   }
 
+  // Curva S filtrada até semana selecionada (max 16 pontos)
+  const curvaFiltrada = useMemo(() => {
+    if (!curvaData?.curvaPlanejada) return [];
+    const plan = (curvaData.curvaPlanejada as any[]).filter((p: any) => p.semana <= semana).slice(-16);
+    const real = (curvaData.curvaRealizada as any[] ?? []).filter((p: any) => p.semana <= semana);
+    const realMap2: Record<string, number> = {};
+    real.forEach((p: any) => { realMap2[p.semana] = p.acumulado; });
+    return plan.map((p: any, i: number) => ({
+      label: `S${i + 1}`,
+      semana: p.semana,
+      previsto:  +(p.acumulado ?? 0).toFixed(1),
+      realizado: realMap2[p.semana] != null ? +(realMap2[p.semana]).toFixed(1) : undefined,
+    }));
+  }, [curvaData, semana]);
+
   return (
-    <div className="space-y-4">
-      {/* Seletor de semana */}
+    <div className="space-y-5">
+
+      {/* ── TOOLBAR ────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <p className="text-sm font-semibold text-slate-700">REFIS — Relatório Semanal de Avanço Físico</p>
@@ -1435,7 +1521,6 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </select>
         </div>
         <div className="flex items-center gap-2">
-          {/* Cancelar emissão — só aparece se há REFIS emitido para a semana */}
           {existente && !confirmDelete && (
             <Button size="sm" variant="outline"
               className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50"
@@ -1458,12 +1543,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
           <div className="flex items-center gap-2 text-sm text-red-700">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>Confirma o cancelamento do <strong>REFIS Nº {String(existente.numero ?? "—").padStart(3, "0")}</strong> da semana {semana}? Esta ação não pode ser desfeita.</span>
+            <span>Confirma o cancelamento do <strong>REFIS Nº {String(existente.numero ?? "—").padStart(3, "0")}</strong> da semana {semana}?</span>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>
-              Voltar
-            </Button>
+            <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>Voltar</Button>
             <Button size="sm" className="bg-red-600 hover:bg-red-700 gap-1.5"
               disabled={deletarMutation.isPending}
               onClick={() => deletarMutation.mutate({ id: existente.id })}>
@@ -1474,120 +1557,305 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         </div>
       )}
 
-      {/* Cabeçalho REFIS */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="bg-slate-700 text-white px-4 py-3 flex items-center justify-between">
+      {/* ══════════════════════════════════════════════════════════════════════
+          BLOCO 1 — CABEÇALHO (estilo PDF)
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Faixa título */}
+        <div className="bg-slate-800 text-white px-5 py-3 flex items-center justify-between">
           <div>
-            <p className="font-bold text-sm">REFIS — Relatório de Avanço Físico</p>
+            <p className="font-bold tracking-wide text-sm uppercase">
+              Relatório de Evolução Física da Obra (REFIS)
+            </p>
             <p className="text-xs text-slate-300 mt-0.5">
-              Obra: {proj.nome} · Cliente: {proj.cliente ?? "—"} · Semana: {semana}
+              Base: {proj.revisaoNome ?? proj.nome}
             </p>
           </div>
-          <div className="text-right text-xs text-slate-300">
-            <p>Nº {existente ? String(existente.numero ?? "—").padStart(3, "0") : "—"}</p>
-            <p>Emissão: {new Date().toLocaleDateString("pt-BR")}</p>
+          <div className="text-right text-xs text-slate-300 space-y-0.5">
+            <p className="font-bold text-slate-100 text-base">
+              R{String(proj.revisao ?? "00").padStart(2, "0")}
+            </p>
+            <p>Relat Nº {existente ? String(existente.numero ?? 1).padStart(2, "0") : "—"}</p>
           </div>
         </div>
 
-        <div className="p-4 space-y-4">
-          {/* Evolução física global */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "Previsto Acumulado",    value: fPct_(avancoPrevisto),      color: "text-blue-700", bg: "bg-blue-50" },
-              { label: "Realizado Acumulado",   value: fPct_(avancoRealAtual),     color: "text-emerald-700", bg: "bg-emerald-50" },
-              { label: "Previsto Semanal",      value: fPct_(avancoPrevSemanal),   color: "text-slate-700", bg: "bg-slate-50" },
-              { label: "Realizado Semanal",     value: fPct_(avancoRealSemanal),   color: "text-purple-700", bg: "bg-purple-50" },
-            ].map((k, i) => (
-              <div key={i} className={`rounded-xl p-3 ${k.bg}`}>
-                <p className="text-[10px] text-slate-500">{k.label}</p>
-                <p className={`text-xl font-bold ${k.color}`}>{k.value}</p>
+        {/* Grade info obra */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-0 divide-x divide-y divide-slate-100 text-xs">
+          {[
+            { label: "OBRA",    value: proj.nome },
+            { label: "CLIENTE", value: proj.cliente ?? "—" },
+            { label: "LOCAL",   value: proj.local ?? proj.obra ?? "—" },
+          ].map((c, i) => (
+            <div key={i} className="px-4 py-2">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{c.label}</span>
+              <p className="font-semibold text-slate-700 mt-0.5 truncate">{c.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Datas */}
+        <div className="bg-slate-50 border-t border-slate-100 px-5 py-2.5 flex flex-wrap gap-6 text-xs">
+          {[
+            { label: "INÍCIO",         value: proj.dataInicio ? new Date(proj.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
+            { label: "STATUS EM",      value: new Date(semana + "T12:00:00").toLocaleDateString("pt-BR") },
+            { label: "TÉRMINO DA OBRA",value: proj.dataFim    ? new Date(proj.dataFim    + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
+          ].map((d, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{d.label}:</span>
+              <span className="font-semibold text-slate-700">{d.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          BLOCO 2 — EVOLUÇÃO FÍSICA GLOBAL (barras horizontais + cards semanal)
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-600">Evolução Física Global</p>
+          <div className="flex gap-4 text-xs text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm bg-blue-500" />% Previsto
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" />% Realizado
+            </span>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 flex gap-4">
+          {/* Barras de gauge */}
+          <div className="flex-1 space-y-3">
+            {/* Escala */}
+            <div className="flex justify-between text-[10px] text-slate-400 px-0 mb-1">
+              {[0,10,20,30,40,50,60,70,80,90,100].map(v => (
+                <span key={v}>{v}%</span>
+              ))}
+            </div>
+
+            {/* Barra Previsto */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="w-16 text-right font-semibold text-blue-700">{fPct_(avancoPrevisto)}</span>
+                <div className="relative flex-1 h-7 bg-slate-100 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-700 flex items-center justify-end pr-2"
+                    style={{ width: `${Math.max(avancoPrevisto, 0)}%` }}
+                  >
+                    {avancoPrevisto > 8 && (
+                      <span className="text-[11px] font-bold text-white">{fPct_(avancoPrevisto)}</span>
+                    )}
+                  </div>
+                </div>
               </div>
-            ))}
+              <p className="text-[10px] text-slate-400 pl-[4.5rem]">% Previsto Acumulado</p>
+            </div>
+
+            {/* Barra Realizado */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="w-16 text-right font-semibold text-emerald-700">{fPct_(avancoRealAtual)}</span>
+                <div className="relative flex-1 h-7 bg-slate-100 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-700 flex items-center justify-end pr-2"
+                    style={{ width: `${Math.max(avancoRealAtual, 0)}%` }}
+                  >
+                    {avancoRealAtual > 8 && (
+                      <span className="text-[11px] font-bold text-white">{fPct_(avancoRealAtual)}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 pl-[4.5rem]">% Realizado Acumulado</p>
+            </div>
           </div>
 
-          {/* SPI */}
-          <div className={`rounded-xl p-3 flex items-center gap-3 ${spi >= 1 ? "bg-emerald-50" : "bg-red-50"}`}>
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${spi >= 1 ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}>
-              SPI
+          {/* Cards semanal */}
+          <div className="shrink-0 flex flex-col gap-2 w-44">
+            <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">Avanço Semanal Previsto</p>
+              <p className="text-2xl font-bold text-blue-700 mt-0.5">{fPct_(avancoPrevSemanal)}</p>
             </div>
-            <div>
-              <p className="text-xs text-slate-500">Índice de Desempenho de Prazo</p>
-              <p className={`text-2xl font-bold ${spi >= 1 ? "text-emerald-700" : "text-red-700"}`}>
-                {spi.toFixed(2)}
-                <span className="text-sm ml-2 font-normal">
-                  {spi >= 1 ? "✓ Dentro do prazo" : "⚠ Abaixo do previsto"}
-                </span>
-              </p>
+            <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Avanço Semanal Real</p>
+              <p className="text-2xl font-bold text-emerald-700 mt-0.5">{fPct_(avancoRealSemanal)}</p>
             </div>
-          </div>
-
-          {/* Avanço por atividade */}
-          <div>
-            <p className="text-xs font-semibold text-slate-600 mb-2">Avanço por Atividade</p>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-slate-100">
-                  <th className="py-1.5 px-3 text-left">EAP</th>
-                  <th className="py-1.5 px-3 text-left">Atividade</th>
-                  <th className="py-1.5 px-3 text-right">Previsto</th>
-                  <th className="py-1.5 px-3 text-right">Realizado</th>
-                  <th className="py-1.5 px-3 text-right">Desvio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {atividades.filter((a: any) => !a.isGrupo).map((a: any, idx: number) => {
-                  const prevAtiv = a.dataFim && a.dataFim <= semana ? 100 : 0;
-                  const realAtiv = (() => {
-                    const m: Record<string, number> = {};
-                    avancos.filter((av: any) => av.atividadeId === a.id && av.semana <= semana)
-                      .forEach((av: any) => { m[av.semana] = n(av.percentualAcumulado); });
-                    const keys = Object.keys(m).sort();
-                    return keys.length > 0 ? m[keys[keys.length - 1]] : 0;
-                  })();
-                  const desvio = realAtiv - prevAtiv;
-                  return (
-                    <tr key={a.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                      <td className="py-1.5 px-3 font-mono text-slate-500">{a.eapCodigo ?? ""}</td>
-                      <td className="py-1.5 px-3 text-slate-700 truncate max-w-[200px]">{a.nome}</td>
-                      <td className="py-1.5 px-3 text-right text-blue-700">{fPct_(prevAtiv)}</td>
-                      <td className="py-1.5 px-3 text-right font-semibold text-emerald-700">{fPct_(realAtiv)}</td>
-                      <td className={`py-1.5 px-3 text-right font-semibold ${desvio >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                        {desvio >= 0 ? "+" : ""}{fPct_(desvio)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Observações e custos */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Custo Previsto (R$)</Label>
-              <Input type="number" value={custoPrev}
-                onChange={e => setCustoPrev(e.target.value)}
-                placeholder="0,00" className="mt-1 text-xs" />
+            <div className={`rounded-lg px-3 py-2 text-center ${spi >= 1 ? "bg-emerald-600" : "bg-red-500"}`}>
+              <p className="text-[10px] font-semibold text-white/70 uppercase tracking-wider">SPI</p>
+              <p className="text-xl font-bold text-white mt-0.5">{spi.toFixed(2)}</p>
+              <p className="text-[10px] text-white/80">{spi >= 1 ? "Dentro do prazo" : "Abaixo do previsto"}</p>
             </div>
-            <div>
-              <Label className="text-xs">Custo Realizado (R$)</Label>
-              <Input type="number" value={custoReal}
-                onChange={e => setCustoReal(e.target.value)}
-                placeholder="0,00" className="mt-1 text-xs" />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Observações / Ocorrências</Label>
-            <textarea
-              value={obs}
-              onChange={e => setObs(e.target.value)}
-              placeholder="Registre ocorrências, problemas, avanços relevantes desta semana..."
-              className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background resize-none"
-              rows={3}
-            />
           </div>
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          BLOCO 3 — CURVA S (Avanço Acumulado Previsto × Realizado)
+      ══════════════════════════════════════════════════════════════════════ */}
+      {curvaFiltrada.length > 1 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              Avanço Físico Acumulado — Previsto × Realizado
+            </p>
+            <div className="flex gap-4 text-xs text-slate-500">
+              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 bg-blue-500 rounded" /> Previsto</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 bg-emerald-500 rounded" /> Realizado</span>
+            </div>
+          </div>
+          <div className="px-4 py-3" style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={curvaFiltrada} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} width={36} />
+                <Tooltip
+                  formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]}
+                  labelFormatter={(l: string) => `Semana ${l}`}
+                />
+                <Line type="monotone" dataKey="previsto"  stroke="#3b82f6" strokeWidth={2} dot={false} name="previsto" />
+                <Line type="monotone" dataKey="realizado" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} connectNulls name="realizado" />
+                <ReferenceLine y={avancoPrevisto}  stroke="#3b82f6" strokeDasharray="4 4" />
+                <ReferenceLine y={avancoRealAtual} stroke="#10b981" strokeDasharray="4 4" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          BLOCO 4 — AVANÇO POR GRUPO (Pavimento) — gráfico de barras horizontal
+      ══════════════════════════════════════════════════════════════════════ */}
+      {grupos.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              Avanço Físico por Grupo
+            </p>
+          </div>
+          <div className="px-4 py-3" style={{ height: Math.max(180, grupos.length * 52 + 40) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={grupos}
+                layout="vertical"
+                margin={{ top: 4, right: 60, bottom: 4, left: 0 }}
+                barCategoryGap="30%"
+                barGap={2}
+              >
+                <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="nome" tick={{ fontSize: 11 }} width={160} />
+                <Tooltip formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]} />
+                <Bar dataKey="previsto"  name="previsto"  fill="#3b82f6" radius={[0, 3, 3, 0]} maxBarSize={14}>
+                  <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 10, fill: "#3b82f6" }} />
+                </Bar>
+                <Bar dataKey="realizado" name="realizado" fill="#10b981" radius={[0, 3, 3, 0]} maxBarSize={14}>
+                  <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 10, fill: "#10b981" }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          BLOCO 5 — AVANÇO POR ETAPA DENTRO DE CADA GRUPO (pavimento)
+      ══════════════════════════════════════════════════════════════════════ */}
+      {grupos.filter((g: any) => g.etapas?.length > 0).map((g: any) => (
+        <div key={g.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          {/* Header do grupo */}
+          <div className="bg-slate-700 text-white px-5 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-mono bg-slate-600 rounded px-2 py-0.5">{g.eapCodigo}</span>
+              <p className="text-sm font-bold uppercase tracking-wide">{g.nome}</p>
+            </div>
+            <div className="flex gap-4 text-xs">
+              <span className="text-blue-300">Previsto: <strong className="text-white">{fPct_(g.previsto)}</strong></span>
+              <span className="text-emerald-300">Realizado: <strong className="text-white">{fPct_(g.realizado)}</strong></span>
+              <span className={g.realizado >= g.previsto ? "text-emerald-300" : "text-red-300"}>
+                Desvio: <strong className="text-white">{g.realizado >= g.previsto ? "+" : ""}{fPct_(g.realizado - g.previsto)}</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Gráfico de barras por etapa */}
+          <div className="px-4 py-3" style={{ height: Math.max(160, g.etapas.length * 48 + 40) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={g.etapas}
+                layout="vertical"
+                margin={{ top: 4, right: 60, bottom: 4, left: 0 }}
+                barCategoryGap="28%"
+                barGap={2}
+              >
+                <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f8fafc" />
+                <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={150} />
+                <Tooltip formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]} />
+                <Bar dataKey="previsto"  name="previsto"  fill="#6097f8" radius={[0, 3, 3, 0]} maxBarSize={12}>
+                  <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 9, fill: "#3b82f6" }} />
+                </Bar>
+                <Bar dataKey="realizado" name="realizado" fill="#34d399" radius={[0, 3, 3, 0]} maxBarSize={12}>
+                  <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 9, fill: "#059669" }} />
+                  {g.etapas.map((e: any) => (
+                    <Cell
+                      key={e.id}
+                      fill={e.realizado >= e.previsto ? "#34d399" : e.previsto - e.realizado > 10 ? "#f87171" : "#fbbf24"}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Mini legenda desvios */}
+          {g.etapas.some((e: any) => e.previsto - e.realizado > 5) && (
+            <div className="border-t border-slate-100 px-4 py-2 flex flex-wrap gap-2">
+              {g.etapas
+                .filter((e: any) => e.previsto - e.realizado > 5)
+                .map((e: any) => (
+                  <span key={e.id} className="inline-flex items-center gap-1 text-[11px] bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5">
+                    ⚠ {e.nome}: −{fPct_(e.previsto - e.realizado)}
+                  </span>
+                ))
+              }
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          BLOCO 6 — INPUTS (Custos + Observações)
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Dados para Emissão</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">Custo Previsto (R$)</Label>
+            <Input type="number" value={custoPrev}
+              onChange={e => setCustoPrev(e.target.value)}
+              placeholder="0,00" className="mt-1 text-xs" />
+          </div>
+          <div>
+            <Label className="text-xs">Custo Realizado (R$)</Label>
+            <Input type="number" value={custoReal}
+              onChange={e => setCustoReal(e.target.value)}
+              placeholder="0,00" className="mt-1 text-xs" />
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs">Observações / Ocorrências</Label>
+          <textarea
+            value={obs}
+            onChange={e => setObs(e.target.value)}
+            placeholder="Registre ocorrências, problemas ou avanços relevantes desta semana..."
+            className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background resize-none"
+            rows={3}
+          />
+        </div>
+      </div>
+
     </div>
   );
 }
