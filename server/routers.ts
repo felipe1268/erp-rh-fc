@@ -89,6 +89,7 @@ import { migrationRouter } from "./routers/migration";
 import { contractsRouter } from "./routers/contracts";
 import { skillsRouter } from "./routers/skills";
 import { orcamentoRouter } from "./routers/orcamento";
+import { planejamentoRouter } from "./routers/planejamento";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -125,6 +126,7 @@ export const appRouter = router({
   terceiros: terceirosRouter,
   parceiros: parceirosRouter,
   orcamento: orcamentoRouter,
+  planejamento: planejamentoRouter,
   portalExterno: portalExternoRouter,
   payrollEngine: payrollEngineRouter,
   fieldNotes: fieldNotesRouter,
