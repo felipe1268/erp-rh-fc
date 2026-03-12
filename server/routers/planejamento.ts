@@ -596,9 +596,10 @@ export const planejamentoRouter = router({
             i."eapCodigo"                          AS eap,
             i.descricao                            AS nome,
             i."vendaTotal"::numeric                AS venda_total,
+            i."metaTotal"::numeric                 AS meta_total,
+            i."custoTotal"::numeric                AS custo_total,
             i."custoTotalMat"::numeric             AS custo_mat,
             i."custoTotalMdo"::numeric             AS custo_mdo,
-            i."custoTotal"::numeric                AS custo_total,
             i.unidade                              AS unidade,
             COALESCE(i.quantidade::numeric, 0)     AS quantidade,
             a.id                                   AS ativ_id,
@@ -622,57 +623,77 @@ export const planejamentoRouter = router({
         SELECT * FROM matched ORDER BY ordem
       `);
 
-      // Busca valor_negociado do orçamento (é o teto de venda real do contrato)
+      // Busca totais do orçamento para normalização dos 3 cenários
       const orcRes = await db.execute(sql`
-        SELECT COALESCE(o.valor_negociado::numeric, o."totalVenda"::numeric, o."totalMeta"::numeric, 0) AS valor_base,
-               o."totalMateriais"::numeric AS total_mat_orc,
-               o."totalMdo"::numeric       AS total_mdo_orc
+        SELECT
+          COALESCE(o.valor_negociado::numeric, o."totalVenda"::numeric, o."totalMeta"::numeric, 0) AS valor_venda,
+          COALESCE(o."totalMeta"::numeric, 0)       AS valor_meta,
+          COALESCE(o."totalCusto"::numeric, 0)      AS valor_custo,
+          COALESCE(o."totalMateriais"::numeric, 0)  AS total_mat_orc,
+          COALESCE(o."totalMdo"::numeric, 0)        AS total_mdo_orc
         FROM orcamentos o
         JOIN planejamento_projetos p ON p.orcamento_id = o.id
         WHERE p.id = ${input.projetoId}
         LIMIT 1
       `);
-      const orcRow   = (orcRes.rows as any[])[0];
-      const valorBase   = parseFloat(orcRow?.valor_base  ?? "0") || 0;
+      const orcRow     = (orcRes.rows as any[])[0];
+      const valorVenda = parseFloat(orcRow?.valor_venda ?? "0") || 0;
+      const valorMeta  = parseFloat(orcRow?.valor_meta  ?? "0") || 0;
+      const valorCusto = parseFloat(orcRow?.valor_custo ?? "0") || 0;
       const totalMatOrc = parseFloat(orcRow?.total_mat_orc ?? "0") || 0;
       const totalMdoOrc = parseFloat(orcRow?.total_mdo_orc ?? "0") || 0;
 
       const rawItens = (rows.rows as any[]).map(r => ({
-        ativId:     Number(r.ativ_id),
-        eap:        String(r.eap ?? ""),
-        nome:       String(r.nome ?? ""),
-        dataInicio: r.data_inicio ? String(r.data_inicio).substring(0, 10) : null,
-        dataFim:    r.data_fim    ? String(r.data_fim).substring(0, 10)    : null,
-        ordem:      Number(r.ordem ?? 0),
-        vendaRaw:   parseFloat(r.venda_total  ?? "0") || 0,
-        custoMatRaw:parseFloat(r.custo_mat    ?? "0") || 0,
-        custoMdoRaw:parseFloat(r.custo_mdo    ?? "0") || 0,
-        custoTotal: parseFloat(r.custo_total  ?? "0") || 0,
-        unidade:    r.unidade    ? String(r.unidade) : null,
-        quantidade: parseFloat(r.quantidade   ?? "0") || 0,
+        ativId:      Number(r.ativ_id),
+        eap:         String(r.eap ?? ""),
+        nome:        String(r.nome ?? ""),
+        dataInicio:  r.data_inicio ? String(r.data_inicio).substring(0, 10) : null,
+        dataFim:     r.data_fim    ? String(r.data_fim).substring(0, 10)    : null,
+        ordem:       Number(r.ordem ?? 0),
+        vendaRaw:    parseFloat(r.venda_total ?? "0") || 0,
+        metaRaw:     parseFloat(r.meta_total  ?? "0") || 0,
+        custoRaw:    parseFloat(r.custo_total ?? "0") || 0,
+        custoMatRaw: parseFloat(r.custo_mat   ?? "0") || 0,
+        custoMdoRaw: parseFloat(r.custo_mdo   ?? "0") || 0,
+        unidade:     r.unidade ? String(r.unidade) : null,
+        quantidade:  parseFloat(r.quantidade  ?? "0") || 0,
       }));
 
-      // Normaliza: escalona para que a soma de vendaTotal = valorBase
+      // Fatores de normalização: escalona cada cenário para o total do orçamento
       const sumVendaRaw = rawItens.reduce((s, i) => s + i.vendaRaw, 0);
+      const sumMetaRaw  = rawItens.reduce((s, i) => s + i.metaRaw,  0);
+      const sumCustoRaw = rawItens.reduce((s, i) => s + i.custoRaw, 0);
       const sumMatRaw   = rawItens.reduce((s, i) => s + i.custoMatRaw, 0);
       const sumMdoRaw   = rawItens.reduce((s, i) => s + i.custoMdoRaw, 0);
 
-      const escVenda = sumVendaRaw > 0 && valorBase > 0 ? valorBase / sumVendaRaw : 1;
-      const escMat   = sumMatRaw   > 0 && totalMatOrc > 0 ? totalMatOrc / sumMatRaw : escVenda;
-      const escMdo   = sumMdoRaw   > 0 && totalMdoOrc > 0 ? totalMdoOrc / sumMdoRaw : escVenda;
+      const escVenda = sumVendaRaw > 0 && valorVenda > 0 ? valorVenda / sumVendaRaw : 1;
+      const escMeta  = sumMetaRaw  > 0 && valorMeta  > 0 ? valorMeta  / sumMetaRaw  : escVenda;
+      const escCusto = sumCustoRaw > 0 && valorCusto > 0 ? valorCusto / sumCustoRaw : escVenda;
+      const escMat   = sumMatRaw   > 0 && totalMatOrc > 0 ? totalMatOrc / sumMatRaw  : escCusto;
+      const escMdo   = sumMdoRaw   > 0 && totalMdoOrc > 0 ? totalMdoOrc / sumMdoRaw  : escCusto;
 
       const itens = rawItens.map(i => ({
         ...i,
-        vendaTotal: +(i.vendaRaw  * escVenda).toFixed(4),
+        vendaTotal: +(i.vendaRaw    * escVenda).toFixed(4),
+        metaTotal:  +(i.metaRaw     * escMeta).toFixed(4),
+        custoNorm:  +(i.custoRaw    * escCusto).toFixed(4),
         custoMat:   +(i.custoMatRaw * escMat).toFixed(4),
         custoMdo:   +(i.custoMdoRaw * escMdo).toFixed(4),
       }));
 
       const totalVenda = itens.reduce((s, i) => s + i.vendaTotal, 0);
+      const totalMeta  = itens.reduce((s, i) => s + i.metaTotal,  0);
+      const totalCusto = itens.reduce((s, i) => s + i.custoNorm,  0);
       const totalMat   = itens.reduce((s, i) => s + i.custoMat,   0);
       const totalMdo   = itens.reduce((s, i) => s + i.custoMdo,   0);
 
-      return { itens, totalVenda, totalMat, totalMdo, valorBase };
+      return {
+        itens,
+        totalVenda, totalMeta, totalCusto, totalMat, totalMdo,
+        valorBase: valorVenda,
+        valorBaseMeta: valorMeta,
+        valorBaseCusto: valorCusto,
+      };
     }),
 
   // ── Medições Financeiras ───────────────────────────────────────────────────

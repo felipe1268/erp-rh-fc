@@ -1631,8 +1631,17 @@ const STATUS_MED = [
   { v: "rejeitada", l: "Rejeitada", c: "bg-red-100 text-red-700" },
 ];
 
+type Cenario = "venda" | "meta" | "custo" | "lucro";
+const CENARIOS: { id: Cenario; label: string; cor: string; corBg: string; corText: string }[] = [
+  { id: "venda", label: "Venda",  cor: "#f97316", corBg: "bg-orange-500",  corText: "text-orange-600" },
+  { id: "meta",  label: "Meta",   cor: "#8b5cf6", corBg: "bg-violet-500",  corText: "text-violet-600" },
+  { id: "custo", label: "Custo",  cor: "#ef4444", corBg: "bg-red-500",     corText: "text-red-600"    },
+  { id: "lucro", label: "Lucro",  cor: "#10b981", corBg: "bg-emerald-500", corText: "text-emerald-600"},
+];
+
 function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt, fPct }: any) {
   const valorContrato = n(proj.valorContrato);
+  const [cenario, setCenario] = useState<Cenario>("venda");
 
   const { data: cruzamento, isLoading: loadCruz } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
     { projetoId }, { enabled: !!projetoId });
@@ -1643,24 +1652,20 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const salvarMut  = trpc.planejamento.salvarMedicao.useMutation({ onSuccess: () => refetch() });
   const excluirMut = trpc.planejamento.excluirMedicao.useMutation({ onSuccess: () => refetch() });
 
-  // Distribui valores do orçamento cruzado pelos meses das atividades
+  // Distribui os 3 cenários mensalmente
   const dadosMensais = useMemo(() => {
     const itens = cruzamento?.itens ?? [];
     if (itens.length === 0) return [];
 
-    const dataInis = itens.filter(i => i.dataInicio).map(i => i.dataInicio!).sort();
-    const dataFins  = itens.filter(i => i.dataFim).map(i => i.dataFim!).sort();
+    const dataInis = itens.filter((i: any) => i.dataInicio).map((i: any) => i.dataInicio!).sort();
+    const dataFins  = itens.filter((i: any) => i.dataFim).map((i: any) => i.dataFim!).sort();
     const priData = dataInis[0]?.substring(0, 7) ?? null;
     const ultData = dataFins[dataFins.length - 1]?.substring(0, 7) ?? null;
     if (!priData || !ultData) return [];
 
-    const meses = mesesRange(priData, ultData);
-
-    return meses.map(mes => {
+    return mesesRange(priData, ultData).map(mes => {
       const [ano, m] = mes.split("-").map(Number);
-      let planejadoMes = 0;
-      let matMes       = 0;
-      let mdoMes       = 0;
+      let venda = 0, meta = 0, custo = 0, mat = 0, mdo = 0;
 
       itens.forEach((item: any) => {
         if (!item.dataInicio || !item.dataFim) return;
@@ -1668,42 +1673,48 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
         const diasMes = diasNoMes(item.dataInicio, item.dataFim, ano, m);
         if (diasMes === 0) return;
         const frac = diasMes / durTotal;
-        planejadoMes += item.vendaTotal * frac;
-        matMes       += item.custoMat   * frac;
-        mdoMes       += item.custoMdo   * frac;
+        venda += (item.vendaTotal ?? 0) * frac;
+        meta  += (item.metaTotal  ?? 0) * frac;
+        custo += (item.custoNorm  ?? 0) * frac;
+        mat   += (item.custoMat   ?? 0) * frac;
+        mdo   += (item.custoMdo   ?? 0) * frac;
       });
 
-      return { mes, planejadoMes, matMes, mdoMes };
+      return {
+        mes,
+        nomeMes: new Date(`${mes}-15`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+        venda, meta, custo, mat, mdo,
+        lucro: venda - custo,
+        margemMeta: venda - meta,
+      };
     });
   }, [cruzamento]);
 
-  // Combina com medições reais
+  // Junta com medições
   const rows = useMemo(() => {
     const medMap: Record<string, any> = {};
     medicoes.forEach((m: any) => { medMap[m.competencia] = m; });
 
-    // Usa valorBase (valor_negociado do orçamento) como denominador para %
-    const totalVendaCruz = cruzamento?.totalVenda ?? 0;
-    const valorBaseOrc   = (cruzamento as any)?.valorBase ?? 0;
-    const base = valorBaseOrc > 0 ? valorBaseOrc : (totalVendaCruz > 0 ? totalVendaCruz : (valorContrato || 1));
+    const baseVenda  = ((cruzamento as any)?.valorBase      ?? cruzamento?.totalVenda  ?? valorContrato) || 1;
+    const baseMeta   = ((cruzamento as any)?.valorBaseMeta  ?? cruzamento?.totalMeta  ?? baseVenda) || 1;
+    const baseCusto  = ((cruzamento as any)?.valorBaseCusto ?? cruzamento?.totalCusto ?? baseVenda) || 1;
 
-    let cumPrev = 0;
-    let cumReal = 0;
+    let cumVenda = 0, cumMeta = 0, cumCusto = 0, cumReal = 0;
     return dadosMensais.map((d: any, idx: number) => {
-      const med = medMap[d.mes];
+      const med       = medMap[d.mes];
       const valorReal = n(med?.valorMedido ?? 0);
-      const percPrev = base > 0 ? (d.planejadoMes / base * 100) : 0;
-      const percReal = base > 0 ? (valorReal / base * 100) : 0;
-      cumPrev += percPrev;
-      cumReal += percReal;
+      const pVenda  = baseVenda > 0 ? d.venda  / baseVenda  * 100 : 0;
+      const pMeta   = baseMeta  > 0 ? d.meta   / baseMeta   * 100 : 0;
+      const pCusto  = baseCusto > 0 ? d.custo  / baseCusto  * 100 : 0;
+      const pReal   = baseVenda > 0 ? valorReal / baseVenda * 100 : 0;
+      cumVenda  = Math.min(100, cumVenda  + pVenda);
+      cumMeta   = Math.min(100, cumMeta   + pMeta);
+      cumCusto  = Math.min(100, cumCusto  + pCusto);
+      cumReal   = Math.min(100, cumReal   + pReal);
       return {
-        ...d,
-        nomeMes: new Date(`${d.mes}-15`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-        percPrev: Math.min(100, percPrev),
-        percReal: Math.min(100, percReal),
-        cumPrev:  Math.min(100, cumPrev),
-        cumReal:  Math.min(100, cumReal),
-        valorReal,
+        ...d, idx,
+        valorReal, pVenda, pMeta, pCusto, pReal,
+        cumVenda, cumMeta, cumCusto, cumReal,
         status:  med?.status ?? "pendente",
         medId:   med?.id ?? null,
         numMed:  med?.numero ?? idx + 1,
@@ -1712,202 +1723,218 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
     });
   }, [dadosMensais, medicoes, valorContrato, cruzamento]);
 
-  // Editando inline
+  // Form de edição inline
   const [editMes, setEditMes] = useState<string | null>(null);
   const [editVal, setEditVal] = useState(0);
   const [editStatus, setEditStatus] = useState("medida");
   const [editObs, setEditObs] = useState("");
 
-  function abrirEdit(row: any) {
-    setEditMes(row.mes);
-    setEditVal(row.valorReal);
-    setEditStatus(row.status !== "pendente" ? row.status : "medida");
-    setEditObs(row.obs);
-  }
+  function abrirEdit(row: any) { setEditMes(row.mes); setEditVal(row.valorReal); setEditStatus(row.status !== "pendente" ? row.status : "medida"); setEditObs(row.obs); }
   function salvar() {
     if (!editMes) return;
-    const row = rows.find(r => r.mes === editMes)!;
+    const row = rows.find((r: any) => r.mes === editMes)!;
+    const baseV = ((cruzamento as any)?.valorBase ?? valorContrato) || 1;
     salvarMut.mutate({
-      projetoId,
-      competencia: editMes,
-      numero: row.numMed,
-      valorPrevisto: row.planejadoMes,
-      valorMedido: editVal,
-      percentualPrevisto: row.percPrev,
-      percentualMedido: valorContrato > 0 ? editVal / valorContrato * 100 : 0,
-      status: editStatus,
-      observacoes: editObs || null,
+      projetoId, competencia: editMes, numero: row.numMed,
+      valorPrevisto: row.venda, valorMedido: editVal,
+      percentualPrevisto: row.pVenda,
+      percentualMedido: baseV > 0 ? editVal / baseV * 100 : 0,
+      status: editStatus, observacoes: editObs || null,
     });
     setEditMes(null);
   }
 
-  const hoje = new Date().toISOString().substring(0, 7);
-  const totalPrev  = rows.reduce((s: number, r: any) => s + r.planejadoMes, 0);
-  const totalMat   = rows.reduce((s: number, r: any) => s + (r.matMes ?? 0), 0);
-  const totalMdo   = rows.reduce((s: number, r: any) => s + (r.mdoMes ?? 0), 0);
+  // KPI totais
+  const hoje      = new Date().toISOString().substring(0, 7);
+  const qtdMed    = medicoes.length;
+  const qtdCruz   = cruzamento?.itens?.length ?? 0;
+  const totalVenda = rows.reduce((s: number, r: any) => s + r.venda,     0);
+  const totalMeta  = rows.reduce((s: number, r: any) => s + r.meta,      0);
+  const totalCusto = rows.reduce((s: number, r: any) => s + r.custo,     0);
+  const totalLucro = totalVenda - totalCusto;
+  const margem     = totalVenda > 0 ? (totalLucro / totalVenda * 100) : 0;
   const totalReal  = rows.reduce((s: number, r: any) => s + r.valorReal, 0);
-  const qtdMed     = medicoes.length;
-  const qtdCruz    = cruzamento?.itens?.length ?? 0;
+  const cen = CENARIOS.find(c => c.id === cenario)!;
 
-  // Dados para o gráfico
-  const chartData = rows.map((r: any) => ({
-    mes:     r.nomeMes,
-    Previsto: +r.planejadoMes.toFixed(2),
-    Material: +(r.matMes ?? 0).toFixed(2),
-    "M.O.":   +(r.mdoMes ?? 0).toFixed(2),
-    Medido:   +r.valorReal.toFixed(2),
-    "Prev. Acum.": +r.cumPrev.toFixed(2),
-    "Real. Acum.": +r.cumReal.toFixed(2),
-  }));
+  // Dados do gráfico
+  const chartData = rows.map((r: any) => {
+    const base: any = { mes: r.nomeMes, Medido: +r.valorReal.toFixed(2) };
+    if (cenario === "lucro") {
+      base["Lucro Previsto"] = +r.lucro.toFixed(2);
+      base["Margem (Meta-Venda)"] = +r.margemMeta.toFixed(2);
+      base["Custo"] = +r.custo.toFixed(2);
+      base["Venda Acum.%"] = +r.cumVenda.toFixed(2);
+    } else {
+      base["Previsto"] = +(cenario === "venda" ? r.venda : cenario === "meta" ? r.meta : r.custo).toFixed(2);
+      base["Material"] = +r.mat.toFixed(2);
+      base["M.O."]     = +r.mdo.toFixed(2);
+      base["Prev.Acum%"] = +(cenario === "venda" ? r.cumVenda : cenario === "meta" ? r.cumMeta : r.cumCusto).toFixed(2);
+      base["Real.Acum%"] = +r.cumReal.toFixed(2);
+    }
+    return base;
+  });
 
-  if (loadCruz) {
-    return (
-      <div className="flex items-center justify-center py-16 text-slate-400">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" /> Cruzando orçamento com cronograma...
-      </div>
-    );
-  }
+  if (loadCruz) return (
+    <div className="flex items-center justify-center py-16 text-slate-400">
+      <Loader2 className="h-5 w-5 animate-spin mr-2" /> Cruzando orçamento com cronograma...
+    </div>
+  );
 
   return (
     <div className="space-y-5">
-      {/* Alerta de cruzamento */}
-      {qtdCruz > 0 && (
+      {/* Banner de cruzamento */}
+      {qtdCruz > 0 ? (
         <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs text-emerald-700">
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
           <span>
-            <b>{qtdCruz.toLocaleString("pt-BR")}</b> itens cruzados orçamento × cronograma —
-            valor negociado <b>{fmt((cruzamento as any)?.valorBase ?? 0)}</b> normalizado
-            ({fmt(cruzamento?.totalMat ?? 0)} materiais · {fmt(cruzamento?.totalMdo ?? 0)} M.O.)
+            <b>{qtdCruz.toLocaleString("pt-BR")}</b> itens cruzados —
+            Venda <b>{fmt((cruzamento as any)?.valorBase ?? 0)}</b> ·
+            Meta <b>{fmt((cruzamento as any)?.valorBaseMeta ?? 0)}</b> ·
+            Custo <b>{fmt((cruzamento as any)?.valorBaseCusto ?? 0)}</b>
           </span>
         </div>
-      )}
-      {qtdCruz === 0 && (
+      ) : (
         <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          Nenhum cruzamento encontrado entre o cronograma e o orçamento. Verifique se o projeto tem orçamento vinculado com itens de mesmo nome.
+          Nenhum cruzamento encontrado. Verifique se o projeto tem orçamento vinculado com itens de mesmo nome.
         </div>
       )}
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Valor do Contrato</p>
-          <p className="text-base font-bold text-slate-800">{fmt(valorContrato)}</p>
-        </div>
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Valor Negociado (orç.)</p>
-          <p className="text-base font-bold text-orange-600">{fmt((cruzamento as any)?.valorBase ?? totalPrev)}</p>
-          {(cruzamento as any)?.valorBase > 0 && (
-            <p className="text-[9px] text-slate-400 mt-0.5">distribuído: {fmt(totalPrev)}</p>
-          )}
-        </div>
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Custo Material Total</p>
-          <p className="text-base font-bold text-purple-600">{fmt(totalMat)}</p>
-        </div>
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Custo M.O. Total</p>
-          <p className="text-base font-bold text-blue-600">{fmt(totalMdo)}</p>
-        </div>
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Total Medido</p>
-          <p className="text-base font-bold text-emerald-600">{fmt(totalReal)}</p>
-        </div>
-        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Medições realizadas</p>
-          <p className="text-base font-bold text-slate-600">{qtdMed} / {rows.length}</p>
-        </div>
+      {/* Seletor de cenário */}
+      <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+        {CENARIOS.map(c => (
+          <button key={c.id}
+            onClick={() => setCenario(c.id)}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all
+              ${cenario === c.id ? `${c.corBg} text-white shadow-sm` : "text-slate-500 hover:text-slate-700"}`}>
+            {c.label}
+          </button>
+        ))}
       </div>
 
-      {/* Gráfico Barras + Linha */}
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { label: "Venda Negociada",   v: (cruzamento as any)?.valorBase ?? totalVenda,        c: "text-orange-600" },
+          { label: "Meta Orçamento",    v: (cruzamento as any)?.valorBaseMeta ?? totalMeta,     c: "text-violet-600" },
+          { label: "Custo Orçamento",   v: (cruzamento as any)?.valorBaseCusto ?? totalCusto,   c: "text-red-600"    },
+          { label: "Lucro Previsto",    v: totalLucro, c: totalLucro >= 0 ? "text-emerald-600" : "text-red-600" },
+          { label: `Margem (${margem.toFixed(1)}%)`, v: totalLucro, c: margem >= 0 ? "text-emerald-600" : "text-red-600" },
+          { label: "Total Medido",      v: totalReal,  c: "text-blue-600"   },
+        ].map((k, i) => (
+          <div key={i} className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+            <p className="text-[10px] text-slate-400">{k.label}</p>
+            <p className={`text-sm font-bold ${k.c}`}>{fmt(k.v)}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Gráfico */}
       {chartData.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-1">Previsto × Realizado por Período</p>
-          <p className="text-[10px] text-slate-400 mb-4">Baseado no cruzamento orçamento × cronograma — barras = valores mensais (eixo esq.), linhas = acumulado % (eixo dir.)</p>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">
+                {cenario === "lucro" ? "Análise de Lucro Previsto × Realizado" : `Cenário ${cen.label} — Previsto × Realizado`}
+              </p>
+              <p className="text-[10px] text-slate-400">Barras = valores mensais (eixo esq.) · Linhas = acumulado % (eixo dir.)</p>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData} margin={{ top: 4, right: 52, bottom: 0, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} />
-              <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} width={60} />
+              <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} width={64} />
               <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 100]} width={36} />
-              <Tooltip formatter={(v: any, name: string) => name.includes("Acum") ? `${Number(v).toFixed(1)}%` : fmt(Number(v))} />
+              <Tooltip formatter={(v: any, name: string) => name.includes("%") ? `${Number(v).toFixed(1)}%` : fmt(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar yAxisId="val" dataKey="Previsto" fill="#f97316" fillOpacity={0.8} radius={[3,3,0,0]} stackId="prev" />
-              <Bar yAxisId="val" dataKey="Material" fill="#a855f7" fillOpacity={0.7} radius={[0,0,0,0]} />
-              <Bar yAxisId="val" dataKey="M.O."     fill="#3b82f6" fillOpacity={0.7} radius={[0,0,0,0]} />
-              <Bar yAxisId="val" dataKey="Medido"   fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
-              <Line yAxisId="pct" type="monotone" dataKey="Prev. Acum." stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-              <Line yAxisId="pct" type="monotone" dataKey="Real. Acum." stroke="#10b981" strokeWidth={2} dot={false} />
+              {cenario === "lucro" ? (<>
+                <Bar yAxisId="val" dataKey="Venda Acum.%" fill="transparent" hide />
+                <Bar yAxisId="val" dataKey="Custo"          fill="#ef4444" fillOpacity={0.5} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="Lucro Previsto" fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="Margem (Meta-Venda)" fill="#8b5cf6" fillOpacity={0.6} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="Medido"         fill="#3b82f6" fillOpacity={0.7} radius={[3,3,0,0]} />
+                <Line yAxisId="pct" type="monotone" dataKey="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+              </>) : (<>
+                <Bar yAxisId="val" dataKey="Previsto" fill={cen.cor}   fillOpacity={0.75} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="Material" fill="#a855f7"   fillOpacity={0.65} radius={[0,0,0,0]} />
+                <Bar yAxisId="val" dataKey="M.O."     fill="#3b82f6"   fillOpacity={0.65} radius={[0,0,0,0]} />
+                <Bar yAxisId="val" dataKey="Medido"   fill="#10b981"   fillOpacity={0.7}  radius={[3,3,0,0]} />
+                <Line yAxisId="pct" type="monotone" dataKey="Prev.Acum%" stroke={cen.cor} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                <Line yAxisId="pct" type="monotone" dataKey="Real.Acum%" stroke="#10b981" strokeWidth={2} dot={false} />
+              </>)}
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {/* Tabela mensal */}
+      {/* Tabela Detalhada */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
         <div className="bg-slate-700 text-white px-4 py-2.5 flex items-center justify-between rounded-t-xl">
-          <p className="text-xs font-semibold">Cronograma de Medições</p>
+          <p className="text-xs font-semibold">Cronograma de Medições — Cenário: <span style={{ color: cen.cor }}>{cen.label}</span></p>
           <p className="text-[10px] text-slate-300">Clique em "Registrar" para lançar uma medição</p>
         </div>
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="py-2 px-3 text-left w-20">N° Med.</th>
-              <th className="py-2 px-3 text-left w-24">Competência</th>
-              <th className="py-2 px-3 text-right w-32">Prev. (R$)</th>
-              <th className="py-2 px-3 text-right w-16">Prev. %</th>
-              <th className="py-2 px-3 text-right w-16">Prev.Acum%</th>
-              <th className="py-2 px-3 text-right w-32">Medido (R$)</th>
-              <th className="py-2 px-3 text-right w-16">Med. %</th>
-              <th className="py-2 px-3 text-right w-16">Med.Acum%</th>
-              <th className="py-2 px-3 text-right w-32">Desvio (R$)</th>
-              <th className="py-2 px-3 text-center w-24">Status</th>
+              <th className="py-2 px-3 text-left">Competência</th>
+              <th className="py-2 px-3 text-right">Venda</th>
+              <th className="py-2 px-3 text-right">Meta</th>
+              <th className="py-2 px-3 text-right">Custo</th>
+              <th className="py-2 px-3 text-right text-emerald-700">Lucro Prev.</th>
+              <th className="py-2 px-3 text-right text-violet-700">Mg.Meta</th>
+              <th className="py-2 px-3 text-right">Prev.Acum%</th>
+              <th className="py-2 px-3 text-right text-blue-700">Medido</th>
+              <th className="py-2 px-3 text-right">Real.Acum%</th>
+              <th className="py-2 px-3 text-right">Desvio</th>
+              <th className="py-2 px-3 text-center w-20">Status</th>
               <th className="py-2 px-3 w-20" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, idx) => {
-              const desvio = r.valorReal - r.planejadoMes;
+            {rows.map((r: any, idx: number) => {
+              const desvio = r.valorReal - r.venda;
               const isEdit = editMes === r.mes;
               const isPast = r.mes <= hoje;
+              const prevCen = cenario === "venda" ? r.venda : cenario === "meta" ? r.meta : r.custo;
+              const cumCen  = cenario === "venda" ? r.cumVenda : cenario === "meta" ? r.cumMeta : r.cumCusto;
               return (
                 <React.Fragment key={r.mes}>
-                  <tr className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} ${isEdit ? "bg-blue-50" : ""}`}>
-                    <td className="py-2 px-3 font-mono text-slate-500">
+                  <tr className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} ${isEdit ? "!bg-blue-50" : ""}`}>
+                    <td className="py-2 px-3 font-mono text-slate-500 text-[10px]">
                       {r.valorReal > 0 ? `M-${String(r.numMed).padStart(2, "0")}` : <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="py-2 px-3 font-semibold text-slate-700">
+                    <td className="py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">
                       {new Date(`${r.mes}-15`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
                     </td>
-                    <td className="py-2 px-3 text-right text-orange-600">{fmt(r.planejadoMes)}</td>
-                    <td className="py-2 px-3 text-right text-orange-500">{r.percPrev.toFixed(2)}%</td>
-                    <td className="py-2 px-3 text-right text-orange-400">{r.cumPrev.toFixed(1)}%</td>
-                    <td className="py-2 px-3 text-right font-semibold text-emerald-700">
+                    <td className="py-2 px-3 text-right text-orange-600 font-medium">{fmt(r.venda)}</td>
+                    <td className="py-2 px-3 text-right text-violet-600">{fmt(r.meta)}</td>
+                    <td className="py-2 px-3 text-right text-red-600">{fmt(r.custo)}</td>
+                    <td className={`py-2 px-3 text-right font-semibold ${r.lucro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {r.lucro >= 0 ? "+" : ""}{fmt(r.lucro)}
+                    </td>
+                    <td className={`py-2 px-3 text-right ${r.margemMeta >= 0 ? "text-violet-600" : "text-red-500"}`}>
+                      {r.margemMeta >= 0 ? "+" : ""}{fmt(r.margemMeta)}
+                    </td>
+                    <td className="py-2 px-3 text-right text-slate-500">{cumCen.toFixed(1)}%</td>
+                    <td className="py-2 px-3 text-right font-semibold text-blue-700">
                       {r.valorReal > 0 ? fmt(r.valorReal) : <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="py-2 px-3 text-right text-emerald-600">
-                      {r.percReal > 0 ? `${r.percReal.toFixed(2)}%` : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="py-2 px-3 text-right text-emerald-500">
+                    <td className="py-2 px-3 text-right text-blue-500">
                       {r.cumReal > 0 ? `${r.cumReal.toFixed(1)}%` : <span className="text-slate-300">—</span>}
                     </td>
                     <td className={`py-2 px-3 text-right font-semibold ${r.valorReal > 0 ? (desvio >= 0 ? "text-emerald-600" : "text-red-600") : "text-slate-300"}`}>
                       {r.valorReal > 0 ? `${desvio >= 0 ? "+" : ""}${fmt(desvio)}` : "—"}
                     </td>
                     <td className="py-2 px-3 text-center">
-                      {(() => {
-                        const s = STATUS_MED.find(x => x.v === r.status) ?? STATUS_MED[0];
-                        return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.c}`}>{s.l}</span>;
-                      })()}
+                      {(() => { const s = STATUS_MED.find(x => x.v === r.status) ?? STATUS_MED[0]; return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.c}`}>{s.l}</span>; })()}
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex gap-1 justify-end">
                         {!isEdit && (
-                          <button
-                            className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors
-                              ${isPast ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200" : "bg-slate-50 text-slate-400 border border-slate-200"}`}
-                            onClick={() => abrirEdit(r)}
-                          >
+                          <button className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${isPast ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200" : "bg-slate-50 text-slate-400 border border-slate-200"}`}
+                            onClick={() => abrirEdit(r)}>
                             {r.valorReal > 0 ? "Editar" : "Registrar"}
                           </button>
                         )}
@@ -1922,40 +1949,32 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                   </tr>
                   {isEdit && (
                     <tr className="bg-blue-50 border-b border-blue-100">
-                      <td colSpan={11} className="px-4 py-3">
+                      <td colSpan={13} className="px-4 py-3">
                         <div className="flex flex-wrap items-center gap-3">
                           <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-slate-600">Valor Medido (R$):</label>
-                            <input
-                              type="number" min="0" step="0.01"
-                              value={editVal}
+                            <input type="number" min="0" step="0.01" value={editVal}
                               onChange={e => setEditVal(parseFloat(e.target.value) || 0)}
-                              className="h-7 text-xs border border-blue-300 rounded px-2 w-32 text-right bg-white"
-                            />
+                              className="h-7 text-xs border border-blue-300 rounded px-2 w-32 text-right bg-white" />
                           </div>
                           <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-slate-600">Status:</label>
                             <select value={editStatus} onChange={e => setEditStatus(e.target.value)}
                               className="h-7 text-xs border border-blue-300 rounded px-2 bg-white">
-                              {STATUS_MED.filter(s => s.v !== "pendente").map(s =>
-                                <option key={s.v} value={s.v}>{s.l}</option>)}
+                              {STATUS_MED.filter(s => s.v !== "pendente").map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
                             </select>
                           </div>
                           <div className="flex items-center gap-2 flex-1 min-w-[160px]">
                             <label className="text-xs font-medium text-slate-600 shrink-0">Obs.:</label>
                             <input type="text" value={editObs} onChange={e => setEditObs(e.target.value)}
-                              placeholder="Observações opcionais"
-                              className="h-7 text-xs border border-blue-300 rounded px-2 flex-1 bg-white" />
+                              placeholder="Observações" className="h-7 text-xs border border-blue-300 rounded px-2 flex-1 bg-white" />
                           </div>
                           <div className="flex gap-2 shrink-0">
-                            <button onClick={() => setEditMes(null)}
-                              className="h-7 px-3 text-xs border border-slate-300 rounded text-slate-600 hover:bg-slate-50">
-                              Cancelar
-                            </button>
+                            <button onClick={() => setEditMes(null)} className="h-7 px-3 text-xs border border-slate-300 rounded text-slate-600 hover:bg-slate-50">Cancelar</button>
                             <button onClick={salvar} disabled={salvarMut.isPending}
                               className="h-7 px-3 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1">
                               {salvarMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                              Salvar Medição
+                              Salvar
                             </button>
                           </div>
                         </div>
@@ -1966,16 +1985,30 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               );
             })}
           </tbody>
+          {rows.length > 0 && (
+            <tfoot className="bg-slate-700 text-white text-[11px]">
+              <tr>
+                <td className="py-2 px-3 font-bold" colSpan={2}>TOTAL</td>
+                <td className="py-2 px-3 text-right font-bold text-orange-300">{fmt(totalVenda)}</td>
+                <td className="py-2 px-3 text-right font-bold text-violet-300">{fmt(totalMeta)}</td>
+                <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(totalCusto)}</td>
+                <td className={`py-2 px-3 text-right font-bold ${totalLucro >= 0 ? "text-emerald-300" : "text-red-400"}`}>{totalLucro >= 0 ? "+" : ""}{fmt(totalLucro)}</td>
+                <td className="py-2 px-3 text-right text-slate-300">{margem.toFixed(1)}%</td>
+                <td className="py-2 px-3" />
+                <td className="py-2 px-3 text-right font-bold text-blue-300">{fmt(totalReal)}</td>
+                <td colSpan={4} />
+              </tr>
+            </tfoot>
+          )}
         </table>
         {rows.length === 0 && (
           <div className="py-12 text-center text-slate-400 text-sm">
-            Nenhum mês calculado. Verifique se há atividades com datas e valor de contrato cadastrado.
+            Nenhum mês calculado. Verifique se há atividades com datas e orçamento vinculado.
           </div>
         )}
       </div>
-
       <p className="text-[10px] text-slate-400 text-center">
-        * Previsto calculado proporcionalmente à distribuição temporal das atividades cruzadas com o orçamento (vendaTotal). Medido = valor lançado manualmente por competência.
+        * Lucro = Venda − Custo | Mg.Meta = Venda − Meta | Valores normalizados ao orçamento (valor_negociado, totalMeta, totalCusto).
       </p>
     </div>
   );
