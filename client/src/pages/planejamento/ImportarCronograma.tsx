@@ -202,7 +202,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     return lista.map(t => {
       const item = eapMap[t.wbs] ?? eapMap[t.eapCodigo];
       if (item && totalVenda > 0) {
-        return { ...t, eapCodigo: item.eapCodigo, pesoFin: +(n(item.vendaTotal) / totalVenda * 100).toFixed(3) };
+        return { ...t, eapCodigo: item.eapCodigo, pesoFin: +(n(item.vendaTotal) / totalVenda * 100).toFixed(4) };
       }
       return t;
     });
@@ -253,11 +253,11 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   function redistribuirPesos() {
     const folhas = tarefas.filter(t => !t.isGrupo);
     if (!folhas.length) return;
-    const pesoUnitario = +(100 / folhas.length).toFixed(3);
+    const pesoUnitario = +(100 / folhas.length).toFixed(4);
     let folhaIdx = 0;
     setTarefas(t => t.map(item =>
       item.isGrupo ? item : { ...item, pesoFin: folhaIdx++ === folhas.length - 1
-        ? +(100 - pesoUnitario * (folhas.length - 1)).toFixed(3) : pesoUnitario }
+        ? +(100 - pesoUnitario * (folhas.length - 1)).toFixed(4) : pesoUnitario }
     ));
   }
 
@@ -394,7 +394,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
               {!pesoOk && (
                 <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  Soma dos pesos financeiros: <strong>{totalPeso.toFixed(1)}%</strong> — deve totalizar 100% para Curva S financeira correta.
+                  Soma dos pesos financeiros: <strong>{totalPeso.toFixed(4)}%</strong> — deve totalizar 100% para Curva S financeira correta.
                 </div>
               )}
 
@@ -489,7 +489,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                             ) : (
                               <Input
                                 type="number"
-                                min={0} max={100} step={0.001}
+                                min={0} max={100} step={0.0001}
                                 value={t.pesoFin}
                                 onChange={e => updateTarefa(idx, "pesoFin", parseFloat(e.target.value) || 0)}
                                 className={`h-6 text-[11px] px-1 py-0 w-full text-right ${t.pesoFin > 0 ? "text-emerald-700" : "text-slate-400"}`}
