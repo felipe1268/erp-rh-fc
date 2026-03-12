@@ -20,7 +20,8 @@ function parseBRL(s: string) {
 }
 function n(v: any) { return parseFloat(v || "0"); }
 
-const EMPTY_FORM = { codigo: "", descricao: "", unidade: "", tipo: "", precoUnitario: "", precoMin: "" };
+const EMPTY_FORM      = { codigo: "", descricao: "", unidade: "", tipo: "", precoUnitario: "", precoMin: "" };
+const EMPTY_COMP_FORM = { codigo: "", descricao: "", unidade: "", tipo: "", custoUnitMat: "", custoUnitMdo: "", custoUnitTotal: "" };
 
 /* ════════════════════════════════════════════════════════════════
    COMPONENTE: Dropdown searchable de grupo
@@ -346,18 +347,239 @@ function CategoriasView({ companyId }: { companyId: number }) {
    SUB-VIEW: Composições
    ════════════════════════════════════════════════════════════════ */
 function ComposicoesView({ companyId }: { companyId: number }) {
-  const [search, setSearch] = useState("");
+  const [search, setSearch]        = useState("");
+  const [tipoFilter, setTipoFilter] = useState<string | null>(null);
+  const [editingId, setEditingId]  = useState<number | "new" | null>(null);
+  const [editForm, setEditForm]    = useState(EMPTY_COMP_FORM);
+  const [saveError, setSaveError]  = useState<string | null>(null);
+  const [jobId, setJobId]          = useState<string | null>(null);
+  const [jobTotal, setJobTotal]    = useState(0);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [selected, setSelected]    = useState<Set<number>>(new Set());
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const utils = trpc.useUtils();
   const { data: composicoes = [], isLoading } =
     trpc.orcamento.listarComposicoesCatalogo.useQuery({ companyId }, { enabled: companyId > 0 });
 
-  const q = search.toLowerCase();
-  const filt = composicoes.filter((c: any) =>
-    !q || c.descricao?.toLowerCase().includes(q) || c.codigo?.toLowerCase().includes(q) || c.tipo?.toLowerCase().includes(q)
+  const { data: novoCodigo } = trpc.orcamento.gerarCodigoComposicao.useQuery(
+    { companyId }, { enabled: companyId > 0 && editingId === "new" }
   );
+  useEffect(() => {
+    if (editingId === "new" && novoCodigo && !editForm.codigo) {
+      setEditForm(f => ({ ...f, codigo: novoCodigo }));
+    }
+  }, [novoCodigo, editingId]);
+
+  /* Polling de importação (reusa o mesmo endpoint de progresso) */
+  const { data: progresso } = trpc.orcamento.progressoImportacao.useQuery(
+    { jobId: jobId ?? "" },
+    {
+      enabled: !!jobId,
+      refetchInterval: (query: any) => {
+        const data = query?.state?.data;
+        if (!data || data.status === "running") return 600;
+        return false;
+      },
+    }
+  );
+  useEffect(() => {
+    if (!progresso) return;
+    if (progresso.status === "done") utils.orcamento.listarComposicoesCatalogo.invalidate({ companyId });
+    if (progresso.status === "error") setImportError(progresso.error ?? "Erro desconhecido.");
+  }, [progresso?.status]);
+
+  const invalidate = useCallback(() => utils.orcamento.listarComposicoesCatalogo.invalidate({ companyId }), [companyId]);
+
+  const importMut = trpc.orcamento.importarComposicoesCatalogo.useMutation({
+    onSuccess: (res) => { setJobId(res.jobId); setJobTotal(res.total); setImportError(null); },
+    onError: (err) => setImportError(err.message),
+  });
+  const salvarMut = trpc.orcamento.salvarComposicao.useMutation({
+    onSuccess: () => { invalidate(); setEditingId(null); setSaveError(null); },
+    onError: (err) => setSaveError(err.message),
+  });
+  const excluirMut = trpc.orcamento.excluirComposicao.useMutation({
+    onSuccess: () => invalidate(),
+  });
+  const excluirBulkMut = trpc.orcamento.excluirComposicoesBulk.useMutation({
+    onSuccess: () => { invalidate(); setSelected(new Set()); },
+  });
+  const excluirTodosMut = trpc.orcamento.excluirTodasComposicoes.useMutation({
+    onSuccess: () => { invalidate(); setSelected(new Set()); },
+  });
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setJobId(null); setImportError(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = (ev.target?.result as string).split(",")[1];
+      if (!base64) return;
+      importMut.mutate({ companyId, fileBase64: base64, fileName: file.name });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  function startEdit(c: any) {
+    setEditingId(c.id); setSaveError(null);
+    setEditForm({
+      codigo:        c.codigo ?? "",
+      descricao:     c.descricao ?? "",
+      unidade:       c.unidade ?? "",
+      tipo:          c.tipo ?? "",
+      custoUnitMat:  n(c.custoUnitMat).toFixed(4).replace(".", ","),
+      custoUnitMdo:  n(c.custoUnitMdo).toFixed(4).replace(".", ","),
+      custoUnitTotal: n(c.custoUnitTotal).toFixed(4).replace(".", ","),
+    });
+  }
+  function startNew() { setEditingId("new"); setSaveError(null); setEditForm({ ...EMPTY_COMP_FORM, codigo: novoCodigo ?? "" }); }
+  function cancelEdit() { setEditingId(null); setSaveError(null); }
+  function handleSave() {
+    if (!editForm.descricao.trim()) { setSaveError("Descrição obrigatória."); return; }
+    if (!editForm.codigo.trim())    { setSaveError("Código obrigatório."); return; }
+    salvarMut.mutate({
+      companyId,
+      id: editingId !== "new" ? (editingId as number) : undefined,
+      codigo: editForm.codigo, descricao: editForm.descricao,
+      unidade: editForm.unidade, tipo: editForm.tipo,
+      custoUnitMat:   String(parseBRL(editForm.custoUnitMat)),
+      custoUnitMdo:   String(parseBRL(editForm.custoUnitMdo)),
+      custoUnitTotal: String(parseBRL(editForm.custoUnitTotal)),
+    });
+  }
+
+  function field(key: keyof typeof EMPTY_COMP_FORM, className?: string) {
+    return (
+      <Input
+        className={`h-6 text-xs px-1.5 py-0 ${className ?? ""}`}
+        value={editForm[key]}
+        onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+        onKeyDown={e => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") cancelEdit(); }}
+      />
+    );
+  }
+
+  const isImporting = importMut.isPending || (!!jobId && progresso?.status === "running");
+  const pct   = progresso?.pct ?? 0;
+  const done  = progresso?.done ?? 0;
+  const total = progresso?.total ?? jobTotal;
+
+  /* Filtro de tipo derivado dos dados */
+  const tiposDisponiveis = Array.from(new Set((composicoes as any[]).map((c: any) => c.tipo).filter(Boolean))).sort();
+  const tipoGrupos = tiposDisponiveis.map((t: any) => ({ id: 0, nome: t }));
+
+  const q = search.toLowerCase();
+  const filt = (composicoes as any[]).filter(c =>
+    (!tipoFilter || c.tipo === tipoFilter) &&
+    (!q || c.descricao?.toLowerCase().includes(q) || c.codigo?.toLowerCase().includes(q) || c.tipo?.toLowerCase().includes(q))
+  );
+
+  const filtIds = filt.map((c: any) => c.id as number);
+  const allFiltSelected = filtIds.length > 0 && filtIds.every(id => selected.has(id));
+  const someFiltSelected = filtIds.some(id => selected.has(id)) && !allFiltSelected;
+
+  function toggleRow(id: number) {
+    setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  }
+  function toggleAll() {
+    if (allFiltSelected) {
+      setSelected(prev => { const next = new Set(prev); filtIds.forEach(id => next.delete(id)); return next; });
+    } else {
+      setSelected(prev => { const next = new Set(prev); filtIds.forEach(id => next.add(id)); return next; });
+    }
+  }
+  function clearSelection() { setSelected(new Set()); }
+  function handleExcluirSelecionados() {
+    const ids = [...selected];
+    if (!confirm(`Excluir ${ids.length} composição(ões) selecionada(s)?`)) return;
+    excluirBulkMut.mutate({ companyId, ids });
+  }
+  function handleExcluirTodas() {
+    if (!confirm(`Tem certeza que deseja apagar TODAS as ${(composicoes as any[]).length} composições do catálogo? Esta ação não pode ser desfeita.`)) return;
+    excluirTodosMut.mutate({ companyId });
+  }
+
+  const isBulkLoading = excluirBulkMut.isPending || excluirTodosMut.isPending;
+
+  function renderRow(c: any) {
+    const isSel = selected.has(c.id);
+    if (editingId === c.id) {
+      return (
+        <tr key={c.id} className="border-b bg-blue-50">
+          <td className="px-3 py-1" />
+          <td className="px-2 py-1">{field("codigo", "font-mono w-24")}</td>
+          <td className="px-2 py-1">{field("descricao", "min-w-[260px]")}</td>
+          <td className="px-2 py-1">{field("tipo", "w-20")}</td>
+          <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
+          <td className="px-2 py-1">{field("custoUnitMat", "w-24 text-right")}</td>
+          <td className="px-2 py-1">{field("custoUnitMdo", "w-24 text-right")}</td>
+          <td className="px-2 py-1">{field("custoUnitTotal", "w-24 text-right")}</td>
+          <td className="px-2 py-1 text-center">
+            <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
+              {c.totalOrcamentos}
+            </span>
+          </td>
+          <td className="px-2 py-1">
+            <div className="flex items-center gap-1">
+              {saveError && <span className="text-red-500 text-[10px] max-w-[80px] truncate">{saveError}</span>}
+              <button onClick={handleSave} disabled={salvarMut.isPending}
+                className="p-1 rounded hover:bg-blue-200 text-blue-700">
+                {salvarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              </button>
+              <button onClick={cancelEdit} className="p-1 rounded hover:bg-slate-200 text-slate-500">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </td>
+        </tr>
+      );
+    }
+    return (
+      <tr key={c.id}
+        className={`border-b transition-colors group ${isSel ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-muted/30"}`}>
+        <td className="px-3 py-2">
+          <button onClick={() => toggleRow(c.id)}
+            className={`text-slate-400 hover:text-blue-600 transition-colors ${isSel ? "text-blue-600" : ""}`}>
+            {isSel ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+          </button>
+        </td>
+        <td className="px-4 py-2 font-mono text-[10px] text-slate-500">{c.codigo || "—"}</td>
+        <td className="px-3 py-2">{c.descricao}</td>
+        <td className="px-3 py-2">
+          {c.tipo && <Badge variant="outline" className="text-[10px]">{c.tipo}</Badge>}
+        </td>
+        <td className="px-3 py-2 text-center text-muted-foreground">{c.unidade || "—"}</td>
+        <td className="px-3 py-2 text-right text-blue-600 tabular-nums">{formatBRL(n(c.custoUnitMat))}</td>
+        <td className="px-3 py-2 text-right text-orange-500 tabular-nums">{formatBRL(n(c.custoUnitMdo))}</td>
+        <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatBRL(n(c.custoUnitTotal))}</td>
+        <td className="px-3 py-2 text-center">
+          <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
+            {c.totalOrcamentos}
+          </span>
+        </td>
+        <td className="px-2 py-1">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => startEdit(c)} className="p-1 rounded hover:bg-blue-100 text-blue-600">
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => { if (confirm("Excluir esta composição?")) excluirMut.mutate({ companyId, id: c.id }); }}
+              className="p-1 rounded hover:bg-red-100 text-red-500">
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-5">
+      {/* Cabeçalho */}
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
         <div className="p-2 rounded-lg bg-blue-100">
           <Wrench className="h-5 w-5 text-blue-600" />
         </div>
@@ -365,60 +587,167 @@ function ComposicoesView({ companyId }: { companyId: number }) {
           <h1 className="text-xl font-bold">Composições</h1>
           <p className="text-sm text-muted-foreground">Catálogo central de composições da empresa</p>
         </div>
-        <span className="ml-auto text-sm text-muted-foreground font-mono">{composicoes.length} registros</span>
+        <span className="ml-auto text-sm text-muted-foreground font-mono mr-2">
+          {filt.length}/{(composicoes as any[]).length} registros
+        </span>
+        <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" className="hidden" onChange={handleFileChange} />
+        <Button size="sm" variant="outline"
+          className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+          onClick={() => fileRef.current?.click()} disabled={isImporting}>
+          {isImporting
+            ? <><Loader2 className="h-4 w-4 animate-spin" /> Importando...</>
+            : <><Upload className="h-4 w-4" /> Importar</>}
+        </Button>
+        <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={startNew} disabled={editingId === "new"}>
+          <Plus className="h-4 w-4" /> Nova Composição
+        </Button>
       </div>
 
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input className="pl-9" placeholder="Buscar por descrição, código ou tipo..."
-          value={search} onChange={e => setSearch(e.target.value)} />
+      {/* Progresso de importação */}
+      {jobId && progresso && progresso.status !== "done" && progresso.status !== "error" && (
+        <div className="mb-4 p-4 rounded-lg bg-blue-50 border border-blue-200">
+          <div className="flex items-center justify-between text-sm text-blue-800 mb-2">
+            <span className="font-medium flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Importando composições...</span>
+            <span className="font-mono font-bold">{pct}%</span>
+          </div>
+          <div className="w-full bg-blue-200 rounded-full h-3 overflow-hidden">
+            <div className="bg-blue-500 h-3 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="text-xs text-blue-700 mt-1.5">
+            {done} de {total} composições · {progresso.inseridos ?? 0} inseridas · {progresso.atualizados ?? 0} atualizadas
+          </p>
+        </div>
+      )}
+      {progresso?.status === "done" && jobId && (
+        <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
+          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+          <span>Importação concluída: <strong>{progresso.total}</strong> composições — <strong>{progresso.inseridos}</strong> inseridas, <strong>{progresso.atualizados}</strong> atualizadas.</span>
+          <button onClick={() => setJobId(null)} className="ml-auto">✕</button>
+        </div>
+      )}
+      {importError && (
+        <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{importError}</span>
+          <button onClick={() => setImportError(null)} className="ml-auto">✕</button>
+        </div>
+      )}
+
+      {/* Busca + Filtro de tipo */}
+      <div className="flex gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Buscar por descrição, código ou tipo..."
+            value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        {tipoGrupos.length > 0 && (
+          <GrupoFiltro value={tipoFilter} onChange={setTipoFilter} grupos={tipoGrupos as any[]} />
+        )}
       </div>
 
+      {/* Tabela */}
       {isLoading ? (
         <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-      ) : filt.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground">
-          <Wrench className="h-10 w-10 mx-auto mb-3 opacity-20" />
-          <p className="text-sm">{search ? "Nenhuma composição encontrada." : "Nenhuma composição cadastrada ainda."}</p>
-        </div>
       ) : (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-slate-50 text-muted-foreground">
-                  <th className="text-left px-4 py-2 w-28">Código</th>
-                  <th className="text-left px-3 py-2 min-w-[300px]">Descrição</th>
-                  <th className="text-left px-3 py-2 w-32">Tipo</th>
-                  <th className="text-center px-3 py-2 w-16">Un</th>
+                  <th className="px-3 py-2 w-8">
+                    <button onClick={toggleAll}
+                      className="text-slate-400 hover:text-blue-600 transition-colors">
+                      {allFiltSelected
+                        ? <CheckSquare className="h-4 w-4 text-blue-600" />
+                        : someFiltSelected
+                          ? <MinusSquare className="h-4 w-4 text-blue-400" />
+                          : <Square className="h-4 w-4" />}
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-2 w-24">Código</th>
+                  <th className="text-left px-3 py-2 min-w-[260px]">Descrição</th>
+                  <th className="text-left px-3 py-2 w-28">Tipo</th>
+                  <th className="text-center px-3 py-2 w-12">Un</th>
                   <th className="text-right px-3 py-2 w-28 text-blue-600">Custo Mat</th>
                   <th className="text-right px-3 py-2 w-28 text-orange-500">Custo MO</th>
                   <th className="text-right px-3 py-2 w-28 font-semibold">Total Unit</th>
-                  <th className="text-center px-3 py-2 w-24">Orçamentos</th>
+                  <th className="text-center px-3 py-2 w-20">Orçamentos</th>
+                  <th className="w-16" />
                 </tr>
               </thead>
               <tbody>
-                {filt.map((c: any) => (
-                  <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-2 font-mono text-[10px] text-slate-500">{c.codigo || "—"}</td>
-                    <td className="px-3 py-2">{c.descricao}</td>
-                    <td className="px-3 py-2">{c.tipo && <Badge variant="outline" className="text-[10px]">{c.tipo}</Badge>}</td>
-                    <td className="px-3 py-2 text-center text-muted-foreground">{c.unidade || "—"}</td>
-                    <td className="px-3 py-2 text-right text-blue-600 tabular-nums">{formatBRL(n(c.custoUnitMat))}</td>
-                    <td className="px-3 py-2 text-right text-orange-500 tabular-nums">{formatBRL(n(c.custoUnitMdo))}</td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatBRL(n(c.custoUnitTotal))}</td>
-                    <td className="px-3 py-2 text-center">
-                      <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
-                        {c.totalOrcamentos}
-                      </span>
+                {/* Linha de nova composição */}
+                {editingId === "new" && (
+                  <tr className="border-b bg-blue-50">
+                    <td className="px-3 py-1" />
+                    <td className="px-2 py-1">{field("codigo", "font-mono w-24")}</td>
+                    <td className="px-2 py-1">{field("descricao", "min-w-[260px]")}</td>
+                    <td className="px-2 py-1">{field("tipo", "w-20")}</td>
+                    <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
+                    <td className="px-2 py-1">{field("custoUnitMat", "w-24 text-right")}</td>
+                    <td className="px-2 py-1">{field("custoUnitMdo", "w-24 text-right")}</td>
+                    <td className="px-2 py-1">{field("custoUnitTotal", "w-24 text-right")}</td>
+                    <td className="px-2 py-1" />
+                    <td className="px-2 py-1">
+                      <div className="flex items-center gap-1">
+                        {saveError && <span className="text-red-500 text-[10px]">{saveError}</span>}
+                        <button onClick={handleSave} disabled={salvarMut.isPending}
+                          className="p-1 rounded hover:bg-blue-200 text-blue-700">
+                          {salvarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        </button>
+                        <button onClick={cancelEdit} className="p-1 rounded hover:bg-slate-200 text-slate-500">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                )}
+                {filt.length === 0 && editingId !== "new" ? (
+                  <tr>
+                    <td colSpan={10} className="py-16 text-center text-muted-foreground">
+                      <Wrench className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                      <p className="text-sm">{search || tipoFilter ? "Nenhuma composição encontrada." : "Nenhuma composição cadastrada ainda."}</p>
+                      {!search && !tipoFilter && <p className="text-xs mt-1">Use "Importar" ou clique em "Nova Composição".</p>}
+                    </td>
+                  </tr>
+                ) : filt.map((c: any) => renderRow(c))}
               </tbody>
             </table>
           </div>
         </Card>
       )}
+
+      {/* ── Barra flutuante de ações em massa ── */}
+      <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-200
+        ${selected.size > 0
+          ? "opacity-100 translate-y-0 pointer-events-auto"
+          : "opacity-0 translate-y-4 pointer-events-none"}`}>
+        <div className="flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl text-sm">
+          <span className="font-medium">
+            <span className="text-blue-300 font-bold">{selected.size}</span> selecionada{selected.size !== 1 ? "s" : ""}
+          </span>
+          <button onClick={clearSelection} className="text-slate-400 hover:text-white text-xs underline underline-offset-2">
+            Limpar
+          </button>
+          <div className="w-px h-4 bg-slate-600" />
+          <button
+            onClick={handleExcluirSelecionados}
+            disabled={isBulkLoading}
+            className="flex items-center gap-1.5 text-red-400 hover:text-red-300 font-medium transition-colors disabled:opacity-50">
+            {excluirBulkMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Excluir selecionadas
+          </button>
+          <div className="w-px h-4 bg-slate-600" />
+          <button
+            onClick={handleExcluirTodas}
+            disabled={isBulkLoading}
+            className="flex items-center gap-1.5 text-red-600 hover:text-red-400 font-medium transition-colors disabled:opacity-50">
+            {excluirTodosMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Apagar todas
+          </button>
+        </div>
+      </div>
     </>
   );
 }
