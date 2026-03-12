@@ -2197,6 +2197,8 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
   const [leadTime, setLeadTime] = useState(30);
   const [descricaoGer, setDescricaoGer] = useState("");
   const [gerandoErr, setGerandoErr] = useState<string | null>(null);
+  const [mesFiltro, setMesFiltro] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"cronograma" | "abc">("cronograma");
 
   // Revisões de compras (metadados)
   const { data: revisoesCompras = [], refetch: refetchRevisoes } = (trpc.planejamento as any).listarRevisoesCompras.useQuery(
@@ -2259,6 +2261,29 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [compras]);
 
+  const porMesFiltrado = mesFiltro ? porMes.filter(([mes]) => mes === mesFiltro) : porMes;
+
+  // Curva ABC: itens ordenados por custo total desc, classificados A/B/C
+  const abcData = useMemo(() => {
+    const sorted = [...compras]
+      .map((c: any) => ({ ...c, total: n(c.quantidade) * n(c.custoUnitario) }))
+      .sort((a: any, b: any) => b.total - a.total);
+    const grand = sorted.reduce((s: number, c: any) => s + c.total, 0) || 1;
+    let cum = 0;
+    return sorted.map((c: any) => {
+      cum += c.total;
+      const cumPct = cum / grand * 100;
+      return { ...c, pctItem: c.total / grand * 100, cumPct, classe: cumPct <= 70 ? "A" : cumPct <= 90 ? "B" : "C" };
+    });
+  }, [compras]);
+
+  const abcResumo = useMemo(() => {
+    const groups: Record<string, { itens: number; custo: number }> = { A: { itens: 0, custo: 0 }, B: { itens: 0, custo: 0 }, C: { itens: 0, custo: 0 } };
+    abcData.forEach((c: any) => { groups[c.classe].itens++; groups[c.classe].custo += c.total; });
+    const grand = abcData.reduce((s: number, c: any) => s + c.total, 0) || 1;
+    return Object.entries(groups).map(([cls, v]) => ({ cls, ...v, pct: v.custo / grand * 100 }));
+  }, [abcData]);
+
   return (
     <div className="space-y-4">
 
@@ -2306,7 +2331,20 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
 
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="text-sm font-semibold text-slate-700">Cronograma de Compras</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-slate-700">Cronograma de Compras</p>
+          {/* Toggle visualização */}
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+            <button onClick={() => setViewMode("cronograma")}
+              className={`px-3 py-1.5 font-medium transition-colors ${viewMode === "cronograma" ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+              Cronograma
+            </button>
+            <button onClick={() => setViewMode("abc")}
+              className={`px-3 py-1.5 font-medium transition-colors ${viewMode === "abc" ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+              Curva ABC
+            </button>
+          </div>
+        </div>
         <div className="flex gap-2 flex-wrap">
           <Button size="sm" variant="outline"
             className="gap-1.5 border-emerald-400 text-emerald-700 hover:bg-emerald-50"
@@ -2319,6 +2357,28 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
           </Button>
         </div>
       </div>
+
+      {/* Filtro por mês (só no modo cronograma) */}
+      {viewMode === "cronograma" && compras.length > 0 && porMes.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Mês:</span>
+          <button onClick={() => setMesFiltro(null)}
+            className={`text-xs px-3 py-1 rounded-full border font-medium transition-colors
+              ${mesFiltro === null ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}>
+            Todos ({compras.length})
+          </button>
+          {porMes.map(([mes, items]) => {
+            const nomeMes = new Date(`${mes}-15`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+            return (
+              <button key={mes} onClick={() => setMesFiltro(mes === mesFiltro ? null : mes)}
+                className={`text-xs px-3 py-1 rounded-full border font-medium transition-colors
+                  ${mesFiltro === mes ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}>
+                {nomeMes} <span className="opacity-70">({items.length})</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Infobanner quando não há itens */}
       {compras.length === 0 && revisoesCompras.length === 0 && (
@@ -2336,10 +2396,107 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
         </div>
       )}
 
-      {/* Lista agrupada por mês */}
-      {compras.length > 0 && (
+      {/* ── Curva ABC ─────────────────────────────────────────────── */}
+      {viewMode === "abc" && compras.length > 0 && (
         <div className="space-y-4">
-          {porMes.map(([mes, items]) => {
+          {/* Resumo ABC */}
+          <div className="grid grid-cols-3 gap-3">
+            {abcResumo.map(({ cls, itens, custo, pct }) => {
+              const cfg = cls === "A"
+                ? { bg: "bg-red-50 border-red-200",    label: "text-red-700",   bar: "bg-red-500",    desc: "Itens críticos — 70% do custo" }
+                : cls === "B"
+                ? { bg: "bg-amber-50 border-amber-200", label: "text-amber-700", bar: "bg-amber-400",  desc: "Itens intermediários — 20% do custo" }
+                : { bg: "bg-emerald-50 border-emerald-200", label: "text-emerald-700", bar: "bg-emerald-400", desc: "Itens secundários — 10% do custo" };
+              return (
+                <div key={cls} className={`border rounded-xl p-4 ${cfg.bg}`}>
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <span className={`text-2xl font-black ${cfg.label}`}>{cls}</span>
+                    <span className={`text-xs font-medium ${cfg.label}`}>{pct.toFixed(1)}% do custo</span>
+                  </div>
+                  <p className={`text-lg font-bold ${cfg.label}`}>{fmt(custo)}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{itens} {itens === 1 ? "item" : "itens"} · {cfg.desc}</p>
+                  <div className="mt-2 h-1.5 rounded-full bg-slate-200">
+                    <div className={`h-full rounded-full ${cfg.bar}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Gráfico de barras ABC */}
+          <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-4">
+            <p className="text-xs font-semibold text-slate-600 mb-3">Top 30 itens por custo</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={abcData.slice(0, 30)} layout="vertical" margin={{ left: 8, right: 32, top: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `R$${(v/1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="item" width={160} tick={{ fontSize: 9 }} />
+                <Tooltip formatter={(v: number) => fmt(v)} />
+                <Bar dataKey="total" radius={[0, 3, 3, 0]}>
+                  {abcData.slice(0, 30).map((entry: any, idx: number) => (
+                    <Cell key={idx} fill={entry.classe === "A" ? "#ef4444" : entry.classe === "B" ? "#f59e0b" : "#10b981"} fillOpacity={0.8} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="text-[10px] text-slate-400 text-center mt-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Classe A (70%)
+              <span className="inline-block w-2 h-2 rounded-full bg-amber-400 mx-1 ml-3" />Classe B (90%)
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 mx-1 ml-3" />Classe C (100%)
+            </p>
+          </div>
+
+          {/* Tabela ABC completa */}
+          <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-slate-700 text-white px-4 py-2 flex items-center justify-between">
+              <span className="text-xs font-semibold">Classificação ABC — {abcData.length} itens</span>
+              <span className="text-xs text-slate-300">{fmt(abcData.reduce((s: number, c: any) => s + c.total, 0))}</span>
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="py-2 px-3 text-center w-10">Cl.</th>
+                  <th className="py-2 px-3 text-left">#</th>
+                  <th className="py-2 px-3 text-left">Item / EAP</th>
+                  <th className="py-2 px-3 text-right">Custo Total</th>
+                  <th className="py-2 px-3 text-right">% Item</th>
+                  <th className="py-2 px-3 text-right">Acum.%</th>
+                  <th className="py-2 px-3 text-left">Mês Necessário</th>
+                </tr>
+              </thead>
+              <tbody>
+                {abcData.map((c: any, idx: number) => {
+                  const clsCfg = c.classe === "A"
+                    ? "bg-red-100 text-red-700 font-black"
+                    : c.classe === "B" ? "bg-amber-100 text-amber-700 font-black"
+                    : "bg-emerald-100 text-emerald-700 font-black";
+                  return (
+                    <tr key={c.id} className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                      <td className="py-1.5 px-3 text-center">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${clsCfg}`}>{c.classe}</span>
+                      </td>
+                      <td className="py-1.5 px-3 text-slate-400">{idx + 1}</td>
+                      <td className="py-1.5 px-3">
+                        <p className="text-slate-700 truncate max-w-[220px]" title={c.item}>{c.item}</p>
+                        {c.eapCodigo && <p className="text-[9px] text-slate-400 font-mono">{c.eapCodigo}</p>}
+                      </td>
+                      <td className="py-1.5 px-3 text-right font-semibold text-slate-700">{fmt(c.total)}</td>
+                      <td className="py-1.5 px-3 text-right text-slate-500">{c.pctItem.toFixed(2)}%</td>
+                      <td className="py-1.5 px-3 text-right font-medium text-slate-600">{c.cumPct.toFixed(1)}%</td>
+                      <td className="py-1.5 px-3 text-blue-600">{c.dataNecessaria ?? "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Lista agrupada por mês */}
+      {viewMode === "cronograma" && compras.length > 0 && (
+        <div className="space-y-4">
+          {porMesFiltrado.map(([mes, items]) => {
             const nomeMes = new Date(`${mes}-15`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
             const totalMes = items.reduce((s: number, c: any) => s + n(c.quantidade) * n(c.custoUnitario), 0);
             return (
