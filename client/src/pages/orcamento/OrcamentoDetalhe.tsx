@@ -968,15 +968,62 @@ export default function OrcamentoDetalhe() {
                 <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin opacity-40" />
                 <p className="text-sm">Carregando composições...</p>
               </div>
-            ) : composicoesCatalogo.length === 0 ? (
+            ) : composicoesCatalogo.length === 0 && leafItems.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Wrench className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
                 <p className="text-sm font-medium">Nenhuma composição encontrada.</p>
-                <p className="text-xs mt-1 text-muted-foreground/70">
-                  As composições são importadas automaticamente da aba CPUs da planilha.<br/>
-                  Se este orçamento foi importado antes desta funcionalidade, reimporte a planilha.
-                </p>
               </div>
+            ) : composicoesCatalogo.length === 0 ? (
+              /* ── Fallback: itens-folha da EAP ordenados por custo desc ── */
+              (() => {
+                const sorted = [...leafItems].sort((a, b) => n(b.custoTotal) - n(a.custoTotal));
+                return (
+                  <Card>
+                    <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100 border-b border-slate-200">
+                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                        Composições / Serviços — {sorted.length} itens
+                      </span>
+                      <span className="text-xs text-muted-foreground">Ordenado por Custo Total ↓</span>
+                    </div>
+                    <CardContent className="py-0 px-0 overflow-x-auto">
+                      <table className="w-full text-xs min-w-[860px]">
+                        <thead>
+                          <tr className="bg-slate-700 text-white uppercase sticky top-0 z-10">
+                            <th className="text-left pl-2 py-1.5 w-28 border-r border-slate-600">EAP</th>
+                            <th className="text-left px-3 py-1.5 border-r border-slate-600">Descrição</th>
+                            <th className="text-center px-2 py-1.5 border-r border-slate-600 w-12">Un</th>
+                            <th className="text-right px-2 py-1.5 border-r border-slate-600 w-20">Qtd</th>
+                            <th className="text-right px-2 py-1.5 border-r border-slate-600 w-28 text-blue-200">Mat Total</th>
+                            <th className="text-right px-2 py-1.5 border-r border-slate-600 w-28 text-orange-200">MO Total</th>
+                            <th className="text-right px-2 py-1.5 border-r border-slate-600 w-28">Custo Total</th>
+                            <th className="text-right pr-3 py-1.5 w-14">%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sorted.map((item, idx) => {
+                            const pct = totalCusto > 0 ? (n(item.custoTotal) / totalCusto) * 100 : 0;
+                            return (
+                              <tr key={item.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
+                                <td className="pl-2 py-1 font-mono text-slate-400 border-r border-slate-100 whitespace-nowrap">{item.eapCodigo}</td>
+                                <td className="px-3 py-1 text-slate-700 border-r border-slate-100 max-w-xs">
+                                  <span className="line-clamp-2">{item.descricao}</span>
+                                  {item.servicoCodigo && <span className="block text-[10px] text-blue-400 font-mono">{item.servicoCodigo}</span>}
+                                </td>
+                                <td className="px-2 py-1 text-center text-slate-500 border-r border-slate-100">{item.unidade}</td>
+                                <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">{n(item.quantidade).toFixed(2)}</td>
+                                <td className="px-2 py-1 text-right font-mono text-blue-700 border-r border-slate-100 whitespace-nowrap">{formatBRL(n(item.custoTotalMat))}</td>
+                                <td className="px-2 py-1 text-right font-mono text-orange-600 border-r border-slate-100 whitespace-nowrap">{formatBRL(n(item.custoTotalMdo))}</td>
+                                <td className="px-2 py-1 text-right font-mono font-semibold text-amber-700 border-r border-slate-100 whitespace-nowrap">{formatBRL(n(item.custoTotal))}</td>
+                                <td className="pr-3 py-1 text-right text-slate-500 whitespace-nowrap">{pct.toFixed(2)}%</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </CardContent>
+                  </Card>
+                );
+              })()
             ) : (
               <Card>
                 <CardContent className="py-0 px-0 overflow-x-auto">
