@@ -958,15 +958,25 @@ function AbaIndiretos({ linhas, orcamentoId, refetchLinhas }: { linhas: any[]; o
                     <td className="px-2 py-1 text-slate-700 border-r border-slate-100">{l.descricao}</td>
                     {/* Equipe (Produção/Supervisão/Coordenação) */}
                     <td className="px-2 py-1 text-xs text-slate-500 border-r border-slate-100 whitespace-nowrap">{l.modalidade}</td>
-                    {/* Tipo contrato — CLT verde, Contrato azul */}
-                    <td className="px-2 py-0.5 text-center border-r border-slate-100 whitespace-nowrap">
-                      {isCLT && (
-                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">CLT</span>
-                      )}
-                      {isPJ && (
-                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">PJ</span>
-                      )}
-                      {!isCLT && !isPJ && (
+                    {/* Tipo contrato — select CLT / PJ com mesmo estilo dos inputs */}
+                    <td className="px-1 py-0.5 text-center border-r border-slate-100 whitespace-nowrap">
+                      {(isCLT || isPJ) ? (
+                        <select
+                          value={l.tipoContrato}
+                          onChange={e => {
+                            const novo = e.target.value;
+                            updateMut.mutate({ id: l.id, tipoContrato: novo } as any);
+                          }}
+                          className={`w-16 h-5 text-xs font-bold font-mono rounded px-1 border cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                            isCLT
+                              ? "bg-blue-50 border-blue-200 text-green-700"
+                              : "bg-blue-50 border-blue-200 text-blue-700"
+                          }`}
+                        >
+                          <option value="CLT">CLT</option>
+                          <option value="Contrato">PJ</option>
+                        </select>
+                      ) : (
                         <span className="text-slate-400 text-xs">{l.tipoContrato || "—"}</span>
                       )}
                     </td>

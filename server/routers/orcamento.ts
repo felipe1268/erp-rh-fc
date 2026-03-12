@@ -1931,22 +1931,26 @@ export const orcamentoRouter = router({
       bonusMensal:          z.number().optional(),
       txTransferencia:      z.number().optional(),
       decimoTerceiroFerias: z.number().optional(),
+      tipoContrato:         z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
-      const { id, quantidade, salarioBase, bonusMensal, txTransferencia } = input;
+      const { id, quantidade, salarioBase, bonusMensal, txTransferencia, tipoContrato } = input;
       const upd: any = {};
       if (quantidade         !== undefined) upd.quantidade         = fix2(quantidade);
       if (salarioBase        !== undefined) upd.salarioBase        = fix2(salarioBase);
       if (bonusMensal        !== undefined) upd.bonusMensal        = fix2(bonusMensal);
       if (txTransferencia    !== undefined) upd.txTransferencia    = fix6(txTransferencia);
+      if (tipoContrato       !== undefined) upd.tipoContrato       = tipoContrato;
       if (Object.keys(upd).length === 0) return { success: true };
       await db.update(bdiIndiretos).set(upd).where(eq(bdiIndiretos.id, id));
 
-      // Após salvar, recalcular valores derivados se for CI-01
+      // Após salvar, recalcular valores derivados para linhas de pessoal CLT/Contrato
       const [row] = await db.select().from(bdiIndiretos).where(eq(bdiIndiretos.id, id));
-      if (row && row.secao === 'CI-01' && row.tipoContrato && row.tipoContrato !== 'SUBHDR') {
+      const effectiveTipo = (tipoContrato ?? row?.tipoContrato ?? '');
+      const isPersonnel = effectiveTipo === 'CLT' || effectiveTipo === 'Contrato';
+      if (row && isPersonnel && !row.isHeader) {
         // Buscar parâmetros do orçamento
         const pRows = await db.execute(
           `SELECT "tempoObraMeses", eventual_atraso_meses, dissidio_pct, incidencia_dissidio_meses
@@ -1963,7 +1967,7 @@ export const orcamentoRouter = router({
             salarioBase:     n(upd.salarioBase  ?? row.salarioBase),
             bonusMensal:     n(upd.bonusMensal  ?? row.bonusMensal),
             quantidade:      n(upd.quantidade   ?? row.quantidade),
-            tipoContrato:    row.tipoContrato ?? '',
+            tipoContrato:    effectiveTipo,
             txTransferencia: n(upd.txTransferencia ?? row.txTransferencia ?? '0'),
           };
           const calc = calcCI01Linha(rowData, params);
