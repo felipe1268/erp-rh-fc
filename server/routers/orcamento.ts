@@ -390,38 +390,46 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
 
 // Parseia aba BDI
 // nomeAba: nome da aba de origem para exibição multi-aba
+// Aceita APENAS códigos BDI válidos — rejeita tudo mais (lixo do Excel)
+// Padrões válidos: CD, CI, DI, B, L, JF, J, PVN, PV-2, PV-3, V1-V10,
+//                  CD-01..CD-03, CI-01..CI-08, DI-01..DI-10,
+//                  B-01, B-02, B-04, L-01..L-04, "CD + CI ="
+// Ordem importa: padrões mais específicos ANTES dos curtos (CD-01 antes de CD)
+const BDI_COD_VALIDO = /^(CD-\d{2}|CI-\d{2}|DI-\d{2}|B-\d{2}|L-\d{2}|V\d{1,2}|PV-\d|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
+
 function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
   let bdiPercentual = 0;
   const linhas: any[] = [];
   let ordem = 0;
 
   for (const row of rows) {
-    const col1    = String(row[1] || '').trim();
     const col2    = String(row[2] || '').trim();
     const descCol = String(row[3] || '').trim();
 
-    // Extrai o BDI total do item B-02 (percentual sobre custo direto)
-    if ((col2 === 'B-02' || col1 === 'B-02') && !bdiPercentual) {
-      bdiPercentual = toNum(row[7]) || toNum(row[6]);
+    // Rejeita qualquer linha cujo código não bate com o padrão BDI válido
+    if (!BDI_COD_VALIDO.test(col2)) continue;
+    // Exige descrição mínima
+    if (descCol.length < 3) continue;
+
+    const pct = toNum(row[7]);
+    const val = toNum(row[9]);
+    // Ignora percentuais absurdos (> 1000%)
+    if (Math.abs(pct) > 10) continue;
+
+    // Extrai BDI total do B-02
+    if (col2 === 'B-02' && !bdiPercentual) {
+      bdiPercentual = pct;
     }
 
-    // Inclui apenas linhas com código + descrição válidos
-    // e percentual razoável (< 10 = < 1000% como decimal) para ignorar bugs de parsing
-    if (col2 && descCol && descCol.length > 2) {
-      const pct = toNum(row[7]);
-      const val = toNum(row[9]);
-      // Ignora linhas com percentual absurdo (ex: linha ARQUIVO, valores de célula errados)
-      if (Math.abs(pct) > 10) continue;
-      linhas.push({
-        companyId,
-        nomeAba,
-        codigo:        col2.substring(0, 30),
-        descricao:     descCol.substring(0, 255),
-        percentual:    fix6(pct),
-        valorAbsoluto: fix2(val),
-        ordem:         ordem++,
-      });
-    }
+    linhas.push({
+      companyId,
+      nomeAba,
+      codigo:        col2.substring(0, 30),
+      descricao:     descCol.substring(0, 255),
+      percentual:    fix6(pct),
+      valorAbsoluto: fix2(val),
+      ordem:         ordem++,
+    });
   }
   return { bdiPercentual, linhas };
 }
