@@ -145,6 +145,8 @@ interface Props {
   onImportado?: () => void;
 }
 
+const POR_PAGINA = 50;
+
 export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoId, utils, onImportado }: Props) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"upload" | "preview" | "vinculo">("upload");
@@ -152,13 +154,16 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [arquivo, setArquivo] = useState<string>("");
+  const [nivelMax, setNivelMax] = useState(5);
+  const [pagina, setPagina] = useState(1);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Busca itens do orçamento para vinculação automática
-  const { data: orcItens = [] } = trpc.orcamento.getItens.useQuery(
-    { orcamentoId: orcamentoId ?? 0 },
+  // Busca orçamento completo para vinculação automática
+  const { data: orcData } = trpc.orcamento.getById.useQuery(
+    { id: orcamentoId ?? 0 },
     { enabled: !!orcamentoId && open }
   );
+  const orcItens: any[] = (orcData as any)?.itens ?? [];
 
   const eapMap = useMemo(() => {
     const map: Record<string, any> = {};
@@ -186,6 +191,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     setTarefas([]);
     setErro(null);
     setArquivo("");
+    setNivelMax(5);
+    setPagina(1);
   }
 
   // ── Vinculação automática com EAP do orçamento ────────────────────────────
@@ -275,6 +282,17 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   const totalPeso = tarefas.reduce((s, t) => s + (t.isGrupo ? 0 : t.pesoFin), 0);
   const pesoOk    = Math.abs(totalPeso - 100) < 0.1 || tarefas.every(t => t.pesoFin === 0);
   const vinculados = tarefas.filter(t => eapMap[t.eapCodigo]).length;
+
+  // Paginação + filtro de nível (preserva índice global)
+  const tarefasFiltradasIdx = useMemo(
+    () => tarefas.map((t, i) => ({ t, i })).filter(({ t }) => t.nivel <= nivelMax),
+    [tarefas, nivelMax]
+  );
+  const totalPaginas = Math.max(1, Math.ceil(tarefasFiltradasIdx.length / POR_PAGINA));
+  const tarefasPagina = useMemo(() => {
+    const ini = (pagina - 1) * POR_PAGINA;
+    return tarefasFiltradasIdx.slice(ini, ini + POR_PAGINA);
+  }, [tarefasFiltradasIdx, pagina]);
 
   return (
     <>
@@ -380,8 +398,34 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 </div>
               )}
 
+              {/* Controles de filtro e paginação */}
+              <div className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Mostrar até nível:</span>
+                  {[1, 2, 3, 4, 5].map(lv => (
+                    <button
+                      key={lv}
+                      onClick={() => { setNivelMax(lv); setPagina(1); }}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${nivelMax === lv ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                    >
+                      {lv}
+                    </button>
+                  ))}
+                  <span className="text-slate-400 ml-1">({tarefasFiltradasIdx.length} exibidas de {tarefas.length})</span>
+                </div>
+                {totalPaginas > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setPagina(p => Math.max(1, p - 1))} disabled={pagina === 1}
+                      className="px-2 py-0.5 rounded border border-slate-200 disabled:opacity-30 hover:bg-slate-50">‹</button>
+                    <span className="px-2 text-slate-500">{pagina}/{totalPaginas}</span>
+                    <button onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))} disabled={pagina === totalPaginas}
+                      className="px-2 py-0.5 rounded border border-slate-200 disabled:opacity-30 hover:bg-slate-50">›</button>
+                  </div>
+                )}
+              </div>
+
               {/* Tabela */}
-              <div className="rounded-xl border border-slate-100 shadow-sm overflow-x-auto max-h-[48vh] overflow-y-auto">
+              <div className="rounded-xl border border-slate-100 shadow-sm overflow-x-auto max-h-[40vh] overflow-y-auto">
                 <table className="w-full text-[11px]">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-slate-700 text-white">
@@ -397,7 +441,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                     </tr>
                   </thead>
                   <tbody>
-                    {tarefas.map((t, idx) => {
+                    {tarefasPagina.map(({ t, i: idx }) => {
                       const indent = (t.nivel - 1) * 12;
                       const vinculado = !!eapMap[t.eapCodigo];
                       return (
