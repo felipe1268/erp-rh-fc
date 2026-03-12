@@ -309,6 +309,7 @@ const menuSectionsOrcamento: MenuSection[] = [
       { icon: FolderOpen,      label: "Orçamentos",       path: "/orcamento/lista"       },
       { icon: Wrench,          label: "Composições",      path: "/orcamento/composicoes" },
       { icon: Package,         label: "Insumos",          path: "/orcamento/insumos"     },
+      { icon: Calculator,      label: "Encargos Sociais", path: "/orcamento/encargos"    },
     ],
   },
 ];
