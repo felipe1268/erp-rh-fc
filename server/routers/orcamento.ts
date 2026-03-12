@@ -13,9 +13,52 @@ import {
   composicaoInsumos,
   insumosGrupos,
   orcamentoParametros,
+  encargosSociais,
   obras,
   companies,
 } from "../../drizzle/schema";
+
+const ENCARGOS_DEFAULTS = [
+  { grupo: 'A', codigo: 'A1',  descricao: 'INSS - Previdência Social (com desoneração da folha de pagamento)', valor: '20.0000', calculado: false, ordem: 1 },
+  { grupo: 'A', codigo: 'A2',  descricao: 'FGTS - Fundo de Garantia por Tempo de Serviço', valor: '8.0000', calculado: false, ordem: 2 },
+  { grupo: 'A', codigo: 'A3',  descricao: 'Salário Educação', valor: '2.5000', calculado: false, ordem: 3 },
+  { grupo: 'A', codigo: 'A4',  descricao: 'SESI - Serviço Social da Indústria', valor: '1.5000', calculado: false, ordem: 4 },
+  { grupo: 'A', codigo: 'A5',  descricao: 'SENAI - Serviço Nacional de Aprendizagem', valor: '1.0000', calculado: false, ordem: 5 },
+  { grupo: 'A', codigo: 'A6',  descricao: 'INCRA - Instituto Nacional de Colonização e Reforma Agrária', valor: '0.2000', calculado: false, ordem: 6 },
+  { grupo: 'A', codigo: 'A7',  descricao: 'Seguro contra os acidentes de trabalho (FAP x RAT)', valor: '3.0000', calculado: false, ordem: 7 },
+  { grupo: 'A', codigo: 'A8',  descricao: 'SEBRAE - Serviço de Apoio à Pequena e Média Empresa', valor: '0.6000', calculado: false, ordem: 8 },
+  { grupo: 'A', codigo: 'A9',  descricao: 'SECONCI - Serviço Social Indústrias da Construção e Mobiliário', valor: '0.0000', calculado: false, ordem: 9 },
+  { grupo: 'A', codigo: 'A10', descricao: 'Adicional de mais de 500 funcionários (SENAI)', valor: '0.0000', calculado: false, ordem: 10 },
+  { grupo: 'B', codigo: 'B1',  descricao: '13º Salário', valor: '8.3300', calculado: false, ordem: 11 },
+  { grupo: 'B', codigo: 'B2',  descricao: 'Férias + 1/3 constitucional', valor: '11.1100', calculado: false, ordem: 12 },
+  { grupo: 'B', codigo: 'B3',  descricao: 'Aviso prévio trabalhado', valor: '1.9400', calculado: false, ordem: 13 },
+  { grupo: 'B', codigo: 'B4',  descricao: 'Auxílio Enfermidade', valor: '1.3900', calculado: false, ordem: 14 },
+  { grupo: 'B', codigo: 'B5',  descricao: 'Auxílio Acidentes de Trabalho', valor: '0.0000', calculado: false, ordem: 15 },
+  { grupo: 'B', codigo: 'B6',  descricao: 'Faltas justificadas por motivos diversos', valor: '0.0000', calculado: false, ordem: 16 },
+  { grupo: 'B', codigo: 'B7',  descricao: 'Salário Maternidade', valor: '0.0000', calculado: false, ordem: 17 },
+  { grupo: 'B', codigo: 'B8',  descricao: 'Licença Paternidade', valor: '0.0000', calculado: false, ordem: 18 },
+  { grupo: 'B', codigo: 'B9',  descricao: 'Repouso semanal remunerado (DSR)', valor: '16.9100', calculado: false, ordem: 19 },
+  { grupo: 'B', codigo: 'B10', descricao: 'Feriados no período', valor: '3.1300', calculado: false, ordem: 20 },
+  { grupo: 'B', codigo: 'B11', descricao: 'Dias de chuva e outras dificuldades', valor: '1.9900', calculado: false, ordem: 21 },
+  { grupo: 'C', codigo: 'C1',  descricao: 'Aviso prévio indenizado', valor: '9.1200', calculado: false, ordem: 22 },
+  { grupo: 'C', codigo: 'C2',  descricao: 'Indenização adicional por ano trabalhado (3 dias por ano trabalhado)', valor: '0.3300', calculado: false, ordem: 23 },
+  { grupo: 'C', codigo: 'C3',  descricao: 'Indenização (rescisão sem justa causa – multa de 40% do FGTS)', valor: '3.2000', calculado: false, ordem: 24 },
+  { grupo: 'C', codigo: 'C4',  descricao: 'Indenização (rescisão sem justa causa – contribuição de 10% do FGTS)', valor: '0.0000', calculado: false, ordem: 25 },
+  { grupo: 'E', codigo: 'E1',  descricao: 'Incidência do FGTS exclusivamente sobre o aviso prévio indenizado', valor: '0.7300', calculado: false, ordem: 26 },
+  { grupo: 'E', codigo: 'E2',  descricao: 'Incidência do FGTS exclusivamente sobre o período médio de afastamento', valor: '0.0300', calculado: false, ordem: 27 },
+  { grupo: 'E', codigo: 'E3',  descricao: 'Incidência dos encargos do Grupo A sobre o salário maternidade', valor: '0.0000', calculado: false, ordem: 28 },
+  { grupo: 'F', codigo: 'F1',  descricao: 'Almoço', valor: '0.0000', calculado: false, ordem: 29 },
+  { grupo: 'F', codigo: 'F2',  descricao: 'Jantar', valor: '0.0000', calculado: false, ordem: 30 },
+  { grupo: 'F', codigo: 'F3',  descricao: 'Café da manhã', valor: '0.0000', calculado: false, ordem: 31 },
+  { grupo: 'F', codigo: 'F4',  descricao: 'Equipamento de segurança (EPIs)', valor: '0.0000', calculado: false, ordem: 32 },
+  { grupo: 'F', codigo: 'F5',  descricao: 'Vale-transporte', valor: '0.0000', calculado: false, ordem: 33 },
+  { grupo: 'F', codigo: 'F6',  descricao: 'Seguro de vida e acidentes', valor: '1.1700', calculado: false, ordem: 34 },
+  { grupo: 'F', codigo: 'F7',  descricao: 'Ferramentas Manuais', valor: '0.0000', calculado: false, ordem: 35 },
+  { grupo: 'F', codigo: 'F8',  descricao: 'Adicional de Insalubridade (20% do salário mínimo)', valor: '0.0000', calculado: false, ordem: 36 },
+  { grupo: 'F', codigo: 'F9',  descricao: 'Periculosidade', valor: '0.0000', calculado: false, ordem: 37 },
+  { grupo: 'F', codigo: 'F10', descricao: 'Por horas extras a 60% + integralização do DSR', valor: '0.0000', calculado: false, ordem: 38 },
+  { grupo: 'F', codigo: 'F11', descricao: 'Por horas extras a 100% + integralização do DSR', valor: '0.0000', calculado: false, ordem: 39 },
+] as const;
 import { eq, and, desc, isNull, inArray, sql } from "drizzle-orm";
 
 // ============================================================
@@ -2190,6 +2233,57 @@ export const orcamentoRouter = router({
         });
       }
       return { ok: true };
+    }),
+
+  // ── Encargos Sociais ──────────────────────────────────────
+  listarEncargos: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      let rows = await db.select().from(encargosSociais)
+        .where(eq(encargosSociais.companyId, input.companyId))
+        .orderBy(encargosSociais.ordem);
+      if (rows.length === 0) {
+        await db.insert(encargosSociais).values(
+          ENCARGOS_DEFAULTS.map(d => ({ ...d, companyId: input.companyId }))
+        );
+        rows = await db.select().from(encargosSociais)
+          .where(eq(encargosSociais.companyId, input.companyId))
+          .orderBy(encargosSociais.ordem);
+      }
+      return rows;
+    }),
+
+  salvarEncargo: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number(), valor: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      const valorNum = parseFloat(input.valor) || 0;
+      await db.update(encargosSociais)
+        .set({ valor: valorNum.toFixed(4) })
+        .where(and(eq(encargosSociais.id, input.id), eq(encargosSociais.companyId, input.companyId)));
+      const rows = await db.select().from(encargosSociais)
+        .where(eq(encargosSociais.companyId, input.companyId));
+      const sumGroup = (g: string) => rows.filter(r => r.grupo === g).reduce((s, r) => s + parseFloat(r.valor || '0'), 0);
+      const subA = sumGroup('A');
+      const subB = sumGroup('B');
+      const subC = sumGroup('C');
+      const subE = sumGroup('E');
+      const subF = sumGroup('F');
+      const groupD = (subA * subB) / 100;
+      const totalLs = subA + subB + subC + groupD + subE + subF;
+      const existing = await db.select().from(orcamentoParametros)
+        .where(eq(orcamentoParametros.companyId, input.companyId)).limit(1);
+      if (existing.length > 0) {
+        await db.update(orcamentoParametros)
+          .set({ ls: totalLs.toFixed(4), atualizadoEm: new Date().toISOString() })
+          .where(eq(orcamentoParametros.companyId, input.companyId));
+      } else {
+        await db.insert(orcamentoParametros).values({ companyId: input.companyId, ls: totalLs.toFixed(4), he: '0' });
+      }
+      return { ok: true, totalLs: totalLs.toFixed(2) };
     }),
 
   // ── Resumo para o painel ──────────────────────────────────

@@ -4007,6 +4007,17 @@ export const composicaoInsumos = pgTable("composicao_insumos", {
   index("ci_insumo").on(table.insumoCodigo),
 ]);
 
+export const encargosSociais = pgTable("encargos_sociais", {
+  id:        serial().notNull().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  grupo:     varchar("grupo", { length: 5 }).notNull(),
+  codigo:    varchar("codigo", { length: 5 }).notNull(),
+  descricao: text("descricao").notNull(),
+  valor:     numeric({ precision: 10, scale: 4 }).notNull().default('0'),
+  calculado: boolean("calculado").notNull().default(false),
+  ordem:     integer("ordem").notNull().default(0),
+});
+
 export const orcamentoParametros = pgTable("orcamento_parametros", {
   id:           serial().notNull().primaryKey(),
   companyId:    integer().notNull().unique(),
