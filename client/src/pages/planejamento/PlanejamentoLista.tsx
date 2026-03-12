@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Plus, Search, Loader2, CalendarRange, Building2, User, DollarSign,
-  TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye,
+  TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -49,21 +49,28 @@ export default function PlanejamentoLista() {
 
   // Formulário novo projeto
   const [form, setForm] = useState({
-    nome: "", cliente: "", local: "", responsavel: "",
-    dataInicio: "", dataTerminoContratual: "",
-    valorContrato: "", status: "Em andamento", descricao: "",
+    obraId: "",
     orcamentoId: "",
+    status: "Em andamento",
+    descricao: "",
   });
 
   const utils = trpc.useUtils();
   const { data: projetos = [], isLoading } = trpc.planejamento.listarProjetos.useQuery(
     { companyId }, { enabled: !!companyId }
   );
+  const { data: obras = [] } = trpc.obras.list.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
   const { data: orcamentos = [] } = trpc.orcamento.list.useQuery(
     { companyId }, { enabled: !!companyId }
   );
 
-  const criarMutation  = trpc.planejamento.criarProjeto.useMutation({
+  const obraSelecionada = useMemo(() =>
+    (obras as any[]).find((o: any) => String(o.id) === form.obraId) ?? null,
+  [obras, form.obraId]);
+
+  const criarMutation = trpc.planejamento.criarProjeto.useMutation({
     onSuccess: () => { utils.planejamento.listarProjetos.invalidate(); setModalAberto(false); resetForm(); },
   });
   const excluirMutation = trpc.planejamento.excluirProjeto.useMutation({
@@ -71,9 +78,26 @@ export default function PlanejamentoLista() {
   });
 
   function resetForm() {
-    setForm({ nome: "", cliente: "", local: "", responsavel: "",
-      dataInicio: "", dataTerminoContratual: "", valorContrato: "",
-      status: "Em andamento", descricao: "", orcamentoId: "" });
+    setForm({ obraId: "", orcamentoId: "", status: "Em andamento", descricao: "" });
+  }
+
+  function handleCriar() {
+    if (!obraSelecionada) return;
+    const local = [obraSelecionada.cidade, obraSelecionada.estado].filter(Boolean).join(" / ")
+      || obraSelecionada.endereco || undefined;
+    criarMutation.mutate({
+      companyId,
+      nome:                  obraSelecionada.nome,
+      cliente:               obraSelecionada.cliente || undefined,
+      local:                 local,
+      responsavel:           obraSelecionada.responsavel || undefined,
+      dataInicio:            obraSelecionada.dataInicio || undefined,
+      dataTerminoContratual: obraSelecionada.dataPrevisaoFim || undefined,
+      valorContrato:         obraSelecionada.valorContrato ? parseFloat(obraSelecionada.valorContrato) : undefined,
+      status:                form.status,
+      descricao:             form.descricao || undefined,
+      orcamentoId:           form.orcamentoId ? parseInt(form.orcamentoId) : undefined,
+    });
   }
 
   const filtrados = projetos.filter(p =>
@@ -222,106 +246,120 @@ export default function PlanejamentoLista() {
         )}
 
         {/* Modal novo projeto */}
-        <Dialog open={modalAberto} onOpenChange={setModalAberto}>
-          <DialogContent className="max-w-lg">
+        <Dialog open={modalAberto} onOpenChange={open => { setModalAberto(open); if (!open) resetForm(); }}>
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Novo Projeto de Planejamento</DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-1 gap-3 mt-1">
+
+            <div className="grid grid-cols-1 gap-4 mt-1">
+
+              {/* Seleção da Obra */}
               <div>
-                <Label className="text-xs">Nome da Obra *</Label>
-                <Input value={form.nome} onChange={e => setForm(f => ({...f, nome: e.target.value}))}
-                  placeholder="Ex: Edifício Comercial Torre A" className="mt-1" />
+                <Label className="text-xs font-medium">Selecionar Obra *</Label>
+                <select
+                  value={form.obraId}
+                  onChange={e => setForm(f => ({ ...f, obraId: e.target.value }))}
+                  className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">— Selecione uma obra —</option>
+                  {(obras as any[]).map((o: any) => (
+                    <option key={o.id} value={o.id}>
+                      {o.nome}{o.cliente ? ` · ${o.cliente}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              {/* Preview dos dados da obra selecionada */}
+              {obraSelecionada && (
+                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1.5 text-xs text-slate-600">
+                  {obraSelecionada.cliente && (
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span>{obraSelecionada.cliente}</span>
+                    </div>
+                  )}
+                  {obraSelecionada.responsavel && (
+                    <div className="flex items-center gap-2">
+                      <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span>{obraSelecionada.responsavel}</span>
+                    </div>
+                  )}
+                  {(obraSelecionada.cidade || obraSelecionada.estado || obraSelecionada.endereco) && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span>
+                        {[obraSelecionada.cidade, obraSelecionada.estado].filter(Boolean).join(" / ")
+                          || obraSelecionada.endereco}
+                      </span>
+                    </div>
+                  )}
+                  {(obraSelecionada.dataInicio || obraSelecionada.dataPrevisaoFim) && (
+                    <div className="flex items-center gap-2">
+                      <CalendarRange className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span>
+                        {obraSelecionada.dataInicio ?? "—"} → {obraSelecionada.dataPrevisaoFim ?? "—"}
+                      </span>
+                    </div>
+                  )}
+                  {obraSelecionada.valorContrato && n(obraSelecionada.valorContrato) > 0 && (
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="font-semibold text-emerald-700">
+                        {formatBRL(n(obraSelecionada.valorContrato))}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Orçamento e Status lado a lado */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Cliente</Label>
-                  <Input value={form.cliente} onChange={e => setForm(f => ({...f, cliente: e.target.value}))}
-                    placeholder="Nome do cliente" className="mt-1" />
+                  <Label className="text-xs font-medium">Orçamento (opcional)</Label>
+                  <select
+                    value={form.orcamentoId}
+                    onChange={e => setForm(f => ({ ...f, orcamentoId: e.target.value }))}
+                    className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="">— Sem vínculo —</option>
+                    {(orcamentos as any[]).map((o: any) => (
+                      <option key={o.id} value={o.id}>
+                        {o.descricao ?? o.nome ?? `#${o.id}`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <Label className="text-xs">Responsável (Engenheiro)</Label>
-                  <Input value={form.responsavel} onChange={e => setForm(f => ({...f, responsavel: e.target.value}))}
-                    placeholder="Nome do engenheiro" className="mt-1" />
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">Local / Endereço</Label>
-                <Input value={form.local} onChange={e => setForm(f => ({...f, local: e.target.value}))}
-                  placeholder="Cidade, estado" className="mt-1" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Data de Início</Label>
-                  <Input type="date" value={form.dataInicio}
-                    onChange={e => setForm(f => ({...f, dataInicio: e.target.value}))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Prazo Contratual</Label>
-                  <Input type="date" value={form.dataTerminoContratual}
-                    onChange={e => setForm(f => ({...f, dataTerminoContratual: e.target.value}))} className="mt-1" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Valor do Contrato (R$)</Label>
-                  <Input type="number" value={form.valorContrato}
-                    onChange={e => setForm(f => ({...f, valorContrato: e.target.value}))}
-                    placeholder="0,00" className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Status</Label>
+                  <Label className="text-xs font-medium">Status</Label>
                   <select
                     value={form.status}
-                    onChange={e => setForm(f => ({...f, status: e.target.value}))}
+                    onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
                     className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
                   >
                     {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
+
+              {/* Descrição */}
               <div>
-                <Label className="text-xs">Vincular ao Orçamento (opcional)</Label>
-                <select
-                  value={form.orcamentoId}
-                  onChange={e => setForm(f => ({...f, orcamentoId: e.target.value}))}
-                  className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                >
-                  <option value="">— Sem vínculo —</option>
-                  {(orcamentos as any[]).map((o: any) => (
-                    <option key={o.id} value={o.id}>
-                      {o.descricao ?? o.nome ?? `#${o.id}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs">Descrição</Label>
+                <Label className="text-xs font-medium">Observações (opcional)</Label>
                 <textarea
                   value={form.descricao}
-                  onChange={e => setForm(f => ({...f, descricao: e.target.value}))}
-                  placeholder="Descrição do projeto ou escopo..."
+                  onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                  placeholder="Informações adicionais sobre o projeto..."
                   className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background resize-none"
                   rows={2}
                 />
               </div>
+
               <div className="flex gap-2 justify-end pt-1">
-                <Button variant="outline" onClick={() => setModalAberto(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setModalAberto(false); resetForm(); }}>Cancelar</Button>
                 <Button
-                  disabled={!form.nome || criarMutation.isPending}
-                  onClick={() => criarMutation.mutate({
-                    companyId,
-                    nome:                  form.nome,
-                    cliente:               form.cliente || undefined,
-                    local:                 form.local || undefined,
-                    responsavel:           form.responsavel || undefined,
-                    dataInicio:            form.dataInicio || undefined,
-                    dataTerminoContratual: form.dataTerminoContratual || undefined,
-                    valorContrato:         form.valorContrato ? parseFloat(form.valorContrato) : undefined,
-                    status:                form.status,
-                    descricao:             form.descricao || undefined,
-                    orcamentoId:           form.orcamentoId ? parseInt(form.orcamentoId) : undefined,
-                  })}
+                  disabled={!form.obraId || criarMutation.isPending}
+                  onClick={handleCriar}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   {criarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Projeto"}
