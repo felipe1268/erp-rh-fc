@@ -9,6 +9,7 @@ import {
   planejamentoAvancos,
   planejamentoRefis,
   planejamentoCompras,
+  planejamentoComprasRevisoes,
   planejamentoMedicoes,
   orcamentos,
   orcamentoItens,
@@ -508,12 +509,165 @@ export const planejamentoRouter = router({
 
   // ── Cronograma de Compras ──────────────────────────────────────────────────
   listarCompras: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisao: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (input.revisao !== undefined) {
+        return db.select().from(planejamentoCompras)
+          .where(and(
+            eq(planejamentoCompras.projetoId, input.projetoId),
+            eq(planejamentoCompras.revisao, input.revisao),
+          ))
+          .orderBy(asc(planejamentoCompras.dataNecessaria));
+      }
+      // Sem revisao especificada: retorna a revisão mais recente
+      const maxRevRes = await db.execute(sql`
+        SELECT COALESCE(MAX(revisao), 1) AS max_rev
+        FROM planejamento_compras
+        WHERE projeto_id = ${input.projetoId}
+      `);
+      const maxRev = Number((maxRevRes.rows as any[])[0]?.max_rev ?? 1);
+      return db.select().from(planejamentoCompras)
+        .where(and(
+          eq(planejamentoCompras.projetoId, input.projetoId),
+          eq(planejamentoCompras.revisao, maxRev),
+        ))
+        .orderBy(asc(planejamentoCompras.dataNecessaria));
+    }),
+
+  listarRevisoesCompras: protectedProcedure
     .input(z.object({ projetoId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      return db.select().from(planejamentoCompras)
-        .where(eq(planejamentoCompras.projetoId, input.projetoId))
-        .orderBy(asc(planejamentoCompras.dataNecessaria));
+      // Revisões com metadados: busca da tabela de controle, complementando com contagem real
+      const revisoes = await db.execute(sql`
+        SELECT
+          r.revisao,
+          r.descricao,
+          r.lead_time,
+          r.total_itens,
+          r.total_custo,
+          r.gerado_em,
+          r.gerado_por_revisao_cronograma,
+          COUNT(c.id)::int                                       AS itens_reais,
+          COALESCE(SUM(c.quantidade::numeric * c.custo_unitario::numeric), 0) AS custo_real
+        FROM planejamento_compras_revisoes r
+        LEFT JOIN planejamento_compras c
+          ON c.projeto_id = r.projeto_id AND c.revisao = r.revisao
+        WHERE r.projeto_id = ${input.projetoId}
+        GROUP BY r.revisao, r.descricao, r.lead_time, r.total_itens, r.total_custo, r.gerado_em, r.gerado_por_revisao_cronograma
+        ORDER BY r.revisao DESC
+      `);
+      return (revisoes.rows as any[]).map(r => ({
+        revisao:                    Number(r.revisao),
+        descricao:                  r.descricao ?? null,
+        leadTime:                   Number(r.lead_time ?? 30),
+        totalItens:                 Number(r.itens_reais ?? r.total_itens ?? 0),
+        totalCusto:                 parseFloat(r.custo_real ?? r.total_custo ?? "0"),
+        geradoEm:                   r.gerado_em ? String(r.gerado_em) : null,
+        geradoPorRevisaoCronograma: r.gerado_por_revisao_cronograma ? Number(r.gerado_por_revisao_cronograma) : null,
+      }));
+    }),
+
+  gerarCronogramaCompras: protectedProcedure
+    .input(z.object({
+      projetoId:              z.number(),
+      leadTime:               z.number().default(30),
+      descricao:              z.string().optional(),
+      revisaoCronogramaId:    z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const { projetoId, leadTime, descricao, revisaoCronogramaId } = input;
+
+      // 1. Cruzamento orçamento × cronograma — itens com custo de material
+      const rows = await db.execute(sql`
+        WITH matched AS (
+          SELECT DISTINCT ON (i.id)
+            i.id                                   AS item_id,
+            i."eapCodigo"                          AS eap,
+            i.descricao                            AS nome,
+            i."custoTotalMat"::numeric             AS custo_mat,
+            i."custoTotal"::numeric                AS custo_total,
+            i.unidade                              AS unidade,
+            COALESCE(i.quantidade::numeric, 0)     AS quantidade,
+            a.id                                   AS ativ_id,
+            a.data_inicio                          AS data_inicio,
+            a.data_fim                             AS data_fim
+          FROM orcamento_itens i
+          JOIN planejamento_projetos p
+            ON p.orcamento_id = i."orcamentoId"
+            AND p.id = ${projetoId}
+          JOIN planejamento_atividades a
+            ON a.projeto_id = ${projetoId}
+            AND NOT a.is_grupo
+            AND LOWER(REGEXP_REPLACE(TRIM(a.nome), '[\\s]+', ' ', 'g'))
+              = LOWER(REGEXP_REPLACE(TRIM(i.descricao), '[\\s]+', ' ', 'g'))
+          WHERE i."custoTotalMat"::numeric > 0
+            AND a.data_inicio IS NOT NULL
+          ORDER BY i.id, a.data_inicio ASC
+        )
+        SELECT * FROM matched ORDER BY data_inicio
+      `);
+
+      const itens = (rows.rows as any[]);
+      if (itens.length === 0) {
+        throw new Error("Nenhum item de material encontrado no cruzamento orçamento × cronograma.");
+      }
+
+      // 2. Próxima revisão
+      const maxRevRes = await db.execute(sql`
+        SELECT COALESCE(MAX(revisao), 0) AS max_rev
+        FROM planejamento_compras_revisoes
+        WHERE projeto_id = ${projetoId}
+      `);
+      const novaRevisao = Number((maxRevRes.rows as any[])[0]?.max_rev ?? 0) + 1;
+
+      // 3. Gera os itens de compra
+      const comprasParaInserir = itens.map((r: any) => {
+        const dataInicio = r.data_inicio ? String(r.data_inicio).substring(0, 10) : null;
+        let dataNecessaria = dataInicio;
+        if (dataInicio) {
+          const d = new Date(dataInicio + "T12:00:00");
+          d.setDate(d.getDate() - leadTime);
+          dataNecessaria = d.toISOString().split("T")[0];
+        }
+        const qtd = parseFloat(r.quantidade ?? "1") || 1;
+        const custoMat = parseFloat(r.custo_mat ?? "0") || 0;
+        return {
+          projetoId,
+          revisao: novaRevisao,
+          fonte: "auto" as const,
+          item: String(r.nome ?? ""),
+          unidade: r.unidade ? String(r.unidade) : "un",
+          quantidade: String(qtd),
+          custoUnitario: String(+(custoMat / qtd).toFixed(4)),
+          dataNecessaria: dataNecessaria ?? dataInicio ?? new Date().toISOString().split("T")[0],
+          atividadeDataInicio: dataInicio,
+          leadTime,
+          eapCodigo: r.eap ? String(r.eap) : null,
+          status: "pendente" as const,
+          observacoes: `Gerado automaticamente — EAP ${r.eap ?? "?"} — Rev. Crono ${revisaoCronogramaId ?? "—"}`,
+        };
+      });
+
+      await db.insert(planejamentoCompras).values(comprasParaInserir);
+
+      // 4. Registra metadados da revisão
+      const totalCusto = comprasParaInserir.reduce(
+        (s, c) => s + parseFloat(c.quantidade) * parseFloat(c.custoUnitario), 0
+      );
+      await db.insert(planejamentoComprasRevisoes).values({
+        projetoId,
+        revisao: novaRevisao,
+        descricao: descricao ?? `Gerado automaticamente (lead time ${leadTime}d)`,
+        leadTime,
+        totalItens: comprasParaInserir.length,
+        totalCusto: String(+totalCusto.toFixed(2)),
+        geradoPorRevisaoCronograma: revisaoCronogramaId ?? null,
+      });
+
+      return { revisao: novaRevisao, totalItens: comprasParaInserir.length, totalCusto };
     }),
 
   criarCompra: protectedProcedure
