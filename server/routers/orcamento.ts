@@ -1888,6 +1888,91 @@ export const orcamentoRouter = router({
         .orderBy(composicaoInsumos.composicaoCodigo, composicaoInsumos.id);
     }),
 
+  // ── Busca insumos do catálogo (autocomplete p/ adicionar à composição) ──
+  buscarInsumosCatalogo: protectedProcedure
+    .input(z.object({ companyId: z.number(), q: z.string().default('') }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const q = input.q.trim().toLowerCase();
+      const rows = await db.select({
+        id: insumosCatalogo.id, codigo: insumosCatalogo.codigo,
+        descricao: insumosCatalogo.descricao, unidade: insumosCatalogo.unidade,
+        precoUnitario: insumosCatalogo.precoUnitario,
+      })
+        .from(insumosCatalogo)
+        .where(eq(insumosCatalogo.companyId, input.companyId))
+        .orderBy(insumosCatalogo.codigo)
+        .limit(5000);
+      if (!q) return rows.slice(0, 30);
+      const fil = rows.filter((r: any) =>
+        r.codigo?.toLowerCase().includes(q) || r.descricao?.toLowerCase().includes(q)
+      );
+      return fil.slice(0, 30);
+    }),
+
+  // ── Adicionar insumo a uma composição ────────────────────────
+  adicionarInsumoComposicao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), composicaoCodigo: z.string(),
+      insumoCodigo: z.string(), quantidade: z.string().default('1'),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      const ins = await db.select().from(insumosCatalogo)
+        .where(and(eq(insumosCatalogo.companyId, input.companyId), eq(insumosCatalogo.codigo, input.insumoCodigo)))
+        .limit(1);
+      if (!ins[0]) throw new TRPCError({ code: 'NOT_FOUND', message: 'Insumo não encontrado no catálogo.' });
+      const i = ins[0];
+      const qty = parseFloat(input.quantidade) || 1;
+      const pu  = parseFloat(i.precoUnitario ?? '0');
+      await db.insert(composicaoInsumos).values({
+        companyId:        input.companyId,
+        composicaoCodigo: input.composicaoCodigo,
+        insumoCodigo:     i.codigo ?? '',
+        insumoDescricao:  i.descricao ?? '',
+        unidade:          i.unidade ?? null,
+        quantidade:       fix6(qty),
+        precoUnitario:    fix4(pu),
+        alocacaoMat:      '0',
+        alocacaoMdo:      '0',
+        custoUnitTotal:   fix6(qty * pu),
+      });
+      return { ok: true };
+    }),
+
+  // ── Atualizar quantidade de um insumo na composição ───────────
+  atualizarQuantidadeInsumoComposicao: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number(), quantidade: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      const qty = parseFloat(input.quantidade.replace(',', '.')) || 0;
+      // Busca registro para calcular custo total atualizado
+      const row = await db.select().from(composicaoInsumos)
+        .where(and(eq(composicaoInsumos.id, input.id), eq(composicaoInsumos.companyId, input.companyId)))
+        .limit(1);
+      if (!row[0]) throw new TRPCError({ code: 'NOT_FOUND', message: 'Registro não encontrado.' });
+      const pu = parseFloat(row[0].precoUnitario ?? '0');
+      await db.update(composicaoInsumos).set({
+        quantidade:     fix6(qty),
+        custoUnitTotal: fix6(qty * pu),
+      }).where(and(eq(composicaoInsumos.id, input.id), eq(composicaoInsumos.companyId, input.companyId)));
+      return { ok: true };
+    }),
+
+  // ── Remover insumo de uma composição ─────────────────────────
+  removerInsumoComposicao: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      await db.delete(composicaoInsumos)
+        .where(and(eq(composicaoInsumos.id, input.id), eq(composicaoInsumos.companyId, input.companyId)));
+      return { ok: true };
+    }),
+
   // ── Composições com insumos de um orçamento ───────────────────
   // Busca as composições (CPUs) usadas nos itens folha deste orçamento,
   // junto com seus insumos detalhados do catálogo da empresa.
