@@ -1926,7 +1926,7 @@ export const orcamentoRouter = router({
       const where = input.composicaoCodigo
         ? and(eq(composicaoInsumos.companyId, input.companyId), eq(composicaoInsumos.composicaoCodigo, input.composicaoCodigo))
         : eq(composicaoInsumos.companyId, input.companyId);
-      return db.select({
+      const rows = await db.select({
         id:               composicaoInsumos.id,
         composicaoCodigo: composicaoInsumos.composicaoCodigo,
         insumoCodigo:     composicaoInsumos.insumoCodigo,
@@ -1934,13 +1934,30 @@ export const orcamentoRouter = router({
         unidade:          composicaoInsumos.unidade,
         quantidade:       composicaoInsumos.quantidade,
         precoUnitario:    composicaoInsumos.precoUnitario,
+        precoAtual:       insumosCatalogo.precoUnitario,
         alocacaoMat:      composicaoInsumos.alocacaoMat,
         alocacaoMdo:      composicaoInsumos.alocacaoMdo,
         custoUnitTotal:   composicaoInsumos.custoUnitTotal,
       })
         .from(composicaoInsumos)
+        .leftJoin(
+          insumosCatalogo,
+          and(
+            eq(insumosCatalogo.companyId, input.companyId),
+            eq(insumosCatalogo.codigo, composicaoInsumos.insumoCodigo),
+          )
+        )
         .where(where)
         .orderBy(composicaoInsumos.composicaoCodigo, composicaoInsumos.id);
+      return rows.map(r => {
+        const pu  = parseFloat(r.precoAtual ?? r.precoUnitario ?? '0');
+        const qty = parseFloat(r.quantidade ?? '0');
+        return {
+          ...r,
+          precoUnitario:  fix4(pu),
+          custoUnitTotal: fix6(qty * pu),
+        };
+      });
     }),
 
   // ── Busca insumos do catálogo (autocomplete p/ adicionar à composição) ──
