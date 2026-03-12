@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
   Wrench, Package, Search, Loader2, Upload, CheckCircle,
   AlertCircle, Plus, Pencil, Trash2, X, Check, Tag,
-  ChevronDown, Square, CheckSquare, MinusSquare,
+  ChevronDown, ChevronRight, Square, CheckSquare, MinusSquare,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -349,6 +349,7 @@ function CategoriasView({ companyId }: { companyId: number }) {
 function ComposicoesView({ companyId }: { companyId: number }) {
   const [search, setSearch]        = useState("");
   const [tipoFilter, setTipoFilter] = useState<string | null>(null);
+  const [expanded, setExpanded]    = useState<Set<number>>(new Set());
   const [editingId, setEditingId]  = useState<number | "new" | null>(null);
   const [editForm, setEditForm]    = useState(EMPTY_COMP_FORM);
   const [saveError, setSaveError]  = useState<string | null>(null);
@@ -361,6 +362,27 @@ function ComposicoesView({ companyId }: { companyId: number }) {
   const utils = trpc.useUtils();
   const { data: composicoes = [], isLoading } =
     trpc.orcamento.listarComposicoesCatalogo.useQuery({ companyId }, { enabled: companyId > 0 });
+  const { data: todosLinhasInsumos = [] } =
+    trpc.orcamento.listarComposicaoInsumosCatalogo.useQuery({ companyId }, { enabled: companyId > 0 });
+
+  // Agrupa insumos pelo código da composição
+  const insumosMap = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const ins of todosLinhasInsumos as any[]) {
+      const arr = map.get(ins.composicaoCodigo) ?? [];
+      arr.push(ins);
+      map.set(ins.composicaoCodigo, arr);
+    }
+    return map;
+  }, [todosLinhasInsumos]);
+
+  function toggleExpand(id: number) {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   const { data: novoCodigo } = trpc.orcamento.gerarCodigoComposicao.useQuery(
     { companyId }, { enabled: companyId > 0 && editingId === "new" }
@@ -504,12 +526,19 @@ function ComposicoesView({ companyId }: { companyId: number }) {
 
   const isBulkLoading = excluirBulkMut.isPending || excluirTodosMut.isPending;
 
-  function renderRow(c: any) {
-    const isSel = selected.has(c.id);
+  /* ── Renderiza linha de composição + sub-linhas de insumos ── */
+  function renderCompRow(c: any) {
+    const isSel  = selected.has(c.id);
+    const isExp  = expanded.has(c.id);
+    const linhas = insumosMap.get(c.codigo ?? '') ?? [];
+    const hasIns = linhas.length > 0;
+
+    /* Modo edição */
     if (editingId === c.id) {
       return (
-        <tr key={c.id} className="border-b bg-blue-50">
-          <td className="px-3 py-1" />
+        <tr key={`edit-${c.id}`} className="border-b bg-blue-50">
+          <td className="px-2 py-1" />
+          <td className="px-2 py-1" />
           <td className="px-2 py-1">{field("codigo", "font-mono w-24")}</td>
           <td className="px-2 py-1">{field("descricao", "min-w-[260px]")}</td>
           <td className="px-2 py-1">{field("tipo", "w-20")}</td>
@@ -517,11 +546,7 @@ function ComposicoesView({ companyId }: { companyId: number }) {
           <td className="px-2 py-1">{field("custoUnitMat", "w-24 text-right")}</td>
           <td className="px-2 py-1">{field("custoUnitMdo", "w-24 text-right")}</td>
           <td className="px-2 py-1">{field("custoUnitTotal", "w-24 text-right")}</td>
-          <td className="px-2 py-1 text-center">
-            <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
-              {c.totalOrcamentos}
-            </span>
-          </td>
+          <td className="px-2 py-1 text-center" />
           <td className="px-2 py-1">
             <div className="flex items-center gap-1">
               {saveError && <span className="text-red-500 text-[10px] max-w-[80px] truncate">{saveError}</span>}
@@ -537,42 +562,101 @@ function ComposicoesView({ companyId }: { companyId: number }) {
         </tr>
       );
     }
+
     return (
-      <tr key={c.id}
-        className={`border-b transition-colors group ${isSel ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-muted/30"}`}>
-        <td className="px-3 py-2">
-          <button onClick={() => toggleRow(c.id)}
-            className={`text-slate-400 hover:text-blue-600 transition-colors ${isSel ? "text-blue-600" : ""}`}>
-            {isSel ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-          </button>
-        </td>
-        <td className="px-4 py-2 font-mono text-[10px] text-slate-500">{c.codigo || "—"}</td>
-        <td className="px-3 py-2">{c.descricao}</td>
-        <td className="px-3 py-2">
-          {c.tipo && <Badge variant="outline" className="text-[10px]">{c.tipo}</Badge>}
-        </td>
-        <td className="px-3 py-2 text-center text-muted-foreground">{c.unidade || "—"}</td>
-        <td className="px-3 py-2 text-right text-blue-600 tabular-nums">{formatBRL(n(c.custoUnitMat))}</td>
-        <td className="px-3 py-2 text-right text-orange-500 tabular-nums">{formatBRL(n(c.custoUnitMdo))}</td>
-        <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatBRL(n(c.custoUnitTotal))}</td>
-        <td className="px-3 py-2 text-center">
-          <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
-            {c.totalOrcamentos}
-          </span>
-        </td>
-        <td className="px-2 py-1">
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => startEdit(c)} className="p-1 rounded hover:bg-blue-100 text-blue-600">
-              <Pencil className="h-3.5 w-3.5" />
+      <>
+        {/* ── Linha da composição ── */}
+        <tr key={`comp-${c.id}`}
+          className={`border-b transition-colors group ${isSel ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-muted/30"}`}>
+          {/* Checkbox */}
+          <td className="px-2 py-2">
+            <button onClick={() => toggleRow(c.id)}
+              className={`text-slate-400 hover:text-blue-600 transition-colors ${isSel ? "text-blue-600" : ""}`}>
+              {isSel ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
             </button>
+          </td>
+          {/* Expand */}
+          <td className="px-1 py-2">
             <button
-              onClick={() => { if (confirm("Excluir esta composição?")) excluirMut.mutate({ companyId, id: c.id }); }}
-              className="p-1 rounded hover:bg-red-100 text-red-500">
-              <Trash2 className="h-3.5 w-3.5" />
+              onClick={() => toggleExpand(c.id)}
+              disabled={!hasIns}
+              title={hasIns ? (isExp ? "Fechar insumos" : "Ver insumos") : "Sem insumos"}
+              className={`p-1 rounded transition-colors ${hasIns ? "hover:bg-blue-100 text-blue-500" : "text-slate-200 cursor-default"}`}>
+              {isExp
+                ? <ChevronDown className="h-3.5 w-3.5" />
+                : <ChevronRight className="h-3.5 w-3.5" />}
+              {hasIns && <span className="text-[9px] ml-0.5 text-slate-400">{linhas.length}</span>}
             </button>
-          </div>
-        </td>
-      </tr>
+          </td>
+          {/* Código */}
+          <td className="px-2 py-2 font-mono text-[10px] font-semibold text-blue-700">{c.codigo || "—"}</td>
+          {/* Descrição */}
+          <td className="px-3 py-2 font-medium">{c.descricao}</td>
+          {/* Tipo */}
+          <td className="px-3 py-2">
+            {c.tipo && <Badge variant="outline" className="text-[10px]">{c.tipo}</Badge>}
+          </td>
+          {/* Un */}
+          <td className="px-3 py-2 text-center text-muted-foreground">{c.unidade || "—"}</td>
+          {/* Custos */}
+          <td className="px-3 py-2 text-right text-blue-600 tabular-nums">{formatBRL(n(c.custoUnitMat))}</td>
+          <td className="px-3 py-2 text-right text-orange-500 tabular-nums">{formatBRL(n(c.custoUnitMdo))}</td>
+          <td className="px-3 py-2 text-right font-bold tabular-nums">{formatBRL(n(c.custoUnitTotal))}</td>
+          {/* Orçamentos */}
+          <td className="px-3 py-2 text-center">
+            <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
+              {c.totalOrcamentos ?? 0}
+            </span>
+          </td>
+          {/* Actions */}
+          <td className="px-2 py-1">
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => startEdit(c)} className="p-1 rounded hover:bg-blue-100 text-blue-600">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => { if (confirm("Excluir esta composição?")) excluirMut.mutate({ companyId, id: c.id }); }}
+                className="p-1 rounded hover:bg-red-100 text-red-500">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </td>
+        </tr>
+
+        {/* ── Sub-linhas de insumos (expandidas) ── */}
+        {isExp && linhas.map((ins: any, idx: number) => (
+          <tr key={`ins-${ins.id}-${idx}`}
+            className="border-b border-dashed bg-slate-50/70 text-[10px] text-slate-600">
+            {/* Indent decorativo */}
+            <td className="px-2" />
+            <td className="px-1 py-1.5">
+              <div className="flex justify-center">
+                <div className="w-px h-full min-h-[12px] bg-blue-200 mx-auto" />
+              </div>
+            </td>
+            {/* Código insumo */}
+            <td className="px-2 py-1.5 font-mono text-[9px] text-slate-400">{ins.insumoCodigo || "—"}</td>
+            {/* Descrição insumo */}
+            <td className="px-3 py-1.5 text-slate-600">{ins.insumoDescricao || "—"}</td>
+            {/* Qty (usa coluna Tipo) */}
+            <td className="px-3 py-1.5 tabular-nums text-slate-500">
+              {n(ins.quantidade) !== 0 ? n(ins.quantidade).toFixed(4) : ""}
+            </td>
+            {/* Un */}
+            <td className="px-3 py-1.5 text-center text-slate-400">{ins.unidade || "—"}</td>
+            {/* Preço Unit (usa col Custo Mat) */}
+            <td className="px-3 py-1.5 text-right text-blue-500 tabular-nums">{formatBRL(n(ins.precoUnitario))}</td>
+            {/* Aloc Mat (usa col Custo MO) */}
+            <td className="px-3 py-1.5 text-right text-slate-400 tabular-nums">{n(ins.alocacaoMat).toFixed(4)}</td>
+            {/* Aloc MO (usa col Total) */}
+            <td className="px-3 py-1.5 text-right text-slate-400 tabular-nums">{n(ins.alocacaoMdo).toFixed(4)}</td>
+            {/* Custo total insumo (usa col Orçamentos) */}
+            <td className="px-3 py-1.5 text-right font-semibold text-slate-600 tabular-nums">{formatBRL(n(ins.custoUnitTotal))}</td>
+            {/* Actions vazio */}
+            <td />
+          </tr>
+        ))}
+      </>
     );
   }
 
@@ -655,9 +739,8 @@ function ComposicoesView({ companyId }: { companyId: number }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-slate-50 text-muted-foreground">
-                  <th className="px-3 py-2 w-8">
-                    <button onClick={toggleAll}
-                      className="text-slate-400 hover:text-blue-600 transition-colors">
+                  <th className="px-2 py-2 w-8">
+                    <button onClick={toggleAll} className="text-slate-400 hover:text-blue-600 transition-colors">
                       {allFiltSelected
                         ? <CheckSquare className="h-4 w-4 text-blue-600" />
                         : someFiltSelected
@@ -665,14 +748,15 @@ function ComposicoesView({ companyId }: { companyId: number }) {
                           : <Square className="h-4 w-4" />}
                     </button>
                   </th>
-                  <th className="text-left px-4 py-2 w-24">Código</th>
+                  <th className="w-8" />
+                  <th className="text-left px-2 py-2 w-24">Código</th>
                   <th className="text-left px-3 py-2 min-w-[260px]">Descrição</th>
-                  <th className="text-left px-3 py-2 w-28">Tipo</th>
+                  <th className="text-left px-3 py-2 w-28">Tipo / Qtd</th>
                   <th className="text-center px-3 py-2 w-12">Un</th>
-                  <th className="text-right px-3 py-2 w-28 text-blue-600">Custo Mat</th>
-                  <th className="text-right px-3 py-2 w-28 text-orange-500">Custo MO</th>
-                  <th className="text-right px-3 py-2 w-28 font-semibold">Total Unit</th>
-                  <th className="text-center px-3 py-2 w-20">Orçamentos</th>
+                  <th className="text-right px-3 py-2 w-28 text-blue-600">Custo Mat / PU</th>
+                  <th className="text-right px-3 py-2 w-28 text-orange-500">Custo MO / Aloc.Mat</th>
+                  <th className="text-right px-3 py-2 w-28 font-semibold">Total / Aloc.MO</th>
+                  <th className="text-right px-3 py-2 w-24 text-slate-500">Orç / C.Total</th>
                   <th className="w-16" />
                 </tr>
               </thead>
@@ -680,7 +764,7 @@ function ComposicoesView({ companyId }: { companyId: number }) {
                 {/* Linha de nova composição */}
                 {editingId === "new" && (
                   <tr className="border-b bg-blue-50">
-                    <td className="px-3 py-1" />
+                    <td className="px-2 py-1" /><td className="px-2 py-1" />
                     <td className="px-2 py-1">{field("codigo", "font-mono w-24")}</td>
                     <td className="px-2 py-1">{field("descricao", "min-w-[260px]")}</td>
                     <td className="px-2 py-1">{field("tipo", "w-20")}</td>
@@ -705,13 +789,13 @@ function ComposicoesView({ companyId }: { companyId: number }) {
                 )}
                 {filt.length === 0 && editingId !== "new" ? (
                   <tr>
-                    <td colSpan={10} className="py-16 text-center text-muted-foreground">
+                    <td colSpan={11} className="py-16 text-center text-muted-foreground">
                       <Wrench className="h-8 w-8 mx-auto mb-2 opacity-20" />
                       <p className="text-sm">{search || tipoFilter ? "Nenhuma composição encontrada." : "Nenhuma composição cadastrada ainda."}</p>
                       {!search && !tipoFilter && <p className="text-xs mt-1">Use "Importar" ou clique em "Nova Composição".</p>}
                     </td>
                   </tr>
-                ) : filt.map((c: any) => renderRow(c))}
+                ) : filt.map((c: any) => renderCompRow(c))}
               </tbody>
             </table>
           </div>
@@ -731,17 +815,13 @@ function ComposicoesView({ companyId }: { companyId: number }) {
             Limpar
           </button>
           <div className="w-px h-4 bg-slate-600" />
-          <button
-            onClick={handleExcluirSelecionados}
-            disabled={isBulkLoading}
+          <button onClick={handleExcluirSelecionados} disabled={isBulkLoading}
             className="flex items-center gap-1.5 text-red-400 hover:text-red-300 font-medium transition-colors disabled:opacity-50">
             {excluirBulkMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
             Excluir selecionadas
           </button>
           <div className="w-px h-4 bg-slate-600" />
-          <button
-            onClick={handleExcluirTodas}
-            disabled={isBulkLoading}
+          <button onClick={handleExcluirTodas} disabled={isBulkLoading}
             className="flex items-center gap-1.5 text-red-600 hover:text-red-400 font-medium transition-colors disabled:opacity-50">
             {excluirTodosMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
             Apagar todas
