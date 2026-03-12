@@ -45,8 +45,8 @@ async function propagarPrecoInsumo(
 ) {
   const updates: any = {
     precoUnitario: fix4(novoPreco),
-    // Recalcula custo total = quantidade * novoPreco com 6 casas decimais
-    custoUnitTotal: sql`to_char(CAST(quantidade AS numeric) * ${novoPreco}, 'FM999999999.000000')`,
+    // Recalcula custo total = quantidade * novoPreco
+    custoUnitTotal: sql`CAST(quantidade AS numeric) * ${novoPreco}`,
   };
   if (novaDescricao !== undefined) updates.insumoDescricao = novaDescricao;
   if (novaUnidade   !== undefined) updates.unidade         = novaUnidade || null;
