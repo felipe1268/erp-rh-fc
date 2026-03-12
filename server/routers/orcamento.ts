@@ -579,107 +579,182 @@ async function processarImportacaoBackground(
 }
 
 // ============================================================
-// PARSER ABA CPUs → CATÁLOGO DE COMPOSIÇÕES
-// Extrai apenas as linhas tipo 'S' (cabeçalho de composição)
+// HELPER: gera próximo código 99.XX.XX para insumos manuais
 // ============================================================
-function parsearAbaComposicoesParaCatalogo(rows: any[][], companyId: number) {
-  const result: {
-    companyId: number; codigo: string; descricao: string; unidade: string;
-    custoMat: number; custoMdo: number; custoTotal: number; chaveNorm: string;
-  }[] = [];
-  for (const row of rows) {
-    const tipo = String(row[0] || '').trim();
-    if (tipo !== 'S') continue;
-    const codigo    = String(row[1] || '').trim();
-    const descricao = String(row[4] || '').trim();
-    if (!descricao) continue;
-    result.push({
-      companyId,
-      codigo:    codigo.substring(0, 100),
-      descricao: descricao.substring(0, 1000),
-      unidade:   String(row[5] || '').trim().substring(0, 30),
-      custoMat:  toNum(row[10]),
-      custoMdo:  toNum(row[11]),
-      custoTotal: toNum(row[12]),
-      chaveNorm: (descricao.toLowerCase().replace(/[^a-z0-9]/g, '')).substring(0, 500),
-    });
-  }
-  return result;
+function gerarProximoCodigo99(codigosUsados: Set<string>): string {
+  const manual = [...codigosUsados]
+    .filter(c => /^99\.\d{2}\.\d{2}$/.test(c))
+    .map(c => { const p = c.split('.'); return parseInt(p[1]) * 100 + parseInt(p[2]); })
+    .sort((a, b) => b - a);
+  const seq  = (manual[0] ?? 0) + 1;
+  const sub  = Math.floor((seq - 1) / 99 + 1).toString().padStart(2, '0');
+  const item = ((seq - 1) % 99 + 1).toString().padStart(2, '0');
+  const cod  = `99.${sub}.${item}`;
+  codigosUsados.add(cod);
+  return cod;
 }
 
-// Processa importação de composições em background
+// ============================================================
+// PROCESSADOR DE IMPORTAÇÃO DE COMPOSIÇÕES (background)
+// Fluxo:
+//   1. Para cada composição (linha S): upsert em composicoes_catalogo
+//   2. Para cada insumo da composição (linha INS):
+//      a. Busca em insumos_catalogo pelo código da planilha
+//      b. Se não achar: busca por descrição normalizada
+//      c. Se ainda não achar: cria o insumo com código 99.XX.XX
+//      d. Salva em composicao_insumos com o código do nosso catálogo
+// ============================================================
 async function processarImportacaoComposicoesBackground(
   jobId: string,
-  composicoes: ReturnType<typeof parsearAbaComposicoesParaCatalogo>,
+  parsed: ReturnType<typeof parsearAbaCPUs>,
   companyId: number, db: any,
 ) {
   const job = importJobs.get(jobId)!;
   try {
-    // Carrega todos os códigos já usados para geração de códigos únicos
-    const existing = await db.select({ codigo: composicoesCatalogo.codigo })
+    // Pré-carrega códigos já usados (composições e insumos) para geração de códigos únicos
+    const exComp = await db.select({ codigo: composicoesCatalogo.codigo })
       .from(composicoesCatalogo).where(eq(composicoesCatalogo.companyId, companyId));
-    const codigosUsados = new Set(existing.map((r: any) => r.codigo ?? ''));
+    const codigosCompUsados = new Set<string>(exComp.map((r: any) => r.codigo ?? ''));
 
-    for (const comp of composicoes) {
+    const exIns = await db.select({ codigo: insumosCatalogo.codigo })
+      .from(insumosCatalogo).where(eq(insumosCatalogo.companyId, companyId));
+    const codigosInsUsados = new Set<string>(exIns.map((r: any) => r.codigo ?? ''));
+
+    // Agrupa linhas INS por código de composição (chave = código da planilha)
+    const insMap = new Map<string, typeof parsed.linhasInsumos>();
+    for (const ins of parsed.linhasInsumos) {
+      const arr = insMap.get(ins.composicaoCodigo) ?? [];
+      arr.push(ins);
+      insMap.set(ins.composicaoCodigo, arr);
+    }
+
+    for (const comp of parsed.composicoes) {
+      // chaveNorm já vem do parsearAbaCPUs
       let existente: any = null;
+      let codigoFinalComp = comp.codigo;
 
-      // 1. Busca por código
+      // 1. Busca composição por código
       if (comp.codigo) {
-        const byCode = await db.select().from(composicoesCatalogo)
+        const r = await db.select().from(composicoesCatalogo)
           .where(and(eq(composicoesCatalogo.companyId, companyId), eq(composicoesCatalogo.codigo, comp.codigo)))
           .limit(1);
-        existente = byCode[0];
+        existente = r[0];
       }
-
-      // 2. Busca por chave normalizada
+      // 2. Busca composição por chave normalizada
       if (!existente && comp.chaveNorm) {
-        const byKey = await db.select().from(composicoesCatalogo)
+        const r = await db.select().from(composicoesCatalogo)
           .where(and(eq(composicoesCatalogo.companyId, companyId), eq(composicoesCatalogo.chaveNorm, comp.chaveNorm)))
           .limit(1);
-        existente = byKey[0];
+        existente = r[0];
       }
 
       if (existente) {
+        codigoFinalComp = existente.codigo ?? codigoFinalComp;
         await db.update(composicoesCatalogo).set({
           codigo:           comp.codigo || existente.codigo,
           descricao:        comp.descricao,
           unidade:          comp.unidade || existente.unidade,
-          custoUnitMat:     fix4(comp.custoMat),
-          custoUnitMdo:     fix4(comp.custoMdo),
-          custoUnitTotal:   fix4(comp.custoTotal),
+          tipo:             'CPU',
+          custoUnitMat:     comp.custoUnitMat,
+          custoUnitMdo:     comp.custoUnitMdo,
+          custoUnitTotal:   comp.custoUnitTotal,
           ultimaAtualizacao: new Date().toISOString(),
         }).where(eq(composicoesCatalogo.id, existente.id));
         job.atualizados++;
       } else {
-        // Garante código único
-        let codigoFinal = comp.codigo;
-        if (!codigoFinal || codigosUsados.has(codigoFinal)) {
-          // Gera código único no padrão 99.XX.XX
-          const manualCodes = [...codigosUsados]
-            .filter(c => /^99\.\d{2}\.\d{2}$/.test(c))
-            .map(c => { const p = c.split('.'); return parseInt(p[1]) * 100 + parseInt(p[2]); })
-            .sort((a, b) => b - a);
-          const seq = (manualCodes[0] ?? 0) + 1;
-          const sub = Math.floor((seq - 1) / 99 + 1).toString().padStart(2, '0');
-          const item = ((seq - 1) % 99 + 1).toString().padStart(2, '0');
-          codigoFinal = `99.${sub}.${item}`;
+        // Garante código único para a composição
+        if (!codigoFinalComp || codigosCompUsados.has(codigoFinalComp)) {
+          codigoFinalComp = gerarProximoCodigo99(codigosCompUsados);
+        } else {
+          codigosCompUsados.add(codigoFinalComp);
         }
-        codigosUsados.add(codigoFinal);
         await db.insert(composicoesCatalogo).values({
           companyId,
-          codigo:           codigoFinal.substring(0, 100),
+          codigo:           codigoFinalComp.substring(0, 100),
           descricao:        comp.descricao,
           unidade:          comp.unidade || null,
           tipo:             'CPU',
-          custoUnitMat:     fix4(comp.custoMat),
-          custoUnitMdo:     fix4(comp.custoMdo),
-          custoUnitTotal:   fix4(comp.custoTotal),
+          custoUnitMat:     comp.custoUnitMat,
+          custoUnitMdo:     comp.custoUnitMdo,
+          custoUnitTotal:   comp.custoUnitTotal,
           totalOrcamentos:  0,
           chaveNorm:        comp.chaveNorm,
           ultimaAtualizacao: new Date().toISOString(),
           criadoEm:         new Date().toISOString(),
         });
         job.inseridos++;
+      }
+
+      // ── Processa os insumos desta composição ─────────────────
+      const linhas = insMap.get(comp.codigo) ?? [];
+
+      // Remove insumos anteriores desta composição (reimporta limpo)
+      await db.delete(composicaoInsumos).where(
+        and(
+          eq(composicaoInsumos.companyId, companyId),
+          eq(composicaoInsumos.composicaoCodigo, codigoFinalComp),
+        )
+      );
+
+      for (const ins of linhas) {
+        const codigoPlnilha = ins.insumoCodigo?.trim() ?? '';
+        const descricaoIns  = ins.insumoDescricao?.trim() ?? '';
+        const chaveIns      = (descricaoIns.toLowerCase().replace(/[^a-z0-9]/g, '')).substring(0, 500);
+        let codigoInsumo    = '';
+
+        // a. Busca por código na planilha
+        if (codigoPlnilha) {
+          const r = await db.select({ codigo: insumosCatalogo.codigo })
+            .from(insumosCatalogo)
+            .where(and(eq(insumosCatalogo.companyId, companyId), eq(insumosCatalogo.codigo, codigoPlnilha)))
+            .limit(1);
+          if (r[0]) codigoInsumo = r[0].codigo;
+        }
+
+        // b. Busca por descrição normalizada
+        if (!codigoInsumo && chaveIns) {
+          const r = await db.select({ codigo: insumosCatalogo.codigo })
+            .from(insumosCatalogo)
+            .where(and(eq(insumosCatalogo.companyId, companyId), eq(insumosCatalogo.chaveNorm, chaveIns)))
+            .limit(1);
+          if (r[0]) codigoInsumo = r[0].codigo;
+        }
+
+        // c. Não encontrou: cria insumo novo com código 99.XX.XX
+        if (!codigoInsumo) {
+          codigoInsumo = gerarProximoCodigo99(codigosInsUsados);
+          const precoIns = toNum(ins.precoUnitario);
+          await db.insert(insumosCatalogo).values({
+            companyId,
+            codigo:            codigoInsumo,
+            descricao:         descricaoIns.substring(0, 1000) || `Insumo importado ${codigoPlnilha}`,
+            unidade:           (ins.unidade ?? '').substring(0, 30) || null,
+            tipo:              null,
+            precoUnitario:     fix4(precoIns),
+            precoMin:          fix4(precoIns),
+            precoMax:          fix4(precoIns),
+            precoMedio:        fix4(precoIns),
+            totalOrcamentos:   0,
+            totalQuantidade:   fix4(toNum(ins.quantidade)),
+            chaveNorm:         chaveIns,
+            ultimaAtualizacao: new Date().toISOString(),
+            criadoEm:          new Date().toISOString(),
+          });
+        }
+
+        // d. Insere na composicao_insumos com código do nosso catálogo
+        await db.insert(composicaoInsumos).values({
+          companyId,
+          composicaoCodigo: codigoFinalComp,
+          insumoCodigo:     codigoInsumo,
+          insumoDescricao:  descricaoIns.substring(0, 1000) || null,
+          unidade:          (ins.unidade ?? '').substring(0, 30) || null,
+          quantidade:       fix6(toNum(ins.quantidade)),
+          precoUnitario:    fix4(toNum(ins.precoUnitario)),
+          alocacaoMat:      fix6(toNum(ins.alocacaoMat)),
+          alocacaoMdo:      fix6(toNum(ins.alocacaoMdo)),
+          custoUnitTotal:   fix6(toNum(ins.custoUnitTotal)),
+        });
       }
 
       job.done++;
@@ -1675,13 +1750,13 @@ export const orcamentoRouter = router({
       if (!cpusTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba de CPUs não encontrada na planilha. Verifique se o arquivo contém uma aba "CPUs" ou "Composições".' });
 
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[cpusTab], { header: 1, defval: '' }) as any[][];
-      const composicoes = parsearAbaComposicoesParaCatalogo(rows, input.companyId);
-      if (composicoes.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhuma composição encontrada na aba CPUs (linhas tipo "S").' });
+      const parsed = parsearAbaCPUs(rows, input.companyId);
+      if (parsed.composicoes.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhuma composição encontrada na aba CPUs (linhas tipo "S").' });
 
       const jobId = crypto.randomUUID();
-      importJobs.set(jobId, { total: composicoes.length, done: 0, inseridos: 0, atualizados: 0, status: 'running', createdAt: Date.now() });
-      setImmediate(() => processarImportacaoComposicoesBackground(jobId, composicoes, input.companyId, db));
-      return { jobId, total: composicoes.length };
+      importJobs.set(jobId, { total: parsed.composicoes.length, done: 0, inseridos: 0, atualizados: 0, status: 'running', createdAt: Date.now() });
+      setImmediate(() => processarImportacaoComposicoesBackground(jobId, parsed, input.companyId, db));
+      return { jobId, total: parsed.composicoes.length };
     }),
 
   // ── Gerar código único para composição manual ─────────────────
