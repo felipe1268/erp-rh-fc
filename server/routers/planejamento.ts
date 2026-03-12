@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, sql } from "drizzle-orm";
 import {
   planejamentoProjetos,
   planejamentoRevisoes,
@@ -11,6 +11,7 @@ import {
   planejamentoCompras,
   planejamentoMedicoes,
   orcamentos,
+  orcamentoItens,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -578,6 +579,64 @@ export const planejamentoRouter = router({
       const db = await getDb();
       return db.delete(planejamentoCompras)
         .where(eq(planejamentoCompras.id, input.id));
+    }),
+
+  // ── Cruzamento Orçamento × Cronograma ─────────────────────────────────────
+  obterCruzamentoOrcCronograma: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      // Busca atividades com o orçamento cruzado pelo nome (DISTINCT para evitar duplicatas)
+      const rows = await db.execute(sql`
+        WITH matched AS (
+          SELECT
+            a.id                                   AS ativ_id,
+            a.eap_codigo                           AS eap,
+            a.nome                                 AS nome,
+            a.data_inicio                          AS data_inicio,
+            a.data_fim                             AS data_fim,
+            a.ordem                                AS ordem,
+            a.nivel                                AS nivel,
+            MAX(i."vendaTotal"::numeric)            AS venda_total,
+            MAX(i."custoTotalMat"::numeric)         AS custo_mat,
+            MAX(i."custoTotalMdo"::numeric)         AS custo_mdo,
+            MAX(i."custoTotal"::numeric)            AS custo_total,
+            MAX(i.unidade)                          AS unidade,
+            MAX(i.quantidade::numeric)              AS quantidade
+          FROM planejamento_atividades a
+          JOIN planejamento_projetos p ON p.id = a.projeto_id
+          JOIN orcamento_itens i
+            ON i."orcamentoId" = p.orcamento_id
+            AND LOWER(REGEXP_REPLACE(TRIM(a.nome), '[\\s]+', ' ', 'g'))
+              = LOWER(REGEXP_REPLACE(TRIM(i.descricao), '[\\s]+', ' ', 'g'))
+          WHERE a.projeto_id = ${input.projetoId}
+            AND NOT a.is_grupo
+          GROUP BY a.id, a.eap_codigo, a.nome, a.data_inicio, a.data_fim, a.ordem, a.nivel
+        )
+        SELECT * FROM matched ORDER BY ordem
+      `);
+
+      const itens = (rows.rows as any[]).map(r => ({
+        ativId:     Number(r.ativ_id),
+        eap:        String(r.eap ?? ""),
+        nome:       String(r.nome ?? ""),
+        dataInicio: r.data_inicio ? String(r.data_inicio).substring(0, 10) : null,
+        dataFim:    r.data_fim    ? String(r.data_fim).substring(0, 10)    : null,
+        ordem:      Number(r.ordem ?? 0),
+        vendaTotal: parseFloat(r.venda_total  ?? "0") || 0,
+        custoMat:   parseFloat(r.custo_mat    ?? "0") || 0,
+        custoMdo:   parseFloat(r.custo_mdo    ?? "0") || 0,
+        custoTotal: parseFloat(r.custo_total  ?? "0") || 0,
+        unidade:    r.unidade    ? String(r.unidade) : null,
+        quantidade: parseFloat(r.quantidade   ?? "0") || 0,
+      }));
+
+      const totalVenda  = itens.reduce((s, i) => s + i.vendaTotal, 0);
+      const totalMat    = itens.reduce((s, i) => s + i.custoMat,   0);
+      const totalMdo    = itens.reduce((s, i) => s + i.custoMdo,   0);
+
+      return { itens, totalVenda, totalMat, totalMdo };
     }),
 
   // ── Medições Financeiras ───────────────────────────────────────────────────

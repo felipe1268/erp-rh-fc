@@ -1633,7 +1633,9 @@ const STATUS_MED = [
 
 function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt, fPct }: any) {
   const valorContrato = n(proj.valorContrato);
-  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim), [atividades]);
+
+  const { data: cruzamento, isLoading: loadCruz } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
+    { projetoId }, { enabled: !!projetoId });
 
   const { data: medicoes = [], refetch } = trpc.planejamento.listarMedicoes.useQuery(
     { projetoId }, { enabled: !!projetoId });
@@ -1641,46 +1643,55 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const salvarMut  = trpc.planejamento.salvarMedicao.useMutation({ onSuccess: () => refetch() });
   const excluirMut = trpc.planejamento.excluirMedicao.useMutation({ onSuccess: () => refetch() });
 
-  // Calcula planejado mensalmente a partir das atividades
+  // Distribui valores do orçamento cruzado pelos meses das atividades
   const dadosMensais = useMemo(() => {
-    const dataInis = folhas.map((a: any) => a.dataInicio).sort();
-    const dataFins = folhas.map((a: any) => a.dataFim).sort();
+    const itens = cruzamento?.itens ?? [];
+    if (itens.length === 0) return [];
+
+    const dataInis = itens.filter(i => i.dataInicio).map(i => i.dataInicio!).sort();
+    const dataFins  = itens.filter(i => i.dataFim).map(i => i.dataFim!).sort();
     const priData = dataInis[0]?.substring(0, 7) ?? null;
     const ultData = dataFins[dataFins.length - 1]?.substring(0, 7) ?? null;
     if (!priData || !ultData) return [];
 
     const meses = mesesRange(priData, ultData);
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
 
     return meses.map(mes => {
       const [ano, m] = mes.split("-").map(Number);
       let planejadoMes = 0;
+      let matMes       = 0;
+      let mdoMes       = 0;
 
-      folhas.forEach((a: any) => {
-        const durTotal = Math.max(1, Math.round((new Date(a.dataFim).getTime() - new Date(a.dataInicio).getTime()) / 86400000) + 1);
-        const diasMes = diasNoMes(a.dataInicio, a.dataFim, ano, m);
+      itens.forEach((item: any) => {
+        if (!item.dataInicio || !item.dataFim) return;
+        const durTotal = Math.max(1, Math.round((new Date(item.dataFim).getTime() - new Date(item.dataInicio).getTime()) / 86400000) + 1);
+        const diasMes = diasNoMes(item.dataInicio, item.dataFim, ano, m);
         if (diasMes === 0) return;
-        const peso = n(a.pesoFinanceiro) || 1;
-        const valorAtiv = (peso / pesoTotal) * valorContrato;
-        planejadoMes += valorAtiv * (diasMes / durTotal);
+        const frac = diasMes / durTotal;
+        planejadoMes += item.vendaTotal * frac;
+        matMes       += item.custoMat   * frac;
+        mdoMes       += item.custoMdo   * frac;
       });
 
-      return { mes, planejadoMes };
+      return { mes, planejadoMes, matMes, mdoMes };
     });
-  }, [folhas, valorContrato]);
+  }, [cruzamento]);
 
   // Combina com medições reais
   const rows = useMemo(() => {
     const medMap: Record<string, any> = {};
     medicoes.forEach((m: any) => { medMap[m.competencia] = m; });
 
+    const totalVendaCruz = cruzamento?.totalVenda ?? 0;
+    const base = totalVendaCruz > 0 ? totalVendaCruz : (valorContrato || 1);
+
     let cumPrev = 0;
     let cumReal = 0;
-    return dadosMensais.map((d, idx) => {
+    return dadosMensais.map((d: any, idx: number) => {
       const med = medMap[d.mes];
       const valorReal = n(med?.valorMedido ?? 0);
-      const percPrev = valorContrato > 0 ? (d.planejadoMes / valorContrato * 100) : 0;
-      const percReal = valorContrato > 0 ? (valorReal / valorContrato * 100) : 0;
+      const percPrev = base > 0 ? (d.planejadoMes / base * 100) : 0;
+      const percReal = base > 0 ? (valorReal / base * 100) : 0;
       cumPrev += percPrev;
       cumReal += percReal;
       return {
@@ -1697,7 +1708,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
         obs:     med?.observacoes ?? "",
       };
     });
-  }, [dadosMensais, medicoes, valorContrato]);
+  }, [dadosMensais, medicoes, valorContrato, cruzamento]);
 
   // Editando inline
   const [editMes, setEditMes] = useState<string | null>(null);
@@ -1729,56 +1740,98 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   }
 
   const hoje = new Date().toISOString().substring(0, 7);
-  const totalPrev = rows.reduce((s, r) => s + r.planejadoMes, 0);
-  const totalReal = rows.reduce((s, r) => s + r.valorReal, 0);
-  const qtdMed   = medicoes.length;
+  const totalPrev  = rows.reduce((s: number, r: any) => s + r.planejadoMes, 0);
+  const totalMat   = rows.reduce((s: number, r: any) => s + (r.matMes ?? 0), 0);
+  const totalMdo   = rows.reduce((s: number, r: any) => s + (r.mdoMes ?? 0), 0);
+  const totalReal  = rows.reduce((s: number, r: any) => s + r.valorReal, 0);
+  const qtdMed     = medicoes.length;
+  const qtdCruz    = cruzamento?.itens?.length ?? 0;
 
-  // Dados para o gráfico (resumido para não sobrecarregar)
-  const chartData = rows.map(r => ({
+  // Dados para o gráfico
+  const chartData = rows.map((r: any) => ({
     mes:     r.nomeMes,
     Previsto: +r.planejadoMes.toFixed(2),
+    Material: +(r.matMes ?? 0).toFixed(2),
+    "M.O.":   +(r.mdoMes ?? 0).toFixed(2),
     Medido:   +r.valorReal.toFixed(2),
     "Prev. Acum.": +r.cumPrev.toFixed(2),
     "Real. Acum.": +r.cumReal.toFixed(2),
   }));
 
+  if (loadCruz) {
+    return (
+      <div className="flex items-center justify-center py-16 text-slate-400">
+        <Loader2 className="h-5 w-5 animate-spin mr-2" /> Cruzando orçamento com cronograma...
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
+      {/* Alerta de cruzamento */}
+      {qtdCruz > 0 && (
+        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs text-emerald-700">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            <b>{qtdCruz.toLocaleString("pt-BR")}</b> atividades cruzadas com o orçamento —
+            valores planejados baseados no orçamento real ({fmt(cruzamento?.totalVenda ?? 0)} em vendas,
+            {fmt(cruzamento?.totalMat ?? 0)} em materiais, {fmt(cruzamento?.totalMdo ?? 0)} em M.O.)
+          </span>
+        </div>
+      )}
+      {qtdCruz === 0 && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          Nenhum cruzamento encontrado entre o cronograma e o orçamento. Verifique se o projeto tem orçamento vinculado com itens de mesmo nome.
+        </div>
+      )}
+
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
         <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
           <p className="text-[10px] text-slate-400">Valor do Contrato</p>
           <p className="text-base font-bold text-slate-800">{fmt(valorContrato)}</p>
         </div>
         <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Previsto (total meses)</p>
+          <p className="text-[10px] text-slate-400">Venda Prevista (orç.)</p>
           <p className="text-base font-bold text-orange-600">{fmt(totalPrev)}</p>
         </div>
         <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
-          <p className="text-[10px] text-slate-400">Medido (total)</p>
+          <p className="text-[10px] text-slate-400">Custo Material Total</p>
+          <p className="text-base font-bold text-purple-600">{fmt(totalMat)}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Custo M.O. Total</p>
+          <p className="text-base font-bold text-blue-600">{fmt(totalMdo)}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
+          <p className="text-[10px] text-slate-400">Total Medido</p>
           <p className="text-base font-bold text-emerald-600">{fmt(totalReal)}</p>
         </div>
         <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-3">
           <p className="text-[10px] text-slate-400">Medições realizadas</p>
-          <p className="text-base font-bold text-blue-600">{qtdMed} / {rows.length}</p>
+          <p className="text-base font-bold text-slate-600">{qtdMed} / {rows.length}</p>
         </div>
       </div>
 
       {/* Gráfico Barras + Linha */}
       {chartData.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-4">Previsto × Realizado por Período</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={chartData} margin={{ top: 4, right: 48, bottom: 0, left: 8 }}>
+          <p className="text-sm font-semibold text-slate-700 mb-1">Previsto × Realizado por Período</p>
+          <p className="text-[10px] text-slate-400 mb-4">Baseado no cruzamento orçamento × cronograma — barras = valores mensais (eixo esq.), linhas = acumulado % (eixo dir.)</p>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={chartData} margin={{ top: 4, right: 52, bottom: 0, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} />
-              <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 100]} />
+              <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} width={60} />
+              <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 100]} width={36} />
               <Tooltip formatter={(v: any, name: string) => name.includes("Acum") ? `${Number(v).toFixed(1)}%` : fmt(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar yAxisId="val" dataKey="Previsto" fill="#f97316" fillOpacity={0.7} radius={[3,3,0,0]} />
+              <Bar yAxisId="val" dataKey="Previsto" fill="#f97316" fillOpacity={0.8} radius={[3,3,0,0]} stackId="prev" />
+              <Bar yAxisId="val" dataKey="Material" fill="#a855f7" fillOpacity={0.7} radius={[0,0,0,0]} />
+              <Bar yAxisId="val" dataKey="M.O."     fill="#3b82f6" fillOpacity={0.7} radius={[0,0,0,0]} />
               <Bar yAxisId="val" dataKey="Medido"   fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
-              <Line yAxisId="pct" type="monotone" dataKey="Prev. Acum." stroke="#f97316" strokeWidth={2} dot={false} />
+              <Line yAxisId="pct" type="monotone" dataKey="Prev. Acum." stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" />
               <Line yAxisId="pct" type="monotone" dataKey="Real. Acum." stroke="#10b981" strokeWidth={2} dot={false} />
             </BarChart>
           </ResponsiveContainer>
@@ -1917,7 +1970,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
       </div>
 
       <p className="text-[10px] text-slate-400 text-center">
-        * Previsto calculado proporcionalmente à distribuição temporal das atividades. Medido = valor lançado manualmente por medição mensal.
+        * Previsto calculado proporcionalmente à distribuição temporal das atividades cruzadas com o orçamento (vendaTotal). Medido = valor lançado manualmente por competência.
       </p>
     </div>
   );
@@ -2096,16 +2149,59 @@ function badgeCompra(status: string) {
 }
 
 function Compras({ projetoId, proj, utils, fmt }: any) {
-  const [modal, setModal] = useState<null | "novo" | "edit">(null);
+  const [modal, setModal] = useState<null | "novo" | "edit" | "importar">(null);
   const [editItem, setEditItem] = useState<any>(null);
   const emptyForm = { item: "", unidade: "un", quantidade: 1, custoUnitario: 0, dataNecessaria: new Date().toISOString().split("T")[0], status: "pendente", fornecedor: "", observacoes: "" };
   const [form, setForm] = useState(emptyForm);
+  const [importSelecionados, setImportSelecionados] = useState<Set<number>>(new Set());
+  const [importando, setImportando] = useState(false);
 
   const { data: compras = [], refetch } = trpc.planejamento.listarCompras.useQuery({ projetoId }, { enabled: !!projetoId });
+  const { data: cruzamento, isLoading: loadCruz } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
+    { projetoId }, { enabled: modal === "importar" && !!projetoId });
 
   const criarMut  = trpc.planejamento.criarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
   const editarMut = trpc.planejamento.atualizarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
   const excluirMut = trpc.planejamento.excluirCompra.useMutation({ onSuccess: () => refetch() });
+
+  // Itens do orçamento com material disponíveis para importar
+  const itensImportaveis = useMemo(() => {
+    if (!cruzamento?.itens) return [];
+    return cruzamento.itens
+      .filter((i: any) => i.custoMat > 0 && i.dataInicio)
+      .map((i: any) => {
+        const dtAtiv = new Date(i.dataInicio + "T00:00:00");
+        dtAtiv.setDate(dtAtiv.getDate() - 30); // Lead-time 30 dias
+        const dtCompra = dtAtiv.toISOString().split("T")[0];
+        const qtd = i.quantidade > 0 ? i.quantidade : 1;
+        return {
+          ...i,
+          dataNecessaria: dtCompra,
+          custoUnitario: +(i.custoMat / qtd).toFixed(4),
+        };
+      });
+  }, [cruzamento]);
+
+  async function confirmarImportacao() {
+    const selecionados = itensImportaveis.filter((_: any, idx: number) => importSelecionados.has(idx));
+    if (selecionados.length === 0) return;
+    setImportando(true);
+    for (const it of selecionados) {
+      await criarMut.mutateAsync({
+        projetoId,
+        item: it.nome,
+        unidade: it.unidade ?? "un",
+        quantidade: it.quantidade > 0 ? it.quantidade : 1,
+        custoUnitario: it.custoUnitario,
+        dataNecessaria: it.dataNecessaria,
+        status: "pendente",
+        observacoes: `Importado do orçamento — EAP ${it.eap}`,
+      });
+    }
+    setImportando(false);
+    setModal(null);
+    setImportSelecionados(new Set());
+  }
 
   function abrirNovo() { setForm(emptyForm); setModal("novo"); }
   function abrirEdit(c: any) {
@@ -2160,11 +2256,17 @@ function Compras({ projetoId, proj, utils, fmt }: any) {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm font-semibold text-slate-700">Cronograma de Compras</p>
-        <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700" onClick={abrirNovo}>
-          <Plus className="h-3.5 w-3.5" /> Novo Item
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5 border-purple-300 text-purple-700 hover:bg-purple-50"
+            onClick={() => { setImportSelecionados(new Set()); setModal("importar"); }}>
+            <Upload className="h-3.5 w-3.5" /> Importar do Orçamento
+          </Button>
+          <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700" onClick={abrirNovo}>
+            <Plus className="h-3.5 w-3.5" /> Novo Item
+          </Button>
+        </div>
       </div>
 
       {compras.length === 0 ? (
@@ -2226,8 +2328,105 @@ function Compras({ projetoId, proj, utils, fmt }: any) {
         </div>
       )}
 
+      {/* Modal Importar do Orçamento */}
+      <Dialog open={modal === "importar"} onOpenChange={open => !open && setModal(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Importar Itens do Orçamento</DialogTitle>
+          </DialogHeader>
+          {loadCruz ? (
+            <div className="flex items-center justify-center py-10 text-slate-400">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando orçamento...
+            </div>
+          ) : itensImportaveis.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 text-sm">
+              Nenhum item com custo de material encontrado no cruzamento orçamento × cronograma.
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-slate-500">
+                  {itensImportaveis.length} itens com material — data de necessidade = início da atividade − 30 dias (lead-time)
+                </p>
+                <div className="flex gap-2">
+                  <button className="text-xs text-blue-600 hover:underline"
+                    onClick={() => setImportSelecionados(new Set(itensImportaveis.map((_: any, i: number) => i)))}>
+                    Selecionar tudo
+                  </button>
+                  <button className="text-xs text-slate-500 hover:underline"
+                    onClick={() => setImportSelecionados(new Set())}>
+                    Limpar
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-y-auto flex-1 border rounded-lg text-xs">
+                <table className="w-full">
+                  <thead className="bg-slate-50 sticky top-0">
+                    <tr className="border-b border-slate-200">
+                      <th className="py-2 px-2 w-8"></th>
+                      <th className="py-2 px-2 text-left">EAP</th>
+                      <th className="py-2 px-2 text-left flex-1">Item</th>
+                      <th className="py-2 px-2 text-right">Qtd</th>
+                      <th className="py-2 px-2 text-left">Un</th>
+                      <th className="py-2 px-2 text-right">Custo Mat.</th>
+                      <th className="py-2 px-2 text-right">C.Unit.</th>
+                      <th className="py-2 px-2 text-right">Data Nec.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itensImportaveis.map((it: any, idx: number) => {
+                      const sel = importSelecionados.has(idx);
+                      return (
+                        <tr key={idx} className={`border-b border-slate-50 cursor-pointer transition-colors ${sel ? "bg-purple-50" : "hover:bg-slate-50"}`}
+                          onClick={() => {
+                            const ns = new Set(importSelecionados);
+                            sel ? ns.delete(idx) : ns.add(idx);
+                            setImportSelecionados(ns);
+                          }}>
+                          <td className="py-1.5 px-2 text-center">
+                            <input type="checkbox" checked={sel} readOnly className="accent-purple-600 cursor-pointer" />
+                          </td>
+                          <td className="py-1.5 px-2 font-mono text-slate-400">{it.eap}</td>
+                          <td className="py-1.5 px-2 max-w-[260px]">
+                            <p className="truncate" title={it.nome}>{it.nome}</p>
+                          </td>
+                          <td className="py-1.5 px-2 text-right">{it.quantidade > 0 ? it.quantidade.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"}</td>
+                          <td className="py-1.5 px-2 text-slate-500">{it.unidade ?? "—"}</td>
+                          <td className="py-1.5 px-2 text-right text-purple-700 font-medium">{fmt(it.custoMat)}</td>
+                          <td className="py-1.5 px-2 text-right text-slate-600">{fmt(it.custoUnitario)}</td>
+                          <td className="py-1.5 px-2 text-right text-blue-600 font-medium">
+                            {new Date(it.dataNecessaria + "T00:00:00").toLocaleDateString("pt-BR")}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                <p className="text-xs text-slate-500">
+                  {importSelecionados.size} item(ns) selecionado(s) — Total: {fmt(
+                    itensImportaveis.filter((_: any, i: number) => importSelecionados.has(i)).reduce((s: number, it: any) => s + it.custoMat, 0)
+                  )}
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setModal(null)}>Cancelar</Button>
+                  <Button size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 gap-1.5"
+                    disabled={importSelecionados.size === 0 || importando}
+                    onClick={confirmarImportacao}>
+                    {importando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                    Importar {importSelecionados.size > 0 ? `(${importSelecionados.size})` : ""} Itens
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Modal Novo/Editar */}
-      <Dialog open={!!modal} onOpenChange={open => !open && setModal(null)}>
+      <Dialog open={modal === "novo" || modal === "edit"} onOpenChange={open => !open && setModal(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{modal === "novo" ? "Novo Item de Compra" : "Editar Item"}</DialogTitle>
