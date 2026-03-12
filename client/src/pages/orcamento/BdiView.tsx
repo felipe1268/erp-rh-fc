@@ -88,8 +88,11 @@ function pct2(v: string | number | null | undefined) {
   return (n * 100).toFixed(2) + "%";
 }
 
-// Filtra apenas códigos BDI válidos — descarta lixo de importações antigas
-const VALID_BDI = /^(CD-\d{2}|CI-\d{2}|DI-\d{2}|B-\d{2}|L-\d{2}|V\d{1,2}|PV-\d|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
+// Filtra apenas códigos BDI válidos — descarta lixo de importações antigas.
+// B-03 e B-05 são excluídos (dados errados de import antigo — L-01..L-04 existem corretamente).
+// PV aceita espaços: "PV - 2" e "PV-2" são equivalentes.
+// Sub-códigos (CD-02.1, CI-01.1, CI-01.2) são permitidos.
+const VALID_BDI = /^(CD-\d{2}(\.\d+)?|CI-\d{2}(\.\d+)?|DI-\d{2}|B-0[124]|L-\d{2}|V\d{1,2}|PV\s*-\s*[23]|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
 
 // Códigos cujo % é digitado diretamente nesta aba (células azuis/verdes do Excel BDI)
 // Os demais têm valor agregado das abas complementares e são somente leitura aqui.
@@ -182,7 +185,7 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                   const header = isGroupHeader(l.codigo);
                   const sumRow = isSumRow(l.codigo);
                   const isBdi  = l.codigo === "B-02";
-                  const isPV2  = l.codigo === "PV-2" || l.codigo === "PV-3";
+                  const isPV2  = /^PV\s*-\s*[23]$/.test(l.codigo);
                   const hasVal = fmt(l.valorAbsoluto) !== 0;
                   const hasPct = fmt(l.percentual) !== 0;
 
@@ -236,21 +239,21 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                     return null;
                   }
 
-                  // ── BDI Total (B-02) — destaque especial, sempre visível
+                  // ── BDI Total (B-02) — linha de destaque, sempre visível, nunca editável
                   if (isBdi) {
                     return (
-                      <tr key={l.id ?? idx} className="border-b-2 border-blue-400 bg-blue-50">
-                        <td className="px-3 py-2.5 font-bold font-mono text-sm text-center text-blue-700 border-r border-blue-200">
+                      <tr key={l.id ?? idx} className="border-y-2 border-blue-300 bg-blue-50">
+                        <td className="px-3 py-2 font-bold font-mono text-xs text-center text-blue-700 border-r border-blue-200">
                           {l.codigo}
                         </td>
-                        <td className="px-3 py-2.5 font-bold text-blue-900 text-sm border-r border-blue-200">
+                        <td className="px-3 py-2 font-bold text-blue-900 text-sm border-r border-blue-200">
                           {l.descricao}
                         </td>
-                        <td className="px-3 py-2.5 text-right font-bold font-mono text-xl text-blue-700 border-r border-blue-200">
+                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-blue-700 border-r border-blue-200">
                           {pct2(l.percentual)}
                         </td>
-                        <td className="px-3 py-2.5 text-right font-bold font-mono text-sm text-slate-900 bg-yellow-300">
-                          {hasVal ? brl(l.valorAbsoluto) : ""}
+                        <td className="px-3 py-2 text-right font-bold font-mono text-sm text-slate-900" style={{ backgroundColor: "#F7F797" }}>
+                          {hasVal ? brl(l.valorAbsoluto) : "—"}
                         </td>
                       </tr>
                     );
@@ -380,24 +383,24 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
   );
 
   return (
-    <Card>
+    <Card className="overflow-hidden border-slate-300">
       <CardContent className="p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-sm border-collapse" style={{ borderSpacing: 0 }}>
             <thead>
-              <tr className="bg-blue-700 text-white text-xs uppercase sticky top-0 z-10">
-                <TH className="text-white w-8"></TH>
-                <TH className="text-white w-20">Seção</TH>
-                <TH className="text-white w-20">Código</TH>
-                <TH className="text-white min-w-[200px]">Cargo / Função</TH>
-                <TH className="text-white">Modalidade</TH>
-                <TH className="text-white">Tipo</TH>
-                <TH className="text-white text-right w-16">Qtd</TH>
-                <TH className="text-white text-right w-16">Meses</TH>
-                <TH className="text-white text-right w-28">Salário Base</TH>
-                <TH className="text-white text-right w-28">13º+Férias</TH>
-                <TH className="text-white text-right w-24">Valor/h</TH>
-                <TH className="text-white text-right w-28">Total/mês</TH>
+              <tr className="bg-slate-700 text-white text-xs uppercase sticky top-0 z-10">
+                <th className="px-2 py-2 w-8 border-r border-slate-600"></th>
+                <TH className="text-white w-20 border-r border-slate-600">Seção</TH>
+                <TH className="text-white w-20 border-r border-slate-600">Código</TH>
+                <TH className="text-white min-w-[200px] border-r border-slate-600">Cargo / Função</TH>
+                <TH className="text-white border-r border-slate-600">Modalidade</TH>
+                <TH className="text-white border-r border-slate-600">Tipo</TH>
+                <TH className="text-white text-right w-16 border-r border-slate-600">Qtd</TH>
+                <TH className="text-white text-right w-16 border-r border-slate-600">Meses</TH>
+                <TH className="text-white text-right w-28 border-r border-slate-600">Salário Base</TH>
+                <TH className="text-white text-right w-28 border-r border-slate-600">13º+Férias</TH>
+                <TH className="text-white text-right w-24 border-r border-slate-600">Valor/h</TH>
+                <TH className="text-white text-right w-28 border-r border-slate-600">Total/mês</TH>
                 <TH className="text-white text-right w-32">Total/obra</TH>
               </tr>
             </thead>
@@ -405,39 +408,41 @@ function AbaIndiretos({ linhas, orcamentoId }: { linhas: any[]; orcamentoId: num
               {linhas.map((l: any, idx: number) => {
                 const secKey = l.secao ?? l.codigo;
                 if (l.isHeader) {
-                  const open = !collapsed.has(secKey);
+                  const open  = !collapsed.has(secKey);
                   const total = linhas.filter(x => !x.isHeader && x.secao === secKey).reduce((s, x) => s + fmt(x.totalObra), 0);
                   return (
-                    <tr key={l.id ?? idx} className="bg-blue-600 text-white cursor-pointer select-none"
+                    <tr key={l.id ?? idx}
+                      className="bg-slate-700 text-white cursor-pointer select-none border-t-2 border-slate-500 hover:brightness-95 transition-all"
                       onClick={() => setCollapsed(p => { const n = new Set(p); n.has(secKey) ? n.delete(secKey) : n.add(secKey); return n; })}>
-                      <td className="px-3 py-2 w-8">
+                      <td className="px-2 py-2 w-8 border-r border-slate-500">
                         {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </td>
-                      <td colSpan={7} className="px-3 py-2 font-bold text-sm uppercase tracking-wide">
+                      <td colSpan={11} className="px-3 py-2 font-bold text-sm uppercase tracking-wide border-r border-slate-500">
                         {l.codigo} — {l.descricao}
                       </td>
-                      <td colSpan={4} className="px-3 py-2 text-right font-mono font-bold text-sm">
+                      <td className="px-3 py-2 text-right font-mono font-bold text-sm text-slate-900" style={{ backgroundColor: "#F7F797" }}>
                         {brl(total)}
                       </td>
                     </tr>
                   );
                 }
                 if (collapsed.has(l.secao ?? "")) return null;
+                const isEven = idx % 2 === 0;
                 return (
-                  <tr key={l.id ?? idx} className={`border-b hover:bg-blue-50/30 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                    <TD></TD>
-                    <TD className="font-mono text-xs text-muted-foreground">{l.secao}</TD>
-                    <TD className="font-mono text-xs">{l.codigo}</TD>
-                    <TD className="font-medium">{l.descricao}</TD>
-                    <TD className="text-muted-foreground text-xs">{l.modalidade}</TD>
-                    <TD className="text-muted-foreground text-xs">{l.tipoContrato}</TD>
-                    <TD className="text-right"><NumCell id={l.id} field="quantidade" val={l.quantidade} /></TD>
-                    <TD className="text-right font-mono text-xs">{num(l.mesesObra)}</TD>
-                    <TD className="text-right"><NumCell id={l.id} field="salarioBase" val={l.salarioBase} /></TD>
-                    <TD className="text-right"><NumCell id={l.id} field="decimoTerceiroFerias" val={l.decimoTerceiroFerias} /></TD>
-                    <TD className="text-right font-mono text-xs">{num(l.valorHora, 4)}</TD>
-                    <TD className="text-right font-mono text-xs">{brl(l.totalMes)}</TD>
-                    <TD className="text-right font-mono text-xs font-medium">{brl(l.totalObra)}</TD>
+                  <tr key={l.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/20 transition-colors ${isEven ? "bg-white" : "bg-slate-50"}`}>
+                    <TD className="border-r border-slate-100"></TD>
+                    <TD className="font-mono text-xs text-muted-foreground border-r border-slate-100">{l.secao}</TD>
+                    <TD className="font-mono text-xs border-r border-slate-100">{l.codigo}</TD>
+                    <TD className="font-medium border-r border-slate-100">{l.descricao}</TD>
+                    <TD className="text-muted-foreground text-xs border-r border-slate-100">{l.modalidade}</TD>
+                    <TD className="text-muted-foreground text-xs border-r border-slate-100">{l.tipoContrato}</TD>
+                    <TD className="text-right border-r border-slate-100"><NumCell id={l.id} field="quantidade" val={l.quantidade} /></TD>
+                    <TD className="text-right font-mono text-xs border-r border-slate-100">{num(l.mesesObra)}</TD>
+                    <TD className="text-right border-r border-slate-100"><NumCell id={l.id} field="salarioBase" val={l.salarioBase} /></TD>
+                    <TD className="text-right border-r border-slate-100"><NumCell id={l.id} field="decimoTerceiroFerias" val={l.decimoTerceiroFerias} /></TD>
+                    <TD className="text-right font-mono text-xs border-r border-slate-100">{num(l.valorHora, 4)}</TD>
+                    <TD className="text-right font-mono text-xs border-r border-slate-100">{brl(l.totalMes)}</TD>
+                    <TD className="text-right font-mono text-xs font-semibold">{brl(l.totalObra)}</TD>
                   </tr>
                 );
               })}
