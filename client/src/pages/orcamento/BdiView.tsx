@@ -381,6 +381,7 @@ function ParamInput({
   const [draft, setDraft] = React.useState("");
   const display = value !== null && value !== undefined && String(value) !== "" ? String(value) : "";
   const textColor = red ? "text-red-600 font-semibold" : "text-slate-800";
+  const baseClass = `${width} h-5 text-center text-xs font-mono rounded px-1`;
   if (editing) {
     return (
       <input
@@ -392,18 +393,19 @@ function ParamInput({
         onChange={e => setDraft(e.target.value)}
         onBlur={() => { setEditing(false); if (draft !== "") onSave(draft); }}
         onKeyDown={e => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
-        className={`${width} h-5 text-center text-xs font-mono bg-blue-50 border border-blue-400 rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-500`}
+        className={`${baseClass} bg-blue-50 border border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500`}
       />
     );
   }
   return (
     <span
       onClick={() => { setDraft(display); setEditing(true); }}
-      className={`${width} inline-block text-center text-xs font-mono cursor-pointer hover:bg-blue-50 hover:underline rounded px-1 ${textColor}`}
+      className={`${baseClass} inline-flex items-center justify-center bg-blue-50 border border-blue-200 cursor-pointer hover:border-blue-400 transition-colors ${textColor}`}
       title="Clique para editar"
     >
-      {display || <span className="text-slate-300">—</span>}
-      {suffix && display ? <span className="text-slate-500 ml-0.5">{suffix}</span> : null}
+      {display
+        ? <>{display}{suffix ? <span className="text-slate-400 ml-0.5">{suffix}</span> : null}</>
+        : <span className="text-slate-300">—</span>}
     </span>
   );
 }
