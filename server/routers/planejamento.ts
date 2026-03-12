@@ -382,6 +382,14 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  deletarRefis: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(planejamentoRefis).where(eq(planejamentoRefis.id, input.id));
+      return { success: true };
+    }),
+
   // ── Curva S ───────────────────────────────────────────────────────────────
   getCurvaS: protectedProcedure
     .input(z.object({ projetoId: z.number(), revisaoId: z.number(), baselineId: z.number() }))

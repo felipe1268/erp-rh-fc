@@ -1328,9 +1328,17 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [obs, setObs] = useState("");
   const [custoPrev, setCustoPrev] = useState("");
   const [custoReal, setCustoReal] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const salvarMutation = trpc.planejamento.salvarRefis.useMutation({
     onSuccess: () => utils.planejamento.listarRefis.invalidate(),
+  });
+
+  const deletarMutation = trpc.planejamento.deletarRefis.useMutation({
+    onSuccess: () => {
+      utils.planejamento.listarRefis.invalidate();
+      setConfirmDelete(false);
+    },
   });
 
   // Calcula avanço previsto para a semana a partir do cronograma
@@ -1426,13 +1434,45 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             ))}
           </select>
         </div>
-        <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700"
-          disabled={salvarMutation.isPending}
-          onClick={emitirRefis}>
-          {salvarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-          {existente ? "Atualizar REFIS" : "Emitir REFIS"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Cancelar emissão — só aparece se há REFIS emitido para a semana */}
+          {existente && !confirmDelete && (
+            <Button size="sm" variant="outline"
+              className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50"
+              onClick={() => setConfirmDelete(true)}>
+              <XCircle className="h-3.5 w-3.5" />
+              Cancelar Emissão
+            </Button>
+          )}
+          <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700"
+            disabled={salvarMutation.isPending}
+            onClick={emitirRefis}>
+            {salvarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+            {existente ? "Atualizar REFIS" : "Emitir REFIS"}
+          </Button>
+        </div>
       </div>
+
+      {/* ── Confirmação de cancelamento ─────────────────────────────────────── */}
+      {confirmDelete && existente && (
+        <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>Confirma o cancelamento do <strong>REFIS Nº {String(existente.numero ?? "—").padStart(3, "0")}</strong> da semana {semana}? Esta ação não pode ser desfeita.</span>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>
+              Voltar
+            </Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 gap-1.5"
+              disabled={deletarMutation.isPending}
+              onClick={() => deletarMutation.mutate({ id: existente.id })}>
+              {deletarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+              Confirmar Cancelamento
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Cabeçalho REFIS */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
