@@ -91,12 +91,28 @@ function pct2(v: string | number | null | undefined) {
 // Filtra apenas códigos BDI válidos — descarta lixo de importações antigas
 const VALID_BDI = /^(CD-\d{2}|CI-\d{2}|DI-\d{2}|B-\d{2}|L-\d{2}|V\d{1,2}|PV-\d|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
 
+// Códigos cujo % é digitado diretamente nesta aba (células azuis/verdes do Excel BDI)
+// Os demais têm valor agregado das abas complementares e são somente leitura aqui.
+const EDITABLE_PCT = new Set([
+  "DI-08", "DI-09", "DI-10",          // Risco, Seguro, Comissionamento
+  "V2", "V4", "V8",                    // BDI curva ABC, BDI FD, Desconto NF
+  "B-01",                              // Lucro Bruto Arbitrário
+  "L-01", "L-02", "L-03", "L-04",     // Lucros
+]);
+
 function AbaBdi({ linhas }: { linhas: any[] }) {
   // Remove linhas inválidas (dados de importação antiga com lixo do Excel)
   const linhasValidas = linhas.filter((l: any) => VALID_BDI.test(String(l.codigo || "").trim()));
 
   // Controle de grupos colapsados — inicia com todos expandidos
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Edições em andamento: id → valor string do input
+  const [edits, setEdits] = useState<Record<number, string>>({});
+
+  const updateMut = trpc.orcamento.updateBdiLinha.useMutation({
+    onSuccess: () => toast.success("Salvo!"),
+    onError:   e  => toast.error(e.message || "Erro ao salvar"),
+  });
 
   function toggleGrupo(key: string) {
     setCollapsed(prev => {
@@ -104,6 +120,16 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
+  }
+
+  function handleBlur(l: any) {
+    const raw  = edits[l.id];
+    if (raw === undefined) return;
+    const val  = parseFloat(raw.replace(",", "."));
+    if (isNaN(val)) { setEdits(p => { const n = {...p}; delete n[l.id]; return n; }); return; }
+    // persiste como fração decimal (Excel usa 0.05 para 5%)
+    updateMut.mutate({ id: l.id, percentual: val / 100 });
+    setEdits(p => { const n = {...p}; delete n[l.id]; return n; });
   }
 
   // Encontra BDI total (B-02)
@@ -118,10 +144,17 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
 
   return (
     <div className="space-y-0 text-sm">
-      {/* Banner somente leitura */}
-      <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-        <Lock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-        <span>Valores somente leitura — editável apenas na aba de origem correspondente. Clique no cabeçalho do grupo para expandir/fechar.</span>
+      {/* Legenda */}
+      <div className="flex items-center gap-4 mb-3 text-xs flex-wrap">
+        <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded px-2.5 py-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm bg-blue-500" />
+          <span className="text-blue-800 font-medium">Campo editável diretamente nesta aba</span>
+        </div>
+        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5">
+          <Lock className="h-3 w-3 text-slate-400" />
+          <span className="text-slate-600">Valor agregado das abas complementares</span>
+        </div>
+        <span className="text-slate-400">• Clique no cabeçalho do grupo para expandir/fechar</span>
       </div>
 
       <Card className="overflow-hidden border-slate-300">
@@ -244,7 +277,14 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                   }
 
                   // ── Linha normal de sub-item
-                  const isEven = idx % 2 === 0;
+                  const isEven   = idx % 2 === 0;
+                  const isEdit   = EDITABLE_PCT.has(l.codigo);
+                  const editVal  = edits[l.id];
+                  // Valor exibido no input (usa edição pendente ou valor do banco convertido para %)
+                  const inputVal = editVal !== undefined
+                    ? editVal
+                    : fmt(l.percentual) !== 0 ? (fmt(l.percentual) * 100).toFixed(2) : "";
+
                   return (
                     <tr key={l.id ?? idx} className={`border-b border-slate-100 ${isEven ? g.rowBg : g.rowBgAlt} hover:bg-blue-50/20 transition-colors`}>
                       <td className={`px-3 py-1.5 font-mono text-xs text-center font-medium ${g.codColor} border-r border-slate-100`}>
@@ -253,9 +293,29 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                       <td className="px-3 py-1.5 text-slate-700 border-r border-slate-100">
                         {l.descricao}
                       </td>
-                      <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-600 border-r border-slate-100">
-                        {hasPct ? pct2(l.percentual) : "—"}
-                      </td>
+
+                      {/* Coluna % — editável (azul) ou somente leitura */}
+                      {isEdit ? (
+                        <td className="py-0.5 px-1 border-r border-blue-200 bg-blue-50">
+                          <div className="flex items-center gap-0.5">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={inputVal}
+                              onChange={e => setEdits(p => ({ ...p, [l.id]: e.target.value }))}
+                              onBlur={() => handleBlur(l)}
+                              onKeyDown={e => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+                              className="w-full text-right text-xs font-semibold font-mono text-blue-700 bg-transparent border-0 outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 py-0.5 h-6"
+                            />
+                            <span className="text-xs text-blue-500 shrink-0">%</span>
+                          </div>
+                        </td>
+                      ) : (
+                        <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-600 border-r border-slate-100">
+                          {hasPct ? pct2(l.percentual) : "—"}
+                        </td>
+                      )}
+
                       <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-700">
                         {hasVal ? brl(l.valorAbsoluto) : "—"}
                       </td>
