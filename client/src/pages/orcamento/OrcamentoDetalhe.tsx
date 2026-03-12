@@ -76,7 +76,7 @@ export default function OrcamentoDetalhe() {
   const id = parseInt(params?.id ?? "0");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [activePage, setActivePage] = useState<"orcamento" | "bdi">("orcamento");
+  const [activePage, setActivePage] = useState<"orcamento" | "bdi" | "dash">("orcamento");
   const [activeTab, setActiveTab]   = useState<string>("eap");
   const [versao, setVersao]         = useState<Versao>("custo");
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
@@ -412,6 +412,17 @@ export default function OrcamentoDetalhe() {
                 {bdiPct.toFixed(2)}%
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setActivePage("dash")}
+            className={`px-5 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-1.5 ${
+              activePage === "dash"
+                ? "bg-emerald-600 text-white shadow"
+                : "bg-muted text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
+            }`}
+          >
+            <TrendingUp className="h-3.5 w-3.5" />
+            DASH
           </button>
         </div>
 
@@ -766,7 +777,6 @@ export default function OrcamentoDetalhe() {
             </TabsTrigger>
             {insumos.length > 0 && <TabsTrigger value="abc">Curva ABC Insumos</TabsTrigger>}
             {insumos.length > 0 && <TabsTrigger value="abc-cat">Curva ABC por Categoria</TabsTrigger>}
-            <TabsTrigger value="dash">📊 Dash</TabsTrigger>
           </TabsList>
 
           {/* ═══ ABA EAP ═══════════════════════════════════════════════ */}
@@ -1417,33 +1427,32 @@ export default function OrcamentoDetalhe() {
             );
           })()}
 
-          {/* ═══ ABA DASH ═══════════════════════════════════════════════ */}
-          <TabsContent value="dash" className="mt-3">
-            <OrcamentoDashTab
-              orc={orc}
-              itens={itens}
-              insumos={insumos}
-              bdiLinhas={orc.bdiLinhas ?? []}
-              totalCusto={totalCusto}
-              totalVenda={totalVenda}
-              totalMat={totalMat}
-              totalMdo={totalMdo}
-              totalMeta={totalMeta}
-              valorNegociado={valorNegociado}
-              margemLucroPct={margemLucroPct}
-              bdiPct={bdiPct}
-              metaPct={metaPct}
-              childMap={childMap}
-              composicoesCatalogo={composicoesCatalogo}
-              formatBRL={formatBRL}
-            />
-          </TabsContent>
-
         </Tabs>}
 
         {/* ════════════════════════════════════════════════════════════
-            ABA BDI — sub-abas por planilha importada
+            DASH — indicadores do orçamento + BDI
         ════════════════════════════════════════════════════════════ */}
+        {activePage === "dash" && (
+          <OrcamentoDashTab
+            orc={orc}
+            itens={itens}
+            insumos={insumos}
+            bdiLinhas={orc.bdiLinhas ?? []}
+            totalCusto={totalCusto}
+            totalVenda={totalVenda}
+            totalMat={totalMat}
+            totalMdo={totalMdo}
+            totalMeta={totalMeta}
+            valorNegociado={valorNegociado}
+            margemLucroPct={margemLucroPct}
+            bdiPct={bdiPct}
+            metaPct={metaPct}
+            childMap={childMap}
+            composicoesCatalogo={composicoesCatalogo}
+            formatBRL={formatBRL}
+          />
+        )}
+
         {activePage === "bdi" && (
           <BdiView
             orcamentoId={id}
