@@ -579,6 +579,119 @@ async function processarImportacaoBackground(
 }
 
 // ============================================================
+// PARSER ABA CPUs → CATÁLOGO DE COMPOSIÇÕES
+// Extrai apenas as linhas tipo 'S' (cabeçalho de composição)
+// ============================================================
+function parsearAbaComposicoesParaCatalogo(rows: any[][], companyId: number) {
+  const result: {
+    companyId: number; codigo: string; descricao: string; unidade: string;
+    custoMat: number; custoMdo: number; custoTotal: number; chaveNorm: string;
+  }[] = [];
+  for (const row of rows) {
+    const tipo = String(row[0] || '').trim();
+    if (tipo !== 'S') continue;
+    const codigo    = String(row[1] || '').trim();
+    const descricao = String(row[4] || '').trim();
+    if (!descricao) continue;
+    result.push({
+      companyId,
+      codigo:    codigo.substring(0, 100),
+      descricao: descricao.substring(0, 1000),
+      unidade:   String(row[5] || '').trim().substring(0, 30),
+      custoMat:  toNum(row[10]),
+      custoMdo:  toNum(row[11]),
+      custoTotal: toNum(row[12]),
+      chaveNorm: (descricao.toLowerCase().replace(/[^a-z0-9]/g, '')).substring(0, 500),
+    });
+  }
+  return result;
+}
+
+// Processa importação de composições em background
+async function processarImportacaoComposicoesBackground(
+  jobId: string,
+  composicoes: ReturnType<typeof parsearAbaComposicoesParaCatalogo>,
+  companyId: number, db: any,
+) {
+  const job = importJobs.get(jobId)!;
+  try {
+    // Carrega todos os códigos já usados para geração de códigos únicos
+    const existing = await db.select({ codigo: composicoesCatalogo.codigo })
+      .from(composicoesCatalogo).where(eq(composicoesCatalogo.companyId, companyId));
+    const codigosUsados = new Set(existing.map((r: any) => r.codigo ?? ''));
+
+    for (const comp of composicoes) {
+      let existente: any = null;
+
+      // 1. Busca por código
+      if (comp.codigo) {
+        const byCode = await db.select().from(composicoesCatalogo)
+          .where(and(eq(composicoesCatalogo.companyId, companyId), eq(composicoesCatalogo.codigo, comp.codigo)))
+          .limit(1);
+        existente = byCode[0];
+      }
+
+      // 2. Busca por chave normalizada
+      if (!existente && comp.chaveNorm) {
+        const byKey = await db.select().from(composicoesCatalogo)
+          .where(and(eq(composicoesCatalogo.companyId, companyId), eq(composicoesCatalogo.chaveNorm, comp.chaveNorm)))
+          .limit(1);
+        existente = byKey[0];
+      }
+
+      if (existente) {
+        await db.update(composicoesCatalogo).set({
+          codigo:           comp.codigo || existente.codigo,
+          descricao:        comp.descricao,
+          unidade:          comp.unidade || existente.unidade,
+          custoUnitMat:     fix4(comp.custoMat),
+          custoUnitMdo:     fix4(comp.custoMdo),
+          custoUnitTotal:   fix4(comp.custoTotal),
+          ultimaAtualizacao: new Date().toISOString(),
+        }).where(eq(composicoesCatalogo.id, existente.id));
+        job.atualizados++;
+      } else {
+        // Garante código único
+        let codigoFinal = comp.codigo;
+        if (!codigoFinal || codigosUsados.has(codigoFinal)) {
+          // Gera código único no padrão 99.XX.XX
+          const manualCodes = [...codigosUsados]
+            .filter(c => /^99\.\d{2}\.\d{2}$/.test(c))
+            .map(c => { const p = c.split('.'); return parseInt(p[1]) * 100 + parseInt(p[2]); })
+            .sort((a, b) => b - a);
+          const seq = (manualCodes[0] ?? 0) + 1;
+          const sub = Math.floor((seq - 1) / 99 + 1).toString().padStart(2, '0');
+          const item = ((seq - 1) % 99 + 1).toString().padStart(2, '0');
+          codigoFinal = `99.${sub}.${item}`;
+        }
+        codigosUsados.add(codigoFinal);
+        await db.insert(composicoesCatalogo).values({
+          companyId,
+          codigo:           codigoFinal.substring(0, 100),
+          descricao:        comp.descricao,
+          unidade:          comp.unidade || null,
+          tipo:             'CPU',
+          custoUnitMat:     fix4(comp.custoMat),
+          custoUnitMdo:     fix4(comp.custoMdo),
+          custoUnitTotal:   fix4(comp.custoTotal),
+          totalOrcamentos:  0,
+          chaveNorm:        comp.chaveNorm,
+          ultimaAtualizacao: new Date().toISOString(),
+          criadoEm:         new Date().toISOString(),
+        });
+        job.inseridos++;
+      }
+
+      job.done++;
+    }
+    job.status = 'done';
+  } catch (err: any) {
+    job.status = 'error';
+    job.error = err?.message ?? 'Erro desconhecido';
+  }
+}
+
+// ============================================================
 // ROUTER
 // ============================================================
 
@@ -1521,10 +1634,160 @@ export const orcamentoRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
-      return db.select().from(composicoesCatalogo)
+      return db.select({
+        id:               composicoesCatalogo.id,
+        companyId:        composicoesCatalogo.companyId,
+        codigo:           composicoesCatalogo.codigo,
+        descricao:        composicoesCatalogo.descricao,
+        unidade:          composicoesCatalogo.unidade,
+        tipo:             composicoesCatalogo.tipo,
+        custoUnitMat:     composicoesCatalogo.custoUnitMat,
+        custoUnitMdo:     composicoesCatalogo.custoUnitMdo,
+        custoUnitTotal:   composicoesCatalogo.custoUnitTotal,
+        ultimaAtualizacao: composicoesCatalogo.ultimaAtualizacao,
+        criadoEm:         composicoesCatalogo.criadoEm,
+        totalOrcamentos:  sql<number>`(
+          SELECT COUNT(DISTINCT oi."orcamentoId")
+          FROM orcamento_itens oi
+          WHERE oi."servicoCodigo" = ${composicoesCatalogo.codigo}
+        )`.as('totalOrcamentos'),
+      })
+        .from(composicoesCatalogo)
         .where(eq(composicoesCatalogo.companyId, input.companyId))
-        .orderBy(desc(composicoesCatalogo.ultimaAtualizacao))
-        .limit(1000);
+        .orderBy(composicoesCatalogo.tipo, composicoesCatalogo.codigo)
+        .limit(5000);
+    }),
+
+  // ── Importar composições do catálogo via CPUs tab ────────────
+  importarComposicoesCatalogo: protectedProcedure
+    .input(z.object({ companyId: z.number(), fileBase64: z.string().min(10), fileName: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco indisponível.' });
+      const { default: XLSX } = await import('xlsx');
+      const buf = Buffer.from(input.fileBase64, 'base64');
+      const wb  = XLSX.read(buf, { type: 'buffer' });
+
+      // Busca aba de CPUs (composições)
+      const cpusTab = wb.SheetNames.find(n =>
+        /cpu|compos|cpu/i.test(n) && !n.toLowerCase().includes('bdi')
+      );
+      if (!cpusTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba de CPUs não encontrada na planilha. Verifique se o arquivo contém uma aba "CPUs" ou "Composições".' });
+
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[cpusTab], { header: 1, defval: '' }) as any[][];
+      const composicoes = parsearAbaComposicoesParaCatalogo(rows, input.companyId);
+      if (composicoes.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhuma composição encontrada na aba CPUs (linhas tipo "S").' });
+
+      const jobId = crypto.randomUUID();
+      importJobs.set(jobId, { total: composicoes.length, done: 0, inseridos: 0, atualizados: 0, status: 'running', createdAt: Date.now() });
+      setImmediate(() => processarImportacaoComposicoesBackground(jobId, composicoes, input.companyId, db));
+      return { jobId, total: composicoes.length };
+    }),
+
+  // ── Gerar código único para composição manual ─────────────────
+  gerarCodigoComposicao: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return '99.01.01';
+      const rows = await db.select({ codigo: composicoesCatalogo.codigo })
+        .from(composicoesCatalogo)
+        .where(eq(composicoesCatalogo.companyId, input.companyId));
+      const manual = rows
+        .map((r: any) => r.codigo ?? '')
+        .filter((c: string) => /^99\.\d{2}\.\d{2}$/.test(c))
+        .map((c: string) => { const p = c.split('.'); return parseInt(p[1]) * 100 + parseInt(p[2]); })
+        .sort((a: number, b: number) => b - a);
+      const seq = (manual[0] ?? 0) + 1;
+      const sub  = Math.floor((seq - 1) / 99 + 1).toString().padStart(2, '0');
+      const item = ((seq - 1) % 99 + 1).toString().padStart(2, '0');
+      return `99.${sub}.${item}`;
+    }),
+
+  // ── Salvar composição (criar ou editar) ───────────────────────
+  salvarComposicao: protectedProcedure
+    .input(z.object({
+      companyId:    z.number(),
+      id:           z.number().optional(),
+      codigo:       z.string().max(100),
+      descricao:    z.string().min(1).max(1000),
+      unidade:      z.string().max(30).optional().default(''),
+      tipo:         z.string().max(100).optional().default(''),
+      custoUnitMat: z.string().optional().default('0'),
+      custoUnitMdo: z.string().optional().default('0'),
+      custoUnitTotal: z.string().optional().default('0'),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      const chave = normalizarTexto(input.descricao);
+      const mat   = parseFloat(input.custoUnitMat || '0');
+      const mdo   = parseFloat(input.custoUnitMdo || '0');
+      const tot   = parseFloat(input.custoUnitTotal || '0') || mat + mdo;
+      if (input.id) {
+        await db.update(composicoesCatalogo).set({
+          codigo:           input.codigo.trim(),
+          descricao:        input.descricao.trim(),
+          unidade:          (input.unidade ?? '').trim() || null,
+          tipo:             (input.tipo ?? '').trim() || null,
+          custoUnitMat:     fix4(mat),
+          custoUnitMdo:     fix4(mdo),
+          custoUnitTotal:   fix4(tot),
+          chaveNorm:        chave,
+          ultimaAtualizacao: new Date().toISOString(),
+        }).where(and(eq(composicoesCatalogo.id, input.id), eq(composicoesCatalogo.companyId, input.companyId)));
+      } else {
+        const existing = await db.select({ id: composicoesCatalogo.id })
+          .from(composicoesCatalogo)
+          .where(and(eq(composicoesCatalogo.companyId, input.companyId), eq(composicoesCatalogo.codigo, input.codigo.trim())))
+          .limit(1);
+        if (existing.length > 0) throw new TRPCError({ code: 'CONFLICT', message: `Código "${input.codigo}" já existe.` });
+        await db.insert(composicoesCatalogo).values({
+          companyId:        input.companyId,
+          codigo:           input.codigo.trim(),
+          descricao:        input.descricao.trim(),
+          unidade:          (input.unidade ?? '').trim() || null,
+          tipo:             (input.tipo ?? '').trim() || null,
+          custoUnitMat:     fix4(mat),
+          custoUnitMdo:     fix4(mdo),
+          custoUnitTotal:   fix4(tot),
+          totalOrcamentos:  0,
+          chaveNorm:        chave,
+          ultimaAtualizacao: new Date().toISOString(),
+          criadoEm:         new Date().toISOString(),
+        });
+      }
+      return { ok: true };
+    }),
+
+  // ── Excluir composição ────────────────────────────────────────
+  excluirComposicao: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      await db.delete(composicoesCatalogo)
+        .where(and(eq(composicoesCatalogo.id, input.id), eq(composicoesCatalogo.companyId, input.companyId)));
+      return { ok: true };
+    }),
+
+  excluirComposicoesBulk: protectedProcedure
+    .input(z.object({ companyId: z.number(), ids: z.array(z.number()).min(1) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      await db.delete(composicoesCatalogo)
+        .where(and(eq(composicoesCatalogo.companyId, input.companyId), inArray(composicoesCatalogo.id, input.ids)));
+      return { ok: true };
+    }),
+
+  excluirTodasComposicoes: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      await db.delete(composicoesCatalogo).where(eq(composicoesCatalogo.companyId, input.companyId));
+      return { ok: true };
     }),
 
   // ── Composições com insumos de um orçamento ───────────────────
