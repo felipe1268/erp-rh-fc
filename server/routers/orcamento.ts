@@ -1239,7 +1239,7 @@ export const orcamentoRouter = router({
       if (!orc) return null;
       const [itens, insumos, bdiLinhas] = await Promise.all([
         db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.id)).orderBy(orcamentoItens.ordem),
-        db.select().from(orcamentoInsumos).where(eq(orcamentoInsumos.orcamentoId, input.id)).orderBy(orcamentoInsumos.percentualTotal),
+        db.select().from(orcamentoInsumos).where(eq(orcamentoInsumos.orcamentoId, input.id)).orderBy(desc(orcamentoInsumos.percentualTotal)),
         db.select().from(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.id)).orderBy(orcamentoBdi.ordem),
       ]);
       // Buscar obra e empresa em paralelo
