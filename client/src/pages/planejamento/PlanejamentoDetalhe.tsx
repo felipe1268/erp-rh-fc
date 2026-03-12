@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -52,6 +52,19 @@ function ultimasSemanas(n: number) {
     semanas.push(toMonday(d));
   }
   return [...new Set(semanas)];
+}
+function semanasRange(from: string | null | undefined, to: string | null | undefined): string[] {
+  const hoje = new Date();
+  const start = from ? new Date(from + "T12:00:00") : new Date(hoje.getTime() - 12 * 7 * 86400000);
+  const end   = to   ? new Date(to   + "T12:00:00") : hoje;
+  const weeks: string[] = [];
+  let curr = new Date(toMonday(start) + "T12:00:00");
+  const last = new Date(toMonday(end) + "T12:00:00");
+  while (curr <= last) {
+    weeks.push(toMonday(curr));
+    curr = new Date(curr.getTime() + 7 * 86400000);
+  }
+  return [...new Set(weeks)];
 }
 
 function labelSemana(s: string, idx: number) {
@@ -860,13 +873,29 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
 // ABA: AVANÇO SEMANAL
 // ═════════════════════════════════════════════════════════════════════════════
 function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: any) {
-  const semanas = ultimasSemanas(12);
-  const [semanaAtual, setSemanaAtual] = useState(semanas[semanas.length - 1]);
+  const [semanaAtual, setSemanaAtual] = useState(() => toMonday(new Date()));
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
   const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [importando, setImportando] = useState(false);
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Semanas abrangendo todo o projeto (do menor dataInicio ao maior dataFim das atividades)
+  const semanas = useMemo(() => {
+    const ins  = atividades.map((a: any) => a.dataInicio).filter(Boolean).sort() as string[];
+    const fins = atividades.map((a: any) => a.dataFim   ).filter(Boolean).sort() as string[];
+    const s = semanasRange(ins[0] ?? null, fins[fins.length - 1] ?? null);
+    return s.length > 0 ? s : ultimasSemanas(12);
+  }, [atividades]);
+
+  // Mantém semanaAtual dentro da faixa disponível
+  useEffect(() => {
+    if (semanas.length > 0 && !semanas.includes(semanaAtual)) {
+      const todayMon = toMonday(new Date());
+      const past = semanas.filter(s => s <= todayMon);
+      setSemanaAtual(past.length > 0 ? past[past.length - 1] : semanas[0]);
+    }
+  }, [semanas]);
 
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
 
@@ -1367,12 +1396,26 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
 function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_ }: any) {
-  const semanas = ultimasSemanas(16);
-  const [semana, setSemana] = useState(semanas[semanas.length - 1]);
+  const [semana, setSemana] = useState(() => toMonday(new Date()));
   const [obs, setObs] = useState("");
   const [custoPrev, setCustoPrev] = useState("");
   const [custoReal, setCustoReal] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Semanas cobrindo todo o projeto (dataInicio → dataFim)
+  const semanas = useMemo(() => {
+    const s = semanasRange(proj?.dataInicio ?? null, proj?.dataFim ?? null);
+    return s.length > 0 ? s : ultimasSemanas(16);
+  }, [proj?.dataInicio, proj?.dataFim]);
+
+  // Mantém semana dentro da faixa disponível
+  useEffect(() => {
+    if (semanas.length > 0 && !semanas.includes(semana)) {
+      const todayMon = toMonday(new Date());
+      const past = semanas.filter(s => s <= todayMon);
+      setSemana(past.length > 0 ? past[past.length - 1] : semanas[semanas.length - 1]);
+    }
+  }, [semanas]);
 
   const salvarMutation = trpc.planejamento.salvarRefis.useMutation({
     onSuccess: () => utils.planejamento.listarRefis.invalidate(),
