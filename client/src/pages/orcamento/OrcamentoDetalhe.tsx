@@ -4,6 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import BdiView from "./BdiView";
+import OrcamentoDashTab from "./OrcamentoDashTab";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -765,6 +766,7 @@ export default function OrcamentoDetalhe() {
             </TabsTrigger>
             {insumos.length > 0 && <TabsTrigger value="abc">Curva ABC Insumos</TabsTrigger>}
             {insumos.length > 0 && <TabsTrigger value="abc-cat">Curva ABC por Categoria</TabsTrigger>}
+            <TabsTrigger value="dash">📊 Dash</TabsTrigger>
           </TabsList>
 
           {/* ═══ ABA EAP ═══════════════════════════════════════════════ */}
@@ -1414,6 +1416,29 @@ export default function OrcamentoDetalhe() {
               </TabsContent>
             );
           })()}
+
+          {/* ═══ ABA DASH ═══════════════════════════════════════════════ */}
+          <TabsContent value="dash" className="mt-3">
+            <OrcamentoDashTab
+              orc={orc}
+              itens={itens}
+              insumos={insumos}
+              bdiLinhas={orc.bdiLinhas ?? []}
+              totalCusto={totalCusto}
+              totalVenda={totalVenda}
+              totalMat={totalMat}
+              totalMdo={totalMdo}
+              totalMeta={totalMeta}
+              valorNegociado={valorNegociado}
+              margemLucroPct={margemLucroPct}
+              bdiPct={bdiPct}
+              metaPct={metaPct}
+              childMap={childMap}
+              composicoesCatalogo={composicoesCatalogo}
+              formatBRL={formatBRL}
+            />
+          </TabsContent>
+
         </Tabs>}
 
         {/* ════════════════════════════════════════════════════════════
