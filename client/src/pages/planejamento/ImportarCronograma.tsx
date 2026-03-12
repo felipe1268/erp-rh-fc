@@ -307,7 +307,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       </Button>
 
       <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetState(); }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="!fixed !inset-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !rounded-none flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="h-4 w-4 text-emerald-600" />
@@ -317,7 +317,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
 
           {/* ── Step 1: Upload ── */}
           {step === "upload" && (
-            <div className="space-y-4 mt-2">
+            <div className="space-y-4 mt-2 flex-1 overflow-y-auto px-1">
               <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 space-y-1">
                 <p className="font-medium text-slate-700">Como exportar do MS Project:</p>
                 <p>• <strong>XML</strong>: Arquivo → Salvar Como → <em>XML do Project (*.xml)</em></p>
@@ -363,7 +363,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
 
           {/* ── Step 2: Preview + Edição ── */}
           {step === "preview" && (
-            <div className="space-y-3 mt-1">
+            <div className="space-y-3 mt-1 flex-1 flex flex-col overflow-hidden">
               {/* Cabeçalho de info */}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -425,7 +425,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
               </div>
 
               {/* Tabela */}
-              <div className="rounded-xl border border-slate-100 shadow-sm overflow-x-auto max-h-[40vh] overflow-y-auto">
+              <div className="rounded-xl border border-slate-100 shadow-sm overflow-x-auto flex-1 overflow-y-auto">
                 <table className="w-full text-[11px]">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-slate-700 text-white">
