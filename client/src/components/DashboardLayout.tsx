@@ -306,6 +306,7 @@ const menuSectionsOrcamento: MenuSection[] = [
     title: "Orçamento",
     items: [
       { icon: LayoutDashboard, label: "Painel Orçamento", path: "/orcamento/painel"      },
+      { icon: TrendingUp,      label: "Dashboard",         path: "/orcamento/dash"        },
       { icon: FolderOpen,      label: "Orçamentos",       path: "/orcamento/lista"       },
       { icon: Wrench,          label: "Composições",      path: "/orcamento/composicoes" },
       { icon: Package,         label: "Insumos",          path: "/orcamento/insumos"     },
