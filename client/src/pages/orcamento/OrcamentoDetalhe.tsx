@@ -761,13 +761,21 @@ export default function OrcamentoDetalhe() {
                     versao === "venda" ? "text-emerald-700" :
                     versao === "meta"  ? "text-purple-700" : "text-slate-700"
                   }`}>{formatBRL(
-                    versao === "venda" ? totalVenda :
+                    versao === "venda" ? (valorNegociado > 0 ? valorNegociado : totalVenda) :
                     versao === "meta"  ? totalMeta  : totalCusto
                   )}</p>
+                  {versao === "venda" && valorNegociado > 0 && (
+                    <p className="text-[10px] text-amber-600 font-medium mt-0.5 line-through tabular-nums">{formatBRL(totalVenda)}</p>
+                  )}
                 </div>
                 {versao === "venda" && totalCusto > 0 && (
-                  <div className="text-[10px] text-emerald-500 font-medium">
-                    BDI {bdiPct.toFixed(1)}%
+                  <div className="text-right">
+                    <div className="text-[10px] text-emerald-500 font-medium">BDI {bdiPct.toFixed(1)}%</div>
+                    {valorNegociado > 0 && (
+                      <div className="text-[10px] text-amber-600 font-medium mt-0.5">
+                        Negociado
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
