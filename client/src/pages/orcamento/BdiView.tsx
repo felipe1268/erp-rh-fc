@@ -206,6 +206,8 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                   // ── Cabeçalho de grupo (CD, CI, DI, B, L, JF, V, PV...) — clicável
                   if (header) {
                     currentGroupKey = key;
+                    // "B" é apenas agrupador interno — não exibir linha de cabeçalho
+                    if (l.codigo === "B") return null;
                     const isCollapsed = collapsed.has(key);
                     return (
                       <tr
