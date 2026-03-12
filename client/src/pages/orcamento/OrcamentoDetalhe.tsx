@@ -76,7 +76,7 @@ export default function OrcamentoDetalhe() {
   const id = parseInt(params?.id ?? "0");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [activePage, setActivePage] = useState<"orcamento" | "bdi" | "dash">("orcamento");
+  const [activePage, setActivePage] = useState<"orcamento" | "bdi">("orcamento");
   const [activeTab, setActiveTab]   = useState<string>("eap");
   const [versao, setVersao]         = useState<Versao>("custo");
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
@@ -414,12 +414,8 @@ export default function OrcamentoDetalhe() {
             )}
           </button>
           <button
-            onClick={() => setActivePage("dash")}
-            className={`px-5 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-1.5 ${
-              activePage === "dash"
-                ? "bg-emerald-600 text-white shadow"
-                : "bg-muted text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
-            }`}
+            onClick={() => navigate(`/orcamento/${id}/dash`)}
+            className="px-5 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
           >
             <TrendingUp className="h-3.5 w-3.5" />
             DASH
@@ -1435,6 +1431,7 @@ export default function OrcamentoDetalhe() {
         {activePage === "dash" && (
           <OrcamentoDashTab
             orc={orc}
+            orcamentoId={id}
             itens={itens}
             insumos={insumos}
             bdiLinhas={orc.bdiLinhas ?? []}

@@ -4,9 +4,11 @@ import {
   Tooltip, Legend, ResponsiveContainer, RadialBarChart, RadialBar,
   LineChart, Line, ComposedChart, Area,
 } from "recharts";
+import OrcamentoBdiIndicadores from "./OrcamentoBdiIndicadores";
 
 interface Props {
   orc: any;
+  orcamentoId: number;
   itens: any[];
   insumos: any[];
   bdiLinhas: any[];
@@ -69,7 +71,7 @@ const CustomTooltipBRL = ({ active, payload, label, formatter }: any) => {
 };
 
 export default function OrcamentoDashTab({
-  orc, itens, insumos, bdiLinhas,
+  orc, orcamentoId, itens, insumos, bdiLinhas,
   totalCusto, totalVenda, totalMat, totalMdo, totalMeta,
   valorNegociado, margemLucroPct, bdiPct, metaPct,
   childMap, composicoesCatalogo, formatBRL,
@@ -399,6 +401,20 @@ export default function OrcamentoDashTab({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Seção BDI — Indicadores Gerenciais ───────────────────── */}
+      {orcamentoId > 0 && (
+        <OrcamentoBdiIndicadores
+          orcamentoId={orcamentoId}
+          totalCusto={totalCusto}
+          totalVenda={totalVenda}
+          valorNegociado={valorNegociado}
+          bdiPct={bdiPct}
+          margemLucroPct={margemLucroPct}
+          bdiLinhas={bdiLinhas}
+          formatBRL={formatBRL}
+        />
       )}
 
     </div>
