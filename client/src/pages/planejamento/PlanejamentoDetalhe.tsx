@@ -145,9 +145,12 @@ export default function PlanejamentoDetalhe() {
     const folhas = atividades.filter((a: any) => !a.isGrupo);
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length;
     const avancoMap: Record<number, number> = {};
+    const semanaMap: Record<number, string> = {};
     avancos.forEach((av: any) => {
-      if (!avancoMap[av.atividadeId] || av.semana > avancoMap[av.atividadeId]) {
-        avancoMap[av.atividadeId] = n(av.percentualAcumulado);
+      const id = av.atividadeId;
+      if (!semanaMap[id] || av.semana > semanaMap[id]) {
+        semanaMap[id] = av.semana;
+        avancoMap[id] = n(av.percentualAcumulado);
       }
     });
     const ponderado = folhas.reduce((s: number, a: any) => {
@@ -1402,11 +1405,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [custoReal, setCustoReal] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Semanas cobrindo todo o projeto (dataInicio → dataFim)
+  // Semanas cobrindo todo o projeto (dataInicio → dataTerminoContratual)
   const semanas = useMemo(() => {
-    const s = semanasRange(proj?.dataInicio ?? null, proj?.dataFim ?? null);
+    const s = semanasRange(proj?.dataInicio ?? null, proj?.dataTerminoContratual ?? null);
     return s.length > 0 ? s : ultimasSemanas(16);
-  }, [proj?.dataInicio, proj?.dataFim]);
+  }, [proj?.dataInicio, proj?.dataTerminoContratual]);
 
   // Mantém semana dentro da faixa disponível
   useEffect(() => {
@@ -1428,24 +1431,39 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     },
   });
 
-  // Calcula avanço previsto para a semana a partir do cronograma
+  // Calcula percentual previsto de uma atividade para uma data de referência
+  function prevIndRef(a: any, ref: string): number {
+    if (!a.dataInicio || !a.dataFim) return 0;
+    const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+    const fim = new Date(a.dataFim   + "T12:00:00").getTime();
+    const r   = new Date(ref         + "T12:00:00").getTime();
+    if (r >= fim) return 100;
+    if (r <= ini) return 0;
+    return ((r - ini) / (fim - ini)) * 100;
+  }
+
+  // Calcula avanço previsto ponderado para a semana a partir do cronograma
   const avancoPrevisto = useMemo(() => {
-    const folhas = atividades.filter((a: any) => !a.isGrupo && a.dataFim && a.dataFim <= semana);
-    const pesoTotal = atividades.filter((a: any) => !a.isGrupo)
-      .reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 100;
-    return Math.min(100, folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) / pesoTotal * 100);
+    const folhas   = atividades.filter((a: any) => !a.isGrupo);
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
+    return Math.min(100, folhas.reduce((s: number, a: any) => {
+      const peso = n(a.pesoFinanceiro) || 1;
+      return s + prevIndRef(a, semana) * (peso / pesoTotal);
+    }, 0));
   }, [atividades, semana]);
 
   // Avanço semanal previsto e realizado
-  const semIdx  = semanas.indexOf(semana);
+  const semIdx   = semanas.indexOf(semana);
   const semAntes = semIdx > 0 ? semanas[semIdx - 1] : null;
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntes) return 0;
-    const folhas = atividades.filter((a: any) => !a.isGrupo && a.dataFim && a.dataFim <= semAntes);
-    const pesoTotal = atividades.filter((a: any) => !a.isGrupo)
-      .reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 100;
-    return Math.min(100, folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) / pesoTotal * 100);
+    const folhas   = atividades.filter((a: any) => !a.isGrupo);
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
+    return Math.min(100, folhas.reduce((s: number, a: any) => {
+      const peso = n(a.pesoFinanceiro) || 1;
+      return s + prevIndRef(a, semAntes) * (peso / pesoTotal);
+    }, 0));
   }, [atividades, semAntes]);
 
   const avancoPrevSemanal = Math.max(0, avancoPrevisto - avancoPrevAntes);
@@ -1653,12 +1671,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               Relatório de Evolução Física da Obra (REFIS)
             </p>
             <p className="text-xs text-slate-300 mt-0.5">
-              Base: {proj.revisaoNome ?? proj.nome}
+              Base: {revisaoAtiva?.descricao ?? proj.nome}
             </p>
           </div>
           <div className="text-right text-xs text-slate-300 space-y-0.5">
             <p className="font-bold text-slate-100 text-base">
-              R{String(proj.revisao ?? "00").padStart(2, "0")}
+              R{String(revisaoAtiva?.numero ?? 0).padStart(2, "0")}
             </p>
             <p>Relat Nº {existente ? String(existente.numero ?? 1).padStart(2, "0") : "—"}</p>
           </div>
@@ -1669,7 +1687,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           {[
             { label: "OBRA",    value: proj.nome },
             { label: "CLIENTE", value: proj.cliente ?? "—" },
-            { label: "LOCAL",   value: proj.local ?? proj.obra ?? "—" },
+            { label: "LOCAL",   value: proj.local ?? "—" },
           ].map((c, i) => (
             <div key={i} className="px-4 py-2">
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{c.label}</span>
@@ -1681,9 +1699,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         {/* Datas */}
         <div className="bg-slate-50 border-t border-slate-100 px-5 py-2.5 flex flex-wrap gap-6 text-xs">
           {[
-            { label: "INÍCIO",         value: proj.dataInicio ? new Date(proj.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
-            { label: "STATUS EM",      value: new Date(semana + "T12:00:00").toLocaleDateString("pt-BR") },
-            { label: "TÉRMINO DA OBRA",value: proj.dataFim    ? new Date(proj.dataFim    + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
+            { label: "INÍCIO",         value: proj.dataInicio             ? new Date(proj.dataInicio             + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
+            { label: "STATUS EM",      value: new Date(semana             + "T12:00:00").toLocaleDateString("pt-BR") },
+            { label: "TÉRMINO DA OBRA",value: proj.dataTerminoContratual  ? new Date(proj.dataTerminoContratual + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
           ].map((d, i) => (
             <div key={i} className="flex items-center gap-2">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{d.label}:</span>

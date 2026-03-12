@@ -421,15 +421,20 @@ export const planejamentoRouter = router({
 
       function gerarCurvaPlanejada(ativs: typeof atividades) {
         if (!ativs.length) return [];
-        const dates: Map<string, number> = new Map();
-        const peso = ativs.filter(a => !a.isGrupo)
-          .reduce((s, a) => s + n(a.pesoFinanceiro), 0) || 100;
+        const folhas = ativs.filter(a => !a.isGrupo && a.dataInicio && a.dataFim);
+        if (!folhas.length) return [];
 
-        ativs.filter(a => !a.isGrupo && a.dataInicio && a.dataFim).forEach(a => {
-          const inicio = new Date(a.dataInicio!);
-          const fim    = new Date(a.dataFim!);
-          const dur    = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (7 * 86400000)));
-          const semPeso = n(a.pesoFinanceiro) / dur / peso * 100;
+        const pesoBruto = folhas.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
+        const usarIgual = pesoBruto === 0;
+        const pesoTotal = usarIgual ? folhas.length : pesoBruto;
+
+        const dates: Map<string, number> = new Map();
+        folhas.forEach(a => {
+          const inicio   = new Date(a.dataInicio!);
+          const fim      = new Date(a.dataFim!);
+          const dur      = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (7 * 86400000)));
+          const pesoAtiv = usarIgual ? 1 : n(a.pesoFinanceiro);
+          const semPeso  = pesoAtiv / dur / pesoTotal * 100;
           let cur = new Date(inicio);
           for (let i = 0; i < dur; i++) {
             const key = cur.toISOString().split("T")[0];
