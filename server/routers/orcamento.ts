@@ -12,6 +12,7 @@ import {
   composicoesCatalogo,
   composicaoInsumos,
   insumosGrupos,
+  orcamentoParametros,
   obras,
   companies,
 } from "../../drizzle/schema";
@@ -2151,6 +2152,44 @@ export const orcamentoRouter = router({
             })),
           };
         });
+    }),
+
+  // ── Parâmetros de encargos (L.S. e H.E.) ─────────────────
+  getParametros: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { ls: '0', he: '0' };
+      const rows = await db.select().from(orcamentoParametros)
+        .where(eq(orcamentoParametros.companyId, input.companyId))
+        .limit(1);
+      if (rows.length === 0) return { ls: '0', he: '0' };
+      return { ls: rows[0].ls ?? '0', he: rows[0].he ?? '0' };
+    }),
+
+  salvarParametros: protectedProcedure
+    .input(z.object({ companyId: z.number(), ls: z.string(), he: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      const lsVal = parseFloat(input.ls) || 0;
+      const heVal = parseFloat(input.he) || 0;
+      const existing = await db.select({ id: orcamentoParametros.id })
+        .from(orcamentoParametros)
+        .where(eq(orcamentoParametros.companyId, input.companyId))
+        .limit(1);
+      if (existing.length > 0) {
+        await db.update(orcamentoParametros)
+          .set({ ls: String(lsVal), he: String(heVal), atualizadoEm: new Date().toISOString() })
+          .where(eq(orcamentoParametros.companyId, input.companyId));
+      } else {
+        await db.insert(orcamentoParametros).values({
+          companyId: input.companyId,
+          ls: String(lsVal),
+          he: String(heVal),
+        });
+      }
+      return { ok: true };
     }),
 
   // ── Resumo para o painel ──────────────────────────────────
