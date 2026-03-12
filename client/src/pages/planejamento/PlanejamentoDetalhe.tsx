@@ -865,6 +865,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
   const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [importando, setImportando] = useState(false);
+  const [confirmLimpar, setConfirmLimpar] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
@@ -980,6 +981,14 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
     onSuccess: () => utils.planejamento.listarAvancos.invalidate(),
   });
 
+  const limparMutation = trpc.planejamento.limparAvancos.useMutation({
+    onSuccess: () => {
+      utils.planejamento.listarAvancos.invalidate();
+      setAvancoLocal({});
+      setConfirmLimpar(false);
+    },
+  });
+
   function salvarTudo() {
     const promises = Object.entries(avancoLocal).map(([idStr, pct]) => {
       const atividadeId = parseInt(idStr);
@@ -1038,6 +1047,14 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
             className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) importarDoMSProject(f); e.target.value = ""; }}
           />
+          {!confirmLimpar && (
+            <Button size="sm" variant="outline"
+              className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50"
+              onClick={() => setConfirmLimpar(true)}>
+              <XCircle className="h-3.5 w-3.5" />
+              Limpar Avanços
+            </Button>
+          )}
           <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
             disabled={!temAlteracoes || salvarMutation.isPending}
             onClick={salvarTudo}>
@@ -1046,6 +1063,31 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
           </Button>
         </div>
       </div>
+
+      {/* ── Confirmação de limpeza ──────────────────────────────────────────── */}
+      {confirmLimpar && (
+        <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              Isso apagará <strong>todos os avanços lançados</strong> deste projeto (todas as semanas). Não pode ser desfeito.
+            </span>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" onClick={() => setConfirmLimpar(false)}>
+              Cancelar
+            </Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 gap-1.5"
+              disabled={limparMutation.isPending}
+              onClick={() => limparMutation.mutate({ projetoId })}>
+              {limparMutation.isPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <XCircle className="h-3.5 w-3.5" />}
+              Confirmar Limpeza
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ── Feedback do import ──────────────────────────────────────────────── */}
       {importStatus && (
