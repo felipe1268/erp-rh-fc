@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
+import ImportarCronograma from "./ImportarCronograma";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -237,6 +238,7 @@ export default function PlanejamentoDetalhe() {
             loadingAtiv={loadingAtiv}
             avancos={avancos}
             utils={utils}
+            orcamentoId={proj?.orcamentoId ?? null}
           />
         )}
         {aba === "curva-s" && (
@@ -420,7 +422,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: CRONOGRAMA
 // ═════════════════════════════════════════════════════════════════════════════
-function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos, utils }: any) {
+function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos, utils, orcamentoId }: any) {
   const [editando, setEditando] = useState(false);
   const [linhas, setLinhas] = useState<any[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -513,10 +515,21 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               </Button>
             </>
           ) : (
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={iniciarEdicao}>
-              <Edit3 className="h-3.5 w-3.5" />
-              Editar Cronograma
-            </Button>
+            <>
+              {revisaoAtiva && (
+                <ImportarCronograma
+                  projetoId={projetoId}
+                  revisaoAtiva={revisaoAtiva}
+                  orcamentoId={orcamentoId}
+                  utils={utils}
+                  onImportado={() => utils.planejamento.listarAtividades.invalidate()}
+                />
+              )}
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={iniciarEdicao}>
+                <Edit3 className="h-3.5 w-3.5" />
+                Editar Cronograma
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -884,8 +897,6 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
     </div>
   );
 }
-
-function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REVISÕES
