@@ -3004,6 +3004,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [cfgInicioFat, setCfgInicioFat] = useState("");
   const [cfgSinalPct, setCfgSinalPct]     = useState(15);
   const [cfgRetencaoPct, setCfgRetencaoPct] = useState(5);
+  const [cfgDataInicioObra, setCfgDataInicioObra] = useState("");
   const [salvando, setSalvando]       = useState(false);
   const [saved, setSaved]             = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false);
@@ -3050,6 +3051,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       setCfgInicioFat((configMed.inicioFaturamento as any) ?? "");
       setCfgSinalPct(n(configMed.sinalPct) || 0);
       setCfgRetencaoPct(n(configMed.retencaoPct) || 5);
+      setCfgDataInicioObra((configMed as any).dataInicioObra ?? "");
       setCfgBloqueado(configMed.bloqueado ?? false);
     }
   }, [configMed]);
@@ -3116,7 +3118,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     let sinalRestante = sinalTotal;
     let pctAcumAnterior = 0;
 
-    return dadosMensais.map((d: any) => {
+    const rows = dadosMensais.map((d: any) => {
       const [ano, m] = d.mes.split("-").map(Number);
       const lastDay = new Date(ano, m, 0).getDate();
       const corte = Math.min(cfgDiaCorte, lastDay);
@@ -3140,9 +3142,39 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       sinalRestante = Math.max(0, sinalRestante - descontoSinal);
       const liquido = +(medicaoBruta - retencao - descontoSinal).toFixed(2);
 
-      return { ...d, pct: +pctAcum.toFixed(1), pctMensal: +pctMensal.toFixed(2), prevMedicao, medicaoBruta, retencao, descontoSinal, liquido };
+      return { ...d, pct: +pctAcum.toFixed(1), pctMensal: +pctMensal.toFixed(2), prevMedicao, medicaoBruta, retencao, descontoSinal, liquido, isSinalRow: false };
     });
-  }, [cfgDiaCorte, cfgSinalPct, cfgRetencaoPct, dadosMensais, avancos, atividades, baseV]);
+
+    // Linha sintética de Sinal/Mobilização
+    if (cfgSinalPct > 0 && cfgDataInicioObra) {
+      const sinalMes = cfgDataInicioObra.substring(0, 7);
+      const sinalDate = new Date(sinalMes + "-15");
+      const nomeMesSinal = sinalDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      const primeiroMes = rows[0]?.mes ?? "";
+      // Insere antes do primeiro mês ou no início da tabela
+      const sinalRow = {
+        mes: sinalMes,
+        nomeMes: nomeMesSinal,
+        nomeMesCurto: sinalDate.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+        venda: 0, custo: 0,
+        pct: 0, pctMensal: 0,
+        prevMedicao: 0,
+        medicaoBruta: sinalTotal,
+        retencao: 0,
+        descontoSinal: 0,
+        liquido: sinalTotal,
+        isSinalRow: true,
+      };
+      if (!primeiroMes || sinalMes <= primeiroMes) {
+        rows.unshift(sinalRow);
+      } else {
+        const idx = rows.findIndex(r => r.mes > sinalMes);
+        if (idx === -1) rows.push(sinalRow); else rows.splice(idx, 0, sinalRow);
+      }
+    }
+
+    return rows;
+  }, [cfgDiaCorte, cfgSinalPct, cfgRetencaoPct, cfgDataInicioObra, dadosMensais, avancos, atividades, baseV]);
 
   // ── Fluxo de Caixa (parcelas fixas) ──────────────────────────────────────
   const fluxoCaixa = useMemo(() => {
@@ -3182,6 +3214,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       inicioFaturamento: cfgInicioFat || null,
       sinalPct: cfgSinalPct,
       retencaoPct: cfgRetencaoPct,
+      dataInicioObra: cfgDataInicioObra || null,
     });
   }
 
@@ -3292,6 +3325,17 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                       <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
                     </div>
                     <p className="text-[10px] text-slate-400 mt-0.5">Retida por medição; devolvida na conclusão</p>
+                  </div>
+
+                  {/* Data de Início do Projeto — define quando o sinal é pago */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-1 font-medium">Data de Início do Projeto</label>
+                    <input
+                      type="date"
+                      value={cfgDataInicioObra}
+                      onChange={e => setCfgDataInicioObra(e.target.value)}
+                      className="h-9 w-full text-sm border border-violet-200 rounded-lg px-3 bg-white focus:ring-2 focus:ring-violet-400 outline-none" />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Define quando o sinal/mobilização é pago</p>
                   </div>
                 </>
               )}
@@ -3436,6 +3480,48 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                       const baixa = baixas[r.mes];
                       const confirmado = !!baixa?.confirmado;
                       const temLiquido = r.liquido > 0;
+
+                      // ── Linha especial de Sinal/Mobilização ──────────────
+                      if ((r as any).isSinalRow) {
+                        return (
+                          <tr key={`sinal-${r.mes}`} className="border-b border-violet-200 bg-violet-50">
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-600 text-white uppercase tracking-wide">SINAL</span>
+                                <span className="font-semibold text-violet-800 text-xs">{r.nomeMes}</span>
+                              </div>
+                              <p className="text-[9px] text-violet-500 mt-0.5">Mobilização / Pagamento Antecipado</p>
+                            </td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-right font-bold text-violet-700">{fmt(r.medicaoBruta)}</td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className={`py-2 px-3 text-right font-bold ${confirmado ? "text-emerald-600 line-through" : "text-violet-700"}`}>
+                              {fmt(r.liquido)}
+                            </td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-center">
+                              <button
+                                onClick={() => toggleBaixa(r.mes, r.liquido)}
+                                title={confirmado ? `Recebido em ${baixa?.data} — clique para desfazer` : "Marcar sinal como recebido"}
+                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
+                                  confirmado
+                                    ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
+                                    : "bg-white border-violet-300 text-violet-600 hover:border-violet-500 hover:bg-violet-50"
+                                }`}
+                              >
+                                {confirmado ? (
+                                  <><CheckCircle2 className="h-3 w-3" /> Recebido</>
+                                ) : (
+                                  <><Circle className="h-3 w-3" /> Dar Baixa</>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       return (
                         <tr key={r.mes} className={`border-b border-slate-50 ${confirmado ? "!bg-emerald-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
                           <td className="py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">{r.nomeMes}</td>
