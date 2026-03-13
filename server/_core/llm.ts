@@ -295,7 +295,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   const isOpenAiKey = ENV.forgeApiKey?.startsWith("sk-");
   const model = isGoogleKey()
-    ? "gemini-2.0-flash"
+    ? "gemini-2.5-flash"
     : isOpenAiKey ? "gpt-4o" : "gemini-2.5-flash";
 
   const payload: Record<string, unknown> = {
