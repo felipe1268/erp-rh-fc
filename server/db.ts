@@ -1299,7 +1299,7 @@ export async function searchEmployeesByTraining(companyId: number, trainingName:
 export async function createObra(data: InsertObra) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [result] = await db.insert(obras).values(data);
+  const result = await db.insert(obras).values(data).returning();
   return { id: result[0].id };
 }
 
