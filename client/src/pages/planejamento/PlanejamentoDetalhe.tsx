@@ -3061,6 +3061,7 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
   const [gerandoErr, setGerandoErr] = useState<string | null>(null);
   const [mesFiltro, setMesFiltro] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"cronograma" | "abc">("cronograma");
+  const [confirmCancelar, setConfirmCancelar] = useState(false);
 
   // Revisões de compras (metadados)
   const { data: revisoesCompras = [], refetch: refetchRevisoes } = (trpc.planejamento as any).listarRevisoesCompras.useQuery(
@@ -3073,6 +3074,14 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
   const criarMut   = trpc.planejamento.criarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
   const editarMut  = trpc.planejamento.atualizarCompra.useMutation({ onSuccess: () => { refetch(); setModal(null); } });
   const excluirMut = trpc.planejamento.excluirCompra.useMutation({ onSuccess: () => refetch() });
+  const deletarRevMut = (trpc.planejamento as any).deletarRevisaoCompras.useMutation({
+    onSuccess: () => {
+      refetch();
+      refetchRevisoes();
+      setConfirmCancelar(false);
+      setRevisaoSel(null);
+    },
+  });
   const gerarMut   = (trpc.planejamento as any).gerarCronogramaCompras.useMutation({
     onSuccess: (res: any) => {
       refetch();
@@ -3208,6 +3217,15 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {/* Cancelar revisão selecionada */}
+          {revExibida && !confirmCancelar && (
+            <Button size="sm" variant="outline"
+              className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50"
+              onClick={() => setConfirmCancelar(true)}>
+              <XCircle className="h-3.5 w-3.5" />
+              Cancelar Rev. {revExibida.revisao}
+            </Button>
+          )}
           <Button size="sm" variant="outline"
             className="gap-1.5 border-emerald-400 text-emerald-700 hover:bg-emerald-50"
             onClick={() => { setDescricaoGer(""); setLeadTime(30); setGerandoErr(null); setModal("gerar"); }}>
@@ -3219,6 +3237,30 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
           </Button>
         </div>
       </div>
+
+      {/* Confirmação cancelar revisão */}
+      {confirmCancelar && revExibida && (
+        <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              Confirma o cancelamento da <strong>Rev. {revExibida.revisao}</strong>?{" "}
+              Isso excluirá <strong>{revExibida.totalItens} itens</strong> permanentemente.
+            </span>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" onClick={() => setConfirmCancelar(false)}>
+              Voltar
+            </Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 gap-1.5"
+              disabled={deletarRevMut.isPending}
+              onClick={() => deletarRevMut.mutate({ projetoId, revisao: revExibida.revisao })}>
+              {deletarRevMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Sim, cancelar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Filtro por mês (só no modo cronograma) */}
       {viewMode === "cronograma" && compras.length > 0 && porMes.length > 1 && (
@@ -3286,27 +3328,54 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
           </div>
 
           {/* Gráfico de barras ABC */}
-          <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-4">
-            <p className="text-xs font-semibold text-slate-600 mb-3">Top 30 itens por custo</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={abcData.slice(0, 30)} layout="vertical" margin={{ left: 8, right: 32, top: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `R$${(v/1000).toFixed(0)}k`} />
-                <YAxis type="category" dataKey="item" width={160} tick={{ fontSize: 9 }} />
-                <Tooltip formatter={(v: number) => fmt(v)} />
-                <Bar dataKey="total" radius={[0, 3, 3, 0]}>
-                  {abcData.slice(0, 30).map((entry: any, idx: number) => (
-                    <Cell key={idx} fill={entry.classe === "A" ? "#ef4444" : entry.classe === "B" ? "#f59e0b" : "#10b981"} fillOpacity={0.8} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <p className="text-[10px] text-slate-400 text-center mt-1">
-              <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Classe A (70%)
-              <span className="inline-block w-2 h-2 rounded-full bg-amber-400 mx-1 ml-3" />Classe B (90%)
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 mx-1 ml-3" />Classe C (100%)
-            </p>
-          </div>
+          {(() => {
+            const top30 = abcData.slice(0, 30);
+            const chartH = Math.max(360, top30.length * 26 + 20);
+            return (
+              <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-slate-600">Top {top30.length} itens por custo</p>
+                  <div className="flex items-center gap-3 text-[10px] text-slate-500">
+                    <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />Classe A (70%)</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-400" />Classe B (90%)</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400" />Classe C (100%)</span>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={chartH}>
+                  <BarChart data={top30} layout="vertical" margin={{ left: 4, right: 56, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis
+                      type="number"
+                      tick={{ fontSize: 10, fill: "#94a3b8" }}
+                      tickFormatter={(v: number) => v >= 1000 ? `R$${(v/1000).toFixed(0)}k` : `R$${v.toFixed(0)}`}
+                      axisLine={false} tickLine={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="item"
+                      width={220}
+                      tick={{ fontSize: 10, fill: "#475569" }}
+                      tickFormatter={(v: string) => v?.length > 32 ? v.substring(0, 30) + "…" : v}
+                    />
+                    <Tooltip
+                      formatter={(v: number, _: any, props: any) => [fmt(v), props.payload?.item]}
+                      labelFormatter={() => ""}
+                      contentStyle={{ fontSize: 11 }}
+                    />
+                    <Bar dataKey="total" radius={[0, 4, 4, 0]} maxBarSize={18}>
+                      {top30.map((entry: any, idx: number) => (
+                        <Cell key={idx} fill={entry.classe === "A" ? "#ef4444" : entry.classe === "B" ? "#f59e0b" : "#10b981"} fillOpacity={0.85} />
+                      ))}
+                      <LabelList dataKey="total" position="right"
+                        formatter={(v: number) => v >= 1000 ? `R$${(v/1000).toFixed(0)}k` : `R$${v.toFixed(0)}`}
+                        style={{ fontSize: 9, fill: "#64748b" }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          })()}
 
           {/* Tabela ABC completa */}
           <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
