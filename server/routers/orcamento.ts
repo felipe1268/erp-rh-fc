@@ -612,8 +612,10 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     if (custoTotal === 0 && quantidade > 0 && custoUnitTotal > 0)
       custoTotal = quantidade * custoUnitTotal;
 
-    const vendaTotal     = custoTotal     * (1 + bdiPercentual);
-    const vendaUnitTotal = custoUnitTotal * (1 + bdiPercentual);
+    // Fórmula ABNT/TCU: PV = CD ÷ (1 − BDI%)
+    const bdiDiv = bdiPercentual > 0 ? (1 - bdiPercentual) : 1;
+    const vendaTotal     = bdiDiv < 1 ? custoTotal     / bdiDiv : custoTotal;
+    const vendaUnitTotal = bdiDiv < 1 ? custoUnitTotal / bdiDiv : custoUnitTotal;
     const metaTotal      = custoTotal     * (1 - metaPerc);
     const metaUnitTotal  = custoUnitTotal * (1 - metaPerc);
     const abcServico     = String(col(row, 'abc') ?? '').trim().substring(0, 5);
@@ -2064,16 +2066,22 @@ export const orcamentoRouter = router({
           for (const item of itens.slice(i, i + BATCH)) {
             const custo     = parseFloat(item.custoTotal     || '0');
             const custoUnit = parseFloat(item.custoUnitTotal || '0');
+            // Fórmula ABNT/TCU: PV = CD ÷ (1 − BDI%)
+            const bdiDivisor = 1 - bdiPercentual;
             await db.update(orcamentoItens).set({
-              vendaTotal:     fix2(custo     * (1 + bdiPercentual)),
-              vendaUnitTotal: fix4(custoUnit * (1 + bdiPercentual)),
+              vendaTotal:     fix2(bdiDivisor > 0 ? custo     / bdiDivisor : custo),
+              vendaUnitTotal: fix4(bdiDivisor > 0 ? custoUnit / bdiDivisor : custoUnit),
             }).where(eq(orcamentoItens.id, item.id));
           }
         }
         const nivel1 = itens.filter(i => i.nivel === 1);
+        const bdiDivisorTotal = 1 - bdiPercentual;
         await db.update(orcamentos).set({
           bdiPercentual: fix6(bdiPercentual),
-          totalVenda:    fix2(nivel1.reduce((s, i) => s + parseFloat(i.custoTotal || '0') * (1 + bdiPercentual), 0)),
+          totalVenda:    fix2(nivel1.reduce((s, i) => {
+            const c = parseFloat(i.custoTotal || '0');
+            return s + (bdiDivisorTotal > 0 ? c / bdiDivisorTotal : c);
+          }, 0)),
         }).where(eq(orcamentos.id, oid));
       }
 
@@ -2566,20 +2574,25 @@ export const orcamentoRouter = router({
       const itens = await db.select().from(orcamentoItens)
         .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
 
+      // Fórmula ABNT/TCU: PV = CD ÷ (1 − BDI%)
+      const bdiDivisor = 1 - bdi;
       const BATCH = 500;
       for (let i = 0; i < itens.length; i += BATCH) {
         for (const item of itens.slice(i, i + BATCH)) {
           const custo     = parseFloat(item.custoTotal     || '0');
           const custoUnit = parseFloat(item.custoUnitTotal || '0');
           await db.update(orcamentoItens).set({
-            vendaTotal:     fix2(custo     * (1 + bdi)),
-            vendaUnitTotal: fix4(custoUnit * (1 + bdi)),
+            vendaTotal:     fix2(bdiDivisor > 0 ? custo     / bdiDivisor : custo),
+            vendaUnitTotal: fix4(bdiDivisor > 0 ? custoUnit / bdiDivisor : custoUnit),
           }).where(eq(orcamentoItens.id, item.id));
         }
       }
 
       const nivel1     = itens.filter(i => i.nivel === 1);
-      const totalVenda = nivel1.reduce((s, i) => s + parseFloat(i.custoTotal || '0') * (1 + bdi), 0);
+      const totalVenda = nivel1.reduce((s, i) => {
+        const c = parseFloat(i.custoTotal || '0');
+        return s + (bdiDivisor > 0 ? c / bdiDivisor : c);
+      }, 0);
 
       await db.update(orcamentos).set({
         bdiPercentual: fix6(bdi),
