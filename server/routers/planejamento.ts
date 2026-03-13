@@ -614,14 +614,17 @@ export const planejamentoRouter = router({
       const db = await getDb();
       const { projetoId, leadTime, descricao, revisaoCronogramaId } = input;
 
-      // 1. Cruzamento orçamento × cronograma — itens com custo de material
+      // 1. Cruzamento orçamento × cronograma — itens com custo (mat ou total)
       const rows = await db.execute(sql`
         WITH matched AS (
           SELECT DISTINCT ON (i.id)
             i.id                                   AS item_id,
             i."eapCodigo"                          AS eap,
             i.descricao                            AS nome,
-            i."custoTotalMat"::numeric             AS custo_mat,
+            CASE
+              WHEN i."custoTotalMat"::numeric > 0 THEN i."custoTotalMat"::numeric
+              ELSE i."custoTotal"::numeric
+            END                                    AS custo_mat,
             i."custoTotal"::numeric                AS custo_total,
             i.unidade                              AS unidade,
             COALESCE(i.quantidade::numeric, 0)     AS quantidade,
@@ -637,7 +640,7 @@ export const planejamentoRouter = router({
             AND NOT a.is_grupo
             AND LOWER(REGEXP_REPLACE(TRIM(a.nome), '[\\s]+', ' ', 'g'))
               = LOWER(REGEXP_REPLACE(TRIM(i.descricao), '[\\s]+', ' ', 'g'))
-          WHERE i."custoTotalMat"::numeric > 0
+          WHERE (i."custoTotalMat"::numeric > 0 OR i."custoTotal"::numeric > 0)
             AND a.data_inicio IS NOT NULL
           ORDER BY i.id, a.data_inicio ASC
         )
@@ -646,7 +649,7 @@ export const planejamentoRouter = router({
 
       const itens = (rows.rows as any[]);
       if (itens.length === 0) {
-        throw new Error("Nenhum item de material encontrado no cruzamento orçamento × cronograma.");
+        throw new Error("Nenhum item encontrado no cruzamento orçamento × cronograma. Verifique se as atividades do cronograma têm o mesmo nome dos itens do orçamento e possuem datas definidas.");
       }
 
       // 2. Próxima revisão
