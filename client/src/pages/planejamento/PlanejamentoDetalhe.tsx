@@ -3434,7 +3434,7 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
               <p className="font-semibold mb-1">Como funciona</p>
               <ul className="space-y-1 list-disc pl-4">
                 <li>Cruza a EAP do <b>Orçamento</b> com a EAP do <b>Cronograma</b> por nome</li>
-                <li>Extrai itens com custo de material &gt; 0</li>
+                <li>Extrai itens com custo &gt; 0 (material preferencial; custo total como fallback)</li>
                 <li>Calcula Data Necessária = Data Início da Atividade − Lead Time</li>
                 <li>Cria uma <b>nova revisão</b> preservando as anteriores para consulta</li>
               </ul>
