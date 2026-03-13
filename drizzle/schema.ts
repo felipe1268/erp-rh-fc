@@ -3875,6 +3875,54 @@ export const orcamentoItens = pgTable("orcamento_itens", {
   index("orci_eap").on(table.eapCodigo),
 ]);
 
+// ── SEC (Serviços Extras Contratuais) ────────────────────────────────────────
+export const orcamentoSecs = pgTable("orcamento_secs", {
+  id:               serial().primaryKey(),
+  orcamentoId:      integer().notNull(),
+  companyId:        integer().notNull(),
+  numero:           integer().notNull(),
+  codigo:           varchar({ length: 100 }).notNull(),
+  descricao:        varchar({ length: 500 }),
+  fase:             varchar({ length: 30 }).notNull().default('elaboracao'),
+  bdiPercentual:    numeric({ precision: 8,  scale: 4 }),
+  totalCusto:       numeric({ precision: 18, scale: 2 }).default('0'),
+  totalVenda:       numeric({ precision: 18, scale: 2 }).default('0'),
+  totalMateriais:   numeric({ precision: 18, scale: 2 }).default('0'),
+  totalMdo:         numeric({ precision: 18, scale: 2 }).default('0'),
+  totalEquipamentos:numeric({ precision: 18, scale: 2 }).default('0'),
+  totalMeta:        numeric({ precision: 18, scale: 2 }).default('0'),
+  createdAt:        timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  deletedAt:        timestamp("deleted_at", { mode: 'string' }),
+}, (table) => [
+  index("sec_orcamento").on(table.orcamentoId),
+  index("sec_company").on(table.companyId),
+]);
+
+export const orcamentoSecItens = pgTable("orcamento_sec_itens", {
+  id:             serial().primaryKey(),
+  secId:          integer().notNull(),
+  companyId:      integer().notNull(),
+  eapCodigo:      varchar({ length: 50 }).notNull(),
+  nivel:          integer().notNull(),
+  tipo:           varchar({ length: 50 }),
+  descricao:      varchar({ length: 1000 }).notNull(),
+  unidade:        varchar({ length: 30 }),
+  quantidade:     numeric({ precision: 18, scale: 4 }),
+  custoUnitMat:   numeric({ precision: 18, scale: 4 }),
+  custoUnitMdo:   numeric({ precision: 18, scale: 4 }),
+  custoUnitTotal: numeric({ precision: 18, scale: 4 }),
+  vendaUnitTotal: numeric({ precision: 18, scale: 4 }),
+  custoTotalMat:  numeric({ precision: 18, scale: 2 }),
+  custoTotalMdo:  numeric({ precision: 18, scale: 2 }),
+  custoTotal:     numeric({ precision: 18, scale: 2 }),
+  vendaTotal:     numeric({ precision: 18, scale: 2 }),
+  ordem:          integer(),
+  createdAt:      timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  index("seci_sec").on(table.secId),
+  index("seci_company").on(table.companyId),
+]);
+
 export const orcamentoInsumos = pgTable("orcamento_insumos", {
   id: serial().notNull(),
   orcamentoId: integer().notNull(),
