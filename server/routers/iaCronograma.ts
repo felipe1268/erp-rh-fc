@@ -49,7 +49,7 @@ function buildSystemPrompt(conhecimentos: any[]): string {
       ).join("\n")
     : "";
 
-  return `Você é o **CRONOS — Assistente IA de Gestão de Obras** da FC Engenharia.
+  return `Você é o **JULINHO — Assistente IA de Gestão de Obras** da FC Engenharia.
 
 Você é um especialista sênior em gestão de projetos de construção civil brasileira, com profundo conhecimento em:
 - Planejamento e controle de obras (PMBOK, Last Planner System)
@@ -654,7 +654,7 @@ Faça uma análise técnica detalhada deste desvio de prazo e responda EXATAMENT
 **Recursos adicionais:** (equipamentos e efetivo específicos necessários)
 **Custo adicional estimado:** (estimativa percentual sobre o custo da semana)
 
-## 🎯 Recomendação do CRONOS
+## 🎯 Recomendação do JULINHO
 (1 parágrafo com qual plano você recomenda e por quê, considerando custo-benefício)`;
 
       const result = await invokeLLM({
