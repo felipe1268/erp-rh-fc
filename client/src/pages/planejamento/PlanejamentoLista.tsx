@@ -66,12 +66,22 @@ export default function PlanejamentoLista() {
     { companyId }, { enabled: !!companyId }
   );
 
+  // Obras que já possuem planejamento — filtradas do select
+  const obraIdsComPlanejamento = useMemo(() =>
+    new Set((projetos as any[]).map((p: any) => p.obraId).filter(Boolean)),
+  [projetos]);
+
+  const obrasDisponiveis = useMemo(() =>
+    (obras as any[]).filter((o: any) => !obraIdsComPlanejamento.has(o.id)),
+  [obras, obraIdsComPlanejamento]);
+
   const obraSelecionada = useMemo(() =>
     (obras as any[]).find((o: any) => String(o.id) === form.obraId) ?? null,
   [obras, form.obraId]);
 
   const criarMutation = trpc.planejamento.criarProjeto.useMutation({
     onSuccess: () => { utils.planejamento.listarProjetos.invalidate(); setModalAberto(false); resetForm(); },
+    onError: (err) => { alert(err.message || "Erro ao criar planejamento."); },
   });
   const excluirMutation = trpc.planejamento.excluirProjeto.useMutation({
     onSuccess: () => { utils.planejamento.listarProjetos.invalidate(); setExcluindo(null); },
@@ -87,6 +97,7 @@ export default function PlanejamentoLista() {
       || obraSelecionada.endereco || undefined;
     criarMutation.mutate({
       companyId,
+      obraId:                obraSelecionada.id,
       nome:                  obraSelecionada.nome,
       cliente:               obraSelecionada.cliente || undefined,
       local:                 local,
@@ -263,7 +274,10 @@ export default function PlanejamentoLista() {
                   className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
                 >
                   <option value="">— Selecione uma obra —</option>
-                  {(obras as any[]).map((o: any) => (
+                  {obrasDisponiveis.length === 0 && (
+                    <option disabled value="">Todas as obras já possuem planejamento</option>
+                  )}
+                  {obrasDisponiveis.map((o: any) => (
                     <option key={o.id} value={o.id}>
                       {o.nome}{o.cliente ? ` · ${o.cliente}` : ""}
                     </option>

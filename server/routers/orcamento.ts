@@ -3559,18 +3559,25 @@ export const orcamentoRouter = router({
 
       const n = (v: any) => parseFloat(v || '0');
 
+      // Orçamentos com BDI calculado (totalVenda > 0) — usados para métricas financeiras
+      // Orçamentos sem venda (importados só com custo, sem BDI) são excluídos das métricas
+      // de carteira e margem para não distorcer os indicadores.
+      const comVenda = lista.filter(o => n(o.totalVenda) > 0);
+
       // Totais gerais
       const total      = lista.length;
-      const totalVenda = lista.reduce((s, o) => s + n(o.totalVenda), 0);
-      const totalCusto = lista.reduce((s, o) => s + n(o.totalCusto), 0);
-      const totalMeta  = lista.reduce((s, o) => s + n(o.totalMeta),  0);
-      const totalMat   = lista.reduce((s, o) => s + n(o.totalMateriais), 0);
-      const totalMdo   = lista.reduce((s, o) => s + n(o.totalMdo),   0);
-      const totalEquip = lista.reduce((s, o) => s + n(o.totalEquipamentos), 0);
+      const totalVenda = comVenda.reduce((s, o) => s + n(o.totalVenda), 0);
+      const totalCusto = comVenda.reduce((s, o) => s + n(o.totalCusto), 0);
+      const totalMeta  = comVenda.reduce((s, o) => s + n(o.totalMeta),  0);
+      const totalMat   = comVenda.reduce((s, o) => s + n(o.totalMateriais), 0);
+      const totalMdo   = comVenda.reduce((s, o) => s + n(o.totalMdo),   0);
+      const totalEquip = comVenda.reduce((s, o) => s + n(o.totalEquipamentos), 0);
 
-      // BDI médio ponderado por custo
-      const bdiMedio = totalCusto > 0
-        ? lista.reduce((s, o) => s + n(o.bdiPercentual) * n(o.totalCusto), 0) / totalCusto
+      // BDI médio ponderado por custo (somente orçamentos com BDI definido)
+      const comBdi = comVenda.filter(o => n(o.bdiPercentual) > 0);
+      const custoBdi = comBdi.reduce((s, o) => s + n(o.totalCusto), 0);
+      const bdiMedio = custoBdi > 0
+        ? comBdi.reduce((s, o) => s + n(o.bdiPercentual) * n(o.totalCusto), 0) / custoBdi
         : 0;
       const margemMedia = totalVenda > 0 ? (totalVenda - totalCusto) / totalVenda : 0;
 
@@ -3626,7 +3633,8 @@ export const orcamentoRouter = router({
         });
 
       return {
-        total, totalVenda, totalCusto, totalMeta, totalMat, totalMdo, totalEquip,
+        total, totalComBdi: comVenda.length,
+        totalVenda, totalCusto, totalMeta, totalMat, totalMdo, totalEquip,
         bdiMedio, margemMedia,
         recentes: lista.slice(0, 5),
         porStatus, porCliente, porBdi, porMargem,

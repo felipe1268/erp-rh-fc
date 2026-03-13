@@ -17,11 +17,15 @@ import {
 
 function formatBRL(v: number, compact = false) {
   if (compact) {
-    if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-    if (v >= 1_000)     return `R$ ${(v / 1_000).toFixed(0)}k`;
+    const abs = Math.abs(v);
+    const sign = v < 0 ? "-" : "";
+    if (abs >= 1_000_000) return `${sign}R$ ${(abs / 1_000_000).toFixed(1)}M`;
+    if (abs >= 1_000)     return `${sign}R$ ${(abs / 1_000).toFixed(0)}k`;
   }
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+// KPI: sempre formato completo com centavos
+function fBRL(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function pct(v: number) { return `${(v * 100).toFixed(1)}%`; }
 function pct2(v: number) { return `${v.toFixed(1)}%`; }
 
@@ -91,6 +95,7 @@ export default function PainelOrcamento() {
   );
 
   const total       = data?.total        ?? 0;
+  const totalComBdi = data?.totalComBdi  ?? 0;
   const totalVenda  = data?.totalVenda   ?? 0;
   const totalCusto  = data?.totalCusto   ?? 0;
   const totalMeta   = data?.totalMeta    ?? 0;
@@ -168,15 +173,15 @@ export default function PainelOrcamento() {
           <div className="col-span-2">
             <KpiCard
               title="Carteira Total" icon={DollarSign}
-              value={isLoading ? "..." : formatBRL(totalVenda, true)}
-              sub="total com BDI aplicado"
+              value={isLoading ? "..." : fBRL(totalVenda)}
+              sub={`${totalComBdi} orçamento${totalComBdi !== 1 ? "s" : ""} com BDI aplicado`}
               iconBg="bg-green-50" iconColor="text-green-600"
             />
           </div>
           <div className="col-span-2">
             <KpiCard
               title="Custo Direto" icon={TrendingDown}
-              value={isLoading ? "..." : formatBRL(totalCusto, true)}
+              value={isLoading ? "..." : fBRL(totalCusto)}
               sub="materiais + MO + equip."
               iconBg="bg-amber-50" iconColor="text-amber-600"
             />
@@ -184,7 +189,7 @@ export default function PainelOrcamento() {
           <div className="col-span-2">
             <KpiCard
               title="Resultado Bruto" icon={TrendingUp}
-              value={isLoading ? "..." : formatBRL(totalVenda - totalCusto, true)}
+              value={isLoading ? "..." : fBRL(totalVenda - totalCusto)}
               sub={`margem ${pct(margemMedia)} sobre venda`}
               iconBg="bg-emerald-50" iconColor="text-emerald-600"
               trend={margemMedia * 100}
@@ -194,14 +199,14 @@ export default function PainelOrcamento() {
             <KpiCard
               title="BDI Médio" icon={Percent}
               value={isLoading ? "..." : pct(bdiMedio)}
-              sub="ponderado por custo"
+              sub="ponderado por custo (orç. c/ BDI)"
               iconBg="bg-indigo-50" iconColor="text-indigo-600"
             />
           </div>
           <div className="col-span-2">
             <KpiCard
               title="Meta de Compras" icon={Target}
-              value={isLoading ? "..." : formatBRL(totalMeta, true)}
+              value={isLoading ? "..." : fBRL(totalMeta)}
               sub="alvo de negociação"
               iconBg="bg-purple-50" iconColor="text-purple-600"
             />
@@ -209,7 +214,7 @@ export default function PainelOrcamento() {
           <div className="col-span-2">
             <KpiCard
               title="Economia Alvo" icon={Calculator}
-              value={isLoading ? "..." : formatBRL(totalCusto - totalMeta, true)}
+              value={isLoading ? "..." : fBRL(totalCusto - totalMeta)}
               sub="custo − meta de compras"
               iconBg="bg-rose-50" iconColor="text-rose-600"
             />
@@ -217,7 +222,7 @@ export default function PainelOrcamento() {
           <div className="col-span-2">
             <KpiCard
               title="Total Materiais" icon={Building2}
-              value={isLoading ? "..." : formatBRL(totalMat, true)}
+              value={isLoading ? "..." : fBRL(totalMat)}
               sub={custosTotais > 0 ? `${pct(totalMat / custosTotais)} do custo` : "do custo"}
               iconBg="bg-sky-50" iconColor="text-sky-600"
             />
