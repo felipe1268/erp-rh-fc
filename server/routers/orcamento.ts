@@ -1594,11 +1594,15 @@ export const orcamentoRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco de dados não disponível.' });
 
-      // Regra: cada obra só pode ter 1 orçamento vinculado
+      // Regra: cada obra só pode ter 1 orçamento vinculado (ignorar excluídos com soft delete)
       if (input.obraId) {
         const existente = await db.select({ id: orcamentos.id })
           .from(orcamentos)
-          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId)))
+          .where(and(
+            eq(orcamentos.companyId, input.companyId),
+            eq(orcamentos.obraId, input.obraId),
+            isNull(orcamentos.deletedAt),
+          ))
           .limit(1);
         if (existente.length > 0) {
           throw new TRPCError({
