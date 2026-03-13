@@ -17,7 +17,7 @@ import {
   ChevronDown, Minus, Upload, XCircle, GripVertical,
   ShoppingCart, AlertOctagon, Cloud, CloudRain, Wind, Sun, Droplets,
   MapPin, Package, Filter, Trash2, Pencil, X, RefreshCw,
-  Settings, AlertCircle,
+  Settings, AlertCircle, Lock, LockOpen,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -1946,12 +1946,17 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [salvando, setSalvando]       = useState(false);
   const [saved, setSaved]             = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false);
+  const [cfgBloqueado, setCfgBloqueado] = useState(false);
 
   const { data: configMed, refetch: refetchCfg } = trpc.planejamento.getConfigMedicao.useQuery(
     { projetoId }, { enabled: !!projetoId });
 
   const salvarCfgMut = trpc.planejamento.salvarConfigMedicao.useMutation({
     onSuccess: () => { refetchCfg(); setSalvando(false); setSaved(true); setTimeout(() => setSaved(false), 2000); },
+  });
+
+  const toggleBloqueioMut = trpc.planejamento.toggleBloqueioMedicao.useMutation({
+    onSuccess: () => refetchCfg(),
   });
 
   useEffect(() => {
@@ -1961,6 +1966,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       setCfgEntrada(n(configMed.entrada));
       setCfgParcelas(configMed.numeroParcelas ?? 6);
       setCfgInicioFat((configMed.inicioFaturamento as any) ?? "");
+      setCfgBloqueado(configMed.bloqueado ?? false);
     }
   }, [configMed]);
 
@@ -2073,13 +2079,48 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     <div className="space-y-6">
 
       {/* ── Painel de Configuração ─────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 bg-slate-700 text-white flex items-center gap-2 rounded-t-xl">
+      <div className={`bg-white rounded-xl shadow-sm overflow-hidden border-2 ${cfgBloqueado ? "border-emerald-400" : "border-slate-200"}`}>
+        {/* Header */}
+        <div className={`px-4 py-3 flex items-center gap-2 rounded-t-xl ${cfgBloqueado ? "bg-emerald-700" : "bg-slate-700"} text-white`}>
           <Settings className="h-4 w-4" />
           <p className="text-sm font-semibold">Configuração de Medição</p>
+          {cfgBloqueado && (
+            <span className="ml-1 flex items-center gap-1 text-[11px] bg-emerald-600 px-2 py-0.5 rounded-full font-semibold">
+              <Lock className="h-3 w-3" /> Configuração Congelada
+            </span>
+          )}
+          <div className="ml-auto">
+            {cfgBloqueado ? (
+              <button
+                onClick={() => toggleBloqueioMut.mutate({ projetoId, bloqueado: false })}
+                disabled={toggleBloqueioMut.isPending}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-semibold transition-colors disabled:opacity-50">
+                <LockOpen className="h-3.5 w-3.5" />
+                Descongelar
+              </button>
+            ) : configMed && (
+              <button
+                onClick={() => toggleBloqueioMut.mutate({ projetoId, bloqueado: true })}
+                disabled={toggleBloqueioMut.isPending}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-semibold transition-colors disabled:opacity-50">
+                <Lock className="h-3.5 w-3.5" />
+                Congelar
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="p-4 space-y-5">
+        {/* Banner de congelado */}
+        {cfgBloqueado && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-b border-emerald-200">
+            <Lock className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+            <p className="text-xs text-emerald-700">
+              Esta configuração está <strong>congelada</strong>. Clique em <strong>Descongelar</strong> para poder editar os parâmetros.
+            </p>
+          </div>
+        )}
+
+        <div className={`p-4 space-y-5 ${cfgBloqueado ? "opacity-60 pointer-events-none select-none" : ""}`}>
           {/* Modalidade */}
           <div>
             <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Modalidade de Medição</p>
