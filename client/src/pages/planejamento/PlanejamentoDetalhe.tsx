@@ -1274,6 +1274,8 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
   const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [importando, setImportando] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importFileName, setImportFileName] = useState("");
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [filtrarSemana, setFiltrarSemana] = useState(true);
@@ -1403,7 +1405,17 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   // ── Import XML / XLSX do MS Project ───────────────────────────────────────
   async function importarDoMSProject(file: File) {
     setImportando(true);
+    setImportProgress(0);
+    setImportFileName(file.name);
     setImportStatus(null);
+
+    // Simula progresso visual durante o processamento assíncrono
+    let prog = 0;
+    const interval = setInterval(() => {
+      prog = Math.min(prog + Math.random() * 12 + 4, 88);
+      setImportProgress(+prog.toFixed(0));
+    }, 180);
+
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
       const percentMap: Record<string, number> = {};
@@ -1452,7 +1464,12 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
     } catch (e: any) {
       setImportStatus({ ok: false, msg: e.message ?? "Erro ao processar o arquivo." });
     } finally {
-      setImportando(false);
+      clearInterval(interval);
+      setImportProgress(100);
+      setTimeout(() => {
+        setImportando(false);
+        setImportProgress(0);
+      }, 400);
     }
   }
 
@@ -1599,6 +1616,25 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
           </Button>
         </div>
       </div>
+
+      {/* ── Barra de progresso do import ────────────────────────────────────── */}
+      {importando && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs text-purple-700">
+            <span className="flex items-center gap-1.5">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Processando arquivo… {importProgress}%
+            </span>
+            <span className="text-slate-400 truncate max-w-[200px]">{importFileName}</span>
+          </div>
+          <div className="w-full h-1.5 bg-purple-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-purple-500 rounded-full transition-all duration-200 ease-out"
+              style={{ width: `${importProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── Confirmação de limpeza ──────────────────────────────────────────── */}
       {confirmLimpar && (
