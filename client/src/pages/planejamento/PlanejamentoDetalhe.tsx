@@ -3813,6 +3813,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [obs, setObs] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [modoMascara, setModoMascara] = useState(false);
+  const [analiseDesvio, setAnaliseDesvio] = useState<string | null>(null);
+  const [analiseExpanded, setAnaliseExpanded] = useState(true);
 
   // ── Cruzamento orçamento × cronograma (para calcular venda prevista/realizada mensal) ──
   const { data: cruzamento } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
@@ -3866,6 +3868,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     onSuccess: () => {
       utils.planejamento.listarRefis.invalidate();
       setConfirmDelete(false);
+    },
+  });
+
+  const analisarDesvioMut = (trpc.iaCronograma as any).analisarDesvio.useMutation({
+    onSuccess: (data: any) => {
+      setAnaliseDesvio(data.analise);
+      setAnaliseExpanded(true);
     },
   });
 
@@ -4089,6 +4098,26 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // Desvio financeiro do mês (R$)
   const desvioFinanceiro = custoRealAuto - custoPrevAuto;
 
+  // Atividades com desvio negativo para contexto da análise IA
+  const atividadesAtrasadas = useMemo(() => {
+    return grupos
+      .map((g: any) => ({
+        nome:      g.nome,
+        eapCodigo: g.eapCodigo ? String(g.eapCodigo) : undefined,
+        previsto:  g.previsto,
+        realizado: g.realizado,
+        desvio:    g.realizado - g.previsto,
+      }))
+      .filter((g: any) => g.desvio < -1)
+      .sort((a: any, b: any) => a.desvio - b.desvio)
+      .slice(0, 8);
+  }, [grupos]);
+
+  // Reset análise quando muda a semana
+  useEffect(() => {
+    setAnaliseDesvio(null);
+  }, [semana]);
+
   return (
     <div className="space-y-5">
 
@@ -4310,6 +4339,153 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          BLOCO 2B — ALERTA IA DE DESVIO DE PRAZO
+      ══════════════════════════════════════════════════════════════════════ */}
+      {desvioFisico < -1 && (
+        <div className={`rounded-xl border-2 overflow-hidden shadow-md ${spi < 0.85 ? "border-red-500 bg-red-50" : "border-orange-400 bg-orange-50"}`}>
+          {/* Header do alerta */}
+          <div className={`px-5 py-3 flex items-center justify-between flex-wrap gap-3 ${spi < 0.85 ? "bg-red-600" : "bg-orange-500"}`}>
+            <div className="flex items-center gap-3">
+              <AlertOctagon className="h-5 w-5 text-white shrink-0" />
+              <div>
+                <p className="font-bold text-white text-sm uppercase tracking-wide">
+                  {spi < 0.85 ? "⚠ Desvio Crítico de Prazo" : "⚠ Desvio de Prazo Detectado"}
+                </p>
+                <p className="text-xs text-white/80 mt-0.5">
+                  Obra {fPct_(Math.abs(desvioFisico))} abaixo do planejado — SPI {spi.toFixed(2)}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!analiseDesvio && (
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-white text-orange-700 hover:bg-orange-50 font-semibold shadow-sm"
+                  disabled={analisarDesvioMut.isPending}
+                  onClick={() => analisarDesvioMut.mutate({
+                    projetoId,
+                    nomeObra:        proj.nome,
+                    semana,
+                    desvioFisico,
+                    avancoPrevisto,
+                    avancoRealizado: avancoRealAtual,
+                    spi,
+                    dataTermino:     proj.dataTerminoContratual ?? null,
+                    atividadesAtrasadas,
+                  })}>
+                  {analisarDesvioMut.isPending
+                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando...</>
+                    : <><Brain className="h-3.5 w-3.5" /> Analisar com IA</>}
+                </Button>
+              )}
+              {analiseDesvio && (
+                <>
+                  <Button size="sm" variant="outline"
+                    className="gap-1.5 bg-white/80 border-white/60 text-orange-700 text-xs"
+                    disabled={analisarDesvioMut.isPending}
+                    onClick={() => analisarDesvioMut.mutate({
+                      projetoId,
+                      nomeObra:        proj.nome,
+                      semana,
+                      desvioFisico,
+                      avancoPrevisto,
+                      avancoRealizado: avancoRealAtual,
+                      spi,
+                      dataTermino:     proj.dataTerminoContratual ?? null,
+                      atividadesAtrasadas,
+                    })}>
+                    {analisarDesvioMut.isPending
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <RefreshCw className="h-3 w-3" />}
+                    Reanalisar
+                  </Button>
+                  <Button size="sm" variant="ghost"
+                    className="text-white/80 hover:text-white hover:bg-white/10 text-xs"
+                    onClick={() => setAnaliseExpanded(v => !v)}>
+                    {analiseExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Chips de indicadores rápidos */}
+          <div className={`px-5 py-3 flex flex-wrap gap-3 border-b ${spi < 0.85 ? "border-red-200 bg-red-100/60" : "border-orange-200 bg-orange-100/60"}`}>
+            {[
+              { label: "Desvio Físico", value: `${desvioFisico.toFixed(1)}pp`, bad: true },
+              { label: "SPI",           value: spi.toFixed(2),                 bad: spi < 1 },
+              { label: "Previsto Acum", value: fPct_(avancoPrevisto),          bad: false },
+              { label: "Realizado Acum",value: fPct_(avancoRealAtual),         bad: false },
+              ...(atividadesAtrasadas.length > 0
+                ? [{ label: "Grupos Atrasados", value: String(atividadesAtrasadas.length), bad: true }]
+                : []),
+            ].map((chip, i) => (
+              <div key={i} className={`rounded-full px-3 py-1 text-xs font-semibold border ${chip.bad ? "bg-red-100 border-red-300 text-red-800" : "bg-white border-slate-200 text-slate-700"}`}>
+                <span className="text-slate-500 font-normal mr-1">{chip.label}:</span>{chip.value}
+              </div>
+            ))}
+            {atividadesAtrasadas.length > 0 && (
+              <div className="w-full flex flex-wrap gap-1.5 mt-0.5">
+                {atividadesAtrasadas.map((a: any, i: number) => (
+                  <span key={i} className="inline-flex items-center gap-1 text-[11px] bg-red-100 text-red-700 border border-red-200 rounded px-2 py-0.5">
+                    {a.eapCodigo && <span className="font-mono text-[10px] text-red-500">{a.eapCodigo}</span>}
+                    {a.nome}: {a.desvio.toFixed(1)}pp
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Resultado da análise IA */}
+          {analisarDesvioMut.isPending && (
+            <div className="px-5 py-6 flex items-center gap-3 text-sm text-slate-600">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+              </div>
+              <span className="text-orange-700 font-medium">CRONOS analisando o desvio e elaborando planos de ação...</span>
+            </div>
+          )}
+
+          {analiseDesvio && analiseExpanded && !analisarDesvioMut.isPending && (
+            <div className="px-5 py-4">
+              {/* Badge CRONOS */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-1.5 bg-slate-800 text-white rounded-full px-3 py-1 text-[11px] font-semibold">
+                  <Bot className="h-3 w-3" />
+                  Análise CRONOS
+                </div>
+                <span className="text-[10px] text-slate-400">IA especialista em gestão de obras</span>
+              </div>
+
+              {/* Conteúdo formatado */}
+              <div className="prose-sm max-w-none text-slate-700">
+                <ReactMarkdownSimple text={analiseDesvio} />
+              </div>
+
+              {/* Footer */}
+              <div className="mt-4 pt-3 border-t border-slate-200 flex items-center gap-2 text-[10px] text-slate-400">
+                <Sparkles className="h-3 w-3 text-violet-400" />
+                Gerado por CRONOS · Para implementar os planos de ação, acesse a aba IA Gestora → Simulador de Cenários
+              </div>
+            </div>
+          )}
+
+          {/* Estado inicial — sem análise ainda */}
+          {!analiseDesvio && !analisarDesvioMut.isPending && (
+            <div className="px-5 py-4 text-center">
+              <Brain className="h-8 w-8 text-orange-300 mx-auto mb-2" />
+              <p className="text-sm font-medium text-orange-800">Desvio detectado — solicite análise do CRONOS</p>
+              <p className="text-xs text-orange-600 mt-1">
+                A IA irá diagnosticar as causas, estimar o impacto no prazo e sugerir 3 planos de ação para recuperação.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 3 — CURVA S (Avanço Acumulado Previsto × Realizado)
