@@ -4829,13 +4829,16 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
           {/* Resultado da análise IA */}
           {analisarDesvioMut.isPending && (
-            <div className="px-5 py-6 flex items-center gap-3 text-sm text-slate-600">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+            <div className="px-5 py-4 flex items-center gap-3 text-sm text-slate-600">
+              <img src="/julinho-3d.png" alt="JULINHO" className="h-10 w-10 object-contain shrink-0 drop-shadow" />
+              <div>
+                <div className="flex gap-1 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+                <span className="text-orange-700 font-medium text-xs">JULINHO analisando o desvio e elaborando planos de ação...</span>
               </div>
-              <span className="text-orange-700 font-medium">JULINHO analisando o desvio e elaborando planos de ação...</span>
             </div>
           )}
 
@@ -4843,8 +4846,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <div className="px-5 py-4">
               {/* Badge JULINHO */}
               <div className="flex items-center gap-2 mb-3">
+                <img src="/julinho-3d.png" alt="JULINHO" className="h-8 w-8 object-contain drop-shadow" />
                 <div className="flex items-center gap-1.5 bg-slate-800 text-white rounded-full px-3 py-1 text-[11px] font-semibold">
-                  <Bot className="h-3 w-3" />
                   Análise JULINHO
                 </div>
                 <span className="text-[10px] text-slate-400">IA especialista em gestão de obras</span>
@@ -4866,7 +4869,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           {/* Estado inicial — sem análise ainda */}
           {!analiseDesvio && !analisarDesvioMut.isPending && (
             <div className="px-5 py-4 text-center">
-              <Brain className="h-8 w-8 text-orange-300 mx-auto mb-2" />
+              <img src="/julinho-3d.png" alt="JULINHO" className="h-14 w-14 object-contain mx-auto mb-2 drop-shadow" />
               <p className="text-sm font-medium text-orange-800">Desvio detectado — solicite análise do JULINHO</p>
               <p className="text-xs text-orange-600 mt-1">
                 A IA irá diagnosticar as causas, estimar o impacto no prazo e sugerir 3 planos de ação para recuperação.
@@ -5516,7 +5519,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl px-5 py-4 text-white flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="bg-white/10 rounded-xl p-2.5"><Bot className="h-6 w-6 text-amber-400" /></div>
+          <img src="/julinho-3d.png" alt="JULINHO" className="h-14 w-14 object-contain drop-shadow-lg" />
           <div>
             <p className="font-bold text-lg">JULINHO — IA Gestora de Obras</p>
             <p className="text-xs text-slate-300">
@@ -5568,9 +5571,9 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {historico.length === 0 && !chatMut.isPending && (
                 <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-8">
-                  <div className="bg-slate-50 rounded-full p-4"><Sparkles className="h-8 w-8 text-amber-400" /></div>
+                  <img src="/julinho-3d.png" alt="JULINHO" className="h-28 w-28 object-contain drop-shadow-xl" />
                   <div>
-                    <p className="font-semibold text-slate-700">Olá! Sou o JULINHO.</p>
+                    <p className="font-semibold text-slate-700 text-base">Olá! Sou o JULINHO.</p>
                     <p className="text-xs text-slate-400 mt-1">Seu assistente de gestão de obras. Sobre o que quer conversar?</p>
                   </div>
                   <div className="grid grid-cols-1 gap-2 w-full max-w-sm">
@@ -5588,9 +5591,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                 <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   {m.role === "assistant" && (
                     <div className="flex gap-2 max-w-[90%]">
-                      <div className="bg-slate-700 rounded-full h-6 w-6 flex items-center justify-center shrink-0 mt-1">
-                        <Bot className="h-3.5 w-3.5 text-amber-400" />
-                      </div>
+                      <img src="/julinho-3d.png" alt="JULINHO" className="h-8 w-8 object-contain shrink-0 mt-1 drop-shadow" />
                       <div className="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-none px-4 py-3 text-slate-700">
                         <ReactMarkdownSimple text={m.conteudo} />
                       </div>
@@ -5997,8 +5998,8 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                 {historicoSim.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-8">
                     <div className="relative">
-                      <Brain className="h-12 w-12 text-purple-200" />
-                      <Zap className="h-4 w-4 text-amber-400 absolute -bottom-1 -right-1" />
+                      <img src="/julinho-3d.png" alt="JULINHO" className="h-20 w-20 object-contain drop-shadow-xl" />
+                      <span className="absolute -bottom-1 -right-1 bg-amber-400 rounded-full p-0.5"><Zap className="h-3.5 w-3.5 text-white" /></span>
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-slate-600">JULINHO — Simulador de Impacto</p>
@@ -6019,9 +6020,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                   <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                     {m.role === "assistant" && (
                       <div className="flex gap-2 max-w-full">
-                        <div className="bg-purple-600 rounded-full h-7 w-7 flex items-center justify-center shrink-0 mt-1">
-                          <Brain className="h-3.5 w-3.5 text-white" />
-                        </div>
+                        <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain shrink-0 mt-1 drop-shadow" />
                         <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3 text-slate-700 flex-1">
                           <ReactMarkdownSimple text={m.conteudo} />
                         </div>
@@ -6035,10 +6034,8 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                   </div>
                 ))}
                 {simMut.isPending && (
-                  <div className="flex gap-2">
-                    <div className="bg-purple-600 rounded-full h-7 w-7 flex items-center justify-center shrink-0">
-                      <Brain className="h-3.5 w-3.5 text-white" />
-                    </div>
+                  <div className="flex gap-2 items-end">
+                    <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain shrink-0 drop-shadow" />
                     <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3 space-y-1">
                       <div className="flex gap-1">
                         <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "0ms" }} />

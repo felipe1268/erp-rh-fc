@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "UMcQ84G0TeMomCL-zJfjX"
+uri = "file://client/public/julinho-3d.png"
+type = "image"
+title = "Avatar 3D do JULINHO"
