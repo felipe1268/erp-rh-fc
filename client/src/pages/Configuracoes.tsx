@@ -2031,6 +2031,23 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     onError: (e: any) => toast.error(e.message || "Erro ao atualizar módulo"),
   });
 
+  // Acompanha a ordem definida na tela inicial
+  const [moduleOrder, setModuleOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("fc-module-order") || "[]"); } catch { return []; }
+  });
+  useEffect(() => {
+    const onCustom = (e: Event) => setModuleOrder((e as CustomEvent).detail ?? []);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "fc-module-order") { try { setModuleOrder(JSON.parse(e.newValue || "[]")); } catch {} }
+    };
+    window.addEventListener("fc-module-order-changed", onCustom);
+    window.addEventListener("storage", onStorage);
+    return () => { window.removeEventListener("fc-module-order-changed", onCustom); window.removeEventListener("storage", onStorage); };
+  }, []);
+
+  // Mapeia moduleKey → hubId para encontrar posição na ordem
+  const keyToHubId: Record<string, string> = { rh: "rh-dp" };
+
   const MODULE_INFO: Record<string, { label: string; subtitle: string; icon: any; color: string; bgColor: string; borderColor: string; description: string }> = {
     rh: { label: "RH & DP", subtitle: "Recursos Humanos e Departamento Pessoal", icon: Users, color: "text-blue-600", bgColor: "bg-blue-50", borderColor: "border-blue-200", description: "Colaboradores, folha de pagamento, ponto eletrônico, férias, benefícios, advertências, rescisão e documentação trabalhista." },
     sst: { label: "SST", subtitle: "Segurança e Saúde do Trabalho", icon: Shield, color: "text-emerald-600", bgColor: "bg-emerald-50", borderColor: "border-emerald-200", description: "EPIs, ASOs, CIPA, treinamentos de segurança, DDS, desvios, planos de ação e conformidade com normas regulamentadoras." },
@@ -2059,7 +2076,16 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
       </div>
 
       <div className="grid gap-4">
-        {modules.map((mod: any) => {
+        {(moduleOrder.length === 0 ? modules : [...modules].sort((a: any, b: any) => {
+          const aHub = keyToHubId[a.moduleKey] ?? a.moduleKey;
+          const bHub = keyToHubId[b.moduleKey] ?? b.moduleKey;
+          const ai = moduleOrder.indexOf(aHub);
+          const bi = moduleOrder.indexOf(bHub);
+          if (ai === -1 && bi === -1) return 0;
+          if (ai === -1) return 1;
+          if (bi === -1) return -1;
+          return ai - bi;
+        })).map((mod: any) => {
           const info = MODULE_INFO[mod.moduleKey];
           if (!info) return null;
           const Icon = info.icon;
