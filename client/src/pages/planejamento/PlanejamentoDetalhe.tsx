@@ -3671,9 +3671,34 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
 function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_ }: any) {
   const [semana, setSemana] = useState(() => toMonday(new Date()));
   const [obs, setObs] = useState("");
-  const [custoPrev, setCustoPrev] = useState("");
-  const [custoReal, setCustoReal] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // ── Cruzamento orçamento × cronograma (para calcular venda prevista/realizada mensal) ──
+  const { data: cruzamento } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
+    { projetoId }, { enabled: !!projetoId });
+
+  // Mês da semana selecionada
+  const mesSemana = semana.substring(0, 7); // "YYYY-MM"
+
+  // Distribui os itens do cruzamento pelo tempo e obtém venda e custo do mês selecionado
+  const dadosMesSelecionado = useMemo(() => {
+    const itens = (cruzamento as any)?.itens ?? [];
+    if (itens.length === 0) return { venda: 0, custo: 0 };
+    const [ano, m] = mesSemana.split("-").map(Number);
+    let venda = 0, custo = 0;
+    itens.forEach((item: any) => {
+      if (!item.dataInicio || !item.dataFim) return;
+      const durTotal = Math.max(1, Math.round(
+        (new Date(item.dataFim   + "T00:00:00").getTime() -
+         new Date(item.dataInicio + "T00:00:00").getTime()) / 86400000) + 1);
+      const diasMes = diasNoMes(item.dataInicio, item.dataFim, ano, m);
+      if (diasMes === 0) return;
+      const frac = diasMes / durTotal;
+      venda += (item.vendaTotal ?? 0) * frac;
+      custo += (item.custoNorm  ?? 0) * frac;
+    });
+    return { venda, custo };
+  }, [cruzamento, mesSemana]);
 
   // Semanas baseadas nas datas reais do cronograma (igual ao AvancoSemanal)
   const semanas = useMemo(() => {
@@ -3846,6 +3871,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const existente = refisLista.find((r: any) => r.semana === semana);
 
+  // ── Venda prevista/realizada do mês (do Cronograma Financeiro) ────────────
+  // Previsto  = venda do mês × % avanço previsto da semana
+  // Realizado = venda do mês × % avanço realizado da semana
+  const vendaMes      = dadosMesSelecionado.venda;
+  const custoPrevAuto = +(vendaMes * avancoPrevisto / 100).toFixed(2);
+  const custoRealAuto = +(vendaMes * avancoRealAtual / 100).toFixed(2);
+
   function emitirRefis() {
     salvarMutation.mutate({
       projetoId,
@@ -3856,8 +3888,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       avancoSemanalRealizado: avancoRealSemanal,
       spi:                    parseFloat(spi.toFixed(4)),
       cpi:                    1,
-      custoPrevisto:          parseFloat(custoPrev || "0"),
-      custoRealizado:         parseFloat(custoReal || "0"),
+      custoPrevisto:          custoPrevAuto,
+      custoRealizado:         custoRealAuto,
       observacoes:            obs || undefined,
       status:                 "emitido",
     });
@@ -4201,24 +4233,61 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       ))}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          BLOCO 6 — INPUTS (Custos + Observações)
+          BLOCO 6 — VENDA PREVISTA / REALIZADA + Observações
       ══════════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Dados para Emissão</p>
+        <div className="flex items-center justify-between flex-wrap gap-1">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Dados para Emissão</p>
+          {vendaMes > 0 && (
+            <p className="text-[10px] text-slate-400">
+              Venda do mês ({new Date(mesSemana + "-15").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}):
+              <span className="font-semibold text-slate-600 ml-1">{fmt(vendaMes)}</span>
+            </p>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs">Custo Previsto (R$)</Label>
-            <Input type="number" value={custoPrev}
-              onChange={e => setCustoPrev(e.target.value)}
-              placeholder="0,00" className="mt-1 text-xs" />
+          {/* Custo Previsto — automático */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Venda Prevista no Mês
+            </p>
+            {vendaMes > 0 ? (
+              <>
+                <p className="text-xl font-bold text-amber-800 mt-1">{fmt(custoPrevAuto)}</p>
+                <p className="text-[10px] text-amber-600 mt-0.5">
+                  {fmt(vendaMes)} × {avancoPrevisto.toFixed(1)}% (avanço previsto)
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-amber-600 mt-1">—</p>
+            )}
           </div>
-          <div>
-            <Label className="text-xs">Custo Realizado (R$)</Label>
-            <Input type="number" value={custoReal}
-              onChange={e => setCustoReal(e.target.value)}
-              placeholder="0,00" className="mt-1 text-xs" />
+
+          {/* Custo Realizado — automático */}
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">
+              Venda Realizada no Mês
+            </p>
+            {vendaMes > 0 ? (
+              <>
+                <p className="text-xl font-bold text-blue-800 mt-1">{fmt(custoRealAuto)}</p>
+                <p className="text-[10px] text-blue-600 mt-0.5">
+                  {fmt(vendaMes)} × {avancoRealAtual.toFixed(1)}% (avanço realizado)
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-blue-600 mt-1">—</p>
+            )}
           </div>
         </div>
+
+        {vendaMes === 0 && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Cruzamento orçamento × cronograma não disponível — os valores de venda serão registrados como 0.
+          </p>
+        )}
+
         <div>
           <Label className="text-xs">Observações / Ocorrências</Label>
           <textarea
