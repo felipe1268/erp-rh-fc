@@ -3784,7 +3784,7 @@ export const orcamentoRouter = router({
       companyId:     z.number(),
       fileBase64:    z.string(),
       fileName:      z.string(),
-      colMapping:    z.record(z.number()).optional(),
+      colMapping:    z.record(z.string(), z.number()).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

@@ -337,7 +337,7 @@ ${climaTexto}`;
       titulo:      z.string(),
       descricao:   z.string(),
       tipoCenario: z.string().optional(),
-      parametros:  z.record(z.any()).optional(),
+      parametros:  z.record(z.string(), z.any()).optional(),
       mensagem:    z.string(),
       sessaoId:    z.string(),
     }))
