@@ -1,1 +1,0 @@
-ALTER TABLE `employees` DROP COLUMN `obraAtualId`;

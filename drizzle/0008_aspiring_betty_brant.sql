@@ -1,1 +1,0 @@
-ALTER TABLE `he_solicitacoes` ADD `observacaoAdmin` text;
