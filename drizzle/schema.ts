@@ -4328,6 +4328,62 @@ export const planejamentoComprasRevisoes = pgTable("planejamento_compras_revisoe
   geradoPorRevisaoCronograma:  integer("gerado_por_revisao_cronograma"),
 });
 
+// ── IA Cronograma ──────────────────────────────────────────────────────────
+
+export const iaCronogramaConhecimento = pgTable("ia_cronograma_conhecimento", {
+  id:                   serial().primaryKey(),
+  companyId:            integer("company_id"),
+  palavrasChave:        text("palavras_chave").notNull(),
+  tipoAtividade:        varchar("tipo_atividade", { length: 100 }),
+  recursosEquipamentos: json("recursos_equipamentos").default([]),
+  recursosEfetivo:      json("recursos_efetivo").default([]),
+  sensibilidadeClima:   json("sensibilidade_clima").default({}),
+  contextoObra:         text("contexto_obra"),
+  confirmacoes:         integer().notNull().default(0),
+  rejeicoes:            integer().notNull().default(0),
+  fonte:                varchar({ length: 50 }).default("ia"),
+  criadoPor:            varchar("criado_por", { length: 200 }),
+  criadoEm:             timestamp("criado_em").defaultNow(),
+  atualizadoEm:         timestamp("atualizado_em").defaultNow(),
+});
+
+export const iaCronogramaChat = pgTable("ia_cronograma_chat", {
+  id:         serial().primaryKey(),
+  projetoId:  integer("projeto_id").notNull(),
+  companyId:  integer("company_id"),
+  sessaoId:   varchar("sessao_id", { length: 50 }).notNull(),
+  role:       varchar({ length: 20 }).notNull(),
+  conteudo:   text().notNull(),
+  tipo:       varchar({ length: 30 }).default("chat"),
+  criadoEm:   timestamp("criado_em").defaultNow(),
+});
+
+export const iaCronogramaAlertas = pgTable("ia_cronograma_alertas", {
+  id:             serial().primaryKey(),
+  projetoId:      integer("projeto_id").notNull(),
+  atividadeId:    integer("atividade_id"),
+  nomeAtividade:  varchar("nome_atividade", { length: 500 }),
+  dataAlerta:     date("data_alerta").notNull(),
+  tipoAlerta:     varchar("tipo_alerta", { length: 50 }).notNull(),
+  severidade:     varchar({ length: 20 }).notNull().default("media"),
+  descricao:      text(),
+  reconhecido:    boolean().notNull().default(false),
+  geradoEm:       timestamp("gerado_em").defaultNow(),
+});
+
+export const iaCronogramaCenarios = pgTable("ia_cronograma_cenarios", {
+  id:          serial().primaryKey(),
+  projetoId:   integer("projeto_id").notNull(),
+  companyId:   integer("company_id"),
+  titulo:      varchar({ length: 200 }).notNull(),
+  descricao:   text(),
+  parametros:  json("parametros").default({}),
+  resultadoIA: text("resultado_ia"),
+  status:      varchar({ length: 30 }).default("rascunho"),
+  criadoPor:   varchar("criado_por", { length: 200 }),
+  criadoEm:    timestamp("criado_em").defaultNow(),
+});
+
 export const orcamentoParametros = pgTable("orcamento_parametros", {
   id:           serial().notNull().primaryKey(),
   companyId:    integer().notNull().unique(),
