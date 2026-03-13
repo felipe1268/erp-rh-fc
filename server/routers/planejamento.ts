@@ -984,6 +984,7 @@ export const planejamentoRouter = router({
       inicioFaturamento: z.string().nullable().optional(),
       sinalPct:          z.number().min(0).max(100).optional(),
       retencaoPct:       z.number().min(0).max(100).optional(),
+      dataInicioObra:    z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1001,6 +1002,7 @@ export const planejamentoRouter = router({
         inicioFaturamento: input.inicioFaturamento ?? null,
         sinalPct:          String(input.sinalPct ?? 0),
         retencaoPct:       String(input.retencaoPct ?? 5),
+        dataInicioObra:    input.dataInicioObra ?? null,
         bloqueado:         false,
         atualizadoEm:      new Date(),
       };
