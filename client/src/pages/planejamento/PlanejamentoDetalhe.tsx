@@ -2331,7 +2331,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   const [importFileName, setImportFileName] = useState("");
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [filtrarSemana, setFiltrarSemana] = useState(true);
+  const [filtroAtivo, setFiltroAtivo] = useState<"semana" | "pendentes" | "todas">("semana");
   const fileRef   = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -2369,18 +2369,17 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
 
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
 
-  // Filtra atividades ativas na semana selecionada (Seg-Sex)
+  // Filtra atividades ativas na semana selecionada (Seg-Sex) — base para todos os modos
   const folhasNaSemana = useMemo(() => {
-    if (!filtrarSemana) return folhas;
+    if (filtroAtivo === "todas") return folhas;
     const mon = new Date(semanaAtual + "T12:00:00");
     const fri = new Date(mon.getTime() + 4 * 86400000);
-    const monStr = semanaAtual;
     const friStr = fri.toISOString().split("T")[0];
     return folhas.filter((a: any) => {
       if (!a.dataInicio || !a.dataFim) return true;
-      return a.dataInicio <= friStr && a.dataFim >= monStr;
+      return a.dataInicio <= friStr && a.dataFim >= semanaAtual;
     });
-  }, [folhas, semanaAtual, filtrarSemana]);
+  }, [folhas, semanaAtual, filtroAtivo]);
 
   // % realizado ponderado por semana (para indicador no seletor)
   const semanasComDados = useMemo(() => {
@@ -2412,6 +2411,25 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
 
   const getAvanco = (id: number) =>
     avancoLocal[id] !== undefined ? avancoLocal[id] : (avancoExistente[id] ?? 0);
+
+  // Atividades pendentes: na semana + previsto > 0 + realizado = 0
+  const folhasPendentes = useMemo(() => {
+    return folhasNaSemana.filter((a: any) => {
+      const atual = avancoLocal[a.id] !== undefined ? avancoLocal[a.id] : (avancoExistente[a.id] ?? 0);
+      if (atual > 0) return false;
+      if (!a.dataInicio || !a.dataFim) return false;
+      const ini = new Date(a.dataInicio).getTime();
+      const fim = new Date(a.dataFim).getTime();
+      const ref = new Date(semanaAtual).getTime();
+      let prevInd = 0;
+      if (ref >= fim) prevInd = 100;
+      else if (ref > ini) prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+      return prevInd > 0;
+    });
+  }, [folhasNaSemana, avancoLocal, avancoExistente, semanaAtual]);
+
+  // Lista final exibida na tabela (muda conforme filtroAtivo)
+  const folhasExibidas = filtroAtivo === "pendentes" ? folhasPendentes : folhasNaSemana;
 
   // Avanço anterior por atividade
   const avancoAnterior = useMemo(() => {
@@ -2634,15 +2652,27 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
           </div>
         </div>
         <div className="flex gap-2 items-center">
-          {/* Filtro por semana */}
+          {/* Filtro de atividades — cicla entre 3 estados */}
           <Button
             size="sm" variant="outline"
-            className={`gap-1.5 ${filtrarSemana ? "bg-blue-50 border-blue-300 text-blue-700" : "text-slate-500"}`}
-            onClick={() => setFiltrarSemana(v => !v)}
-            title={filtrarSemana ? "Mostrando apenas atividades da semana selecionada" : "Mostrando todas as atividades"}
+            className={`gap-1.5 ${
+              filtroAtivo === "semana"   ? "bg-blue-50 border-blue-300 text-blue-700" :
+              filtroAtivo === "pendentes" ? "bg-amber-50 border-amber-400 text-amber-700" :
+              "text-slate-500 border-slate-300"
+            }`}
+            onClick={() => setFiltroAtivo(v =>
+              v === "semana" ? "pendentes" : v === "pendentes" ? "todas" : "semana"
+            )}
+            title={
+              filtroAtivo === "semana"    ? "Clique para ver só as não executadas" :
+              filtroAtivo === "pendentes" ? "Clique para ver todas as atividades" :
+              "Clique para voltar ao filtro da semana"
+            }
           >
             <Filter className="h-3.5 w-3.5" />
-            {filtrarSemana ? `${semanaNum}ª Sem. (${folhasNaSemana.length} ativ.)` : `Todas (${folhas.length})`}
+            {filtroAtivo === "semana"    && `${semanaNum}ª Sem. (${folhasNaSemana.length} ativ.)`}
+            {filtroAtivo === "pendentes" && `Não Execut. (${folhasPendentes.length})`}
+            {filtroAtivo === "todas"     && `Todas (${folhas.length})`}
           </Button>
           {/* Botão importar MS Project */}
           <Button
@@ -2773,13 +2803,47 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
         </div>
       </div>
 
+      {/* ── Alerta: modo "Não Executadas" ───────────────────────────────────── */}
+      {filtroAtivo === "pendentes" && (
+        <div className={`flex items-start gap-3 rounded-xl px-4 py-3 border ${folhasPendentes.length > 0 ? "bg-amber-50 border-amber-300" : "bg-emerald-50 border-emerald-300"}`}>
+          <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${folhasPendentes.length > 0 ? "text-amber-500" : "text-emerald-500"}`} />
+          <div className="flex-1 min-w-0">
+            {folhasPendentes.length > 0 ? (
+              <>
+                <p className="text-xs font-semibold text-amber-800">
+                  {folhasPendentes.length} {folhasPendentes.length === 1 ? "atividade prevista" : "atividades previstas"} para esta semana sem execução registrada
+                </p>
+                <p className="text-[10px] text-amber-600 mt-0.5">
+                  Estas atividades tinham avanço esperado pelo cronograma mas não foram lançadas. Registre o % realizado ou justifique o não-inicio.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-semibold text-emerald-800">Todas as atividades da semana foram executadas</p>
+                <p className="text-[10px] text-emerald-600 mt-0.5">Nenhuma pendência encontrada para a semana {semanaAtual}.</p>
+              </>
+            )}
+          </div>
+          <button className="text-slate-400 hover:text-slate-600" onClick={() => setFiltroAtivo("semana")}>
+            <XCircle className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* ── Tabela de atividades ─────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-slate-700 text-white">
+            <tr className={filtroAtivo === "pendentes" ? "bg-amber-700 text-white" : "bg-slate-700 text-white"}>
               <th className="py-2 px-3 text-left w-20">EAP</th>
-              <th className="py-2 px-3 text-left">Atividade</th>
+              <th className="py-2 px-3 text-left">
+                Atividade
+                {filtroAtivo === "pendentes" && (
+                  <span className="ml-2 text-[9px] font-normal bg-amber-900/40 rounded px-1.5 py-0.5 uppercase tracking-wider">
+                    Não Executadas
+                  </span>
+                )}
+              </th>
               <th className="py-2 px-3 text-left w-24">Início</th>
               <th className="py-2 px-3 text-left w-24">Fim</th>
               <th className="py-2 px-3 text-right w-20">Previsto%</th>
@@ -2793,12 +2857,14 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
                 Nenhuma atividade. Cadastre no Cronograma primeiro.
               </td></tr>
             )}
-            {folhasNaSemana.length === 0 && folhas.length > 0 && (
+            {folhasExibidas.length === 0 && folhas.length > 0 && (
               <tr><td colSpan={7} className="py-8 text-center text-slate-400">
-                Nenhuma atividade ativa nesta semana. Clique em "Todas" para ver todas.
+                {filtroAtivo === "pendentes"
+                  ? "Todas as atividades da semana foram executadas — nenhuma pendência."
+                  : "Nenhuma atividade ativa nesta semana. Clique no filtro para ver todas."}
               </td></tr>
             )}
-            {folhasNaSemana.map((a: any, idx: number) => {
+            {folhasExibidas.map((a: any, idx: number) => {
               const atual    = getAvanco(a.id);
               const anterior = avancoAnterior[a.id] ?? 0;
               const alterado = avancoLocal[a.id] !== undefined;
@@ -2814,13 +2880,20 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
               }
               const atrasada = !alterado && atual < prevInd - 5;
 
+              const naoExecutada = filtroAtivo === "pendentes" && atual === 0 && prevInd > 0;
+
               return (
-                <tr key={a.id} className={`border-b border-slate-50 ${alterado ? "bg-blue-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                <tr key={a.id} className={`border-b ${
+                  naoExecutada     ? "bg-amber-50/70 border-amber-100" :
+                  alterado         ? "bg-blue-50/60 border-slate-50" :
+                  idx % 2 === 0    ? "bg-white border-slate-50" :
+                                     "bg-slate-50/40 border-slate-50"
+                }`}>
                   <td className="py-2 px-3 font-mono text-slate-500">{a.eapCodigo ?? ""}</td>
                   <td className="py-2 px-3 text-slate-700">
                     <div className="flex items-center gap-1.5">
-                      {atrasada && <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />}
-                      {a.nome}
+                      {(atrasada || naoExecutada) && <AlertTriangle className={`h-3 w-3 shrink-0 ${naoExecutada ? "text-amber-600" : "text-amber-500"}`} />}
+                      <span className={naoExecutada ? "font-medium text-amber-900" : ""}>{a.nome}</span>
                     </div>
                   </td>
                   <td className="py-2 px-3 text-slate-500">{fmtBR(a.dataInicio)}</td>
