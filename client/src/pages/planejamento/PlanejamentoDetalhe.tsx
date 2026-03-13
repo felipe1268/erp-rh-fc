@@ -4921,6 +4921,20 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
   const [subTab, setSubTab] = useState<SubTabIA>("assistente");
   const [sessaoId] = useState(() => `sess-${projetoId}-${Date.now()}`);
 
+  // Dados financeiros do cruzamento (para o Simulador)
+  const { data: cruzamento } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
+    { projetoId }, { enabled: !!projetoId }
+  );
+
+  const dadosFinanceiros = useMemo(() => {
+    const itens = (cruzamento as any)?.itens ?? [];
+    if (itens.length === 0) return { valorContrato: 0, custoTotal: 0, margemPerc: 0 };
+    const valorContrato = itens.reduce((s: number, i: any) => s + n(i.vendaTotal), 0);
+    const custoTotal    = itens.reduce((s: number, i: any) => s + n(i.custoNorm), 0);
+    const margemPerc    = valorContrato > 0 ? +((valorContrato - custoTotal) / valorContrato * 100).toFixed(1) : 0;
+    return { valorContrato, custoTotal, margemPerc };
+  }, [cruzamento]);
+
   // ── Assistente ──────────────────────────────────────────────────
   const [inputMsg, setInputMsg] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -4980,10 +4994,12 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
 
   // ── Simulador ────────────────────────────────────────────────────
   const [simTitulo,     setSimTitulo]     = useState("");
-  const [simDescricao,  setSimDescricao]  = useState("");
   const [simMensagem,   setSimMensagem]   = useState("");
+  const [simAbaForm,    setSimAbaForm]    = useState<"prazo"|"custo"|"caixa">("prazo");
   const [simParams,     setSimParams]     = useState<Record<string, any>>({
     equipeExtra: 0, aceleracaoPercent: 0, atividadesAfetadas: "", prazoRecuperarDias: 0,
+    custoExtraEstimado: 0, horasExtrasSemana: 0, custoMOExtra: 0,
+    margemRiscoMaxPerc: 3, anteciparMedicao: false,
   });
   const [simSessaoId] = useState(() => `sim-${projetoId}-${Date.now()}`);
 
@@ -4999,15 +5015,74 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
     { projetoId }, { enabled: !!projetoId }
   );
 
+  // Calcular avanço/SPI atual a partir de atividades+avanços (para contexto do simulador)
+  const metricsAtuais = useMemo(() => {
+    const hoje = new Date().toISOString().split("T")[0];
+    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
+    // Previsto até hoje
+    let prevAcum = 0;
+    folhas.forEach((a: any) => {
+      if (!a.dataInicio || !a.dataFim) return;
+      const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+      const fim = new Date(a.dataFim   + "T12:00:00").getTime();
+      const ref = new Date(hoje         + "T12:00:00").getTime();
+      const pct = ref >= fim ? 100 : ref <= ini ? 0 : ((ref - ini) / (fim - ini)) * 100;
+      prevAcum += pct * (n(a.pesoFinanceiro) || 1) / pesoTotal;
+    });
+    // Realizado mais recente
+    const m: Record<number, number> = {};
+    avancos.forEach((av: any) => {
+      if (!m[av.atividadeId] || av.semana > (m as any)[`d_${av.atividadeId}`]) {
+        m[av.atividadeId] = n(av.percentualAcumulado);
+        (m as any)[`d_${av.atividadeId}`] = av.semana;
+      }
+    });
+    let realAcum = 0;
+    folhas.forEach((a: any) => {
+      realAcum += (m[a.id] ?? 0) * (n(a.pesoFinanceiro) || 1) / pesoTotal;
+    });
+    prevAcum  = Math.min(100, prevAcum);
+    realAcum  = Math.min(100, realAcum);
+    const desvio = realAcum - prevAcum;
+    const spi    = prevAcum > 0 ? realAcum / prevAcum : 1;
+    // Calcular dias restantes para término
+    const termino = proj?.dataTerminoContratual;
+    const diasRestantes = termino
+      ? Math.max(0, Math.round((new Date(termino + "T12:00:00").getTime() - Date.now()) / 86400000))
+      : null;
+    const diasAtraso = desvio < 0 && diasRestantes
+      ? Math.round(Math.abs(desvio) / 100 * diasRestantes)
+      : 0;
+    return { prevAcum, realAcum, desvio, spi, diasRestantes, diasAtraso };
+  }, [atividades, avancos, proj]);
+
+  // Faturamento mês previsto (mês corrente, ponderado por avanço)
+  const faturamentoMesPrev = useMemo(() => {
+    if (!dadosFinanceiros.valorContrato) return 0;
+    return +(dadosFinanceiros.valorContrato * metricsAtuais.prevAcum / 100).toFixed(0);
+  }, [dadosFinanceiros, metricsAtuais]);
+
   function simularCenario() {
     if (!simMensagem.trim() && !simTitulo.trim()) return;
     simMut.mutate({
       projetoId,
       sessaoId: simSessaoId,
       titulo:    simTitulo || "Cenário sem título",
-      descricao: simDescricao,
-      mensagem:  simMensagem || simDescricao || simTitulo,
-      parametros: simParams,
+      descricao: simMensagem.slice(0, 200),
+      mensagem:  simMensagem || simTitulo,
+      parametros: {
+        ...simParams,
+        // Contexto automático da obra
+        valorContrato:      dadosFinanceiros.valorContrato,
+        custoTotal:         dadosFinanceiros.custoTotal,
+        margemPercAtual:    dadosFinanceiros.margemPerc,
+        faturamentoMesPrev,
+        avancoDesvio:       metricsAtuais.desvio,
+        spiAtual:           metricsAtuais.spi,
+        diasAtrasoAtual:    metricsAtuais.diasAtraso,
+        diasRestantesPrazo: metricsAtuais.diasRestantes,
+      },
     });
   }
 
@@ -5316,68 +5391,246 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
       {/* ── SIMULADOR ──────────────────────────────────────────────── */}
       {subTab === "simulador" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Formulário do cenário */}
-            <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-4 space-y-3">
-              <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Configurar Cenário
-              </p>
-              <div>
-                <label className="text-[11px] text-slate-500 font-medium">Título do Cenário</label>
-                <input value={simTitulo} onChange={e => setSimTitulo(e.target.value)}
-                  placeholder="Ex: Adição de segunda equipe de armação"
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+          {/* ── Painel de Situação Atual da Obra ────────────────────── */}
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-slate-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+              <Activity className="h-3.5 w-3.5 text-amber-400" /> Situação Atual da Obra
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-slate-100">
+              {/* Prazo */}
+              <div className="px-4 py-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Desvio Físico</p>
+                <p className={`text-xl font-bold ${metricsAtuais.desvio < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                  {metricsAtuais.desvio >= 0 ? "+" : ""}{metricsAtuais.desvio.toFixed(1)}pp
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">SPI: {metricsAtuais.spi.toFixed(2)}</p>
               </div>
-              <div>
-                <label className="text-[11px] text-slate-500 font-medium">Parâmetros Quantitativos</label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  {[
-                    { key: "equipeExtra", label: "Equipes extras", type: "number", placeholder: "0" },
-                    { key: "aceleracaoPercent", label: "Aceleração %", type: "number", placeholder: "0" },
-                    { key: "prazoRecuperarDias", label: "Dias a recuperar", type: "number", placeholder: "0" },
-                    { key: "atividadesAfetadas", label: "Atividades afetadas (EAP)", type: "text", placeholder: "2.1, 2.2" },
-                  ].map(({ key, label, type, placeholder }) => (
-                    <div key={key}>
-                      <label className="text-[10px] text-slate-400">{label}</label>
-                      <input type={type} value={simParams[key]} onChange={e => setSimParams(p => ({ ...p, [key]: e.target.value }))}
-                        placeholder={placeholder}
-                        className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                    </div>
+              {/* Dias de atraso */}
+              <div className="px-4 py-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Atraso Estimado</p>
+                <p className={`text-xl font-bold ${metricsAtuais.diasAtraso > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                  {metricsAtuais.diasAtraso > 0 ? `~${metricsAtuais.diasAtraso} dias` : "Em dia"}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  {metricsAtuais.diasRestantes !== null ? `${metricsAtuais.diasRestantes}d restantes` : "prazo não informado"}
+                </p>
+              </div>
+              {/* Contrato */}
+              <div className="px-4 py-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Valor do Contrato</p>
+                <p className="text-base font-bold text-slate-700">
+                  {dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato) : "—"}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Custo: {dadosFinanceiros.custoTotal > 0 ? fmt(dadosFinanceiros.custoTotal) : "—"}</p>
+              </div>
+              {/* Margem */}
+              <div className="px-4 py-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Margem Bruta</p>
+                <p className={`text-xl font-bold ${dadosFinanceiros.margemPerc < 5 ? "text-red-600" : dadosFinanceiros.margemPerc < 15 ? "text-amber-600" : "text-emerald-600"}`}>
+                  {dadosFinanceiros.valorContrato > 0 ? `${dadosFinanceiros.margemPerc}%` : "—"}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  {dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato - dadosFinanceiros.custoTotal) : "configure orçamento"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Grid: Formulário + Chat ────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Formulário do cenário */}
+            <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col">
+              {/* Header do form com tabs de contexto */}
+              <div className="border-b border-slate-100 px-4 py-2.5 flex items-center gap-2 justify-between">
+                <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Configurar Cenário
+                </p>
+                <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5 text-[10px]">
+                  {(["prazo", "custo", "caixa"] as const).map(aba => (
+                    <button key={aba} onClick={() => setSimAbaForm(aba)}
+                      className={`px-2.5 py-1 rounded-md font-semibold transition-all capitalize ${simAbaForm === aba ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}>
+                      {aba === "prazo" ? "⏱ Prazo" : aba === "custo" ? "💰 Custo" : "🏦 Caixa"}
+                    </button>
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="text-[11px] text-slate-500 font-medium">Descreva o cenário / plano de ataque</label>
-                <textarea value={simMensagem} onChange={e => setSimMensagem(e.target.value)}
-                  placeholder="Descreva detalhadamente o cenário que você quer simular. Ex: Quero adicionar uma equipe extra de concretagem e trabalhar aos sábados para recuperar 15 dias de atraso na fundação..."
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={5} />
+
+              <div className="p-4 space-y-3 flex-1">
+                {/* Título */}
+                <div>
+                  <label className="text-[11px] text-slate-500 font-medium">Título do Cenário</label>
+                  <input value={simTitulo} onChange={e => setSimTitulo(e.target.value)}
+                    placeholder="Ex: Adição de segunda equipe de armação"
+                    className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                </div>
+
+                {/* ── Aba PRAZO ── */}
+                {simAbaForm === "prazo" && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Parâmetros de Prazo</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { key: "prazoRecuperarDias",  label: "Dias a recuperar",         type: "number", placeholder: "0" },
+                        { key: "aceleracaoPercent",   label: "Aceleração %",             type: "number", placeholder: "0" },
+                        { key: "equipeExtra",          label: "Equipes extras",           type: "number", placeholder: "0" },
+                        { key: "atividadesAfetadas",   label: "Atividades (EAP)",         type: "text",   placeholder: "2.1, 2.2" },
+                      ].map(({ key, label, type, placeholder }) => (
+                        <div key={key}>
+                          <label className="text-[10px] text-slate-400">{label}</label>
+                          <input type={type} value={simParams[key]}
+                            onChange={e => setSimParams(p => ({ ...p, [key]: e.target.value }))}
+                            placeholder={placeholder}
+                            className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Aba CUSTO ── */}
+                {simAbaForm === "custo" && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Parâmetros de Custo Adicional</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { key: "custoExtraEstimado",  label: "Custo extra (R$)",         type: "number", placeholder: "0" },
+                        { key: "horasExtrasSemana",   label: "Horas extras/semana",      type: "number", placeholder: "0" },
+                        { key: "custoMOExtra",         label: "Custo MO extra (R$/h)",   type: "number", placeholder: "0" },
+                        { key: "equipeExtra",          label: "Equipes extras",           type: "number", placeholder: "0" },
+                      ].map(({ key, label, type, placeholder }) => (
+                        <div key={key}>
+                          <label className="text-[10px] text-slate-400">{label}</label>
+                          <input type={type} value={simParams[key]}
+                            onChange={e => setSimParams(p => ({ ...p, [key]: e.target.value }))}
+                            placeholder={placeholder}
+                            className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" />
+                        </div>
+                      ))}
+                    </div>
+                    {/* Custo extra em % da margem */}
+                    {dadosFinanceiros.valorContrato > 0 && simParams.custoExtraEstimado > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs">
+                        <p className="font-semibold text-amber-800">Impacto na Margem Estimado:</p>
+                        <p className="text-amber-700 mt-0.5">
+                          Custo extra = <strong>{((n(simParams.custoExtraEstimado) / dadosFinanceiros.valorContrato) * 100).toFixed(2)}%</strong> do contrato
+                          {" — "}Margem cairia para ~<strong>{(dadosFinanceiros.margemPerc - (n(simParams.custoExtraEstimado) / dadosFinanceiros.valorContrato * 100)).toFixed(1)}%</strong>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Aba CAIXA ── */}
+                {simAbaForm === "caixa" && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Contexto de Caixa & Margem</p>
+                    {/* Auto-preenchidos */}
+                    <div className="bg-slate-50 rounded-lg p-3 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Valor do Contrato</span>
+                        <span className="font-semibold text-slate-700">{dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato) : "—"}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Custo Orçado</span>
+                        <span className="font-semibold text-slate-700">{dadosFinanceiros.custoTotal > 0 ? fmt(dadosFinanceiros.custoTotal) : "—"}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+                        <span className="text-slate-500 font-medium">Margem Bruta Atual</span>
+                        <span className={`font-bold text-base ${dadosFinanceiros.margemPerc < 5 ? "text-red-600" : dadosFinanceiros.margemPerc < 15 ? "text-amber-600" : "text-emerald-600"}`}>
+                          {dadosFinanceiros.valorContrato > 0 ? `${dadosFinanceiros.margemPerc}%` : "—"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-400">Margem mínima aceitável (%)</label>
+                        <input type="number" value={simParams.margemRiscoMaxPerc}
+                          onChange={e => setSimParams(p => ({ ...p, margemRiscoMaxPerc: e.target.value }))}
+                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400">Próxima medição (data)</label>
+                        <input type="date" value={simParams.dataProximaMedicao ?? ""}
+                          onChange={e => setSimParams(p => ({ ...p, dataProximaMedicao: e.target.value }))}
+                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs" />
+                      </div>
+                    </div>
+                    {metricsAtuais.diasAtraso > 0 && dadosFinanceiros.valorContrato > 0 && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs">
+                        <p className="font-semibold text-red-700">⚠ Risco de Caixa Estimado:</p>
+                        <p className="text-red-600 mt-0.5">
+                          {metricsAtuais.diasAtraso} dias de atraso podem impactar ~<strong>
+                            {fmt(dadosFinanceiros.valorContrato * Math.abs(metricsAtuais.desvio) / 100)}
+                          </strong> na próxima medição
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Mensagem livre */}
+                <div>
+                  <label className="text-[11px] text-slate-500 font-medium">Descreva o cenário / plano de ação</label>
+                  <textarea value={simMensagem} onChange={e => setSimMensagem(e.target.value)}
+                    placeholder="Descreva o cenário: quais ações serão tomadas, quais recursos serão mobilizados, quais atividades serão aceleradas. A IA irá analisar o impacto no prazo, custo, caixa e margem..."
+                    className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    rows={4} />
+                </div>
+
+                <Button className="w-full bg-gradient-to-r from-purple-700 to-slate-800 hover:from-purple-800 hover:to-slate-900 gap-1.5 text-white"
+                  disabled={simMut.isPending || (!simMensagem.trim() && !simTitulo.trim())}
+                  onClick={simularCenario}>
+                  {simMut.isPending
+                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando Prazo · Custo · Caixa · Margem...</>
+                    : <><Zap className="h-3.5 w-3.5 text-amber-400" /> Simular com CRONOS</>}
+                </Button>
               </div>
-              <Button className="w-full bg-slate-800 hover:bg-slate-900 gap-1.5"
-                disabled={simMut.isPending || (!simMensagem.trim() && !simTitulo.trim())}
-                onClick={simularCenario}>
-                {simMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-amber-400" />}
-                {simMut.isPending ? "Simulando..." : "Simular com IA"}
-              </Button>
             </div>
 
             {/* Chat do simulador */}
-            <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col" style={{ minHeight: 400 }}>
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 text-xs text-slate-500">
-                <Brain className="h-3.5 w-3.5 text-purple-500" /> Análise do Cenário
+            <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col" style={{ minHeight: 480 }}>
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Brain className="h-3.5 w-3.5 text-purple-500" />
+                  <span className="font-semibold text-purple-700">Análise CRONOS</span>
+                  <span className="text-slate-300">·</span>
+                  <span>Prazo · Custo · Caixa · Margem</span>
+                </div>
+                {historicoSim.length > 0 && (
+                  <button className="text-[10px] text-slate-400 hover:text-red-500 flex items-center gap-1"
+                    onClick={() => { /* clear handled via new sessaoId */ }}>
+                    <History className="h-3 w-3" /> {historicoSim.length / 2} simulação(ões)
+                  </button>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {historicoSim.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-8">
-                    <Brain className="h-10 w-10 text-purple-300" />
-                    <p className="text-xs text-slate-400">Configure e envie um cenário para análise técnica pela IA</p>
+                  <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-8">
+                    <div className="relative">
+                      <Brain className="h-12 w-12 text-purple-200" />
+                      <Zap className="h-4 w-4 text-amber-400 absolute -bottom-1 -right-1" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600">CRONOS — Simulador de Impacto</p>
+                      <p className="text-[11px] text-slate-400 mt-1 max-w-[220px]">
+                        Configure e simule um cenário para análise integrada de prazo, custo, caixa e margem
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1.5 text-[10px] text-slate-500">
+                      {["⏱ Impacto no prazo (dias ganhos/perdidos)", "💰 Custo do cenário e projeção de margem", "🏦 Quando bate no caixa (medições)", "🎯 Solução imediata para proteger margem"].map((hint, i) => (
+                        <div key={i} className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-3 py-1.5">
+                          <span>{hint}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {historicoSim.map((m: any, i: number) => (
                   <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                     {m.role === "assistant" && (
                       <div className="flex gap-2 max-w-full">
-                        <div className="bg-purple-600 rounded-full h-6 w-6 flex items-center justify-center shrink-0 mt-1">
+                        <div className="bg-purple-600 rounded-full h-7 w-7 flex items-center justify-center shrink-0 mt-1">
                           <Brain className="h-3.5 w-3.5 text-white" />
                         </div>
                         <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3 text-slate-700 flex-1">
@@ -5394,11 +5647,16 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                 ))}
                 {simMut.isPending && (
                   <div className="flex gap-2">
-                    <div className="bg-purple-600 rounded-full h-6 w-6 flex items-center justify-center shrink-0">
+                    <div className="bg-purple-600 rounded-full h-7 w-7 flex items-center justify-center shrink-0">
                       <Brain className="h-3.5 w-3.5 text-white" />
                     </div>
-                    <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3">
-                      <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
+                    <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3 space-y-1">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                      <p className="text-[10px] text-purple-600">Analisando prazo · custo · impacto no caixa · margem...</p>
                     </div>
                   </div>
                 )}
@@ -5408,7 +5666,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                 <div className="border-t border-slate-100 p-3 flex gap-2">
                   <input value={simMensagem} onChange={e => setSimMensagem(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") simularCenario(); }}
-                    placeholder="Continue a análise, faça uma pergunta..."
+                    placeholder="Aprofunde a análise: e se reduzir equipe? qual o impacto se atrasar mais 2 semanas?"
                     className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500" />
                   <button onClick={simularCenario} disabled={simMut.isPending || !simMensagem.trim()}
                     className="bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white rounded-lg px-3 py-2">

@@ -352,21 +352,49 @@ ${climaTexto}`;
         .where(and(eq(iaCronogramaChat.projetoId, input.projetoId), eq(iaCronogramaChat.sessaoId, input.sessaoId)))
         .orderBy(iaCronogramaChat.criadoEm).limit(15);
 
+      // Extrair dados financeiros dos parâmetros, se enviados
+      const p = input.parametros ?? {} as Record<string, any>;
+      const valorContrato     = p["valorContrato"]      ? Number(p["valorContrato"])      : 0;
+      const custoTotal        = p["custoTotal"]         ? Number(p["custoTotal"])         : 0;
+      const margemPerc        = valorContrato > 0 && custoTotal > 0
+        ? +((valorContrato - custoTotal) / valorContrato * 100).toFixed(1)
+        : p["margemPercAtual"] ? Number(p["margemPercAtual"]) : null;
+      const faturamentoMes    = p["faturamentoMesPrev"] ? Number(p["faturamentoMesPrev"]) : 0;
+      const custoExtraEstimado = p["custoExtraEstimado"] ? Number(p["custoExtraEstimado"]) : 0;
+      const diasAtrasoAtual   = p["diasAtrasoAtual"]    ? Number(p["diasAtrasoAtual"])    : 0;
+      const spiAtual          = p["spiAtual"]           ? Number(p["spiAtual"])           : null;
+      const avancoDesvio      = p["avancoDesvio"]       ? Number(p["avancoDesvio"])       : 0;
+
+      const contextFinanceiro = valorContrato > 0 ? `
+## Contexto Financeiro da Obra:
+- Valor do Contrato (Venda): R$ ${valorContrato.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+- Custo Orçado Total: R$ ${custoTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+- Margem Bruta Prevista: ${margemPerc !== null ? margemPerc + "%" : "não informada"}
+- Faturamento Previsto do Mês: R$ ${faturamentoMes.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+- Custo Extra Estimado do Cenário: R$ ${custoExtraEstimado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+- Desvio Físico Acumulado: ${avancoDesvio.toFixed(1)}pp
+- SPI Atual: ${spiAtual !== null ? spiAtual.toFixed(2) : "não informado"}
+- Dias de atraso acumulado: ${diasAtrasoAtual} dias` : "";
+
       const systemPrompt = buildSystemPrompt(conhecimentos) + `
 
-## Modo: SIMULADOR DE CENÁRIOS
-Você está em modo de simulação. O gestor está pensando em um cenário/plano de ação específico.
-Analise profundamente o impacto proposto, considerando:
-1. Viabilidade técnica e financeira
-2. Impacto no caminho crítico
-3. Recursos adicionais necessários
-4. Riscos e mitigações
-5. Estimativa de ganho/perda de prazo
-6. Alternativas comparadas
+## Modo: SIMULADOR DE CENÁRIOS — ANÁLISE INTEGRADA (PRAZO + CUSTO + CAIXA + MARGEM)
+
+Você está em modo de simulação avançada. O gestor quer entender o impacto COMPLETO do cenário proposto.
+Analise SEMPRE os 5 eixos abaixo, mesmo que o usuário não pergunte explicitamente:
+
+1. **PRAZO** — Impacto no cronograma físico (dias ganhos/perdidos, SPI projetado)
+2. **CUSTO** — Custo adicional do cenário (mão de obra, equipamentos, horas extras)
+3. **CAIXA** — Quando o desvio/custo bate no caixa da obra (próximas medições, antecipações)
+4. **MARGEM** — Risco à margem bruta e estratégias para protegê-la
+5. **SOLUÇÃO IMEDIATA** — O que fazer AGORA, esta semana, para minimizar o impacto
+
+## Formato obrigatório de resposta:
+Use sempre este formato estruturado com as seções marcadas.
 
 Projeto: ${proj?.nome} | Local: ${proj?.local} | Término contratual: ${proj?.dataTerminoContratual}
 Total atividades: ${atividades.length} | Atrasadas: ${atrasadas.length}
-Parâmetros do cenário: ${JSON.stringify(input.parametros ?? {})}`;
+Parâmetros do cenário: ${JSON.stringify(input.parametros ?? {})}${contextFinanceiro}`;
 
       const messagesForLLM = [
         { role: "system" as const, content: systemPrompt },
