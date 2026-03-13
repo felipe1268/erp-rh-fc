@@ -1945,6 +1945,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [cfgInicioFat, setCfgInicioFat] = useState("");
   const [salvando, setSalvando]       = useState(false);
   const [saved, setSaved]             = useState(false);
+  const [entradaFocused, setEntradaFocused] = useState(false);
 
   const { data: configMed, refetch: refetchCfg } = trpc.planejamento.getConfigMedicao.useQuery(
     { projetoId }, { enabled: !!projetoId });
@@ -2118,8 +2119,24 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                 <>
                   <div>
                     <label className="text-[10px] text-slate-500 block mb-1 font-medium">Entrada (R$)</label>
-                    <input type="number" min={0} step={0.01} value={cfgEntrada}
-                      onChange={e => setCfgEntrada(parseFloat(e.target.value) || 0)}
+                    <input
+                      type="text"
+                      value={entradaFocused
+                        ? (cfgEntrada === 0 ? "" : String(cfgEntrada).replace(".", ","))
+                        : (cfgEntrada === 0 ? "" : cfgEntrada.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                      }
+                      onFocus={() => setEntradaFocused(true)}
+                      onBlur={e => {
+                        setEntradaFocused(false);
+                        const raw = e.target.value.replace(/\./g, "").replace(",", ".");
+                        setCfgEntrada(parseFloat(raw) || 0);
+                      }}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^\d,]/g, "");
+                        const asNum = parseFloat(raw.replace(",", ".")) || 0;
+                        setCfgEntrada(asNum);
+                      }}
+                      placeholder="0,00"
                       className="h-9 w-full text-sm border border-amber-200 rounded-lg px-3 bg-white focus:ring-2 focus:ring-amber-400 outline-none" />
                   </div>
                   <div>
