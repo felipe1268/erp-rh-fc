@@ -107,7 +107,7 @@ export const migrationRouter = router({
    */
   importar: protectedProcedure
     .input(z.object({
-      data: z.record(z.any()),
+      data: z.record(z.string(), z.any()),
       mode: z.enum(["replace", "merge"]).default("replace"),
     }))
     .mutation(async ({ ctx, input }) => {
