@@ -24,6 +24,8 @@ import {
   bdiTaxaComercializacao,
   orcamentoSecs,
   orcamentoSecItens,
+  planejamentoProjetos,
+  planejamentoRefis,
 } from "../../drizzle/schema";
 
 const ENCARGOS_DEFAULTS = [
@@ -3638,10 +3640,70 @@ export const orcamentoRouter = router({
           };
         });
 
+      // ── Lucro Médio Mensal (Previsto × Realizado) ────────────────────────────
+      // Para cada projeto ligado a um orçamento desta empresa, calcula:
+      //   Previsto  = lucro / duração em meses do cronograma
+      //   Realizado = (lucro × %avanço) / meses decorridos desde o início
+      const orcIds = comVenda.map(o => o.id);
+      let lucroMensalPrev = 0;
+      let lucroMensalReal = 0;
+
+      if (orcIds.length > 0) {
+        const projRows = await db
+          .select({
+            id:                    planejamentoProjetos.id,
+            orcamentoId:           planejamentoProjetos.orcamentoId,
+            dataInicio:            planejamentoProjetos.dataInicio,
+            dataTerminoContratual: planejamentoProjetos.dataTerminoContratual,
+          })
+          .from(planejamentoProjetos)
+          .where(
+            and(
+              eq(planejamentoProjetos.companyId, input.companyId),
+              inArray(planejamentoProjetos.orcamentoId, orcIds),
+            )
+          );
+
+        const today = new Date();
+        const MS_PER_MONTH = 30.44 * 24 * 3600 * 1000;
+
+        for (const p of projRows) {
+          if (!p.dataInicio || !p.dataTerminoContratual || !p.orcamentoId) continue;
+
+          const orc = comVenda.find(o => o.id === p.orcamentoId);
+          if (!orc) continue;
+
+          const lucro   = n(orc.totalVenda) - n(orc.totalCusto);
+          const tInicio = new Date(p.dataInicio + "T12:00:00").getTime();
+          const tFim    = new Date(p.dataTerminoContratual + "T12:00:00").getTime();
+          const duracaoMeses = Math.max(1, (tFim - tInicio) / MS_PER_MONTH);
+
+          lucroMensalPrev += lucro / duracaoMeses;
+
+          // Último avanço realizado registrado para este projeto
+          const [ultimoRefis] = await db
+            .select({ avancoRealizado: planejamentoRefis.avancoRealizado })
+            .from(planejamentoRefis)
+            .where(eq(planejamentoRefis.projetoId, p.id))
+            .orderBy(desc(planejamentoRefis.semana))
+            .limit(1);
+
+          const avancoReal = n(ultimoRefis?.avancoRealizado ?? 0);
+          if (avancoReal > 0) {
+            const mesesDecorridos = Math.max(1, Math.min(
+              (today.getTime() - tInicio) / MS_PER_MONTH,
+              duracaoMeses
+            ));
+            lucroMensalReal += (lucro * avancoReal / 100) / mesesDecorridos;
+          }
+        }
+      }
+
       return {
         total, totalComBdi: comVenda.length,
         totalVenda, totalCusto, totalMeta, totalMat, totalMdo, totalEquip,
         bdiMedio, margemMedia,
+        lucroMensalPrev, lucroMensalReal,
         recentes: lista.slice(0, 5),
         porStatus, porCliente, porBdi, porMargem,
         lista: lista.slice(0, 50).map(o => ({

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Calculator, FolderOpen, DollarSign, Target, ArrowRight,
   TrendingDown, TrendingUp, BarChart3, Percent, Building2,
-  Clock,
+  Clock, CalendarDays,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -102,8 +102,10 @@ export default function PainelOrcamento() {
   const totalMat    = data?.totalMat     ?? 0;
   const totalMdo    = data?.totalMdo     ?? 0;
   const totalEquip  = data?.totalEquip   ?? 0;
-  const bdiMedio    = data?.bdiMedio     ?? 0;
-  const margemMedia = data?.margemMedia  ?? 0;
+  const bdiMedio        = data?.bdiMedio        ?? 0;
+  const margemMedia     = data?.margemMedia     ?? 0;
+  const lucroMensalPrev = data?.lucroMensalPrev ?? 0;
+  const lucroMensalReal = data?.lucroMensalReal ?? 0;
 
   const porStatus = data?.porStatus ?? [];
   const porCliente = data?.porCliente ?? [];
@@ -225,6 +227,22 @@ export default function PainelOrcamento() {
               value={isLoading ? "..." : fBRL(totalMat)}
               sub={custosTotais > 0 ? `${pct(totalMat / custosTotais)} do custo` : "do custo"}
               iconBg="bg-sky-50" iconColor="text-sky-600"
+            />
+          </div>
+          <div className="col-span-2 lg:col-span-4">
+            <KpiCard
+              title="Lucro Médio Mensal — Previsto" icon={CalendarDays}
+              value={isLoading ? "..." : lucroMensalPrev > 0 ? fBRL(lucroMensalPrev) : "—"}
+              sub={lucroMensalPrev > 0 ? "lucro ÷ duração do cronograma" : "nenhum projeto com cronograma vinculado"}
+              iconBg="bg-amber-50" iconColor="text-amber-600"
+            />
+          </div>
+          <div className="col-span-2 lg:col-span-4">
+            <KpiCard
+              title="Lucro Médio Mensal — Realizado" icon={CalendarDays}
+              value={isLoading ? "..." : lucroMensalReal > 0 ? fBRL(lucroMensalReal) : "—"}
+              sub={lucroMensalReal > 0 ? "conforme avanço físico registrado" : "sem avanço registrado nos projetos"}
+              iconBg="bg-emerald-50" iconColor="text-emerald-600"
             />
           </div>
         </div>
