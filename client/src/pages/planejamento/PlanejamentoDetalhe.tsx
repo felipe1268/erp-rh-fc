@@ -372,6 +372,7 @@ export default function PlanejamentoDetalhe() {
             revisaoAtiva={revisaoAtiva}
             fmt={fmt}
             fPct={fPct}
+            onEditarProjeto={abrirEditProjeto}
           />
         )}
         {aba === "cronograma" && (
@@ -719,7 +720,7 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: VISÃO GERAL
 // ═════════════════════════════════════════════════════════════════════════════
-function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct }: any) {
+function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, onEditarProjeto }: any) {
   const totalAtiv   = atividades.filter((a: any) => !a.isGrupo).length;
   const concluidas  = atividades.filter((a: any) => !a.isGrupo).filter((a: any) => {
     const avMap: Record<number, number> = {};
@@ -795,7 +796,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-slate-700">Dados do Projeto</p>
-            <button onClick={abrirEditProjeto}
+            <button onClick={onEditarProjeto}
               className="text-[10px] flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors">
               <Pencil className="h-3 w-3" /> Editar
             </button>
