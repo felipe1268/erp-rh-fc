@@ -31,7 +31,6 @@ interface TarefaImportada {
 // ── Utilitários de parse ──────────────────────────────────────────────────────
 function parseDuration(dur: string): number {
   if (!dur) return 0;
-  // ISO PT240H0M0S  ou  P10DT0H0M0S
   const h = dur.match(/(\d+)H/);
   const d = dur.match(/(\d+)D/);
   const hours = h ? parseInt(h[1]) : 0;
@@ -39,10 +38,65 @@ function parseDuration(dur: string): number {
   return days + Math.ceil(hours / 8);
 }
 
-function fmtDate(raw: string): string {
-  if (!raw) return "";
-  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : "";
+// Converte serial do Excel para ISO (ex: 45679 → "2025-01-26")
+function excelSerialToISO(serial: number): string {
+  const epoch = new Date(Date.UTC(1899, 11, 30));
+  const ms    = serial * 86400000;
+  const date  = new Date(epoch.getTime() + ms);
+  return date.toISOString().substring(0, 10);
+}
+
+// Converte qualquer representação de data → "YYYY-MM-DD" ou ""
+function fmtDate(raw: any): string {
+  if (raw == null || raw === "") return "";
+
+  // Já é um Date (cellDates: true)
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return "";
+    return raw.toISOString().substring(0, 10);
+  }
+
+  const s = String(raw).trim();
+
+  // Serial numérico do Excel (> 1000 para evitar confundir com dias)
+  if (/^\d+(\.\d+)?$/.test(s) && Number(s) > 1000) {
+    return excelSerialToISO(Math.floor(Number(s)));
+  }
+
+  // YYYY-MM-DD
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  // DD/MM/YYYY ou DD-MM-YYYY (formato brasileiro)
+  const br = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+
+  // MM/DD/YYYY (formato americano)
+  const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (us) {
+    const [, m, d, y] = us;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // Tenta parse nativo como último recurso
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().substring(0, 10);
+
+  return "";
+}
+
+// Valida se uma data ISO é plausível para cronograma (entre 2000 e 2100)
+function isDateOk(iso: string): boolean {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const y = parseInt(iso.substring(0, 4));
+  return y >= 2000 && y <= 2100;
+}
+
+// Formata ISO → dd/mm/yyyy para exibição
+function fmtBRLocal(iso: string): string {
+  if (!iso) return "—";
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
 // ── Parser MS Project XML ─────────────────────────────────────────────────────
@@ -82,58 +136,97 @@ function parseMSProjectXML(text: string): TarefaImportada[] {
 async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImportada[]> {
   const xlsxMod = await import("xlsx");
   const XLSX = xlsxMod.default ?? xlsxMod;
-  const wb = XLSX.read(buffer, { type: "array" });
+  // cellDates: true → datas vêm como objetos Date em vez de serial numérico
+  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
 
-  // Tenta pegar a primeira planilha
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<any>(ws, { defval: "" });
+  const rows = XLSX.utils.sheet_to_json<any>(ws, { defval: "", raw: false });
 
   if (!rows.length) throw new Error("Planilha vazia");
 
-  // Detecta as colunas automaticamente (MS Project exporta com nomes em inglês ou português)
-  const KEYS_NOME = ["Name", "Task Name", "Atividade", "Nome", "Tarefa"];
-  const KEYS_WBS  = ["WBS", "EAP", "Código", "Code"];
-  const KEYS_INI  = ["Start", "Data de Início", "Início", "Inicio"];
-  const KEYS_FIM  = ["Finish", "Data de Término", "Fim", "Término", "Termino"];
-  const KEYS_DUR  = ["Duration", "Duração", "Duracao"];
-  const KEYS_PRED = ["Predecessors", "Predecessoras", "Predecessores"];
-  const KEYS_REC  = ["Resource Names", "Recursos", "Recurso"];
+  // Detecta colunas em inglês ou português
+  const KEYS_NOME = ["Name", "Task Name", "Atividade", "Nome", "Tarefa", "Descrição", "Descricao"];
+  const KEYS_WBS  = ["WBS", "EAP", "Código WBS", "Code", "Codigo"];
+  const KEYS_INI  = ["Start", "Data de Início", "Início", "Inicio", "Data Início", "Data Inicio"];
+  const KEYS_FIM  = ["Finish", "Data de Término", "Fim", "Término", "Termino", "Data Término", "Data Termino"];
+  const KEYS_DUR  = ["Duration", "Duração", "Duracao", "Dur"];
+  const KEYS_PRED = ["Predecessors", "Predecessoras", "Predecessores", "Pred"];
+  const KEYS_REC  = ["Resource Names", "Recursos", "Recurso", "Resource"];
+  const KEYS_SUMM = ["Summary", "Resumo", "Grupo", "Is Summary", "Outline Level", "Nível", "Nivel"];
 
-  function findKey(keys: string[], row: any) {
-    const headers = Object.keys(row);
-    for (const k of keys) for (const h of headers) {
-      if (h.toLowerCase().includes(k.toLowerCase())) return h;
+  const headers = Object.keys(rows[0] ?? {});
+
+  function findKey(keys: string[]): string | null {
+    for (const k of keys) {
+      const found = headers.find(h => h.toLowerCase().trim().includes(k.toLowerCase()));
+      if (found) return found;
     }
     return null;
   }
 
-  const firstRow = rows[0];
-  const kNome = findKey(KEYS_NOME, firstRow);
-  const kWbs  = findKey(KEYS_WBS,  firstRow);
-  const kIni  = findKey(KEYS_INI,  firstRow);
-  const kFim  = findKey(KEYS_FIM,  firstRow);
-  const kDur  = findKey(KEYS_DUR,  firstRow);
-  const kPred = findKey(KEYS_PRED, firstRow);
-  const kRec  = findKey(KEYS_REC,  firstRow);
+  const kNome = findKey(KEYS_NOME);
+  const kWbs  = findKey(KEYS_WBS);
+  const kIni  = findKey(KEYS_INI);
+  const kFim  = findKey(KEYS_FIM);
+  const kDur  = findKey(KEYS_DUR);
+  const kPred = findKey(KEYS_PRED);
+  const kRec  = findKey(KEYS_REC);
+  const kSumm = findKey(KEYS_SUMM);
 
-  if (!kNome) throw new Error("Coluna de nome da tarefa não encontrada");
+  if (!kNome) {
+    const cols = headers.slice(0, 8).join(", ");
+    throw new Error(`Coluna de nome da tarefa não encontrada. Colunas detectadas: ${cols}. Exporte do MS Project com cabeçalhos em inglês ou português.`);
+  }
 
-  return rows
+  const parsed = rows
     .filter((r: any) => r[kNome!]?.toString().trim())
     .map((r: any, i: number) => {
-      const wbs   = kWbs ? r[kWbs]?.toString().trim() : String(i + 1);
       const nome  = r[kNome!]?.toString().trim() ?? "";
-      const ini   = kIni ? fmtDate(r[kIni]?.toString()) : "";
-      const fim   = kFim ? fmtDate(r[kFim]?.toString()) : "";
-      const durRaw= kDur ? r[kDur]?.toString() : "";
-      const durDias = durRaw ? parseDuration(durRaw) || parseInt(durRaw) || 0 : 0;
-      const pred  = kPred ? r[kPred]?.toString().trim() : "";
-      const rec   = kRec  ? r[kRec]?.toString().trim()  : "";
-      const level = wbs ? wbs.split(".").length : 1;
-      const isGrupo = false;
+      const wbs   = kWbs ? (r[kWbs]?.toString().trim() || String(i + 1)) : String(i + 1);
+      const ini   = fmtDate(kIni ? r[kIni] : "");
+      const fim   = fmtDate(kFim ? r[kFim] : "");
+      const durRaw= kDur ? r[kDur]?.toString() ?? "" : "";
+      const durDias = parseDuration(durRaw) || parseInt(durRaw) || 0;
+      const pred  = kPred ? r[kPred]?.toString().trim() ?? "" : "";
+      const rec   = kRec  ? r[kRec]?.toString().trim()  ?? "" : "";
+      const level = wbs.split(".").filter(Boolean).length || 1;
+
+      // Detecta grupo: coluna Summary, ou atividade com filhos (WBS maior implica grupo no pai)
+      let isGrupo = false;
+      if (kSumm) {
+        const sv = r[kSumm]?.toString().toLowerCase();
+        isGrupo = sv === "sim" || sv === "yes" || sv === "1" || sv === "true";
+      }
 
       return { wbs, nome, nivel: level, inicio: ini, fim, durDias, pred, recurso: rec, isGrupo, eapCodigo: wbs, pesoFin: 0 };
     });
+
+  // Detecção automática de grupos: se há WBS filhos, o pai é grupo
+  const wbsSet = new Set(parsed.map(t => t.wbs));
+  parsed.forEach(t => {
+    if (!t.isGrupo) {
+      const hasChild = parsed.some(o => o.wbs !== t.wbs && o.wbs.startsWith(t.wbs + "."));
+      if (hasChild) t.isGrupo = true;
+    }
+  });
+
+  return parsed;
+}
+
+// ── Verifica problemas nas tarefas importadas ─────────────────────────────────
+interface Problema { idx: number; campo: string; msg: string }
+function validarTarefas(tarefas: TarefaImportada[]): Problema[] {
+  const problemas: Problema[] = [];
+  tarefas.forEach((t, i) => {
+    if (t.isGrupo) return;
+    if (!t.inicio || !isDateOk(t.inicio))
+      problemas.push({ idx: i, campo: "inicio", msg: `"${t.nome.substring(0, 30)}" — data de início inválida ou ausente` });
+    if (!t.fim || !isDateOk(t.fim))
+      problemas.push({ idx: i, campo: "fim", msg: `"${t.nome.substring(0, 30)}" — data de término inválida ou ausente` });
+    if (t.inicio && t.fim && isDateOk(t.inicio) && isDateOk(t.fim) && t.fim < t.inicio)
+      problemas.push({ idx: i, campo: "fim", msg: `"${t.nome.substring(0, 30)}" — término anterior ao início (${fmtBRLocal(t.inicio)} → ${fmtBRLocal(t.fim)})` });
+  });
+  return problemas;
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
@@ -152,6 +245,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   const [step, setStep] = useState<"upload" | "preview" | "vinculo">("upload");
   const [tarefas, setTarefas] = useState<TarefaImportada[]>([]);
   const [erro, setErro] = useState<string | null>(null);
+  const [alertas, setAlertas] = useState<Problema[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [arquivo, setArquivo] = useState<string>("");
   const [nivelMax, setNivelMax] = useState(5);
@@ -190,6 +284,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     setStep("upload");
     setTarefas([]);
     setErro(null);
+    setAlertas([]);
     setArquivo("");
     setNivelMax(5);
     setPagina(1);
@@ -231,6 +326,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
 
       const vinculados = vincularComOrcamento(parsed);
       setTarefas(vinculados);
+      setAlertas(validarTarefas(vinculados));
       setStep("preview");
     } catch (e: any) {
       setErro(e.message ?? "Erro ao processar arquivo");
@@ -246,7 +342,11 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   }
 
   function updateTarefa(idx: number, field: keyof TarefaImportada, value: any) {
-    setTarefas(t => t.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+    setTarefas(prev => {
+      const next = prev.map((item, i) => i === idx ? { ...item, [field]: value } : item);
+      setAlertas(validarTarefas(next));
+      return next;
+    });
   }
 
   // Recalcula pesos automaticamente distribuindo 100% pelas folhas
@@ -398,6 +498,21 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 </div>
               )}
 
+              {/* Alertas de datas inválidas */}
+              {alertas.length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 space-y-1 max-h-32 overflow-y-auto">
+                  <p className="text-xs font-semibold text-red-700 flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {alertas.length} problema{alertas.length > 1 ? "s" : ""} de datas detectado{alertas.length > 1 ? "s" : ""}:
+                  </p>
+                  {alertas.slice(0, 8).map((a, i) => (
+                    <p key={i} className="text-[10px] text-red-600">• {a.msg}</p>
+                  ))}
+                  {alertas.length > 8 && <p className="text-[10px] text-red-500 italic">+ {alertas.length - 8} outros</p>}
+                  <p className="text-[10px] text-red-500 mt-1">Corrija as datas na tabela abaixo antes de importar.</p>
+                </div>
+              )}
+
               {/* Controles de filtro e paginação */}
               <div className="flex items-center justify-between gap-2 text-xs text-slate-600">
                 <div className="flex items-center gap-2">
@@ -444,8 +559,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                     {tarefasPagina.map(({ t, i: idx }) => {
                       const indent = (t.nivel - 1) * 12;
                       const vinculado = !!eapMap[t.eapCodigo];
+                      const temProblema = !t.isGrupo && alertas.some(a => a.idx === idx);
                       return (
-                        <tr key={idx} className={`border-b border-slate-50 ${t.isGrupo ? "bg-slate-50 font-semibold" : "bg-white hover:bg-blue-50/30"}`}>
+                        <tr key={idx} className={`border-b border-slate-50 ${temProblema ? "bg-red-50" : t.isGrupo ? "bg-slate-50 font-semibold" : "bg-white hover:bg-blue-50/30"}`}>
                           <td className="px-2 py-1">
                             <Input
                               value={t.eapCodigo}

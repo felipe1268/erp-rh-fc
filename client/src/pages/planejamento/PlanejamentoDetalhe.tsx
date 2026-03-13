@@ -39,6 +39,13 @@ function calcDesvio(dataTermino: string | null) {
   return dias;
 }
 
+// ── Formata data ISO → dd/mm/aaaa ────────────────────────────────────────────
+function fmtBR(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
 // ── Semana (segunda-feira) ────────────────────────────────────────────────────
 function toMonday(d: Date) {
   const day = d.getDay();
@@ -783,7 +790,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
                     <span className="text-slate-700 truncate">{a.nome}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <span className="text-slate-500">Previsto: {a.dataFim}</span>
+                    <span className="text-slate-500">Previsto: {fmtBR(a.dataFim)}</span>
                     <span className="font-semibold text-red-700">{fPct(avMap[a.id] ?? 0)}</span>
                   </div>
                 </div>
@@ -809,8 +816,8 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
                 ? <span className="flex items-center gap-1 text-blue-600"><MapPin className="h-3 w-3" />{proj.local}</span>
                 : <span className="text-amber-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Não definido — clique em Editar</span>],
               ["Responsável", proj.responsavel ?? "—"],
-              ["Início", proj.dataInicio ?? "—"],
-              ["Prazo Contratual", proj.dataTerminoContratual ?? "—"],
+              ["Início", fmtBR(proj.dataInicio) || "—"],
+              ["Prazo Contratual", fmtBR(proj.dataTerminoContratual) || "—"],
               ["Status", proj.status ?? "—"],
               ["Vinculado ao Orçamento", proj.orcamento ? (proj.orcamento.descricao ?? `#${proj.orcamento.id}`) : "—"],
             ].map(([k, v]) => (
@@ -1138,8 +1145,8 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                           {atrasada && <AlertTriangle className="h-3 w-3 text-red-500 ml-1 shrink-0" />}
                         </div>
                       </td>
-                      <td className="py-1.5 px-3 text-slate-500">{a.dataInicio ?? "—"}</td>
-                      <td className="py-1.5 px-3 text-slate-500">{a.dataFim ?? "—"}</td>
+                      <td className="py-1.5 px-3 text-slate-500">{fmtBR(a.dataInicio)}</td>
+                      <td className="py-1.5 px-3 text-slate-500">{fmtBR(a.dataFim)}</td>
                       <td className="py-1.5 px-3 text-right text-slate-500">{a.duracaoDias ?? 0}d</td>
                       <td className="py-1.5 px-3 text-right text-slate-600">{n(a.pesoFinanceiro).toFixed(1)}%</td>
                       <td className="py-1.5 px-3 text-slate-500 truncate max-w-[100px]">{a.recursoPrincipal ?? "—"}</td>
@@ -1717,8 +1724,8 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
                       {a.nome}
                     </div>
                   </td>
-                  <td className="py-2 px-3 text-slate-500">{a.dataInicio ?? "—"}</td>
-                  <td className="py-2 px-3 text-slate-500">{a.dataFim ?? "—"}</td>
+                  <td className="py-2 px-3 text-slate-500">{fmtBR(a.dataInicio)}</td>
+                  <td className="py-2 px-3 text-slate-500">{fmtBR(a.dataFim)}</td>
                   <td className="py-2 px-3 text-right text-orange-600 font-medium">{prevInd.toFixed(0)}%</td>
                   <td className="py-2 px-3 text-right text-slate-500">{fPct(anterior)}</td>
                   <td className="py-2 px-3">
@@ -2985,11 +2992,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [custoReal, setCustoReal] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Semanas cobrindo todo o projeto (dataInicio → dataTerminoContratual)
+  // Semanas baseadas nas datas reais do cronograma (igual ao AvancoSemanal)
   const semanas = useMemo(() => {
-    const s = semanasRange(proj?.dataInicio ?? null, proj?.dataTerminoContratual ?? null);
+    const ins  = atividades.map((a: any) => a.dataInicio).filter(Boolean).sort() as string[];
+    const fins = atividades.map((a: any) => a.dataFim   ).filter(Boolean).sort() as string[];
+    const s = semanasRange(ins[0] ?? null, fins[fins.length - 1] ?? null);
     return s.length > 0 ? s : ultimasSemanas(16);
-  }, [proj?.dataInicio, proj?.dataTerminoContratual]);
+  }, [atividades]);
 
   // Mantém semana dentro da faixa disponível
   useEffect(() => {
