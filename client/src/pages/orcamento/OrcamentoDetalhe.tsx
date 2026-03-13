@@ -1788,7 +1788,7 @@ export default function OrcamentoDetalhe() {
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
               disabled={excluirMut.isPending}
-              onClick={() => excluirMut.mutate({ id, companyId: bibCompanyId })}
+              onClick={() => excluirMut.mutate({ id, companyId: Number(orc?.companyId ?? 0) })}
             >
               {excluirMut.isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Excluindo...</>
