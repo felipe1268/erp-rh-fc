@@ -946,51 +946,57 @@ Faça uma análise técnica detalhada deste desvio de prazo e responda EXATAMENT
 Analise os dados LOB desta obra e forneça diagnóstico técnico preciso sobre colisões entre frentes, desvios de ritmo e risco ao prazo.
 Seja específico, técnico e prático. Use linguagem direta de engenharia de obras.`;
 
+      // Mostrar apenas top 5 colisões mais críticas (menor gap = maior risco)
+      const colisoesSorted = [...input.colisoes].sort((a, b) => a.diasGap - b.diasGap);
+      const colisoesPrincipais = colisoesSorted.slice(0, 5);
       const colisoesText = input.colisoes.length === 0
         ? "Nenhuma colisão detectada — todas as frentes dentro do buffer mínimo."
-        : input.colisoes.map(c =>
-            `- ${c.disciplina1} alcançando ${c.disciplina2} no ${c.pavimento} (gap atual: ${c.diasGap} dias | mínimo: ${input.bufferMinimoDias} dias)`
-          ).join("\n");
+        : [
+            ...colisoesPrincipais.map(c =>
+              `- ${c.disciplina1} → ${c.disciplina2} no ${c.pavimento} (gap: ${c.diasGap}d | mínimo: ${input.bufferMinimoDias}d)`
+            ),
+            input.colisoes.length > 5 ? `... e mais ${input.colisoes.length - 5} colisões adicionais` : ""
+          ].filter(Boolean).join("\n");
 
-      const ritmoText = input.ritmoPorDisciplina.map(r =>
+      // Top 3 disciplinas com maior desvio negativo
+      const ritmoSorted = [...input.ritmoPorDisciplina].sort((a, b) => a.desvioPercent - b.desvioPercent);
+      const ritmoTop = ritmoSorted.slice(0, 4);
+      const ritmoText = ritmoTop.map(r =>
         `- ${r.disciplina}: plan ${r.ritmoPlaneadoPavsSemana.toFixed(2)} pavs/sem | real ${r.ritmoRealizadoPavsSemana.toFixed(2)} pavs/sem | desvio ${r.desvioPercent > 0 ? "+" : ""}${r.desvioPercent.toFixed(0)}%`
       ).join("\n");
 
       const userPrompt = `# Análise LOB — ${input.nomeProjeto}
 
-**Configuração:**
-- Pavimentos monitorados: ${input.numPavimentos}
-- Disciplinas/frentes: ${input.numDisciplinas}
-- Buffer mínimo configurado: ${input.bufferMinimoDias} dias
-
-**Colisões detectadas:**
-${colisoesText}
-
-**Ritmo por disciplina:**
-${ritmoText}
-
+**Configuração:** ${input.numPavimentos} pavimentos | ${input.numDisciplinas} disciplinas | buffer mínimo ${input.bufferMinimoDias} dias
+**Total de colisões detectadas:** ${input.colisoes.length}
 ${input.disciplinaMaisAtrasada ? `**Disciplina mais atrasada:** ${input.disciplinaMaisAtrasada}` : ""}
 ${input.disciplinaMaisAdiantada ? `**Disciplina mais adiantada:** ${input.disciplinaMaisAdiantada}` : ""}
 
+**Top ${colisoesPrincipais.length} colisões críticas (menor gap):**
+${colisoesText}
+
+**Ritmo das principais disciplinas (maior desvio):**
+${ritmoText}
+
 ---
-Responda EXATAMENTE neste formato:
+Responda EXATAMENTE neste formato (seja conciso e direto):
 
 ## 🏗️ Diagnóstico LOB
-(2 parágrafos: situação geral da obra na Linha de Balanços, principais riscos identificados)
+(1 parágrafo: situação geral — crítico/controlado, principais riscos ao prazo)
 
-## ⚡ Colisões & Interferências
-(liste cada colisão com impacto específico — se não houver, confirme equilíbrio entre frentes)
+## 🎯 3 Ações Prioritárias para Resolver
+1. **[DISCIPLINA]** — (ação específica: o quê, quem, quando, resultado esperado)
+2. **[DISCIPLINA]** — (ação específica: o quê, quem, quando, resultado esperado)
+3. **[DISCIPLINA]** — (ação específica: o quê, quem, quando, resultado esperado)
 
-## 📈 Análise de Ritmo
-(para as 2-3 disciplinas com maior desvio, causa provável e consequência no prazo)
+## ⚡ Colisões Críticas
+(as 3 mais graves com impacto no prazo — seja específico)
 
-## 🎯 Ações Prioritárias
-1. (ação mais urgente — quem, o quê, quando)
-2. (segunda prioridade)
-3. (terceira prioridade)
+## 📈 Desvios de Ritmo
+(as 2 disciplinas com maior atraso: causa provável e consequência)
 
 ## ✅ Recomendação Final do JULINHO
-(1 parágrafo: rebalanceamento necessário, qual disciplina precisa de atenção imediata e por quê)`;
+(1 frase: o que precisa acontecer ESTA SEMANA para estabilizar a Linha de Balanços)`;
 
       let analise: string;
       try {
@@ -999,7 +1005,7 @@ Responda EXATAMENTE neste formato:
             { role: "system", content: systemPrompt },
             { role: "user",   content: userPrompt },
           ],
-          maxTokens: 1800,
+          maxTokens: 3000,
         });
         const raw = result.choices?.[0]?.message?.content;
         analise = typeof raw === "string" ? raw : "Não foi possível gerar análise LOB no momento.";
