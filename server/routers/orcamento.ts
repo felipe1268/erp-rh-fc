@@ -1594,6 +1594,20 @@ export const orcamentoRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco de dados não disponível.' });
 
+      // Regra: cada obra só pode ter 1 orçamento vinculado
+      if (input.obraId) {
+        const existente = await db.select({ id: orcamentos.id })
+          .from(orcamentos)
+          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId)))
+          .limit(1);
+        if (existente.length > 0) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Esta obra já possui um orçamento vinculado. Use "Atualizar Planilha" dentro do orçamento existente para importar uma nova versão.',
+          });
+        }
+      }
+
       const res = await db.insert(orcamentos).values({
         companyId:       input.companyId,
         obraId:          input.obraId || null,
