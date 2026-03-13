@@ -3127,7 +3127,18 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       folhas.forEach((a: any) => {
         const acts = avByAct[a.id] ?? [];
         let pct = 0;
-        for (const av of acts) { if (av.semana <= cutoff) pct = av.pct; else break; }
+        if (acts.length > 0) {
+          // Avanço real registrado
+          for (const av of acts) { if (av.semana <= cutoff) pct = av.pct; else break; }
+        } else if (a.dataInicio && a.dataFim) {
+          // Sem avanço registrado → usa cronograma planejado (interpolação linear)
+          const startMs = new Date(a.dataInicio + "T00:00:00").getTime();
+          const endMs   = new Date(a.dataFim   + "T23:59:59").getTime();
+          const cutMs   = new Date(cutoff       + "T23:59:59").getTime();
+          if (cutMs >= endMs)        pct = 100;
+          else if (cutMs >= startMs) pct = (cutMs - startMs) / (endMs - startMs) * 100;
+          else                       pct = 0;
+        }
         const peso = semPeso ? 1 : n(a.pesoFinanceiro);
         soma += (pct * peso) / denom;
       });
