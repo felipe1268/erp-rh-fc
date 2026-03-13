@@ -535,4 +535,106 @@ Responda com um JSON no formato:
       await db.delete(iaCronogramaConhecimento).where(eq(iaCronogramaConhecimento.id, input.id));
       return { ok: true };
     }),
+
+  // ── Análise de Desvio de Prazo ────────────────────────────────────────────
+  analisarDesvio: protectedProcedure
+    .input(z.object({
+      projetoId:       z.number(),
+      nomeObra:        z.string(),
+      semana:          z.string(),
+      desvioFisico:    z.number(),     // pp (negativo = atrasado)
+      avancoPrevisto:  z.number(),     // %
+      avancoRealizado: z.number(),     // %
+      spi:             z.number(),
+      dataTermino:     z.string().nullable().optional(),
+      atividadesAtrasadas: z.array(z.object({
+        nome:       z.string(),
+        eapCodigo:  z.string().optional(),
+        desvio:     z.number(),
+        previsto:   z.number(),
+        realizado:  z.number(),
+      })).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      // Carregar base de conhecimento para enriquecer o contexto
+      const conhecimentos = await db.select()
+        .from(iaCronogramaConhecimento)
+        .where(
+          or(
+            eq(iaCronogramaConhecimento.companyId, 0),
+            isNull(iaCronogramaConhecimento.companyId)
+          )
+        )
+        .limit(10);
+
+      const systemPrompt = buildSystemPrompt(conhecimentos);
+
+      // Calcular impacto em dias
+      const diasAtraso = input.dataTermino
+        ? (() => {
+            const termino = new Date(input.dataTermino + "T12:00:00");
+            const hoje = new Date(input.semana + "T12:00:00");
+            const diasRestantes = Math.max(0, Math.round((termino.getTime() - hoje.getTime()) / 86400000));
+            // Proporção do desvio em dias
+            return Math.round(Math.abs(input.desvioFisico) / 100 * diasRestantes);
+          })()
+        : null;
+
+      const atrasadasTxt = (input.atividadesAtrasadas ?? [])
+        .slice(0, 8)
+        .map(a => `  - ${a.eapCodigo ? `[${a.eapCodigo}] ` : ""}${a.nome}: Prev=${a.previsto.toFixed(1)}%, Real=${a.realizado.toFixed(1)}%, Desvio=${a.desvio.toFixed(1)}pp`)
+        .join("\n") || "  (não informadas)";
+
+      const userPrompt = `## ALERTA DE DESVIO DE PRAZO — OBRA: ${input.nomeObra}
+
+**Data de referência:** ${new Date(input.semana + "T12:00:00").toLocaleDateString("pt-BR")}
+
+**Indicadores da semana:**
+- Avanço Previsto Acumulado: **${input.avancoPrevisto.toFixed(1)}%**
+- Avanço Realizado Acumulado: **${input.avancoRealizado.toFixed(1)}%**
+- Desvio Físico: **${input.desvioFisico.toFixed(1)} pp** (ATRASADO)
+- SPI: **${input.spi.toFixed(2)}** ${input.spi < 0.85 ? "🔴 CRÍTICO" : input.spi < 0.95 ? "🟡 ATENÇÃO" : "🟠 MONITORAR"}
+${diasAtraso !== null ? `- Impacto estimado: **~${diasAtraso} dias de atraso** no prazo contratual` : ""}
+
+**Atividades com maior desvio negativo:**
+${atrasadasTxt}
+
+---
+
+Faça uma análise técnica detalhada deste desvio de prazo e responda EXATAMENTE neste formato:
+
+## ⚠️ Diagnóstico do Desvio
+(2-3 parágrafos explicando as causas prováveis do desvio com base nos dados, o que isso pode acarretar se não for corrigido agora, incluindo impacto no prazo final, nas medições e no faturamento)
+
+## 📋 Plano de Ação 1 — [Nome do plano: ex. "Aceleração com Horas Extras"]
+**Ações:** (liste 3-4 ações concretas e específicas)
+**Impacto esperado:** (ex: recuperar X% em Y semanas)
+**Recursos adicionais:** (equipamentos e efetivo específicos necessários)
+**Custo adicional estimado:** (estimativa percentual sobre o custo da semana)
+
+## 📋 Plano de Ação 2 — [Nome do plano: ex. "Reprogramação com Reforço de Equipe"]
+**Ações:** (liste 3-4 ações concretas e específicas)
+**Impacto esperado:** (ex: recuperar X% em Y semanas)
+**Recursos adicionais:** (equipamentos e efetivo específicos necessários)
+**Custo adicional estimado:** (estimativa percentual sobre o custo da semana)
+
+## 📋 Plano de Ação 3 — [Nome do plano: ex. "Revisão de Sequência Construtiva"]
+**Ações:** (liste 3-4 ações concretas e específicas)
+**Impacto esperado:** (ex: recuperar X% em Y semanas)
+**Recursos adicionais:** (equipamentos e efetivo específicos necessários)
+**Custo adicional estimado:** (estimativa percentual sobre o custo da semana)
+
+## 🎯 Recomendação do CRONOS
+(1 parágrafo com qual plano você recomenda e por quê, considerando custo-benefício)`;
+
+      const result = await invokeLLM({
+        messages: [{ role: "user", content: userPrompt }],
+        systemPrompt,
+        maxTokens: 2000,
+      });
+
+      return { analise: result.content ?? "Não foi possível gerar análise no momento." };
+    }),
 });
