@@ -903,10 +903,15 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: CRONOGRAMA
 // ═════════════════════════════════════════════════════════════════════════════
-type PeriodoFiltro = "tudo" | "dia" | "semana" | "mes" | "ano";
+type PeriodoFiltro = "tudo" | "dia" | "semana" | "mes" | "ano" | "intervalo";
 
-function getPeriodoRange(p: PeriodoFiltro): [string, string] | null {
+function getPeriodoRange(p: PeriodoFiltro, customIni?: string, customFim?: string): [string, string] | null {
   if (p === "tudo") return null;
+  if (p === "intervalo") {
+    if (customIni && customFim && customIni <= customFim) return [customIni, customFim];
+    if (customIni && !customFim) return [customIni, customIni];
+    return null;
+  }
   const hoje = new Date();
   const fmt = (d: Date) => d.toISOString().split("T")[0];
   if (p === "dia") return [fmt(hoje), fmt(hoje)];
@@ -933,6 +938,8 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   const [nivelAtivo, setNivelAtivo] = useState<number | null>(null);
   const [confirmExcluir, setConfirmExcluir] = useState(false);
   const [periodoFiltro, setPeriodoFiltro] = useState<PeriodoFiltro>("tudo");
+  const [intervaloIni,  setIntervaloIni]  = useState("");
+  const [intervaloFim,  setIntervaloFim]  = useState("");
 
   const limparMutation = trpc.planejamento.limparCronograma.useMutation({
     onSuccess: () => {
@@ -1023,7 +1030,10 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     </div>
   );
 
-  const periodoRange = useMemo(() => getPeriodoRange(periodoFiltro), [periodoFiltro]);
+  const periodoRange = useMemo(
+    () => getPeriodoRange(periodoFiltro, intervaloIni, intervaloFim),
+    [periodoFiltro, intervaloIni, intervaloFim]
+  );
   const displayAtiv = useMemo(() => {
     if (editando) return linhas;
     if (!periodoRange) return atividades;
@@ -1119,15 +1129,43 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
       {!editando && (
         <div className="flex items-center gap-3 flex-wrap">
           {/* Período */}
-          <div className="flex items-center gap-1">
-            <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
-            {(["tudo", "dia", "semana", "mes", "ano"] as PeriodoFiltro[]).map(p => (
+          <div className="flex items-center gap-1 flex-wrap">
+            <CalendarDays className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            {(["tudo", "dia", "semana", "mes", "ano", "intervalo"] as PeriodoFiltro[]).map(p => (
               <button key={p} onClick={() => setPeriodoFiltro(p)}
                 className={`h-6 px-2 text-[11px] font-semibold rounded border transition-colors ${periodoFiltro === p ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
-                {p === "tudo" ? "Tudo" : p === "dia" ? "Hoje" : p === "semana" ? "Semana" : p === "mes" ? "Mês" : "Ano"}
+                {p === "tudo" ? "Tudo" : p === "dia" ? "Hoje" : p === "semana" ? "Semana" : p === "mes" ? "Mês" : p === "ano" ? "Ano" : "Intervalo"}
               </button>
             ))}
-            {periodoFiltro !== "tudo" && (
+            {/* Inputs de intervalo — aparecem ao selecionar "intervalo" */}
+            {periodoFiltro === "intervalo" && (
+              <div className="flex items-center gap-1 ml-1">
+                <input
+                  type="date"
+                  value={intervaloIni}
+                  onChange={e => setIntervaloIni(e.target.value)}
+                  className="h-6 border border-slate-200 rounded px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-700"
+                />
+                <span className="text-[10px] text-slate-400">até</span>
+                <input
+                  type="date"
+                  value={intervaloFim}
+                  min={intervaloIni || undefined}
+                  onChange={e => setIntervaloFim(e.target.value)}
+                  className="h-6 border border-slate-200 rounded px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-700"
+                />
+                {(intervaloIni || intervaloFim) && (
+                  <button
+                    onClick={() => { setIntervaloIni(""); setIntervaloFim(""); }}
+                    className="h-6 w-6 flex items-center justify-center rounded border border-slate-200 bg-white hover:bg-red-50 hover:border-red-300 text-slate-400 hover:text-red-500 transition-colors"
+                    title="Limpar intervalo"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            )}
+            {periodoFiltro !== "tudo" && !(periodoFiltro === "intervalo" && !periodoRange) && (
               <span className="text-[10px] text-blue-600 font-medium ml-1">
                 {displayAtiv.filter((a: any) => !a.isGrupo).length} atividades
               </span>
