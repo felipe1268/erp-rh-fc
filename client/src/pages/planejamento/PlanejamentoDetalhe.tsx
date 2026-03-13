@@ -2563,6 +2563,10 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
     onSuccess: () => utils.planejamento.listarAvancos.invalidate(),
   });
 
+  const salvarLoteMutation = trpc.planejamento.salvarAvancoLote.useMutation({
+    onSuccess: () => utils.planejamento.listarAvancos.invalidate(),
+  });
+
   const limparMutation = trpc.planejamento.limparAvancos.useMutation({
     onSuccess: () => {
       utils.planejamento.listarAvancos.invalidate();
@@ -2571,20 +2575,25 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
     },
   });
 
-  function salvarTudo() {
-    const promises = Object.entries(avancoLocal).map(([idStr, pct]) => {
+  async function salvarTudo() {
+    const itens = Object.entries(avancoLocal).map(([idStr, pct]) => {
       const atividadeId = parseInt(idStr);
       const anterior = avancoAnterior[atividadeId] ?? 0;
-      return salvarMutation.mutateAsync({
-        projetoId,
+      return {
         atividadeId,
-        revisaoId:           revisaoAtiva?.id ?? 0,
-        semana:              semanaAtual,
         percentualAcumulado: pct,
         percentualSemanal:   Math.max(0, pct - anterior),
-      });
+      };
     });
-    Promise.all(promises).then(() => setAvancoLocal({}));
+    if (itens.length === 0) return;
+    // Usa batch save para qualquer quantidade (muito mais rápido que 1 request por atividade)
+    await salvarLoteMutation.mutateAsync({
+      projetoId,
+      revisaoId: revisaoAtiva?.id ?? 0,
+      semana:    semanaAtual,
+      itens,
+    });
+    setAvancoLocal({});
   }
 
   if (!revisaoAtiva) return (
@@ -2707,10 +2716,10 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
             </Button>
           )}
           <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-            disabled={!temAlteracoes || salvarMutation.isPending}
+            disabled={!temAlteracoes || salvarLoteMutation.isPending}
             onClick={salvarTudo}>
-            {salvarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Salvar Avanços
+            {salvarLoteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {salvarLoteMutation.isPending ? `Salvando...` : "Salvar Avanços"}
           </Button>
         </div>
       </div>
