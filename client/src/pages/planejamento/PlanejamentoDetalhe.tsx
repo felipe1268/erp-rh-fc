@@ -1275,8 +1275,8 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
       <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
         {[
           { color: "#1d4ed8", dash: false,  label: "Baseline (Rev 00)" },
-          { color: "#FFB800", dash: false,  label: "Revisão Atual" },
-          { color: "#1A3461", dash: false,  label: "Realizado" },
+          { color: "#D4A017", dash: false,  label: "Revisão Atual" },
+          { color: "#4169E1", dash: false,  label: "Realizado" },
           { color: "#7c3aed", dash: true,   label: "Tendência (projeção)" },
         ].map((l, i) => (
           <div key={i} className="flex items-center gap-1.5">
@@ -1293,7 +1293,7 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
           Curva S — Avanço Físico Acumulado
         </p>
         <p className="text-xs text-slate-400 mb-3">
-          Realizado atual: <strong style={{ color: "#1A3461" }}>{fPct(avancoAtual)}</strong>
+          Realizado atual: <strong style={{ color: "#4169E1" }}>{fPct(avancoAtual)}</strong>
           {proj.dataTerminoContratual && ` · Prazo: ${proj.dataTerminoContratual}`}
         </p>
         <ResponsiveContainer width="100%" height={360}>
@@ -1314,8 +1314,8 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
               <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
             )}
             <Line type="monotone" dataKey="baseline"  name="Baseline"       stroke="#1d4ed8" strokeWidth={2} dot={false} connectNulls />
-            <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#FFB800" strokeWidth={2} dot={false} connectNulls />
-            <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#1A3461" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+            <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#D4A017" strokeWidth={2} dot={false} connectNulls />
+            <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#4169E1" strokeWidth={3.5} dot={{ r: 4 }} connectNulls />
             <Line type="monotone" dataKey="tendencia" name="Tendência"      stroke="#7c3aed" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>
