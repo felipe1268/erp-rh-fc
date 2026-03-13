@@ -663,6 +663,7 @@ const BDI_COD_VALIDO = /^(CD-\d{2}(\.\d+)?|CI-\d{2}(\.\d+)?|DI-\d{2}|B-0[124]|L-
 
 function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
   let bdiPercentual = 0;
+  let totalVendaBdi = 0; // valor absoluto do PV-2 (preço de venda final da planilha BDI)
   const linhas: any[] = [];
   let ordem = 0;
 
@@ -685,6 +686,11 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
       bdiPercentual = pct;
     }
 
+    // Extrai o valor de venda final do PV-2 (Preço de Venda com FD + ADM)
+    if (/^PV\s*-\s*2$/.test(col2) && val > 0) {
+      totalVendaBdi = val;
+    }
+
     linhas.push({
       companyId,
       nomeAba,
@@ -695,7 +701,7 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
       ordem:         ordem++,
     });
   }
-  return { bdiPercentual, linhas };
+  return { bdiPercentual, totalVendaBdi, linhas };
 }
 
 // ── Parsers dedicados por aba BDI ────────────────────────────────────────
@@ -1561,7 +1567,7 @@ export const orcamentoRouter = router({
       // Fallback para somas das folhas apenas se a linha não existir.
       const totaisGerais  = extrairTotaisPlanilha(dataOrc, colMapOrc);
       const nivel1        = itens.filter(i => i.nivel === 1);
-      const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal),    0);
+      const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
       const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
       const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
       const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
@@ -1990,7 +1996,7 @@ export const orcamentoRouter = router({
       const bdtSheet = findSheet('bdi');
       if (!bdtSheet) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba BDI não encontrada na planilha.' });
 
-      const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(getRows(bdtSheet), cid, 'BDI');
+      const { bdiPercentual, totalVendaBdi, linhas: bdiLinhas } = parsearAbaBdi(getRows(bdtSheet), cid, 'BDI');
 
       // ── 2. Indiretos ────────────────────────────────────────────
       const indiSheet = findSheet('indiretos');
