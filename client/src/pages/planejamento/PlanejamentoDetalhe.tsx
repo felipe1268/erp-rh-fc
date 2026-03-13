@@ -1372,30 +1372,38 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   }, [avancos, semanaAtual, semanas]);
 
   // ── Previsto para a semana (interpolação linear por datas) ─────────────────
+  // Fallback para peso igual (1/n) quando nenhuma atividade tem peso financeiro
   const previsto = useMemo(() => {
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 100;
+    const folhasComDatas = folhas.filter((a: any) => a.dataInicio && a.dataFim);
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso   = pesoTotal === 0;
+    const denom     = semPeso ? (folhasComDatas.length || 1) : pesoTotal;
     let soma = 0;
-    folhas.forEach((a: any) => {
-      if (!a.dataInicio || !a.dataFim) return;
-      const ini = new Date(a.dataInicio).getTime();
-      const fim = new Date(a.dataFim).getTime();
-      const ref = new Date(semanaAtual).getTime();
+    folhasComDatas.forEach((a: any) => {
+      const ini  = new Date(a.dataInicio).getTime();
+      const fim  = new Date(a.dataFim).getTime();
+      const ref  = new Date(semanaAtual).getTime();
       let exp = 0;
       if (ref >= fim) exp = 100;
       else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
-      soma += (exp * n(a.pesoFinanceiro)) / pesoTotal;
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      soma += (exp * peso) / denom;
     });
     return +soma.toFixed(1);
   }, [folhas, semanaAtual]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
   // Prioriza avancoLocal (edições não salvas / import) sobre avancoExistente (banco)
+  // Fallback para peso igual (1/n) quando nenhuma atividade tem peso financeiro
   const realizadoAcum = useMemo(() => {
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 100;
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso   = pesoTotal === 0;
+    const denom     = semPeso ? (folhas.length || 1) : pesoTotal;
     let soma = 0;
     folhas.forEach((a: any) => {
-      const val = avancoLocal[a.id] !== undefined ? avancoLocal[a.id] : (avancoExistente[a.id] ?? 0);
-      soma += (val * n(a.pesoFinanceiro)) / pesoTotal;
+      const val  = avancoLocal[a.id] !== undefined ? avancoLocal[a.id] : (avancoExistente[a.id] ?? 0);
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      soma += (val * peso) / denom;
     });
     return +soma.toFixed(1);
   }, [folhas, avancoExistente, avancoLocal]);
