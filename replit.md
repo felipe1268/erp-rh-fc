@@ -60,6 +60,19 @@ shared/         # Shared types and constants
 - `VITE_APP_ID` — OAuth App ID (optional)
 - `OWNER_OPEN_ID` — Owner user OpenID (optional)
 
+## Planejamento Module
+- Routes: `/planejamento/:id` (tabs: cronograma, curva-s, avanco, refis, compras, ia-gestora, etc.)
+- `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` — main file with all tab components
+- **REFIS tab** — enhanced report:
+  - Desvio físico card (+/- pp) alongside SPI
+  - "Faturamento do Mês" (renamed from Venda): Previsto, Realizado, Desvio (R$)
+  - Curva S Física with trend line (purple dashed)
+  - Curva S Financeira (R$) with trend line
+  - "Modo Campo" toggle (EyeOff button) — hides all monetary values for field team
+  - "Imprimir PDF" button — triggers browser print with `@media print` CSS
+  - Histórico REFIS table (BLOCO 7) — shows all previous reports sortable by date
+- **IA Gestora tab** — CRONOS AI assistant with 4 sub-tabs
+
 ## User Preferences
 - After every completed adjustment, always remind the user to click **Publish** to deploy. Deployment config: autoscale, build=`pnpm run build`, run=`node dist/index.js`.
 
