@@ -165,9 +165,23 @@ ${climaTexto}`;
         { role: "user" as const, content: input.mensagem },
       ];
 
-      const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 1500 });
-      const rawContent = result.choices?.[0]?.message?.content;
-      const resposta = typeof rawContent === "string" ? rawContent : "Não foi possível processar. Tente novamente.";
+      let resposta: string;
+      try {
+        const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 1500 });
+        const rawContent = result.choices?.[0]?.message?.content;
+        resposta = typeof rawContent === "string" ? rawContent : "Não foi possível processar. Tente novamente.";
+      } catch (err: any) {
+        const isNoKey = err?.message?.includes("not configured");
+        resposta = isNoKey
+          ? "⚠️ **JULINHO offline** — Chave de API de IA não configurada. Acesse as configurações do projeto e defina a variável `OPENAI_API_KEY` para ativar o assistente."
+          : `⚠️ **Erro ao contatar IA** — ${err?.message ?? "Erro desconhecido"}. Tente novamente em instantes.`;
+        // Save to chat but return friendly message
+        await db.insert(iaCronogramaChat).values([
+          { projetoId: input.projetoId, companyId, sessaoId: input.sessaoId, role: "user",      conteudo: input.mensagem, tipo: input.tipo },
+          { projetoId: input.projetoId, companyId, sessaoId: input.sessaoId, role: "assistant", conteudo: resposta,       tipo: input.tipo },
+        ]);
+        return { resposta, sessaoId: input.sessaoId, erro: true };
+      }
 
       await db.insert(iaCronogramaChat).values([
         { projetoId: input.projetoId, companyId, sessaoId: input.sessaoId, role: "user",      conteudo: input.mensagem, tipo: input.tipo },
@@ -403,9 +417,17 @@ Parâmetros do cenário: ${JSON.stringify(input.parametros ?? {})}${contextFinan
         { role: "user" as const, content: `**Cenário: ${input.titulo}**\n\n${input.mensagem}` },
       ];
 
-      const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 2000 });
-      const rawContent = result.choices?.[0]?.message?.content;
-      const resposta = typeof rawContent === "string" ? rawContent : "Não foi possível simular.";
+      let resposta: string;
+      try {
+        const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 2000 });
+        const rawContent = result.choices?.[0]?.message?.content;
+        resposta = typeof rawContent === "string" ? rawContent : "Não foi possível simular.";
+      } catch (err: any) {
+        const isNoKey = err?.message?.includes("not configured");
+        resposta = isNoKey
+          ? "⚠️ **JULINHO offline** — Chave de API de IA não configurada. Defina `OPENAI_API_KEY` nas secrets do projeto para ativar o simulador."
+          : `⚠️ **Erro ao contatar IA** — ${err?.message ?? "Erro desconhecido"}. Tente novamente.`;
+      }
 
       const [cenario] = await db.insert(iaCronogramaCenarios).values({
         projetoId:   input.projetoId,
@@ -475,16 +497,18 @@ Responda com um JSON no formato:
   ]
 }`;
 
-      const result = await invokeLLM({
-        messages: [{ role: "user", content: prompt }],
-        maxTokens: 1200,
-        responseFormat: { type: "json_object" },
-      });
-      const rawContent = result.choices?.[0]?.message?.content;
       let sugestoes: any[] = [];
       try {
-        const parsed = JSON.parse(typeof rawContent === "string" ? rawContent : "{}");
-        sugestoes = parsed.sugestoes ?? [];
+        const result = await invokeLLM({
+          messages: [{ role: "user", content: prompt }],
+          maxTokens: 1200,
+          responseFormat: { type: "json_object" },
+        });
+        const rawContent = result.choices?.[0]?.message?.content;
+        try {
+          const parsed = JSON.parse(typeof rawContent === "string" ? rawContent : "{}");
+          sugestoes = parsed.sugestoes ?? [];
+        } catch { sugestoes = []; }
       } catch { sugestoes = []; }
 
       for (const sug of sugestoes) {
@@ -658,13 +682,25 @@ Faça uma análise técnica detalhada deste desvio de prazo e responda EXATAMENT
 ## 🎯 Recomendação do JULINHO
 (1 parágrafo com qual plano você recomenda e por quê, considerando custo-benefício)`;
 
-      const result = await invokeLLM({
-        messages: [{ role: "user", content: userPrompt }],
-        systemPrompt,
-        maxTokens: 2000,
-      });
+      let analise: string;
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user",   content: userPrompt },
+          ],
+          maxTokens: 2000,
+        });
+        const raw = result.choices?.[0]?.message?.content;
+        analise = typeof raw === "string" ? raw : "Não foi possível gerar análise no momento.";
+      } catch (err: any) {
+        const isNoKey = err?.message?.includes("not configured");
+        analise = isNoKey
+          ? "⚠️ **JULINHO offline** — API de IA não configurada. Configure `OPENAI_API_KEY` nas secrets para ativar a análise de desvio."
+          : `⚠️ **Erro ao contatar IA** — ${err?.message ?? "Erro desconhecido"}.`;
+      }
 
-      return { analise: result.content ?? "Não foi possível gerar análise no momento." };
+      return { analise };
     }),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -891,12 +927,24 @@ Responda EXATAMENTE neste formato:
 ## ✅ Recomendação Final do JULINHO
 (1 parágrafo: rebalanceamento necessário, qual disciplina precisa de atenção imediata e por quê)`;
 
-      const result = await invokeLLM({
-        messages: [{ role: "user", content: userPrompt }],
-        systemPrompt,
-        maxTokens: 1800,
-      });
+      let analise: string;
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user",   content: userPrompt },
+          ],
+          maxTokens: 1800,
+        });
+        const raw = result.choices?.[0]?.message?.content;
+        analise = typeof raw === "string" ? raw : "Não foi possível gerar análise LOB no momento.";
+      } catch (err: any) {
+        const isNoKey = err?.message?.includes("not configured");
+        analise = isNoKey
+          ? "⚠️ **JULINHO offline** — API de IA não configurada. Configure `OPENAI_API_KEY` nas secrets para ativar a análise LOB."
+          : `⚠️ **Erro ao contatar IA** — ${err?.message ?? "Erro desconhecido"}.`;
+      }
 
-      return { analise: result.content ?? "Não foi possível gerar análise no momento." };
+      return { analise };
     }),
 });
