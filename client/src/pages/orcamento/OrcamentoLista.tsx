@@ -5,12 +5,12 @@ import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Calculator, Upload, Eye, Trash2, Pencil,
-  FolderOpen, RefreshCw, Search,
+  FolderOpen, RefreshCw, Search, ChevronDown,
+  FileEdit, Clock, CheckCircle, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -21,17 +21,29 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  rascunho:             { label: "Rascunho",      variant: "secondary" },
-  aguardando_aprovacao: { label: "Ag. Aprovação", variant: "default" },
-  aprovado:             { label: "Aprovado",       variant: "default" },
-  fechado:              { label: "Fechado",        variant: "secondary" },
+type StatusKey = "rascunho" | "aguardando_aprovacao" | "aprovado" | "fechado";
+
+const STATUS_CONFIG: Record<StatusKey, {
+  label: string;
+  icon: React.ElementType;
+  className: string;
+  dotColor: string;
+}> = {
+  rascunho:             { label: "Rascunho",       icon: FileEdit,     className: "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200",       dotColor: "bg-slate-400" },
+  aguardando_aprovacao: { label: "Ag. Aprovação",  icon: Clock,        className: "bg-amber-50  text-amber-700  border-amber-200  hover:bg-amber-100",       dotColor: "bg-amber-400" },
+  aprovado:             { label: "Aprovado",        icon: CheckCircle,  className: "bg-green-50  text-green-700  border-green-200  hover:bg-green-100",       dotColor: "bg-green-500" },
+  fechado:              { label: "Fechado",         icon: Lock,         className: "bg-gray-100  text-gray-500   border-gray-200   hover:bg-gray-100 cursor-not-allowed", dotColor: "bg-gray-400" },
 };
+
+const STATUS_ORDER: StatusKey[] = ["rascunho", "aguardando_aprovacao", "aprovado", "fechado"];
 
 interface EditForm {
   id: number;
@@ -80,6 +92,15 @@ export default function OrcamentoLista() {
       refetch();
     },
     onError: (e) => toast.error(e.message || "Erro ao salvar"),
+  });
+
+  const changeStatusMutation = trpc.orcamento.changeStatus.useMutation({
+    onSuccess: (_, vars) => {
+      const label = STATUS_CONFIG[vars.status as StatusKey]?.label ?? vars.status;
+      toast.success(`Status alterado para "${label}".`);
+      refetch();
+    },
+    onError: (e) => toast.error(e.message || "Erro ao alterar status"),
   });
 
   const openEdit = (orc: any) => {
@@ -180,7 +201,9 @@ export default function OrcamentoLista() {
         ) : (
           <div className="space-y-3">
             {filtrado.map((orc: any) => {
-              const st = STATUS_LABELS[orc.status] ?? { label: orc.status, variant: "secondary" as const };
+              const currentStatus = (orc.status ?? "rascunho") as StatusKey;
+              const stCfg = STATUS_CONFIG[currentStatus] ?? STATUS_CONFIG.rascunho;
+              const isFechado = currentStatus === "fechado";
               const bdi = orc.bdiPercentual ? `BDI ${(parseFloat(orc.bdiPercentual) * 100).toFixed(2)}%` : "";
               const meta = orc.metaPercentual ? `Meta −${(parseFloat(orc.metaPercentual) * 100).toFixed(0)}%` : "";
               return (
@@ -191,7 +214,45 @@ export default function OrcamentoLista() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-sm truncate">{orc.codigo}</span>
                           {orc.revisao && <span className="text-xs text-blue-600 font-mono">{orc.revisao}</span>}
-                          <Badge variant={st.variant} className="text-xs">{st.label}</Badge>
+                          {/* Badge clicável de status */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium transition-colors ${stCfg.className}`}
+                                title="Clique para alterar o status"
+                              >
+                                <span className={`h-1.5 w-1.5 rounded-full ${stCfg.dotColor}`} />
+                                {stCfg.label}
+                                {!isFechado && <ChevronDown className="h-3 w-3 opacity-60" />}
+                              </button>
+                            </DropdownMenuTrigger>
+                            {!isFechado && (
+                              <DropdownMenuContent align="start" className="w-52">
+                                <DropdownMenuLabel className="text-xs text-muted-foreground pb-1">Alterar status para</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {STATUS_ORDER.map(s => {
+                                  const cfg = STATUS_CONFIG[s];
+                                  const Icon = cfg.icon;
+                                  const isActive = s === currentStatus;
+                                  return (
+                                    <DropdownMenuItem
+                                      key={s}
+                                      disabled={isActive || changeStatusMutation.isPending}
+                                      className={`cursor-pointer gap-2 ${isActive ? "font-semibold" : ""}`}
+                                      onClick={() => {
+                                        if (!isActive) changeStatusMutation.mutate({ id: orc.id, status: s });
+                                      }}
+                                    >
+                                      <span className={`h-2 w-2 rounded-full ${cfg.dotColor} shrink-0`} />
+                                      <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                                      <span>{cfg.label}</span>
+                                      {isActive && <span className="ml-auto text-[10px] text-muted-foreground">atual</span>}
+                                    </DropdownMenuItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            )}
+                          </DropdownMenu>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1 truncate">{orc.descricao || "—"}</p>
                         <div className="flex gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
