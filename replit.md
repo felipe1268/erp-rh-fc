@@ -62,7 +62,13 @@ shared/         # Shared types and constants
 
 ## Planejamento Module
 - Routes: `/planejamento/:id` (tabs: cronograma, curva-s, avanco, refis, compras, ia-gestora, etc.)
-- `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` — main file with all tab components
+- `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` — main file ~7430 lines
+- Projects in DB: id=4 (Hotel do Papa), id=6 (Chlorum Palmeira), id=7 (Hotel QIU 2 - 4 Fase)
+- **JULINHO AI**: Google Gemini (gemini-2.5-flash) via GOOGLE_API_KEY, system prompt = persona only, project context in user message
+- **Curva S**: Shows spinner while loading; server generates curve using equal weights when no peso_financeiro set
+- **Avanço Semanal**: Import MS Project (XML/XLSX) → uses `salvarAvancoLote` batch endpoint (NOT 1512 individual requests)
+  - `salvarAvancoLote` endpoint: 1 request with all items, processed in chunks of 50 on server
+  - `filtroAtivo` states: "semana" (active week), "pendentes" (pending activities), "todas" (all)
 - **REFIS tab** — enhanced report:
   - Desvio físico card (+/- pp) alongside SPI
   - "Faturamento do Mês" (renamed from Venda): Previsto, Realizado, Desvio (R$)

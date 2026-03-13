@@ -354,6 +354,68 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  // ── Batch save de avanços (import MS Project) ─────────────────────────────
+  salvarAvancoLote: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      revisaoId: z.number(),
+      semana:    z.string(),
+      itens: z.array(z.object({
+        atividadeId:         z.number(),
+        percentualAcumulado: z.number(),
+        percentualSemanal:   z.number(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // Carrega todos os existentes da semana de uma vez
+      const existentes = await db.select()
+        .from(planejamentoAvancos)
+        .where(and(
+          eq(planejamentoAvancos.projetoId, input.projetoId),
+          eq(planejamentoAvancos.semana, input.semana),
+        ));
+      const existMap = new Map(existentes.map(e => [e.atividadeId, e.id]));
+
+      const toUpdate: typeof input.itens = [];
+      const toInsert: typeof input.itens = [];
+      for (const item of input.itens) {
+        if (existMap.has(item.atividadeId)) toUpdate.push(item);
+        else toInsert.push(item);
+      }
+
+      // Updates em paralelo (em lotes de 50)
+      const chunkSize = 50;
+      for (let i = 0; i < toUpdate.length; i += chunkSize) {
+        await Promise.all(
+          toUpdate.slice(i, i + chunkSize).map(item =>
+            db.update(planejamentoAvancos)
+              .set({
+                percentualAcumulado: String(item.percentualAcumulado),
+                percentualSemanal:   String(item.percentualSemanal),
+              })
+              .where(eq(planejamentoAvancos.id, existMap.get(item.atividadeId)!))
+          )
+        );
+      }
+
+      // Inserts em lotes
+      for (let i = 0; i < toInsert.length; i += chunkSize) {
+        await db.insert(planejamentoAvancos).values(
+          toInsert.slice(i, i + chunkSize).map(item => ({
+            projetoId:           input.projetoId,
+            revisaoId:           input.revisaoId,
+            atividadeId:         item.atividadeId,
+            semana:              input.semana,
+            percentualAcumulado: String(item.percentualAcumulado),
+            percentualSemanal:   String(item.percentualSemanal),
+          }))
+        );
+      }
+
+      return { success: true, total: input.itens.length };
+    }),
+
   // ── REFIS ─────────────────────────────────────────────────────────────────
   listarRefis: protectedProcedure
     .input(z.object({ projetoId: z.number() }))
