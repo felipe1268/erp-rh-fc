@@ -4392,3 +4392,14 @@ export const orcamentoParametros = pgTable("orcamento_parametros", {
   criadoEm:     timestamp({ mode: 'string' }).defaultNow().notNull(),
   atualizadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
+
+export const lobConfig = pgTable("lob_config", {
+  id:                   serial().primaryKey(),
+  projetoId:            integer("projeto_id").notNull().unique(),
+  bufferMinimoDias:     integer("buffer_minimo_dias").notNull().default(5),
+  ritmoAlvoPavsSemana:  numeric("ritmo_alvo_pavs_semana", { precision: 10, scale: 2 }).default("1.0"),
+  pavimentosExcluidos:  json("pavimentos_excluidos").default([]),
+  disciplinasConfig:    json("disciplinas_config").default([]),
+  criadoEm:             timestamp("criado_em").defaultNow(),
+  atualizadoEm:         timestamp("atualizado_em").defaultNow(),
+});

@@ -33,7 +33,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -93,6 +93,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "visao-geral",          label: "Visão Geral",        Icon: BarChart3 },
   { id: "cronograma",           label: "Cronograma",         Icon: CalendarRange },
   { id: "gantt",                label: "Gantt",              Icon: CalendarCheck },
+  { id: "lob",                  label: "Linha de Balanços",  Icon: Building2 },
   { id: "cronograma-financeiro",label: "Crono. Financeiro",  Icon: DollarSign },
   { id: "curva-s",              label: "Curva S",            Icon: TrendingUp },
   { id: "avanco",               label: "Avanço Semanal",     Icon: Activity },
@@ -442,6 +443,12 @@ export default function PlanejamentoDetalhe() {
             utils={utils}
             fmt={fmt}
             fPct={fPct}
+          />
+        )}
+        {aba === "lob" && (
+          <LobLinhaBalancosTab
+            projetoId={projetoId}
+            nomeProjeto={proj?.nome ?? "Projeto"}
           />
         )}
         {aba === "ia-gestora" && (
@@ -940,6 +947,525 @@ function getPeriodoRange(p: PeriodoFiltro, customIni?: string, customFim?: strin
   return null;
 }
 
+// ── LOB color palette ─────────────────────────────────────────────────────────
+const LOB_COLORS = [
+  "#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#06B6D4",
+  "#F97316","#EC4899","#84CC16","#6366F1","#14B8A6","#A855F7",
+  "#F43F5E","#22D3EE","#FB923C","#4ADE80",
+];
+
+// ══════════════════════════════════════════════════════════════════════════════
+// LINHA DE BALANÇOS TAB
+// ══════════════════════════════════════════════════════════════════════════════
+function LobLinhaBalancosTab({ projetoId, nomeProjeto }: { projetoId: number; nomeProjeto: string }) {
+  const [zoom, setZoom]               = useState<"mes" | "semana">("mes");
+  const [showConfig, setShowConfig]   = useState(false);
+  const [bufferDias, setBufferDias]   = useState(5);
+  const [pavExcluidos, setPavExcluidos] = useState<string[]>([]);
+  const [discConfig, setDiscConfig]   = useState<{ nome: string; cor: string; visivel: boolean; ordem: number }[]>([]);
+  const [analise, setAnalise]         = useState<string | null>(null);
+  const [cfgInit, setCfgInit]         = useState(false);
+  const scrollRef                     = useRef<HTMLDivElement>(null);
+
+  const lobQ        = trpc.iaCronograma.getLobData.useQuery({ projetoId }, { enabled: !!projetoId });
+  const saveConfigM = trpc.iaCronograma.saveLobConfig.useMutation();
+  const analisarM   = trpc.iaCronograma.analisarLOB.useMutation({ onSuccess: d => setAnalise(d.analise) });
+
+  // Initialise config once data arrives
+  useEffect(() => {
+    if (!lobQ.data || cfgInit) return;
+    const { disciplinas, config } = lobQ.data;
+    if (config) {
+      setBufferDias((config as any).bufferMinimoDias ?? 5);
+      setPavExcluidos(((config as any).pavimentosExcluidos as string[]) ?? []);
+      const saved = ((config as any).disciplinasConfig as any[]) ?? [];
+      setDiscConfig(saved.length > 0 ? saved : disciplinas.map((d, i) => ({ nome: d, cor: LOB_COLORS[i % LOB_COLORS.length], visivel: true, ordem: i })));
+    } else {
+      setDiscConfig(disciplinas.map((d, i) => ({ nome: d, cor: LOB_COLORS[i % LOB_COLORS.length], visivel: true, ordem: i })));
+    }
+    setCfgInit(true);
+  }, [lobQ.data, cfgInit]);
+
+  const data            = lobQ.data;
+  const FLOOR_H         = 44;
+  const HEADER_H        = 38;
+  const LEFT_W          = 200;
+  const PAD_RIGHT       = 40;
+  const dayPx           = zoom === "semana" ? 14 : 5;
+
+  const pavimentos = useMemo(
+    () => (data?.pavimentos ?? []).filter(p => !pavExcluidos.includes(p.nome)),
+    [data, pavExcluidos]
+  );
+  const disciplinasVis = useMemo(
+    () => discConfig.filter(d => d.visivel).sort((a, b) => a.ordem - b.ordem),
+    [discConfig]
+  );
+
+  // disc.nome → [{pavimentoNome, pavimentoOrdem, dataInicio, dataFim, pct}]
+  const lobMatrix = useMemo(() => {
+    const m: Record<string, { pavimentoNome: string; pavimentoOrdem: number; dataInicio: string | null; dataFim: string | null; pct: number }[]> = {};
+    for (const l of data?.linhas ?? []) {
+      if (pavExcluidos.includes(l.pavimentoNome)) continue;
+      if (!m[l.disciplinaNome]) m[l.disciplinaNome] = [];
+      m[l.disciplinaNome].push({ pavimentoNome: l.pavimentoNome, pavimentoOrdem: l.pavimentoOrdem, dataInicio: l.dataInicio, dataFim: l.dataFim, pct: l.percentualRealizado });
+    }
+    for (const k of Object.keys(m)) m[k].sort((a, b) => a.pavimentoOrdem - b.pavimentoOrdem);
+    return m;
+  }, [data, pavExcluidos]);
+
+  const dateRange = useMemo(() => {
+    let mn = "9999", mx = "0000";
+    for (const l of data?.linhas ?? []) {
+      if (l.dataInicio && l.dataInicio < mn) mn = l.dataInicio;
+      if (l.dataFim    && l.dataFim    > mx) mx = l.dataFim;
+    }
+    return { min: mn === "9999" ? null : mn, max: mx === "0000" ? null : mx };
+  }, [data]);
+
+  function d2x(iso: string | null): number {
+    if (!iso || !dateRange.min) return 0;
+    const s = new Date(dateRange.min + "T00:00:00");
+    const d = new Date(iso          + "T00:00:00");
+    return Math.max(0, Math.round((d.getTime() - s.getTime()) / 86400000) * dayPx);
+  }
+  function fl2y(fi: number): number {
+    return HEADER_H + (pavimentos.length - 1 - fi) * FLOOR_H;
+  }
+
+  const totalDays = useMemo(() => {
+    if (!dateRange.min || !dateRange.max) return 180;
+    return Math.ceil((new Date(dateRange.max + "T00:00:00").getTime() - new Date(dateRange.min + "T00:00:00").getTime()) / 86400000) + 14;
+  }, [dateRange]);
+  const svgW = totalDays * dayPx + PAD_RIGHT;
+  const svgH = HEADER_H + pavimentos.length * FLOOR_H + 8;
+
+  const months = useMemo(() => {
+    if (!dateRange.min) return [] as { label: string; x: number }[];
+    const start = new Date(dateRange.min + "T00:00:00");
+    const res: { label: string; x: number }[] = [];
+    let cur = new Date(start); cur.setDate(1);
+    if (cur < start) cur.setMonth(cur.getMonth() + 1);
+    for (let i = 0; i < 30; i++) {
+      const x = d2x(cur.toISOString().slice(0, 10));
+      if (x > svgW) break;
+      res.push({ label: cur.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), x });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return res;
+  }, [dateRange, svgW, dayPx]);
+
+  const todayX = useMemo(() => d2x(new Date().toISOString().slice(0, 10)), [dateRange, dayPx]);
+
+  // Ritmo (pavs/week) per discipline
+  const ritmoData = useMemo(() => disciplinasVis.map(d => {
+    const rows = lobMatrix[d.nome] ?? [];
+    if (rows.length < 2) return { nome: d.nome, cor: d.cor, plan: 0, real: 0, dev: 0 };
+    const first = rows[0], last = rows[rows.length - 1];
+    const planDays = Math.max(1, (new Date(last.dataFim ?? "2099").getTime() - new Date(first.dataInicio ?? "2000").getTime()) / 86400000);
+    const plan = rows.length / (planDays / 7);
+    const completedFloors = rows.reduce((a, r) => a + Math.min(r.pct / 100, 1), 0);
+    const today = new Date(), startD = new Date(first.dataInicio ?? "2099");
+    const realDays = Math.max(1, (today.getTime() - startD.getTime()) / 86400000);
+    const real = startD < today ? completedFloors / (realDays / 7) : 0;
+    const dev = plan > 0 ? ((real - plan) / plan) * 100 : 0;
+    return { nome: d.nome, cor: d.cor, plan, real, dev };
+  }), [disciplinasVis, lobMatrix]);
+
+  // Collision detection
+  const colisoes = useMemo(() => {
+    const res: { disciplina1: string; disciplina2: string; pavimento: string; diasGap: number }[] = [];
+    const names = disciplinasVis.map(d => d.nome);
+    for (let i = 0; i < names.length - 1; i++) {
+      const rows1 = lobMatrix[names[i]] ?? [], rows2 = lobMatrix[names[i + 1]] ?? [];
+      for (const r1 of rows1) {
+        const r2 = rows2.find(r => r.pavimentoNome === r1.pavimentoNome);
+        if (!r2 || !r1.dataFim || !r2.dataInicio) continue;
+        const gap = (new Date(r2.dataInicio + "T00:00:00").getTime() - new Date(r1.dataFim + "T00:00:00").getTime()) / 86400000;
+        if (gap < bufferDias) res.push({ disciplina1: names[i], disciplina2: names[i + 1], pavimento: r1.pavimentoNome, diasGap: Math.round(gap) });
+      }
+    }
+    return res;
+  }, [disciplinasVis, lobMatrix, bufferDias]);
+
+  function handleSave() {
+    saveConfigM.mutate({ projetoId, bufferMinimoDias: bufferDias, ritmoAlvoPavsSemana: 1, pavimentosExcluidos: pavExcluidos, disciplinasConfig: discConfig });
+  }
+  function handleAnalisar() {
+    setAnalise(null);
+    const sorted = [...ritmoData].sort((a, b) => a.dev - b.dev);
+    analisarM.mutate({
+      projetoId, nomeProjeto,
+      numPavimentos: pavimentos.length, numDisciplinas: disciplinasVis.length, bufferMinimoDias: bufferDias, colisoes,
+      ritmoPorDisciplina: ritmoData.map(r => ({ disciplina: r.nome, ritmoPlaneadoPavsSemana: r.plan, ritmoRealizadoPavsSemana: r.real, desvioPercent: r.dev })),
+      disciplinaMaisAtrasada:  sorted[0]?.dev < -5 ? sorted[0]?.nome : undefined,
+      disciplinaMaisAdiantada: sorted[sorted.length - 1]?.dev > 5 ? sorted[sorted.length - 1]?.nome : undefined,
+    });
+  }
+
+  // ── States ─────────────────────────────────────────────────────────────────
+  if (lobQ.isLoading) return (
+    <div className="flex items-center justify-center h-64 text-slate-500">
+      <Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando dados LOB...
+    </div>
+  );
+  if (!data || pavimentos.length === 0) return (
+    <div className="flex flex-col items-center justify-center h-64 text-center gap-3">
+      <Building2 className="h-12 w-12 text-slate-300" />
+      <p className="text-slate-500 font-medium">Nenhum pavimento detectado</p>
+      <p className="text-xs text-slate-400 max-w-xs">
+        A Linha de Balanços funciona para projetos com grupos nível 1 nomeados como "Xº PAVIMENTO", "ANDAR", "TÉRREO" ou "COBERTURA"
+      </p>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Building2 className="h-5 w-5 text-blue-600" />
+          <h2 className="font-semibold text-slate-800">Linha de Balanços</h2>
+          <span className="text-xs text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">{pavimentos.length} pavs · {disciplinasVis.length} frentes</span>
+          {colisoes.length > 0 && (
+            <span className="text-xs bg-red-100 text-red-700 rounded-full px-2 py-0.5 font-medium flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />{colisoes.length} colisão{colisoes.length > 1 ? "ões" : ""}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex border border-slate-200 rounded-lg overflow-hidden text-xs">
+            {(["mes", "semana"] as const).map(z => (
+              <button key={z} onClick={() => setZoom(z)}
+                className={`px-3 py-1.5 font-medium transition-colors ${zoom === z ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                {z === "mes" ? "Mês" : "Semana"}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setShowConfig(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${showConfig ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+            <Settings className="h-3.5 w-3.5" /> Configurar
+          </button>
+          <button onClick={handleAnalisar} disabled={analisarM.isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors font-medium disabled:opacity-60">
+            {analisarM.isPending
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <img src="/julinho-3d.png" alt="" className="h-5 w-5 object-contain" />}
+            Analisar com JULINHO
+          </button>
+        </div>
+      </div>
+
+      {/* ── Config panel ── */}
+      {showConfig && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-700">Configuração da LOB</h3>
+            <button onClick={handleSave} disabled={saveConfigM.isPending}
+              className="flex items-center gap-1 text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {saveConfigM.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Salvar
+            </button>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-slate-600 whitespace-nowrap w-48">Buffer mínimo entre serviços:</label>
+            <input type="range" min={0} max={21} value={bufferDias} onChange={e => setBufferDias(+e.target.value)} className="w-32 accent-blue-600" />
+            <span className="text-xs font-bold text-blue-700 w-12">{bufferDias} dias</span>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-600 mb-2">Pavimentos (clique para excluir da LOB)</p>
+            <div className="flex flex-wrap gap-2">
+              {data.pavimentos.map(p => {
+                const ex = pavExcluidos.includes(p.nome);
+                return (
+                  <button key={p.nome} onClick={() => setPavExcluidos(prev => ex ? prev.filter(x => x !== p.nome) : [...prev, p.nome])}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${ex ? "bg-white border-slate-300 text-slate-400 line-through" : "bg-blue-100 border-blue-300 text-blue-700"}`}>
+                    {p.nome}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-600 mb-2">Disciplinas (cor + visibilidade)</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {discConfig.map((d, idx) => (
+                <div key={d.nome} className="flex items-center gap-2 text-xs">
+                  <input type="color" value={d.cor}
+                    onChange={e => setDiscConfig(prev => prev.map((x, i) => i === idx ? { ...x, cor: e.target.value } : x))}
+                    className="h-5 w-5 rounded border-0 cursor-pointer shrink-0" />
+                  <button onClick={() => setDiscConfig(prev => prev.map((x, i) => i === idx ? { ...x, visivel: !x.visivel } : x))}
+                    className={`flex-1 text-left truncate ${d.visivel ? "text-slate-700 font-medium" : "text-slate-400 line-through"}`}>
+                    {d.nome}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LOB Chart ── */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="flex">
+          {/* Sticky floor labels */}
+          <div className="shrink-0 border-r border-slate-200" style={{ width: LEFT_W }}>
+            <div className="flex items-center px-3 bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider" style={{ height: HEADER_H }}>
+              Pavimento
+            </div>
+            {[...pavimentos].reverse().map(p => (
+              <div key={p.id} className="flex items-center px-3 border-b border-slate-100" style={{ height: FLOOR_H }}>
+                <Building2 className="h-3 w-3 text-blue-400 mr-1.5 shrink-0" />
+                <span className="text-xs font-medium text-slate-700 truncate">{p.nome}</span>
+              </div>
+            ))}
+          </div>
+          {/* Scrollable SVG area */}
+          <div ref={scrollRef} className="overflow-x-auto flex-1 relative">
+            <svg width={svgW} height={svgH} className="block select-none">
+              {/* Month labels + grid */}
+              {months.map((m, i) => (
+                <g key={i}>
+                  <line x1={m.x} y1={0} x2={m.x} y2={svgH} stroke="#e2e8f0" strokeWidth={1} />
+                  <text x={m.x + 4} y={HEADER_H - 8} fontSize={10} fill="#94a3b8" fontWeight="600">{m.label}</text>
+                </g>
+              ))}
+              {/* Floor row shading */}
+              {pavimentos.map((_, fi) => fi % 2 === 0
+                ? <rect key={fi} x={0} y={fl2y(fi)} width={svgW} height={FLOOR_H} fill="#f8fafc" />
+                : null
+              )}
+              {/* Floor separators */}
+              {pavimentos.map((_, fi) => (
+                <line key={fi} x1={0} y1={fl2y(fi)} x2={svgW} y2={fl2y(fi)} stroke="#e2e8f0" strokeWidth={0.5} />
+              ))}
+              {/* Header separator */}
+              <line x1={0} y1={HEADER_H} x2={svgW} y2={HEADER_H} stroke="#cbd5e1" strokeWidth={1} />
+
+              {/* ── Discipline bands ── */}
+              {disciplinasVis.map(disc => {
+                const rows = lobMatrix[disc.nome] ?? [];
+                const pavIdxMap = new Map(pavimentos.map((p, i) => [p.nome, i]));
+                const pts = rows
+                  .map(r => ({ fi: pavIdxMap.get(r.pavimentoNome) ?? -1, ...r }))
+                  .filter(r => r.fi >= 0 && r.dataInicio && r.dataFim);
+                if (pts.length === 0) return null;
+                const color = disc.cor;
+
+                // Build planned band polygon
+                // Left edge: bottom floor to top floor
+                const leftEdge  = pts.map(r => [d2x(r.dataInicio), fl2y(r.fi) + FLOOR_H] as [number, number]);
+                // Right edge: top floor to bottom floor
+                const rightEdge = [...pts].reverse().map(r => [d2x(r.dataFim), fl2y(r.fi) + FLOOR_H] as [number, number]);
+                // Top caps per floor
+                const topLeft   = pts.map(r => [d2x(r.dataInicio), fl2y(r.fi)] as [number, number]);
+                const topRight  = [...pts].reverse().map(r => [d2x(r.dataFim), fl2y(r.fi)] as [number, number]);
+                // Full band polygon: go along bottom edges (left→right), up right side, along top (right→left), down left side
+                // Simpler: polygon of start-dates (left edge, fl2y bottom→top) + end-dates reversed (right edge, fl2y top→bottom)
+                const polyPoints = [
+                  ...pts.map(r => `${d2x(r.dataInicio)},${fl2y(r.fi)}`),           // top of each floor, left edge, bottom floor → top floor (reversed y)
+                  ...([...pts].reverse().map(r => `${d2x(r.dataFim)},${fl2y(r.fi)}`)), // top of each floor, right edge, top → bottom
+                ].join(" ");
+
+                // balance line midpoints
+                const midPts = pts.map(r => `${(d2x(r.dataInicio) + d2x(r.dataFim)) / 2},${fl2y(r.fi) + FLOOR_H / 2}`).join(" ");
+
+                const visNames = disciplinasVis.map(x => x.nome);
+                const nextName = visNames[visNames.indexOf(disc.nome) + 1];
+                const nextRows = nextName ? (lobMatrix[nextName] ?? []) : [];
+
+                return (
+                  <g key={disc.nome}>
+                    {/* Planned band */}
+                    <polygon points={polyPoints} fill={color} fillOpacity={0.10} stroke={color} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="6,3" />
+
+                    {/* Per-floor bars (planned outline + realizado fill) */}
+                    {pts.map(r => {
+                      const x1 = d2x(r.dataInicio), x2 = d2x(r.dataFim);
+                      const w = Math.max(2, x2 - x1);
+                      const fy = fl2y(r.fi);
+                      const pad = 5;
+                      const realizW = w * Math.min(r.pct / 100, 1);
+
+                      // Buffer collision highlight with next discipline
+                      const nr = nextRows.find(x => x.pavimentoNome === r.pavimentoNome);
+                      const gap = (nr && r.dataFim && nr.dataInicio)
+                        ? (new Date(nr.dataInicio + "T00:00:00").getTime() - new Date(r.dataFim + "T00:00:00").getTime()) / 86400000
+                        : 999;
+
+                      return (
+                        <g key={r.pavimentoNome}>
+                          {gap < bufferDias && gap >= 0 && nr?.dataInicio && (
+                            <rect x={x2} y={fy + 1} width={Math.max(2, d2x(nr.dataInicio) - x2)} height={FLOOR_H - 2}
+                              fill="#ef4444" fillOpacity={0.18} rx={2} />
+                          )}
+                          <rect x={x1} y={fy + pad} width={w} height={FLOOR_H - pad * 2}
+                            fill={color} fillOpacity={0.08} stroke={color} strokeWidth={0.5} strokeOpacity={0.3} rx={2} />
+                          {realizW > 0 && (
+                            <rect x={x1} y={fy + pad} width={realizW} height={FLOOR_H - pad * 2}
+                              fill={color} fillOpacity={0.82} rx={2} />
+                          )}
+                          {r.pct > 0 && r.pct < 100 && (
+                            <text x={x1 + realizW + 2} y={fy + FLOOR_H / 2 + 3} fontSize={8} fill={color} fontWeight="700">
+                              {Math.round(r.pct)}%
+                            </text>
+                          )}
+                          {r.pct >= 100 && w > 16 && (
+                            <text x={x1 + w / 2} y={fy + FLOOR_H / 2 + 3} fontSize={8} fill="white" textAnchor="middle" fontWeight="700">✓</text>
+                          )}
+                        </g>
+                      );
+                    })}
+
+                    {/* Balance line */}
+                    {pts.length > 1 && (
+                      <polyline points={midPts} fill="none" stroke={color} strokeWidth={2} strokeOpacity={0.9} strokeLinejoin="round" />
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* Today vertical line */}
+              {todayX > 0 && todayX < svgW && (
+                <g>
+                  <line x1={todayX} y1={HEADER_H} x2={todayX} y2={svgH} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="4,3" />
+                  <rect x={todayX - 14} y={HEADER_H - 18} width={28} height={14} fill="#ef4444" rx={3} />
+                  <text x={todayX} y={HEADER_H - 7} fontSize={8} fill="white" textAnchor="middle" fontWeight="800">HOJE</text>
+                </g>
+              )}
+            </svg>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="border-t border-slate-100 px-4 py-2 flex flex-wrap gap-x-4 gap-y-1.5 items-center">
+          {disciplinasVis.map(d => (
+            <div key={d.nome} className="flex items-center gap-1.5">
+              <div className="w-4 h-2 rounded-sm" style={{ background: d.cor }} />
+              <span className="text-[10px] text-slate-600">{d.nome}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <div className="w-3 h-3 rounded-sm" style={{ background: "#ef4444", opacity: 0.3 }} />
+            <span className="text-[10px] text-slate-400">Buffer crítico</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Ritmo table ── */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-slate-500" />
+          <h3 className="text-sm font-semibold text-slate-700">Ritmo de Produção (pavimentos / semana)</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">
+              <tr>
+                <th className="px-4 py-2 text-left">Disciplina</th>
+                <th className="px-4 py-2 text-center">Plan.</th>
+                <th className="px-4 py-2 text-center">Real.</th>
+                <th className="px-4 py-2 text-center">Desvio</th>
+                <th className="px-4 py-2 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {ritmoData.map(r => (
+                <tr key={r.nome} className="hover:bg-slate-50">
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: r.cor }} />
+                      <span className="font-medium text-slate-700">{r.nome}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-center text-slate-600">{r.plan > 0 ? r.plan.toFixed(2) : "—"}</td>
+                  <td className="px-4 py-2.5 text-center font-semibold text-slate-800">{r.real > 0 ? r.real.toFixed(2) : "—"}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    {r.real === 0
+                      ? <span className="text-slate-400">—</span>
+                      : <span className={`font-semibold ${r.dev >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {r.dev > 0 ? "+" : ""}{r.dev.toFixed(0)}%
+                        </span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    {r.real === 0
+                      ? <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Aguardando</span>
+                      : r.dev >= -5
+                        ? <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">No ritmo</span>
+                        : r.dev >= -20
+                          ? <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-medium">Atenção</span>
+                          : <span className="text-[10px] text-red-700 bg-red-50 px-2 py-0.5 rounded-full font-medium">Crítico</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Collisions ── */}
+      {colisoes.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <h3 className="text-sm font-semibold text-red-800">Colisões — buffer abaixo de {bufferDias} dias</h3>
+          </div>
+          <div className="space-y-1.5">
+            {colisoes.map((c, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-red-700 bg-white rounded-lg px-3 py-2 border border-red-100 flex-wrap">
+                <span className="font-semibold">{c.pavimento}</span>
+                <span className="text-red-400 font-bold">→</span>
+                <span className="font-medium">{c.disciplina1}</span>
+                <span className="text-red-400">alcançando</span>
+                <span className="font-medium">{c.disciplina2}</span>
+                <span className="ml-auto font-semibold text-red-600">
+                  {c.diasGap < 0 ? `${Math.abs(c.diasGap)}d sobreposição` : `${c.diasGap}d gap`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── JULINHO loading ── */}
+      {analisarM.isPending && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+          <img src="/julinho-3d.png" alt="JULINHO" className="h-12 w-12 object-contain drop-shadow" />
+          <div>
+            <div className="flex gap-1 mb-1">
+              {[0, 150, 300].map(d => <span key={d} className="w-2 h-2 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
+            </div>
+            <p className="text-xs text-amber-800 font-medium">JULINHO analisando Linha de Balanços · ritmos · colisões...</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── JULINHO result ── */}
+      {analise && !analisarM.isPending && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50">
+            <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain drop-shadow" />
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Análise LOB — JULINHO</p>
+              <p className="text-[10px] text-slate-500">IA especialista em Linha de Balanços e obras verticais</p>
+            </div>
+            <button onClick={() => setAnalise(null)} className="ml-auto text-slate-400 hover:text-slate-600 p-1 rounded">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="p-4 prose-sm max-w-none text-slate-700">
+            <ReactMarkdownSimple text={analise} />
+          </div>
+          <div className="px-4 py-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center gap-1">
+            <Sparkles className="h-3 w-3 text-violet-400" />
+            Gerado por JULINHO · Para simular cenários, acesse IA Gestora → Simulador de Cenários
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Cronograma ────────────────────────────────────────────────────────────────
 function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos, utils, orcamentoId }: any) {
   const [editando, setEditando] = useState(false);
   const [linhas, setLinhas] = useState<any[]>([]);
