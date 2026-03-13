@@ -4835,17 +4835,17 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "150ms" }} />
                 <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "300ms" }} />
               </div>
-              <span className="text-orange-700 font-medium">CRONOS analisando o desvio e elaborando planos de ação...</span>
+              <span className="text-orange-700 font-medium">JULINHO analisando o desvio e elaborando planos de ação...</span>
             </div>
           )}
 
           {analiseDesvio && analiseExpanded && !analisarDesvioMut.isPending && (
             <div className="px-5 py-4">
-              {/* Badge CRONOS */}
+              {/* Badge JULINHO */}
               <div className="flex items-center gap-2 mb-3">
                 <div className="flex items-center gap-1.5 bg-slate-800 text-white rounded-full px-3 py-1 text-[11px] font-semibold">
                   <Bot className="h-3 w-3" />
-                  Análise CRONOS
+                  Análise JULINHO
                 </div>
                 <span className="text-[10px] text-slate-400">IA especialista em gestão de obras</span>
               </div>
@@ -4858,7 +4858,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               {/* Footer */}
               <div className="mt-4 pt-3 border-t border-slate-200 flex items-center gap-2 text-[10px] text-slate-400">
                 <Sparkles className="h-3 w-3 text-violet-400" />
-                Gerado por CRONOS · Para implementar os planos de ação, acesse a aba IA Gestora → Simulador de Cenários
+                Gerado por JULINHO · Para implementar os planos de ação, acesse a aba IA Gestora → Simulador de Cenários
               </div>
             </div>
           )}
@@ -4867,7 +4867,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           {!analiseDesvio && !analisarDesvioMut.isPending && (
             <div className="px-5 py-4 text-center">
               <Brain className="h-8 w-8 text-orange-300 mx-auto mb-2" />
-              <p className="text-sm font-medium text-orange-800">Desvio detectado — solicite análise do CRONOS</p>
+              <p className="text-sm font-medium text-orange-800">Desvio detectado — solicite análise do JULINHO</p>
               <p className="text-xs text-orange-600 mt-1">
                 A IA irá diagnosticar as causas, estimar o impacto no prazo e sugerir 3 planos de ação para recuperação.
               </p>
@@ -5518,7 +5518,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
         <div className="flex items-center gap-3">
           <div className="bg-white/10 rounded-xl p-2.5"><Bot className="h-6 w-6 text-amber-400" /></div>
           <div>
-            <p className="font-bold text-lg">CRONOS — IA Gestora de Obras</p>
+            <p className="font-bold text-lg">JULINHO — IA Gestora de Obras</p>
             <p className="text-xs text-slate-300">
               Assistente inteligente · Aprende com todos os projetos · {proj?.nome}
             </p>
@@ -5555,7 +5555,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <MessageSquare className="h-3.5 w-3.5" />
-                Conversa com CRONOS
+                Conversa com JULINHO
               </div>
               {historico.length > 0 && (
                 <button onClick={() => limparMut.mutate({ projetoId, sessaoId })}
@@ -5570,7 +5570,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                 <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-8">
                   <div className="bg-slate-50 rounded-full p-4"><Sparkles className="h-8 w-8 text-amber-400" /></div>
                   <div>
-                    <p className="font-semibold text-slate-700">Olá! Sou o CRONOS.</p>
+                    <p className="font-semibold text-slate-700">Olá! Sou o JULINHO.</p>
                     <p className="text-xs text-slate-400 mt-1">Seu assistente de gestão de obras. Sobre o que quer conversar?</p>
                   </div>
                   <div className="grid grid-cols-1 gap-2 w-full max-w-sm">
@@ -5972,7 +5972,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                   onClick={simularCenario}>
                   {simMut.isPending
                     ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando Prazo · Custo · Caixa · Margem...</>
-                    : <><Zap className="h-3.5 w-3.5 text-amber-400" /> Simular com CRONOS</>}
+                    : <><Zap className="h-3.5 w-3.5 text-amber-400" /> Simular com JULINHO</>}
                 </Button>
               </div>
             </div>
@@ -5982,7 +5982,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <Brain className="h-3.5 w-3.5 text-purple-500" />
-                  <span className="font-semibold text-purple-700">Análise CRONOS</span>
+                  <span className="font-semibold text-purple-700">Análise JULINHO</span>
                   <span className="text-slate-300">·</span>
                   <span>Prazo · Custo · Caixa · Margem</span>
                 </div>
@@ -6001,7 +6001,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                       <Zap className="h-4 w-4 text-amber-400 absolute -bottom-1 -right-1" />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-slate-600">CRONOS — Simulador de Impacto</p>
+                      <p className="text-xs font-semibold text-slate-600">JULINHO — Simulador de Impacto</p>
                       <p className="text-[11px] text-slate-400 mt-1 max-w-[220px]">
                         Configure e simule um cenário para análise integrada de prazo, custo, caixa e margem
                       </p>
