@@ -33,7 +33,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -92,6 +92,7 @@ function labelSemana(s: string, idx: number) {
 const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "visao-geral",          label: "Visão Geral",        Icon: BarChart3 },
   { id: "cronograma",           label: "Cronograma",         Icon: CalendarRange },
+  { id: "gantt",                label: "Gantt",              Icon: CalendarCheck },
   { id: "cronograma-financeiro",label: "Crono. Financeiro",  Icon: DollarSign },
   { id: "curva-s",              label: "Curva S",            Icon: TrendingUp },
   { id: "avanco",               label: "Avanço Semanal",     Icon: Activity },
@@ -398,6 +399,14 @@ export default function PlanejamentoDetalhe() {
             avancos={avancos}
             utils={utils}
             orcamentoId={proj?.orcamentoId ?? null}
+          />
+        )}
+        {aba === "gantt" && (
+          <GanttCronograma
+            revisaoAtiva={revisaoAtiva}
+            atividades={atividades}
+            loadingAtiv={loadingAtiv}
+            avancos={avancos}
           />
         )}
         {aba === "curva-s" && (
@@ -1334,6 +1343,348 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
           Adicionar Linha
         </Button>
       )}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ABA: GANTT
+// ═════════════════════════════════════════════════════════════════════════════
+type ZoomGantt = "semana" | "mes" | "trimestre";
+
+function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any) {
+  const [collapsed,  setCollapsed]  = useState<Set<string>>(new Set());
+  const [nivelAtivo, setNivelAtivo] = useState<number | null>(null);
+  const [zoom,       setZoom]       = useState<ZoomGantt>("mes");
+  const [hoverId,    setHoverId]    = useState<number | null>(null);
+
+  // dayPx = pixels per day
+  const dayPx = zoom === "semana" ? 28 : zoom === "mes" ? 10 : 3;
+  const ROW_H = 30;
+  const HEADER_H = 46;
+  const LEFT_W = 310;
+
+  // avanço map (latest per atividade)
+  const avMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    avancos.forEach((av: any) => { m[av.atividadeId] = n(av.percentualAcumulado); });
+    return m;
+  }, [avancos]);
+
+  // Project date range
+  const { minDate, maxDate } = useMemo(() => {
+    const folhas = atividades.filter((a: any) => a.dataInicio && a.dataFim);
+    if (folhas.length === 0) {
+      const now = new Date();
+      return { minDate: new Date(now.getFullYear(), now.getMonth(), 1), maxDate: new Date(now.getFullYear(), now.getMonth() + 3, 0) };
+    }
+    const times = folhas.flatMap((a: any) => [
+      new Date(a.dataInicio + "T12:00:00").getTime(),
+      new Date(a.dataFim    + "T12:00:00").getTime(),
+    ]);
+    const mn = new Date(Math.min(...times));
+    const mx = new Date(Math.max(...times));
+    mn.setDate(1);
+    mx.setMonth(mx.getMonth() + 1, 0);
+    return { minDate: mn, maxDate: mx };
+  }, [atividades]);
+
+  const totalDays  = Math.ceil((maxDate.getTime() - minDate.getTime()) / 86400000) + 1;
+  const totalWidth = totalDays * dayPx;
+
+  const dateToX = useCallback((dateStr: string) => {
+    const d = new Date(dateStr + "T12:00:00");
+    return Math.round((d.getTime() - minDate.getTime()) / 86400000) * dayPx;
+  }, [minDate, dayPx]);
+
+  const todayX = useMemo(() => dateToX(new Date().toISOString().split("T")[0]), [dateToX]);
+
+  // Month header cells
+  const monthCells = useMemo(() => {
+    const cells: { label: string; x: number; w: number }[] = [];
+    const cur = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    while (cur <= maxDate) {
+      const x = Math.max(0, Math.round((cur.getTime() - minDate.getTime()) / 86400000) * dayPx);
+      const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      const endX = Math.round((Math.min(next.getTime() - 86400000, maxDate.getTime()) - minDate.getTime()) / 86400000) * dayPx + dayPx;
+      cells.push({ label: cur.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), x, w: endX - x });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return cells;
+  }, [minDate, maxDate, dayPx]);
+
+  // Week ticks (only when zoom = semana or mes)
+  const weekTicks = useMemo(() => {
+    if (zoom === "trimestre") return [];
+    const ticks: { x: number; label: string }[] = [];
+    const cur = new Date(minDate);
+    while (cur.getDay() !== 1) cur.setDate(cur.getDate() + 1);
+    while (cur <= maxDate) {
+      const x = Math.round((cur.getTime() - minDate.getTime()) / 86400000) * dayPx;
+      ticks.push({ x, label: `${cur.getDate()}/${cur.getMonth() + 1}` });
+      cur.setDate(cur.getDate() + 7);
+    }
+    return ticks;
+  }, [minDate, maxDate, dayPx, zoom]);
+
+  // Groups/collapse
+  const gruposEap = useMemo(() =>
+    atividades.filter((a: any) => a.isGrupo && a.eapCodigo).map((a: any) => a.eapCodigo as string),
+  [atividades]);
+
+  const maxNivel = useMemo(() =>
+    atividades.filter((a: any) => a.isGrupo).reduce((m: number, a: any) => Math.max(m, a.nivel ?? 1), 1),
+  [atividades]);
+
+  function toggleCollapse(eap: string) {
+    setCollapsed(s => { const ns = new Set(s); ns.has(eap) ? ns.delete(eap) : ns.add(eap); return ns; });
+  }
+
+  function isHidden(eap: string | null) {
+    if (!eap) return false;
+    const parts = eap.split(".");
+    for (let i = 1; i < parts.length; i++) {
+      if (collapsed.has(parts.slice(0, i).join("."))) return true;
+    }
+    return false;
+  }
+
+  function expandirAteNivel(nivel: number) {
+    setCollapsed(new Set(
+      atividades.filter((a: any) => a.isGrupo && a.eapCodigo && (a.nivel ?? 1) >= nivel).map((a: any) => a.eapCodigo)
+    ));
+  }
+
+  const visibleAtiv = useMemo(() =>
+    atividades.filter((a: any) => !isHidden(a.eapCodigo ?? "")),
+  [atividades, collapsed]);
+
+  if (loadingAtiv) return (
+    <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
+      <Loader2 className="h-5 w-5 animate-spin" /><span>Carregando Gantt...</span>
+    </div>
+  );
+
+  if (!revisaoAtiva) return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
+      Nenhuma revisão ativa encontrada. Crie uma revisão na aba Revisões.
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* ── Toolbar ─────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Zoom */}
+        <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5">
+          {(["semana", "mes", "trimestre"] as ZoomGantt[]).map(z => (
+            <button key={z} onClick={() => setZoom(z)}
+              className={`h-6 px-2.5 text-[11px] font-semibold rounded transition-colors ${zoom === z ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+              {z === "semana" ? "Semana" : z === "mes" ? "Mês" : "Trimestre"}
+            </button>
+          ))}
+        </div>
+
+        <div className="w-px h-4 bg-slate-200" />
+
+        {/* Level expand */}
+        {gruposEap.length > 0 && <span className="text-[11px] text-slate-500 font-medium">Nível:</span>}
+        {Array.from({ length: maxNivel }, (_, i) => i + 1).map(lvl => (
+          <button key={lvl} onClick={() => { expandirAteNivel(lvl + 1); setNivelAtivo(lvl); }}
+            className={`h-6 min-w-[28px] px-1.5 text-[11px] font-semibold rounded border transition-colors ${nivelAtivo === lvl ? "bg-slate-700 text-white border-slate-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+            N{lvl}
+          </button>
+        ))}
+        <button onClick={() => { setCollapsed(new Set()); setNivelAtivo(null); }}
+          className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-emerald-50 hover:border-emerald-300 text-slate-600 hover:text-emerald-700 flex items-center gap-1 transition-colors">
+          <ChevronDown className="h-3 w-3" /> Tudo
+        </button>
+        <button onClick={() => { setCollapsed(new Set(gruposEap)); setNivelAtivo(0); }}
+          className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 flex items-center gap-1 transition-colors">
+          <ChevronRight className="h-3 w-3" /> Recolher
+        </button>
+
+        {/* Legend */}
+        <div className="ml-auto flex items-center gap-3 text-[10px] text-slate-500">
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: "#1e293b" }} /> Grupo</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: "#1A3461" }} /> Atividade</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm bg-emerald-500" /> Concluída</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-3 rounded-sm bg-red-500" /> Hoje</span>
+        </div>
+      </div>
+
+      {/* ── Gantt grid ──────────────────────────────────────────── */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto"
+        style={{ maxHeight: "calc(100vh - 260px)" }}>
+
+        {/* Sticky header */}
+        <div className="flex sticky top-0 z-20 border-b border-slate-200">
+          {/* Corner cell */}
+          <div style={{ width: LEFT_W, minWidth: LEFT_W, height: HEADER_H }}
+            className="bg-slate-700 text-white text-[11px] font-semibold flex items-center px-3 gap-1.5 border-r border-slate-600 shrink-0 sticky left-0 z-30">
+            <CalendarCheck className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+            <span>Atividade / EAP</span>
+          </div>
+          {/* Timeline header */}
+          <div style={{ width: totalWidth, minWidth: totalWidth, height: HEADER_H, position: "relative" }}
+            className="bg-slate-700 shrink-0">
+            {/* Month rows */}
+            {monthCells.map((m, i) => (
+              <div key={i} style={{ position: "absolute", left: m.x, top: 0, width: m.w, height: 26 }}
+                className="border-r border-slate-600 flex items-center px-1.5 overflow-hidden">
+                <span className="text-[10px] font-semibold text-slate-200 uppercase tracking-wide whitespace-nowrap">
+                  {m.label}
+                </span>
+              </div>
+            ))}
+            {/* Week ticks */}
+            {weekTicks.map((w, i) => (
+              <div key={i} style={{ position: "absolute", left: w.x, top: 26, height: 20 }}
+                className="border-r border-slate-600/30 pl-0.5">
+                <span className="text-[8px] text-slate-400 whitespace-nowrap">{w.label}</span>
+              </div>
+            ))}
+            {/* Today in header */}
+            {todayX >= 0 && todayX <= totalWidth && (
+              <div style={{ position: "absolute", left: todayX, top: 0, bottom: 0, width: 2 }}
+                className="bg-red-400/60 pointer-events-none" />
+            )}
+          </div>
+        </div>
+
+        {/* Body rows */}
+        {visibleAtiv.map((a: any) => {
+          const isGrupo   = !!a.isGrupo;
+          const nivel      = a.nivel ?? 1;
+          const avanc      = avMap[a.id] ?? 0;
+          const isCollapsed = collapsed.has(a.eapCodigo ?? "");
+          const hasChildren = atividades.some((b: any) =>
+            b.eapCodigo && a.eapCodigo &&
+            b.eapCodigo.startsWith(a.eapCodigo + ".") &&
+            b.eapCodigo.split(".").length === a.eapCodigo.split(".").length + 1
+          );
+          const isHovered = hoverId === a.id;
+
+          // Bar geometry
+          const hasBar = !!(a.dataInicio && a.dataFim);
+          const barX    = hasBar ? Math.max(0, dateToX(a.dataInicio)) : 0;
+          const endX    = hasBar ? dateToX(a.dataFim) + dayPx : 0;
+          const barW    = hasBar ? Math.max(endX - barX, 4) : 0;
+          const fillW   = barW * (avanc / 100);
+
+          const barColor  = isGrupo ? "#1e293b" : "#1A3461";
+          const fillColor = avanc >= 100 ? "#10b981" : "#3b82f6";
+          const barH      = isGrupo ? 10 : 14;
+          const barTop    = (ROW_H - barH) / 2;
+
+          return (
+            <div key={a.id} className="flex" style={{ height: ROW_H }}
+              onMouseEnter={() => setHoverId(a.id)}
+              onMouseLeave={() => setHoverId(null)}>
+
+              {/* Left sticky label */}
+              <div style={{ width: LEFT_W, minWidth: LEFT_W, height: ROW_H }}
+                className={`sticky left-0 z-10 border-b border-r border-slate-100 flex items-center px-2 gap-1 shrink-0 transition-colors
+                  ${isGrupo ? "bg-slate-50" : isHovered ? "bg-blue-50/60" : "bg-white"}`}>
+                {/* Indent */}
+                <div style={{ width: (nivel - 1) * 10 }} className="shrink-0" />
+                {/* Toggle button */}
+                {hasChildren ? (
+                  <button onClick={() => toggleCollapse(a.eapCodigo)}
+                    className="h-4 w-4 flex items-center justify-center text-slate-400 hover:text-slate-700 shrink-0">
+                    {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </button>
+                ) : (
+                  <div className="h-4 w-4 shrink-0" />
+                )}
+                {/* EAP badge */}
+                <span className={`text-[8px] font-mono shrink-0 px-1 rounded leading-4 ${isGrupo ? "bg-slate-200 text-slate-600" : "bg-blue-50 text-blue-600"}`}>
+                  {a.eapCodigo ?? "—"}
+                </span>
+                {/* Name */}
+                <span className={`text-[11px] truncate flex-1 ${isGrupo ? "font-semibold text-slate-700" : "text-slate-600"}`}
+                  title={a.nome}>
+                  {a.nome}
+                </span>
+                {/* Progress badge */}
+                {!isGrupo && avanc > 0 && (
+                  <span className={`text-[9px] font-bold shrink-0 ${avanc >= 100 ? "text-emerald-600" : "text-blue-600"}`}>
+                    {avanc.toFixed(0)}%
+                  </span>
+                )}
+              </div>
+
+              {/* Right Gantt area */}
+              <div style={{ width: totalWidth, minWidth: totalWidth, height: ROW_H, position: "relative" }}
+                className={`border-b border-slate-100 shrink-0 ${isGrupo ? "bg-slate-50/40" : isHovered ? "bg-blue-50/20" : ""}`}>
+                {/* Month grid lines */}
+                {monthCells.map((m, i) => (
+                  <div key={i} style={{ position: "absolute", left: m.x, top: 0, bottom: 0, width: 1 }}
+                    className="bg-slate-100 pointer-events-none" />
+                ))}
+                {/* Today line */}
+                {todayX >= 0 && todayX <= totalWidth && (
+                  <div style={{ position: "absolute", left: todayX, top: 0, bottom: 0, width: 2 }}
+                    className="bg-red-500/50 pointer-events-none" />
+                )}
+                {/* Bar */}
+                {hasBar && (
+                  <div style={{
+                    position: "absolute",
+                    left: barX,
+                    top: barTop,
+                    width: barW,
+                    height: barH,
+                    backgroundColor: barColor,
+                    borderRadius: isGrupo ? "2px" : "3px",
+                    overflow: "hidden",
+                  }}>
+                    {/* Progress fill */}
+                    {fillW > 0 && (
+                      <div style={{ position: "absolute", left: 0, top: 0, width: fillW, height: "100%", backgroundColor: fillColor, opacity: 0.9 }} />
+                    )}
+                    {/* Label inside bar */}
+                    {barW > 32 && avanc > 0 && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", paddingLeft: 3 }}>
+                        <span style={{ fontSize: 8, color: "white", fontWeight: 700 }}>{avanc.toFixed(0)}%</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* End date label */}
+                {hasBar && isHovered && barW > 0 && (
+                  <div style={{
+                    position: "absolute",
+                    left: barX + barW + 4,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    fontSize: 9,
+                    color: "#64748b",
+                    whiteSpace: "nowrap",
+                    pointerEvents: "none",
+                    background: "rgba(255,255,255,0.95)",
+                    padding: "0 3px",
+                    borderRadius: 2,
+                    border: "1px solid #e2e8f0",
+                    zIndex: 5,
+                  }}>
+                    {fmtBR(a.dataInicio)} → {fmtBR(a.dataFim)}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer summary */}
+      <div className="flex items-center gap-4 text-[10px] text-slate-400 px-1">
+        <span>{visibleAtiv.length} itens visíveis de {atividades.length} total</span>
+        <span>·</span>
+        <span>{fmtBR(minDate.toISOString().split("T")[0])} → {fmtBR(maxDate.toISOString().split("T")[0])}</span>
+        <span>·</span>
+        <span>{totalDays} dias de projeto</span>
+      </div>
     </div>
   );
 }
