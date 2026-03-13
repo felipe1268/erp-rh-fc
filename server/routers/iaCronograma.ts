@@ -11,6 +11,7 @@ import {
   planejamentoRevisoes,
   planejamentoProjetos,
   planejamentoAvancos,
+  lobConfig,
 } from "../../drizzle/schema";
 import { eq, and, or, ilike, desc, sql, isNull } from "drizzle-orm";
 
@@ -661,6 +662,239 @@ Faça uma análise técnica detalhada deste desvio de prazo e responda EXATAMENT
         messages: [{ role: "user", content: userPrompt }],
         systemPrompt,
         maxTokens: 2000,
+      });
+
+      return { analise: result.content ?? "Não foi possível gerar análise no momento." };
+    }),
+
+  // ══════════════════════════════════════════════════════════════════════
+  // LINHA DE BALANÇOS — endpoints
+  // ══════════════════════════════════════════════════════════════════════
+
+  getLobData: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      const [revisao] = await db
+        .select()
+        .from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.projetoId, input.projetoId))
+        .orderBy(desc(planejamentoRevisoes.id))
+        .limit(1);
+
+      if (!revisao) return { revisaoId: null, pavimentos: [], disciplinas: [], linhas: [], config: null };
+
+      const revisaoId = revisao.id;
+
+      const PAVIMENTO_KEYWORDS = ["PAVIMENTO", "ANDAR", "TÉRREO", "TERREO", "COBERTURA", "SUBSOLO", "PAVTO"];
+      const pavimentos = await db
+        .select()
+        .from(planejamentoAtividades)
+        .where(
+          and(
+            eq(planejamentoAtividades.projetoId, input.projetoId),
+            eq(planejamentoAtividades.revisaoId, revisaoId),
+            eq(planejamentoAtividades.nivel, 1),
+            eq(planejamentoAtividades.isGrupo, true),
+            or(...PAVIMENTO_KEYWORDS.map(k => ilike(planejamentoAtividades.nome, `%${k}%`)))
+          )
+        )
+        .orderBy(planejamentoAtividades.ordem);
+
+      if (pavimentos.length === 0) return { revisaoId, pavimentos: [], disciplinas: [], linhas: [], config: null };
+
+      const allN2: {
+        pavimentoId: number; pavimentoNome: string; pavimentoOrdem: number;
+        disciplinaId: number; disciplinaNome: string; disciplinaOrdem: number;
+        eapCodigo: string | null; dataInicio: string | null; dataFim: string | null;
+        percentualRealizado: number;
+      }[] = [];
+
+      for (const pav of pavimentos) {
+        const n2s = await db
+          .select()
+          .from(planejamentoAtividades)
+          .where(
+            and(
+              eq(planejamentoAtividades.revisaoId, revisaoId),
+              eq(planejamentoAtividades.nivel, 2),
+              sql`${planejamentoAtividades.eapCodigo} LIKE ${pav.eapCodigo + ".%"}`
+            )
+          )
+          .orderBy(planejamentoAtividades.ordem);
+
+        for (const n2 of n2s) {
+          const [avancoRow] = await db
+            .select({ pct: sql<number>`COALESCE(MAX(CAST(percentual_acumulado AS FLOAT)), 0)` })
+            .from(planejamentoAvancos)
+            .where(
+              and(
+                eq(planejamentoAvancos.revisaoId, revisaoId),
+                sql`atividade_id IN (
+                  SELECT id FROM planejamento_atividades
+                  WHERE revisao_id = ${revisaoId}
+                  AND eap_codigo LIKE ${n2.eapCodigo + "%"}
+                )`
+              )
+            );
+
+          allN2.push({
+            pavimentoId: pav.id,
+            pavimentoNome: pav.nome.replace(/:$/, "").trim(),
+            pavimentoOrdem: pav.ordem ?? 0,
+            disciplinaId: n2.id,
+            disciplinaNome: n2.nome.replace(/:$/, "").trim(),
+            disciplinaOrdem: n2.ordem ?? 0,
+            eapCodigo: n2.eapCodigo,
+            dataInicio: n2.dataInicio,
+            dataFim: n2.dataFim,
+            percentualRealizado: avancoRow?.pct ?? 0,
+          });
+        }
+      }
+
+      const disciplinas = [...new Set(allN2.map(r => r.disciplinaNome))];
+
+      const [config] = await db
+        .select()
+        .from(lobConfig)
+        .where(eq(lobConfig.projetoId, input.projetoId))
+        .limit(1);
+
+      return {
+        revisaoId,
+        pavimentos: pavimentos.map(p => ({
+          id: p.id,
+          nome: p.nome.replace(/:$/, "").trim(),
+          ordem: p.ordem ?? 0,
+          dataInicio: p.dataInicio,
+          dataFim: p.dataFim,
+        })),
+        disciplinas,
+        linhas: allN2,
+        config: config ?? null,
+      };
+    }),
+
+  saveLobConfig: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      bufferMinimoDias: z.number().default(5),
+      ritmoAlvoPavsSemana: z.number().default(1.0),
+      pavimentosExcluidos: z.array(z.string()).default([]),
+      disciplinasConfig: z.array(z.object({
+        nome: z.string(),
+        cor: z.string(),
+        visivel: z.boolean(),
+        ordem: z.number(),
+      })).default([]),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const existing = await db
+        .select({ id: lobConfig.id })
+        .from(lobConfig)
+        .where(eq(lobConfig.projetoId, input.projetoId))
+        .limit(1);
+
+      if (existing.length > 0) {
+        await db.update(lobConfig).set({
+          bufferMinimoDias: input.bufferMinimoDias,
+          ritmoAlvoPavsSemana: String(input.ritmoAlvoPavsSemana),
+          pavimentosExcluidos: input.pavimentosExcluidos as any,
+          disciplinasConfig: input.disciplinasConfig as any,
+          atualizadoEm: new Date(),
+        }).where(eq(lobConfig.projetoId, input.projetoId));
+      } else {
+        await db.insert(lobConfig).values({
+          projetoId: input.projetoId,
+          bufferMinimoDias: input.bufferMinimoDias,
+          ritmoAlvoPavsSemana: String(input.ritmoAlvoPavsSemana),
+          pavimentosExcluidos: input.pavimentosExcluidos as any,
+          disciplinasConfig: input.disciplinasConfig as any,
+        });
+      }
+      return { ok: true };
+    }),
+
+  analisarLOB: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      nomeProjeto: z.string(),
+      numPavimentos: z.number(),
+      numDisciplinas: z.number(),
+      bufferMinimoDias: z.number(),
+      colisoes: z.array(z.object({
+        disciplina1: z.string(),
+        disciplina2: z.string(),
+        pavimento: z.string(),
+        diasGap: z.number(),
+      })),
+      ritmoPorDisciplina: z.array(z.object({
+        disciplina: z.string(),
+        ritmoPlaneadoPavsSemana: z.number(),
+        ritmoRealizadoPavsSemana: z.number(),
+        desvioPercent: z.number(),
+      })),
+      disciplinaMaisAtrasada: z.string().optional(),
+      disciplinaMaisAdiantada: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const systemPrompt = `Você é JULINHO, IA especialista em gestão de obras verticais e Linha de Balanços (LOB).
+Analise os dados LOB desta obra e forneça diagnóstico técnico preciso sobre colisões entre frentes, desvios de ritmo e risco ao prazo.
+Seja específico, técnico e prático. Use linguagem direta de engenharia de obras.`;
+
+      const colisoesText = input.colisoes.length === 0
+        ? "Nenhuma colisão detectada — todas as frentes dentro do buffer mínimo."
+        : input.colisoes.map(c =>
+            `- ${c.disciplina1} alcançando ${c.disciplina2} no ${c.pavimento} (gap atual: ${c.diasGap} dias | mínimo: ${input.bufferMinimoDias} dias)`
+          ).join("\n");
+
+      const ritmoText = input.ritmoPorDisciplina.map(r =>
+        `- ${r.disciplina}: plan ${r.ritmoPlaneadoPavsSemana.toFixed(2)} pavs/sem | real ${r.ritmoRealizadoPavsSemana.toFixed(2)} pavs/sem | desvio ${r.desvioPercent > 0 ? "+" : ""}${r.desvioPercent.toFixed(0)}%`
+      ).join("\n");
+
+      const userPrompt = `# Análise LOB — ${input.nomeProjeto}
+
+**Configuração:**
+- Pavimentos monitorados: ${input.numPavimentos}
+- Disciplinas/frentes: ${input.numDisciplinas}
+- Buffer mínimo configurado: ${input.bufferMinimoDias} dias
+
+**Colisões detectadas:**
+${colisoesText}
+
+**Ritmo por disciplina:**
+${ritmoText}
+
+${input.disciplinaMaisAtrasada ? `**Disciplina mais atrasada:** ${input.disciplinaMaisAtrasada}` : ""}
+${input.disciplinaMaisAdiantada ? `**Disciplina mais adiantada:** ${input.disciplinaMaisAdiantada}` : ""}
+
+---
+Responda EXATAMENTE neste formato:
+
+## 🏗️ Diagnóstico LOB
+(2 parágrafos: situação geral da obra na Linha de Balanços, principais riscos identificados)
+
+## ⚡ Colisões & Interferências
+(liste cada colisão com impacto específico — se não houver, confirme equilíbrio entre frentes)
+
+## 📈 Análise de Ritmo
+(para as 2-3 disciplinas com maior desvio, causa provável e consequência no prazo)
+
+## 🎯 Ações Prioritárias
+1. (ação mais urgente — quem, o quê, quando)
+2. (segunda prioridade)
+3. (terceira prioridade)
+
+## ✅ Recomendação Final do JULINHO
+(1 parágrafo: rebalanceamento necessário, qual disciplina precisa de atenção imediata e por quê)`;
+
+      const result = await invokeLLM({
+        messages: [{ role: "user", content: userPrompt }],
+        systemPrompt,
+        maxTokens: 1800,
       });
 
       return { analise: result.content ?? "Não foi possível gerar análise no momento." };
