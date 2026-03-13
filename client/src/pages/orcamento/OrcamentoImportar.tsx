@@ -396,8 +396,10 @@ export default function OrcamentoImportar() {
   const previewSheetMut = trpc.orcamento.previewSheet.useMutation();
 
   const obras = (obrasQ.data ?? []).filter((o: any) =>
-    !search || o.nome.toLowerCase().includes(search.toLowerCase()) ||
-    (o.numOrcamento || "").toLowerCase().includes(search.toLowerCase())
+    !obraIdsComOrcamento.has(o.id) && (
+      !search || o.nome.toLowerCase().includes(search.toLowerCase()) ||
+      (o.numOrcamento || "").toLowerCase().includes(search.toLowerCase())
+    )
   );
 
   /* ── selecionar arquivo custo → analisa automaticamente ── */
@@ -581,32 +583,19 @@ export default function OrcamentoImportar() {
                   <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                 ) : obras.length === 0 ? (
                   <div className="text-center py-8 text-sm text-muted-foreground">Nenhuma obra encontrada</div>
-                ) : obras.map((o: any) => {
-                  const jaTemOrc = obraIdsComOrcamento.has(o.id);
-                  const isSel    = selectedObra?.id === o.id;
-                  return (
-                    <button key={o.id}
-                      onClick={() => !jaTemOrc && setSelectedObra(o)}
-                      disabled={jaTemOrc}
-                      title={jaTemOrc ? "Esta obra já possui orçamento vinculado — use Atualizar Planilha no orçamento existente" : undefined}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors
-                        ${jaTemOrc ? "opacity-50 cursor-not-allowed bg-muted/30" : "hover:bg-muted/50"}
-                        ${isSel ? "bg-primary/10 border-l-2 border-primary" : ""}`}
-                    >
-                      <Building2 className={`h-4 w-4 shrink-0 ${isSel ? "text-primary" : "text-muted-foreground"}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{o.nome}</p>
-                        {o.numOrcamento && <p className="text-xs text-muted-foreground">{o.numOrcamento}</p>}
-                      </div>
-                      {jaTemOrc && (
-                        <span className="text-xs bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5 shrink-0">
-                          Orçamento existente
-                        </span>
-                      )}
-                      {isSel && !jaTemOrc && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
-                    </button>
-                  );
-                })}
+                ) : obras.map((o: any) => (
+                  <button key={o.id} onClick={() => setSelectedObra(o)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors
+                      ${selectedObra?.id === o.id ? "bg-primary/10 border-l-2 border-primary" : ""}`}
+                  >
+                    <Building2 className={`h-4 w-4 shrink-0 ${selectedObra?.id === o.id ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{o.nome}</p>
+                      {o.numOrcamento && <p className="text-xs text-muted-foreground">{o.numOrcamento}</p>}
+                    </div>
+                    {selectedObra?.id === o.id && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+                  </button>
+                ))}
               </div>
 
               {selectedObra && (
