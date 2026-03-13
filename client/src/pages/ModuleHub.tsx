@@ -136,8 +136,14 @@ const MODULES: Module[] = [
   {
     id: "planejamento", title: "Planejamento", subtitle: "Gestão de Projetos",
     description: "Projetos vinculados a orçamentos, Curva S, avanço físico semanal, revisões de cronograma e REFIS.",
-    icon: CalendarRange, accentFrom: "#22C55E", accentTo: "#16A34A", accentGlow: "", iconBg: "", path: "/planejamento", active: true,
+    icon: CalendarRange, accentFrom: "#22C55E", accentTo: "#16A34A", accentGlow: "rgba(34,197,94,0.35)", iconBg: "rgba(34,197,94,0.12)", path: "/planejamento", active: true,
     features: ["Curva S (4 linhas)", "Avanço Semanal", "Revisões / Baseline", "REFIS"],
+  },
+  {
+    id: "cadastro", title: "Cadastro", subtitle: "Gestão de Cadastros",
+    description: "Empresas, colaboradores, obras, setores, funções, relógios de ponto, convenções coletivas e habilidades.",
+    icon: BookOpen, accentFrom: "#6366F1", accentTo: "#4F46E5", accentGlow: "rgba(99,102,241,0.35)", iconBg: "rgba(99,102,241,0.12)", path: "/empresas", active: true,
+    features: ["Empresas", "Colaboradores", "Obras", "Setores & Funções", "Relógios de Ponto", "Convenções Coletivas", "Habilidades"],
   },
   {
     id: "financeiro", title: "Financeiro", subtitle: "Gestão Financeira",
@@ -336,6 +342,7 @@ export default function ModuleHub() {
   const hubToConfigKey: Record<string, string> = {
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
+    "cadastro": "cadastro",
   };
   // Filtrar módulos: habilitados no config E acessíveis pelo grupo do usuário
   const activeModules = MODULES.filter(m => {

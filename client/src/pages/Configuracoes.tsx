@@ -2040,6 +2040,7 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     parceiros: { label: "Parceiros", subtitle: "Portal de Convênios", icon: Coffee, color: "text-purple-600", bgColor: "bg-purple-50", borderColor: "border-purple-200", description: "Farmácia, posto, restaurante e outros convênios com lançamentos, aprovações e guia de descontos." },
     orcamento:      { label: "Orçamento",      subtitle: "Orçamento de Obras",                  icon: Calculator,    color: "text-cyan-600",   bgColor: "bg-cyan-50",   borderColor: "border-cyan-200",   description: "Importação de planilhas Excel com BDI, 3 versões de orçamento (Venda, Custo, Meta) e curva ABC de insumos." },
     planejamento:   { label: "Planejamento",   subtitle: "Planejamento e Controle de Obras",     icon: CalendarCheck, color: "text-green-600",  bgColor: "bg-green-50",  borderColor: "border-green-200",  description: "Cronograma MS Project, Curva S, Avanço Semanal, Caminho Crítico, Cronograma Financeiro, Compras e REFIS." },
+    cadastro:       { label: "Cadastro",       subtitle: "Gestão de Cadastros",                  icon: BookOpen,      color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200", description: "Empresas, colaboradores, obras, setores, funções, relógios de ponto, convenções coletivas e habilidades." },
   };
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;

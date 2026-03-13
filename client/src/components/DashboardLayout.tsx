@@ -324,6 +324,23 @@ const menuSectionsPlanejamento: MenuSection[] = [
   },
 ];
 
+const menuSectionsCadastro: MenuSection[] = [
+  {
+    title: "Cadastro",
+    items: [
+      { icon: Building2, label: "Empresas",            path: "/empresas"             },
+      { icon: Users,     label: "Colaboradores",       path: "/colaboradores"        },
+      { icon: Landmark,  label: "Obras",               path: "/obras"                },
+      { icon: HardHat,   label: "Efetivo por Obra",    path: "/obras/efetivo"        },
+      { icon: Layers,    label: "Setores",             path: "/setores"              },
+      { icon: Briefcase, label: "Funções",             path: "/funcoes"              },
+      { icon: Wifi,      label: "Relógios de Ponto",   path: "/relogios-ponto"       },
+      { icon: Scale,     label: "Convenções Coletivas",path: "/convencoes-coletivas" },
+      { icon: Wrench,    label: "Habilidades",         path: "/habilidades"          },
+    ],
+  },
+];
+
 const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
@@ -333,6 +350,7 @@ const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "parceiros":     menuSectionsParceiros,
   "orcamento":     menuSectionsOrcamento,
   "planejamento":  menuSectionsPlanejamento,
+  "cadastro":      menuSectionsCadastro,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
 
@@ -393,6 +411,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "parceiros":     "/parceiros/painel",
   "orcamento":     "/orcamento/painel",
   "planejamento":  "/planejamento",
+  "cadastro":      "/empresas",
   "all": "/painel",
 };
 
@@ -406,6 +425,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "parceiros":     { icon: Handshake,  color: "text-purple-400", bg: "bg-purple-500/20"  },
   "orcamento":     { icon: Calculator, color: "text-cyan-400",   bg: "bg-cyan-500/20"    },
   "planejamento":  { icon: Target,     color: "text-green-400",  bg: "bg-green-500/20"   },
+  "cadastro":      { icon: BookOpen,   color: "text-indigo-400", bg: "bg-indigo-500/20"  },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
 
@@ -864,6 +884,14 @@ function DashboardLayoutContent({
                       Planejamento
                     </div>
                   </SelectItem>}
+                  {isModEnabled("cadastro") && <SelectItem value="cadastro">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded bg-indigo-500/20 flex items-center justify-center">
+                        <BookOpen className="h-3 w-3 text-indigo-400" />
+                      </div>
+                      Cadastro
+                    </div>
+                  </SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -918,6 +946,11 @@ function DashboardLayoutContent({
                   {isModEnabled("planejamento") && (
                     <DropdownMenuItem onClick={() => { setActiveModule("planejamento" as ModuleId); setLocation("/planejamento"); }} className="cursor-pointer">
                       <Target className="mr-2 h-4 w-4 text-green-400" /> Planejamento
+                    </DropdownMenuItem>
+                  )}
+                  {isModEnabled("cadastro") && (
+                    <DropdownMenuItem onClick={() => { setActiveModule("cadastro" as ModuleId); setLocation("/empresas"); }} className="cursor-pointer">
+                      <BookOpen className="mr-2 h-4 w-4 text-indigo-400" /> Cadastro
                     </DropdownMenuItem>
                   )}
                 </DropdownMenuContent>
