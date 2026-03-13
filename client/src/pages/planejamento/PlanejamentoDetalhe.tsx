@@ -881,6 +881,15 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   const [linhas, setLinhas] = useState<any[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [nivelAtivo, setNivelAtivo] = useState<number | null>(null);
+  const [confirmExcluir, setConfirmExcluir] = useState(false);
+
+  const limparMutation = trpc.planejamento.limparCronograma.useMutation({
+    onSuccess: () => {
+      utils.planejamento.listarAtividades.invalidate();
+      utils.planejamento.listarAvancos.invalidate();
+      setConfirmExcluir(false);
+    },
+  });
 
   const avMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -998,6 +1007,14 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                   onImportado={() => utils.planejamento.listarAtividades.invalidate()}
                 />
               )}
+              {atividades.length > 0 && !confirmExcluir && (
+                <Button size="sm" variant="outline"
+                  className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50"
+                  onClick={() => setConfirmExcluir(true)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir Cronograma
+                </Button>
+              )}
               <Button size="sm" variant="outline" className="gap-1.5" onClick={iniciarEdicao}>
                 <Edit3 className="h-3.5 w-3.5" />
                 Editar Cronograma
@@ -1006,6 +1023,31 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
           )}
         </div>
       </div>
+
+      {/* ── Confirmação de exclusão do cronograma ─────────────────────────────── */}
+      {confirmExcluir && (
+        <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              Isso apagará <strong>todas as {atividades.length} atividades</strong> e os avanços registrados desta revisão. Não pode ser desfeito.
+            </span>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" onClick={() => setConfirmExcluir(false)}>
+              Cancelar
+            </Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 gap-1.5"
+              disabled={limparMutation.isPending}
+              onClick={() => limparMutation.mutate({ projetoId, revisaoId: revisaoAtiva.id })}>
+              {limparMutation.isPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Trash2 className="h-3.5 w-3.5" />}
+              Confirmar Exclusão
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Linha 2 — controles de nível (só fora do modo edição e se há grupos) */}
       {!editando && gruposEap.length > 0 && (
