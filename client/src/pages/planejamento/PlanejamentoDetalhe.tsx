@@ -1304,7 +1304,11 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
               tickFormatter={v => semanaLabel[v] ?? v} />
             <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
             <Tooltip formatter={(v: any) => `${n(v).toFixed(1)}%`}
-              labelFormatter={l => `${semanaLabel[l] ?? l} (${l})`} />
+              labelFormatter={l => {
+                const [y, m, d] = String(l).split("-");
+                const dataBR = `${d}/${m}/${y}`;
+                return `${semanaLabel[l] ?? l} (${dataBR})`;
+              }} />
             {/* Linha "hoje" */}
             {semanas.includes(hoje) && (
               <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
