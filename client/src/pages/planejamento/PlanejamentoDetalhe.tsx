@@ -20,7 +20,8 @@ import {
   Settings, AlertCircle, Lock, LockOpen,
   Bot, Brain, Sparkles, MessageSquare, Send, Zap,
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
-  ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye,
+  ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer,
+  TrendingDown, ArrowUpRight, ArrowDownRight,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -3811,6 +3812,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [semana, setSemana] = useState(() => toMonday(new Date()));
   const [obs, setObs] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [modoMascara, setModoMascara] = useState(false);
 
   // ── Cruzamento orçamento × cronograma (para calcular venda prevista/realizada mensal) ──
   const { data: cruzamento } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
@@ -4034,20 +4036,58 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     });
   }
 
-  // Curva S filtrada até semana selecionada (max 16 pontos)
+  // Curva S filtrada até semana selecionada (max 16 pontos) com tendência
   const curvaFiltrada = useMemo(() => {
     if (!curvaData?.curvaPlanejada) return [];
     const plan = (curvaData.curvaPlanejada as any[]).filter((p: any) => p.semana <= semana).slice(-16);
     const real = (curvaData.curvaRealizada as any[] ?? []).filter((p: any) => p.semana <= semana);
+    const tend = (curvaData.curvaTendencia as any[] ?? []).filter((p: any) => p.semana <= semana);
     const realMap2: Record<string, number> = {};
     real.forEach((p: any) => { realMap2[p.semana] = p.acumulado; });
+    const tendMap: Record<string, number> = {};
+    tend.forEach((p: any) => { tendMap[p.semana] = p.acumulado; });
     return plan.map((p: any, i: number) => ({
       label: `S${i + 1}`,
       semana: p.semana,
-      previsto:  +(p.acumulado ?? 0).toFixed(1),
-      realizado: realMap2[p.semana] != null ? +(realMap2[p.semana]).toFixed(1) : undefined,
+      previsto:   +(p.acumulado ?? 0).toFixed(1),
+      realizado:  realMap2[p.semana] != null ? +(realMap2[p.semana]).toFixed(1) : undefined,
+      tendencia:  tendMap[p.semana]  != null ? +(tendMap[p.semana]).toFixed(1)  : undefined,
     }));
   }, [curvaData, semana]);
+
+  // Valor total do contrato (sum das vendas dos itens cruzados)
+  const totalContrato = useMemo(() => {
+    const itens = (cruzamento as any)?.itens ?? [];
+    return itens.reduce((s: number, item: any) => s + n(item.vendaTotal), 0);
+  }, [cruzamento]);
+
+  // Curva S financeira (R$) — planejado × realizado sobre o contrato
+  const curvaFinanceira = useMemo(() => {
+    if (!curvaData?.curvaPlanejada || totalContrato === 0) return [];
+    const plan = (curvaData.curvaPlanejada as any[]).filter((p: any) => p.semana <= semana).slice(-16);
+    const real = (curvaData.curvaRealizada as any[] ?? []).filter((p: any) => p.semana <= semana);
+    const tend = (curvaData.curvaTendencia as any[] ?? []).filter((p: any) => p.semana <= semana);
+    const realMap2: Record<string, number> = {};
+    real.forEach((p: any) => { realMap2[p.semana] = p.acumulado; });
+    const tendMap: Record<string, number> = {};
+    tend.forEach((p: any) => { tendMap[p.semana] = p.acumulado; });
+    return plan.map((p: any, i: number) => {
+      const rv = realMap2[p.semana];
+      const tv = tendMap[p.semana];
+      return {
+        label: `S${i + 1}`,
+        semana: p.semana,
+        previsto:  +((p.acumulado ?? 0) / 100 * totalContrato).toFixed(0),
+        realizado: rv != null ? +(rv / 100 * totalContrato).toFixed(0) : undefined,
+        tendencia: tv != null ? +(tv / 100 * totalContrato).toFixed(0) : undefined,
+      };
+    });
+  }, [curvaData, semana, totalContrato]);
+
+  // Desvio físico global (pp)
+  const desvioFisico = avancoRealAtual - avancoPrevisto;
+  // Desvio financeiro do mês (R$)
+  const desvioFinanceiro = custoRealAuto - custoPrevAuto;
 
   return (
     <div className="space-y-5">
@@ -4066,16 +4106,28 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             ))}
           </select>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="outline"
+            className={`gap-1.5 no-print ${modoMascara ? "border-orange-400 text-orange-600 bg-orange-50" : "border-slate-300 text-slate-600"}`}
+            onClick={() => setModoMascara(v => !v)}>
+            {modoMascara ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            {modoMascara ? "Mostrar Valores" : "Modo Campo"}
+          </Button>
+          <Button size="sm" variant="outline"
+            className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50 no-print"
+            onClick={() => window.print()}>
+            <Printer className="h-3.5 w-3.5" />
+            Imprimir PDF
+          </Button>
           {existente && !confirmDelete && (
             <Button size="sm" variant="outline"
-              className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50"
+              className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50 no-print"
               onClick={() => setConfirmDelete(true)}>
               <XCircle className="h-3.5 w-3.5" />
               Cancelar Emissão
             </Button>
           )}
-          <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700"
+          <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 no-print"
             disabled={salvarMutation.isPending}
             onClick={emitirRefis}>
             {salvarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
@@ -4083,6 +4135,17 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </Button>
         </div>
       </div>
+
+      {/* Print styles */}
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          nav, aside, header, [data-sidebar], [data-tab-bar] { display: none !important; }
+          body { background: white !important; }
+          .bg-slate-50, .bg-slate-100 { background: #f8fafc !important; }
+          @page { margin: 1.5cm; size: A4; }
+        }
+      `}</style>
 
       {/* ── Confirmação de cancelamento ─────────────────────────────────────── */}
       {confirmDelete && existente && (
@@ -4232,6 +4295,18 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               <p className="text-xl font-bold text-white mt-0.5">{spi.toFixed(2)}</p>
               <p className="text-[10px] text-white/80">{spi >= 1 ? "Dentro do prazo" : "Abaixo do previsto"}</p>
             </div>
+            <div className={`rounded-lg px-3 py-2.5 text-center border ${desvioFisico >= 0 ? "bg-emerald-50 border-emerald-300" : "bg-red-50 border-red-300"}`}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Desvio Físico</p>
+              <p className={`text-xl font-bold mt-0.5 ${desvioFisico >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
+              </p>
+              <p className="text-[10px] text-slate-500 flex items-center justify-center gap-0.5">
+                {desvioFisico >= 0
+                  ? <ArrowUpRight className="h-3 w-3 text-emerald-600" />
+                  : <ArrowDownRight className="h-3 w-3 text-red-500" />}
+                {desvioFisico >= 0 ? "Adiantado" : "Atrasado"}
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -4239,15 +4314,17 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 3 — CURVA S (Avanço Acumulado Previsto × Realizado)
       ══════════════════════════════════════════════════════════════════════ */}
+      {/* BLOCO 3A — Curva S Física */}
       {curvaFiltrada.length > 1 && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
-              Avanço Físico Acumulado — Previsto × Realizado
+              Curva S Física — Avanço Acumulado (%)
             </p>
-            <div className="flex gap-4 text-xs text-slate-500">
+            <div className="flex gap-3 text-xs text-slate-500 flex-wrap">
               <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
               <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#1A3461" }} /> Realizado</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-6 border-t-2 border-dashed" style={{ borderColor: "#9b59b6" }} /> Tendência</span>
             </div>
           </div>
           <div className="px-4 py-3" style={{ height: 240 }}>
@@ -4257,15 +4334,77 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                 <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} width={36} />
                 <Tooltip
-                  formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]}
+                  formatter={(v: any, name: string) => [
+                    `${Number(v).toFixed(1)}%`,
+                    name === "previsto" ? "Previsto" : name === "realizado" ? "Realizado" : "Tendência"
+                  ]}
                   labelFormatter={(l: string) => `Semana ${l}`}
                 />
                 <Line type="monotone" dataKey="previsto"  stroke="#FFB800" strokeWidth={2} dot={false} name="previsto" />
-                <Line type="monotone" dataKey="realizado" stroke="#1A3461" strokeWidth={2} dot={{ r: 3 }} connectNulls name="realizado" />
+                <Line type="monotone" dataKey="realizado" stroke="#1A3461" strokeWidth={2.5} dot={{ r: 3 }} connectNulls name="realizado" />
+                <Line type="monotone" dataKey="tendencia" stroke="#9b59b6" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
                 <ReferenceLine y={avancoPrevisto}  stroke="#FFB800" strokeDasharray="4 4" />
                 <ReferenceLine y={avancoRealAtual} stroke="#1A3461" strokeDasharray="4 4" />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+          {/* Linha de resumo de desvio */}
+          <div className="border-t border-slate-100 px-5 py-2.5 flex flex-wrap gap-6 text-xs">
+            <div><span className="text-slate-400 mr-1">Acumulado Previsto:</span><span className="font-semibold text-amber-700">{fPct_(avancoPrevisto)}</span></div>
+            <div><span className="text-slate-400 mr-1">Acumulado Realizado:</span><span className="font-semibold text-blue-800">{fPct_(avancoRealAtual)}</span></div>
+            <div>
+              <span className="text-slate-400 mr-1">Desvio:</span>
+              <span className={`font-bold ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BLOCO 3B — Curva S Financeira */}
+      {curvaFinanceira.length > 1 && !modoMascara && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              Curva S Financeira — Faturamento Acumulado (R$)
+            </p>
+            <div className="flex gap-3 text-xs text-slate-500 flex-wrap">
+              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#1A3461" }} /> Realizado</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-6 border-t-2 border-dashed" style={{ borderColor: "#9b59b6" }} /> Tendência</span>
+            </div>
+          </div>
+          <div className="px-4 py-3" style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={curvaFinanceira} margin={{ top: 5, right: 20, bottom: 5, left: 55 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                <YAxis tickFormatter={v => `${(v/1000000).toFixed(1)}M`} tick={{ fontSize: 10 }} width={55} />
+                <Tooltip
+                  formatter={(v: any, name: string) => [
+                    v != null ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—",
+                    name === "previsto" ? "Previsto" : name === "realizado" ? "Realizado" : "Tendência"
+                  ]}
+                  labelFormatter={(l: string) => `Semana ${l}`}
+                />
+                <Line type="monotone" dataKey="previsto"  stroke="#FFB800" strokeWidth={2} dot={false} name="previsto" />
+                <Line type="monotone" dataKey="realizado" stroke="#1A3461" strokeWidth={2.5} dot={{ r: 3 }} connectNulls name="realizado" />
+                <Line type="monotone" dataKey="tendencia" stroke="#9b59b6" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="border-t border-slate-100 px-5 py-2.5 flex flex-wrap gap-6 text-xs">
+            <div><span className="text-slate-400 mr-1">Contrato Total:</span><span className="font-semibold text-slate-700">{fmt(totalContrato)}</span></div>
+            <div><span className="text-slate-400 mr-1">Previsto Acumulado:</span><span className="font-semibold text-amber-700">{fmt(totalContrato * avancoPrevisto / 100)}</span></div>
+            <div><span className="text-slate-400 mr-1">Realizado Acumulado:</span><span className="font-semibold text-blue-800">{fmt(totalContrato * avancoRealAtual / 100)}</span></div>
+            <div>
+              <span className="text-slate-400 mr-1">Desvio Financeiro:</span>
+              <span className={`font-bold ${(totalContrato * avancoRealAtual / 100) >= (totalContrato * avancoPrevisto / 100) ? "text-emerald-600" : "text-red-600"}`}>
+                {(totalContrato * (avancoRealAtual - avancoPrevisto) / 100) >= 0 ? "+" : ""}
+                {fmt(totalContrato * (avancoRealAtual - avancoPrevisto) / 100)}
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -4372,58 +4511,88 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       ))}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          BLOCO 6 — VENDA PREVISTA / REALIZADA + Observações
+          BLOCO 6 — FATURAMENTO PREVISTO / REALIZADO + Observações
       ══════════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-1">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Dados para Emissão</p>
-          {vendaMes > 0 && (
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Faturamento do Mês</p>
+          {vendaMes > 0 && !modoMascara && (
             <p className="text-[10px] text-slate-400">
-              Venda do mês ({new Date(mesSemana + "-15").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}):
+              Faturamento contratual do mês ({new Date(mesSemana + "-15").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}):
               <span className="font-semibold text-slate-600 ml-1">{fmt(vendaMes)}</span>
             </p>
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Custo Previsto — automático */}
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-              Venda Prevista no Mês
-            </p>
-            {vendaMes > 0 ? (
-              <>
-                <p className="text-xl font-bold text-amber-800 mt-1">{fmt(custoPrevAuto)}</p>
-                <p className="text-[10px] text-amber-600 mt-0.5">
-                  {fmt(vendaMes)} × {avancoPrevisto.toFixed(1)}% (avanço previsto)
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-amber-600 mt-1">—</p>
-            )}
-          </div>
+        {!modoMascara ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Faturamento Previsto */}
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+                Faturamento Previsto no Mês
+              </p>
+              {vendaMes > 0 ? (
+                <>
+                  <p className="text-xl font-bold text-amber-800 mt-1">{fmt(custoPrevAuto)}</p>
+                  <p className="text-[10px] text-amber-600 mt-0.5">
+                    {fmt(vendaMes)} × {avancoPrevisto.toFixed(1)}% (avanço previsto)
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-amber-600 mt-1">—</p>
+              )}
+            </div>
 
-          {/* Custo Realizado — automático */}
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">
-              Venda Realizada no Mês
-            </p>
-            {vendaMes > 0 ? (
-              <>
-                <p className="text-xl font-bold text-blue-800 mt-1">{fmt(custoRealAuto)}</p>
-                <p className="text-[10px] text-blue-600 mt-0.5">
-                  {fmt(vendaMes)} × {avancoRealAtual.toFixed(1)}% (avanço realizado)
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-blue-600 mt-1">—</p>
-            )}
-          </div>
-        </div>
+            {/* Faturamento Realizado */}
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">
+                Faturamento Realizado no Mês
+              </p>
+              {vendaMes > 0 ? (
+                <>
+                  <p className="text-xl font-bold text-blue-800 mt-1">{fmt(custoRealAuto)}</p>
+                  <p className="text-[10px] text-blue-600 mt-0.5">
+                    {fmt(vendaMes)} × {avancoRealAtual.toFixed(1)}% (avanço realizado)
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-blue-600 mt-1">—</p>
+              )}
+            </div>
 
-        {vendaMes === 0 && (
+            {/* Desvio Financeiro */}
+            <div className={`rounded-lg border px-4 py-3 ${desvioFinanceiro >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+              <p className={`text-[10px] font-semibold uppercase tracking-wider ${desvioFinanceiro >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                Desvio no Mês
+              </p>
+              {vendaMes > 0 ? (
+                <>
+                  <p className={`text-xl font-bold mt-1 ${desvioFinanceiro >= 0 ? "text-emerald-800" : "text-red-800"}`}>
+                    {desvioFinanceiro >= 0 ? "+" : ""}{fmt(desvioFinanceiro)}
+                  </p>
+                  <p className={`text-[10px] mt-0.5 flex items-center gap-0.5 ${desvioFinanceiro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desvioFinanceiro >= 0
+                      ? <ArrowUpRight className="h-3 w-3" />
+                      : <ArrowDownRight className="h-3 w-3" />}
+                    {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)} físico
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-slate-400 mt-1">—</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-center">
+            <EyeOff className="h-5 w-5 text-orange-400 mx-auto mb-1" />
+            <p className="text-xs text-orange-600 font-medium">Modo Campo — valores financeiros ocultos</p>
+            <p className="text-[10px] text-orange-500 mt-0.5">Indicadores de produtividade abaixo</p>
+          </div>
+        )}
+
+        {vendaMes === 0 && !modoMascara && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            Cruzamento orçamento × cronograma não disponível — os valores de venda serão registrados como 0.
+            Cruzamento orçamento × cronograma não disponível — os valores serão registrados como 0.
           </p>
         )}
 
@@ -4438,6 +4607,72 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           />
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          BLOCO 7 — HISTÓRICO DE REFIS ANTERIORES
+      ══════════════════════════════════════════════════════════════════════ */}
+      {refisLista.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-800 text-white px-5 py-2.5 flex items-center gap-2">
+            <History className="h-4 w-4 text-slate-300" />
+            <p className="text-xs font-bold uppercase tracking-wider">Histórico de Relatórios Emitidos</p>
+            <span className="ml-auto text-[11px] text-slate-400">{refisLista.length} {refisLista.length === 1 ? "relatório" : "relatórios"}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+                  <th className="px-4 py-2 text-left">Nº</th>
+                  <th className="px-4 py-2 text-left">Semana</th>
+                  <th className="px-4 py-2 text-right">Prev. Acum.</th>
+                  <th className="px-4 py-2 text-right">Real. Acum.</th>
+                  <th className="px-4 py-2 text-right">Desvio</th>
+                  <th className="px-4 py-2 text-right">SPI</th>
+                  {!modoMascara && <th className="px-4 py-2 text-right">Fat. Previsto</th>}
+                  {!modoMascara && <th className="px-4 py-2 text-right">Fat. Realizado</th>}
+                  {!modoMascara && <th className="px-4 py-2 text-right">Desvio R$</th>}
+                  <th className="px-4 py-2 text-left">Observações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...refisLista]
+                  .sort((a: any, b: any) => b.semana.localeCompare(a.semana))
+                  .map((r: any, idx: number) => {
+                    const desvR = n(r.avancoRealizado) - n(r.avancoPrevisto);
+                    const devFin = n(r.custoRealizado) - n(r.custoPrevisto);
+                    const isAtual = r.semana === semana;
+                    return (
+                      <tr key={r.id}
+                        className={`border-b border-slate-100 ${isAtual ? "bg-blue-50" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"} hover:bg-slate-50 transition-colors`}>
+                        <td className="px-4 py-2.5 font-mono text-slate-500">{String(r.numero ?? idx + 1).padStart(3, "0")}</td>
+                        <td className="px-4 py-2.5 font-medium text-slate-700">
+                          {new Date(r.semana + "T12:00:00").toLocaleDateString("pt-BR")}
+                          {isAtual && <span className="ml-1.5 text-[9px] bg-blue-100 text-blue-700 rounded px-1 py-0.5 font-semibold">ATUAL</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-amber-700 font-semibold">{fPct_(n(r.avancoPrevisto))}</td>
+                        <td className="px-4 py-2.5 text-right text-blue-800 font-semibold">{fPct_(n(r.avancoRealizado))}</td>
+                        <td className={`px-4 py-2.5 text-right font-bold ${desvR >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {desvR >= 0 ? "+" : ""}{fPct_(desvR)}
+                        </td>
+                        <td className={`px-4 py-2.5 text-right font-semibold ${n(r.spi) >= 1 ? "text-emerald-600" : "text-red-600"}`}>
+                          {n(r.spi).toFixed(2)}
+                        </td>
+                        {!modoMascara && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoPrevisto > 0 ? fmt(n(r.custoPrevisto)) : "—"}</td>}
+                        {!modoMascara && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoRealizado > 0 ? fmt(n(r.custoRealizado)) : "—"}</td>}
+                        {!modoMascara && (
+                          <td className={`px-4 py-2.5 text-right font-semibold ${devFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            {r.custoPrevisto > 0 ? `${devFin >= 0 ? "+" : ""}${fmt(devFin)}` : "—"}
+                          </td>
+                        )}
+                        <td className="px-4 py-2.5 text-slate-500 max-w-[200px] truncate">{r.observacoes ?? "—"}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
     </div>
   );
