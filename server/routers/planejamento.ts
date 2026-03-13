@@ -12,6 +12,7 @@ import {
   planejamentoCompras,
   planejamentoComprasRevisoes,
   planejamentoMedicoes,
+  planejamentoMedicaoConfig,
   orcamentos,
   orcamentoItens,
 } from "../../drizzle/schema";
@@ -940,5 +941,51 @@ export const planejamentoRouter = router({
       const db = await getDb();
       return db.delete(planejamentoMedicoes)
         .where(eq(planejamentoMedicoes.id, input.id));
+    }),
+
+  // ── Configuração de Modalidade de Medição ────────────────────────────────
+  getConfigMedicao: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [cfg] = await db.select().from(planejamentoMedicaoConfig)
+        .where(eq(planejamentoMedicaoConfig.projetoId, input.projetoId))
+        .limit(1);
+      return cfg ?? null;
+    }),
+
+  salvarConfigMedicao: protectedProcedure
+    .input(z.object({
+      projetoId:         z.number(),
+      tipoMedicao:       z.enum(["avanco", "parcela_fixa"]),
+      diaCorte:          z.number().min(1).max(31),
+      entrada:           z.number().optional(),
+      numeroParcelas:    z.number().min(1).max(120).optional(),
+      inicioFaturamento: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [existing] = await db.select({ id: planejamentoMedicaoConfig.id })
+        .from(planejamentoMedicaoConfig)
+        .where(eq(planejamentoMedicaoConfig.projetoId, input.projetoId))
+        .limit(1);
+
+      const data = {
+        projetoId:         input.projetoId,
+        tipoMedicao:       input.tipoMedicao,
+        diaCorte:          input.diaCorte,
+        entrada:           String(input.entrada ?? 0),
+        numeroParcelas:    input.numeroParcelas ?? 6,
+        inicioFaturamento: input.inicioFaturamento ?? null,
+        atualizadoEm:      new Date(),
+      };
+
+      if (existing) {
+        await db.update(planejamentoMedicaoConfig).set(data)
+          .where(eq(planejamentoMedicaoConfig.id, existing.id));
+      } else {
+        await db.insert(planejamentoMedicaoConfig).values(data);
+      }
+      return { success: true };
     }),
 });
