@@ -12,8 +12,11 @@ import {
   Upload, FileSpreadsheet, X, AlertCircle, CheckCircle2,
   Loader2, Search, ArrowLeft, Building2, ChevronRight,
   TrendingDown, DollarSign, Target, BarChart3, SkipForward,
-  FileCheck, CircleDot,
+  FileCheck, CircleDot, Columns, RefreshCw,
 } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 
 function formatBRL(v: number) {
@@ -37,7 +40,20 @@ function readAsArrayBuffer(file: File, onProgress: (p: number) => void): Promise
   });
 }
 
-type Step = "obra" | "custo" | "bdi" | "done";
+type Step = "obra" | "custo" | "mapping" | "bdi" | "done";
+
+const KEY_FIELDS: { key: string; label: string; required: boolean }[] = [
+  { key: "item",       label: "Código / Item (EAP)",      required: true  },
+  { key: "descricao",  label: "Descrição",                 required: true  },
+  { key: "unidade",    label: "Unidade (Un)",              required: false },
+  { key: "quantidade", label: "Quantidade",                required: false },
+  { key: "cuUnitMat",  label: "Preço Unit. Material",      required: false },
+  { key: "cuUnitMdo",  label: "Preço Unit. Mão de Obra",   required: false },
+  { key: "cuTotalMat", label: "Total Material",            required: false },
+  { key: "cuTotalMdo", label: "Total Mão de Obra",         required: false },
+  { key: "custoTotal", label: "Custo Total",               required: true  },
+  { key: "abc",        label: "Curva ABC",                 required: false },
+];
 
 type AnalyzeResult = {
   ok: boolean;
@@ -107,13 +123,15 @@ async function analisarCusto(
     setProgress(80);
     let headerRow = -1;
     for (let i = 0; i < Math.min(30, data.length); i++) {
-      if (String(data[i][10] || "").trim() === "Item") { headerRow = i; break; }
+      if (data[i].some((cell: any) => String(cell || "").trim().toLowerCase() === "item")) {
+        headerRow = i; break;
+      }
     }
     if (headerRow === -1) {
-      errors.push('Cabeçalho com coluna "Item" (col K) não encontrado — verifique se a planilha segue o padrão FC Engenharia');
+      errors.push('Coluna "Item" não encontrada nas primeiras 30 linhas — certifique-se de que a aba se chama "Orçamento"');
     } else {
       for (let i = headerRow + 1; i < data.length; i++) {
-        if (String(data[i][10] || "").trim() && String(data[i][15] || "").trim()) rowCount++;
+        if (data[i].some((cell: any) => String(cell || "").trim())) rowCount++;
       }
       if (rowCount === 0) errors.push("Nenhum item encontrado após o cabeçalho");
     }
@@ -282,10 +300,11 @@ function Dropzone({ onFile, file, onRemove, accept = ".xlsx,.xlsm,.xls" }: {
 /* ─── Stepper header ──────────────────────────────────────────── */
 function Stepper({ current }: { current: Step }) {
   const steps: { key: Step; label: string; desc: string }[] = [
-    { key: "obra",  label: "1", desc: "Selecionar Obra"   },
-    { key: "custo", label: "2", desc: "Planilha de Custo" },
-    { key: "bdi",   label: "3", desc: "Planilha BDI"      },
-    { key: "done",  label: "4", desc: "Resultado"         },
+    { key: "obra",    label: "1", desc: "Selecionar Obra"   },
+    { key: "custo",   label: "2", desc: "Planilha de Custo" },
+    { key: "mapping", label: "3", desc: "Mapear Colunas"    },
+    { key: "bdi",     label: "4", desc: "Planilha BDI"      },
+    { key: "done",    label: "5", desc: "Resultado"         },
   ];
   const idx = steps.findIndex(s => s.key === current);
   return (
@@ -355,8 +374,15 @@ export default function OrcamentoImportar() {
     { enabled: !!companyId },
   );
 
-  const importarMut   = trpc.orcamento.importar.useMutation();
+  /* Mapeamento de colunas */
+  const [previewCols,    setPreviewCols]    = useState<{ idx: number; label: string }[]>([]);
+  const [previewSample,  setPreviewSample]  = useState<string[][]>([]);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [currentMapping, setCurrentMapping] = useState<Record<string, number>>({});
+
+  const importarMut    = trpc.orcamento.importar.useMutation();
   const importarBdiMut = trpc.orcamento.importarBdi.useMutation();
+  const previewSheetMut = trpc.orcamento.previewSheet.useMutation();
 
   const obras = (obrasQ.data ?? []).filter((o: any) =>
     !search || o.nome.toLowerCase().includes(search.toLowerCase()) ||
@@ -395,6 +421,27 @@ export default function OrcamentoImportar() {
     }
   }, []);
 
+  /* ── ir para mapeamento de colunas ── */
+  const handleGoToMapping = async () => {
+    if (!fileCusto) return;
+    setLoadingPreview(true);
+    try {
+      const base64 = await fileToBase64(fileCusto);
+      const res = await previewSheetMut.mutateAsync({ fileBase64: base64, fileName: fileCusto.name });
+      setPreviewCols(res.allColumns);
+      setPreviewSample(res.sampleRows);
+      // Carregar mapeamento salvo anteriormente (por nome de arquivo)
+      const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+      const saved = localStorage.getItem(savedKey);
+      setCurrentMapping(saved ? JSON.parse(saved) : (res.detectedMap as Record<string, number>));
+      setStep("mapping");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao analisar colunas da planilha");
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
   /* ── importar planilha de custo ── */
   const handleImportarCusto = async () => {
     if (!fileCusto || !companyId) return;
@@ -414,6 +461,7 @@ export default function OrcamentoImportar() {
         fileName:        fileCusto.name,
         metaPercentual:  metaPerc / 100,
         userName:        (user as any)?.username || (user as any)?.name || "sistema",
+        colMapping:      Object.keys(currentMapping).length > 0 ? currentMapping : undefined,
       });
       clearInterval(interval);
       setImportProgCusto(100);
@@ -615,7 +663,191 @@ export default function OrcamentoImportar() {
                 </div>
               )}
 
-              {/* Barra de progresso de importação */}
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" onClick={() => setStep("obra")}>
+                  <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+                </Button>
+                <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
+                  disabled={!analyzeResCusto?.ok || analyzingCusto || loadingPreview}
+                  onClick={handleGoToMapping}
+                >
+                  {loadingPreview
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Detectando colunas...</>
+                    : <><Columns className="h-4 w-4 mr-2" /> Mapear Colunas <ChevronRight className="h-4 w-4 ml-1" /></>}
+                </Button>
+              </div>
+
+              {/* Sobre o mapeamento */}
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer font-medium">Como funciona o mapeamento</summary>
+                <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-1">
+                  <p>• O sistema detecta automaticamente as colunas da planilha</p>
+                  <p>• Na próxima etapa você confirma ou corrige o mapeamento antes de importar</p>
+                  <p>• O mapeamento é salvo para reutilizar em planilhas com o mesmo nome</p>
+                  <p>• Aba obrigatória: <strong>Orçamento</strong> (ou "Orçamento" / "Orc")</p>
+                  <p>• Aba opcional: <strong>Insumos</strong> para gerar Curva ABC</p>
+                </div>
+              </details>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ════════ STEP 3 — MAPEAMENTO DE COLUNAS ════════ */}
+        {step === "mapping" && (
+          <Card>
+            <CardContent className="pt-5 space-y-5">
+              <div>
+                <h2 className="font-semibold text-base flex items-center gap-2">
+                  <Columns className="h-5 w-5 text-blue-600" />
+                  Mapear Colunas da Planilha
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Confirme que cada campo do sistema está ligado à coluna correta. O mapeamento será salvo para próximas importações com esta planilha.
+                </p>
+              </div>
+
+              {/* Tabela de mapeamento */}
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/60 border-b">
+                      <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground w-[40%]">Campo do Sistema</th>
+                      <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Coluna na Planilha</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {KEY_FIELDS.map((field, i) => {
+                      const mappedIdx = currentMapping[field.key];
+                      const mappedLabel = previewCols.find(c => c.idx === mappedIdx)?.label;
+                      return (
+                        <tr key={field.key} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
+                          <td className="px-3 py-2">
+                            <span className="font-medium text-sm">{field.label}</span>
+                            {field.required && <span className="ml-1 text-red-500 text-xs">*</span>}
+                          </td>
+                          <td className="px-3 py-2">
+                            <Select
+                              value={mappedIdx !== undefined ? String(mappedIdx) : "__none__"}
+                              onValueChange={(val) => {
+                                setCurrentMapping(prev => {
+                                  const next = { ...prev };
+                                  if (val === "__none__") { delete next[field.key]; }
+                                  else { next[field.key] = parseInt(val); }
+                                  return next;
+                                });
+                              }}
+                            >
+                              <SelectTrigger className={`h-8 text-xs ${!mappedIdx && field.required ? "border-amber-400 bg-amber-50" : ""}`}>
+                                <SelectValue placeholder="— não mapear —" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">
+                                  <span className="text-muted-foreground">— não mapear —</span>
+                                </SelectItem>
+                                {previewCols.map(col => (
+                                  <SelectItem key={col.idx} value={String(col.idx)}>
+                                    <span className="font-mono text-xs mr-2 text-muted-foreground">[{col.idx}]</span>
+                                    {col.label}
+                                    {mappedLabel === col.label && mappedLabel !== undefined && col.idx !== mappedIdx && (
+                                      <span className="ml-1 text-xs text-blue-500">✓ auto</span>
+                                    )}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pré-visualização de dados */}
+              {previewSample.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pré-visualização (5 primeiras linhas)</p>
+                  <div className="rounded-lg border overflow-x-auto">
+                    <table className="text-xs min-w-full">
+                      <thead>
+                        <tr className="bg-muted/60 border-b">
+                          {KEY_FIELDS.map(f => {
+                            const idx = currentMapping[f.key];
+                            const col = previewCols.find(c => c.idx === idx);
+                            return (
+                              <th key={f.key} className="px-2 py-1.5 text-left font-medium whitespace-nowrap text-muted-foreground">
+                                <span className={f.required ? "text-foreground" : ""}>{f.label}</span>
+                                {col && <span className="block font-normal text-blue-500 text-[10px]">{col.label}</span>}
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewSample.map((row, ri) => (
+                          <tr key={ri} className={`border-b last:border-0 ${ri % 2 === 0 ? "" : "bg-muted/10"}`}>
+                            {KEY_FIELDS.map(f => {
+                              const colIdx = currentMapping[f.key];
+                              const previewColIdx = previewCols.findIndex(c => c.idx === colIdx);
+                              const val = previewColIdx >= 0 ? row[previewColIdx] : "";
+                              return (
+                                <td key={f.key} className="px-2 py-1.5 whitespace-nowrap max-w-[140px] overflow-hidden text-ellipsis">
+                                  {val || <span className="text-muted-foreground/40">—</span>}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Avisos sobre campos obrigatórios não mapeados */}
+              {KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                  <span>
+                    <strong>Campos obrigatórios sem mapeamento:</strong>{" "}
+                    {KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).map(f => f.label).join(", ")}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" onClick={() => setStep("custo")}>
+                  <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+                </Button>
+                <Button variant="outline" size="sm"
+                  onClick={() => {
+                    if (fileCusto) {
+                      const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+                      localStorage.removeItem(savedKey);
+                      toast.info("Mapeamento salvo removido — usando detecção automática");
+                      handleGoToMapping();
+                    }
+                  }}
+                  title="Redefinir para detecção automática"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+                <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
+                  disabled={KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 || importingCusto}
+                  onClick={async () => {
+                    if (fileCusto) {
+                      const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+                      localStorage.setItem(savedKey, JSON.stringify(currentMapping));
+                    }
+                    await handleImportarCusto();
+                  }}
+                >
+                  {importingCusto
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
+                    : <><FileCheck className="h-4 w-4 mr-2" /> Confirmar e Importar</>}
+                </Button>
+              </div>
+
               {importingCusto && (
                 <div className="space-y-2">
                   <p className="text-sm font-medium flex items-center gap-2">
@@ -632,36 +864,11 @@ export default function OrcamentoImportar() {
                   <CheckCircle2 className="h-5 w-5" /> Planilha de custo importada com sucesso!
                 </div>
               )}
-
-              <div className="flex gap-2 pt-1">
-                <Button variant="outline" onClick={() => setStep("obra")}>
-                  <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-                </Button>
-                <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
-                  disabled={!analyzeResCusto?.ok || analyzingCusto || importingCusto || importProgCusto === 100}
-                  onClick={handleImportarCusto}
-                >
-                  {importingCusto
-                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
-                    : <><FileCheck className="h-4 w-4 mr-2" /> Importar Planilha de Custo</>}
-                </Button>
-              </div>
-
-              {/* Estrutura esperada */}
-              <details className="text-xs text-muted-foreground">
-                <summary className="cursor-pointer font-medium">Estrutura esperada da planilha</summary>
-                <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-1">
-                  <p>• Aba <strong>Orçamento</strong> com linha de cabeçalho contendo "Item" na coluna K</p>
-                  <p>• Coluna K: código EAP · Coluna P: descrição · Coluna Q: unidade · Coluna R: quantidade</p>
-                  <p>• Coluna S: Pu. Material · Coluna U: Pu. MO · Coluna AE: Pt. Material · Coluna AF: Pt. MO · Coluna AG: Total</p>
-                  <p>• Aba <strong>Insumos</strong> (opcional) para gerar curva ABC</p>
-                </div>
-              </details>
             </CardContent>
           </Card>
         )}
 
-        {/* ════════ STEP 3 — PLANILHA BDI ════════ */}
+        {/* ════════ STEP 4 — PLANILHA BDI ════════ */}
         {step === "bdi" && resultCusto && (
           <Card>
             <CardContent className="pt-5 space-y-5">
