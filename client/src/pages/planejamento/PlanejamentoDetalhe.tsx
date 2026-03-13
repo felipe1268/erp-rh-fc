@@ -222,7 +222,7 @@ export default function PlanejamentoDetalhe() {
     { projetoId }, { enabled: !!projetoId }
   );
 
-  const { data: curvaData } = trpc.planejamento.getCurvaS.useQuery(
+  const { data: curvaData, isLoading: curvaLoading } = trpc.planejamento.getCurvaS.useQuery(
     { projetoId, revisaoId: revisaoAtiva?.id ?? 0, baselineId: baselineRev?.id ?? revisaoAtiva?.id ?? 0 },
     { enabled: !!revisaoAtiva }
   );
@@ -411,7 +411,7 @@ export default function PlanejamentoDetalhe() {
           />
         )}
         {aba === "curva-s" && (
-          <CurvaS curvaData={curvaData} proj={proj} avancoAtual={avancoAtual} fPct={fPct} />
+          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} proj={proj} avancoAtual={avancoAtual} fPct={fPct} />
         )}
         {aba === "avanco" && (
           <AvancoSemanal
@@ -2218,7 +2218,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: CURVA S
 // ═════════════════════════════════════════════════════════════════════════════
-function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
+function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
   const merged = useMemo(() => {
     if (!curvaData) return [];
     const map: Record<string, any> = {};
@@ -2241,6 +2241,13 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
     });
     return m;
   }, [merged]);
+
+  if (curvaLoading) return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
+      <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <p className="text-sm">Carregando Curva S...</p>
+    </div>
+  );
 
   if (!curvaData || merged.length === 0) return (
     <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
