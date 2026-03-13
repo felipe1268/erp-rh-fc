@@ -490,9 +490,31 @@ function DashboardLayoutContent({
   const { isModuleEnabled } = useModuleConfig();
   const hubToConfigKey: Record<string, string> = {
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
-    "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros", "orcamento": "orcamento", "planejamento": "planejamento",
+    "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
+    "orcamento": "orcamento", "planejamento": "planejamento", "cadastro": "cadastro",
   };
   const isModEnabled = (modId: string) => isModuleEnabled(hubToConfigKey[modId] ?? modId);
+
+  // Ordem igual à tela inicial (fc-module-order no localStorage)
+  const [moduleOrder, setModuleOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("fc-module-order") || "[]"); } catch { return []; }
+  });
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "fc-module-order") {
+        try { setModuleOrder(JSON.parse(e.newValue || "[]")); } catch {}
+      }
+    };
+    const onCustom = (e: Event) => {
+      setModuleOrder((e as CustomEvent).detail ?? []);
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("fc-module-order-changed", onCustom);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("fc-module-order-changed", onCustom);
+    };
+  }, []);
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -743,6 +765,29 @@ function DashboardLayoutContent({
   const currentTheme = MODULE_THEME[activeModule];
   const ModIcon = currentTheme.icon;
 
+  // Lista de módulos disponíveis, filtrada e ordenada igual à tela inicial
+  const ALL_MODULE_DEFS = [
+    { id: "rh-dp",       label: "RH & DP",       icon: Users,       color: "text-blue-400",    bg: "bg-blue-500/20",    path: "/painel/rh",          canSee: () => (permIsAdminMaster || canAccessModule("rh-dp")) && isModEnabled("rh-dp") },
+    { id: "sst",         label: "SST",            icon: Shield,      color: "text-emerald-400", bg: "bg-emerald-500/20", path: "/painel/sst",          canSee: () => (permIsAdminMaster || canAccessModule("sst")) && isModEnabled("sst") },
+    { id: "juridico",    label: "Jurídico",       icon: Gavel,       color: "text-slate-300",   bg: "bg-slate-400/20",   path: "/painel/juridico",    canSee: () => (permIsAdminMaster || canAccessModule("juridico")) && isModEnabled("juridico") },
+    { id: "avaliacao",   label: "Avaliação",      icon: Star,        color: "text-amber-400",   bg: "bg-amber-500/20",   path: "/avaliacao-desempenho", canSee: () => isModEnabled("avaliacao") },
+    { id: "terceiros",   label: "Terceiros",      icon: HardHat,     color: "text-orange-400",  bg: "bg-orange-500/20",  path: "/terceiros/painel",   canSee: () => isModEnabled("terceiros") },
+    { id: "parceiros",   label: "Parceiros",      icon: Handshake,   color: "text-purple-400",  bg: "bg-purple-500/20",  path: "/parceiros/painel",   canSee: () => isModEnabled("parceiros") },
+    { id: "orcamento",   label: "Orçamento",      icon: Calculator,  color: "text-cyan-400",    bg: "bg-cyan-500/20",    path: "/orcamento/painel",   canSee: () => isModEnabled("orcamento") },
+    { id: "planejamento",label: "Planejamento",   icon: Target,      color: "text-green-400",   bg: "bg-green-500/20",   path: "/planejamento",       canSee: () => isModEnabled("planejamento") },
+    { id: "cadastro",    label: "Cadastro",       icon: BookOpen,    color: "text-indigo-400",  bg: "bg-indigo-500/20",  path: "/empresas",           canSee: () => isModEnabled("cadastro") },
+  ];
+  const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
+  const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :
+    [...visibleModuleDefs].sort((a, b) => {
+      const ai = moduleOrder.indexOf(a.id);
+      const bi = moduleOrder.indexOf(b.id);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+
   return (
     <>
       <div className="relative" ref={sidebarRef}>
@@ -800,84 +845,16 @@ function DashboardLayoutContent({
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  {(permIsAdminMaster || canAccessModule("rh-dp")) && isModEnabled("rh-dp") && (
-                    <SelectItem value="rh-dp">
+                  {sortedModuleDefs.map(m => (
+                    <SelectItem key={m.id} value={m.id}>
                       <div className="flex items-center gap-2">
-                        <div className="h-5 w-5 rounded bg-blue-500/20 flex items-center justify-center">
-                          <Users className="h-3 w-3 text-blue-400" />
+                        <div className={`h-5 w-5 rounded ${m.bg} flex items-center justify-center`}>
+                          <m.icon className={`h-3 w-3 ${m.color}`} />
                         </div>
-                        RH & DP
+                        {m.label}
                       </div>
                     </SelectItem>
-                  )}
-                  {(permIsAdminMaster || canAccessModule("sst")) && isModEnabled("sst") && (
-                    <SelectItem value="sst">
-                      <div className="flex items-center gap-2">
-                        <div className="h-5 w-5 rounded bg-emerald-500/20 flex items-center justify-center">
-                          <Shield className="h-3 w-3 text-emerald-400" />
-                        </div>
-                        SST
-                      </div>
-                    </SelectItem>
-                  )}
-                  {(permIsAdminMaster || canAccessModule("juridico")) && isModEnabled("juridico") && (
-                    <SelectItem value="juridico">
-                      <div className="flex items-center gap-2">
-                        <div className="h-5 w-5 rounded bg-slate-400/20 flex items-center justify-center">
-                          <Gavel className="h-3 w-3 text-slate-300" />
-                        </div>
-                        Jurídico
-                      </div>
-                    </SelectItem>
-                  )}
-                  {isModEnabled("avaliacao") && <SelectItem value="avaliacao">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded bg-amber-500/20 flex items-center justify-center">
-                        <Star className="h-3 w-3 text-amber-400" />
-                      </div>
-                      Avaliação
-                    </div>
-                  </SelectItem>}
-                  {isModEnabled("terceiros") && <SelectItem value="terceiros">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded bg-orange-500/20 flex items-center justify-center">
-                        <HardHat className="h-3 w-3 text-orange-400" />
-                      </div>
-                      Terceiros
-                    </div>
-                  </SelectItem>}
-                  {isModEnabled("parceiros") && <SelectItem value="parceiros">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded bg-purple-500/20 flex items-center justify-center">
-                        <Handshake className="h-3 w-3 text-purple-400" />
-                      </div>
-                      Parceiros
-                    </div>
-                  </SelectItem>}
-                  {isModEnabled("orcamento") && <SelectItem value="orcamento">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded bg-cyan-500/20 flex items-center justify-center">
-                        <Calculator className="h-3 w-3 text-cyan-400" />
-                      </div>
-                      Orçamento
-                    </div>
-                  </SelectItem>}
-                  {isModEnabled("planejamento") && <SelectItem value="planejamento">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded bg-green-500/20 flex items-center justify-center">
-                        <Target className="h-3 w-3 text-green-400" />
-                      </div>
-                      Planejamento
-                    </div>
-                  </SelectItem>}
-                  {isModEnabled("cadastro") && <SelectItem value="cadastro">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded bg-indigo-500/20 flex items-center justify-center">
-                        <BookOpen className="h-3 w-3 text-indigo-400" />
-                      </div>
-                      Cadastro
-                    </div>
-                  </SelectItem>}
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -894,51 +871,11 @@ function DashboardLayoutContent({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="right" align="start">
-                  {(permIsAdminMaster || canAccessModule("rh-dp")) && isModEnabled("rh-dp") && (
-                    <DropdownMenuItem onClick={() => { setActiveModule("rh-dp"); setLocation("/painel/rh"); }} className="cursor-pointer">
-                      <Users className="mr-2 h-4 w-4 text-blue-400" /> RH & DP
+                  {sortedModuleDefs.map(m => (
+                    <DropdownMenuItem key={m.id} onClick={() => { setActiveModule(m.id as ModuleId); setLocation(m.path); }} className="cursor-pointer">
+                      <m.icon className={`mr-2 h-4 w-4 ${m.color}`} /> {m.label}
                     </DropdownMenuItem>
-                  )}
-                  {(permIsAdminMaster || canAccessModule("sst")) && isModEnabled("sst") && (
-                    <DropdownMenuItem onClick={() => { setActiveModule("sst"); setLocation("/painel/sst"); }} className="cursor-pointer">
-                      <Shield className="mr-2 h-4 w-4 text-emerald-400" /> SST
-                    </DropdownMenuItem>
-                  )}
-                  {(permIsAdminMaster || canAccessModule("juridico")) && isModEnabled("juridico") && (
-                    <DropdownMenuItem onClick={() => { setActiveModule("juridico"); setLocation("/painel/juridico"); }} className="cursor-pointer">
-                      <Gavel className="mr-2 h-4 w-4 text-slate-300" /> Jurídico
-                    </DropdownMenuItem>
-                  )}
-                  {isModEnabled("avaliacao") && (
-                    <DropdownMenuItem onClick={() => { setActiveModule("avaliacao"); setLocation("/avaliacao-desempenho"); }} className="cursor-pointer">
-                      <Star className="mr-2 h-4 w-4 text-amber-400" /> Avaliação
-                    </DropdownMenuItem>
-                  )}
-                  {isModEnabled("terceiros") && (
-                    <DropdownMenuItem onClick={() => { setActiveModule("terceiros" as ModuleId); setLocation("/terceiros/painel"); }} className="cursor-pointer">
-                      <HardHat className="mr-2 h-4 w-4 text-orange-400" /> Terceiros
-                    </DropdownMenuItem>
-                  )}
-                  {isModEnabled("parceiros") && (
-                    <DropdownMenuItem onClick={() => { setActiveModule("parceiros" as ModuleId); setLocation("/parceiros/painel"); }} className="cursor-pointer">
-                      <Handshake className="mr-2 h-4 w-4 text-purple-400" /> Parceiros
-                    </DropdownMenuItem>
-                  )}
-                  {isModEnabled("orcamento") && (
-                    <DropdownMenuItem onClick={() => { setActiveModule("orcamento" as ModuleId); setLocation("/orcamento/painel"); }} className="cursor-pointer">
-                      <Calculator className="mr-2 h-4 w-4 text-cyan-400" /> Orçamento
-                    </DropdownMenuItem>
-                  )}
-                  {isModEnabled("planejamento") && (
-                    <DropdownMenuItem onClick={() => { setActiveModule("planejamento" as ModuleId); setLocation("/planejamento"); }} className="cursor-pointer">
-                      <Target className="mr-2 h-4 w-4 text-green-400" /> Planejamento
-                    </DropdownMenuItem>
-                  )}
-                  {isModEnabled("cadastro") && (
-                    <DropdownMenuItem onClick={() => { setActiveModule("cadastro" as ModuleId); setLocation("/empresas"); }} className="cursor-pointer">
-                      <BookOpen className="mr-2 h-4 w-4 text-indigo-400" /> Cadastro
-                    </DropdownMenuItem>
-                  )}
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
