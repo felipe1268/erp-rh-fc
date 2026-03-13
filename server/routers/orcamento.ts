@@ -1547,9 +1547,11 @@ export const orcamentoRouter = router({
       const meta = extrairMetadados(dataOrc);
 
       // BDI primeiro — necessário para calcular venda dos itens
-      const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
+      // totalVendaBdi = PV-2 da planilha BDI (valor autoritativo já calculado pelo Excel,
+      //   considera apenas custo direto, excluindo indiretos que constam na EAP)
+      const { bdiPercentual, totalVendaBdi, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
 
-      // Itens da EAP — venda calculada via Custo × (1 + BDI%)
+      // Itens da EAP — venda calculada via fórmula ABNT/TCU por item
       const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual, input.colMapping);
       if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
@@ -1566,10 +1568,11 @@ export const orcamentoRouter = router({
         : { composicoes: [], linhasInsumos: [] };
 
       // Totais: lê a linha "TOTAIS GERAIS" da planilha (precisão total, sem arredondamento intermediário).
-      // Fallback para somas das folhas apenas se a linha não existir.
+      // Para totalVenda: usa o PV-2 da aba BDI quando disponível (já considera apenas custos diretos).
       const totaisGerais  = extrairTotaisPlanilha(dataOrc, colMapOrc);
       const nivel1        = itens.filter(i => i.nivel === 1);
-      const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
+      const totalVendaEAP = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
+      const totalVenda    = totalVendaBdi > 0 ? totalVendaBdi : totalVendaEAP;
       const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
       const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
       const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
@@ -1765,7 +1768,7 @@ export const orcamentoRouter = router({
 
       // BDI e itens
       const metaPerc = parseFloat(orc.metaPercentual || '0.2');
-      const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
+      const { bdiPercentual, totalVendaBdi, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
       const bdiFinal = bdiPercentual > 0 ? bdiPercentual : parseFloat(orc.bdiPercentual || '0');
 
       const { itens, colMap: colMapOrc2 } = parsearAbaCorcamento(dataOrc, metaPerc, bdiFinal);
@@ -1783,10 +1786,11 @@ export const orcamentoRouter = router({
         ? parsearAbaCPUs(XLSX.utils.sheet_to_json(wb.Sheets[cpusTabReimp], { header: 1, defval: '' }) as any[][], input.companyId)
         : { composicoes: [], linhasInsumos: [] };
 
-      // Totais: lê a linha "TOTAIS GERAIS" da planilha (precisão total, sem arredondamento intermediário).
+      // Totais: usa PV-2 da aba BDI como total de venda autoritativo quando disponível
       const totaisGerais  = extrairTotaisPlanilha(dataOrc, colMapOrc2);
       const nivel1        = itens.filter(i => i.nivel === 1);
-      const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
+      const totalVendaEAP = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
+      const totalVenda    = totalVendaBdi > 0 ? totalVendaBdi : totalVendaEAP;
       const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
       const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
       const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
@@ -2074,14 +2078,22 @@ export const orcamentoRouter = router({
             }).where(eq(orcamentoItens.id, item.id));
           }
         }
-        const nivel1 = itens.filter(i => i.nivel === 1);
+        // Usa PV-2 da aba BDI como total de venda autoritativo (exclui indiretos da EAP).
+        // Fallback: soma dos itens nível 1 com fórmula ABNT/TCU.
         const bdiDivisorTotal = 1 - bdiPercentual;
-        await db.update(orcamentos).set({
-          bdiPercentual: fix6(bdiPercentual),
-          totalVenda:    fix2(nivel1.reduce((s, i) => {
+        let totalVendaFinal: number;
+        if (totalVendaBdi > 0) {
+          totalVendaFinal = totalVendaBdi;
+        } else {
+          const nivel1 = itens.filter(i => i.nivel === 1);
+          totalVendaFinal = nivel1.reduce((s, i) => {
             const c = parseFloat(i.custoTotal || '0');
             return s + (bdiDivisorTotal > 0 ? c / bdiDivisorTotal : c);
-          }, 0)),
+          }, 0);
+        }
+        await db.update(orcamentos).set({
+          bdiPercentual: fix6(bdiPercentual),
+          totalVenda:    fix2(totalVendaFinal),
         }).where(eq(orcamentos.id, oid));
       }
 
