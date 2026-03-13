@@ -965,7 +965,7 @@ export const planejamentoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const [existing] = await db.select({ id: planejamentoMedicaoConfig.id })
+      const [existing] = await db.select({ id: planejamentoMedicaoConfig.id, bloqueado: planejamentoMedicaoConfig.bloqueado })
         .from(planejamentoMedicaoConfig)
         .where(eq(planejamentoMedicaoConfig.projetoId, input.projetoId))
         .limit(1);
@@ -977,6 +977,7 @@ export const planejamentoRouter = router({
         entrada:           String(input.entrada ?? 0),
         numeroParcelas:    input.numeroParcelas ?? 6,
         inicioFaturamento: input.inicioFaturamento ?? null,
+        bloqueado:         false,
         atualizadoEm:      new Date(),
       };
 
@@ -986,6 +987,21 @@ export const planejamentoRouter = router({
       } else {
         await db.insert(planejamentoMedicaoConfig).values(data);
       }
+      return { success: true };
+    }),
+
+  toggleBloqueioMedicao: protectedProcedure
+    .input(z.object({ projetoId: z.number(), bloqueado: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [existing] = await db.select({ id: planejamentoMedicaoConfig.id })
+        .from(planejamentoMedicaoConfig)
+        .where(eq(planejamentoMedicaoConfig.projetoId, input.projetoId))
+        .limit(1);
+      if (!existing) return { success: false };
+      await db.update(planejamentoMedicaoConfig)
+        .set({ bloqueado: input.bloqueado, atualizadoEm: new Date() })
+        .where(eq(planejamentoMedicaoConfig.id, existing.id));
       return { success: true };
     }),
 });
