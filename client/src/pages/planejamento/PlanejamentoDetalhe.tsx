@@ -5034,10 +5034,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   }, [semana]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" id="refis-print-area">
 
       {/* ── TOOLBAR ────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 refis-no-print">
         <div className="flex items-center gap-3">
           <p className="text-sm font-semibold text-slate-700">REFIS — Relatório Semanal de Avanço Físico</p>
           <select
@@ -5082,18 +5082,237 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
       {/* Print styles */}
       <style>{`
+        /* ─── REFIS · Layout de Impressão Técnico A4 ─────────────────────────── */
         @media print {
-          .no-print { display: none !important; }
-          nav, aside, header, [data-sidebar], [data-tab-bar] { display: none !important; }
-          body { background: white !important; }
-          .bg-slate-50, .bg-slate-100 { background: #f8fafc !important; }
-          @page { margin: 1.5cm; size: A4; }
+          @page { size: A4 portrait; margin: 14mm 14mm 16mm 14mm; }
+
+          /* Isolação do conteúdo via visibility trick */
+          html, body { background: white !important; }
+          body * { visibility: hidden !important; }
+          #refis-print-area {
+            visibility: visible !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            z-index: 99999 !important;
+            overflow: visible !important;
+            font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important;
+            font-size: 9pt !important;
+            color: #1e293b !important;
+          }
+          #refis-print-area * {
+            visibility: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+
+          /* Elementos apenas de tela: ocultos na impressão */
+          .refis-no-print { display: none !important; visibility: hidden !important; }
+
+          /* Elementos apenas de impressão: visíveis na impressão */
+          .refis-print-only { display: flex !important; }
+          .refis-print-only-block { display: block !important; }
+
+          /* Espaçamento entre blocos */
+          #refis-print-area .space-y-5 > * + * { margin-top: 6pt !important; }
+
+          /* ── Remover decoração web ── */
+          #refis-print-area .rounded-xl,
+          #refis-print-area .rounded-lg,
+          #refis-print-area .rounded-md { border-radius: 2px !important; }
+          #refis-print-area .shadow-sm,
+          #refis-print-area .shadow-md,
+          #refis-print-area .shadow { box-shadow: none !important; }
+
+          /* ── Cabeçalho do documento (FC Engenharia · banner) ── */
+          .refis-doc-header {
+            background: #1A3461 !important;
+            color: white !important;
+            margin-bottom: 6pt !important;
+            page-break-after: avoid !important;
+          }
+          .refis-doc-header-inner {
+            display: flex !important;
+            align-items: stretch !important;
+            min-height: 46pt !important;
+          }
+          .refis-doc-header-brand {
+            border-right: 1pt solid rgba(255,255,255,0.22) !important;
+            padding: 8pt 12pt !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            min-width: 108pt !important;
+          }
+          .refis-doc-header-center {
+            flex: 1 !important;
+            padding: 8pt 14pt !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+          }
+          .refis-doc-header-ref {
+            border-left: 1pt solid rgba(255,255,255,0.22) !important;
+            padding: 8pt 12pt !important;
+            text-align: right !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            min-width: 82pt !important;
+          }
+
+          /* ── Container de cada bloco ── */
+          .refis-block {
+            page-break-inside: avoid !important;
+            border: 0.5pt solid #cbd5e1 !important;
+            background: white !important;
+            margin-bottom: 6pt !important;
+            overflow: visible !important;
+          }
+
+          /* ── BLOCO 1: cabeçalho obra ── */
+          #refis-print-area .refis-block .bg-slate-800 {
+            background: #1A3461 !important;
+            padding: 6pt 10pt !important;
+            font-size: 8.5pt !important;
+          }
+          #refis-print-area .refis-block .bg-slate-800 .text-slate-300 { color: rgba(255,255,255,0.65) !important; }
+          #refis-print-area .refis-block .bg-slate-800 .text-slate-100 { color: rgba(255,255,255,0.95) !important; }
+          #refis-print-area .refis-block .bg-slate-50 { background: #f8fafc !important; }
+          #refis-print-area .refis-block .bg-slate-100 { background: #f1f5f9 !important; }
+          #refis-print-area .refis-block .divide-slate-100 { border-color: #e2e8f0 !important; }
+          #refis-print-area .refis-block .grid { grid-template-columns: repeat(3, 1fr) !important; }
+
+          /* ── BLOCO 2: barras + KPIs ── */
+          #refis-print-area .refis-block .bg-slate-100.border-b { background: #f1f5f9 !important; padding: 4pt 8pt !important; font-size: 7.5pt !important; }
+          #refis-print-area [style*="background: #FFB800"] { background: #FFB800 !important; }
+          #refis-print-area [style*="background: #1A3461"] { background: #1A3461 !important; }
+          #refis-print-area .bg-slate-100.rounded.overflow-hidden { background: #e2e8f0 !important; border: 0.3pt solid #cbd5e1 !important; }
+          #refis-print-area .bg-emerald-600 { background: #16a34a !important; }
+          #refis-print-area .bg-red-500 { background: #ef4444 !important; }
+          #refis-print-area .bg-emerald-50 { background: #f0fdf4 !important; }
+          #refis-print-area .bg-red-50 { background: #fef2f2 !important; }
+          #refis-print-area [style*="background: #FFFAEB"] { background: #fffbeb !important; border-color: #fcd34d !important; }
+          #refis-print-area [style*="background: #E8EDF5"] { background: #eff6ff !important; border-color: #93c5fd !important; }
+          #refis-print-area .shrink-0.flex.flex-col { flex-direction: row !important; flex-wrap: wrap !important; width: 100% !important; gap: 5pt !important; padding: 6pt 8pt !important; border-top: 0.5pt solid #e2e8f0 !important; }
+          #refis-print-area .shrink-0.flex.flex-col > * { flex: 1 !important; min-width: 80pt !important; }
+          #refis-print-area .px-5.py-4.flex.gap-4 { flex-direction: column !important; padding: 6pt 8pt !important; gap: 6pt !important; }
+          #refis-print-area .flex-1.space-y-3 { flex: 1 !important; }
+
+          /* ── BLOCO 2B: alerta IA ── */
+          .refis-alert-block { border: 1.5pt solid #dc2626 !important; page-break-inside: avoid !important; margin-bottom: 6pt !important; background: white !important; }
+          #refis-print-area .bg-red-600 { background: #dc2626 !important; }
+          #refis-print-area .bg-orange-500 { background: #ea580c !important; }
+          #refis-print-area .bg-red-100\/60 { background: rgba(254,226,226,0.6) !important; }
+          #refis-print-area .bg-orange-100\/60 { background: rgba(255,237,213,0.6) !important; }
+          #refis-print-area .rounded-full { border-radius: 3pt !important; }
+          #refis-print-area .rounded-full.px-3 { font-size: 7pt !important; padding: 2pt 5pt !important; }
+
+          /* ── BLOCO 5: grupo header escuro ── */
+          #refis-print-area .bg-slate-700 { background: #334155 !important; }
+          #refis-print-area .bg-slate-700 .text-blue-300 { color: #93c5fd !important; }
+          #refis-print-area .bg-slate-700 .text-emerald-300 { color: #6ee7b7 !important; }
+          #refis-print-area .bg-slate-700 .text-red-300 { color: #fca5a5 !important; }
+          #refis-print-area .bg-mono { background: #3b4a60 !important; }
+
+          /* ── Faturamento ── */
+          #refis-print-area .bg-amber-50 { background: #fffbeb !important; }
+          #refis-print-area .bg-blue-50 { background: #eff6ff !important; }
+          #refis-print-area .border-amber-200 { border-color: #fde68a !important; }
+          #refis-print-area .border-blue-200 { border-color: #bfdbfe !important; }
+
+          /* ── Histórico: tabela ── */
+          #refis-print-area .overflow-x-auto { overflow: visible !important; }
+          #refis-print-area table { width: 100% !important; border-collapse: collapse !important; font-size: 7.5pt !important; }
+          #refis-print-area table th { background: #f1f5f9 !important; border: 0.5pt solid #cbd5e1 !important; padding: 3pt 5pt !important; font-size: 6.5pt !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #475569 !important; }
+          #refis-print-area table td { border: 0.5pt solid #e2e8f0 !important; padding: 3pt 5pt !important; }
+          #refis-print-area .bg-slate-800.text-white.px-5.py-2\\.5 { background: #1e293b !important; font-size: 7.5pt !important; padding: 4pt 8pt !important; }
+
+          /* ── Textarea de observações ── */
+          #refis-print-area textarea { border: 0.5pt solid #cbd5e1 !important; font-size: 8pt !important; padding: 4pt !important; width: 100% !important; resize: none !important; display: block !important; min-height: 38pt !important; box-sizing: border-box !important; }
+
+          /* ── Recharts SVG: não quebrar ── */
+          #refis-print-area .recharts-wrapper { page-break-inside: avoid !important; }
+          #refis-print-area [style*="height: 240"] { height: 180pt !important; }
+          #refis-print-area [style*="height: 180"] { height: 150pt !important; }
+
+          /* ── Rodapé do documento ── */
+          .refis-doc-footer {
+            border-top: 0.8pt solid #94a3b8 !important;
+            padding-top: 5pt !important;
+            margin-top: 8pt !important;
+            font-size: 6.5pt !important;
+            color: #64748b !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+          }
         }
       `}</style>
 
+      {/* ━━━ PRINT-ONLY: Cabeçalho do documento (FC Engenharia) ━━━━━━━━━━━━━━ */}
+      <div className="refis-doc-header refis-print-only-block" style={{ display: 'none' }}>
+        <div className="refis-doc-header-inner">
+          <div className="refis-doc-header-brand">
+            <div style={{ fontSize: '20pt', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1 }}>FC</div>
+            <div style={{ fontSize: '5.5pt', fontWeight: 700, color: 'rgba(255,255,255,0.72)', textTransform: 'uppercase', letterSpacing: '0.2em', marginTop: '2pt' }}>Engenharia</div>
+            <div style={{ fontSize: '5pt', color: 'rgba(255,255,255,0.48)', marginTop: '4pt', lineHeight: 1.4 }}>Planejamento<br/>e Controle</div>
+          </div>
+          <div className="refis-doc-header-center">
+            <div style={{ fontSize: '10.5pt', fontWeight: 800, color: 'white', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
+              Relatório de Evolução Física da Obra
+            </div>
+            <div style={{ fontSize: '7.5pt', color: 'rgba(255,255,255,0.65)', marginTop: '3pt', letterSpacing: '0.03em' }}>
+              REFIS · Revisão Base: {revisaoAtiva?.descricao ?? proj.nome}
+            </div>
+            <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.5)', marginTop: '2pt' }}>
+              {proj.nome}{proj.local ? ` · ${proj.local}` : ''}
+            </div>
+          </div>
+          <div className="refis-doc-header-ref">
+            <div style={{ fontSize: '20pt', fontWeight: 900, color: 'white', lineHeight: 1, letterSpacing: '-0.02em' }}>
+              R{String(revisaoAtiva?.numero ?? 0).padStart(2, '0')}
+            </div>
+            <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.7)', marginTop: '3pt' }}>
+              Relat. Nº {existente ? String(existente.numero ?? 1).padStart(3, '0') : '—'}
+            </div>
+            <div style={{ fontSize: '6.5pt', color: 'rgba(255,255,255,0.52)', marginTop: '2pt' }}>
+              {new Date(semana + 'T12:00:00').toLocaleDateString('pt-BR')}
+            </div>
+            <div style={{ fontSize: '5.5pt', color: 'rgba(255,255,255,0.38)', marginTop: '2pt', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Status em
+            </div>
+          </div>
+        </div>
+        {/* Faixa de identificação da obra */}
+        <div style={{ background: 'rgba(0,0,0,0.25)', borderTop: '0.5pt solid rgba(255,255,255,0.15)', padding: '3pt 12pt', display: 'flex', gap: '24pt', alignItems: 'center' }}>
+          <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Obra: <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 700 }}>{proj.nome}</span>
+          </div>
+          {proj.cliente && (
+            <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Cliente: <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 700 }}>{proj.cliente}</span>
+            </div>
+          )}
+          <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Período: <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 700 }}>
+              {proj.dataInicio ? new Date(proj.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+              {' → '}
+              {proj.dataTerminoContratual ? new Date(proj.dataTerminoContratual + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* ── Confirmação de cancelamento ─────────────────────────────────────── */}
       {confirmDelete && existente && (
-        <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+        <div className="refis-no-print flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
           <div className="flex items-center gap-2 text-sm text-red-700">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>Confirma o cancelamento do <strong>REFIS Nº {String(existente.numero ?? "—").padStart(3, "0")}</strong> da semana {semana}?</span>
@@ -5113,7 +5332,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 1 — CABEÇALHO (estilo PDF)
       ══════════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Faixa título */}
         <div className="bg-slate-800 text-white px-5 py-3 flex items-center justify-between">
           <div>
@@ -5164,7 +5383,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 2 — EVOLUÇÃO FÍSICA GLOBAL (barras horizontais + cards semanal)
       ══════════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-600">Evolução Física Global</p>
           <div className="flex gap-4 text-xs text-slate-500">
@@ -5259,7 +5478,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           BLOCO 2B — ALERTA IA DE DESVIO DE PRAZO
       ══════════════════════════════════════════════════════════════════════ */}
       {desvioFisico < -1 && (
-        <div className={`rounded-xl border-2 overflow-hidden shadow-md ${spi < 0.85 ? "border-red-500 bg-red-50" : "border-orange-400 bg-orange-50"}`}>
+        <div className={`refis-alert-block rounded-xl border-2 overflow-hidden shadow-md ${spi < 0.85 ? "border-red-500 bg-red-50" : "border-orange-400 bg-orange-50"}`}>
           {/* Header do alerta */}
           <div className={`px-5 py-3 flex items-center justify-between flex-wrap gap-3 ${spi < 0.85 ? "bg-red-600" : "bg-orange-500"}`}>
             <div className="flex items-center gap-3">
@@ -5410,7 +5629,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       ══════════════════════════════════════════════════════════════════════ */}
       {/* BLOCO 3A — Curva S Física */}
       {curvaFiltrada.length > 1 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Curva S Física — Avanço Acumulado (%)
@@ -5458,7 +5677,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
       {/* BLOCO 3B — Curva S Financeira */}
       {curvaFinanceira.length > 1 && !modoMascara && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Curva S Financeira — Faturamento Acumulado (R$)
@@ -5507,7 +5726,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           BLOCO 4 — AVANÇO POR GRUPO (Pavimento) — gráfico de barras horizontal
       ══════════════════════════════════════════════════════════════════════ */}
       {grupos.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-100 border-b border-slate-200 px-5 py-2">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Avanço Físico por Grupo
@@ -5542,7 +5761,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           BLOCO 5 — AVANÇO POR ETAPA DENTRO DE CADA GRUPO (pavimento)
       ══════════════════════════════════════════════════════════════════════ */}
       {grupos.filter((g: any) => g.etapas?.length > 0).map((g: any) => (
-        <div key={g.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div key={g.id} className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Header do grupo */}
           <div className="bg-slate-700 text-white px-5 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -5607,7 +5826,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 6 — FATURAMENTO PREVISTO / REALIZADO + Observações
       ══════════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+      <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-1">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Faturamento do Mês</p>
           {vendaMes > 0 && !modoMascara && (
@@ -5706,7 +5925,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           BLOCO 7 — HISTÓRICO DE REFIS ANTERIORES
       ══════════════════════════════════════════════════════════════════════ */}
       {refisLista.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-800 text-white px-5 py-2.5 flex items-center gap-2">
             <History className="h-4 w-4 text-slate-300" />
             <p className="text-xs font-bold uppercase tracking-wider">Histórico de Relatórios Emitidos</p>
@@ -5767,6 +5986,21 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
         </div>
       )}
+
+      {/* ━━━ PRINT-ONLY: Rodapé do documento ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div className="refis-doc-footer refis-print-only-block" style={{ display: 'none' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6pt' }}>
+          <span style={{ fontWeight: 700, color: '#1A3461' }}>FC Engenharia</span>
+          <span style={{ color: '#94a3b8' }}>·</span>
+          <span>ERP · Planejamento e Controle de Obras</span>
+        </span>
+        <span style={{ fontWeight: 600 }}>
+          REFIS Nº {existente ? String(existente.numero ?? 1).padStart(3, '0') : '—'} · {proj.nome}
+        </span>
+        <span>
+          Gerado em {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+        </span>
+      </div>
 
     </div>
   );
