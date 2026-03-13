@@ -377,10 +377,9 @@ export default function ModuleHub() {
     return true;
   });
 
-  // Aplica a ordem salva pelo usuário
-  const sortedActiveModules = useMemo(() => {
-    if (!moduleOrder.length) return activeModules;
-    return [...activeModules].sort((a, b) => {
+  // Aplica a ordem salva pelo usuário (sem useMemo — não pode ser depois de early returns)
+  const sortedActiveModules = moduleOrder.length === 0 ? activeModules :
+    [...activeModules].sort((a, b) => {
       const ai = moduleOrder.indexOf(a.id);
       const bi = moduleOrder.indexOf(b.id);
       if (ai === -1 && bi === -1) return 0;
@@ -388,7 +387,6 @@ export default function ModuleHub() {
       if (bi === -1) return -1;
       return ai - bi;
     });
-  }, [activeModules, moduleOrder]);
 
   function handleDragStart(id: string) {
     draggingId.current = id;
