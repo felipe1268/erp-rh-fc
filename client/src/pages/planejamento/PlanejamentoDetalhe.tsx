@@ -6489,8 +6489,10 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
     { projetoId, sessaoId: simSessaoId }, { enabled: !!projetoId }
   );
 
+  const [simError, setSimError] = useState<string | null>(null);
   const simMut = (trpc.iaCronograma as any).simularCenario.useMutation({
-    onSuccess: () => { refetchSim(); refetchCenarios(); setSimMensagem(""); },
+    onSuccess: () => { setSimError(null); refetchSim(); refetchCenarios(); setSimMensagem(""); },
+    onError: (e: any) => { setSimError(e?.message ?? "Erro ao conectar com JULINHO. Tente novamente."); },
   });
 
   const { data: cenarios = [], refetch: refetchCenarios } = (trpc.iaCronograma as any).listarCenarios.useQuery(
@@ -7078,6 +7080,16 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                         <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
                       <p className="text-[10px] text-purple-600">Analisando prazo · custo · caixa · margem...</p>
+                    </div>
+                  </div>
+                )}
+                {simError && !simMut.isPending && (
+                  <div className="flex gap-2 justify-start">
+                    <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain shrink-0 mt-1 drop-shadow" />
+                    <div className="bg-red-50 border border-red-200 rounded-2xl rounded-tl-none px-4 py-3 max-w-xs">
+                      <p className="text-xs text-red-700 font-semibold">⚠️ JULINHO não conseguiu responder</p>
+                      <p className="text-[11px] text-red-500 mt-1">{simError}</p>
+                      <button onClick={() => setSimError(null)} className="text-[10px] text-red-400 underline mt-1">Fechar</button>
                     </div>
                   </div>
                 )}
