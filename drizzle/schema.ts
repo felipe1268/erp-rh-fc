@@ -4372,16 +4372,36 @@ export const iaCronogramaAlertas = pgTable("ia_cronograma_alertas", {
 });
 
 export const iaCronogramaCenarios = pgTable("ia_cronograma_cenarios", {
-  id:          serial().primaryKey(),
-  projetoId:   integer("projeto_id").notNull(),
-  companyId:   integer("company_id"),
-  titulo:      varchar({ length: 200 }).notNull(),
-  descricao:   text(),
-  parametros:  json("parametros").default({}),
-  resultadoIA: text("resultado_ia"),
-  status:      varchar({ length: 30 }).default("rascunho"),
-  criadoPor:   varchar("criado_por", { length: 200 }),
-  criadoEm:    timestamp("criado_em").defaultNow(),
+  id:                serial().primaryKey(),
+  projetoId:         integer("projeto_id").notNull(),
+  companyId:         integer("company_id"),
+  titulo:            varchar({ length: 200 }).notNull(),
+  descricao:         text(),
+  tipoCenario:       varchar("tipo_cenario", { length: 50 }).default("outro"),
+  parametros:        json("parametros").default({}),
+  resultadoIA:       text("resultado_ia"),
+  planoAcao:         text("plano_acao"),
+  atividadesAfetadas: json("atividades_afetadas").default([]),
+  status:            varchar({ length: 30 }).default("rascunho"),
+  aprovadoEm:        timestamp("aprovado_em"),
+  aprovadoPor:       varchar("aprovado_por", { length: 200 }),
+  criadoPor:         varchar("criado_por", { length: 200 }),
+  criadoEm:          timestamp("criado_em").defaultNow(),
+});
+
+export const iaCronogramaMonitoramento = pgTable("ia_cronograma_monitoramento", {
+  id:           serial().primaryKey(),
+  cenarioId:    integer("cenario_id").notNull(),
+  projetoId:    integer("projeto_id").notNull(),
+  companyId:    integer("company_id"),
+  semana:       varchar({ length: 10 }).notNull(),
+  avancoReal:   numeric("avanco_real", { precision: 6, scale: 2 }),
+  spiFim:       numeric("spi_fim", { precision: 6, scale: 4 }),
+  custoRealizado: numeric("custo_realizado", { precision: 16, scale: 2 }),
+  observacao:   text(),
+  status:       varchar({ length: 20 }).default("no_prazo"),
+  registradoPor: varchar("registrado_por", { length: 200 }),
+  criadoEm:     timestamp("criado_em").defaultNow(),
 });
 
 export const orcamentoParametros = pgTable("orcamento_parametros", {
