@@ -2025,23 +2025,20 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const totalReal  = rows.reduce((s: number, r: any) => s + r.valorReal, 0);
   const cen = CENARIOS.find(c => c.id === cenario)!;
 
-  // Dados do gráfico
-  const chartData = rows.map((r: any) => {
-    const base: any = { mes: r.nomeMes, Medido: +r.valorReal.toFixed(2) };
-    if (cenario === "lucro") {
-      base["Lucro Previsto (V−C)"] = +r.lucro.toFixed(2);
-      base["Lucro Desejado (V−M)"] = +r.margemMeta.toFixed(2);
-      base["Custo"] = +r.custo.toFixed(2);
-      base["Venda Acum.%"] = +r.cumVenda.toFixed(2);
-    } else {
-      base["Previsto"] = +(cenario === "venda" ? r.venda : cenario === "meta" ? r.meta : r.custo).toFixed(2);
-      base["Material"] = +r.mat.toFixed(2);
-      base["M.O."]     = +r.mdo.toFixed(2);
-      base["Prev.Acum%"] = +(cenario === "venda" ? r.cumVenda : cenario === "meta" ? r.cumMeta : r.cumCusto).toFixed(2);
-      base["Real.Acum%"] = +r.cumReal.toFixed(2);
-    }
-    return base;
-  });
+  // Dados do gráfico — chaves sem pontos/parênteses (Recharts interpreta "." como acesso aninhado)
+  const chartData = rows.map((r: any) => ({
+    mes:       r.nomeMes,
+    Previsto:  +(cenario === "venda" ? r.venda : cenario === "meta" ? r.meta : r.custo).toFixed(2),
+    Material:  +r.mat.toFixed(2),
+    MO:        +r.mdo.toFixed(2),
+    Medido:    +r.valorReal.toFixed(2),
+    Custo:     +r.custo.toFixed(2),
+    LucroPrev: +r.lucro.toFixed(2),
+    LucroDes:  +r.margemMeta.toFixed(2),
+    PrevAcum:  +(cenario === "venda" ? r.cumVenda : cenario === "meta" ? r.cumMeta : r.cumCusto).toFixed(2),
+    RealAcum:  +r.cumReal.toFixed(2),
+    VendaAcum: +r.cumVenda.toFixed(2),
+  }));
 
   if (loadCruz) return (
     <div className="flex items-center justify-center py-16 text-slate-400">
@@ -2115,21 +2112,24 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} />
               <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} width={64} />
               <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 100]} width={36} />
-              <Tooltip formatter={(v: any, name: string) => name.includes("%") ? `${Number(v).toFixed(1)}%` : fmt(Number(v))} />
+              <Tooltip formatter={(v: any, name: string) => {
+                const pcts = ["Prev.Acum%","Real.Acum%","Venda Acum.%"];
+                return pcts.includes(name) ? `${Number(v).toFixed(1)}%` : fmt(Number(v));
+              }} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {cenario === "lucro" ? (<>
-                <Bar yAxisId="val" dataKey="Custo"          fill="#ef4444" fillOpacity={0.5} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="Lucro Previsto (V−C)" fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="Lucro Desejado (V−M)" fill="#8b5cf6" fillOpacity={0.6} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="Medido"         fill="#3b82f6" fillOpacity={0.7} radius={[3,3,0,0]} />
-                <Line yAxisId="pct" type="monotone" dataKey="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                <Bar yAxisId="val" dataKey="Custo"     name="Custo"             fill="#ef4444" fillOpacity={0.5} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="LucroPrev" name="Lucro Prev. (V−C)" fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="LucroDes"  name="Lucro Des. (V−M)"  fill="#8b5cf6" fillOpacity={0.6} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="Medido"    name="Medido"            fill="#3b82f6" fillOpacity={0.7} radius={[3,3,0,0]} />
+                <Line yAxisId="pct" type="monotone" dataKey="VendaAcum" name="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" />
               </>) : (<>
-                <Bar yAxisId="val" dataKey="Previsto" fill={cen.cor}   fillOpacity={0.75} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="Material" fill="#a855f7"   fillOpacity={0.65} radius={[0,0,0,0]} />
-                <Bar yAxisId="val" dataKey="M.O."     fill="#3b82f6"   fillOpacity={0.65} radius={[0,0,0,0]} />
-                <Bar yAxisId="val" dataKey="Medido"   fill="#10b981"   fillOpacity={0.7}  radius={[3,3,0,0]} />
-                <Line yAxisId="pct" type="monotone" dataKey="Prev.Acum%" stroke={cen.cor} strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                <Line yAxisId="pct" type="monotone" dataKey="Real.Acum%" stroke="#10b981" strokeWidth={2} dot={false} />
+                <Bar yAxisId="val" dataKey="Previsto" name="Previsto" fill={cen.cor} fillOpacity={0.75} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="Material" name="Material" fill="#a855f7" fillOpacity={0.65} radius={[0,0,0,0]} />
+                <Bar yAxisId="val" dataKey="MO"       name="M.O."    fill="#3b82f6" fillOpacity={0.65} radius={[0,0,0,0]} />
+                <Bar yAxisId="val" dataKey="Medido"   name="Medido"  fill="#10b981" fillOpacity={0.7}  radius={[3,3,0,0]} />
+                <Line yAxisId="pct" type="monotone" dataKey="PrevAcum" name="Prev.Acum%" stroke={cen.cor} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                <Line yAxisId="pct" type="monotone" dataKey="RealAcum" name="Real.Acum%" stroke="#10b981" strokeWidth={2} dot={false} />
               </>)}
             </ComposedChart>
           </ResponsiveContainer>
