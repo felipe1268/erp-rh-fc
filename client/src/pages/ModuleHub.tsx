@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getLoginUrl } from "@/const";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import { useMenuVisibility } from "@/hooks/useMenuVisibility";
 import { MODULE_DEFINITIONS } from "../../../shared/modules";
@@ -313,6 +313,17 @@ export default function ModuleHub() {
   const { isMenuItemVisible } = useMenuVisibility();
   const [mounted, setMounted] = useState(false);
 
+  // ── Drag-and-drop order ──────────────────────────────────────────
+  const ORDER_KEY = "fc-module-order";
+  const [moduleOrder, setModuleOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(ORDER_KEY) || "[]"); } catch { return []; }
+  });
+  const draggingId = useRef<string | null>(null);
+  const dragOverId = useRef<string | null>(null);
+  const [dragActive, setDragActive] = useState<string | null>(null);
+  const [dragTarget, setDragTarget] = useState<string | null>(null);
+  const didDrag = useRef(false);
+
   const greeting = useMemo(() => getGreeting(), []);
   const formattedDate = useMemo(() => getFormattedDate(), []);
   const firstName = user?.name?.split(" ")[0] || "Usuário";
@@ -365,6 +376,52 @@ export default function ModuleHub() {
     }
     return true;
   });
+
+  // Aplica a ordem salva pelo usuário
+  const sortedActiveModules = useMemo(() => {
+    if (!moduleOrder.length) return activeModules;
+    return [...activeModules].sort((a, b) => {
+      const ai = moduleOrder.indexOf(a.id);
+      const bi = moduleOrder.indexOf(b.id);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }, [activeModules, moduleOrder]);
+
+  function handleDragStart(id: string) {
+    draggingId.current = id;
+    didDrag.current = false;
+    setDragActive(id);
+  }
+
+  function handleDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault();
+    didDrag.current = true;
+    dragOverId.current = id;
+    setDragTarget(id);
+  }
+
+  function handleDrop(toId: string) {
+    const fromId = draggingId.current;
+    if (!fromId || fromId === toId) return;
+    const ids = sortedActiveModules.map(m => m.id);
+    const fromIdx = ids.indexOf(fromId);
+    const toIdx = ids.indexOf(toId);
+    const newOrder = [...ids];
+    newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, fromId);
+    setModuleOrder(newOrder);
+    localStorage.setItem(ORDER_KEY, JSON.stringify(newOrder));
+  }
+
+  function handleDragEnd() {
+    setDragActive(null);
+    setDragTarget(null);
+    draggingId.current = null;
+    dragOverId.current = null;
+  }
   const disabledModules = MODULES.filter(m => m.active && !isModuleEnabled(hubToConfigKey[m.id] ?? m.id));
   const futureModules = [...MODULES.filter(m => !m.active), ...disabledModules.map(m => ({ ...m, active: false }))];
 
@@ -557,59 +614,89 @@ export default function ModuleHub() {
 
               {/* Module Cards - Stacked */}
               <div className="flex flex-col gap-3 mt-6 relative z-10">
-                {activeModules.map((mod, idx) => (
-                  <button
-                    key={mod.id}
-                    onClick={() => { setActiveModule(mod.id as ModuleId); navigate(mod.path); }}
-                    className={`hub-module-card group relative text-left rounded-2xl overflow-hidden hub-glass w-full ${mounted ? 'hub-animate-up' : 'opacity-0'}`}
-                    style={{ animationDelay: `${0.3 + idx * 0.12}s` }}
-                  >
-                    {/* Hover glow */}
+                {sortedActiveModules.map((mod, idx) => {
+                  const isBeingDragged = dragActive === mod.id;
+                  const isDropTarget = dragTarget === mod.id && dragActive !== mod.id;
+                  return (
                     <div
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                      key={mod.id}
+                      draggable
+                      onDragStart={() => handleDragStart(mod.id)}
+                      onDragOver={e => handleDragOver(e, mod.id)}
+                      onDrop={() => handleDrop(mod.id)}
+                      onDragEnd={handleDragEnd}
+                      className={`hub-module-card group relative text-left rounded-2xl overflow-hidden hub-glass w-full ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-150`}
                       style={{
-                        background: `radial-gradient(ellipse 60% 80% at 0% 50%, ${mod.accentGlow} 0%, transparent 70%)`,
+                        animationDelay: `${0.3 + idx * 0.12}s`,
+                        opacity: isBeingDragged ? 0.4 : 1,
+                        outline: isDropTarget ? `2px solid ${mod.accentFrom}` : "2px solid transparent",
+                        cursor: "grab",
+                        transform: isDropTarget ? "scale(1.015)" : "scale(1)",
                       }}
-                    />
-
-                    {/* Left accent bar */}
-                    <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl" style={{
-                      background: `linear-gradient(180deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                    }} />
-
-                    <div className="relative flex items-center gap-4 px-5 py-4 pl-6">
-                      {/* Icon */}
+                    >
+                      {/* Hover glow */}
                       <div
-                        className="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-110"
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
                         style={{
-                          background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                          boxShadow: `0 6px 20px -4px ${mod.accentGlow}`,
+                          background: `radial-gradient(ellipse 60% 80% at 0% 50%, ${mod.accentGlow} 0%, transparent 70%)`,
                         }}
-                      >
-                        <mod.icon className="h-6 w-6 text-white" />
-                      </div>
+                      />
 
-                      {/* Text */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-base font-extrabold text-[#1B2A4A] tracking-tight">{mod.title}</h4>
-                          <span className="text-[10px] text-gray-300 font-medium hidden sm:inline">{mod.subtitle}</span>
+                      {/* Left accent bar */}
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl" style={{
+                        background: `linear-gradient(180deg, ${mod.accentFrom}, ${mod.accentTo})`,
+                      }} />
+
+                      <div className="relative flex items-center gap-4 px-5 py-4 pl-6">
+                        {/* Drag handle */}
+                        <div
+                          className="absolute right-14 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-30 transition-opacity duration-200 cursor-grab active:cursor-grabbing"
+                          title="Arraste para reordenar"
+                        >
+                          <svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor" className="text-gray-400">
+                            <circle cx="3" cy="4" r="1.5"/><circle cx="9" cy="4" r="1.5"/>
+                            <circle cx="3" cy="10" r="1.5"/><circle cx="9" cy="10" r="1.5"/>
+                            <circle cx="3" cy="16" r="1.5"/><circle cx="9" cy="16" r="1.5"/>
+                          </svg>
                         </div>
-                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{mod.description}</p>
-                      </div>
 
-                      {/* Arrow */}
-                      <div
-                        className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 opacity-40 group-hover:opacity-100 transition-all duration-300 group-hover:translate-x-1"
-                        style={{
-                          background: `linear-gradient(135deg, ${mod.accentFrom}15, ${mod.accentTo}10)`,
-                        }}
-                      >
-                        <ArrowRight className="h-4 w-4" style={{ color: mod.accentFrom }} />
+                        {/* Icon */}
+                        <div
+                          className="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-110"
+                          style={{
+                            background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
+                            boxShadow: `0 6px 20px -4px ${mod.accentGlow}`,
+                          }}
+                        >
+                          <mod.icon className="h-6 w-6 text-white" />
+                        </div>
+
+                        {/* Text — click navigates */}
+                        <div
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() => { if (!didDrag.current) { setActiveModule(mod.id as ModuleId); navigate(mod.path); } }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-base font-extrabold text-[#1B2A4A] tracking-tight">{mod.title}</h4>
+                            <span className="text-[10px] text-gray-300 font-medium hidden sm:inline">{mod.subtitle}</span>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{mod.description}</p>
+                        </div>
+
+                        {/* Arrow */}
+                        <div
+                          className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 opacity-40 group-hover:opacity-100 transition-all duration-300 group-hover:translate-x-1 cursor-pointer"
+                          style={{
+                            background: `linear-gradient(135deg, ${mod.accentFrom}15, ${mod.accentTo}10)`,
+                          }}
+                          onClick={() => { setActiveModule(mod.id as ModuleId); navigate(mod.path); }}
+                        >
+                          <ArrowRight className="h-4 w-4" style={{ color: mod.accentFrom }} />
+                        </div>
                       </div>
                     </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
