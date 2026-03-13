@@ -4273,6 +4273,8 @@ export const planejamentoMedicaoConfig = pgTable("planejamento_medicao_config", 
   entrada:           numeric({ precision: 18, scale: 2 }).default("0"),
   numeroParcelas:    integer("numero_parcelas").default(6),
   inicioFaturamento: date("inicio_faturamento"),
+  sinalPct:          numeric("sinal_pct", { precision: 10, scale: 2 }).default("0"),
+  retencaoPct:       numeric("retencao_pct", { precision: 10, scale: 2 }).default("5"),
   criadoEm:          timestamp("criado_em").defaultNow(),
   atualizadoEm:      timestamp("atualizado_em").defaultNow(),
 });
