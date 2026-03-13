@@ -103,9 +103,10 @@ export const iaCronogramaRouter = router({
 
       const [projeto, revisoes, conhecimentos] = await Promise.all([
         db.select().from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1),
-        db.select().from(planejamentoRevisoes).where(
-          and(eq(planejamentoRevisoes.projetoId, input.projetoId), eq(planejamentoRevisoes.ativo, true))
-        ).limit(1),
+        db.select().from(planejamentoRevisoes)
+          .where(eq(planejamentoRevisoes.projetoId, input.projetoId))
+          .orderBy(desc(planejamentoRevisoes.numero))
+          .limit(1),
         db.select().from(iaCronogramaConhecimento)
           .where(or(isNull(iaCronogramaConhecimento.companyId), eq(iaCronogramaConhecimento.companyId, companyId)))
           .orderBy(desc(iaCronogramaConhecimento.confirmacoes))
@@ -229,7 +230,8 @@ ${climaTexto}`;
     .mutation(async ({ input }) => {
       const db = await getDb();
       const rev = await db.select().from(planejamentoRevisoes)
-        .where(and(eq(planejamentoRevisoes.projetoId, input.projetoId), eq(planejamentoRevisoes.ativo, true)))
+        .where(eq(planejamentoRevisoes.projetoId, input.projetoId))
+        .orderBy(desc(planejamentoRevisoes.numero))
         .limit(1);
       if (!rev[0]) return { alertas: [], gerados: 0 };
 
@@ -347,7 +349,10 @@ ${climaTexto}`;
 
       const [projeto, revisoes, conhecimentos] = await Promise.all([
         db.select().from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1),
-        db.select().from(planejamentoRevisoes).where(and(eq(planejamentoRevisoes.projetoId, input.projetoId), eq(planejamentoRevisoes.ativo, true))).limit(1),
+        db.select().from(planejamentoRevisoes)
+          .where(eq(planejamentoRevisoes.projetoId, input.projetoId))
+          .orderBy(desc(planejamentoRevisoes.numero))
+          .limit(1),
         db.select().from(iaCronogramaConhecimento)
           .where(or(isNull(iaCronogramaConhecimento.companyId), eq(iaCronogramaConhecimento.companyId, companyId)))
           .orderBy(desc(iaCronogramaConhecimento.confirmacoes)).limit(20),
