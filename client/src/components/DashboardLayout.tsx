@@ -516,6 +516,20 @@ function DashboardLayoutContent({
     };
   }, []);
   const isCollapsed = state === "collapsed";
+
+  // Drag-and-drop de itens do menu lateral
+  const MENU_ORDER_KEY = `fc-menu-items-${activeModule}`;
+  const [itemOrder, setItemOrder] = useState<Record<string, string[]>>(() => {
+    try { return JSON.parse(localStorage.getItem(`fc-menu-items-${activeModule}`) || "{}"); } catch { return {}; }
+  });
+  useEffect(() => {
+    try { setItemOrder(JSON.parse(localStorage.getItem(`fc-menu-items-${activeModule}`) || "{}")); } catch { setItemOrder({}); }
+  }, [activeModule]);
+  const draggingItem = useRef<{ sectionTitle: string; path: string } | null>(null);
+  const dragOverItem = useRef<{ sectionTitle: string; path: string } | null>(null);
+  const [dragActiveItem, setDragActiveItem] = useState<string | null>(null);
+  const [dragTargetItem, setDragTargetItem] = useState<string | null>(null);
+
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
