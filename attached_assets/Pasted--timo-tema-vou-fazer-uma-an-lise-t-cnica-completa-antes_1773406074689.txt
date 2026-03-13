@@ -1,0 +1,48 @@
+Ótimo tema — vou fazer uma análise técnica completa antes de qualquer implementação.
+
+Linha de Balanços — Análise de Implantação
+O que é e por que faz sentido para prédios verticais
+A Linha de Balanços (LOB / Line of Balance) é uma técnica de planejamento made for repetitividade. Em vez de uma linha horizontal por atividade (Gantt), ela usa linhas diagonais onde:
+
+Eixo X = Tempo (semanas ou meses)
+Eixo Y = Posição / Pavimento (Térreo → Cobertura)
+Cada serviço (alvenaria, reboco, instalações, pintura...) vira uma linha diagonal
+A inclinação da linha = taxa de produção (pavimentos/semana)
+Em um prédio com 20 andares, o Gantt teria 20 linhas de "Alvenaria" (uma por andar) — ilegível. Na LOB, a Alvenaria é UMA linha diagonal. Perfeito para obras verticais.
+
+O que o sistema precisa saber (dados necessários)
+Dado	Origem
+Total de pavimentos	Configuração da obra
+Nome de cada pavimento	Config (SS, Térreo, 1º, 2º...)
+Serviços (nome + cor)	Agrupamento de atividades
+Data início no 1º pavimento	Cronograma existente
+Data fim no último pavimento	Cronograma existente
+3 Opções de Implantação
+Opção A — Ler do Cronograma existente (automático)
+O sistema detecta padrões como "Alvenaria - Andar 3" ou "2.1.3 Reboco P3" e agrupa por serviço. Boa para quem já tem o cronograma detalhado. Problema: depende de nomenclatura padronizada.
+
+Opção B — Dados próprios da LOB (manual, mais preciso)
+O usuário configura diretamente na aba LOB: quantos pavimentos, quais serviços, data início e taxa de produção por serviço. O sistema calcula a linha automaticamente.
+
+Opção C — Híbrido (minha recomendação)
+
+Uma tela de Configuração LOB onde o usuário define: pavimentos e mapeia grupos de EAP → serviços LOB
+O sistema puxa as datas reais do Cronograma existente e plota a LOB automaticamente
+Se quiser, o usuário pode ajustar taxas manualmente
+O que o sistema conseguiria detectar automaticamente
+Cruzamento de linhas → Conflito real de equipes (impossível executar como planejado)
+Convergência de linhas → Risco iminente de conflito nas próximas semanas
+Buffer insuficiente → Serviço A está a menos de 1 pavimento de distância do serviço B
+Aceleração/desaceleração → A linha quebra (taxa de produção caiu)
+Hoje → Linha vertical mostrando onde cada serviço deveria estar vs. onde está
+Como ficaria no banco de dados (mínimo necessário)
+lob_configuracao: projetoId, totalAndares, nomesAndares (json)
+lob_servico:      projetoId, nome, cor, ordem, eapGrupos (json), taxaAndaresSemana
+Não precisaria de muito — a LOB é essencialmente uma visualização calculada a partir das datas já existentes no Cronograma, com apenas a configuração de "como agrupar" e "quantos andares".
+
+Minha recomendação de UX
+Uma nova aba "Linha de Balanços" com dois modos:
+
+Config (primeira vez): define pavimentos + mapeia serviços
+Visualização: o gráfico LOB + tabela de taxas de produção + alertas de conflito
+Quer que eu implante esta abordagem? Se sim, confirme se prefere a Opção B (dados independentes, mais simples de começar) ou a Opção C (integrada ao cronograma existente, mais poderosa). Também me diga se já tem obras verticais com dados lançados nos projetos atuais para eu testar com dados reais.
