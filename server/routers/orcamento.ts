@@ -22,6 +22,8 @@ import {
   bdiDespesasFinanceiras,
   bdiTributos,
   bdiTaxaComercializacao,
+  orcamentoSecs,
+  orcamentoSecItens,
 } from "../../drizzle/schema";
 
 const ENCARGOS_DEFAULTS = [
@@ -65,7 +67,7 @@ const ENCARGOS_DEFAULTS = [
   { grupo: 'F', codigo: 'F10', descricao: 'Por horas extras a 60% + integralização do DSR', valor: '0.0000', calculado: false, ordem: 38 },
   { grupo: 'F', codigo: 'F11', descricao: 'Por horas extras a 100% + integralização do DSR', valor: '0.0000', calculado: false, ordem: 39 },
 ] as const;
-import { eq, and, desc, isNull, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, inArray, sql } from "drizzle-orm";
 
 // ============================================================
 // UTILITÁRIOS
@@ -3649,5 +3651,177 @@ export const orcamentoRouter = router({
           createdAt: o.createdAt,
         })),
       };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SEC — Serviços Extras Contratuais
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  secListar: protectedProcedure
+    .input(z.object({ orcamentoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select().from(orcamentoSecs)
+        .where(and(eq(orcamentoSecs.orcamentoId, input.orcamentoId), isNull(orcamentoSecs.deletedAt)))
+        .orderBy(asc(orcamentoSecs.numero));
+    }),
+
+  secCriar: protectedProcedure
+    .input(z.object({
+      orcamentoId: z.number(),
+      companyId:   z.number(),
+      descricao:   z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // Próximo número livre
+      const existentes = await db.select({ numero: orcamentoSecs.numero })
+        .from(orcamentoSecs)
+        .where(and(eq(orcamentoSecs.orcamentoId, input.orcamentoId), isNull(orcamentoSecs.deletedAt)));
+      const maxNum = existentes.reduce((m, r) => Math.max(m, r.numero), 0);
+      const numero = maxNum + 1;
+      const codigo = `SEC_${String(numero).padStart(2, '0')}`;
+      const [sec] = await db.insert(orcamentoSecs).values({
+        orcamentoId: input.orcamentoId,
+        companyId:   input.companyId,
+        numero,
+        codigo,
+        descricao:   input.descricao ?? codigo,
+        fase:        'elaboracao',
+      }).returning();
+      return sec;
+    }),
+
+  secExcluir: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(orcamentoSecs)
+        .set({ deletedAt: new Date().toISOString() })
+        .where(eq(orcamentoSecs.id, input.id));
+      return { ok: true };
+    }),
+
+  secAtualizarFase: protectedProcedure
+    .input(z.object({
+      id:   z.number(),
+      fase: z.enum(['elaboracao', 'enviada', 'aprovada', 'recusada']),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [sec] = await db.update(orcamentoSecs)
+        .set({ fase: input.fase })
+        .where(eq(orcamentoSecs.id, input.id))
+        .returning();
+      return sec;
+    }),
+
+  secImportarPlanilha: protectedProcedure
+    .input(z.object({
+      secId:         z.number(),
+      companyId:     z.number(),
+      fileBase64:    z.string(),
+      fileName:      z.string(),
+      colMapping:    z.record(z.number()).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // Ler arquivo
+      const buf = Buffer.from(input.fileBase64, 'base64');
+      const XLSX = await import('xlsx');
+      const wb = XLSX.read(buf, { type: 'buffer', cellDates: true });
+      // Procura aba de orçamento (Orçamento, Orcamento, custo, planilha)
+      const abaOrc = wb.SheetNames.find(n =>
+        /orçamento|orcamento|custo|planilha/i.test(n)
+      ) ?? wb.SheetNames[0];
+      const ws = wb.Sheets[abaOrc];
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+      // Reutiliza parsearAbaCorcamento
+      const { itens } = parsearAbaCorcamento(rows, 0.20, 0, input.colMapping);
+      if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
+
+      // Apaga itens antigos da SEC
+      await db.delete(orcamentoSecItens).where(eq(orcamentoSecItens.secId, input.secId));
+
+      // Insere novos itens em lotes
+      const BATCH = 200;
+      const rows2Insert = itens.map((it, idx) => ({
+        secId:        input.secId,
+        companyId:    input.companyId,
+        eapCodigo:    it.eapCodigo,
+        nivel:        it.nivel,
+        tipo:         it.tipo ?? null,
+        descricao:    it.descricao,
+        unidade:      it.unidade ?? null,
+        quantidade:   String(it.quantidade ?? 0),
+        custoUnitMat:   String(it.custoUnitMat ?? 0),
+        custoUnitMdo:   String(it.custoUnitMdo ?? 0),
+        custoUnitTotal: String(it.custoUnitTotal ?? 0),
+        vendaUnitTotal: String(it.vendaUnitTotal ?? 0),
+        custoTotalMat:  String(it.custoTotalMat ?? 0),
+        custoTotalMdo:  String(it.custoTotalMdo ?? 0),
+        custoTotal:     String(it.custoTotal ?? 0),
+        vendaTotal:     String(it.vendaTotal ?? 0),
+        ordem:          idx,
+      }));
+      for (let i = 0; i < rows2Insert.length; i += BATCH) {
+        await db.insert(orcamentoSecItens).values(rows2Insert.slice(i, i + BATCH));
+      }
+
+      // Calcula totais a partir dos itens nível 1
+      const nivel1 = itens.filter(it => it.nivel === 1);
+      const totalCusto = nivel1.reduce((s, it) => s + (it.custoTotal ?? 0), 0);
+
+      // Tenta ler BDI da planilha (aba BDI se existir)
+      let bdiPercentual = 0;
+      const abaBdi = wb.SheetNames.find(n => /bdi/i.test(n));
+      if (abaBdi) {
+        const wsBdi = wb.Sheets[abaBdi];
+        const rowsBdi: any[][] = XLSX.utils.sheet_to_json(wsBdi, { header: 1, raw: false, defval: '' });
+        const parsed = parsearAbaBdi(rowsBdi, input.companyId);
+        bdiPercentual = parsed.bdiPercentual;
+      }
+
+      const totalVenda = bdiPercentual > 0 ? totalCusto / (1 - bdiPercentual) : totalCusto;
+      const totalMat = nivel1.reduce((s, it) => s + (it.custoTotalMat ?? 0), 0);
+      const totalMdo = nivel1.reduce((s, it) => s + (it.custoTotalMdo ?? 0), 0);
+
+      await db.update(orcamentoSecs).set({
+        totalCusto:   String(Math.round(totalCusto * 100) / 100),
+        totalVenda:   String(Math.round(totalVenda * 100) / 100),
+        totalMateriais: String(Math.round(totalMat * 100) / 100),
+        totalMdo:     String(Math.round(totalMdo * 100) / 100),
+        bdiPercentual: bdiPercentual > 0 ? String(bdiPercentual) : null,
+      }).where(eq(orcamentoSecs.id, input.secId));
+
+      return { ok: true, itemCount: itens.length, totalCusto, totalVenda, bdiPercentual };
+    }),
+
+  secAplicarBdi: protectedProcedure
+    .input(z.object({
+      secId:         z.number(),
+      bdiPercentual: z.number().min(0).max(0.9999),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [sec] = await db.select().from(orcamentoSecs).where(eq(orcamentoSecs.id, input.secId)).limit(1);
+      if (!sec) throw new TRPCError({ code: 'NOT_FOUND', message: 'SEC não encontrada.' });
+      const totalCusto = parseFloat(sec.totalCusto ?? '0');
+      const totalVenda = input.bdiPercentual > 0 ? totalCusto / (1 - input.bdiPercentual) : totalCusto;
+      await db.update(orcamentoSecs).set({
+        bdiPercentual: String(input.bdiPercentual),
+        totalVenda:    String(Math.round(totalVenda * 100) / 100),
+      }).where(eq(orcamentoSecs.id, input.secId));
+      return { ok: true, totalVenda, bdiPercentual: input.bdiPercentual };
+    }),
+
+  secListarItens: protectedProcedure
+    .input(z.object({ secId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select().from(orcamentoSecItens)
+        .where(eq(orcamentoSecItens.secId, input.secId))
+        .orderBy(asc(orcamentoSecItens.ordem));
     }),
 });

@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import BdiView from "./BdiView";
 import OrcamentoDashTab from "./OrcamentoDashTab";
+import SecTab from "./SecTab";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,7 +81,7 @@ export default function OrcamentoDetalhe() {
   const id = parseInt(params?.id ?? "0");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [activePage, setActivePage] = useState<"orcamento" | "bdi">("orcamento");
+  const [activePage, setActivePage] = useState<"orcamento" | "bdi" | "sec">("orcamento");
   const [activeTab, setActiveTab]   = useState<string>("eap");
   const [versao, setVersao]         = useState<Versao>("custo");
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
@@ -432,6 +433,17 @@ export default function OrcamentoDetalhe() {
           >
             <TrendingUp className="h-3.5 w-3.5" />
             DASH
+          </button>
+          <button
+            onClick={() => setActivePage("sec")}
+            className={`px-5 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-1.5 ${
+              activePage === "sec"
+                ? "bg-violet-600 text-white shadow"
+                : "bg-muted text-muted-foreground hover:bg-violet-100 hover:text-violet-700"
+            }`}
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            SEC
           </button>
         </div>
 
@@ -1474,6 +1486,16 @@ export default function OrcamentoDetalhe() {
             bdiPct={n(orc.bdiPercentual)}
             aplicarBdiMutation={aplicarBdiMutation}
             onImportarBdi={() => setBdiUploadOpen(true)}
+          />
+        )}
+
+        {/* ═══ ABA SEC ═══ */}
+        {activePage === "sec" && (
+          <SecTab
+            orcamentoId={id}
+            companyId={orc.companyId}
+            totalCustoBase={totalCusto}
+            totalVendaBase={totalVenda}
           />
         )}
 
