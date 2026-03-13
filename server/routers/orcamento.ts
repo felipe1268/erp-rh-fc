@@ -678,19 +678,35 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
     // Exige descrição mínima
     if (descCol.length < 3) continue;
 
+    const isPvRow = /^PV\s*-\s*\d/.test(col2);
     const pct = toNum(row[7]);
-    const val = toNum(row[9]);
-    // Ignora percentuais absurdos (> 1000%)
-    if (Math.abs(pct) > 10) continue;
+
+    // Busca valor absoluto nas colunas 8, 9, 10 — usa o primeiro > 0
+    // (PV-2 pode ter o valor em coluna diferente de B-xx)
+    let val = 0;
+    for (const ci of [9, 8, 10, 11]) {
+      const v = toNum(row[ci]);
+      if (v > 0) { val = v; break; }
+    }
+
+    // DEBUG temporário — mostra toda linha PV antes de qualquer filtro
+    if (isPvRow) {
+      console.log(`[BDI-DEBUG] PV row | col2="${col2}" | pct=${pct} | val=${val} | cols[0..12]:`, JSON.stringify(row.slice(0, 13)));
+    }
+
+    // Extrai o valor de venda final do PV-2 ANTES do filtro de pct
+    // (linhas PV são totais — não têm percentual próprio)
+    if (/^PV\s*-\s*2$/.test(col2) && val > 0) {
+      totalVendaBdi = val;
+      console.log(`[BDI-DEBUG] totalVendaBdi capturado: ${totalVendaBdi}`);
+    }
+
+    // Ignora percentuais absurdos (> 1000%) — mas linhas PV passam mesmo com pct alto
+    if (!isPvRow && Math.abs(pct) > 10) continue;
 
     // Extrai BDI total do B-02
     if (col2 === 'B-02' && !bdiPercentual) {
       bdiPercentual = pct;
-    }
-
-    // Extrai o valor de venda final do PV-2 (Preço de Venda com FD + ADM)
-    if (/^PV\s*-\s*2$/.test(col2) && val > 0) {
-      totalVendaBdi = val;
     }
 
     linhas.push({
@@ -698,7 +714,7 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
       nomeAba,
       codigo:        col2.substring(0, 30),
       descricao:     descCol.substring(0, 255),
-      percentual:    fix6(pct),
+      percentual:    fix6(isPvRow ? 0 : pct),
       valorAbsoluto: fix2(val),
       ordem:         ordem++,
     });
