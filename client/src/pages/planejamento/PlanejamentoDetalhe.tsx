@@ -1943,6 +1943,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [cfgEntrada, setCfgEntrada]   = useState(0);
   const [cfgParcelas, setCfgParcelas] = useState(6);
   const [cfgInicioFat, setCfgInicioFat] = useState("");
+  const [cfgSinalPct, setCfgSinalPct]     = useState(15);
+  const [cfgRetencaoPct, setCfgRetencaoPct] = useState(5);
   const [salvando, setSalvando]       = useState(false);
   const [saved, setSaved]             = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false);
@@ -1966,6 +1968,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       setCfgEntrada(n(configMed.entrada));
       setCfgParcelas(configMed.numeroParcelas ?? 6);
       setCfgInicioFat((configMed.inicioFaturamento as any) ?? "");
+      setCfgSinalPct(n(configMed.sinalPct) || 0);
+      setCfgRetencaoPct(n(configMed.retencaoPct) || 5);
       setCfgBloqueado(configMed.bloqueado ?? false);
     }
   }, [configMed]);
@@ -2017,6 +2021,11 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       avByAct[av.atividadeId].push({ semana: av.semana, pct: n(av.percentualAcumulado) });
     });
     Object.values(avByAct).forEach(arr => arr.sort((a, b) => a.semana.localeCompare(b.semana)));
+
+    const sinalTotal = +(baseV * cfgSinalPct / 100).toFixed(2);
+    let sinalRestante = sinalTotal;
+    let pctAcumAnterior = 0;
+
     return dadosMensais.map((d: any) => {
       const [ano, m] = d.mes.split("-").map(Number);
       const lastDay = new Date(ano, m, 0).getDate();
@@ -2030,11 +2039,20 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
         const peso = semPeso ? 1 : n(a.pesoFinanceiro);
         soma += (pct * peso) / denom;
       });
-      const prevMedicao = +(soma / 100 * baseV).toFixed(2);
-      const pct = +(soma).toFixed(1);
-      return { ...d, pct, prevMedicao };
+      const pctAcum = +soma.toFixed(4);
+      const pctMensal = Math.max(0, pctAcum - pctAcumAnterior);
+      pctAcumAnterior = pctAcum;
+
+      const prevMedicao = +(pctAcum / 100 * baseV).toFixed(2);         // cumulative (for display)
+      const medicaoBruta = +(pctMensal / 100 * baseV).toFixed(2);      // monthly increment (for billing)
+      const retencao = +(medicaoBruta * cfgRetencaoPct / 100).toFixed(2);
+      const descontoSinal = Math.min(sinalRestante, +(medicaoBruta * cfgSinalPct / 100).toFixed(2));
+      sinalRestante = Math.max(0, sinalRestante - descontoSinal);
+      const liquido = +(medicaoBruta - retencao - descontoSinal).toFixed(2);
+
+      return { ...d, pct: +pctAcum.toFixed(1), pctMensal: +pctMensal.toFixed(2), prevMedicao, medicaoBruta, retencao, descontoSinal, liquido };
     });
-  }, [cfgDiaCorte, dadosMensais, avancos, atividades, baseV]);
+  }, [cfgDiaCorte, cfgSinalPct, cfgRetencaoPct, dadosMensais, avancos, atividades, baseV]);
 
   // ── Fluxo de Caixa (parcelas fixas) ──────────────────────────────────────
   const fluxoCaixa = useMemo(() => {
@@ -2043,22 +2061,30 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     const valorParcela  = cfgParcelas > 0 ? saldoParcelar / cfgParcelas : 0;
     const inicioMes = cfgInicioFat ? cfgInicioFat.substring(0, 7) : (dadosMensais[0]?.mes ?? "");
     let caixaAcum = 0;
+    let sinalRestante = +(baseV * cfgSinalPct / 100).toFixed(2);
+
     return dadosMensais.map((d: any) => {
-      let recebido = 0;
+      let recebidoBruto = 0;
       if (d.mes === inicioMes) {
-        recebido = cfgEntrada;
+        recebidoBruto = cfgEntrada;
       } else if (d.mes > inicioMes) {
         const startDate = new Date(inicioMes + "-01");
         const thisDate  = new Date(d.mes + "-01");
         const diffM = (thisDate.getFullYear() - startDate.getFullYear()) * 12
                     + (thisDate.getMonth() - startDate.getMonth());
-        if (diffM >= 1 && diffM <= cfgParcelas) recebido = valorParcela;
+        if (diffM >= 1 && diffM <= cfgParcelas) recebidoBruto = valorParcela;
       }
+      const retencao = +(recebidoBruto * cfgRetencaoPct / 100).toFixed(2);
+      const descontoSinal = recebidoBruto > 0
+        ? Math.min(sinalRestante, +(recebidoBruto * cfgSinalPct / 100).toFixed(2))
+        : 0;
+      sinalRestante = Math.max(0, sinalRestante - descontoSinal);
+      const recebido = +(recebidoBruto - retencao - descontoSinal).toFixed(2);
       const saldoMes = recebido - d.custo;
       caixaAcum += saldoMes;
-      return { ...d, recebido, saldoMes, caixaAcum };
+      return { ...d, recebidoBruto, retencao, descontoSinal, recebido, saldoMes, caixaAcum };
     });
-  }, [cfgEntrada, cfgParcelas, cfgInicioFat, dadosMensais, baseV]);
+  }, [cfgEntrada, cfgParcelas, cfgInicioFat, cfgSinalPct, cfgRetencaoPct, dadosMensais, baseV]);
 
   const mesesNeg = fluxoCaixa.filter(r => r.caixaAcum < 0).length;
   const valorParcela = cfgParcelas > 0 ? Math.max(0, baseV - cfgEntrada) / cfgParcelas : 0;
@@ -2072,6 +2098,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       entrada: cfgEntrada,
       numeroParcelas: cfgParcelas,
       inicioFaturamento: cfgInicioFat || null,
+      sinalPct: cfgSinalPct,
+      retencaoPct: cfgRetencaoPct,
     });
   }
 
@@ -2156,6 +2184,32 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                 <p className="text-[10px] text-slate-400 mt-0.5">Dia limite para apurar o avanço</p>
               </div>
 
+              {/* Sinal % — sempre visível */}
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1 font-medium">Sinal / Mobilização (%)</label>
+                <div className="relative">
+                  <input type="number" min={0} max={100} step={0.5} value={cfgSinalPct}
+                    onChange={e => setCfgSinalPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                    className="h-9 w-full text-sm border border-violet-200 rounded-lg px-3 pr-8 bg-white focus:ring-2 focus:ring-violet-400 outline-none font-semibold text-center" />
+                  <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Sinal: {fmt(baseV * cfgSinalPct / 100)}
+                </p>
+              </div>
+
+              {/* Retenção Técnica % — sempre visível */}
+              <div>
+                <label className="text-[10px] text-slate-500 block mb-1 font-medium">Retenção Técnica (%)</label>
+                <div className="relative">
+                  <input type="number" min={0} max={100} step={0.5} value={cfgRetencaoPct}
+                    onChange={e => setCfgRetencaoPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                    className="h-9 w-full text-sm border border-rose-200 rounded-lg px-3 pr-8 bg-white focus:ring-2 focus:ring-rose-400 outline-none font-semibold text-center" />
+                  <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">Retida por medição; devolvida na conclusão</p>
+              </div>
+
               {cfgTipo === "parcela_fixa" && (
                 <>
                   <div>
@@ -2235,39 +2289,51 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
                     <th className="py-2 px-3 text-left">Competência</th>
-                    <th className="py-2 px-3 text-right">Venda Prevista</th>
-                    <th className="py-2 px-3 text-right">Custo Previsto</th>
-                    <th className="py-2 px-3 text-right text-blue-700 font-semibold">% Acum. até Corte</th>
-                    <th className="py-2 px-3 text-right text-indigo-700 font-semibold">Prev. Medição</th>
-                    <th className="py-2 px-3 text-right">Desvio (Med − Venda)</th>
+                    <th className="py-2 px-3 text-right text-blue-700">% Acum.</th>
+                    <th className="py-2 px-3 text-right">Medição Bruta</th>
+                    <th className="py-2 px-3 text-right text-rose-700">− Ret. {cfgRetencaoPct}%</th>
+                    <th className="py-2 px-3 text-right text-violet-700">− Sinal {cfgSinalPct}%</th>
+                    <th className="py-2 px-3 text-right text-emerald-700 font-semibold">= Líquido</th>
+                    <th className="py-2 px-3 text-right text-slate-500">Custo Prev.</th>
+                    <th className="py-2 px-3 text-right">Margem</th>
                   </tr>
                 </thead>
                 <tbody>
                   {previsoesMensais.map((r, idx) => {
-                    const desvio = r.prevMedicao - r.venda;
-                    const temDados = r.pct > 0;
+                    const temDados = r.pctMensal > 0 || r.pct > 0;
+                    const margem = r.liquido - r.custo;
                     return (
                       <tr key={r.mes} className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
-                        <td className="py-2 px-3 font-semibold text-slate-700">{r.nomeMes}</td>
-                        <td className="py-2 px-3 text-right text-orange-600">{fmt(r.venda)}</td>
-                        <td className="py-2 px-3 text-right text-red-600">{fmt(r.custo)}</td>
+                        <td className="py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">{r.nomeMes}</td>
                         <td className="py-2 px-3 text-right">
                           {temDados ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <div className="w-14 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, r.pct)}%` }} />
                               </div>
-                              <span className="font-semibold text-blue-700">{r.pct.toFixed(1)}%</span>
+                              <span className="font-semibold text-blue-700 w-10 text-right">{r.pct.toFixed(1)}%</span>
                             </div>
                           ) : <span className="text-slate-300">—</span>}
                         </td>
-                        <td className="py-2 px-3 text-right font-bold text-indigo-700">
-                          {temDados ? fmt(r.prevMedicao) : <span className="text-slate-300">—</span>}
+                        <td className="py-2 px-3 text-right text-indigo-700 font-semibold">
+                          {temDados ? fmt(r.medicaoBruta) : <span className="text-slate-300">—</span>}
                         </td>
-                        <td className={`py-2 px-3 text-right font-semibold ${!temDados ? "text-slate-300" : desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                          {temDados ? `${desvio >= 0 ? "+" : ""}${fmt(desvio)}` : "—"}
+                        <td className="py-2 px-3 text-right text-rose-600">
+                          {temDados && r.retencao > 0 ? `−${fmt(r.retencao)}` : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="py-2 px-3 text-right text-violet-600">
+                          {temDados && r.descontoSinal > 0 ? `−${fmt(r.descontoSinal)}` : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="py-2 px-3 text-right font-bold text-emerald-700">
+                          {temDados ? fmt(r.liquido) : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="py-2 px-3 text-right text-red-500">
+                          {fmt(r.custo)}
+                        </td>
+                        <td className={`py-2 px-3 text-right font-semibold ${!temDados ? "text-slate-300" : margem >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {temDados ? `${margem >= 0 ? "+" : ""}${fmt(margem)}` : "—"}
                         </td>
                       </tr>
                     );
@@ -2276,10 +2342,12 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                 <tfoot className="bg-slate-700 text-white text-[11px]">
                   <tr>
                     <td className="py-2 px-3 font-bold">TOTAL</td>
-                    <td className="py-2 px-3 text-right font-bold text-orange-300">{fmt(previsoesMensais.reduce((s, r) => s + r.venda, 0))}</td>
-                    <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(previsoesMensais.reduce((s, r) => s + r.custo, 0))}</td>
                     <td className="py-2 px-3" />
-                    <td className="py-2 px-3 text-right font-bold text-indigo-300">{fmt(previsoesMensais.reduce((s, r) => s + r.prevMedicao, 0))}</td>
+                    <td className="py-2 px-3 text-right font-bold text-indigo-300">{fmt(previsoesMensais.reduce((s, r) => s + r.medicaoBruta, 0))}</td>
+                    <td className="py-2 px-3 text-right font-bold text-rose-300">−{fmt(previsoesMensais.reduce((s, r) => s + r.retencao, 0))}</td>
+                    <td className="py-2 px-3 text-right font-bold text-violet-300">−{fmt(previsoesMensais.reduce((s, r) => s + r.descontoSinal, 0))}</td>
+                    <td className="py-2 px-3 text-right font-bold text-emerald-300">{fmt(previsoesMensais.reduce((s, r) => s + r.liquido, 0))}</td>
+                    <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(previsoesMensais.reduce((s, r) => s + r.custo, 0))}</td>
                     <td className="py-2 px-3" />
                   </tr>
                 </tfoot>
@@ -2287,7 +2355,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
             </div>
           )}
           <p className="text-[10px] text-slate-400 px-4 py-2 border-t border-slate-100">
-            * % acumulado = média ponderada pelo peso financeiro das atividades com avanço registrado até o dia de corte do mês.
+            * Medição Bruta = incremento mensal de avanço físico × valor contrato · Retenção e Desc. Sinal deduzidos até recuperar o total adiantado.
           </p>
         </div>
       )}
@@ -2342,12 +2410,15 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
                     <th className="py-2 px-3 text-left">Competência</th>
-                    <th className="py-2 px-3 text-right text-red-700">Custo Previsto</th>
-                    <th className="py-2 px-3 text-right text-amber-700">Recebimento</th>
+                    <th className="py-2 px-3 text-right text-amber-700">Bruto</th>
+                    <th className="py-2 px-3 text-right text-rose-700">− Ret. {cfgRetencaoPct}%</th>
+                    <th className="py-2 px-3 text-right text-violet-700">− Sinal {cfgSinalPct}%</th>
+                    <th className="py-2 px-3 text-right text-emerald-700 font-semibold">= Líquido</th>
+                    <th className="py-2 px-3 text-right text-red-700">Custo Prev.</th>
                     <th className="py-2 px-3 text-right">Saldo Mês</th>
-                    <th className="py-2 px-3 text-right font-semibold">Caixa Acumulado</th>
+                    <th className="py-2 px-3 text-right font-semibold">Caixa Acum.</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2355,11 +2426,20 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                     const isNeg = r.caixaAcum < 0;
                     return (
                       <tr key={r.mes} className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/30"} ${isNeg ? "!bg-red-50/60" : ""}`}>
-                        <td className="py-2 px-3 font-semibold text-slate-700">{r.nomeMes}</td>
-                        <td className="py-2 px-3 text-right text-red-600">{fmt(r.custo)}</td>
-                        <td className={`py-2 px-3 text-right font-semibold ${r.recebido > 0 ? "text-amber-700" : "text-slate-300"}`}>
+                        <td className="py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">{r.nomeMes}</td>
+                        <td className={`py-2 px-3 text-right font-semibold ${r.recebidoBruto > 0 ? "text-amber-700" : "text-slate-300"}`}>
+                          {r.recebidoBruto > 0 ? fmt(r.recebidoBruto) : "—"}
+                        </td>
+                        <td className="py-2 px-3 text-right text-rose-600">
+                          {r.retencao > 0 ? `−${fmt(r.retencao)}` : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="py-2 px-3 text-right text-violet-600">
+                          {r.descontoSinal > 0 ? `−${fmt(r.descontoSinal)}` : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className={`py-2 px-3 text-right font-bold ${r.recebido > 0 ? "text-emerald-700" : "text-slate-300"}`}>
                           {r.recebido > 0 ? fmt(r.recebido) : "—"}
                         </td>
+                        <td className="py-2 px-3 text-right text-red-600">{fmt(r.custo)}</td>
                         <td className={`py-2 px-3 text-right font-semibold ${r.saldoMes >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                           {r.saldoMes >= 0 ? "+" : ""}{fmt(r.saldoMes)}
                         </td>
@@ -2376,8 +2456,11 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                 <tfoot className="bg-slate-700 text-white text-[11px]">
                   <tr>
                     <td className="py-2 px-3 font-bold">TOTAL</td>
+                    <td className="py-2 px-3 text-right font-bold text-amber-300">{fmt(fluxoCaixa.reduce((s, r) => s + r.recebidoBruto, 0))}</td>
+                    <td className="py-2 px-3 text-right font-bold text-rose-300">−{fmt(fluxoCaixa.reduce((s, r) => s + r.retencao, 0))}</td>
+                    <td className="py-2 px-3 text-right font-bold text-violet-300">−{fmt(fluxoCaixa.reduce((s, r) => s + r.descontoSinal, 0))}</td>
+                    <td className="py-2 px-3 text-right font-bold text-emerald-300">{fmt(fluxoCaixa.reduce((s, r) => s + r.recebido, 0))}</td>
                     <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(fluxoCaixa.reduce((s, r) => s + r.custo, 0))}</td>
-                    <td className="py-2 px-3 text-right font-bold text-amber-300">{fmt(fluxoCaixa.reduce((s, r) => s + r.recebido, 0))}</td>
                     <td colSpan={2} />
                   </tr>
                 </tfoot>
