@@ -21,7 +21,7 @@ import {
   Bot, Brain, Sparkles, MessageSquare, Send, Zap,
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer,
-  TrendingDown, ArrowUpRight, ArrowDownRight,
+  TrendingDown, ArrowUpRight, ArrowDownRight, Circle,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -3009,6 +3009,26 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [entradaFocused, setEntradaFocused] = useState(false);
   const [cfgBloqueado, setCfgBloqueado] = useState(false);
 
+  // ── Baixa de Pagamentos (manual, persiste em localStorage) ────────────────
+  const baixaKey = `baixas_${projetoId}`;
+  const [baixas, setBaixasRaw] = useState<Record<string, { confirmado: boolean; data: string; valor: number }>>(() => {
+    try { return JSON.parse(localStorage.getItem(baixaKey) ?? "{}"); } catch { return {}; }
+  });
+  const persistBaixas = (next: Record<string, any>) => {
+    setBaixasRaw(next);
+    localStorage.setItem(baixaKey, JSON.stringify(next));
+  };
+  const toggleBaixa = (mes: string, valorPrevisto: number) => {
+    const atual = baixas[mes];
+    if (atual?.confirmado) {
+      const next = { ...baixas };
+      delete next[mes];
+      persistBaixas(next);
+    } else {
+      persistBaixas({ ...baixas, [mes]: { confirmado: true, data: new Date().toISOString().substring(0, 10), valor: valorPrevisto } });
+    }
+  };
+
   const { data: configMed, refetch: refetchCfg } = trpc.planejamento.getConfigMedicao.useQuery(
     { projetoId }, { enabled: !!projetoId });
 
@@ -3352,73 +3372,144 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
               Nenhum dado calculado. Verifique se há atividades com datas e orçamento vinculado.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                    <th className="py-2 px-3 text-left">Competência</th>
-                    <th className="py-2 px-3 text-right text-blue-700">% Acum.</th>
-                    <th className="py-2 px-3 text-right">Medição Bruta</th>
-                    <th className="py-2 px-3 text-right text-rose-700">− Ret. {cfgRetencaoPct}%</th>
-                    <th className="py-2 px-3 text-right text-violet-700">− Sinal {cfgSinalPct}%</th>
-                    <th className="py-2 px-3 text-right text-emerald-700 font-semibold">= Líquido</th>
-                    <th className="py-2 px-3 text-right text-slate-500">Custo Prev.</th>
-                    <th className="py-2 px-3 text-right">Margem</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previsoesMensais.map((r, idx) => {
-                    const temDados = r.pctMensal > 0 || r.pct > 0;
-                    const margem = r.liquido - r.custo;
-                    return (
-                      <tr key={r.mes} className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
-                        <td className="py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">{r.nomeMes}</td>
-                        <td className="py-2 px-3 text-right">
-                          {temDados ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <div className="w-14 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, r.pct)}%` }} />
+            <>
+              {/* KPI Previsto vs Recebido (baixas manuais) — modo avanço */}
+              {(() => {
+                const totalPrevisto = previsoesMensais.reduce((s, r) => s + (r.liquido > 0 ? r.liquido : 0), 0);
+                const totalRecebido = previsoesMensais.reduce((s, r) => s + (r.liquido > 0 && baixas[r.mes]?.confirmado ? r.liquido : 0), 0);
+                const aReceber = totalPrevisto - totalRecebido;
+                const pct = totalPrevisto > 0 ? (totalRecebido / totalPrevisto) * 100 : 0;
+                const nBaixas = previsoesMensais.filter(r => r.liquido > 0 && baixas[r.mes]?.confirmado).length;
+                const nMeses = previsoesMensais.filter(r => r.liquido > 0).length;
+                return (
+                  <div className="px-4 py-3 border-b border-blue-100 bg-white">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                        Previsto × Recebido — Baixa Manual
+                        <span className="text-[9px] font-normal text-slate-400 ml-1 normal-case">(integração financeira futura)</span>
+                      </p>
+                      <span className="text-[10px] text-slate-400">{nBaixas}/{nMeses} medições confirmadas</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 mb-2">
+                      <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                        <p className="text-[9px] text-slate-500 uppercase tracking-wide">Total Previsto (Líq.)</p>
+                        <p className="text-sm font-bold text-slate-700">{fmt(totalPrevisto)}</p>
+                      </div>
+                      <div className="bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-200">
+                        <p className="text-[9px] text-emerald-600 uppercase tracking-wide">Recebido ✓</p>
+                        <p className="text-sm font-bold text-emerald-700">{fmt(totalRecebido)}</p>
+                      </div>
+                      <div className="bg-orange-50 rounded-lg px-3 py-2 border border-orange-200">
+                        <p className="text-[9px] text-orange-600 uppercase tracking-wide">A Receber</p>
+                        <p className="text-sm font-bold text-orange-700">{fmt(aReceber)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-[10px] font-semibold text-emerald-700 w-10 text-right">{pct.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                      <th className="py-2 px-3 text-left">Competência</th>
+                      <th className="py-2 px-3 text-right text-blue-700">% Acum.</th>
+                      <th className="py-2 px-3 text-right">Medição Bruta</th>
+                      <th className="py-2 px-3 text-right text-rose-700">− Ret. {cfgRetencaoPct}%</th>
+                      <th className="py-2 px-3 text-right text-violet-700">− Sinal {cfgSinalPct}%</th>
+                      <th className="py-2 px-3 text-right text-emerald-700 font-semibold">= Líquido</th>
+                      <th className="py-2 px-3 text-right text-slate-500">Custo Prev.</th>
+                      <th className="py-2 px-3 text-right">Margem</th>
+                      <th className="py-2 px-3 text-center text-emerald-700 font-semibold w-28">Baixa</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previsoesMensais.map((r, idx) => {
+                      const temDados = r.pctMensal > 0 || r.pct > 0;
+                      const margem = r.liquido - r.custo;
+                      const baixa = baixas[r.mes];
+                      const confirmado = !!baixa?.confirmado;
+                      const temLiquido = r.liquido > 0;
+                      return (
+                        <tr key={r.mes} className={`border-b border-slate-50 ${confirmado ? "!bg-emerald-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                          <td className="py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">{r.nomeMes}</td>
+                          <td className="py-2 px-3 text-right">
+                            {temDados ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <div className="w-14 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, r.pct)}%` }} />
+                                </div>
+                                <span className="font-semibold text-blue-700 w-10 text-right">{r.pct.toFixed(1)}%</span>
                               </div>
-                              <span className="font-semibold text-blue-700 w-10 text-right">{r.pct.toFixed(1)}%</span>
-                            </div>
-                          ) : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="py-2 px-3 text-right text-indigo-700 font-semibold">
-                          {temDados ? fmt(r.medicaoBruta) : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="py-2 px-3 text-right text-rose-600">
-                          {temDados && r.retencao > 0 ? `−${fmt(r.retencao)}` : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="py-2 px-3 text-right text-violet-600">
-                          {temDados && r.descontoSinal > 0 ? `−${fmt(r.descontoSinal)}` : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="py-2 px-3 text-right font-bold text-emerald-700">
-                          {temDados ? fmt(r.liquido) : <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="py-2 px-3 text-right text-red-500">
-                          {fmt(r.custo)}
-                        </td>
-                        <td className={`py-2 px-3 text-right font-semibold ${!temDados ? "text-slate-300" : margem >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                          {temDados ? `${margem >= 0 ? "+" : ""}${fmt(margem)}` : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot className="bg-slate-700 text-white text-[11px]">
-                  <tr>
-                    <td className="py-2 px-3 font-bold">TOTAL</td>
-                    <td className="py-2 px-3" />
-                    <td className="py-2 px-3 text-right font-bold text-indigo-300">{fmt(previsoesMensais.reduce((s, r) => s + r.medicaoBruta, 0))}</td>
-                    <td className="py-2 px-3 text-right font-bold text-rose-300">−{fmt(previsoesMensais.reduce((s, r) => s + r.retencao, 0))}</td>
-                    <td className="py-2 px-3 text-right font-bold text-violet-300">−{fmt(previsoesMensais.reduce((s, r) => s + r.descontoSinal, 0))}</td>
-                    <td className="py-2 px-3 text-right font-bold text-emerald-300">{fmt(previsoesMensais.reduce((s, r) => s + r.liquido, 0))}</td>
-                    <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(previsoesMensais.reduce((s, r) => s + r.custo, 0))}</td>
-                    <td className="py-2 px-3" />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                            ) : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="py-2 px-3 text-right text-indigo-700 font-semibold">
+                            {temDados ? fmt(r.medicaoBruta) : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="py-2 px-3 text-right text-rose-600">
+                            {temDados && r.retencao > 0 ? `−${fmt(r.retencao)}` : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="py-2 px-3 text-right text-violet-600">
+                            {temDados && r.descontoSinal > 0 ? `−${fmt(r.descontoSinal)}` : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className={`py-2 px-3 text-right font-bold ${confirmado ? "text-emerald-600 line-through" : "text-emerald-700"}`}>
+                            {temDados ? fmt(r.liquido) : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="py-2 px-3 text-right text-red-500">
+                            {fmt(r.custo)}
+                          </td>
+                          <td className={`py-2 px-3 text-right font-semibold ${!temDados ? "text-slate-300" : margem >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            {temDados ? `${margem >= 0 ? "+" : ""}${fmt(margem)}` : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            {temLiquido ? (
+                              <button
+                                onClick={() => toggleBaixa(r.mes, r.liquido)}
+                                title={confirmado ? `Recebido em ${baixa.data} — clique para desfazer` : "Marcar líquido como recebido"}
+                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
+                                  confirmado
+                                    ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
+                                    : "bg-white border-slate-300 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50"
+                                }`}
+                              >
+                                {confirmado ? (
+                                  <><CheckCircle2 className="h-3 w-3" /> Recebido</>
+                                ) : (
+                                  <><Circle className="h-3 w-3" /> Dar Baixa</>
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-slate-300 text-[10px]">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-slate-700 text-white text-[11px]">
+                    <tr>
+                      <td className="py-2 px-3 font-bold">TOTAL</td>
+                      <td className="py-2 px-3" />
+                      <td className="py-2 px-3 text-right font-bold text-indigo-300">{fmt(previsoesMensais.reduce((s, r) => s + r.medicaoBruta, 0))}</td>
+                      <td className="py-2 px-3 text-right font-bold text-rose-300">−{fmt(previsoesMensais.reduce((s, r) => s + r.retencao, 0))}</td>
+                      <td className="py-2 px-3 text-right font-bold text-violet-300">−{fmt(previsoesMensais.reduce((s, r) => s + r.descontoSinal, 0))}</td>
+                      <td className="py-2 px-3 text-right font-bold text-emerald-300">{fmt(previsoesMensais.reduce((s, r) => s + r.liquido, 0))}</td>
+                      <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(previsoesMensais.reduce((s, r) => s + r.custo, 0))}</td>
+                      <td className="py-2 px-3" />
+                      <td className="py-2 px-3 text-center text-emerald-300 font-bold">
+                        {fmt(previsoesMensais.reduce((s, r) => s + (baixas[r.mes]?.confirmado ? r.liquido : 0), 0))} ✓
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
           <p className="text-[10px] text-slate-400 px-4 py-2 border-t border-slate-100">
             * Medição Bruta = incremento mensal de avanço físico × valor contrato · Retenção e Desc. Sinal deduzidos até recuperar o total adiantado.
@@ -3464,6 +3555,48 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
             </div>
           </div>
 
+          {/* KPI Previsto vs Recebido (baixas manuais) */}
+          {(() => {
+            const totalPrevisto = fluxoCaixa.reduce((s, r) => s + (r.recebido > 0 ? r.recebido : 0), 0);
+            const totalRecebido = fluxoCaixa.reduce((s, r) => s + (r.recebido > 0 && baixas[r.mes]?.confirmado ? r.recebido : 0), 0);
+            const aReceber = totalPrevisto - totalRecebido;
+            const pct = totalPrevisto > 0 ? (totalRecebido / totalPrevisto) * 100 : 0;
+            const nBaixas = fluxoCaixa.filter(r => r.recebido > 0 && baixas[r.mes]?.confirmado).length;
+            const nParcelas = fluxoCaixa.filter(r => r.recebido > 0).length;
+            return (
+              <div className="px-4 py-3 border-b border-amber-100 bg-white">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                    Previsto × Recebido — Baixa Manual
+                    <span className="text-[9px] font-normal text-slate-400 ml-1 normal-case">(integração financeira futura)</span>
+                  </p>
+                  <span className="text-[10px] text-slate-400">{nBaixas}/{nParcelas} parcelas confirmadas</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mb-2">
+                  <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                    <p className="text-[9px] text-slate-500 uppercase tracking-wide">Total Previsto</p>
+                    <p className="text-sm font-bold text-slate-700">{fmt(totalPrevisto)}</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-200">
+                    <p className="text-[9px] text-emerald-600 uppercase tracking-wide">Recebido ✓</p>
+                    <p className="text-sm font-bold text-emerald-700">{fmt(totalRecebido)}</p>
+                  </div>
+                  <div className="bg-orange-50 rounded-lg px-3 py-2 border border-orange-200">
+                    <p className="text-[9px] text-orange-600 uppercase tracking-wide">A Receber</p>
+                    <p className="text-sm font-bold text-orange-700">{fmt(aReceber)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-[10px] font-semibold text-emerald-700 w-10 text-right">{pct.toFixed(0)}%</span>
+                </div>
+              </div>
+            );
+          })()}
+
           {loadCruz ? (
             <div className="flex items-center justify-center py-12 text-slate-400">
               <Loader2 className="h-5 w-5 animate-spin mr-2" /> Calculando...
@@ -3479,20 +3612,24 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="py-2 px-3 text-left">Competência</th>
                     <th className="py-2 px-3 text-right text-red-700">Custo Previsto</th>
-                    <th className="py-2 px-3 text-right text-amber-700">Recebimento</th>
+                    <th className="py-2 px-3 text-right text-amber-700">Recebimento Prev.</th>
                     <th className="py-2 px-3 text-right">Saldo Mês</th>
                     <th className="py-2 px-3 text-right font-semibold">Caixa Acumulado</th>
+                    <th className="py-2 px-3 text-center text-emerald-700 font-semibold w-28">Baixa</th>
                   </tr>
                 </thead>
                 <tbody>
                   {fluxoCaixa.map((r, idx) => {
                     const isNeg = r.caixaAcum < 0;
+                    const baixa = baixas[r.mes];
+                    const confirmado = !!baixa?.confirmado;
+                    const temRecebimento = r.recebido > 0;
                     return (
-                      <tr key={r.mes} className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/30"} ${isNeg ? "!bg-red-50/60" : ""}`}>
+                      <tr key={r.mes} className={`border-b border-slate-50 ${confirmado ? "!bg-emerald-50/60" : isNeg ? "!bg-red-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
                         <td className="py-2 px-3 font-semibold text-slate-700">{r.nomeMes}</td>
                         <td className="py-2 px-3 text-right text-red-600">{fmt(r.custo)}</td>
-                        <td className={`py-2 px-3 text-right font-semibold ${r.recebido > 0 ? "text-amber-700" : "text-slate-300"}`}>
-                          {r.recebido > 0 ? fmt(r.recebido) : "—"}
+                        <td className={`py-2 px-3 text-right font-semibold ${temRecebimento ? (confirmado ? "text-emerald-600 line-through" : "text-amber-700") : "text-slate-300"}`}>
+                          {temRecebimento ? fmt(r.recebido) : "—"}
                         </td>
                         <td className={`py-2 px-3 text-right font-semibold ${r.saldoMes >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                           {r.saldoMes >= 0 ? "+" : ""}{fmt(r.saldoMes)}
@@ -3502,6 +3639,27 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                             {isNeg && <AlertCircle className="h-3 w-3 text-red-500" />}
                             {r.caixaAcum >= 0 ? "+" : ""}{fmt(r.caixaAcum)}
                           </div>
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {temRecebimento ? (
+                            <button
+                              onClick={() => toggleBaixa(r.mes, r.recebido)}
+                              title={confirmado ? `Recebido em ${baixa.data} — clique para desfazer` : "Marcar como recebido"}
+                              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
+                                confirmado
+                                  ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
+                                  : "bg-white border-slate-300 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50"
+                              }`}
+                            >
+                              {confirmado ? (
+                                <><CheckCircle2 className="h-3 w-3" /> Recebido</>
+                              ) : (
+                                <><Circle className="h-3 w-3" /> Dar Baixa</>
+                              )}
+                            </button>
+                          ) : (
+                            <span className="text-slate-300 text-[10px]">—</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -3513,6 +3671,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                     <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(fluxoCaixa.reduce((s, r) => s + r.custo, 0))}</td>
                     <td className="py-2 px-3 text-right font-bold text-amber-300">{fmt(fluxoCaixa.reduce((s, r) => s + r.recebido, 0))}</td>
                     <td colSpan={2} />
+                    <td className="py-2 px-3 text-center text-emerald-300 font-bold">
+                      {fmt(fluxoCaixa.reduce((s, r) => s + (baixas[r.mes]?.confirmado ? r.recebido : 0), 0))} ✓
+                    </td>
                   </tr>
                 </tfoot>
               </table>
