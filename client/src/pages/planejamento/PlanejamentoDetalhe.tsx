@@ -6332,6 +6332,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
 
   const chatMut = (trpc.iaCronograma as any).chat.useMutation({
     onSuccess: () => { refetchHistorico(); },
+    onError: () => { refetchHistorico(); },
   });
 
   const limparMut = (trpc.iaCronograma as any).limparHistorico.useMutation({
@@ -6602,19 +6603,33 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
               {chatMut.isPending && (
                 <div className="flex justify-start">
                   <div className="flex gap-2">
-                    <div className="bg-slate-700 rounded-full h-6 w-6 flex items-center justify-center shrink-0">
-                      <Bot className="h-3.5 w-3.5 text-amber-400" />
-                    </div>
+                    <img src="/julinho-3d.png" alt="" className="h-8 w-8 object-contain shrink-0 mt-1 drop-shadow" />
                     <div className="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-none px-4 py-3">
-                      <div className="flex gap-1">
-                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </div>
+                        <span className="text-[10px] text-slate-400">JULINHO pensando...</span>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
+
+              {chatMut.isError && !chatMut.isPending && (
+                <div className="flex justify-start">
+                  <div className="flex gap-2 max-w-[90%]">
+                    <img src="/julinho-3d.png" alt="" className="h-8 w-8 object-contain shrink-0 mt-1 drop-shadow opacity-60" />
+                    <div className="bg-red-50 border border-red-200 rounded-2xl rounded-tl-none px-4 py-3 text-xs text-red-700">
+                      <p className="font-semibold mb-1">⚠️ Falha na comunicação</p>
+                      <p>{(chatMut.error as any)?.message ?? "Não foi possível conectar ao servidor. Tente novamente."}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div ref={chatEndRef} />
             </div>
 
