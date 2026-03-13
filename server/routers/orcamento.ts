@@ -1921,6 +1921,40 @@ export const orcamentoRouter = router({
       return { success: true };
     }),
 
+  // ── Excluir orçamento completo (todos os dados relacionados) ──
+  excluir: protectedProcedure
+    .input(z.object({
+      id:        z.number(),
+      companyId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+
+      const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
+      if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      if (Number(orc.companyId) !== Number(input.companyId))
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para excluir este orçamento.' });
+
+      const oid = input.id;
+
+      // Deletar dados relacionados em cascata
+      await db.delete(orcamentoItens)            .where(eq(orcamentoItens.orcamentoId,            oid));
+      await db.delete(orcamentoInsumos)          .where(eq(orcamentoInsumos.orcamentoId,          oid));
+      await db.delete(orcamentoBdi)              .where(eq(orcamentoBdi.orcamentoId,              oid));
+      await db.delete(bdiIndiretos)              .where(eq(bdiIndiretos.orcamentoId,              oid));
+      await db.delete(bdiFd)                     .where(eq(bdiFd.orcamentoId,                     oid));
+      await db.delete(bdiAdmCentral)             .where(eq(bdiAdmCentral.orcamentoId,             oid));
+      await db.delete(bdiDespesasFinanceiras)    .where(eq(bdiDespesasFinanceiras.orcamentoId,    oid));
+      await db.delete(bdiTributos)               .where(eq(bdiTributos.orcamentoId,               oid));
+      await db.delete(bdiTaxaComercializacao)    .where(eq(bdiTaxaComercializacao.orcamentoId,    oid));
+
+      // Deletar o orçamento principal
+      await db.delete(orcamentos).where(eq(orcamentos.id, oid));
+
+      return { success: true };
+    }),
+
   // ── Importar BDI separadamente para um orçamento existente ──
   importarBdi: protectedProcedure
     .input(z.object({

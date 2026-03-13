@@ -11,9 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, TrendingUp, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
-  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent, Pencil,
+  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent, Pencil, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -116,6 +120,15 @@ export default function OrcamentoDetalhe() {
   const [reuploadFile, setReuploadFile] = useState<File | null>(null);
   const [reuploadAnalise, setReuploadAnalise] = useState<{ itens: number; arquivo: string } | null>(null);
   const [reuploadLoading, setReuploadLoading] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const excluirMut = trpc.orcamento.excluir.useMutation({
+    onSuccess: () => {
+      toast.success("Orçamento excluído com sucesso.");
+      navigate("/orcamento");
+    },
+    onError: e => toast.error(e.message || "Erro ao excluir orçamento"),
+  });
 
   const reimportarMutation = trpc.orcamento.reimportar.useMutation({
     onSuccess: (res) => {
@@ -452,6 +465,11 @@ export default function OrcamentoDetalhe() {
               onClick={() => { setBibOpen(true); setBibLoaded(true); }}
               title="Envia os preços e composições deste orçamento para atualizar a base central do sistema">
               <BookOpen className="h-4 w-4" /> Atualizar Base
+            </Button>
+            <Button size="sm" variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+              onClick={() => setDeleteConfirmOpen(true)}
+              title="Excluir este orçamento permanentemente">
+              <Trash2 className="h-4 w-4" /> Excluir
             </Button>
           </div>
         </div>
@@ -1751,6 +1769,34 @@ export default function OrcamentoDetalhe() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── AlertDialog de confirmação de exclusão ── */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" /> Excluir orçamento?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação é <strong>irreversível</strong>. Todos os itens, insumos, composições e dados
+              de BDI deste orçamento serão permanentemente excluídos.
+              {orc && <span className="block mt-2 font-medium text-foreground">"{orc.codigo}"</span>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              disabled={excluirMut.isPending}
+              onClick={() => excluirMut.mutate({ id, companyId: bibCompanyId })}
+            >
+              {excluirMut.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Excluindo...</>
+                : <><Trash2 className="h-4 w-4 mr-1" />Confirmar Exclusão</>}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </DashboardLayout>
   );
