@@ -53,8 +53,15 @@ export default function Obras() {
   const availableSnsQ = trpc.obras.listAvailableSns.useQuery({ companyId }, { enabled: !!companyId });
   const availableSns = availableSnsQ.data ?? [];
 
-  const createMut = trpc.obras.create.useMutation({ onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); availableSnsQ.refetch(); setDialogOpen(false); toast.success("Obra criada com sucesso!"); } });
-  const updateMut = trpc.obras.update.useMutation({ onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); availableSnsQ.refetch(); setDialogOpen(false); toast.success("Obra atualizada!"); } });
+  const [saving, setSaving] = useState(false);
+  const createMut = trpc.obras.create.useMutation({
+    onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); availableSnsQ.refetch(); setSaving(false); setDialogOpen(false); toast.success("Obra criada com sucesso!"); },
+    onError: (err) => { setSaving(false); toast.error(err.message || "Erro ao criar obra"); },
+  });
+  const updateMut = trpc.obras.update.useMutation({
+    onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); availableSnsQ.refetch(); setSaving(false); setDialogOpen(false); toast.success("Obra atualizada com sucesso!"); },
+    onError: (err) => { setSaving(false); toast.error(err.message || "Erro ao atualizar obra"); },
+  });
   const deleteMut = trpc.obras.delete.useMutation({ onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); toast.success("Obra excluída!"); } });
   const addSnMut = trpc.obras.addSn.useMutation({
     onSuccess: () => { allSnsQ.refetch(); obraSnQ.refetch(); toast.success("SN vinculado com sucesso!"); setNewSn(""); setNewSnApelido(""); },
@@ -193,6 +200,7 @@ export default function Obras() {
   const [nomeError, setNomeError] = useState(false);
 
   const handleSave = () => {
+    if (saving) return;
     const nomeEfetivo = form.nome.trim() || form.numOrcamento.trim();
     if (!nomeEfetivo) {
       setNomeError(true);
@@ -202,6 +210,7 @@ export default function Obras() {
       return;
     }
     setNomeError(false);
+    setSaving(true);
     const cleanForm = Object.fromEntries(
       Object.entries(form).map(([k, v]) => [k, typeof v === "string" && v.trim() === "" ? undefined : v])
     ) as any;
@@ -354,7 +363,7 @@ export default function Obras() {
         )}
       </div>
 
-      <FullScreenDialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingId ? "Editar Obra" : "Nova Obra"} icon={<Landmark className="h-5 w-5 text-white" />}>
+      <FullScreenDialog open={dialogOpen} onClose={() => { setDialogOpen(false); setSaving(false); }} title={editingId ? "Editar Obra" : "Nova Obra"} icon={<Landmark className="h-5 w-5 text-white" />}>
         <div className="w-full">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
@@ -632,9 +641,9 @@ export default function Obras() {
           />
 
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
-              {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar"}
+            <Button variant="outline" onClick={() => { setDialogOpen(false); setSaving(false); }}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={saving} className="bg-[#1B2A4A] hover:bg-[#243660] min-w-[100px]">
+              {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar"}
             </Button>
           </div>
         </div>
