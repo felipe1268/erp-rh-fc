@@ -19,7 +19,7 @@ import {
   MapPin, Package, Filter, Trash2, Pencil, X, RefreshCw,
 } from "lucide-react";
 import {
-  LineChart, Line, BarChart, Bar, Cell,
+  LineChart, Line, BarChart, Bar, Cell, ComposedChart,
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ReferenceLine, LabelList,
 } from "recharts";
@@ -2110,7 +2110,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
             </div>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData} margin={{ top: 4, right: 52, bottom: 0, left: 8 }}>
+            <ComposedChart data={chartData} margin={{ top: 4, right: 52, bottom: 0, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} />
               <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} width={64} />
@@ -2118,7 +2118,6 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               <Tooltip formatter={(v: any, name: string) => name.includes("%") ? `${Number(v).toFixed(1)}%` : fmt(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {cenario === "lucro" ? (<>
-                <Bar yAxisId="val" dataKey="Venda Acum.%" fill="transparent" hide />
                 <Bar yAxisId="val" dataKey="Custo"          fill="#ef4444" fillOpacity={0.5} radius={[3,3,0,0]} />
                 <Bar yAxisId="val" dataKey="Lucro Previsto (V−C)" fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
                 <Bar yAxisId="val" dataKey="Lucro Desejado (V−M)" fill="#8b5cf6" fillOpacity={0.6} radius={[3,3,0,0]} />
@@ -2132,7 +2131,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                 <Line yAxisId="pct" type="monotone" dataKey="Prev.Acum%" stroke={cen.cor} strokeWidth={2} dot={false} strokeDasharray="4 2" />
                 <Line yAxisId="pct" type="monotone" dataKey="Real.Acum%" stroke="#10b981" strokeWidth={2} dot={false} />
               </>)}
-            </BarChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}
