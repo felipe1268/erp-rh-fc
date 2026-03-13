@@ -412,6 +412,7 @@ export default function ModuleHub() {
     newOrder.splice(toIdx, 0, fromId);
     setModuleOrder(newOrder);
     localStorage.setItem(ORDER_KEY, JSON.stringify(newOrder));
+    window.dispatchEvent(new CustomEvent("fc-module-order-changed", { detail: newOrder }));
   }
 
   function handleDragEnd() {
