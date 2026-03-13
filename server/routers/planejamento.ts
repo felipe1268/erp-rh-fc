@@ -772,6 +772,23 @@ export const planejamentoRouter = router({
         .where(eq(planejamentoCompras.id, input.id));
     }),
 
+  deletarRevisaoCompras: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisao: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(planejamentoCompras)
+        .where(and(
+          eq(planejamentoCompras.projetoId, input.projetoId),
+          eq(planejamentoCompras.revisao,   input.revisao),
+        ));
+      await db.delete(planejamentoComprasRevisoes)
+        .where(and(
+          eq(planejamentoComprasRevisoes.projetoId, input.projetoId),
+          eq(planejamentoComprasRevisoes.revisao,   input.revisao),
+        ));
+      return { ok: true };
+    }),
+
   // ── Cruzamento Orçamento × Cronograma ─────────────────────────────────────
   obterCruzamentoOrcCronograma: protectedProcedure
     .input(z.object({ projetoId: z.number() }))
