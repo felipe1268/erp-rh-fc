@@ -1247,6 +1247,15 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
     return Object.values(map).sort((a, b) => a.semana.localeCompare(b.semana));
   }, [curvaData]);
 
+  // Mapa: data ISO → "Sem 01", "Sem 02", etc.
+  const semanaLabel = useMemo(() => {
+    const m: Record<string, string> = {};
+    merged.forEach((p, i) => {
+      m[p.semana] = `Sem ${String(i + 1).padStart(2, "0")}`;
+    });
+    return m;
+  }, [merged]);
+
   if (!curvaData || merged.length === 0) return (
     <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
       <TrendingUp className="h-10 w-10 opacity-30" />
@@ -1291,10 +1300,11 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
           <LineChart data={merged} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-30} textAnchor="end"
-              height={50} interval={Math.max(0, Math.floor(merged.length / 10) - 1)} />
+              height={50} interval={Math.max(0, Math.floor(merged.length / 10) - 1)}
+              tickFormatter={v => semanaLabel[v] ?? v} />
             <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
             <Tooltip formatter={(v: any) => `${n(v).toFixed(1)}%`}
-              labelFormatter={l => `Semana: ${l}`} />
+              labelFormatter={l => `${semanaLabel[l] ?? l} (${l})`} />
             {/* Linha "hoje" */}
             {semanas.includes(hoje) && (
               <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
