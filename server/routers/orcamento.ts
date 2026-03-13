@@ -379,74 +379,168 @@ function extrairMetadados(rows: any[][]): {
 }
 
 // Extrai os totais gerais diretamente da linha "TOTAIS GERAIS" da planilha.
-// Essa linha tem os valores em precisão total (sem arredondamento de 2 casas),
-// que arredondados dão exatamente os valores exibidos na planilha.
-// Colunas: mat=col[22], mdo=col[23], total=col[24]
-function extrairTotaisPlanilha(rows: any[][]): { totalMat: number; totalMdo: number; totalCusto: number } | null {
+// Varre todas as colunas para encontrar o label — independente do layout.
+function extrairTotaisPlanilha(rows: any[][], colMap?: Record<string, number>): { totalMat: number; totalMdo: number; totalCusto: number } | null {
   for (const row of rows) {
-    const label = String(row[10] || '').trim().toUpperCase();
-    if (label.includes('TOTAI') && label.includes('GERA')) {
-      const totalMat   = toNum(row[22]);
-      const totalMdo   = toNum(row[23]);
-      const totalCusto = toNum(row[24]);
-      if (totalCusto > 0) return { totalMat, totalMdo, totalCusto };
+    // Procura "TOTAIS GERAIS" em qualquer coluna da linha
+    const labelIdx = row.findIndex((c: any) => {
+      const s = String(c || '').trim().toUpperCase();
+      return s.includes('TOTAI') && s.includes('GERA');
+    });
+    if (labelIdx === -1) continue;
+    // Se temos o mapa de colunas, usa ele; caso contrário tenta os índices clássicos
+    if (colMap) {
+      const mat   = toNum(row[colMap['cuTotalMat']  ?? -1]);
+      const mdo   = toNum(row[colMap['cuTotalMdo']  ?? -1]);
+      const custo = toNum(row[colMap['custoTotal']  ?? -1]);
+      if (custo > 0) return { totalMat: mat, totalMdo: mdo, totalCusto: custo };
+      // fallback soma
+      const soma = mat + mdo;
+      if (soma > 0) return { totalMat: mat, totalMdo: mdo, totalCusto: soma };
+    } else {
+      // Pega os 3 maiores números da linha (mat, mdo, total)
+      const nums = row.map((c: any) => toNum(c)).filter(n => n > 0).sort((a, b) => b - a);
+      if (nums.length >= 1) return { totalMat: nums[1] ?? 0, totalMdo: nums[2] ?? 0, totalCusto: nums[0] };
     }
   }
   return null;
+}
+
+// ─── Mapeador de colunas pelo cabeçalho ──────────────────────────────────────
+// Normaliza uma string: minúsculas + sem acentos + sem pontos/espaços
+function normCol(s: string): string {
+  return s.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.\s_\-/]/g, '');
+}
+
+// Mapa de aliases: chave semântica → lista de valores normalizados aceitos
+const COL_ALIASES: Record<string, string[]> = {
+  item:           ['item', 'cod', 'codigo', 'eap', 'codigoeap'],
+  descricao:      ['descricao', 'descri', 'desc', 'denominacao', 'servico', 'especificacao'],
+  unidade:        ['un', 'und', 'unid', 'unidade'],
+  quantidade:     ['qtd', 'qt', 'quant', 'quantidade', 'qde'],
+  nivel:          ['nivel', 'niv', 'lvl', 'hierarquia'],
+  composicaoTipo: ['composicao', 'comp', 'composicaotipo', 'tipocomposicao'],
+  servicoCodigo:  ['codigoservico', 'codservico', 'servcod', 'cods', 'codsv'],
+  tipo:           ['tipo'],
+  cuUnitMat:      ['punitmat', 'pumat', 'cunitmat', 'custounitmat', 'precounitmat', 'valorunitmat', 'custounitariomaterial', 'pumateria', 'valorunitariomaterial'],
+  cuUnitMdo:      ['punitmo', 'pumo', 'cunitmo', 'custounitmo', 'precounitmo', 'valorunitmo', 'custounitariomo', 'pumaodeobra', 'valorunitariomo'],
+  cuTotalMat:     ['ptotalmat', 'pttotalmat', 'ctmat', 'custototalmat', 'totalmat', 'totalmaterial'],
+  cuTotalMdo:     ['ptotalmo', 'pttotalmo', 'ctmo', 'custototalmo', 'totalmo', 'totalmaodeobra'],
+  custoTotal:     ['custo', 'custototal', 'totalcusto', 'ct', 'ptotal', 'preçototal', 'valortotal', 'totalservico', 'totalgeral'],
+  abc:            ['abc'],
+};
+
+function detectarColunas(headerRow: any[]): Record<string, number> {
+  const colMap: Record<string, number> = {};
+  headerRow.forEach((cell: any, idx: number) => {
+    const n = normCol(String(cell || ''));
+    if (!n) return;
+    for (const [field, aliases] of Object.entries(COL_ALIASES)) {
+      if (colMap[field] !== undefined) continue; // já encontrou
+      if (aliases.some(a => n === a || n.startsWith(a))) {
+        colMap[field] = idx;
+      }
+    }
+  });
+  return colMap;
 }
 
 // Parseia a aba Orçamento e retorna array de itens
 // bdiPercentual: decimal fraction (ex: 0.2456 = 24.56%)
 // Venda = Custo × (1 + BDI%)   |   Meta = Custo × (1 − Meta%)
 function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: number = 0) {
-  // Detectar linha de cabeçalho: coluna 10 = "Item"
+  // ─── 1. Detectar linha de cabeçalho ────────────────────────────────────────
+  // A linha deve conter ao menos "Item" (EAP) e "Descri..." em células distintas
   let headerIdx = -1;
-  for (let i = 0; i < Math.min(25, rows.length); i++) {
-    if (String(rows[i][10] || '').trim() === 'Item') { headerIdx = i; break; }
-  }
-  if (headerIdx === -1) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Estrutura da planilha não reconhecida. Coluna "Item" não encontrada na linha de cabeçalho.' });
+  let colMap: Record<string, number> = {};
 
+  for (let i = 0; i < Math.min(30, rows.length); i++) {
+    const row = rows[i];
+    const cells = row.map((c: any) => normCol(String(c || '')));
+    const hasItem = cells.some(c => c === 'item' || c === 'codigo' || c === 'eap');
+    const hasDesc = cells.some(c => c.startsWith('descri') || c === 'desc' || c === 'denominacao');
+    if (hasItem && hasDesc) {
+      headerIdx = i;
+      colMap = detectarColunas(row);
+      break;
+    }
+  }
+
+  if (headerIdx === -1) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Estrutura da planilha não reconhecida. Linha de cabeçalho com "Item" e "Descrição" não encontrada nas primeiras 30 linhas.',
+    });
+  }
+  if (colMap['item'] === undefined) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Coluna "Item" não mapeada.' });
+  }
+  if (colMap['descricao'] === undefined) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Coluna "Descrição" não mapeada.' });
+  }
+
+  // ─── 2. Helper de leitura ──────────────────────────────────────────────────
+  const col = (row: any[], field: string): any => {
+    const idx = colMap[field];
+    return idx !== undefined ? row[idx] : undefined;
+  };
+
+  // ─── 3. Parsear linhas de dados ────────────────────────────────────────────
   const itens = [];
   let ordem = 0;
 
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i];
-    const eapCodigo = String(row[10] || '').trim();
-    const descricao = String(row[15] || '').trim();
+    const eapCodigo = String(col(row, 'item') ?? '').trim();
+    const descricao = String(col(row, 'descricao') ?? '').trim();
     if (!eapCodigo || !descricao) continue;
 
-    const nivel = toNum(row[9]);
+    // Nível: usa coluna explícita se existir, senão infere pela profundidade do código EAP
+    // Ex: "01" → 1  |  "01.01" → 2  |  "01.01.01" → 3
+    let nivel: number;
+    if (colMap['nivel'] !== undefined) {
+      nivel = toNum(col(row, 'nivel'));
+    } else {
+      nivel = eapCodigo.split('.').length;
+    }
     if (nivel < 1 || nivel > 10) continue;
 
-    const composicaoTipo = String(row[11] || '').trim();
-    const servicoCodigo  = String(row[13] || '').trim();
-    const tipo           = String(row[14] || '').trim();
-    const unidade        = String(row[16] || '').trim();
-    const quantidade     = toNum(row[17]);
-    const custoUnitMat   = toNum(row[18]);
-    const custoUnitMdo   = toNum(row[20]);
+    const composicaoTipo = String(col(row, 'composicaoTipo') ?? '').trim();
+    const servicoCodigo  = String(col(row, 'servicoCodigo')  ?? '').trim();
+    const tipo           = String(col(row, 'tipo')           ?? '').trim();
+    const unidade        = String(col(row, 'unidade')        ?? '').trim();
+    const quantidade     = toNum(col(row, 'quantidade'));
+    const custoUnitMat   = toNum(col(row, 'cuUnitMat'));
+    const custoUnitMdo   = toNum(col(row, 'cuUnitMdo'));
     const custoUnitTotal = custoUnitMat + custoUnitMdo;
-    const custoTotalMat  = toNum(row[30]);
-    const custoTotalMdo  = toNum(row[31]);
-    const custoTotal     = toNum(row[32]);
 
-    // Venda calculada a partir do custo + BDI (NÃO lemos da coluna 24)
-    const vendaTotal     = custoTotal * (1 + bdiPercentual);
+    const custoTotalMat  = toNum(col(row, 'cuTotalMat'));
+    const custoTotalMdo  = toNum(col(row, 'cuTotalMdo'));
+    let   custoTotal     = toNum(col(row, 'custoTotal'));
+
+    // Fallbacks para custoTotal: soma das partes → qty × custo unitário
+    if (custoTotal === 0 && (custoTotalMat > 0 || custoTotalMdo > 0))
+      custoTotal = custoTotalMat + custoTotalMdo;
+    if (custoTotal === 0 && quantidade > 0 && custoUnitTotal > 0)
+      custoTotal = quantidade * custoUnitTotal;
+
+    const vendaTotal     = custoTotal     * (1 + bdiPercentual);
     const vendaUnitTotal = custoUnitTotal * (1 + bdiPercentual);
-
-    const metaTotal      = custoTotal * (1 - metaPerc);
+    const metaTotal      = custoTotal     * (1 - metaPerc);
     const metaUnitTotal  = custoUnitTotal * (1 - metaPerc);
-    const abcServico     = String(row[25] || '').trim().substring(0, 5);
+    const abcServico     = String(col(row, 'abc') ?? '').trim().substring(0, 5);
 
     ordem++;
     itens.push({
       eapCodigo,
       nivel,
-      tipo: tipo.substring(0, 50),
+      tipo:           tipo.substring(0, 50),
       composicaoTipo: composicaoTipo.substring(0, 20),
-      servicoCodigo: servicoCodigo.substring(0, 50),
-      descricao: descricao.substring(0, 1000),
-      unidade: unidade.substring(0, 30),
+      servicoCodigo:  servicoCodigo.substring(0, 50),
+      descricao:      descricao.substring(0, 1000),
+      unidade:        unidade.substring(0, 30),
       quantidade:     fix4(quantidade),
       custoUnitMat:   fix4(custoUnitMat),
       custoUnitMdo:   fix4(custoUnitMdo),
@@ -462,7 +556,8 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
       ordem,
     });
   }
-  return itens;
+
+  return { itens, colMap };
 }
 
 // Parseia aba BDI
@@ -1303,7 +1398,7 @@ export const orcamentoRouter = router({
       const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
 
       // Itens da EAP — venda calculada via Custo × (1 + BDI%)
-      const itens = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual);
+      const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual);
       if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
       // Insumos (aba "Insumos" se existir)
@@ -1320,7 +1415,7 @@ export const orcamentoRouter = router({
 
       // Totais: lê a linha "TOTAIS GERAIS" da planilha (precisão total, sem arredondamento intermediário).
       // Fallback para somas das folhas apenas se a linha não existir.
-      const totaisGerais  = extrairTotaisPlanilha(dataOrc);
+      const totaisGerais  = extrairTotaisPlanilha(dataOrc, colMapOrc);
       const nivel1        = itens.filter(i => i.nivel === 1);
       const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal),    0);
       const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
@@ -1521,7 +1616,7 @@ export const orcamentoRouter = router({
       const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
       const bdiFinal = bdiPercentual > 0 ? bdiPercentual : parseFloat(orc.bdiPercentual || '0');
 
-      const itens = parsearAbaCorcamento(dataOrc, metaPerc, bdiFinal);
+      const { itens, colMap: colMapOrc2 } = parsearAbaCorcamento(dataOrc, metaPerc, bdiFinal);
       if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
       // Insumos opcionais
@@ -1537,7 +1632,7 @@ export const orcamentoRouter = router({
         : { composicoes: [], linhasInsumos: [] };
 
       // Totais: lê a linha "TOTAIS GERAIS" da planilha (precisão total, sem arredondamento intermediário).
-      const totaisGerais  = extrairTotaisPlanilha(dataOrc);
+      const totaisGerais  = extrairTotaisPlanilha(dataOrc, colMapOrc2);
       const nivel1        = itens.filter(i => i.nivel === 1);
       const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
       const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
