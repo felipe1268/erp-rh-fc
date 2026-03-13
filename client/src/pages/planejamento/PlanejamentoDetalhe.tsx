@@ -2679,6 +2679,18 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
         ))}
       </div>
 
+      {/* Gráfico — empty state */}
+      {chartData.length === 0 && !loadCruz && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center justify-center text-center gap-2">
+          <AlertTriangle className="h-8 w-8 text-amber-400" />
+          <p className="text-sm font-semibold text-slate-600">Sem dados para exibir no gráfico</p>
+          <p className="text-xs text-slate-400 max-w-sm">
+            Nenhum item do orçamento foi cruzado com atividades do cronograma.
+            Verifique se as atividades possuem o mesmo nome que os itens do orçamento e se têm datas definidas.
+          </p>
+        </div>
+      )}
+
       {/* Gráfico */}
       {chartData.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
