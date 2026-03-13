@@ -407,43 +407,62 @@ function extrairTotaisPlanilha(rows: any[][], colMap?: Record<string, number>): 
 }
 
 // ─── Mapeador de colunas pelo cabeçalho ──────────────────────────────────────
-// Normaliza uma string: minúsculas + sem acentos + sem pontos/espaços
+// Normaliza uma string: minúsculas + sem acentos + sem pontos/espaços/hífen
 function normCol(s: string): string {
   return s.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[.\s_\-/]/g, '');
+    .replace(/[.\s_\-/()]/g, '');
 }
 
-// Mapa de aliases: chave semântica → lista de valores normalizados aceitos
+// Mapa de aliases — mais específico ANTES do mais genérico dentro de cada campo
+// custo total é o ÚLTIMO fallback para evitar conflito com "P.Total" (grupo)
 const COL_ALIASES: Record<string, string[]> = {
-  item:           ['item', 'cod', 'codigo', 'eap', 'codigoeap'],
-  descricao:      ['descricao', 'descri', 'desc', 'denominacao', 'servico', 'especificacao'],
-  unidade:        ['un', 'und', 'unid', 'unidade'],
-  quantidade:     ['qtd', 'qt', 'quant', 'quantidade', 'qde'],
-  nivel:          ['nivel', 'niv', 'lvl', 'hierarquia'],
-  composicaoTipo: ['composicao', 'comp', 'composicaotipo', 'tipocomposicao'],
-  servicoCodigo:  ['codigoservico', 'codservico', 'servcod', 'cods', 'codsv'],
+  item:           ['item', 'codigoeap', 'eap', 'codigoservico'],
+  descricao:      ['descricao', 'descricaodoservico', 'denominacao', 'especificacao'],
+  unidade:        ['unidade', 'und', 'unid', 'un'],
+  quantidade:     ['quantidade', 'quant', 'qtd', 'qde', 'qt'],
+  nivel:          ['nivel', 'hierarquia', 'niv'],
+  composicaoTipo: ['composicaotipo', 'tipocomposicao', 'composicao', 'comp'],
+  servicoCodigo:  ['codigoservico', 'codservico', 'cods'],
   tipo:           ['tipo'],
-  cuUnitMat:      ['punitmat', 'pumat', 'cunitmat', 'custounitmat', 'precounitmat', 'valorunitmat', 'custounitariomaterial', 'pumateria', 'valorunitariomaterial'],
-  cuUnitMdo:      ['punitmo', 'pumo', 'cunitmo', 'custounitmo', 'precounitmo', 'valorunitmo', 'custounitariomo', 'pumaodeobra', 'valorunitariomo'],
+  // Custo unitário — combinações "P.Unit.Mat" / "PU Mat" / "CU Mat"
+  cuUnitMat:      ['punitmat', 'pumat', 'cunitmat', 'custounitmat', 'precounitmat', 'valorunitmat', 'valorunitariomaterial', 'custounitariomaterial'],
+  cuUnitMdo:      ['punitmo', 'pumo', 'cunitmo', 'custounitmo', 'precounitmo', 'valorunitmo', 'valorunitariomo', 'custounitariomo'],
+  // Custo total por item — combinações "P.Total Mat" / "PT Mat" / "CT Mat"
   cuTotalMat:     ['ptotalmat', 'pttotalmat', 'ctmat', 'custototalmat', 'totalmat', 'totalmaterial'],
   cuTotalMdo:     ['ptotalmo', 'pttotalmo', 'ctmo', 'custototalmo', 'totalmo', 'totalmaodeobra'],
-  custoTotal:     ['custo', 'custototal', 'totalcusto', 'ct', 'ptotal', 'preçototal', 'valortotal', 'totalservico', 'totalgeral'],
+  // Custo total do serviço — "Custo", "Total", "Custo Total"
+  custoTotal:     ['custototal', 'totalcusto', 'custo', 'total', 'ct'],
   abc:            ['abc'],
 };
 
-function detectarColunas(headerRow: any[]): Record<string, number> {
+/**
+ * Detecta mapeamento coluna→índice combinando até 2 linhas de cabeçalho.
+ * parentRow: linha acima (grupos: "P. Unitário", "P. Total") — pode ser null
+ * labelRow:  linha com labels específicos ("Item", "Descrição", "Mat", "MO", "Custo"…)
+ */
+function detectarColunas(labelRow: any[], parentRow: any[] | null): Record<string, number> {
   const colMap: Record<string, number> = {};
-  headerRow.forEach((cell: any, idx: number) => {
-    const n = normCol(String(cell || ''));
-    if (!n) return;
+
+  labelRow.forEach((cell: any, idx: number) => {
+    const label  = String(cell      || '').trim();
+    const parent = parentRow ? String(parentRow[idx] || '').trim() : '';
+
+    // Gera candidatos: combined ("P.Unit. Mat"), só label ("Mat"), só parent ("P.Unit.")
+    const candidates = [
+      normCol(`${parent} ${label}`),  // "P.Unit. Mat" → "punitmat"
+      normCol(label),                 // "Mat" → "mat" | "Custo" → "custo"
+      normCol(parent),                // "P.Unit." → "punit"
+    ].filter(Boolean);
+
     for (const [field, aliases] of Object.entries(COL_ALIASES)) {
-      if (colMap[field] !== undefined) continue; // já encontrou
-      if (aliases.some(a => n === a || n.startsWith(a))) {
+      if (colMap[field] !== undefined) continue;
+      if (candidates.some(c => aliases.some(a => c === a || c.startsWith(a)))) {
         colMap[field] = idx;
       }
     }
   });
+
   return colMap;
 }
 
@@ -452,34 +471,78 @@ function detectarColunas(headerRow: any[]): Record<string, number> {
 // Venda = Custo × (1 + BDI%)   |   Meta = Custo × (1 − Meta%)
 function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: number = 0) {
   // ─── 1. Detectar linha de cabeçalho ────────────────────────────────────────
-  // A linha deve conter ao menos "Item" (EAP) e "Descri..." em células distintas
-  let headerIdx = -1;
-  let colMap: Record<string, number> = {};
+  // Procura a linha que contém "Item" (qualquer posição).
+  // Pode haver dois padrões:
+  //   A) cabeçalho único: "Item" e "Descrição" na mesma linha
+  //   B) cabeçalho duplo: linha com "Item" + linha ABAIXO com "Descrição" / "Mat" / "MO"
+  let headerIdx   = -1;
+  let labelRowIdx = -1;
 
   for (let i = 0; i < Math.min(30, rows.length); i++) {
-    const row = rows[i];
-    const cells = row.map((c: any) => normCol(String(c || '')));
-    const hasItem = cells.some(c => c === 'item' || c === 'codigo' || c === 'eap');
-    const hasDesc = cells.some(c => c.startsWith('descri') || c === 'desc' || c === 'denominacao');
-    if (hasItem && hasDesc) {
-      headerIdx = i;
-      colMap = detectarColunas(row);
-      break;
+    const cells = rows[i].map((c: any) => normCol(String(c || '')));
+    if (!cells.some(c => c === 'item')) continue;
+    headerIdx = i;
+
+    // Verifica se a mesma linha já tem "Descrição"
+    if (cells.some(c => c.startsWith('descri') || c === 'denominacao')) {
+      labelRowIdx = i;          // caso A: header único
+    } else if (i + 1 < rows.length) {
+      const nextCells = rows[i + 1].map((c: any) => normCol(String(c || '')));
+      if (nextCells.some(c => c.startsWith('descri') || c === 'denominacao' || c === 'mat' || c === 'mo' || c === 'mdo')) {
+        labelRowIdx = i + 1;    // caso B: sub-cabeçalho na linha seguinte
+      } else {
+        labelRowIdx = i;        // fallback: usa a própria linha
+      }
+    } else {
+      labelRowIdx = i;
     }
+    break;
   }
 
   if (headerIdx === -1) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
-      message: 'Estrutura da planilha não reconhecida. Linha de cabeçalho com "Item" e "Descrição" não encontrada nas primeiras 30 linhas.',
+      message: 'Estrutura da planilha não reconhecida. Coluna "Item" não encontrada nas primeiras 30 linhas.',
     });
   }
+
+  // parentRow = linha acima de labelRow (para combinar grupos como "P. Unitário" + "Mat")
+  const parentRow = labelRowIdx > 0 ? rows[labelRowIdx - 1] : null;
+  const labelRow  = rows[labelRowIdx];
+  let   colMap    = detectarColunas(labelRow, parentRow);
+
+  // Logar diagnóstico para debug
+  console.log('[Orcamento] Header detectado na linha', headerIdx, '/ label na linha', labelRowIdx);
+  console.log('[Orcamento] Labels:', labelRow.slice(0, 40).map((c: any, i: number) => `[${i}]${String(c||'').substring(0,12)}`).join(' '));
+  if (parentRow) console.log('[Orcamento] Parent:', parentRow.slice(0, 40).map((c: any, i: number) => `[${i}]${String(c||'').substring(0,12)}`).join(' '));
+  console.log('[Orcamento] ColMap:', JSON.stringify(colMap));
+
+  // ─── Verificações mínimas ───────────────────────────────────────────────────
   if (colMap['item'] === undefined) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Coluna "Item" não mapeada.' });
+    // Fallback: procurar coluna com string "item" em qualquer posição do labelRow
+    labelRow.forEach((c: any, i: number) => { if (normCol(String(c||'')) === 'item' && colMap['item'] === undefined) colMap['item'] = i; });
   }
   if (colMap['descricao'] === undefined) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Coluna "Descrição" não mapeada.' });
+    // Fallback: primeira coluna não numérica com texto longo nos dados
+    for (let i = headerIdx + 2; i < Math.min(headerIdx + 10, rows.length); i++) {
+      const dataRow = rows[i];
+      for (let j = 0; j < dataRow.length; j++) {
+        const v = String(dataRow[j] || '').trim();
+        if (v.length > 5 && !/^\d/.test(v) && j !== colMap['item']) {
+          colMap['descricao'] = j;
+          console.log('[Orcamento] Descrição inferida da col', j, '=', v.substring(0, 30));
+          break;
+        }
+      }
+      if (colMap['descricao'] !== undefined) break;
+    }
   }
+
+  if (colMap['item'] === undefined) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Coluna "Item" não mapeada.' });
+  if (colMap['descricao'] === undefined) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Coluna "Descrição" não mapeada.' });
+
+  // Linha de início dos dados = após o último header row
+  const dataStartIdx = Math.max(headerIdx, labelRowIdx) + 1;
 
   // ─── 2. Helper de leitura ──────────────────────────────────────────────────
   const col = (row: any[], field: string): any => {
@@ -491,7 +554,7 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
   const itens = [];
   let ordem = 0;
 
-  for (let i = headerIdx + 1; i < rows.length; i++) {
+  for (let i = dataStartIdx; i < rows.length; i++) {
     const row = rows[i];
     const eapCodigo = String(col(row, 'item') ?? '').trim();
     const descricao = String(col(row, 'descricao') ?? '').trim();
@@ -532,6 +595,10 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     const metaUnitTotal  = custoUnitTotal * (1 - metaPerc);
     const abcServico     = String(col(row, 'abc') ?? '').trim().substring(0, 5);
 
+    // Log do primeiro item para diagnóstico
+    if (ordem === 0) {
+      console.log('[Orcamento] 1º item:', { eapCodigo, descricao: descricao.substring(0,30), unidade, quantidade, custoUnitMat, custoUnitMdo, custoTotalMat, custoTotalMdo, custoTotal });
+    }
     ordem++;
     itens.push({
       eapCodigo,
