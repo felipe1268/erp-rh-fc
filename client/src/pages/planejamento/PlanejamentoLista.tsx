@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Plus, Search, Loader2, CalendarRange, Building2, User, DollarSign,
-  TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin,
+  TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin, ArrowLeft,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -127,14 +127,24 @@ export default function PlanejamentoLista() {
       <div className="p-5">
         {/* Cabeçalho */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div>
-            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <CalendarRange className="h-5 w-5 text-blue-600" />
-              Planejamento de Obras
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Cronograma · Curva S · REFIS · Controle de Avanço
-            </p>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline" size="sm"
+              className="gap-1.5 text-slate-600"
+              onClick={() => window.history.back()}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <CalendarRange className="h-5 w-5 text-blue-600" />
+                Planejamento de Obras
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Cronograma · Curva S · REFIS · Controle de Avanço
+              </p>
+            </div>
           </div>
           <Button onClick={() => setModalAberto(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
             <Plus className="h-4 w-4" />
