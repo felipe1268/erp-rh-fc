@@ -18,6 +18,9 @@ import {
   ShoppingCart, AlertOctagon, Cloud, CloudRain, Wind, Sun, Droplets,
   MapPin, Package, Filter, Trash2, Pencil, X, RefreshCw,
   Settings, AlertCircle, Lock, LockOpen,
+  Bot, Brain, Sparkles, MessageSquare, Send, Zap,
+  CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
+  ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -29,7 +32,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao";
+type Tab = "visao-geral" | "cronograma" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -96,6 +99,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "prev-medicao",         label: "Prev. Medição",      Icon: ClipboardList },
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
+  { id: "ia-gestora",           label: "IA Gestora",         Icon: Bot },
 ];
 const TAB_IDS = TAB_DEFS.map(t => t.id);
 const LS_KEY  = "plan-tab-order";
@@ -428,6 +432,17 @@ export default function PlanejamentoDetalhe() {
             utils={utils}
             fmt={fmt}
             fPct={fPct}
+          />
+        )}
+        {aba === "ia-gestora" && (
+          <IAGestora
+            projetoId={projetoId}
+            proj={proj}
+            atividades={atividades}
+            avancos={avancos}
+            revisaoAtiva={revisaoAtiva}
+            utils={utils}
+            fmt={fmt}
           />
         )}
         {aba === "cronograma-financeiro" && (
@@ -887,12 +902,36 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: CRONOGRAMA
 // ═════════════════════════════════════════════════════════════════════════════
+type PeriodoFiltro = "tudo" | "dia" | "semana" | "mes" | "ano";
+
+function getPeriodoRange(p: PeriodoFiltro): [string, string] | null {
+  if (p === "tudo") return null;
+  const hoje = new Date();
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+  if (p === "dia") return [fmt(hoje), fmt(hoje)];
+  if (p === "semana") {
+    const ini = new Date(hoje); ini.setDate(hoje.getDate() - hoje.getDay() + 1);
+    const fim = new Date(ini); fim.setDate(ini.getDate() + 6);
+    return [fmt(ini), fmt(fim)];
+  }
+  if (p === "mes") {
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    return [fmt(ini), fmt(fim)];
+  }
+  if (p === "ano") {
+    return [`${hoje.getFullYear()}-01-01`, `${hoje.getFullYear()}-12-31`];
+  }
+  return null;
+}
+
 function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos, utils, orcamentoId }: any) {
   const [editando, setEditando] = useState(false);
   const [linhas, setLinhas] = useState<any[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [nivelAtivo, setNivelAtivo] = useState<number | null>(null);
   const [confirmExcluir, setConfirmExcluir] = useState(false);
+  const [periodoFiltro, setPeriodoFiltro] = useState<PeriodoFiltro>("tudo");
 
   const limparMutation = trpc.planejamento.limparCronograma.useMutation({
     onSuccess: () => {
@@ -983,7 +1022,22 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     </div>
   );
 
-  const displayAtiv = editando ? linhas : atividades;
+  const periodoRange = useMemo(() => getPeriodoRange(periodoFiltro), [periodoFiltro]);
+  const displayAtiv = useMemo(() => {
+    if (editando) return linhas;
+    if (!periodoRange) return atividades;
+    const [ini, fim] = periodoRange;
+    const matchIds = new Set(
+      atividades.filter((a: any) => a.dataInicio && a.dataFim && a.dataFim >= ini && a.dataInicio <= fim).map((a: any) => a.id)
+    );
+    if (matchIds.size === 0) return atividades.filter((a: any) => matchIds.has(a.id));
+    const parentEaps = new Set<string>();
+    atividades.filter((a: any) => matchIds.has(a.id) && a.eapCodigo).forEach((a: any) => {
+      const parts = String(a.eapCodigo).split(".");
+      for (let i = 1; i < parts.length; i++) parentEaps.add(parts.slice(0, i).join("."));
+    });
+    return atividades.filter((a: any) => matchIds.has(a.id) || (a.isGrupo && a.eapCodigo && parentEaps.has(a.eapCodigo)));
+  }, [editando, linhas, atividades, periodoRange]);
 
   return (
     <div className="space-y-3">
@@ -1060,10 +1114,26 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
         </div>
       )}
 
-      {/* Linha 2 — controles de nível (só fora do modo edição e se há grupos) */}
-      {!editando && gruposEap.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] text-slate-500 font-medium mr-1">Nível:</span>
+      {/* Linha 2 — controles de nível + filtro de período */}
+      {!editando && (
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Período */}
+          <div className="flex items-center gap-1">
+            <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+            {(["tudo", "dia", "semana", "mes", "ano"] as PeriodoFiltro[]).map(p => (
+              <button key={p} onClick={() => setPeriodoFiltro(p)}
+                className={`h-6 px-2 text-[11px] font-semibold rounded border transition-colors ${periodoFiltro === p ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+                {p === "tudo" ? "Tudo" : p === "dia" ? "Hoje" : p === "semana" ? "Semana" : p === "mes" ? "Mês" : "Ano"}
+              </button>
+            ))}
+            {periodoFiltro !== "tudo" && (
+              <span className="text-[10px] text-blue-600 font-medium ml-1">
+                {displayAtiv.filter((a: any) => !a.isGrupo).length} atividades
+              </span>
+            )}
+          </div>
+          {gruposEap.length > 0 && <div className="w-px h-4 bg-slate-200" />}
+          {gruposEap.length > 0 && <span className="text-[11px] text-slate-500 font-medium">Nível:</span>}
           {Array.from({ length: maxNivel }, (_, i) => i + 1).map(lvl => {
             const isAtivo = nivelAtivo === lvl;
             return (
@@ -4369,6 +4439,722 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         </div>
       </div>
 
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ABA: IA GESTORA — Assistente inteligente de gestão de obras
+// ═════════════════════════════════════════════════════════════════════════════
+type SubTabIA = "assistente" | "clima" | "simulador" | "conhecimento";
+
+function useWeatherForProject(local: string | null | undefined) {
+  const [dadosClima, setDadosClima] = useState<any>(null);
+  useEffect(() => {
+    if (!local) return;
+    const coords = getCoordsFromLocal(local);
+    const [lat, lon] = coords;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=America%2FSao_Paulo&forecast_days=7`;
+    fetch(url).then(r => r.json()).then(d => {
+      if (!d.daily) return;
+      const { daily } = d;
+      const diasUteis = daily.time.map((dt: string, i: number) => {
+        const dow = new Date(dt + "T12:00:00").getDay();
+        if (dow === 0 || dow === 6) return null;
+        return {
+          dt,
+          code:      daily.weather_code[i],
+          chuva:     parseFloat(daily.precipitation_sum[i] ?? "0"),
+          probChuva: parseInt(daily.precipitation_probability_max[i] ?? "0"),
+          vento:     parseFloat(daily.wind_speed_10m_max[i] ?? "0"),
+        };
+      }).filter(Boolean).slice(0, 5);
+      setDadosClima({ diasUteis });
+    }).catch(() => {});
+  }, [local]);
+  return dadosClima;
+}
+
+function ReactMarkdownSimple({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-1 text-sm leading-relaxed">
+      {lines.map((line, i) => {
+        if (line.startsWith("### ")) return <h3 key={i} className="font-bold text-slate-800 mt-2">{line.slice(4)}</h3>;
+        if (line.startsWith("## ")) return <h2 key={i} className="font-bold text-slate-900 mt-3 text-base">{line.slice(3)}</h2>;
+        if (line.startsWith("# ")) return <h1 key={i} className="font-black text-slate-900 mt-3 text-lg">{line.slice(2)}</h1>;
+        if (line.startsWith("- ") || line.startsWith("* ")) return <div key={i} className="flex gap-2"><span className="text-slate-400 mt-1">•</span><span dangerouslySetInnerHTML={{ __html: formatInline(line.slice(2)) }} /></div>;
+        if (line.match(/^\d+\. /)) return <div key={i} className="flex gap-2"><span className="text-slate-500 font-medium min-w-[20px]">{line.match(/^(\d+)/)?.[1]}.</span><span dangerouslySetInnerHTML={{ __html: formatInline(line.replace(/^\d+\. /, "")) }} /></div>;
+        if (line.trim() === "") return <div key={i} className="h-1" />;
+        return <p key={i} dangerouslySetInnerHTML={{ __html: formatInline(line) }} />;
+      })}
+    </div>
+  );
+}
+
+function formatInline(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/`([^`]+)`/g, "<code class='bg-slate-100 px-1 rounded text-xs'>$1</code>");
+}
+
+const SEV_CONFIG: Record<string, { bg: string; border: string; icon: any; label: string }> = {
+  critica: { bg: "bg-red-50",    border: "border-red-400",    icon: CloudLightning, label: "Crítico"  },
+  alta:    { bg: "bg-orange-50", border: "border-orange-400", icon: CloudRain,       label: "Alto"     },
+  media:   { bg: "bg-amber-50",  border: "border-amber-300",  icon: Cloud,           label: "Médio"    },
+  baixa:   { bg: "bg-blue-50",   border: "border-blue-200",   icon: Droplets,        label: "Baixo"    },
+};
+
+function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, fmt }: any) {
+  const [subTab, setSubTab] = useState<SubTabIA>("assistente");
+  const [sessaoId] = useState(() => `sess-${projetoId}-${Date.now()}`);
+
+  // ── Assistente ──────────────────────────────────────────────────
+  const [inputMsg, setInputMsg] = useState("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const { data: historico = [], refetch: refetchHistorico } = (trpc.iaCronograma as any).historico.useQuery(
+    { projetoId, sessaoId }, { enabled: !!projetoId }
+  );
+
+  const chatMut = (trpc.iaCronograma as any).chat.useMutation({
+    onSuccess: () => { refetchHistorico(); },
+  });
+
+  const limparMut = (trpc.iaCronograma as any).limparHistorico.useMutation({
+    onSuccess: () => refetchHistorico(),
+  });
+
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [historico]);
+
+  function enviarMensagem(msg?: string) {
+    const texto = (msg ?? inputMsg).trim();
+    if (!texto || chatMut.isPending) return;
+    setInputMsg("");
+    const hoje = new Date();
+    const semanaIni = new Date(hoje); semanaIni.setDate(hoje.getDate() - hoje.getDay() + 1);
+    const semanaFim = new Date(semanaIni); semanaFim.setDate(semanaIni.getDate() + 6);
+    const toDate = (d: Date) => d.toISOString().split("T")[0];
+    const atividadesSemana = atividades.filter((a: any) =>
+      a.dataInicio && a.dataFim && !a.isGrupo &&
+      a.dataFim >= toDate(semanaIni) && a.dataInicio <= toDate(semanaFim)
+    );
+    chatMut.mutate({
+      projetoId, sessaoId, mensagem: texto, tipo: "chat",
+      contexto: { atividadesSemana, clima: dadosClima },
+    });
+  }
+
+  // ── Clima ────────────────────────────────────────────────────────
+  const dadosClima = useWeatherForProject(proj?.local);
+
+  const gerarAlertasMut = (trpc.iaCronograma as any).gerarAlertasClima.useMutation({
+    onSuccess: () => refetchAlertas(),
+  });
+
+  const { data: alertas = [], refetch: refetchAlertas } = (trpc.iaCronograma as any).listarAlertas.useQuery(
+    { projetoId, somenteAtivos: true }, { enabled: !!projetoId }
+  );
+
+  const reconhecerMut     = (trpc.iaCronograma as any).reconhecerAlerta.useMutation({ onSuccess: () => refetchAlertas() });
+  const reconhecerTodosMut = (trpc.iaCronograma as any).reconhecerTodosAlertas.useMutation({ onSuccess: () => refetchAlertas() });
+
+  useEffect(() => {
+    if (dadosClima && projetoId && subTab === "clima") {
+      gerarAlertasMut.mutate({ projetoId, clima: dadosClima });
+    }
+  }, [dadosClima, subTab]);
+
+  // ── Simulador ────────────────────────────────────────────────────
+  const [simTitulo,     setSimTitulo]     = useState("");
+  const [simDescricao,  setSimDescricao]  = useState("");
+  const [simMensagem,   setSimMensagem]   = useState("");
+  const [simParams,     setSimParams]     = useState<Record<string, any>>({
+    equipeExtra: 0, aceleracaoPercent: 0, atividadesAfetadas: "", prazoRecuperarDias: 0,
+  });
+  const [simSessaoId] = useState(() => `sim-${projetoId}-${Date.now()}`);
+
+  const { data: historicoSim = [], refetch: refetchSim } = (trpc.iaCronograma as any).historico.useQuery(
+    { projetoId, sessaoId: simSessaoId }, { enabled: !!projetoId }
+  );
+
+  const simMut = (trpc.iaCronograma as any).simularCenario.useMutation({
+    onSuccess: () => { refetchSim(); refetchCenarios(); setSimMensagem(""); },
+  });
+
+  const { data: cenarios = [], refetch: refetchCenarios } = (trpc.iaCronograma as any).listarCenarios.useQuery(
+    { projetoId }, { enabled: !!projetoId }
+  );
+
+  function simularCenario() {
+    if (!simMensagem.trim() && !simTitulo.trim()) return;
+    simMut.mutate({
+      projetoId,
+      sessaoId: simSessaoId,
+      titulo:    simTitulo || "Cenário sem título",
+      descricao: simDescricao,
+      mensagem:  simMensagem || simDescricao || simTitulo,
+      parametros: simParams,
+    });
+  }
+
+  // ── Base de conhecimento ─────────────────────────────────────────
+  const { data: conhecimentos = [], refetch: refetchConhecimentos } = (trpc.iaCronograma as any).listarConhecimento.useQuery(
+    { global: false }, { enabled: !!projetoId }
+  );
+
+  const confirmarMut = (trpc.iaCronograma as any).confirmarConhecimento.useMutation({ onSuccess: () => refetchConhecimentos() });
+  const excluirConhMut = (trpc.iaCronograma as any).excluirConhecimento.useMutation({ onSuccess: () => refetchConhecimentos() });
+
+  const sugerirMut = (trpc.iaCronograma as any).sugerirRecursos.useMutation({
+    onSuccess: () => { refetchConhecimentos(); },
+  });
+
+  const hoje = new Date();
+  const semanaIni = new Date(hoje); semanaIni.setDate(hoje.getDate() - hoje.getDay() + 1);
+  const semanaFim = new Date(semanaIni); semanaFim.setDate(semanaIni.getDate() + 6);
+  const toDate = (d: Date) => d.toISOString().split("T")[0];
+  const atividadesSemana = atividades.filter((a: any) =>
+    a.dataInicio && a.dataFim && !a.isGrupo &&
+    a.dataFim >= toDate(semanaIni) && a.dataInicio <= toDate(semanaFim)
+  );
+
+  const SUB_TABS: { id: SubTabIA; label: string; Icon: any; badge?: number }[] = [
+    { id: "assistente",   label: "Assistente IA",        Icon: Bot,           badge: 0 },
+    { id: "clima",        label: "Clima × Atividades",   Icon: CloudLightning, badge: alertas.length },
+    { id: "simulador",    label: "Simulador de Cenários", Icon: Zap },
+    { id: "conhecimento", label: "Base de Conhecimento", Icon: BookOpen,      badge: conhecimentos.length },
+  ];
+
+  const PROMPTS_SUGERIDOS = [
+    "Analise o cronograma atual e aponte os principais riscos de atraso",
+    "Quais atividades do caminho crítico precisam de atenção esta semana?",
+    "Sugira um plano de ataque para recuperar o prazo perdido",
+    "Qual o impacto de chuvas nesta semana nas atividades programadas?",
+    "Que equipamentos preciso mobilizar para as atividades da próxima semana?",
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl px-5 py-4 text-white flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-white/10 rounded-xl p-2.5"><Bot className="h-6 w-6 text-amber-400" /></div>
+          <div>
+            <p className="font-bold text-lg">CRONOS — IA Gestora de Obras</p>
+            <p className="text-xs text-slate-300">
+              Assistente inteligente · Aprende com todos os projetos · {proj?.nome}
+            </p>
+          </div>
+        </div>
+        {alertas.length > 0 && (
+          <div className="bg-red-500 rounded-full px-3 py-1 text-xs font-bold animate-pulse">
+            ⚠️ {alertas.length} alerta{alertas.length > 1 ? "s" : ""} ativos
+          </div>
+        )}
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-slate-100 rounded-xl p-1 flex-wrap">
+        {SUB_TABS.map(({ id, label, Icon, badge }) => (
+          <button key={id} onClick={() => setSubTab(id)}
+            className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${subTab === id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+            {typeof badge === "number" && badge > 0 && (
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${id === "clima" ? "bg-red-500 text-white" : "bg-amber-400 text-slate-900"}`}>
+                {badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── ASSISTENTE ─────────────────────────────────────────────── */}
+      {subTab === "assistente" && (
+        <div className="space-y-3">
+          {/* Chat container */}
+          <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col" style={{ minHeight: 420, maxHeight: 560 }}>
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <MessageSquare className="h-3.5 w-3.5" />
+                Conversa com CRONOS
+              </div>
+              {historico.length > 0 && (
+                <button onClick={() => limparMut.mutate({ projetoId, sessaoId })}
+                  className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-500 transition-colors">
+                  <RotateCcw className="h-3 w-3" /> Nova conversa
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {historico.length === 0 && !chatMut.isPending && (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-8">
+                  <div className="bg-slate-50 rounded-full p-4"><Sparkles className="h-8 w-8 text-amber-400" /></div>
+                  <div>
+                    <p className="font-semibold text-slate-700">Olá! Sou o CRONOS.</p>
+                    <p className="text-xs text-slate-400 mt-1">Seu assistente de gestão de obras. Sobre o que quer conversar?</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 w-full max-w-sm">
+                    {PROMPTS_SUGERIDOS.map((p, i) => (
+                      <button key={i} onClick={() => enviarMensagem(p)}
+                        className="text-left text-xs px-3 py-2 rounded-lg border border-slate-200 hover:bg-amber-50 hover:border-amber-300 text-slate-600 transition-colors">
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {historico.map((m: any, i: number) => (
+                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {m.role === "assistant" && (
+                    <div className="flex gap-2 max-w-[90%]">
+                      <div className="bg-slate-700 rounded-full h-6 w-6 flex items-center justify-center shrink-0 mt-1">
+                        <Bot className="h-3.5 w-3.5 text-amber-400" />
+                      </div>
+                      <div className="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-none px-4 py-3 text-slate-700">
+                        <ReactMarkdownSimple text={m.conteudo} />
+                      </div>
+                    </div>
+                  )}
+                  {m.role === "user" && (
+                    <div className="bg-blue-600 text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-sm max-w-[80%]">
+                      {m.conteudo}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {chatMut.isPending && (
+                <div className="flex justify-start">
+                  <div className="flex gap-2">
+                    <div className="bg-slate-700 rounded-full h-6 w-6 flex items-center justify-center shrink-0">
+                      <Bot className="h-3.5 w-3.5 text-amber-400" />
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-none px-4 py-3">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="border-t border-slate-100 p-3 flex gap-2">
+              <input
+                ref={inputRef}
+                value={inputMsg}
+                onChange={e => setInputMsg(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviarMensagem(); } }}
+                placeholder="Faça uma pergunta técnica sobre o cronograma..."
+                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button onClick={() => enviarMensagem()} disabled={!inputMsg.trim() || chatMut.isPending}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg px-3 py-2 transition-colors">
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Atividades da semana */}
+          {atividadesSemana.length > 0 && (
+            <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-4">
+              <p className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1.5">
+                <CalendarCheck className="h-3.5 w-3.5 text-emerald-500" /> Atividades desta semana ({atividadesSemana.length})
+              </p>
+              <div className="space-y-1">
+                {atividadesSemana.slice(0, 8).map((a: any) => (
+                  <div key={a.id} className="flex items-center gap-2 text-xs text-slate-600 py-1 border-b border-slate-50">
+                    <span className="text-slate-400 text-[10px] w-10 shrink-0">{a.eapCodigo}</span>
+                    <span className="flex-1">{a.nome}</span>
+                    <span className="text-slate-400">{a.dataInicio} → {a.dataFim}</span>
+                  </div>
+                ))}
+                {atividadesSemana.length > 8 && <p className="text-[10px] text-slate-400 text-center mt-1">+{atividadesSemana.length - 8} mais</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── CLIMA × ATIVIDADES ─────────────────────────────────────── */}
+      {subTab === "clima" && (
+        <div className="space-y-4">
+          {/* Previsão do tempo */}
+          {dadosClima?.diasUteis && (
+            <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Cloud className="h-3.5 w-3.5 text-blue-500" />
+                  Previsão 7 dias — {proj?.local ?? "Projeto"}
+                </p>
+                <button onClick={() => gerarAlertasMut.mutate({ projetoId, clima: dadosClima })}
+                  disabled={gerarAlertasMut.isPending}
+                  className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium">
+                  {gerarAlertasMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                  Atualizar alertas
+                </button>
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {dadosClima.diasUteis.map((d: any, i: number) => {
+                  const dObj = new Date(d.dt + "T12:00:00");
+                  const dayName = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][dObj.getDay()];
+                  const isCrit = d.code >= 95 || d.chuva > 10;
+                  return (
+                    <div key={i} className={`rounded-lg border p-2 text-center ${isCrit ? "bg-red-50 border-red-200" : d.probChuva > 60 ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-100"}`}>
+                      <p className="text-[10px] font-bold text-slate-600">{dayName} {dObj.getDate()}</p>
+                      <p className="text-lg mt-1">{d.code >= 95 ? "⛈️" : d.chuva > 10 ? "🌧️" : d.probChuva > 60 ? "🌦️" : d.vento > 30 ? "💨" : "☀️"}</p>
+                      <p className="text-[10px] text-blue-600 font-medium">{d.chuva.toFixed(0)}mm</p>
+                      <p className="text-[10px] text-slate-400">{d.probChuva}%</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Alertas vinculados às atividades */}
+          <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-slate-700 text-white px-4 py-2.5 flex items-center justify-between">
+              <span className="text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                Alertas Clima × Atividades ({alertas.length})
+              </span>
+              {alertas.length > 0 && (
+                <button onClick={() => reconhecerTodosMut.mutate({ projetoId })}
+                  className="text-[10px] text-slate-300 hover:text-white flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3" /> Reconhecer todos
+                </button>
+              )}
+            </div>
+
+            {alertas.length === 0 && (
+              <div className="p-8 text-center text-slate-400">
+                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
+                <p className="text-sm font-medium text-emerald-600">Nenhum alerta ativo</p>
+                <p className="text-xs mt-1">O clima desta semana não impacta atividades externas programadas.</p>
+              </div>
+            )}
+
+            {alertas.length > 0 && (
+              <div className="divide-y divide-slate-50">
+                {alertas.map((alerta: any) => {
+                  const cfg = SEV_CONFIG[alerta.severidade] ?? SEV_CONFIG.media;
+                  const Icon = cfg.icon;
+                  return (
+                    <div key={alerta.id} className={`p-4 flex items-start gap-3 ${cfg.bg} border-l-4 ${cfg.border}`}>
+                      <Icon className="h-5 w-5 mt-0.5 shrink-0 text-slate-600" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded uppercase ${alerta.severidade === "critica" ? "bg-red-500 text-white" : alerta.severidade === "alta" ? "bg-orange-500 text-white" : alerta.severidade === "media" ? "bg-amber-400 text-slate-900" : "bg-blue-400 text-white"}`}>
+                            {cfg.label}
+                          </span>
+                          <span className="text-[10px] text-slate-500">{alerta.dataAlerta}</span>
+                          {alerta.nomeAtividade && (
+                            <span className="text-[10px] text-blue-600 font-medium truncate">
+                              📌 {alerta.nomeAtividade}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-700">{alerta.descricao}</p>
+                      </div>
+                      <button onClick={() => reconhecerMut.mutate({ id: alerta.id })}
+                        disabled={reconhecerMut.isPending}
+                        className="text-slate-400 hover:text-emerald-600 transition-colors shrink-0 mt-0.5">
+                        <CheckCircle2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Atividades externas da semana */}
+          {atividadesSemana.length > 0 && (
+            <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-4">
+              <p className="text-xs font-semibold text-slate-600 mb-2">
+                Atividades externas / sensíveis ao clima — esta semana
+              </p>
+              <div className="space-y-1.5">
+                {atividadesSemana.slice(0, 10).map((a: any) => {
+                  const isExt = ["concreto","escav","fundaç","armação","aço","estrutura","içamento","andaime","cobert","telhad","paviment","demoli","terra","drena","esgoto","alvenar","reboc","imperme"].some(k => a.nome?.toLowerCase().includes(k));
+                  return (
+                    <div key={a.id} className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${isExt ? "bg-amber-50 border border-amber-200" : "bg-slate-50"}`}>
+                      <span>{isExt ? "⚠️" : "✅"}</span>
+                      <span className="flex-1">{a.nome}</span>
+                      <span className="text-slate-400">{a.dataInicio} → {a.dataFim}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SIMULADOR ──────────────────────────────────────────────── */}
+      {subTab === "simulador" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            {/* Formulário do cenário */}
+            <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-4 space-y-3">
+              <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Configurar Cenário
+              </p>
+              <div>
+                <label className="text-[11px] text-slate-500 font-medium">Título do Cenário</label>
+                <input value={simTitulo} onChange={e => setSimTitulo(e.target.value)}
+                  placeholder="Ex: Adição de segunda equipe de armação"
+                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-500 font-medium">Parâmetros Quantitativos</label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  {[
+                    { key: "equipeExtra", label: "Equipes extras", type: "number", placeholder: "0" },
+                    { key: "aceleracaoPercent", label: "Aceleração %", type: "number", placeholder: "0" },
+                    { key: "prazoRecuperarDias", label: "Dias a recuperar", type: "number", placeholder: "0" },
+                    { key: "atividadesAfetadas", label: "Atividades afetadas (EAP)", type: "text", placeholder: "2.1, 2.2" },
+                  ].map(({ key, label, type, placeholder }) => (
+                    <div key={key}>
+                      <label className="text-[10px] text-slate-400">{label}</label>
+                      <input type={type} value={simParams[key]} onChange={e => setSimParams(p => ({ ...p, [key]: e.target.value }))}
+                        placeholder={placeholder}
+                        className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-500 font-medium">Descreva o cenário / plano de ataque</label>
+                <textarea value={simMensagem} onChange={e => setSimMensagem(e.target.value)}
+                  placeholder="Descreva detalhadamente o cenário que você quer simular. Ex: Quero adicionar uma equipe extra de concretagem e trabalhar aos sábados para recuperar 15 dias de atraso na fundação..."
+                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={5} />
+              </div>
+              <Button className="w-full bg-slate-800 hover:bg-slate-900 gap-1.5"
+                disabled={simMut.isPending || (!simMensagem.trim() && !simTitulo.trim())}
+                onClick={simularCenario}>
+                {simMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-amber-400" />}
+                {simMut.isPending ? "Simulando..." : "Simular com IA"}
+              </Button>
+            </div>
+
+            {/* Chat do simulador */}
+            <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col" style={{ minHeight: 400 }}>
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 text-xs text-slate-500">
+                <Brain className="h-3.5 w-3.5 text-purple-500" /> Análise do Cenário
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {historicoSim.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-center gap-2 py-8">
+                    <Brain className="h-10 w-10 text-purple-300" />
+                    <p className="text-xs text-slate-400">Configure e envie um cenário para análise técnica pela IA</p>
+                  </div>
+                )}
+                {historicoSim.map((m: any, i: number) => (
+                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                    {m.role === "assistant" && (
+                      <div className="flex gap-2 max-w-full">
+                        <div className="bg-purple-600 rounded-full h-6 w-6 flex items-center justify-center shrink-0 mt-1">
+                          <Brain className="h-3.5 w-3.5 text-white" />
+                        </div>
+                        <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3 text-slate-700 flex-1">
+                          <ReactMarkdownSimple text={m.conteudo} />
+                        </div>
+                      </div>
+                    )}
+                    {m.role === "user" && (
+                      <div className="bg-slate-700 text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-xs max-w-[80%]">
+                        {m.conteudo}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {simMut.isPending && (
+                  <div className="flex gap-2">
+                    <div className="bg-purple-600 rounded-full h-6 w-6 flex items-center justify-center shrink-0">
+                      <Brain className="h-3.5 w-3.5 text-white" />
+                    </div>
+                    <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3">
+                      <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* Follow-up input */}
+              {historicoSim.length > 0 && (
+                <div className="border-t border-slate-100 p-3 flex gap-2">
+                  <input value={simMensagem} onChange={e => setSimMensagem(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") simularCenario(); }}
+                    placeholder="Continue a análise, faça uma pergunta..."
+                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <button onClick={simularCenario} disabled={simMut.isPending || !simMensagem.trim()}
+                    className="bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white rounded-lg px-3 py-2">
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cenários salvos */}
+          {cenarios.length > 0 && (
+            <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
+              <div className="bg-slate-700 text-white px-4 py-2 text-xs font-semibold flex items-center gap-2">
+                <History className="h-3.5 w-3.5" /> Cenários Salvos ({cenarios.length})
+              </div>
+              <div className="divide-y divide-slate-50">
+                {cenarios.map((c: any) => (
+                  <div key={c.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-700">{c.titulo}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{new Date(c.criadoEm).toLocaleDateString("pt-BR")} · por {c.criadoPor}</p>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${c.status === "aprovado" ? "bg-emerald-100 text-emerald-700" : c.status === "rejeitado" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+                        {c.status}
+                      </span>
+                    </div>
+                    {c.resultadoIA && (
+                      <details className="mt-2">
+                        <summary className="text-[10px] text-blue-600 cursor-pointer hover:text-blue-700">Ver análise completa</summary>
+                        <div className="mt-2 bg-slate-50 rounded-lg p-3 text-[11px] text-slate-600 max-h-40 overflow-y-auto">
+                          <ReactMarkdownSimple text={c.resultadoIA.slice(0, 600) + (c.resultadoIA.length > 600 ? "..." : "")} />
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── BASE DE CONHECIMENTO ────────────────────────────────────── */}
+      {subTab === "conhecimento" && (
+        <div className="space-y-4">
+          {/* Sugerir recursos para a semana */}
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  Gerar sugestões de recursos para esta semana
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {atividadesSemana.length} atividades na semana · A IA vai sugerir equipamentos e efetivo e salvar na base
+                </p>
+              </div>
+              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 gap-1.5 shrink-0"
+                disabled={sugerirMut.isPending || atividadesSemana.length === 0}
+                onClick={() => sugerirMut.mutate({
+                  projetoId,
+                  atividades: atividadesSemana.slice(0, 10).map((a: any) => ({ id: a.id, nome: a.nome, dataInicio: a.dataInicio, dataFim: a.dataFim })),
+                  tipoObra: "construção civil",
+                })}>
+                {sugerirMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
+                {sugerirMut.isPending ? "Analisando..." : "Analisar com IA"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Tabela de conhecimento */}
+          <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-slate-700 text-white px-4 py-2.5 flex items-center justify-between">
+              <span className="text-xs font-semibold flex items-center gap-2">
+                <BookOpen className="h-3.5 w-3.5 text-amber-400" />
+                Base de Conhecimento — {conhecimentos.length} registros
+              </span>
+              <span className="text-[10px] text-slate-300">Compartilhada entre projetos · ✅ = confirmado · ❌ = rejeitado</span>
+            </div>
+
+            {conhecimentos.length === 0 && (
+              <div className="p-8 text-center text-slate-400">
+                <BookOpen className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                <p className="text-sm">Base vazia</p>
+                <p className="text-xs mt-1">Gere sugestões de recursos para esta semana e a IA vai popular a base automaticamente.</p>
+              </div>
+            )}
+
+            {conhecimentos.length > 0 && (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="py-2 px-3 text-left">Atividade / Palavras-chave</th>
+                    <th className="py-2 px-3 text-left">Equipamentos Sugeridos</th>
+                    <th className="py-2 px-3 text-left">Efetivo Sugerido</th>
+                    <th className="py-2 px-3 text-center w-24">Confirmações</th>
+                    <th className="py-2 px-3 text-center w-20">Fonte</th>
+                    <th className="py-2 px-3 w-16"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {conhecimentos.map((k: any) => (
+                    <tr key={k.id} className="border-b border-slate-50 hover:bg-slate-50/40">
+                      <td className="py-2 px-3 font-medium text-slate-700 max-w-[200px]">
+                        <div className="truncate">{k.palavrasChave}</div>
+                        {k.tipoAtividade && <div className="text-[10px] text-slate-400">{k.tipoAtividade}</div>}
+                      </td>
+                      <td className="py-2 px-3 text-slate-600">
+                        {(Array.isArray(k.recursosEquipamentos) ? k.recursosEquipamentos : []).slice(0, 3).map((e: string, i: number) => (
+                          <span key={i} className="inline-block bg-blue-50 text-blue-700 rounded px-1.5 py-0.5 text-[10px] mr-1 mb-0.5">{e}</span>
+                        ))}
+                      </td>
+                      <td className="py-2 px-3 text-slate-600">
+                        {(Array.isArray(k.recursosEfetivo) ? k.recursosEfetivo : []).slice(0, 3).map((e: string, i: number) => (
+                          <span key={i} className="inline-block bg-emerald-50 text-emerald-700 rounded px-1.5 py-0.5 text-[10px] mr-1 mb-0.5">{e}</span>
+                        ))}
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-emerald-600 font-bold">✅{k.confirmacoes}</span>
+                          <span className="text-red-500 font-bold">❌{k.rejeicoes}</span>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${k.fonte === "ia" ? "bg-purple-100 text-purple-700" : "bg-emerald-100 text-emerald-700"}`}>
+                          {k.fonte === "ia" ? "IA" : "Manual"}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex items-center gap-1 justify-center">
+                          <button onClick={() => confirmarMut.mutate({ id: k.id, aceitar: true })}
+                            title="Confirmar sugestão"
+                            className="text-slate-300 hover:text-emerald-500 transition-colors">
+                            <ThumbsUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => confirmarMut.mutate({ id: k.id, aceitar: false })}
+                            title="Rejeitar sugestão"
+                            className="text-slate-300 hover:text-red-500 transition-colors">
+                            <ThumbsDown className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => excluirConhMut.mutate({ id: k.id })}
+                            title="Excluir"
+                            className="text-slate-300 hover:text-red-600 transition-colors">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
