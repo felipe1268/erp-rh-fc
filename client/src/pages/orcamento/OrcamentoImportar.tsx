@@ -504,7 +504,11 @@ export default function OrcamentoImportar() {
       clearInterval(interval);
       setImportProgBdi(100);
       const bdiPct = res.bdiPercentual || 0;
-      const totalVenda = resultCusto.totalCusto * (1 + bdiPct);
+      // Usa totalVenda retornado pelo servidor (PV-2 da planilha BDI — fórmula ABNT/TCU correta).
+      // Fallback: fórmula de divisão aplicada ao custo total da EAP.
+      const bdiDivisor = 1 - bdiPct;
+      const totalVenda = (res as any).totalVenda
+        ?? (bdiDivisor > 0 ? resultCusto.totalCusto / bdiDivisor : resultCusto.totalCusto);
       setResultBdi({
         bdiPercentual:   bdiPct,
         linhasCount:     res.linhasCount,

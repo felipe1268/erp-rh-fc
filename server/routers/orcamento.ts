@@ -689,16 +689,10 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
       if (v > 0) { val = v; break; }
     }
 
-    // DEBUG temporário — mostra toda linha PV antes de qualquer filtro
-    if (isPvRow) {
-      console.log(`[BDI-DEBUG] PV row | col2="${col2}" | pct=${pct} | val=${val} | cols[0..12]:`, JSON.stringify(row.slice(0, 13)));
-    }
-
     // Extrai o valor de venda final do PV-2 ANTES do filtro de pct
     // (linhas PV são totais — não têm percentual próprio)
     if (/^PV\s*-\s*2$/.test(col2) && val > 0) {
       totalVendaBdi = val;
-      console.log(`[BDI-DEBUG] totalVendaBdi capturado: ${totalVendaBdi}`);
     }
 
     // Ignora percentuais absurdos (> 1000%) — mas linhas PV passam mesmo com pct alto
@@ -2127,6 +2121,7 @@ export const orcamentoRouter = router({
         success: true,
         linhasCount:    bdiLinhas.length + indiLinhas.length + fdLinhas.length + admLinhas.length + dfLinhas.length + tribLinhas.length + tcLinhas.length,
         bdiPercentual,
+        totalVenda:     totalVendaBdi > 0 ? totalVendaBdi : undefined,
         abasImportadas,
       };
     }),
