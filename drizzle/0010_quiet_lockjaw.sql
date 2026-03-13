@@ -1,1 +1,0 @@
-ALTER TABLE `employees` MODIFY COLUMN `tipoContrato` enum('CLT','PJ','Temporario','Estagio','Aprendiz','Horista') DEFAULT 'CLT';

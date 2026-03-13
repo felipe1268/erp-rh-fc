@@ -1,1 +1,0 @@
-ALTER TABLE `companies` ADD `grupoEmpresarial` varchar(100);
