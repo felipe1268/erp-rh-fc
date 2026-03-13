@@ -468,8 +468,9 @@ function detectarColunas(labelRow: any[], parentRow: any[] | null): Record<strin
 
 // Parseia a aba Orçamento e retorna array de itens
 // bdiPercentual: decimal fraction (ex: 0.2456 = 24.56%)
+// overrideColMap: mapeamento manual confirmado pelo usuário (se fornecido, pula detecção automática)
 // Venda = Custo × (1 + BDI%)   |   Meta = Custo × (1 − Meta%)
-function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: number = 0) {
+function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: number = 0, overrideColMap?: Record<string, number>) {
   // ─── 1. Detectar linha de cabeçalho ────────────────────────────────────────
   // Procura a linha que contém "Item" (qualquer posição).
   // Pode haver dois padrões:
@@ -509,7 +510,9 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
   // parentRow = linha acima de labelRow (para combinar grupos como "P. Unitário" + "Mat")
   const parentRow = labelRowIdx > 0 ? rows[labelRowIdx - 1] : null;
   const labelRow  = rows[labelRowIdx];
-  let   colMap    = detectarColunas(labelRow, parentRow);
+  let   colMap    = overrideColMap && Object.keys(overrideColMap).length > 0
+                    ? overrideColMap
+                    : detectarColunas(labelRow, parentRow);
 
   // Logar diagnóstico para debug
   console.log('[Orcamento] Header detectado na linha', headerIdx, '/ label na linha', labelRowIdx);
@@ -1428,7 +1431,60 @@ export const orcamentoRouter = router({
       return { ...orc, itens, insumos, bdiLinhas, margemLucroBdi, obra: obraRes, empresa: empresaRes };
     }),
 
-  // ── Importar planilha Excel (base64) ──────────────────────
+  // ── Pré-visualização de colunas (antes da importação) ───────
+  previewSheet: protectedProcedure
+    .input(z.object({
+      fileBase64: z.string().min(10),
+      fileName:   z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const XLSX = await import('xlsx');
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const wb = XLSX.read(buffer, { type: 'buffer' });
+
+      const isOrc = (n: string) => { const l = n.toLowerCase(); return l.includes('orçamento') || l.includes('orcamento') || l === 'orc'; };
+      const orcTab = wb.SheetNames.find(isOrc);
+      if (!orcTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "Orçamento" não encontrada.' });
+
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], { header: 1, defval: '' }) as any[][];
+
+      // Encontrar linha de cabeçalho e detectar colunas (mesma lógica do parser)
+      let headerIdx = -1, labelRowIdx = -1;
+      for (let i = 0; i < Math.min(30, rows.length); i++) {
+        const cells = rows[i].map((c: any) => normCol(String(c || '')));
+        if (!cells.some((c: string) => c === 'item')) continue;
+        headerIdx = i;
+        if (cells.some((c: string) => c.startsWith('descri') || c === 'denominacao')) {
+          labelRowIdx = i;
+        } else if (i + 1 < rows.length) {
+          const next = rows[i + 1].map((c: any) => normCol(String(c || '')));
+          labelRowIdx = next.some((c: string) => c.startsWith('descri') || c === 'mat' || c === 'mo') ? i + 1 : i;
+        } else { labelRowIdx = i; }
+        break;
+      }
+      if (headerIdx === -1) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Coluna "Item" não encontrada nas primeiras 30 linhas.' });
+
+      const parentRow = labelRowIdx > 0 ? rows[labelRowIdx - 1] : null;
+      const labelRow  = rows[labelRowIdx];
+      const detectedMap = detectarColunas(labelRow, parentRow);
+
+      // Todas as colunas com algum conteúdo no cabeçalho (para os dropdowns)
+      const allColumns: { idx: number; label: string }[] = [];
+      labelRow.forEach((cell: any, idx: number) => {
+        const parent = parentRow ? String(parentRow[idx] || '').trim() : '';
+        const lbl = [parent, String(cell || '').trim()].filter(Boolean).join(' ');
+        if (lbl.trim()) allColumns.push({ idx, label: lbl });
+      });
+
+      // 5 primeiras linhas de dados como amostra
+      const dataStart = Math.max(headerIdx, labelRowIdx) + 1;
+      const sampleRows: any[][] = rows.slice(dataStart, dataStart + 5).map((r: any[]) =>
+        allColumns.map(col => String(r[col.idx] ?? ''))
+      );
+
+      return { allColumns, detectedMap, sampleRows };
+    }),
+
   importar: protectedProcedure
     .input(z.object({
       companyId:      z.number(),
@@ -1437,6 +1493,7 @@ export const orcamentoRouter = router({
       fileName:       z.string(),
       metaPercentual: z.number().min(0).max(0.99).default(0.2),
       userName:       z.string(),
+      colMapping:     z.record(z.string(), z.number()).optional(),
     }))
     .mutation(async ({ input }) => {
       const XLSX = await import('xlsx');
@@ -1465,7 +1522,7 @@ export const orcamentoRouter = router({
       const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
 
       // Itens da EAP — venda calculada via Custo × (1 + BDI%)
-      const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual);
+      const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual, input.colMapping);
       if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
       // Insumos (aba "Insumos" se existir)
