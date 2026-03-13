@@ -1,0 +1,10 @@
+id,companyId,nomeEpi,categoriaEpi,vidaUtilMeses,observacoes,createdAt,updatedAt
+1,999,Capacete de Segurança,EPI,60,,2026-03-04 23:00:26,2026-03-04 23:00:26
+2,999,Botina de Segurança,Calcado,6,,2026-03-04 23:00:26,2026-03-04 23:00:26
+3,999,Luva de Segurança,EPI,3,,2026-03-04 23:00:26,2026-03-04 23:00:26
+4,999,Óculos de Proteção,EPI,12,,2026-03-04 23:00:26,2026-03-04 23:00:26
+5,999,Protetor Auricular,EPI,6,,2026-03-04 23:00:26,2026-03-04 23:00:26
+6,999,Máscara PFF2,EPI,1,,2026-03-04 23:00:26,2026-03-04 23:00:26
+7,999,Cinto Paraquedista,EPI,60,,2026-03-04 23:00:26,2026-03-04 23:00:26
+8,999,Camisa Manga Longa,Uniforme,6,,2026-03-04 23:00:26,2026-03-04 23:00:26
+9,999,Calça de Brim,Uniforme,6,,2026-03-04 23:00:26,2026-03-04 23:00:26

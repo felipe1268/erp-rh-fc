@@ -1,0 +1,12 @@
+id,companyId,nome,data,tipo,recorrente,estado,cidade,ativo,criadoPor,createdAt,updatedAt
+1,,Confraternização Universal,2026-01-01 00:00:00,nacional,1,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+3,,Tiradentes,2026-04-21 00:00:00,nacional,1,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+5,,Dia do Trabalho,2026-05-01 00:00:00,nacional,1,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+7,,Independência do Brasil,2026-09-07 00:00:00,nacional,1,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+9,,Nossa Senhora Aparecida,2026-10-12 00:00:00,nacional,1,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+11,,Finados,2026-11-02 00:00:00,nacional,1,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+13,,Proclamação da República,2026-11-15 00:00:00,nacional,1,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+15,,Natal,2026-12-25 00:00:00,nacional,1,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+17,,Carnaval,2026-02-17 00:00:00,nacional,0,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+19,,Sexta-Feira Santa,2026-04-03 00:00:00,nacional,0,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29
+21,,Corpus Christi,2026-06-04 00:00:00,nacional,0,,,1,Felipe Costa Alves,2026-03-01 21:28:29,2026-03-01 21:28:29

@@ -1,0 +1,13 @@
+id,contractId,companyId,employeeId,mesReferencia,tipo,valor,descricao,dataPagamento,status,comprovanteUrl,observacoes,criadoPor,createdAt,updatedAt
+1,1,60002,420043,2025-09,adiantamento,4800.00,Adiantamento 40% - Serviços de engenharia,2025-09-15 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+2,1,60002,420043,2025-09,fechamento,7200.00,Fechamento 60% - Serviços de engenharia,2025-09-05 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+3,1,60002,420043,2025-10,adiantamento,4800.00,Adiantamento 40% - Serviços de engenharia,2025-10-15 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+4,1,60002,420043,2025-10,fechamento,7200.00,Fechamento 60% - Serviços de engenharia,2025-10-05 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+5,1,60002,420043,2025-11,adiantamento,4800.00,Adiantamento 40% - Serviços de engenharia,2025-11-15 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+6,1,60002,420043,2025-11,fechamento,7200.00,Fechamento 60% - Serviços de engenharia,2025-11-05 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+7,1,60002,420043,2025-12,adiantamento,4800.00,Adiantamento 40% - Serviços de engenharia,2025-12-15 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+8,1,60002,420043,2025-12,fechamento,7200.00,Fechamento 60% - Serviços de engenharia,2025-12-05 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+9,1,60002,420043,2026-01,adiantamento,4800.00,Adiantamento 40% - Serviços de engenharia,2026-01-15 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+10,1,60002,420043,2026-01,fechamento,7200.00,Fechamento 60% - Serviços de engenharia,2026-01-05 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+11,1,60002,420043,2026-02,adiantamento,4800.00,Adiantamento 40% - Serviços de engenharia,2026-02-15 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:17:16
+12,1,60002,420043,2026-02,fechamento,7200.00,Fechamento 60% - Serviços de engenharia,2026-02-23 00:00:00,pago,,,Felipe Alves,2026-02-23 00:17:16,2026-02-23 00:47:21

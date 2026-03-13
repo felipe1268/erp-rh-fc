@@ -1,0 +1,3 @@
+id,empresa_terceira_id,company_id,competencia,fgts_url,fgts_status,inss_url,inss_status,folha_pagamento_url,folha_pagamento_status,comprovante_pagamento_url,comprovante_pagamento_status,gps_url,gps_status,cnd_url,cnd_status,status_geral_obrigacao,observacoes,validado_por,validado_em,created_at,updated_at
+1,1,60002,2026-03,,pendente,,pendente,,pendente,,pendente,,pendente,,pendente,pendente,,,,2026-03-01 20:01:36,2026-03-01 20:01:36
+2,30001,60002,2026-03,,pendente,,pendente,,pendente,,pendente,,pendente,,pendente,pendente,,,,2026-03-01 20:59:27,2026-03-01 20:59:27

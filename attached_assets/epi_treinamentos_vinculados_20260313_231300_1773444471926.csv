@@ -1,0 +1,8 @@
+id,companyId,nomeEpi,categoriaEpi,normaExigida,nomeTreinamento,obrigatorio,descricao,createdAt,updatedAt
+1,999,Cinto Paraquedista,,NR-35,Trabalho em Altura - NR-35,1,,2026-03-04 23:00:26,2026-03-04 23:00:26
+2,999,Talabarte Duplo com ABS,,NR-35,Trabalho em Altura - NR-35,1,,2026-03-04 23:00:26,2026-03-04 23:00:26
+3,999,Trava-Queda,,NR-35,Trabalho em Altura - NR-35,1,,2026-03-04 23:00:26,2026-03-04 23:00:26
+4,999,Luva Isolante Classe 00,,NR-10,Segurança em Instalações Elétricas - NR-10,1,,2026-03-04 23:00:26,2026-03-04 23:00:26
+5,999,Manga Isolante,,NR-10,Segurança em Instalações Elétricas - NR-10,1,,2026-03-04 23:00:26,2026-03-04 23:00:26
+6,999,Máscara de Solda,,NR-18,Soldagem e Corte a Quente,1,,2026-03-04 23:00:26,2026-03-04 23:00:26
+7,999,Respirador Semifacial,,NR-15,Proteção Respiratória,1,,2026-03-04 23:00:26,2026-03-04 23:00:26

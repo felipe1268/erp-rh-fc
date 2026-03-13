@@ -1,0 +1,125 @@
+id,companyId,tipo,titulo,textoModelo,baseJuridica,isDefault,createdAt,updatedAt
+1,0,Verbal,Advertência Verbal,"Prezado(a) [NOME_FUNCIONARIO],
+
+Por meio desta, comunicamos que V.Sa. está sendo ADVERTIDO(A) VERBALMENTE em razão de [MOTIVO], ocorrido em [DATA_OCORRENCIA].
+
+Tal conduta contraria as normas internas desta empresa e as disposições legais aplicáveis.
+
+Esperamos que este fato não se repita, sob pena de aplicação de medidas disciplinares mais severas, conforme previsto na legislação trabalhista vigente.
+
+[CIDADE], [DATA]
+
+_________________________
+[NOME_EMPRESA]
+Empregador
+
+_________________________
+[NOME_FUNCIONARIO]
+Empregado(a)
+
+Testemunhas:
+1. _________________________
+2. _________________________","Art. 482 da CLT - Constitui justa causa para rescisão do contrato de trabalho pelo empregador. A advertência verbal é a primeira medida disciplinar, de caráter educativo.",1,2026-02-21 05:37:12,2026-02-21 05:37:12
+2,0,Escrita,Advertência Escrita,"ADVERTÊNCIA DISCIPLINAR
+
+Prezado(a) [NOME_FUNCIONARIO],
+CPF: [CPF_FUNCIONARIO]
+Cargo/Função: [FUNCAO]
+
+Vimos por meio desta ADVERTI-LO(A) FORMALMENTE pela seguinte ocorrência:
+
+Motivo: [MOTIVO]
+Data da Ocorrência: [DATA_OCORRENCIA]
+Descrição: [DESCRICAO]
+
+Esta é a sua [NUMERO]ª advertência. Informamos que a reincidência poderá acarretar em penalidades mais severas, incluindo suspensão e/ou rescisão do contrato de trabalho por justa causa, nos termos do Art. 482 da CLT.
+
+Solicitamos que tome as devidas providências para que tal fato não se repita.
+
+[CIDADE], [DATA]
+
+_________________________
+[NOME_EMPRESA]
+Empregador
+
+Declaro que recebi uma cópia desta advertência:
+
+_________________________
+[NOME_FUNCIONARIO]
+Empregado(a)
+
+Testemunhas:
+1. _________________________
+2. _________________________","Art. 482 da CLT. A advertência escrita é o segundo grau de penalidade disciplinar. O empregador deve aplicar as penalidades de forma gradativa: advertência verbal, advertência escrita, suspensão e, por último, justa causa.",1,2026-02-21 05:37:12,2026-02-21 05:37:12
+3,0,Suspensao,Suspensão Disciplinar,"TERMO DE SUSPENSÃO DISCIPLINAR
+
+Prezado(a) [NOME_FUNCIONARIO],
+CPF: [CPF_FUNCIONARIO]
+Cargo/Função: [FUNCAO]
+
+Comunicamos que V.Sa. está sendo SUSPENSO(A) pelo período de [DIAS_SUSPENSAO] dia(s), a contar de [DATA_INICIO_SUSPENSAO], devendo retornar às suas atividades em [DATA_RETORNO].
+
+Motivo: [MOTIVO]
+Data da Ocorrência: [DATA_OCORRENCIA]
+Descrição: [DESCRICAO]
+
+Esta medida disciplinar é aplicada em razão da reincidência de condutas inadequadas, já tendo sido aplicadas [NUMERO_ADVERTENCIAS] advertência(s) anterior(es), conforme registros em seu prontuário.
+
+Durante o período de suspensão, não haverá remuneração correspondente aos dias suspensos, conforme Art. 474 da CLT.
+
+Informamos que a persistência em condutas contrárias às normas da empresa poderá resultar na rescisão do contrato de trabalho por justa causa, nos termos do Art. 482 da CLT.
+
+[CIDADE], [DATA]
+
+_________________________
+[NOME_EMPRESA]
+Empregador
+
+Declaro que recebi uma cópia deste termo:
+
+_________________________
+[NOME_FUNCIONARIO]
+Empregado(a)
+
+Testemunhas:
+1. _________________________
+2. _________________________","Art. 474 da CLT - A suspensão do empregado por mais de 30 (trinta) dias consecutivos importa na rescisão injusta do contrato de trabalho. A suspensão disciplinar é o terceiro grau de penalidade, aplicada após advertências verbais e escritas.",1,2026-02-21 05:37:12,2026-02-21 05:37:12
+4,0,JustaCausa,Rescisão por Justa Causa,"TERMO DE RESCISÃO POR JUSTA CAUSA
+
+Prezado(a) [NOME_FUNCIONARIO],
+CPF: [CPF_FUNCIONARIO]
+Cargo/Função: [FUNCAO]
+Data de Admissão: [DATA_ADMISSAO]
+
+Comunicamos que o seu contrato de trabalho está sendo RESCINDIDO POR JUSTA CAUSA, com fundamento no Art. 482, alínea [ALINEA], da Consolidação das Leis do Trabalho (CLT).
+
+Motivo: [MOTIVO]
+Data da Ocorrência: [DATA_OCORRENCIA]
+Descrição: [DESCRICAO]
+
+Histórico Disciplinar:
+- Advertência(s) Verbal(is): [QTD_VERBAIS]
+- Advertência(s) Escrita(s): [QTD_ESCRITAS]
+- Suspensão(ões): [QTD_SUSPENSOES]
+
+Apesar das medidas socioeducativas aplicadas anteriormente, V.Sa. persistiu na conduta inadequada, esgotando todas as possibilidades de correção disciplinar.
+
+A rescisão produz efeitos a partir de [DATA_RESCISAO].
+
+Direitos rescisórios: Saldo de salário, férias vencidas + 1/3 (se houver). Não há direito a aviso prévio, 13º proporcional, férias proporcionais, multa de 40% do FGTS e seguro-desemprego.
+
+[CIDADE], [DATA]
+
+_________________________
+[NOME_EMPRESA]
+Empregador
+
+Declaro que recebi uma cópia deste termo:
+
+_________________________
+[NOME_FUNCIONARIO]
+Empregado(a)
+
+Testemunhas:
+1. _________________________
+2. _________________________",Art. 482 da CLT - Constituem justa causa para rescisão do contrato de trabalho pelo empregador: a) ato de improbidade; b) incontinência de conduta ou mau procedimento; c) negociação habitual; d) condenação criminal; e) desídia no desempenho das respectivas funções; f) embriaguez habitual ou em serviço; g) violação de segredo da empresa; h) ato de indisciplina ou de insubordinação; i) abandono de emprego; j) ato lesivo da honra ou da boa fama; k) prática constante de jogos de azar; l) perda da habilitação profissional.,1,2026-02-21 05:37:12,2026-02-21 05:37:12

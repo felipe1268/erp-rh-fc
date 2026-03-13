@@ -1,0 +1,13 @@
+id,mandateId,companyId,tipo,dataReuniao,horaInicio,horaFim,local,pauta,ataTexto,ataDocumentoUrl,presentesJson,status,observacoes,criadoPor,createdAt,updatedAt
+1,60001,60002,ordinaria,2025-02-15 00:00:00,08:00,09:30,Escritório Central - Sala de Reuniões,"1. Posse da nova CIPA
+2. Definição do calendário de reuniões
+3. Plano de trabalho 2025
+4. Mapa de riscos - atualização","Reunião de posse da CIPA 2025/2026. Todos os membros presentes. Definido calendário mensal de reuniões (toda 3ª terça-feira). Aprovado plano de trabalho focado em: prevenção de quedas, uso correto de EPIs e ergonomia.",,,realizada,,Thiago Martins Rocha,2026-02-23 00:17:16,2026-02-23 00:17:16
+2,60001,60002,ordinaria,2025-03-18 00:00:00,08:00,09:00,Escritório Central - Sala de Reuniões,"1. Análise do acidente com José Roberto Lima
+2. Inspeção de andaimes
+3. Campanha de uso de EPIs
+4. Assuntos gerais","Discutido o acidente com o colaborador José Roberto Lima (queda de andaime). Determinada inspeção diária obrigatória de todos os andaimes. Iniciada campanha ""EPI é Vida"" em todas as obras. Próxima reunião: 15/04/2025.",,,realizada,,Thiago Martins Rocha,2026-02-23 00:17:16,2026-02-23 00:17:16
+3,60001,60002,ordinaria,2025-04-15 00:00:00,08:00,09:15,Escritório Central - Sala de Reuniões,"1. Resultado da campanha EPI é Vida
+2. SIPAT 2025 - planejamento
+3. Treinamento NR-35 reciclagem
+4. Assuntos gerais",Campanha EPI é Vida reduziu ocorrências em 40%. Definida SIPAT para setembro/2025. Programado treinamento de reciclagem NR-35 para maio/2025.,,,realizada,,Thiago Martins Rocha,2026-02-23 00:17:16,2026-02-23 00:17:16

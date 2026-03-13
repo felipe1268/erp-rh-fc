@@ -1,0 +1,116 @@
+id,kitId,epiId,nomeEpi,categoria,quantidade,obrigatorio,observacoes,createdAt
+1,1,,Capacete,EPI,1,1,,2026-03-04 23:00:26
+2,2,,Capacete de Segurança,EPI,1,1,,2026-03-04 23:00:26
+3,2,,Protetor Auricular,EPI,1,1,,2026-03-04 23:00:26
+4,2,,Máscara PFF2,EPI,1,1,,2026-03-04 23:00:26
+5,2,,Luva de Segurança,EPI,1,1,,2026-03-04 23:00:26
+6,2,,Óculos de Proteção,EPI,1,1,,2026-03-04 23:00:26
+7,2,,Camisa Manga Longa,Uniforme,2,1,,2026-03-04 23:00:26
+8,2,,Calça de Brim,Uniforme,2,1,,2026-03-04 23:00:26
+9,2,,Botina de Segurança,Calcado,1,1,,2026-03-04 23:00:26
+10,3,,Capacete de Segurança,EPI,1,1,,2026-03-04 23:00:26
+11,3,,Protetor Auricular,EPI,1,1,,2026-03-04 23:00:26
+12,3,,Máscara PFF2,EPI,1,1,,2026-03-04 23:00:26
+13,3,,Luva de Segurança,EPI,1,1,,2026-03-04 23:00:26
+14,3,,Óculos de Proteção,EPI,1,1,,2026-03-04 23:00:26
+15,3,,Camisa Manga Longa,Uniforme,2,1,,2026-03-04 23:00:26
+16,3,,Calça de Brim,Uniforme,2,1,,2026-03-04 23:00:26
+17,3,,Botina de Segurança,Calcado,1,1,,2026-03-04 23:00:26
+18,3,,Luva Isolante Classe 00,EPI,1,1,,2026-03-04 23:00:26
+19,3,,Manga Isolante,EPI,1,1,,2026-03-04 23:00:26
+20,3,,Óculos contra Arco Elétrico,EPI,1,1,,2026-03-04 23:00:26
+21,4,,Capacete de Segurança,EPI,1,1,,2026-03-04 23:00:26
+22,4,,Protetor Auricular,EPI,1,1,,2026-03-04 23:00:26
+23,4,,Máscara PFF2,EPI,1,1,,2026-03-04 23:00:26
+24,4,,Luva de Segurança,EPI,1,1,,2026-03-04 23:00:26
+25,4,,Óculos de Proteção,EPI,1,1,,2026-03-04 23:00:26
+26,4,,Camisa Manga Longa,Uniforme,2,1,,2026-03-04 23:00:26
+27,4,,Calça de Brim,Uniforme,2,1,,2026-03-04 23:00:26
+28,4,,Botina de Segurança,Calcado,1,1,,2026-03-04 23:00:26
+29,4,,Máscara de Solda,EPI,1,1,,2026-03-04 23:00:26
+30,4,,Avental de Raspa,EPI,1,1,,2026-03-04 23:00:26
+31,4,,Luva de Raspa,EPI,1,1,,2026-03-04 23:00:26
+32,4,,Perneira de Raspa,EPI,1,1,,2026-03-04 23:00:26
+33,5,,Capacete de Segurança,EPI,1,1,,2026-03-04 23:00:26
+34,5,,Protetor Auricular,EPI,1,1,,2026-03-04 23:00:26
+35,5,,Máscara PFF2,EPI,1,1,,2026-03-04 23:00:26
+36,5,,Luva de Segurança,EPI,1,1,,2026-03-04 23:00:26
+37,5,,Óculos de Proteção,EPI,1,1,,2026-03-04 23:00:26
+38,5,,Camisa Manga Longa,Uniforme,2,1,,2026-03-04 23:00:26
+39,5,,Calça de Brim,Uniforme,2,1,,2026-03-04 23:00:26
+40,5,,Botina de Segurança,Calcado,1,1,,2026-03-04 23:00:26
+41,5,,Luva Anticorte,EPI,1,1,,2026-03-04 23:00:26
+42,6,,Capacete de Segurança,EPI,1,1,,2026-03-04 23:00:26
+43,6,,Protetor Auricular,EPI,1,1,,2026-03-04 23:00:26
+44,6,,Máscara PFF2,EPI,1,1,,2026-03-04 23:00:26
+45,6,,Luva de Segurança,EPI,1,1,,2026-03-04 23:00:26
+46,6,,Óculos de Proteção,EPI,1,1,,2026-03-04 23:00:26
+47,6,,Camisa Manga Longa,Uniforme,2,1,,2026-03-04 23:00:26
+48,6,,Calça de Brim,Uniforme,2,1,,2026-03-04 23:00:26
+49,6,,Botina de Segurança,Calcado,1,1,,2026-03-04 23:00:26
+50,6,,Cinto Paraquedista,EPI,1,1,,2026-03-04 23:00:26
+51,6,,Talabarte Duplo com ABS,EPI,1,1,,2026-03-04 23:00:26
+52,6,,Trava-Queda,EPI,1,1,,2026-03-04 23:00:26
+53,7,,Capacete de Segurança,EPI,1,1,,2026-03-04 23:00:26
+54,7,,Protetor Auricular,EPI,1,1,,2026-03-04 23:00:26
+55,7,,Máscara PFF2,EPI,1,1,,2026-03-04 23:00:26
+56,7,,Luva de Segurança,EPI,1,1,,2026-03-04 23:00:26
+57,7,,Óculos de Proteção,EPI,1,1,,2026-03-04 23:00:26
+58,7,,Camisa Manga Longa,Uniforme,2,1,,2026-03-04 23:00:26
+59,7,,Calça de Brim,Uniforme,2,1,,2026-03-04 23:00:26
+60,7,,Botina de Segurança,Calcado,1,1,,2026-03-04 23:00:26
+61,7,,Protetor Auricular Tipo Concha,EPI,1,1,,2026-03-04 23:00:26
+62,8,,Capacete,EPI,1,1,,2026-03-04 23:00:47
+63,9,,Capacete,EPI,1,1,,2026-03-04 23:33:36
+64,10,,Capacete,EPI,1,1,,2026-03-04 23:51:09
+65,11,,Capacete,EPI,1,1,,2026-03-05 00:04:36
+66,12,,Capacete,EPI,1,1,,2026-03-05 00:20:23
+67,13,,Capacete,EPI,1,1,,2026-03-05 00:20:46
+68,14,,Capacete,EPI,1,1,,2026-03-05 00:21:15
+85,16,,Capacete,EPI,1,1,,2026-03-05 00:31:50
+86,17,,Capacete,EPI,1,1,,2026-03-05 00:32:11
+87,18,,Capacete de Segurança,EPI,1,1,,2026-03-05 00:33:07
+88,18,,Protetor Auricular,EPI,1,1,,2026-03-05 00:33:07
+89,18,,Máscara PFF2,EPI,1,1,,2026-03-05 00:33:07
+90,18,,Luva de Segurança,EPI,1,1,,2026-03-05 00:33:07
+91,18,,Óculos de Proteção,EPI,1,1,,2026-03-05 00:33:07
+92,18,,Camisa Manga Longa,Uniforme,2,1,,2026-03-05 00:33:07
+93,18,,Calça de Brim,Uniforme,2,1,,2026-03-05 00:33:07
+94,18,,Botina de Segurança,Calcado,1,1,,2026-03-05 00:33:07
+95,19,,Capacete,EPI,1,1,,2026-03-05 00:56:19
+96,20,,Capacete,EPI,1,1,,2026-03-05 00:56:38
+97,21,,Capacete,EPI,1,1,,2026-03-05 01:38:30
+98,22,,Capacete,EPI,1,1,,2026-03-05 01:38:50
+99,23,,Capacete,EPI,1,1,,2026-03-05 01:40:38
+100,24,,Capacete,EPI,1,1,,2026-03-05 01:48:50
+101,25,,Capacete,EPI,1,1,,2026-03-05 01:56:41
+102,26,,Capacete,EPI,1,1,,2026-03-05 02:10:09
+103,27,,Capacete,EPI,1,1,,2026-03-05 02:45:34
+104,28,,Capacete,EPI,1,1,,2026-03-05 02:57:37
+105,29,,Capacete,EPI,1,1,,2026-03-05 03:03:05
+106,30,,Capacete,EPI,1,1,,2026-03-05 03:05:13
+30001,30001,,Capacete,EPI,1,1,,2026-03-05 08:00:27
+30002,30002,,Capacete,EPI,1,1,,2026-03-05 08:00:53
+30003,30003,,Capacete,EPI,1,1,,2026-03-05 11:36:31
+30004,30004,,Capacete,EPI,1,1,,2026-03-05 13:02:03
+30005,30005,,Capacete,EPI,1,1,,2026-03-05 13:16:08
+30006,30006,,Capacete,EPI,1,1,,2026-03-05 13:32:42
+60001,60001,,Capacete,EPI,1,1,,2026-03-09 17:06:47
+60002,60002,,Capacete,EPI,1,1,,2026-03-09 17:07:19
+60003,60003,,Capacete,EPI,1,1,,2026-03-09 17:07:44
+60004,60004,,Capacete,EPI,1,1,,2026-03-09 17:08:21
+60005,60005,,Capacete,EPI,1,1,,2026-03-09 17:09:03
+60006,60006,,Capacete,EPI,1,1,,2026-03-09 20:24:44
+60007,60007,,Capacete,EPI,1,1,,2026-03-09 20:26:05
+60008,60008,,Capacete,EPI,1,1,,2026-03-09 20:36:03
+60009,60009,,Capacete,EPI,1,1,,2026-03-09 20:59:12
+60010,60010,,Capacete,EPI,1,1,,2026-03-09 23:55:55
+60011,60011,,Capacete,EPI,1,1,,2026-03-10 00:03:38
+90009,15,,Botina de Segurança,Calcado,1,1,,2026-03-12 19:32:05
+90010,15,,Calça de Brim,Uniforme,2,1,,2026-03-12 19:32:05
+90011,15,,Camisa Manga Longa,Uniforme,2,1,,2026-03-12 19:32:05
+90012,15,,Capacete de Segurança,EPI,1,1,,2026-03-12 19:32:05
+90013,15,,Luva de Segurança Vaqueta Mista,EPI,1,1,,2026-03-12 19:32:05
+90014,15,,Máscara PFF2,EPI,1,1,,2026-03-12 19:32:05
+90015,15,,Óculos de Proteção,EPI,1,1,,2026-03-12 19:32:05
+90016,15,,Protetor Auricular Tipo Plug,EPI,1,1,,2026-03-12 19:32:05

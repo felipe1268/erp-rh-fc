@@ -1,0 +1,3 @@
+id,companyId,obraId,dataSolicitacao,horaInicio,horaFim,motivo,status,solicitadoPor,solicitadoPorId,aprovadoPor,aprovadoPorId,aprovadoEm,motivoRejeicao,observacaoAdmin,observacoes,createdAt,updatedAt
+120001,60002,90001,2026-03-14 00:00:00,07:00,16:00,"Limpeza de entulhos dos pavimentos.
+Durante a semana é inviável a decida de entulhos pelo uso da cremalheira ser o único acesso aos pavimentos.",aprovada,Wesley Leonard De Oliveira,2880439,Felipe Costa Alves,601043,2026-03-13 00:15:28,,,,2026-03-12 19:55:47,2026-03-13 00:15:28

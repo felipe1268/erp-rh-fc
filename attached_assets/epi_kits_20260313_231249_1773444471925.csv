@@ -1,0 +1,48 @@
+id,companyId,nome,funcao,descricao,ativo,createdAt,updatedAt
+1,1,,Teste,,1,2026-03-04 23:00:26,2026-03-04 23:00:26
+2,999,Kit Básico Obra,Geral,Kit padrão para todos os funcionários de obra (NR-6),1,2026-03-04 23:00:26,2026-03-04 23:00:26
+3,999,Kit Eletricista,Eletricista,Kit específico para Eletricista,1,2026-03-04 23:00:26,2026-03-04 23:00:26
+4,999,Kit Soldador,Soldador,Kit específico para Soldador,1,2026-03-04 23:00:26,2026-03-04 23:00:26
+5,999,Kit Carpinteiro,Carpinteiro,Kit específico para Carpinteiro,1,2026-03-04 23:00:26,2026-03-04 23:00:26
+6,999,Kit Trabalho em Altura,Trabalho em Altura,Kit específico para Trabalho em Altura,1,2026-03-04 23:00:26,2026-03-04 23:00:26
+7,999,Kit Operador de Máquinas,Operador de Máquinas,Kit específico para Operador de Máquinas,1,2026-03-04 23:00:26,2026-03-04 23:00:26
+8,1,Kit Teste,Teste,,1,2026-03-04 23:00:47,2026-03-04 23:00:47
+9,1,Kit Teste,Teste,,1,2026-03-04 23:33:36,2026-03-04 23:33:36
+10,1,Kit Teste,Teste,,1,2026-03-04 23:51:09,2026-03-04 23:51:09
+11,1,Kit Teste,Teste,,1,2026-03-05 00:04:36,2026-03-05 00:04:36
+12,1,Kit Teste,Teste,,1,2026-03-05 00:20:22,2026-03-05 00:20:22
+13,1,Kit Teste,Teste,,1,2026-03-05 00:20:46,2026-03-05 00:20:46
+14,1,Kit Teste,Teste,,1,2026-03-05 00:21:15,2026-03-05 00:21:15
+15,60002,Kit Básico de Contratação,Geral,Kit padrão de EPIs necessários para equipar um novo funcionário,1,2026-03-05 00:29:41,2026-03-05 00:29:41
+16,1,Kit Teste,Teste,,1,2026-03-05 00:31:50,2026-03-05 00:31:50
+17,1,Kit Teste,Teste,,1,2026-03-05 00:32:11,2026-03-05 00:32:11
+18,60004,Kit Básico Contratação,Geral,Kit padrão de EPIs para contratação de novos funcionários (NR-6),1,2026-03-05 00:33:07,2026-03-05 00:33:07
+19,1,Kit Teste,Teste,,1,2026-03-05 00:56:19,2026-03-05 00:56:19
+20,1,Kit Teste,Teste,,1,2026-03-05 00:56:38,2026-03-05 00:56:38
+21,1,Kit Teste,Teste,,1,2026-03-05 01:38:30,2026-03-05 01:38:30
+22,1,Kit Teste,Teste,,1,2026-03-05 01:38:50,2026-03-05 01:38:50
+23,1,Kit Teste,Teste,,1,2026-03-05 01:40:38,2026-03-05 01:40:38
+24,1,Kit Teste,Teste,,1,2026-03-05 01:48:50,2026-03-05 01:48:50
+25,1,Kit Teste,Teste,,1,2026-03-05 01:56:41,2026-03-05 01:56:41
+26,1,Kit Teste,Teste,,1,2026-03-05 02:10:09,2026-03-05 02:10:09
+27,1,Kit Teste,Teste,,1,2026-03-05 02:45:34,2026-03-05 02:45:34
+28,1,Kit Teste,Teste,,1,2026-03-05 02:57:37,2026-03-05 02:57:37
+29,1,Kit Teste,Teste,,1,2026-03-05 03:03:05,2026-03-05 03:03:05
+30,1,Kit Teste,Teste,,1,2026-03-05 03:05:13,2026-03-05 03:05:13
+30001,1,Kit Teste,Teste,,1,2026-03-05 08:00:27,2026-03-05 08:00:27
+30002,1,Kit Teste,Teste,,1,2026-03-05 08:00:53,2026-03-05 08:00:53
+30003,1,Kit Teste,Teste,,1,2026-03-05 11:36:31,2026-03-05 11:36:31
+30004,1,Kit Teste,Teste,,1,2026-03-05 13:02:02,2026-03-05 13:02:02
+30005,1,Kit Teste,Teste,,1,2026-03-05 13:16:08,2026-03-05 13:16:08
+30006,1,Kit Teste,Teste,,1,2026-03-05 13:32:42,2026-03-05 13:32:42
+60001,1,Kit Teste,Teste,,1,2026-03-09 17:06:47,2026-03-09 17:06:47
+60002,1,Kit Teste,Teste,,1,2026-03-09 17:07:19,2026-03-09 17:07:19
+60003,1,Kit Teste,Teste,,1,2026-03-09 17:07:44,2026-03-09 17:07:44
+60004,1,Kit Teste,Teste,,1,2026-03-09 17:08:21,2026-03-09 17:08:21
+60005,1,Kit Teste,Teste,,1,2026-03-09 17:09:03,2026-03-09 17:09:03
+60006,1,Kit Teste,Teste,,1,2026-03-09 20:24:44,2026-03-09 20:24:44
+60007,1,Kit Teste,Teste,,1,2026-03-09 20:26:05,2026-03-09 20:26:05
+60008,1,Kit Teste,Teste,,1,2026-03-09 20:36:03,2026-03-09 20:36:03
+60009,1,Kit Teste,Teste,,1,2026-03-09 20:59:12,2026-03-09 20:59:12
+60010,1,Kit Teste,Teste,,1,2026-03-09 23:55:55,2026-03-09 23:55:55
+60011,1,Kit Teste,Teste,,1,2026-03-10 00:03:38,2026-03-10 00:03:38

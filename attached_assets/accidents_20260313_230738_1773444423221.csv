@@ -1,0 +1,1 @@
+id,companyId,employeeId,dataAcidente,horaAcidente,tipoAcidente,gravidade,localAcidente,descricao,parteCorpoAtingida,catNumero,catData,diasAfastamento,testemunhas,acaoCorretiva,documentoUrl,createdAt,updatedAt

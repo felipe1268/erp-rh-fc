@@ -1,0 +1,3570 @@
+id,companyId,employeeId,employeeName,employeeCpf,employeeFuncao,tipoMovimentacao,statusAnterior,statusNovo,recipientId,recipientName,recipientEmail,titulo,corpo,statusEnvio,erroMensagem,trackingId,lido,lidoEm,disparadoPor,disparadoPorId,enviadoEm,createdAt
+60001,60002,450001,"	MATHEUS DONIZETTI ALVES RODRIGUES",547.148.568-80,,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — 	MATHEUS DONIZETTI ALVES RODRIGUES,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: 	MATHEUS DONIZETTI ALVES RODRIGUES
+│  CPF: 547.148.568-80
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em segunda-feira, 23 de fevereiro de 2026, às 17:08.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,558da808-8c16-4a91-bd31-b9f4e123e9bc,0,,Ana Beatriz  Silva Conceição,570172,2026-02-23 20:08:10,2026-02-23 20:08:10
+60002,60002,450001,"	MATHEUS DONIZETTI ALVES RODRIGUES",547.148.568-80,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — 	MATHEUS DONIZETTI ALVES RODRIGUES,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: 	MATHEUS DONIZETTI ALVES RODRIGUES
+│  CPF: 547.148.568-80
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-23
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em segunda-feira, 23 de fevereiro de 2026, às 17:43.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,055eedac-5333-45db-ad3e-a42f68d08ff9,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-23 20:43:29,2026-02-23 20:43:29
+60003,60002,450001,"	MATHEUS DONIZETTI ALVES RODRIGUES",547.148.568-80,SERVENTE,demissao,Ativo,Desligado,30001,Isabela Velloso,isabelavelloso94@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — 	MATHEUS DONIZETTI ALVES RODRIGUES,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: 	MATHEUS DONIZETTI ALVES RODRIGUES
+│  CPF: 547.148.568-80
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-23
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em segunda-feira, 23 de fevereiro de 2026, às 17:43.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,2e88de05-9694-4dd3-a9ef-ff264f94ec0c,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-23 20:43:29,2026-02-23 20:43:29
+60004,60002,450001,"	MATHEUS DONIZETTI ALVES RODRIGUES",547.148.568-80,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — 	MATHEUS DONIZETTI ALVES RODRIGUES,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: 	MATHEUS DONIZETTI ALVES RODRIGUES
+│  CPF: 547.148.568-80
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-23
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em segunda-feira, 23 de fevereiro de 2026, às 17:46.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,77b153ed-dc9f-4b27-9df6-35758dec7318,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-23 20:46:14,2026-02-23 20:46:14
+60005,60002,450001,"	MATHEUS DONIZETTI ALVES RODRIGUES",547.148.568-80,SERVENTE,demissao,Ativo,Desligado,30001,Isabela Velloso,isabelavelloso94@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — 	MATHEUS DONIZETTI ALVES RODRIGUES,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: 	MATHEUS DONIZETTI ALVES RODRIGUES
+│  CPF: 547.148.568-80
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-23
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em segunda-feira, 23 de fevereiro de 2026, às 17:46.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,51121bb2-a5f3-4d36-8330-a9e4ddb01586,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-23 20:46:14,2026-02-23 20:46:14
+90001,60002,480001,felipe costa alves,362.506.888-53,,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — felipe costa alves,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa noite,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: felipe costa alves
+│  CPF: 362.506.888-53
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em segunda-feira, 23 de fevereiro de 2026, às 23:18.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,7498e0c3-9e23-43de-87e4-a63cc4513c95,0,,Felipe Costa Alves,601043,2026-02-24 02:18:26,2026-02-24 02:18:26
+120001,60002,420194,ALEX ROBSON CARNEIRO PINTO,144.642.138-47,PEDREIRO I,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ALEX ROBSON CARNEIRO PINTO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ALEX ROBSON CARNEIRO PINTO
+│  CPF: 144.642.138-47
+│  Função: PEDREIRO I
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-24
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 24 de fevereiro de 2026, às 16:11.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,9cf5607f-9f6e-472d-bcb6-3664779113ba,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-24 19:11:03,2026-02-24 19:11:03
+150001,60002,420108,EMERSON RODRIGO DOS SANTOS,366.221.528-45,SERVENTE,afastamento,Ativo,Recluso,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Afastamento — EMERSON RODRIGO DOS SANTOS,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE AFASTAMENTO
+
+Boa tarde,
+
+Comunicamos que o colaborador abaixo identificado teve um afastamento registrado na empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO AFASTAMENTO
+┌──────────────────────────────────────────────┐
+│  Colaborador: EMERSON RODRIGO DOS SANTOS
+│  CPF: 366.221.528-45
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Motivo: Reclusão
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: AFASTADO
+
+Providências necessárias:
+  • Comunicação ao INSS (se afastamento superior a 15 dias)
+  • Comunicação à seguradora sobre o afastamento
+  • Atualização do controle de ponto e folha de pagamento
+  • Acompanhamento do prazo de retorno
+  • Agendamento de ASO de retorno (quando aplicável)
+
+Registro efetuado em quarta-feira, 25 de fevereiro de 2026, às 15:30.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,0c6eb41f-79cd-405b-8805-515011d78c62,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-25 18:30:01,2026-02-25 18:30:01
+180001,60002,420196,REGINALDO DA SILVA OLIVEIRA,405.930.158-27,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — REGINALDO DA SILVA OLIVEIRA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: REGINALDO DA SILVA OLIVEIRA
+│  CPF: 405.930.158-27
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-26
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quinta-feira, 26 de fevereiro de 2026, às 16:19.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,189c3ccc-9099-4066-b2fe-bc5c9bf0dfe4,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-26 19:19:44,2026-02-26 19:19:44
+180002,60002,420195,ROBERTO DAMASIO,071.209.708-28,PEDREIRO,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ROBERTO DAMASIO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ROBERTO DAMASIO
+│  CPF: 071.209.708-28
+│  Função: PEDREIRO
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-26
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quinta-feira, 26 de fevereiro de 2026, às 16:36.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,c671b777-6057-45ed-a3e8-3c11c32f4c9b,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-26 19:36:40,2026-02-26 19:36:40
+180003,60002,420209,ROGERIO DIAS DE FREITAS,284.871.468-99,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ROGERIO DIAS DE FREITAS,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ROGERIO DIAS DE FREITAS
+│  CPF: 284.871.468-99
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-26
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quinta-feira, 26 de fevereiro de 2026, às 16:44.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,acef899b-4b6b-4db6-845b-125970ce23b7,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-26 19:44:46,2026-02-26 19:44:46
+180004,60002,420205,VALDINEI LUIS AMARO MARTINS,379.274.558-50,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — VALDINEI LUIS AMARO MARTINS,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: VALDINEI LUIS AMARO MARTINS
+│  CPF: 379.274.558-50
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-26
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quinta-feira, 26 de fevereiro de 2026, às 17:20.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,2e1a7321-7125-4c06-8257-d9df80bfb4ce,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-26 20:20:54,2026-02-26 20:20:54
+210001,60002,420123,WILLIANS FELIPE DA SILVA,378.677.228-23,SERVENTE,afastamento,Ativo,Recluso,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Afastamento — WILLIANS FELIPE DA SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE AFASTAMENTO
+
+Bom dia,
+
+Comunicamos que o colaborador abaixo identificado teve um afastamento registrado na empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO AFASTAMENTO
+┌──────────────────────────────────────────────┐
+│  Colaborador: WILLIANS FELIPE DA SILVA
+│  CPF: 378.677.228-23
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Motivo: Reclusão
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: AFASTADO
+
+Providências necessárias:
+  • Comunicação ao INSS (se afastamento superior a 15 dias)
+  • Comunicação à seguradora sobre o afastamento
+  • Atualização do controle de ponto e folha de pagamento
+  • Acompanhamento do prazo de retorno
+  • Agendamento de ASO de retorno (quando aplicável)
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 09:00.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,9aff1341-11ca-466a-b1f3-01047a889644,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 12:00:02,2026-02-27 12:00:02
+210002,60002,420186,GLAYSON SEVERINO DA SILVA,113.111.554-65,PEDREIRO,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — GLAYSON SEVERINO DA SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: GLAYSON SEVERINO DA SILVA
+│  CPF: 113.111.554-65
+│  Função: PEDREIRO
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-27
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 09:25.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,7392b3d5-4a02-4a5b-be99-df900abcd966,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 12:25:36,2026-02-27 12:25:36
+210003,60002,420203,ITALO CAUA PEDRO DA SILVA,161.589.484-54,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ITALO CAUA PEDRO DA SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ITALO CAUA PEDRO DA SILVA
+│  CPF: 161.589.484-54
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-27
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 09:28.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,d7d1c8b0-c015-4153-9494-7065813047a3,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 12:28:27,2026-02-27 12:28:27
+210004,60002,420201,KELVIS ALVES PESSOA,178.269.274-63,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — KELVIS ALVES PESSOA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: KELVIS ALVES PESSOA
+│  CPF: 178.269.274-63
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-27
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 09:30.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,73231340-6017-4047-b99c-009b5e7c11fc,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 12:30:08,2026-02-27 12:30:08
+210005,60002,420182,JOAO DARC DOS SANTOS,693.126.484-20,MESTRE DE OBRAS,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JOAO DARC DOS SANTOS,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOAO DARC DOS SANTOS
+│  CPF: 693.126.484-20
+│  Função: MESTRE DE OBRAS
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-27
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 09:32.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,7909407f-852e-4f84-bae2-3f4dc2f6a118,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 12:32:35,2026-02-27 12:32:35
+240001,60002,420189,JOSE ALBERTO SILVA,268.776.648-84,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JOSE ALBERTO SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOSE ALBERTO SILVA
+│  CPF: 268.776.648-84
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-27
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 15:28.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,cac0317a-b6cf-4dab-a5e0-4f388e92de38,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 18:28:53,2026-02-27 18:28:53
+240002,60002,420198,BRUNO SERRA GALVAO,358.563.748-51,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — BRUNO SERRA GALVAO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: BRUNO SERRA GALVAO
+│  CPF: 358.563.748-51
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-27
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 17:11.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,a237ca43-2290-477a-9fec-07ca2b86c4f0,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 20:11:29,2026-02-27 20:11:29
+240003,60002,420211,DENIS AUGUSTO DE JESUS ARAUJO,411.733.288-07,PEDREIRO I,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — DENIS AUGUSTO DE JESUS ARAUJO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: DENIS AUGUSTO DE JESUS ARAUJO
+│  CPF: 411.733.288-07
+│  Função: PEDREIRO I
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-27
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 17:18.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,1d206d54-3565-441c-9fc7-f42abd14c74b,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 20:18:08,2026-02-27 20:18:08
+240004,60002,420202,EDUARDO HENRIQUE DA SILVA PAIVA,157.143.124-14,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — EDUARDO HENRIQUE DA SILVA PAIVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: EDUARDO HENRIQUE DA SILVA PAIVA
+│  CPF: 157.143.124-14
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-27
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 17:33.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,1ee412f5-bde6-435d-abaa-02390a7cb5f6,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 20:33:46,2026-02-27 20:33:46
+240005,60002,420108,EMERSON RODRIGO DOS SANTOS,366.221.528-45,SERVENTE,afastamento,Ativo,Recluso,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Afastamento — EMERSON RODRIGO DOS SANTOS,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE AFASTAMENTO
+
+Boa tarde,
+
+Comunicamos que o colaborador abaixo identificado teve um afastamento registrado na empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO AFASTAMENTO
+┌──────────────────────────────────────────────┐
+│  Colaborador: EMERSON RODRIGO DOS SANTOS
+│  CPF: 366.221.528-45
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Motivo: Reclusão
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: AFASTADO
+
+Providências necessárias:
+  • Comunicação ao INSS (se afastamento superior a 15 dias)
+  • Comunicação à seguradora sobre o afastamento
+  • Atualização do controle de ponto e folha de pagamento
+  • Acompanhamento do prazo de retorno
+  • Agendamento de ASO de retorno (quando aplicável)
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 17:45.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,ff91e197-0060-4c24-8fee-9491f365000f,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 20:45:54,2026-02-27 20:45:54
+240006,60002,420190,FERNANDO AMORIM VIEIRA,201.868.338-14,PEDREIRO,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — FERNANDO AMORIM VIEIRA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: FERNANDO AMORIM VIEIRA
+│  CPF: 201.868.338-14
+│  Função: PEDREIRO
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-27
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sexta-feira, 27 de fevereiro de 2026, às 17:50.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,1d4bfa08-e1c6-4ca0-af99-c3086e19db0d,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-02-27 20:50:39,2026-02-27 20:50:39
+270001,60002,420070,ACACIO LESCURA DE CAMARGO,199.141.028-08,AUXILIAR DE PINTURA,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ACACIO LESCURA DE CAMARGO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ACACIO LESCURA DE CAMARGO
+│  CPF: 199.141.028-08
+│  Função: AUXILIAR DE PINTURA
+│  Setor: OBRA
+│  Data do Desligamento: 2026-02-28
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sábado, 28 de fevereiro de 2026, às 13:57.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,8ec757d4-13b6-4315-9eee-bcdfc8d52a54,0,,Felipe Alves,1,2026-02-28 16:57:45,2026-02-28 16:57:45
+300001,60002,420070,ACACIO LESCURA DE CAMARGO,199.141.028-08,AUXILIAR DE PINTURA,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ACACIO LESCURA DE CAMARGO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa noite,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ACACIO LESCURA DE CAMARGO
+│  CPF: 199.141.028-08
+│  Função: AUXILIAR DE PINTURA
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-01
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em domingo, 1 de março de 2026, às 20:27.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,45734911-c3a6-4358-83b2-d141866f356b,0,,Felipe Costa Alves,601043,2026-03-01 23:27:32,2026-03-01 23:27:32
+300002,60002,420199,JULIANO RODRIGO DINIZ DE SOUSA,371.901.628-52,MEIO OFICIAL DE PEDREIRO,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JULIANO RODRIGO DINIZ DE SOUSA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa noite,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JULIANO RODRIGO DINIZ DE SOUSA
+│  CPF: 371.901.628-52
+│  Função: MEIO OFICIAL DE PEDREIRO
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-02
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em segunda-feira, 2 de março de 2026, às 00:05.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,24934123-5d81-4fc8-bb0e-6bd7c6f41eed,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-02 03:05:47,2026-03-02 03:05:47
+330001,60002,420082,ALEXANDRO GONCALVES DO NASCIMENTO,259.915.518-55,SERVENTE,afastamento,Ativo,Afastado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Afastamento — ALEXANDRO GONCALVES DO NASCIMENTO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE AFASTAMENTO
+
+Bom dia,
+
+Comunicamos que o colaborador abaixo identificado teve um afastamento registrado na empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO AFASTAMENTO
+┌──────────────────────────────────────────────┐
+│  Colaborador: ALEXANDRO GONCALVES DO NASCIMENTO
+│  CPF: 259.915.518-55
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Motivo: Afastamento (doença/acidente)
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: AFASTADO
+
+Providências necessárias:
+  • Comunicação ao INSS (se afastamento superior a 15 dias)
+  • Comunicação à seguradora sobre o afastamento
+  • Atualização do controle de ponto e folha de pagamento
+  • Acompanhamento do prazo de retorno
+  • Agendamento de ASO de retorno (quando aplicável)
+
+Registro efetuado em segunda-feira, 2 de março de 2026, às 08:31.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,f8e6abf1-e789-45c8-941e-a4bec83e5091,0,,Felipe Costa Alves,601043,2026-03-02 11:31:06,2026-03-02 11:31:06
+360001,60002,1260001,RODNEI ALEXANDRE DOS SANTOS SILVA,347.819.168-80,TÉCNICO DE SEGURANÇA DO TRABALHO,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — RODNEI ALEXANDRE DOS SANTOS SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: RODNEI ALEXANDRE DOS SANTOS SILVA
+│  CPF: 347.819.168-80
+│  Função: TÉCNICO DE SEGURANÇA DO TRABALHO
+│  Setor: OBRA
+│  Data de Admissão: 2025-02-06
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em segunda-feira, 2 de março de 2026, às 14:10.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,04abc6c5-f532-42dd-9ab3-ad8eae66be63,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-02 17:10:34,2026-03-02 17:10:34
+360002,60002,420200,JOSE LUCIO DE SOUZA,756.936.236-53,PEDREIRO,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JOSE LUCIO DE SOUZA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOSE LUCIO DE SOUZA
+│  CPF: 756.936.236-53
+│  Função: PEDREIRO
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-02
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em segunda-feira, 2 de março de 2026, às 17:55.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,59196740-a448-466c-9fa9-5da70ec6d7c2,0,,Nayara Rodrigues,1020024,2026-03-02 20:55:16,2026-03-02 20:55:16
+390001,60002,420192,JULIO CESAR DOS SANTOS,342.452.318-66,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JULIO CESAR DOS SANTOS,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JULIO CESAR DOS SANTOS
+│  CPF: 342.452.318-66
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 09:26.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,dce64209-b0c5-47ad-8057-dd955bcec147,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 12:26:29,2026-03-03 12:26:29
+390002,60002,420193,JOAO VITOR GOMES DE CARVALHO,496.203.018-38,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JOAO VITOR GOMES DE CARVALHO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOAO VITOR GOMES DE CARVALHO
+│  CPF: 496.203.018-38
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 09:33.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,9de659e8-44cc-4863-9c9d-2a0b35daa2b4,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 12:33:11,2026-03-03 12:33:11
+390003,60002,420204,KAUAN SANTIAGO DA SILVA SANTOS,406.704.988-90,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — KAUAN SANTIAGO DA SILVA SANTOS,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: KAUAN SANTIAGO DA SILVA SANTOS
+│  CPF: 406.704.988-90
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 09:49.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,7a3fad19-3d93-4394-a876-61a9604c366a,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 12:49:02,2026-03-03 12:49:02
+390004,60002,420187,JOSIAS HELENO DA SILVA,033.441.454-79,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JOSIAS HELENO DA SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOSIAS HELENO DA SILVA
+│  CPF: 033.441.454-79
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 09:55.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,6cfc222f-3949-4f02-9510-b7e3b6dbeea4,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 12:55:59,2026-03-03 12:55:59
+390005,60002,420210,JHONATAS FELIPE GOMES LEITE,351.999.448-86,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JHONATAS FELIPE GOMES LEITE,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JHONATAS FELIPE GOMES LEITE
+│  CPF: 351.999.448-86
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 09:57.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,9c9a480c-040a-4a78-8f75-eae5580bb20e,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 12:57:29,2026-03-03 12:57:29
+390006,60002,420119,EDUARDO DA SILVA OLIVEIRA,608.980.803-20,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — EDUARDO DA SILVA OLIVEIRA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: EDUARDO DA SILVA OLIVEIRA
+│  CPF: 608.980.803-20
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 10:05.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,a7c0799c-c9ee-44b2-b050-fbcf82eca9e9,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 13:05:12,2026-03-03 13:05:12
+390007,60002,420183,DAVYD JOSE SANTOS DE SOUSA,089.594.324-74,ENCARREGADO DE OBRAS,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — DAVYD JOSE SANTOS DE SOUSA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: DAVYD JOSE SANTOS DE SOUSA
+│  CPF: 089.594.324-74
+│  Função: ENCARREGADO DE OBRAS
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 10:06.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,b78b2ec7-5b1e-4880-bdde-ede0780bd820,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 13:06:30,2026-03-03 13:06:30
+390008,60002,420206,ARIEL DA SILVA,442.495.578-80,CALCETEIRO,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ARIEL DA SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ARIEL DA SILVA
+│  CPF: 442.495.578-80
+│  Função: CALCETEIRO
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 10:07.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,ad3d81f5-2a0f-43c1-b846-3ab23f873d03,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 13:07:28,2026-03-03 13:07:28
+390009,60002,420208,NILO CESAR DOS SANTOS ARANTES,264.829.898-37,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — NILO CESAR DOS SANTOS ARANTES,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: NILO CESAR DOS SANTOS ARANTES
+│  CPF: 264.829.898-37
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 10:08.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,f60716d0-2a92-451a-945f-a47f2179dbb1,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 13:08:29,2026-03-03 13:08:29
+390010,60002,420207,EVERTON RICARDO DA SILVA COSTA,363.094.428-05,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — EVERTON RICARDO DA SILVA COSTA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: EVERTON RICARDO DA SILVA COSTA
+│  CPF: 363.094.428-05
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 10:17.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,adcf1801-5eab-46fe-a7b8-9fb5cbc347ae,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 13:17:48,2026-03-03 13:17:48
+390011,60002,420184,JOAO CAMPOS DA SILVA,050.191.328-96,PEDREIRO,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JOAO CAMPOS DA SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOAO CAMPOS DA SILVA
+│  CPF: 050.191.328-96
+│  Função: PEDREIRO
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 10:19.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,b9046fdd-ee8c-4e29-91c4-edf228a2186e,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 13:19:47,2026-03-03 13:19:47
+390012,60002,420185,MELQUISEDEQUE SILVA BATISTA,598.452.875-49,CARPINTEIRO III,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — MELQUISEDEQUE SILVA BATISTA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: MELQUISEDEQUE SILVA BATISTA
+│  CPF: 598.452.875-49
+│  Função: CARPINTEIRO III
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 10:20.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,a8f08b0a-8f51-4019-ad17-62a92464b7bf,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 13:20:48,2026-03-03 13:20:48
+390013,60002,420191,JOAO HENRIQUE SOARES,350.648.228-98,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — JOAO HENRIQUE SOARES,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOAO HENRIQUE SOARES
+│  CPF: 350.648.228-98
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 10:22.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,8b12ac30-8d50-444b-be96-28bb4b6dd861,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 13:22:45,2026-03-03 13:22:45
+390014,60002,420194,ALEX ROBSON CARNEIRO PINTO,144.642.138-47,PEDREIRO I,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ALEX ROBSON CARNEIRO PINTO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ALEX ROBSON CARNEIRO PINTO
+│  CPF: 144.642.138-47
+│  Função: PEDREIRO I
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 11:16.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,d01f668f-949b-4887-a333-d9dffb9fd50a,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 14:16:36,2026-03-03 14:16:36
+390015,60002,420088,DOUGLAS DE SOUZA ROCHA,298.269.958-35,PEDREIRO,afastamento,Ativo,Afastado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Afastamento — DOUGLAS DE SOUZA ROCHA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE AFASTAMENTO
+
+Bom dia,
+
+Comunicamos que o colaborador abaixo identificado teve um afastamento registrado na empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO AFASTAMENTO
+┌──────────────────────────────────────────────┐
+│  Colaborador: DOUGLAS DE SOUZA ROCHA
+│  CPF: 298.269.958-35
+│  Função: PEDREIRO
+│  Setor: OBRA
+│  Motivo: Afastamento (doença/acidente)
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: AFASTADO
+
+Providências necessárias:
+  • Comunicação ao INSS (se afastamento superior a 15 dias)
+  • Comunicação à seguradora sobre o afastamento
+  • Atualização do controle de ponto e folha de pagamento
+  • Acompanhamento do prazo de retorno
+  • Agendamento de ASO de retorno (quando aplicável)
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 11:17.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,53f2a15b-ed16-42f4-93fb-53fef91fe09e,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 14:17:50,2026-03-03 14:17:50
+390016,60002,420197,LUIS HENRIQUE DO NASCIMENTO,434.791.418-03,SERVENTE,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — LUIS HENRIQUE DO NASCIMENTO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: LUIS HENRIQUE DO NASCIMENTO
+│  CPF: 434.791.418-03
+│  Função: SERVENTE
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-03
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 11:20.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,32ee039a-d86c-446a-bc76-c59952d09d4e,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 14:20:42,2026-03-03 14:20:42
+390017,60002,1320015,THAIS NAMIE YOSHII,234.689.158-45,ARQUITETO URBANISTA,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — THAIS NAMIE YOSHII,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: THAIS NAMIE YOSHII
+│  CPF: 234.689.158-45
+│  Função: ARQUITETO URBANISTA
+│  Setor: Projetos
+│  Data de Admissão: 2023-04-17
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 14:08.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,61ac861b-4310-434c-a974-e2be0cff2f09,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 17:08:58,2026-03-03 17:08:58
+390018,60002,1320016,ANDRÉ FIGUEIREDO AUGUSTO ,351,,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — ANDRÉ FIGUEIREDO AUGUSTO ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ANDRÉ FIGUEIREDO AUGUSTO 
+│  CPF: 351
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em terça-feira, 3 de março de 2026, às 16:04.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,34c1fc1b-8664-43c7-bc7b-5e7aa0f8a4db,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-03 19:04:52,2026-03-03 19:04:52
+420001,60002,1080020,ITALO BARRETO DA SILVA,104.471.954-09,,demissao,Lista_Negra,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ITALO BARRETO DA SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ITALO BARRETO DA SILVA
+│  CPF: 104.471.954-09
+│  Data do Desligamento: 2026-03-04
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 10:39.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,224da120-edb9-423f-8634-f0a08f077650,0,,Nayara Rodrigues,1020024,2026-03-04 13:39:15,2026-03-04 13:39:15
+420002,60002,1080002,MARCILIO DIAS DOS SANTOS,065.124.934-19,PEDREIRO,demissao,Lista_Negra,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — MARCILIO DIAS DOS SANTOS,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: MARCILIO DIAS DOS SANTOS
+│  CPF: 065.124.934-19
+│  Função: PEDREIRO
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-04
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 10:45.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,0488013b-50fd-401b-82f4-ab3f8ddc51e2,0,,Nayara Rodrigues,1020024,2026-03-04 13:45:57,2026-03-04 13:45:57
+420003,60002,1080017,GENESIO DA SILVA CARVALHO,022.337.354-04,PEDREIRO,demissao,Lista_Negra,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — GENESIO DA SILVA CARVALHO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: GENESIO DA SILVA CARVALHO
+│  CPF: 022.337.354-04
+│  Função: PEDREIRO
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-04
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 10:47.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,d1fdc3a1-102c-43d2-a0c1-e5a9aa0793fb,0,,Nayara Rodrigues,1020024,2026-03-04 13:47:50,2026-03-04 13:47:50
+420004,60002,1080018,ALBERTO FRANCISCO DA SILVA,049.085.874-00,MONTADOR DE ANDAIME,demissao,Ativo,Desligado,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ALBERTO FRANCISCO DA SILVA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ALBERTO FRANCISCO DA SILVA
+│  CPF: 049.085.874-00
+│  Função: MONTADOR DE ANDAIME
+│  Setor: OBRA
+│  Data do Desligamento: 2026-03-04
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 10:54.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,b8f8e246-8a7f-45a5-a204-af7d6f1964db,0,,Nayara Rodrigues,1020024,2026-03-04 13:54:17,2026-03-04 13:54:17
+450001,60002,1380001,renan teste,358.135.298-29,ARQUITETO URBANISTA,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — renan teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: renan teste
+│  CPF: 358.135.298-29
+│  Função: ARQUITETO URBANISTA
+│  Data de Admissão: 2026-03-04
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 15:14.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,43957360-a1f3-4e90-a3f5-28f564103a2c,0,,Felipe Costa Alves,601043,2026-03-04 18:14:31,2026-03-04 18:14:31
+450002,60002,1380001,renan teste,358.135.298-29,ARQUITETO URBANISTA,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — renan teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: renan teste
+│  CPF: 358.135.298-29
+│  Função: ARQUITETO URBANISTA
+│  Data de Admissão: 2026-03-04
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 15:14.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,d86f100c-d3d7-4248-8d61-6b04d0c5d004,0,,Felipe Costa Alves,601043,2026-03-04 18:14:31,2026-03-04 18:14:31
+450003,60002,1380001,renan teste,358.135.298-29,ARQUITETO URBANISTA,demissao,Ativo,Desligado,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — renan teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: renan teste
+│  CPF: 358.135.298-29
+│  Função: ARQUITETO URBANISTA
+│  Data do Desligamento: 2026-03-04
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 15:20.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,3809fd35-6cb9-4615-b6c4-e92a780fba11,0,,Felipe Costa Alves,601043,2026-03-04 18:20:26,2026-03-04 18:20:26
+450004,60002,1380001,renan teste,358.135.298-29,ARQUITETO URBANISTA,demissao,Ativo,Desligado,60002,Renan Pamplona,pamplona.consorcio@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — renan teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa tarde,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: renan teste
+│  CPF: 358.135.298-29
+│  Função: ARQUITETO URBANISTA
+│  Data do Desligamento: 2026-03-04
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 15:20.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,8b0dadea-b2ed-4e32-94d7-b9a1b2c90aa9,0,,Felipe Costa Alves,601043,2026-03-04 18:20:26,2026-03-04 18:20:26
+450005,60002,1380006,RAFAEL HARA DOS SANTOS ,324.329.288-30,ENGENHEIRO CIVIL,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — RAFAEL HARA DOS SANTOS ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: RAFAEL HARA DOS SANTOS 
+│  CPF: 324.329.288-30
+│  Função: ENGENHEIRO CIVIL
+│  Setor: Orçamento
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:28.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,3c5729bd-85d9-4319-8099-aaae4c5b1139,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:28:11,2026-03-04 20:28:11
+450006,60002,1380006,RAFAEL HARA DOS SANTOS ,324.329.288-30,ENGENHEIRO CIVIL,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — RAFAEL HARA DOS SANTOS ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: RAFAEL HARA DOS SANTOS 
+│  CPF: 324.329.288-30
+│  Função: ENGENHEIRO CIVIL
+│  Setor: Orçamento
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:28.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,7a1643bc-f1e5-45b0-9592-4c1d23c461ae,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:28:11,2026-03-04 20:28:11
+450007,60002,1380006,RAFAEL HARA DOS SANTOS ,324.329.288-30,ENGENHEIRO CIVIL,contratacao,,Ativo,60002,Renan Pamplona,pamplona.consorcio@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — RAFAEL HARA DOS SANTOS ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: RAFAEL HARA DOS SANTOS 
+│  CPF: 324.329.288-30
+│  Função: ENGENHEIRO CIVIL
+│  Setor: Orçamento
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:28.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,07e9a38e-b9b0-41e0-b397-1a72c5f3b216,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:28:11,2026-03-04 20:28:11
+450008,60002,1380007,THAIS NUNES SUGAHARA,396.176.388-78,ARQUITETO URBANISTA,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — THAIS NUNES SUGAHARA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: THAIS NUNES SUGAHARA
+│  CPF: 396.176.388-78
+│  Função: ARQUITETO URBANISTA
+│  Setor: Planejamento
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:32.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,90fd50c8-9e23-41c2-9fe4-1a75e9e68e82,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:32:14,2026-03-04 20:32:14
+450009,60002,1380007,THAIS NUNES SUGAHARA,396.176.388-78,ARQUITETO URBANISTA,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — THAIS NUNES SUGAHARA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: THAIS NUNES SUGAHARA
+│  CPF: 396.176.388-78
+│  Função: ARQUITETO URBANISTA
+│  Setor: Planejamento
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:32.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,b4e1cb78-0afc-4796-a2f5-c628dfd1814e,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:32:14,2026-03-04 20:32:14
+450010,60002,1380007,THAIS NUNES SUGAHARA,396.176.388-78,ARQUITETO URBANISTA,contratacao,,Ativo,60002,Renan Pamplona,pamplona.consorcio@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — THAIS NUNES SUGAHARA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: THAIS NUNES SUGAHARA
+│  CPF: 396.176.388-78
+│  Função: ARQUITETO URBANISTA
+│  Setor: Planejamento
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:32.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,f520796b-9cb2-4e8b-948a-e707aa508d7d,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:32:14,2026-03-04 20:32:14
+450011,60002,1380008,CARLOS RAFAEL DE GOES SANTOS ,062.443.324-23,ENGENHEIRO CIVIL,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — CARLOS RAFAEL DE GOES SANTOS ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: CARLOS RAFAEL DE GOES SANTOS 
+│  CPF: 062.443.324-23
+│  Função: ENGENHEIRO CIVIL
+│  Setor: OBRA
+│  Data de Admissão: 2025-09-11
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:37.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,2ca1683a-6e86-42b5-b5ba-957cba72647b,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:37:22,2026-03-04 20:37:22
+450012,60002,1380008,CARLOS RAFAEL DE GOES SANTOS ,062.443.324-23,ENGENHEIRO CIVIL,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — CARLOS RAFAEL DE GOES SANTOS ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: CARLOS RAFAEL DE GOES SANTOS 
+│  CPF: 062.443.324-23
+│  Função: ENGENHEIRO CIVIL
+│  Setor: OBRA
+│  Data de Admissão: 2025-09-11
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:37.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,d493ebf2-fff3-4ee4-b9ac-68add850929f,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:37:22,2026-03-04 20:37:22
+450013,60002,1380008,CARLOS RAFAEL DE GOES SANTOS ,062.443.324-23,ENGENHEIRO CIVIL,contratacao,,Ativo,60002,Renan Pamplona,pamplona.consorcio@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — CARLOS RAFAEL DE GOES SANTOS ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: CARLOS RAFAEL DE GOES SANTOS 
+│  CPF: 062.443.324-23
+│  Função: ENGENHEIRO CIVIL
+│  Setor: OBRA
+│  Data de Admissão: 2025-09-11
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:37.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,2949440c-dba8-42db-9f34-c76681c50370,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:37:23,2026-03-04 20:37:23
+450014,60002,1380009,teste,123.123.121-23,,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: teste
+│  CPF: 123.123.121-23
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:47.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,07a5a217-2427-445f-bc22-69a41141c99e,0,,Felipe Costa Alves,601043,2026-03-04 20:47:25,2026-03-04 20:47:25
+450015,60002,1380009,teste,123.123.121-23,,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: teste
+│  CPF: 123.123.121-23
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:47.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,e50cd8f1-4f00-445a-9039-319f89c7b0d9,0,,Felipe Costa Alves,601043,2026-03-04 20:47:38,2026-03-04 20:47:38
+450016,60002,1380009,teste,123.123.121-23,,contratacao,,Ativo,60002,Renan Pamplona,pamplona.consorcio@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: teste
+│  CPF: 123.123.121-23
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:47.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,c2c5dfd0-90cf-40da-a620-ca5dfc91d53f,0,,Felipe Costa Alves,601043,2026-03-04 20:47:51,2026-03-04 20:47:51
+450017,60002,1380009,teste,123.123.121-23,,contratacao,,Ativo,60003,Felipe Alves,felipe@fcengenhariacivil.com.br,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: teste
+│  CPF: 123.123.121-23
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:47.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,ffa770d4-e968-4a90-8ce2-53c35bf1779c,0,,Felipe Costa Alves,601043,2026-03-04 20:48:04,2026-03-04 20:48:04
+450018,60002,1380010,camila,229.764.608-92,,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — camila,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: camila
+│  CPF: 229.764.608-92
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:48.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,515e8ff9-7619-43a8-aec9-d68815e35080,0,,Felipe Costa Alves,601043,2026-03-04 20:48:39,2026-03-04 20:48:39
+450019,60002,1380010,camila,229.764.608-92,,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — camila,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: camila
+│  CPF: 229.764.608-92
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:48.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,85cf239a-4b30-4412-b231-a6ce1cb45d68,0,,Felipe Costa Alves,601043,2026-03-04 20:48:52,2026-03-04 20:48:52
+450020,60002,1380010,camila,229.764.608-92,,contratacao,,Ativo,60002,Renan Pamplona,pamplona.consorcio@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — camila,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: camila
+│  CPF: 229.764.608-92
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:48.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,f44a6600-632c-431c-a079-4fa07e1b942f,0,,Felipe Costa Alves,601043,2026-03-04 20:49:05,2026-03-04 20:49:05
+450021,60002,1380010,camila,229.764.608-92,,contratacao,,Ativo,60003,Felipe Alves,felipe@fcengenhariacivil.com.br,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — camila,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: camila
+│  CPF: 229.764.608-92
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:48.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,6982a2d9-883c-49e2-9a54-9843c64a5d45,0,,Felipe Costa Alves,601043,2026-03-04 20:49:18,2026-03-04 20:49:18
+450022,60002,1380011,JOSE CARLOS DE ANDRADE ,111.111.111-11,ENCARREGADO DE OBRAS,contratacao,,Ativo,1,Felipe Alves,felipe1268@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — JOSE CARLOS DE ANDRADE ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOSE CARLOS DE ANDRADE 
+│  CPF: 111.111.111-11
+│  Função: ENCARREGADO DE OBRAS
+│  Setor: OBRA
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:53.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,08f93473-f4eb-428a-9fac-409e1853d280,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:53:29,2026-03-04 20:53:29
+450023,60002,1380011,JOSE CARLOS DE ANDRADE ,111.111.111-11,ENCARREGADO DE OBRAS,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — JOSE CARLOS DE ANDRADE ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOSE CARLOS DE ANDRADE 
+│  CPF: 111.111.111-11
+│  Função: ENCARREGADO DE OBRAS
+│  Setor: OBRA
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:53.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,6fc4d5bb-7aa4-48ad-b854-746bf11c5bf4,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:53:42,2026-03-04 20:53:42
+450024,60002,1380011,JOSE CARLOS DE ANDRADE ,111.111.111-11,ENCARREGADO DE OBRAS,contratacao,,Ativo,60002,Renan Pamplona,pamplona.consorcio@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — JOSE CARLOS DE ANDRADE ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOSE CARLOS DE ANDRADE 
+│  CPF: 111.111.111-11
+│  Função: ENCARREGADO DE OBRAS
+│  Setor: OBRA
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:53.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,b85f4bb3-f478-4a39-993f-0f5c7853c744,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:53:55,2026-03-04 20:53:55
+450025,60002,1380011,JOSE CARLOS DE ANDRADE ,111.111.111-11,ENCARREGADO DE OBRAS,contratacao,,Ativo,60003,Felipe Alves,felipe@fcengenhariacivil.com.br,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — JOSE CARLOS DE ANDRADE ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa tarde,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: JOSE CARLOS DE ANDRADE 
+│  CPF: 111.111.111-11
+│  Função: ENCARREGADO DE OBRAS
+│  Setor: OBRA
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 17:53.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Departamento Pessoal
+FC ENGENHARIA E CONSTRUCAO LTDA
+E-mail: contato@fcengenharia.com.br
+Tel: (12) 9144-3486
+────────────────────────────────────────────────
+
+Comunicado automático — Sistema de Gestão de Pessoas
+Em caso de dúvidas, entre em contato com o Departamento Pessoal.",enviado,,a75ff5f4-0230-4550-87e3-d08715a2e62e,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-04 20:54:08,2026-03-04 20:54:08
+450026,60002,1380012,Teste,747.473.737-38,,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — Teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa noite,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: Teste
+│  CPF: 747.473.737-38
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 18:57.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,ac493e49-8df5-41a8-9996-0c0d15db096d,0,,Felipe Costa Alves,601043,2026-03-04 21:57:15,2026-03-04 21:57:15
+450027,60002,1380012,Teste,747.473.737-38,,contratacao,,Ativo,60003,Felipe Alves,felipe@fcengenhariacivil.com.br,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — Teste,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa noite,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: Teste
+│  CPF: 747.473.737-38
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 18:57.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,c7fcd354-13f3-4970-a7f0-6bedd2c9619e,0,,Felipe Costa Alves,601043,2026-03-04 21:57:27,2026-03-04 21:57:27
+450028,60002,420070,ACACIO LESCURA DE CAMARGO,199.141.028-08,AUXILIAR DE PINTURA,demissao,Ativo,Desligado,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ACACIO LESCURA DE CAMARGO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa noite,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ACACIO LESCURA DE CAMARGO
+│  CPF: 199.141.028-08
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 19:01.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,50ac956b-2744-4835-ae59-b4114844aa82,0,,Felipe Costa Alves,601043,2026-03-04 22:01:51,2026-03-04 22:01:51
+450029,60002,420070,ACACIO LESCURA DE CAMARGO,199.141.028-08,AUXILIAR DE PINTURA,demissao,Ativo,Desligado,60003,Felipe Alves,felipe@fcengenhariacivil.com.br,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ACACIO LESCURA DE CAMARGO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa noite,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ACACIO LESCURA DE CAMARGO
+│  CPF: 199.141.028-08
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 19:01.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,fa3dfe45-271f-41ab-890a-95b42d6aeaa0,0,,Felipe Costa Alves,601043,2026-03-04 22:01:56,2026-03-04 22:01:56
+450030,60002,,TESTE - Funcionário Exemplo,000.000.000-00,Servente,contratacao,Ativo,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — TESTE - Funcionário Exemplo,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa noite,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: TESTE - Funcionário Exemplo
+│  CPF: 000.000.000-00
+│  Data de Nascimento: 15/03/1990
+│  Estado Civil: Solteiro
+│  Salário: R$ 2.500,00
+│  Profissão: Servente
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 19:06.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",erro,Connection timeout,35804b30-a7e2-4745-a9b4-30d4ffbc8747,0,,Felipe Alves,1,2026-03-04 22:06:31,2026-03-04 22:06:31
+450031,60002,,TESTE - Funcionário Exemplo,000.000.000-00,Servente,contratacao,Ativo,Ativo,60003,Felipe Alves,felipe@fcengenhariacivil.com.br,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — TESTE - Funcionário Exemplo,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa noite,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: TESTE - Funcionário Exemplo
+│  CPF: 000.000.000-00
+│  Data de Nascimento: 15/03/1990
+│  Estado Civil: Solteiro
+│  Salário: R$ 2.500,00
+│  Profissão: Servente
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 19:06.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",erro,Connection timeout,2e31940c-4b6d-4da0-8890-27445eef3a05,0,,Felipe Alves,1,2026-03-04 22:06:41,2026-03-04 22:06:41
+450032,60002,,TESTE - Funcionário Exemplo,000.000.000-00,Servente,contratacao,Ativo,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — TESTE - Funcionário Exemplo,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa noite,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: TESTE - Funcionário Exemplo
+│  CPF: 000.000.000-00
+│  Data de Nascimento: 15/03/1990
+│  Estado Civil: Solteiro
+│  Salário: R$ 2.500,00
+│  Profissão: Servente
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 23:11.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,f8312b9e-9fbe-4f81-bfbf-0ad794965b5c,0,,Felipe Costa Alves,601043,2026-03-05 02:11:35,2026-03-05 02:11:35
+450033,60002,,TESTE - Funcionário Exemplo,000.000.000-00,Servente,contratacao,Ativo,Ativo,60003,Felipe Alves,felipe@fcengenhariacivil.com.br,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — TESTE - Funcionário Exemplo,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Boa noite,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: TESTE - Funcionário Exemplo
+│  CPF: 000.000.000-00
+│  Data de Nascimento: 15/03/1990
+│  Estado Civil: Solteiro
+│  Salário: R$ 2.500,00
+│  Profissão: Servente
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quarta-feira, 4 de março de 2026, às 23:11.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,73e39dbc-921e-4dec-8b2d-18591f2a3ed9,0,,Felipe Costa Alves,601043,2026-03-05 02:11:38,2026-03-05 02:11:38
+480001,60002,1410012,EDSON LUIZ DE MATOS ,282.956.088-43,CARPINTEIRO,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — EDSON LUIZ DE MATOS ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Bom dia,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: EDSON LUIZ DE MATOS 
+│  CPF: 282.956.088-43
+│  Data de Nascimento: 1988-07-27
+│  Estado Civil: Casado
+│  Salário: R$ 4.499,00
+│  Profissão: CARPINTEIRO
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quinta-feira, 5 de março de 2026, às 08:51.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,00664647-1c77-42e7-8432-0b974e6da771,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-05 11:51:10,2026-03-05 11:51:10
+480002,60002,1410013,VICENTE DANUBIO DE OLIVEIRA ,107.933.676-11,ENGENHEIRO CIVIL,contratacao,,Ativo,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Nova Contratação — VICENTE DANUBIO DE OLIVEIRA ,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE CONTRATAÇÃO
+
+Bom dia,
+
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO COLABORADOR ADMITIDO
+┌──────────────────────────────────────────────┐
+│  Nome completo: VICENTE DANUBIO DE OLIVEIRA 
+│  CPF: 107.933.676-11
+│  Estado Civil: Casado
+│  Salário: R$ 12.001,00
+│  Profissão: ENGENHEIRO CIVIL
+└──────────────────────────────────────────────┘
+
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
+
+Registro efetuado em quinta-feira, 5 de março de 2026, às 09:03.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,71c7d148-7803-48aa-9896-ab7b2e737312,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-05 12:03:53,2026-03-05 12:03:53
+480003,60002,420102,IRAEL ALVES DE SOUZA,026.290.844-18,ARMADOR,afastamento,Ativo,Afastado,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Afastamento — IRAEL ALVES DE SOUZA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE AFASTAMENTO
+
+Bom dia,
+
+Comunicamos que o colaborador abaixo identificado teve um afastamento registrado na empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO AFASTAMENTO
+┌──────────────────────────────────────────────┐
+│  Colaborador: IRAEL ALVES DE SOUZA
+│  CPF: 026.290.844-18
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: AFASTADO
+
+Providências necessárias:
+  • Comunicação ao INSS (se afastamento superior a 15 dias)
+  • Comunicação à seguradora sobre o afastamento
+  • Atualização do controle de ponto e folha de pagamento
+  • Acompanhamento do prazo de retorno
+  • Agendamento de ASO de retorno (quando aplicável)
+
+Registro efetuado em quinta-feira, 5 de março de 2026, às 11:16.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,a6acd39c-0274-4029-802d-da5b6376cda3,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-05 14:16:50,2026-03-05 14:16:50
+510001,60002,420181,PATRICIA SIMOES DE SOUSA,257.924.718-19,AUXILIAR FINANCEIRO,demissao,Ativo,Desligado,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — PATRICIA SIMOES DE SOUSA,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: PATRICIA SIMOES DE SOUSA
+│  CPF: 257.924.718-19
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em sábado, 7 de março de 2026, às 10:14.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",erro,Connection timeout,df1b86e8-ea3d-48e5-9f07-92c26339e10b,0,,Felipe Costa Alves,601043,2026-03-07 13:14:36,2026-03-07 13:14:36
+540001,60002,420194,ALEX ROBSON CARNEIRO PINTO,144.642.138-47,PEDREIRO I,demissao,Lista_Negra,Desligado,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — ALEX ROBSON CARNEIRO PINTO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Boa noite,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: ALEX ROBSON CARNEIRO PINTO
+│  CPF: 144.642.138-47
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em segunda-feira, 9 de março de 2026, às 23:04.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",erro,Connection timeout,9f2173ea-51ab-410b-9518-b85dce6d5d69,0,,Felipe Costa Alves,601043,2026-03-10 02:05:02,2026-03-10 02:05:02
+570001,60002,420137,CARLOS ALBERTO GONCALVES,249.394.688-01,SERVENTE,afastamento,Ativo,Afastado,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — Afastamento — CARLOS ALBERTO GONCALVES,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE AFASTAMENTO
+
+Bom dia,
+
+Comunicamos que o colaborador abaixo identificado teve um afastamento registrado na empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+▸ DADOS DO AFASTAMENTO
+┌──────────────────────────────────────────────┐
+│  Colaborador: CARLOS ALBERTO GONCALVES
+│  CPF: 249.394.688-01
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: AFASTADO
+
+Providências necessárias:
+  • Comunicação ao INSS (se afastamento superior a 15 dias)
+  • Comunicação à seguradora sobre o afastamento
+  • Atualização do controle de ponto e folha de pagamento
+  • Acompanhamento do prazo de retorno
+  • Agendamento de ASO de retorno (quando aplicável)
+
+Registro efetuado em terça-feira, 10 de março de 2026, às 09:56.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,666fe856-20e0-4195-ba53-66b2969ff752,0,,Felipe Costa Alves,601043,2026-03-10 12:56:23,2026-03-10 12:56:23
+570002,60002,420188,EWERTTON DA SILVA ARAUJO,702.920.754-80,CARPINTEIRO,demissao,Ativo,Desligado,60001,Renan Pamplona,pamplona.seguros@gmail.com,FC ENGENHARIA PROJETOS E OBRAS — URGENTE: Baixa Seguro de Vida — EWERTTON DA SILVA ARAUJO,"────────────────────────────────────────────────
+  FC ENGENHARIA PROJETOS E OBRAS
+  FC ENGENHARIA E CONSTRUCAO LTDA
+  CNPJ: 29.353.906/0001-71
+────────────────────────────────────────────────
+
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
+
+Bom dia,
+
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa FC ENGENHARIA E CONSTRUCAO LTDA.
+
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+
+▸ DADOS DO COLABORADOR DESLIGADO
+┌──────────────────────────────────────────────┐
+│  Nome completo: EWERTTON DA SILVA ARAUJO
+│  CPF: 702.920.754-80
+└──────────────────────────────────────────────┘
+
+  ⚠  STATUS: DESLIGADO
+
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
+
+Registro efetuado em terça-feira, 10 de março de 2026, às 10:34.
+
+────────────────────────────────────────────────
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas",enviado,,2c16508d-6420-488e-821e-8abdf264d979,0,,Isabela Augusta da Silva Velloso Monteiro,990252,2026-03-10 13:34:58,2026-03-10 13:34:58

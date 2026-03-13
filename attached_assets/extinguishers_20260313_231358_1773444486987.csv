@@ -1,0 +1,2 @@
+id,companyId,numero,tipoExtintor,capacidade,localizacao,dataRecarga,validadeRecarga,dataTesteHidrostatico,validadeTesteHidrostatico,statusExtintor,observacoes,createdAt,updatedAt
+1080004,1110004,EXT-001,PQS,6kg,Almoxarifado,2024-06-30 00:00:00,2027-06-30 00:00:00,,,OK,,2026-03-01 13:11:37,2026-03-01 13:11:37

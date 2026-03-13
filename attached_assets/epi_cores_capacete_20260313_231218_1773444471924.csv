@@ -1,0 +1,17 @@
+id,companyId,cor,hexColor,funcoes,descricao,createdAt,updatedAt
+1,999,Branco,#FFFFFF,"Engenheiro,Encarregado,Mestre de Obras","Engenheiros, Encarregados e Mestres de Obras",2026-03-04 23:00:26,2026-03-04 23:00:26
+2,999,Azul,#2563EB,"Servente,Eletricista,Técnico","Serventes, Eletricistas e Técnicos",2026-03-04 23:00:26,2026-03-04 23:00:26
+3,999,Vermelho,#DC2626,"Bombeiro,Brigadista",Bombeiros e Brigadistas,2026-03-04 23:00:26,2026-03-04 23:00:26
+4,999,Verde,#16A34A,"TST,CIPA,Meio Ambiente","Técnicos de Segurança, CIPA e Meio Ambiente",2026-03-04 23:00:26,2026-03-04 23:00:26
+5,999,Amarelo,#EAB308,Visitante,Visitantes,2026-03-04 23:00:26,2026-03-04 23:00:26
+6,999,Cinza,#6B7280,"Pedreiro,Armador,Carpinteiro","Pedreiros, Armadores e Carpinteiros",2026-03-04 23:00:26,2026-03-04 23:00:26
+7,999,Laranja,#EA580C,"Sinaleiro,Operador de Máquinas",Sinaleiros e Operadores de Máquinas,2026-03-04 23:00:26,2026-03-04 23:00:26
+17,60002,Branco,#FFFFFF,"Engenheiros, Mestres de Obras, Encarregados",Liderança e supervisão,2026-03-05 01:22:07,2026-03-05 01:22:07
+18,60002,Azul,#1E40AF,Pedreiros (alvenaria e estruturas),Serviços de alvenaria,2026-03-05 01:22:07,2026-03-05 01:22:07
+19,60002,Verde,#16A34A,"Operários, Téc. Segurança, Armadores",Operacional e segurança,2026-03-05 01:22:07,2026-03-05 01:22:07
+20,60002,Amarelo,#EAB308,Servente,Identificação de visitantes,2026-03-05 01:22:07,2026-03-05 01:22:07
+21,60002,Vermelho,#DC2626,"Carpinteiros, Bombeiros",Carpintaria e combate a incêndio,2026-03-05 01:22:07,2026-03-05 01:22:07
+22,60002,Laranja,#EA580C,Eletricistas,Serviços elétricos,2026-03-05 01:22:07,2026-03-05 01:22:07
+23,60002,Cinza,#6B7280,"Estagiários, Visitantes técnicos",Estagiários e visitantes técnicos,2026-03-05 01:22:07,2026-03-05 01:22:07
+24,60002,Marrom,#92400E,Soldadores,Serviços de solda,2026-03-05 01:22:07,2026-03-05 01:22:07
+25,60002,Preto,#1F2937,Operadores de máquinas pesadas,Operação de máquinas,2026-03-05 01:22:07,2026-03-05 01:22:07

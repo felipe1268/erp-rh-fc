@@ -1,0 +1,2 @@
+id,companyId,obraId,nome,cafeManhaDia,lancheTardeDia,valeAlimentacaoMes,jantaDia,totalVA_iFood,diasUteisRef,observacoes,ativo,createdAt,updatedAt,cafeAtivo,lancheAtivo,jantaAtivo
+1,60002,,Padrão FC Engenharia,"5,45","4,55","460,75",0,"680,75",22,"Valores padrão - Café R$5,45/dia, Lanche R$4,55/dia, VA R$460,75/mês (iFood), Janta R$25,00/dia (se necessário)",1,2026-02-26 21:09:58,2026-02-28 00:11:08,1,1,0

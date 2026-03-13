@@ -35,9 +35,10 @@ import { ENV } from './_core/env';
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  const dbUrl = ENV.databaseUrl || process.env.DATABASE_URL;
+  if (!_db && dbUrl) {
     try {
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const pool = new Pool({ connectionString: dbUrl });
       _db = drizzle(pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);

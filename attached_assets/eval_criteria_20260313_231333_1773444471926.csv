@@ -1,0 +1,13 @@
+id,pillarId,revisionId,nome,descricao,fieldKey,ordem,ativo,createdAt
+1,1,1,Comportamento,"Postura profissional, respeito às normas e aos colegas",comportamento,1,1,2026-02-28 01:47:12
+2,1,1,Pontualidade,"Cumprimento de horários de entrada, saída e intervalos",pontualidade,2,1,2026-02-28 01:47:12
+3,1,1,Assiduidade,Frequência e comprometimento com a presença no trabalho,assiduidade,3,1,2026-02-28 01:47:12
+4,1,1,Segurança e EPIs,Uso correto de EPIs e cumprimento das normas de segurança,segurancaEpis,4,1,2026-02-28 01:47:12
+5,2,1,Qualidade e Acabamento,Nível de qualidade e acabamento dos serviços executados,qualidadeAcabamento,1,1,2026-02-28 01:47:12
+6,2,1,Produtividade e Ritmo,Volume de trabalho entregue dentro do prazo esperado,produtividadeRitmo,2,1,2026-02-28 01:47:12
+7,2,1,Cuidado com Ferramentas,Zelo e manutenção dos equipamentos e ferramentas,cuidadoFerramentas,3,1,2026-02-28 01:47:12
+8,2,1,Economia de Materiais,Uso consciente e econômico dos materiais de trabalho,economiaMateriais,4,1,2026-02-28 01:47:12
+9,3,1,Trabalho em Equipe,Colaboração e relacionamento com colegas de trabalho,trabalhoEquipe,1,1,2026-02-28 01:47:12
+10,3,1,Iniciativa e Proatividade,Capacidade de antecipar problemas e propor soluções,iniciativaProatividade,2,1,2026-02-28 01:47:12
+11,3,1,Disponibilidade e Flexibilidade,Adaptação a mudanças e disponibilidade para novas tarefas,disponibilidadeFlexibilidade,3,1,2026-02-28 01:47:12
+12,3,1,Organização e Limpeza,Manutenção da organização e limpeza do ambiente de trabalho,organizacaoLimpeza,4,1,2026-02-28 01:47:12

@@ -1,0 +1,6 @@
+id,processoId,data,tipo,descricao,resultado,documentoUrl,documentoNome,criadoPor,createdAt
+30001,30006,2025-04-06 00:00:00,outros,[DataJud] Distribuição,sorteio,,,DataJud API,2026-02-28 09:28:49
+30002,30005,2025-07-04 00:00:00,outros,[DataJud] Distribuição,dependência,,,DataJud API,2026-02-28 10:15:17
+30003,30005,2025-10-08 00:00:00,sentenca,[DataJud] Julgamento em Diligência,,,,DataJud API,2026-02-28 10:15:17
+60001,30004,2025-07-22 00:00:00,outros,[DataJud] Distribuição,dependência,,,DataJud API,2026-02-28 12:10:56
+90001,60004,2025-05-23 00:00:00,outros,[DataJud] Distribuição,sorteio,,,DataJud API,2026-03-05 13:16:46

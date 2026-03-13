@@ -1,0 +1,5 @@
+id,companyId,titulo,descricao,tipo,anonimo,status,obraId,createdAt,updatedAt,public_token,expires_at,is_evaluation,allow_employee_selection
+1,1,Pesquisa Teste,,outro,0,rascunho,,2026-02-27 10:16:33,2026-02-27 10:16:33,kd44ornm3xcjmu6gxgbf3kqpotvfke09,,0,1
+2,1,Pesquisa Teste,,outro,0,rascunho,,2026-02-27 10:17:06,2026-02-27 10:17:06,bylussqiqjp03ybryfb9z9kp6wfwefih,,0,1
+3,1,Pesquisa Teste,,outro,0,rascunho,,2026-02-27 10:39:16,2026-02-27 10:39:16,eb5ts7z54dfrucrsw7arxekz8fxughfc,,0,1
+4,1,Pesquisa Teste,,outro,0,rascunho,,2026-02-27 10:40:04,2026-02-27 10:40:04,0zrcyer2ixgiotm405jk1dohkbeap7fn,,0,1

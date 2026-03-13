@@ -1,0 +1,5 @@
+id,companyId,action,actorType,actorId,actorName,targetType,targetId,details,ipAddress,createdAt
+1,1,AVALIACAO_CRIADA,admin,1,Admin FC,avaliacao,1,"{""employeeId"":0,""mediaGeral"":""3.0"",""recomendacao"":""TREINAMENTO""}",,2026-02-27 10:16:33
+2,1,AVALIACAO_CRIADA,admin,1,Admin FC,avaliacao,2,"{""employeeId"":999999,""mediaGeral"":""3.0"",""recomendacao"":""TREINAMENTO""}",,2026-02-27 10:17:06
+3,1,AVALIACAO_CRIADA,admin,1,Admin FC,avaliacao,3,"{""employeeId"":999999,""mediaGeral"":""3.0"",""recomendacao"":""TREINAMENTO""}",,2026-02-27 10:39:16
+4,1,AVALIACAO_CRIADA,admin,1,Admin FC,avaliacao,4,"{""employeeId"":999999,""mediaGeral"":""3.0"",""recomendacao"":""TREINAMENTO""}",,2026-02-27 10:40:04
