@@ -7,6 +7,7 @@ import {
   iaCronogramaChat,
   iaCronogramaAlertas,
   iaCronogramaCenarios,
+  iaCronogramaMonitoramento,
   planejamentoAtividades,
   planejamentoRevisoes,
   planejamentoProjetos,
@@ -335,6 +336,7 @@ ${climaTexto}`;
       projetoId:   z.number(),
       titulo:      z.string(),
       descricao:   z.string(),
+      tipoCenario: z.string().optional(),
       parametros:  z.record(z.any()).optional(),
       mensagem:    z.string(),
       sessaoId:    z.string(),
@@ -434,6 +436,7 @@ Parâmetros do cenário: ${JSON.stringify(input.parametros ?? {})}${contextFinan
         companyId,
         titulo:      input.titulo,
         descricao:   input.descricao || input.mensagem.slice(0, 200),
+        tipoCenario: input.tipoCenario ?? "outro",
         parametros:  input.parametros ?? {},
         resultadoIA: resposta,
         criadoPor:   (ctx.user as any).name ?? "Usuário",
@@ -455,6 +458,68 @@ Parâmetros do cenário: ${JSON.stringify(input.parametros ?? {})}${contextFinan
       return db.select().from(iaCronogramaCenarios)
         .where(eq(iaCronogramaCenarios.projetoId, input.projetoId))
         .orderBy(desc(iaCronogramaCenarios.criadoEm))
+        .limit(20);
+    }),
+
+  // ── Aprovar cenário ────────────────────────────────────────────────────
+  aprovarCenario: protectedProcedure
+    .input(z.object({
+      cenarioId:           z.number(),
+      planoAcao:           z.string().optional(),
+      atividadesAfetadas:  z.array(z.object({ id: z.number(), nome: z.string(), aceleracao: z.string().optional() })).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await db.update(iaCronogramaCenarios)
+        .set({
+          status:             "aprovado",
+          aprovadoEm:         new Date(),
+          aprovadoPor:        (ctx.user as any).name ?? "Usuário",
+          planoAcao:          input.planoAcao ?? null,
+          atividadesAfetadas: input.atividadesAfetadas ?? [],
+        })
+        .where(eq(iaCronogramaCenarios.id, input.cenarioId));
+      return { ok: true };
+    }),
+
+  // ── Registrar monitoramento semanal do plano ───────────────────────────
+  registrarMonitoramento: protectedProcedure
+    .input(z.object({
+      cenarioId:       z.number(),
+      projetoId:       z.number(),
+      semana:          z.string(),
+      avancoReal:      z.number().optional(),
+      spiFim:          z.number().optional(),
+      custoRealizado:  z.number().optional(),
+      observacao:      z.string().optional(),
+      status:          z.enum(["no_prazo", "atrasado", "adiantado", "critico"]).default("no_prazo"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const companyId = (ctx.user as any).companyId;
+      await db.insert(iaCronogramaMonitoramento).values({
+        cenarioId:      input.cenarioId,
+        projetoId:      input.projetoId,
+        companyId,
+        semana:         input.semana,
+        avancoReal:     input.avancoReal?.toString(),
+        spiFim:         input.spiFim?.toString(),
+        custoRealizado: input.custoRealizado?.toString(),
+        observacao:     input.observacao,
+        status:         input.status,
+        registradoPor:  (ctx.user as any).name ?? "Usuário",
+      });
+      return { ok: true };
+    }),
+
+  // ── Listar monitoramento de um cenário ────────────────────────────────
+  listarMonitoramento: protectedProcedure
+    .input(z.object({ cenarioId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select().from(iaCronogramaMonitoramento)
+        .where(eq(iaCronogramaMonitoramento.cenarioId, input.cenarioId))
+        .orderBy(desc(iaCronogramaMonitoramento.semana))
         .limit(20);
     }),
 

@@ -6380,13 +6380,11 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
   }, [dadosClima, subTab]);
 
   // ── Simulador ────────────────────────────────────────────────────
-  const [simTitulo,     setSimTitulo]     = useState("");
   const [simMensagem,   setSimMensagem]   = useState("");
-  const [simAbaForm,    setSimAbaForm]    = useState<"prazo"|"custo"|"caixa">("prazo");
-  const [simParams,     setSimParams]     = useState<Record<string, any>>({
-    equipeExtra: 0, aceleracaoPercent: 0, atividadesAfetadas: "", prazoRecuperarDias: 0,
-    custoExtraEstimado: 0, horasExtrasSemana: 0, custoMOExtra: 0,
-    margemRiscoMaxPerc: 3, anteciparMedicao: false,
+  const [simTipo,       setSimTipo]       = useState("acelerar_prazo");
+  const [simMonitOpen,  setSimMonitOpen]  = useState<number|null>(null);
+  const [simMonitInputs, setSimMonitInputs] = useState({
+    avancoReal: "", spiFim: "", custoRealizado: "", observacao: "", status: "no_prazo" as const,
   });
   const [simSessaoId] = useState(() => `sim-${projetoId}-${Date.now()}`);
 
@@ -6400,6 +6398,22 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
 
   const { data: cenarios = [], refetch: refetchCenarios } = (trpc.iaCronograma as any).listarCenarios.useQuery(
     { projetoId }, { enabled: !!projetoId }
+  );
+
+  const aprovarMut = (trpc.iaCronograma as any).aprovarCenario.useMutation({
+    onSuccess: () => { refetchCenarios(); },
+  });
+
+  const registrarMonitorMut = (trpc.iaCronograma as any).registrarMonitoramento.useMutation({
+    onSuccess: () => {
+      setSimMonitOpen(null);
+      setSimMonitInputs({ avancoReal: "", spiFim: "", custoRealizado: "", observacao: "", status: "no_prazo" });
+      refetchCenarios();
+    },
+  });
+
+  const { data: monitorEntries = [] } = (trpc.iaCronograma as any).listarMonitoramento.useQuery(
+    { cenarioId: simMonitOpen ?? 0 }, { enabled: !!simMonitOpen }
   );
 
   // Calcular avanço/SPI atual a partir de atividades+avanços (para contexto do simulador)
@@ -6451,16 +6465,19 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
   }, [dadosFinanceiros, metricsAtuais]);
 
   function simularCenario() {
-    if (!simMensagem.trim() && !simTitulo.trim()) return;
+    if (!simMensagem.trim()) return;
+    const tipoLabel: Record<string, string> = {
+      acelerar_prazo: "Acelerar Prazo", reduzir_custo: "Reduzir Custo",
+      renegociar_escopo: "Renegociar Escopo", contingencia: "Contingência/Risco",
+    };
     simMut.mutate({
       projetoId,
       sessaoId: simSessaoId,
-      titulo:    simTitulo || "Cenário sem título",
-      descricao: simMensagem.slice(0, 200),
-      mensagem:  simMensagem || simTitulo,
+      titulo:      tipoLabel[simTipo] ?? "Simulação",
+      descricao:   simMensagem.slice(0, 200),
+      tipoCenario: simTipo,
+      mensagem:    simMensagem,
       parametros: {
-        ...simParams,
-        // Contexto automático da obra
         valorContrato:      dadosFinanceiros.valorContrato,
         custoTotal:         dadosFinanceiros.custoTotal,
         margemPercAtual:    dadosFinanceiros.margemPerc,
@@ -6791,257 +6808,169 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
       {subTab === "simulador" && (
         <div className="space-y-4">
 
-          {/* ── Painel de Situação Atual da Obra ────────────────────── */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="bg-slate-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-              <Activity className="h-3.5 w-3.5 text-amber-400" /> Situação Atual da Obra
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-slate-100">
-              {/* Prazo */}
-              <div className="px-4 py-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Desvio Físico</p>
-                <p className={`text-xl font-bold ${metricsAtuais.desvio < 0 ? "text-red-600" : "text-emerald-600"}`}>
+          {/* ── Situação Atual — compact dark panel ─────────────────── */}
+          <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl p-4 text-white shadow-sm">
+            <p className="text-[10px] uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+              <Activity className="h-3 w-3 text-amber-400" /> Situação atual da obra
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <p className="text-[10px] text-slate-400 mb-0.5">Desvio Físico</p>
+                <p className={`text-2xl font-black ${metricsAtuais.desvio < 0 ? "text-red-400" : "text-emerald-400"}`}>
                   {metricsAtuais.desvio >= 0 ? "+" : ""}{metricsAtuais.desvio.toFixed(1)}pp
                 </p>
-                <p className="text-[10px] text-slate-500 mt-0.5">SPI: {metricsAtuais.spi.toFixed(2)}</p>
+                <p className="text-[10px] text-slate-400">SPI {metricsAtuais.spi.toFixed(2)}</p>
               </div>
-              {/* Dias de atraso */}
-              <div className="px-4 py-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Atraso Estimado</p>
-                <p className={`text-xl font-bold ${metricsAtuais.diasAtraso > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                  {metricsAtuais.diasAtraso > 0 ? `~${metricsAtuais.diasAtraso} dias` : "Em dia"}
+              <div>
+                <p className="text-[10px] text-slate-400 mb-0.5">Atraso Estimado</p>
+                <p className={`text-2xl font-black ${metricsAtuais.diasAtraso > 0 ? "text-red-400" : "text-emerald-400"}`}>
+                  {metricsAtuais.diasAtraso > 0 ? `~${metricsAtuais.diasAtraso}d` : "No prazo"}
                 </p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  {metricsAtuais.diasRestantes !== null ? `${metricsAtuais.diasRestantes}d restantes` : "prazo não informado"}
+                <p className="text-[10px] text-slate-400">
+                  {metricsAtuais.diasRestantes !== null ? `${metricsAtuais.diasRestantes}d restantes` : "Prazo não informado"}
                 </p>
               </div>
-              {/* Contrato */}
-              <div className="px-4 py-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Valor do Contrato</p>
-                <p className="text-base font-bold text-slate-700">
-                  {dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato) : "—"}
-                </p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Custo: {dadosFinanceiros.custoTotal > 0 ? fmt(dadosFinanceiros.custoTotal) : "—"}</p>
+              <div>
+                <p className="text-[10px] text-slate-400 mb-0.5">Contrato</p>
+                <p className="text-lg font-bold">{dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato) : "—"}</p>
+                <p className="text-[10px] text-slate-400">Custo {dadosFinanceiros.custoTotal > 0 ? fmt(dadosFinanceiros.custoTotal) : "—"}</p>
               </div>
-              {/* Margem */}
-              <div className="px-4 py-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Margem Bruta</p>
-                <p className={`text-xl font-bold ${dadosFinanceiros.margemPerc < 5 ? "text-red-600" : dadosFinanceiros.margemPerc < 15 ? "text-amber-600" : "text-emerald-600"}`}>
+              <div>
+                <p className="text-[10px] text-slate-400 mb-0.5">Margem Bruta</p>
+                <p className={`text-2xl font-black ${dadosFinanceiros.margemPerc < 5 ? "text-red-400" : dadosFinanceiros.margemPerc < 15 ? "text-amber-400" : "text-emerald-400"}`}>
                   {dadosFinanceiros.valorContrato > 0 ? `${dadosFinanceiros.margemPerc}%` : "—"}
                 </p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  {dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato - dadosFinanceiros.custoTotal) : "configure orçamento"}
+                <p className="text-[10px] text-slate-400">
+                  {dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato - dadosFinanceiros.custoTotal) : "Orçamento não configurado"}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* ── Grid: Formulário + Chat ────────────────────────────── */}
+          {/* ── Grid: Formulário + Chat ─────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Formulário do cenário */}
+
+            {/* Formulário simplificado */}
             <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col">
-              {/* Header do form com tabs de contexto */}
-              <div className="border-b border-slate-100 px-4 py-2.5 flex items-center gap-2 justify-between">
-                <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Configurar Cenário
+              <div className="border-b border-slate-100 px-4 py-3">
+                <p className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-400" /> O que você quer simular?
                 </p>
-                <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5 text-[10px]">
-                  {(["prazo", "custo", "caixa"] as const).map(aba => (
-                    <button key={aba} onClick={() => setSimAbaForm(aba)}
-                      className={`px-2.5 py-1 rounded-md font-semibold transition-all capitalize ${simAbaForm === aba ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}>
-                      {aba === "prazo" ? "⏱ Prazo" : aba === "custo" ? "💰 Custo" : "🏦 Caixa"}
+                <p className="text-[11px] text-slate-400 mt-0.5">JULINHO analisa prazo e financeiro juntos — escolha um cenário</p>
+              </div>
+              <div className="p-4 space-y-4 flex-1">
+                {/* Tipo do cenário */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "acelerar_prazo",    emoji: "⏱", label: "Acelerar Prazo",      desc: "Horas extras, equipe adicional" },
+                    { id: "reduzir_custo",     emoji: "💰", label: "Reduzir Custo",       desc: "Otimizar recursos e contratos" },
+                    { id: "renegociar_escopo", emoji: "📋", label: "Renegociar Escopo",   desc: "Eliminar ou postergar itens" },
+                    { id: "contingencia",      emoji: "🆘", label: "Contingência/Risco",  desc: "Plano B para imprevistos" },
+                  ].map(op => (
+                    <button key={op.id} onClick={() => setSimTipo(op.id)}
+                      className={`text-left px-3 py-2.5 rounded-xl border-2 transition-all ${simTipo === op.id ? "border-purple-500 bg-purple-50" : "border-slate-200 hover:border-slate-300 bg-white"}`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base">{op.emoji}</span>
+                        <span className={`text-[11px] font-bold ${simTipo === op.id ? "text-purple-700" : "text-slate-700"}`}>{op.label}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5 ml-5">{op.desc}</p>
                     </button>
                   ))}
                 </div>
-              </div>
 
-              <div className="p-4 space-y-3 flex-1">
-                {/* Título */}
+                {/* Textarea */}
                 <div>
-                  <label className="text-[11px] text-slate-500 font-medium">Título do Cenário</label>
-                  <input value={simTitulo} onChange={e => setSimTitulo(e.target.value)}
-                    placeholder="Ex: Adição de segunda equipe de armação"
-                    className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                </div>
-
-                {/* ── Aba PRAZO ── */}
-                {simAbaForm === "prazo" && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Parâmetros de Prazo</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { key: "prazoRecuperarDias",  label: "Dias a recuperar",         type: "number", placeholder: "0" },
-                        { key: "aceleracaoPercent",   label: "Aceleração %",             type: "number", placeholder: "0" },
-                        { key: "equipeExtra",          label: "Equipes extras",           type: "number", placeholder: "0" },
-                        { key: "atividadesAfetadas",   label: "Atividades (EAP)",         type: "text",   placeholder: "2.1, 2.2" },
-                      ].map(({ key, label, type, placeholder }) => (
-                        <div key={key}>
-                          <label className="text-[10px] text-slate-400">{label}</label>
-                          <input type={type} value={simParams[key]}
-                            onChange={e => setSimParams(p => ({ ...p, [key]: e.target.value }))}
-                            placeholder={placeholder}
-                            className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Aba CUSTO ── */}
-                {simAbaForm === "custo" && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Parâmetros de Custo Adicional</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { key: "custoExtraEstimado",  label: "Custo extra (R$)",         type: "number", placeholder: "0" },
-                        { key: "horasExtrasSemana",   label: "Horas extras/semana",      type: "number", placeholder: "0" },
-                        { key: "custoMOExtra",         label: "Custo MO extra (R$/h)",   type: "number", placeholder: "0" },
-                        { key: "equipeExtra",          label: "Equipes extras",           type: "number", placeholder: "0" },
-                      ].map(({ key, label, type, placeholder }) => (
-                        <div key={key}>
-                          <label className="text-[10px] text-slate-400">{label}</label>
-                          <input type={type} value={simParams[key]}
-                            onChange={e => setSimParams(p => ({ ...p, [key]: e.target.value }))}
-                            placeholder={placeholder}
-                            className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" />
-                        </div>
-                      ))}
-                    </div>
-                    {/* Custo extra em % da margem */}
-                    {dadosFinanceiros.valorContrato > 0 && simParams.custoExtraEstimado > 0 && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs">
-                        <p className="font-semibold text-amber-800">Impacto na Margem Estimado:</p>
-                        <p className="text-amber-700 mt-0.5">
-                          Custo extra = <strong>{((n(simParams.custoExtraEstimado) / dadosFinanceiros.valorContrato) * 100).toFixed(2)}%</strong> do contrato
-                          {" — "}Margem cairia para ~<strong>{(dadosFinanceiros.margemPerc - (n(simParams.custoExtraEstimado) / dadosFinanceiros.valorContrato * 100)).toFixed(1)}%</strong>
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── Aba CAIXA ── */}
-                {simAbaForm === "caixa" && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Contexto de Caixa & Margem</p>
-                    {/* Auto-preenchidos */}
-                    <div className="bg-slate-50 rounded-lg p-3 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Valor do Contrato</span>
-                        <span className="font-semibold text-slate-700">{dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato) : "—"}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Custo Orçado</span>
-                        <span className="font-semibold text-slate-700">{dadosFinanceiros.custoTotal > 0 ? fmt(dadosFinanceiros.custoTotal) : "—"}</span>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-slate-200 pt-2">
-                        <span className="text-slate-500 font-medium">Margem Bruta Atual</span>
-                        <span className={`font-bold text-base ${dadosFinanceiros.margemPerc < 5 ? "text-red-600" : dadosFinanceiros.margemPerc < 15 ? "text-amber-600" : "text-emerald-600"}`}>
-                          {dadosFinanceiros.valorContrato > 0 ? `${dadosFinanceiros.margemPerc}%` : "—"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-slate-400">Margem mínima aceitável (%)</label>
-                        <input type="number" value={simParams.margemRiscoMaxPerc}
-                          onChange={e => setSimParams(p => ({ ...p, margemRiscoMaxPerc: e.target.value }))}
-                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400">Próxima medição (data)</label>
-                        <input type="date" value={simParams.dataProximaMedicao ?? ""}
-                          onChange={e => setSimParams(p => ({ ...p, dataProximaMedicao: e.target.value }))}
-                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs" />
-                      </div>
-                    </div>
-                    {metricsAtuais.diasAtraso > 0 && dadosFinanceiros.valorContrato > 0 && (
-                      <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs">
-                        <p className="font-semibold text-red-700">⚠ Risco de Caixa Estimado:</p>
-                        <p className="text-red-600 mt-0.5">
-                          {metricsAtuais.diasAtraso} dias de atraso podem impactar ~<strong>
-                            {fmt(dadosFinanceiros.valorContrato * Math.abs(metricsAtuais.desvio) / 100)}
-                          </strong> na próxima medição
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Mensagem livre */}
-                <div>
-                  <label className="text-[11px] text-slate-500 font-medium">Descreva o cenário / plano de ação</label>
+                  <label className="text-[11px] font-semibold text-slate-600">Descreva o que você quer fazer</label>
                   <textarea value={simMensagem} onChange={e => setSimMensagem(e.target.value)}
-                    placeholder="Descreva o cenário: quais ações serão tomadas, quais recursos serão mobilizados, quais atividades serão aceleradas. A IA irá analisar o impacto no prazo, custo, caixa e margem..."
-                    className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    placeholder={
+                      simTipo === "acelerar_prazo"    ? "Ex: Adicionar 2ª equipe de armação e fazer horas extras aos sábados para recuperar 3 semanas..." :
+                      simTipo === "reduzir_custo"     ? "Ex: Substituir o fornecedor de aço por outro 12% mais barato sem perder qualidade..." :
+                      simTipo === "renegociar_escopo" ? "Ex: Excluir o paisagismo e postergar o acabamento das áreas externas para adendo futuro..." :
+                      "Ex: Chuva forte paralisou 40% da obra por 2 semanas — qual o impacto e plano de recuperação?"
+                    }
+                    className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
                     rows={4} />
                 </div>
 
-                <Button className="w-full bg-gradient-to-r from-purple-700 to-slate-800 hover:from-purple-800 hover:to-slate-900 gap-1.5 text-white"
-                  disabled={simMut.isPending || (!simMensagem.trim() && !simTitulo.trim())}
+                <Button className="w-full bg-gradient-to-r from-purple-700 to-slate-800 hover:from-purple-800 hover:to-slate-900 gap-2 text-white"
+                  disabled={simMut.isPending || !simMensagem.trim()}
                   onClick={simularCenario}>
                   {simMut.isPending
-                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando Prazo · Custo · Caixa · Margem...</>
+                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando prazo · custo · margem...</>
                     : <><Zap className="h-3.5 w-3.5 text-amber-400" /> Simular com JULINHO</>}
                 </Button>
               </div>
             </div>
 
-            {/* Chat do simulador */}
-            <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col" style={{ minHeight: 480 }}>
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <Brain className="h-3.5 w-3.5 text-purple-500" />
-                  <span className="font-semibold text-purple-700">Análise JULINHO</span>
-                  <span className="text-slate-300">·</span>
-                  <span>Prazo · Custo · Caixa · Margem</span>
-                </div>
-                {historicoSim.length > 0 && (
-                  <button className="text-[10px] text-slate-400 hover:text-red-500 flex items-center gap-1"
-                    onClick={() => { /* clear handled via new sessaoId */ }}>
-                    <History className="h-3 w-3" /> {historicoSim.length / 2} simulação(ões)
-                  </button>
-                )}
+            {/* Chat JULINHO */}
+            <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col" style={{ minHeight: 420 }}>
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 text-xs text-slate-500">
+                <Brain className="h-3.5 w-3.5 text-purple-500" />
+                <span className="font-semibold text-purple-700">Análise JULINHO</span>
+                <span className="text-slate-300">·</span>
+                <span>Prazo + Custo + Caixa + Margem</span>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {historicoSim.length === 0 && (
+                {historicoSim.length === 0 && !simMut.isPending && (
                   <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-8">
                     <div className="relative">
                       <img src="/julinho-3d.png" alt="JULINHO" className="h-20 w-20 object-contain drop-shadow-xl" />
                       <span className="absolute -bottom-1 -right-1 bg-amber-400 rounded-full p-0.5"><Zap className="h-3.5 w-3.5 text-white" /></span>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-slate-600">JULINHO — Simulador de Impacto</p>
+                      <p className="text-xs font-semibold text-slate-600">JULINHO — Simulador Integrado</p>
                       <p className="text-[11px] text-slate-400 mt-1 max-w-[220px]">
-                        Configure e simule um cenário para análise integrada de prazo, custo, caixa e margem
+                        Escolha o tipo de cenário e descreva o que quer fazer. JULINHO analisa prazo e financeiro juntos.
                       </p>
                     </div>
-                    <div className="flex flex-col gap-1.5 text-[10px] text-slate-500">
-                      {["⏱ Impacto no prazo (dias ganhos/perdidos)", "💰 Custo do cenário e projeção de margem", "🏦 Quando bate no caixa (medições)", "🎯 Solução imediata para proteger margem"].map((hint, i) => (
-                        <div key={i} className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-3 py-1.5">
-                          <span>{hint}</span>
-                        </div>
+                    <div className="flex flex-col gap-1.5 text-[10px] text-slate-500 w-full max-w-[240px]">
+                      {["⏱ Impacto no prazo — dias ganhos ou perdidos", "💰 Custo do cenário e projeção de margem", "🏦 Impacto no caixa e nas próximas medições", "✅ Após aprovação — monitoramento semanal"].map((h, i) => (
+                        <div key={i} className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-3 py-1.5 text-left">{h}</div>
                       ))}
                     </div>
                   </div>
                 )}
-                {historicoSim.map((m: any, i: number) => (
-                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                    {m.role === "assistant" && (
-                      <div className="flex gap-2 max-w-full">
-                        <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain shrink-0 mt-1 drop-shadow" />
-                        <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3 text-slate-700 flex-1">
-                          <ReactMarkdownSimple text={m.conteudo} />
+                {historicoSim.map((m: any, i: number) => {
+                  const isLastAssistant = m.role === "assistant" && i === historicoSim.length - 1;
+                  const aprovado = cenarios.find((c: any) => c.status === "aprovado" && c.resultadoIA === m.conteudo);
+                  return (
+                    <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                      {m.role === "assistant" && (
+                        <div className="flex gap-2 max-w-full">
+                          <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain shrink-0 mt-1 drop-shadow" />
+                          <div className="flex-1">
+                            <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3 text-slate-700">
+                              <ReactMarkdownSimple text={m.conteudo} />
+                            </div>
+                            {isLastAssistant && !aprovado && (
+                              <button
+                                onClick={() => {
+                                  const ultimo = [...cenarios].find((c: any) => c.status !== "aprovado" && c.status !== "rejeitado");
+                                  if (ultimo) aprovarMut.mutate({ cenarioId: ultimo.id, planoAcao: m.conteudo });
+                                }}
+                                disabled={aprovarMut.isPending}
+                                className="mt-2 flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-all">
+                                {aprovarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                Aprovar Plano de Ação
+                              </button>
+                            )}
+                            {isLastAssistant && aprovado && (
+                              <div className="mt-2 flex items-center gap-1.5 text-emerald-700 text-[11px] font-semibold bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Plano aprovado · veja o monitoramento abaixo
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {m.role === "user" && (
-                      <div className="bg-slate-700 text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-xs max-w-[80%]">
-                        {m.conteudo}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+                      {m.role === "user" && (
+                        <div className="bg-slate-700 text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-xs max-w-[80%]">
+                          {m.conteudo}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {simMut.isPending && (
                   <div className="flex gap-2 items-end">
                     <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain shrink-0 drop-shadow" />
@@ -7051,17 +6980,16 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                         <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "150ms" }} />
                         <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
-                      <p className="text-[10px] text-purple-600">Analisando prazo · custo · impacto no caixa · margem...</p>
+                      <p className="text-[10px] text-purple-600">Analisando prazo · custo · caixa · margem...</p>
                     </div>
                   </div>
                 )}
               </div>
-              {/* Follow-up input */}
-              {historicoSim.length > 0 && (
+              {historicoSim.length > 0 && !simMut.isPending && (
                 <div className="border-t border-slate-100 p-3 flex gap-2">
                   <input value={simMensagem} onChange={e => setSimMensagem(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") simularCenario(); }}
-                    placeholder="Aprofunde a análise: e se reduzir equipe? qual o impacto se atrasar mais 2 semanas?"
+                    placeholder="Aprofunde: e se reduzir equipe? e se antecipar a medição?"
                     className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500" />
                   <button onClick={simularCenario} disabled={simMut.isPending || !simMensagem.trim()}
                     className="bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white rounded-lg px-3 py-2">
@@ -7072,27 +7000,188 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
             </div>
           </div>
 
-          {/* Cenários salvos */}
-          {cenarios.length > 0 && (
+          {/* ── Planos Aprovados & Monitoramento ───────────────────── */}
+          {cenarios.filter((c: any) => c.status === "aprovado").length > 0 && (
+            <div className="bg-white border border-emerald-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-700 to-slate-700 text-white px-4 py-2.5 flex items-center justify-between">
+                <span className="text-xs font-bold flex items-center gap-2">
+                  <Activity className="h-3.5 w-3.5 text-amber-400" />
+                  Monitoramento dos Planos Aprovados
+                </span>
+                <span className="text-[10px] text-emerald-200">
+                  {cenarios.filter((c: any) => c.status === "aprovado").length} plano(s) ativo(s)
+                </span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {cenarios.filter((c: any) => c.status === "aprovado").map((c: any) => {
+                  const isOpen = simMonitOpen === c.id;
+                  const tipoEmoji: Record<string, string> = {
+                    acelerar_prazo: "⏱", reduzir_custo: "💰", renegociar_escopo: "📋", contingencia: "🆘",
+                  };
+                  return (
+                    <div key={c.id} className="p-4">
+                      {/* Cabeçalho do plano */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <span>{tipoEmoji[c.tipoCenario] ?? "📋"}</span> {c.titulo}
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Aprovado em {c.aprovadoEm ? new Date(c.aprovadoEm).toLocaleDateString("pt-BR") : "—"} por {c.aprovadoPor ?? c.criadoPor}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => { setSimMonitOpen(isOpen ? null : c.id); }}
+                          className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${isOpen ? "bg-slate-100 text-slate-600 border-slate-200" : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"}`}>
+                          <Activity className="h-3 w-3" />
+                          {isOpen ? "Fechar" : "Monitorar"}
+                        </button>
+                      </div>
+
+                      {/* Painel de monitoramento expandido */}
+                      {isOpen && (
+                        <div className="mt-4 space-y-4">
+                          {/* Análise do plano */}
+                          {c.planoAcao && (
+                            <details>
+                              <summary className="text-[10px] text-purple-600 cursor-pointer hover:text-purple-700 font-semibold">
+                                📄 Ver análise completa do plano
+                              </summary>
+                              <div className="mt-2 bg-purple-50 border border-purple-100 rounded-lg p-3 text-[11px] text-slate-700 max-h-48 overflow-y-auto">
+                                <ReactMarkdownSimple text={c.planoAcao.slice(0, 1200) + (c.planoAcao.length > 1200 ? "..." : "")} />
+                              </div>
+                            </details>
+                          )}
+
+                          {/* Form: registrar semana */}
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <p className="text-[11px] font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+                              <ClipboardList className="h-3.5 w-3.5 text-slate-500" /> Registrar esta semana
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                              <div>
+                                <label className="text-[10px] text-slate-500">Avanço Real (%)</label>
+                                <input type="number" step="0.1"
+                                  value={simMonitInputs.avancoReal}
+                                  onChange={e => setSimMonitInputs(p => ({ ...p, avancoReal: e.target.value }))}
+                                  placeholder={metricsAtuais.realAcum.toFixed(1)}
+                                  className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-slate-500">SPI desta semana</label>
+                                <input type="number" step="0.01"
+                                  value={simMonitInputs.spiFim}
+                                  onChange={e => setSimMonitInputs(p => ({ ...p, spiFim: e.target.value }))}
+                                  placeholder={metricsAtuais.spi.toFixed(2)}
+                                  className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-slate-500">Status</label>
+                                <select value={simMonitInputs.status}
+                                  onChange={e => setSimMonitInputs(p => ({ ...p, status: e.target.value as any }))}
+                                  className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                  <option value="no_prazo">🟢 No prazo</option>
+                                  <option value="adiantado">🔵 Adiantado</option>
+                                  <option value="atrasado">🟡 Atenção</option>
+                                  <option value="critico">🔴 Crítico</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="mb-3">
+                              <label className="text-[10px] text-slate-500">Observação / o que foi feito</label>
+                              <textarea
+                                value={simMonitInputs.observacao}
+                                onChange={e => setSimMonitInputs(p => ({ ...p, observacao: e.target.value }))}
+                                placeholder="Ex: Equipe adicional iniciou na armação. Produtividade aumentou 18% em relação à semana anterior..."
+                                className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500 mt-1"
+                                rows={2} />
+                            </div>
+                            <button
+                              onClick={() => registrarMonitorMut.mutate({
+                                cenarioId: c.id,
+                                projetoId,
+                                semana: new Date().toISOString().split("T")[0],
+                                avancoReal: simMonitInputs.avancoReal ? parseFloat(simMonitInputs.avancoReal) : undefined,
+                                spiFim: simMonitInputs.spiFim ? parseFloat(simMonitInputs.spiFim) : undefined,
+                                observacao: simMonitInputs.observacao || undefined,
+                                status: simMonitInputs.status as any,
+                              })}
+                              disabled={registrarMonitorMut.isPending}
+                              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5">
+                              {registrarMonitorMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                              Salvar registro semanal
+                            </button>
+                          </div>
+
+                          {/* Histórico de monitoramento */}
+                          {(monitorEntries as any[]).length > 0 && (
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Histórico do plano</p>
+                              <div className="space-y-2">
+                                {(monitorEntries as any[]).map((entry: any) => {
+                                  const statusCfg: Record<string, { color: string; label: string }> = {
+                                    no_prazo:  { color: "text-emerald-600 bg-emerald-50 border-emerald-200", label: "🟢 No prazo" },
+                                    adiantado: { color: "text-blue-600 bg-blue-50 border-blue-200",         label: "🔵 Adiantado" },
+                                    atrasado:  { color: "text-amber-600 bg-amber-50 border-amber-200",      label: "🟡 Atenção" },
+                                    critico:   { color: "text-red-600 bg-red-50 border-red-200",            label: "🔴 Crítico" },
+                                  };
+                                  const sc = statusCfg[entry.status] ?? statusCfg.no_prazo;
+                                  return (
+                                    <div key={entry.id} className={`rounded-lg border px-3 py-2.5 ${sc.color}`}>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[11px] font-bold">{sc.label}</span>
+                                        <span className="text-[10px] text-slate-400">{entry.semana}</span>
+                                      </div>
+                                      <div className="flex items-center gap-4 mt-1 text-[10px]">
+                                        {entry.avancoReal && <span>Avanço: <strong>{entry.avancoReal}%</strong></span>}
+                                        {entry.spiFim && <span>SPI: <strong>{entry.spiFim}</strong></span>}
+                                        {entry.registradoPor && <span>por {entry.registradoPor}</span>}
+                                      </div>
+                                      {entry.observacao && <p className="text-[11px] mt-1 text-slate-600">{entry.observacao}</p>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          {(monitorEntries as any[]).length === 0 && (
+                            <p className="text-[11px] text-slate-400 text-center py-2">Nenhum registro semanal ainda — registre o progresso acima.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Rascunhos / simulações não aprovadas ──────────────── */}
+          {cenarios.filter((c: any) => c.status !== "aprovado").length > 0 && (
             <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
               <div className="bg-slate-700 text-white px-4 py-2 text-xs font-semibold flex items-center gap-2">
-                <History className="h-3.5 w-3.5" /> Cenários Salvos ({cenarios.length})
+                <History className="h-3.5 w-3.5" /> Simulações anteriores ({cenarios.filter((c: any) => c.status !== "aprovado").length})
               </div>
               <div className="divide-y divide-slate-50">
-                {cenarios.map((c: any) => (
+                {cenarios.filter((c: any) => c.status !== "aprovado").map((c: any) => (
                   <div key={c.id} className="p-4">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-700">{c.titulo}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{new Date(c.criadoEm).toLocaleDateString("pt-BR")} · por {c.criadoPor}</p>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-700 truncate">{c.titulo}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {new Date(c.criadoEm).toLocaleDateString("pt-BR")} · {c.criadoPor}
+                          {c.tipoCenario && ` · ${c.tipoCenario.replace(/_/g," ")}`}
+                        </p>
                       </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${c.status === "aprovado" ? "bg-emerald-100 text-emerald-700" : c.status === "rejeitado" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
-                        {c.status}
-                      </span>
+                      <button onClick={() => aprovarMut.mutate({ cenarioId: c.id, planoAcao: c.resultadoIA ?? "" })}
+                        disabled={aprovarMut.isPending}
+                        className="text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1.5 font-semibold shrink-0 flex items-center gap-1 transition-all">
+                        <CheckCircle2 className="h-3 w-3" /> Aprovar
+                      </button>
                     </div>
                     {c.resultadoIA && (
                       <details className="mt-2">
-                        <summary className="text-[10px] text-blue-600 cursor-pointer hover:text-blue-700">Ver análise completa</summary>
+                        <summary className="text-[10px] text-blue-600 cursor-pointer hover:text-blue-700">Ver análise</summary>
                         <div className="mt-2 bg-slate-50 rounded-lg p-3 text-[11px] text-slate-600 max-h-40 overflow-y-auto">
                           <ReactMarkdownSimple text={c.resultadoIA.slice(0, 600) + (c.resultadoIA.length > 600 ? "..." : "")} />
                         </div>
