@@ -50,7 +50,6 @@ export default function PlanejamentoLista() {
   // Formulário novo projeto
   const [form, setForm] = useState({
     obraId: "",
-    orcamentoId: "",
     status: "Em andamento",
     descricao: "",
   });
@@ -79,6 +78,12 @@ export default function PlanejamentoLista() {
     (obras as any[]).find((o: any) => String(o.id) === form.obraId) ?? null,
   [obras, form.obraId]);
 
+  // Orçamento vinculado automaticamente pela obra selecionada
+  const orcamentoAutoVinculado = useMemo(() => {
+    if (!obraSelecionada) return null;
+    return (orcamentos as any[]).find((o: any) => o.obraId === obraSelecionada.id) ?? null;
+  }, [orcamentos, obraSelecionada]);
+
   const criarMutation = trpc.planejamento.criarProjeto.useMutation({
     onSuccess: () => { utils.planejamento.listarProjetos.invalidate(); setModalAberto(false); resetForm(); },
     onError: (err) => { alert(err.message || "Erro ao criar planejamento."); },
@@ -88,7 +93,7 @@ export default function PlanejamentoLista() {
   });
 
   function resetForm() {
-    setForm({ obraId: "", orcamentoId: "", status: "Em andamento", descricao: "" });
+    setForm({ obraId: "", status: "Em andamento", descricao: "" });
   }
 
   function handleCriar() {
@@ -107,7 +112,7 @@ export default function PlanejamentoLista() {
       valorContrato:         obraSelecionada.valorContrato ? parseFloat(obraSelecionada.valorContrato) : undefined,
       status:                form.status,
       descricao:             form.descricao || undefined,
-      orcamentoId:           form.orcamentoId ? parseInt(form.orcamentoId) : undefined,
+      orcamentoId:           orcamentoAutoVinculado?.id ?? undefined,
     });
   }
 
@@ -328,22 +333,19 @@ export default function PlanejamentoLista() {
                 </div>
               )}
 
-              {/* Orçamento e Status lado a lado */}
+              {/* Orçamento auto-vinculado + Status */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs font-medium">Orçamento (opcional)</Label>
-                  <select
-                    value={form.orcamentoId}
-                    onChange={e => setForm(f => ({ ...f, orcamentoId: e.target.value }))}
-                    className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                  >
-                    <option value="">— Sem vínculo —</option>
-                    {(orcamentos as any[]).map((o: any) => (
-                      <option key={o.id} value={o.id}>
-                        {o.descricao ?? o.nome ?? `#${o.id}`}
-                      </option>
-                    ))}
-                  </select>
+                  <Label className="text-xs font-medium">Orçamento vinculado</Label>
+                  <div className={`mt-1 w-full border rounded-md px-3 py-2 text-sm truncate ${
+                    orcamentoAutoVinculado
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800 font-medium"
+                      : "border-input bg-muted/40 text-muted-foreground italic"
+                  }`}>
+                    {orcamentoAutoVinculado
+                      ? (orcamentoAutoVinculado.descricao ?? orcamentoAutoVinculado.codigo ?? `#${orcamentoAutoVinculado.id}`)
+                      : "Nenhum orçamento para esta obra"}
+                  </div>
                 </div>
                 <div>
                   <Label className="text-xs font-medium">Status</Label>
