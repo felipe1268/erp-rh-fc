@@ -962,6 +962,8 @@ export const planejamentoRouter = router({
       entrada:           z.number().optional(),
       numeroParcelas:    z.number().min(1).max(120).optional(),
       inicioFaturamento: z.string().nullable().optional(),
+      sinalPct:          z.number().min(0).max(100).optional(),
+      retencaoPct:       z.number().min(0).max(100).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -977,6 +979,8 @@ export const planejamentoRouter = router({
         entrada:           String(input.entrada ?? 0),
         numeroParcelas:    input.numeroParcelas ?? 6,
         inicioFaturamento: input.inicioFaturamento ?? null,
+        sinalPct:          String(input.sinalPct ?? 0),
+        retencaoPct:       String(input.retencaoPct ?? 5),
         bloqueado:         false,
         atualizadoEm:      new Date(),
       };
