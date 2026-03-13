@@ -1275,8 +1275,8 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
       <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
         {[
           { color: "#1d4ed8", dash: false,  label: "Baseline (Rev 00)" },
-          { color: "#f97316", dash: false,  label: "Revisão Atual" },
-          { color: "#16a34a", dash: false,  label: "Realizado" },
+          { color: "#D4A017", dash: false,  label: "Revisão Atual" },
+          { color: "#4169E1", dash: false,  label: "Realizado" },
           { color: "#7c3aed", dash: true,   label: "Tendência (projeção)" },
         ].map((l, i) => (
           <div key={i} className="flex items-center gap-1.5">
@@ -1293,7 +1293,7 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
           Curva S — Avanço Físico Acumulado
         </p>
         <p className="text-xs text-slate-400 mb-3">
-          Realizado atual: <strong className="text-emerald-700">{fPct(avancoAtual)}</strong>
+          Realizado atual: <strong style={{ color: "#4169E1" }}>{fPct(avancoAtual)}</strong>
           {proj.dataTerminoContratual && ` · Prazo: ${proj.dataTerminoContratual}`}
         </p>
         <ResponsiveContainer width="100%" height={360}>
@@ -1314,8 +1314,8 @@ function CurvaS({ curvaData, proj, avancoAtual, fPct }: any) {
               <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
             )}
             <Line type="monotone" dataKey="baseline"  name="Baseline"       stroke="#1d4ed8" strokeWidth={2} dot={false} connectNulls />
-            <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#f97316" strokeWidth={2} dot={false} connectNulls />
-            <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#16a34a" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+            <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#D4A017" strokeWidth={2} dot={false} connectNulls />
+            <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#4169E1" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
             <Line type="monotone" dataKey="tendencia" name="Tendência"      stroke="#7c3aed" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>
@@ -2708,12 +2708,12 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                 <Bar yAxisId="val" dataKey="Medido"    name="Medido"            fill="#3b82f6" fillOpacity={0.7} radius={[3,3,0,0]} />
                 <Line yAxisId="pct" type="monotone" dataKey="VendaAcum" name="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" />
               </>) : (<>
-                <Bar yAxisId="val" dataKey="Previsto" name="Previsto" fill={cen.cor} fillOpacity={0.75} radius={[3,3,0,0]} />
+                <Bar yAxisId="val" dataKey="Previsto" name="Previsto" fill="#D4A017" fillOpacity={0.75} radius={[3,3,0,0]} />
                 <Bar yAxisId="val" dataKey="Material" name="Material" fill="#a855f7" fillOpacity={0.65} radius={[0,0,0,0]} />
                 <Bar yAxisId="val" dataKey="MO"       name="M.O."    fill="#3b82f6" fillOpacity={0.65} radius={[0,0,0,0]} />
-                <Bar yAxisId="val" dataKey="Medido"   name="Medido"  fill="#10b981" fillOpacity={0.7}  radius={[3,3,0,0]} />
-                <Line yAxisId="pct" type="monotone" dataKey="PrevAcum" name="Prev.Acum%" stroke={cen.cor} strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                <Line yAxisId="pct" type="monotone" dataKey="RealAcum" name="Real.Acum%" stroke="#10b981" strokeWidth={2} dot={false} />
+                <Bar yAxisId="val" dataKey="Medido"   name="Medido"  fill="#4169E1" fillOpacity={0.7}  radius={[3,3,0,0]} />
+                <Line yAxisId="pct" type="monotone" dataKey="PrevAcum" name="Prev.Acum%" stroke="#D4A017" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                <Line yAxisId="pct" type="monotone" dataKey="RealAcum" name="Real.Acum%" stroke="#4169E1" strokeWidth={2} dot={false} />
               </>)}
             </ComposedChart>
           </ResponsiveContainer>
@@ -3979,10 +3979,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           <p className="text-xs font-bold uppercase tracking-wider text-slate-600">Evolução Física Global</p>
           <div className="flex gap-4 text-xs text-slate-500">
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm bg-blue-500" />% Previsto
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#D4A017" }} />% Previsto
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" />% Realizado
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#4169E1" }} />% Realizado
             </span>
           </div>
         </div>
@@ -4000,11 +4000,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             {/* Barra Previsto */}
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="w-16 text-right font-semibold text-blue-700">{fPct_(avancoPrevisto)}</span>
+                <span className="w-16 text-right font-semibold" style={{ color: "#D4A017" }}>{fPct_(avancoPrevisto)}</span>
                 <div className="relative flex-1 h-7 bg-slate-100 rounded overflow-hidden">
                   <div
-                    className="h-full bg-blue-500 transition-all duration-700 flex items-center justify-end pr-2"
-                    style={{ width: `${Math.max(avancoPrevisto, 0)}%` }}
+                    className="h-full transition-all duration-700 flex items-center justify-end pr-2"
+                    style={{ width: `${Math.max(avancoPrevisto, 0)}%`, background: "#D4A017" }}
                   >
                     {avancoPrevisto > 8 && (
                       <span className="text-[11px] font-bold text-white">{fPct_(avancoPrevisto)}</span>
@@ -4018,11 +4018,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             {/* Barra Realizado */}
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="w-16 text-right font-semibold text-emerald-700">{fPct_(avancoRealAtual)}</span>
+                <span className="w-16 text-right font-semibold" style={{ color: "#4169E1" }}>{fPct_(avancoRealAtual)}</span>
                 <div className="relative flex-1 h-7 bg-slate-100 rounded overflow-hidden">
                   <div
-                    className="h-full bg-emerald-500 transition-all duration-700 flex items-center justify-end pr-2"
-                    style={{ width: `${Math.max(avancoRealAtual, 0)}%` }}
+                    className="h-full transition-all duration-700 flex items-center justify-end pr-2"
+                    style={{ width: `${Math.max(avancoRealAtual, 0)}%`, background: "#4169E1" }}
                   >
                     {avancoRealAtual > 8 && (
                       <span className="text-[11px] font-bold text-white">{fPct_(avancoRealAtual)}</span>
@@ -4036,13 +4036,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
           {/* Cards semanal */}
           <div className="shrink-0 flex flex-col gap-2 w-44">
-            <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2.5 text-center">
-              <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">Avanço Semanal Previsto</p>
-              <p className="text-2xl font-bold text-blue-700 mt-0.5">{fPct_(avancoPrevSemanal)}</p>
+            <div className="rounded-lg border px-3 py-2.5 text-center" style={{ background: "#FDF8E7", borderColor: "#E8CC6A" }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#A07C12" }}>Avanço Semanal Previsto</p>
+              <p className="text-2xl font-bold mt-0.5" style={{ color: "#D4A017" }}>{fPct_(avancoPrevSemanal)}</p>
             </div>
-            <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2.5 text-center">
-              <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Avanço Semanal Real</p>
-              <p className="text-2xl font-bold text-emerald-700 mt-0.5">{fPct_(avancoRealSemanal)}</p>
+            <div className="rounded-lg border px-3 py-2.5 text-center" style={{ background: "#EEF2FF", borderColor: "#B0C0F0" }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#4169E1" }}>Avanço Semanal Real</p>
+              <p className="text-2xl font-bold mt-0.5" style={{ color: "#2954C8" }}>{fPct_(avancoRealSemanal)}</p>
             </div>
             <div className={`rounded-lg px-3 py-2 text-center ${spi >= 1 ? "bg-emerald-600" : "bg-red-500"}`}>
               <p className="text-[10px] font-semibold text-white/70 uppercase tracking-wider">SPI</p>
@@ -4063,8 +4063,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               Avanço Físico Acumulado — Previsto × Realizado
             </p>
             <div className="flex gap-4 text-xs text-slate-500">
-              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 bg-blue-500 rounded" /> Previsto</span>
-              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 bg-emerald-500 rounded" /> Realizado</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#D4A017" }} /> Previsto</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#4169E1" }} /> Realizado</span>
             </div>
           </div>
           <div className="px-4 py-3" style={{ height: 240 }}>
@@ -4077,10 +4077,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]}
                   labelFormatter={(l: string) => `Semana ${l}`}
                 />
-                <Line type="monotone" dataKey="previsto"  stroke="#3b82f6" strokeWidth={2} dot={false} name="previsto" />
-                <Line type="monotone" dataKey="realizado" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} connectNulls name="realizado" />
-                <ReferenceLine y={avancoPrevisto}  stroke="#3b82f6" strokeDasharray="4 4" />
-                <ReferenceLine y={avancoRealAtual} stroke="#10b981" strokeDasharray="4 4" />
+                <Line type="monotone" dataKey="previsto"  stroke="#D4A017" strokeWidth={2} dot={false} name="previsto" />
+                <Line type="monotone" dataKey="realizado" stroke="#4169E1" strokeWidth={2} dot={{ r: 3 }} connectNulls name="realizado" />
+                <ReferenceLine y={avancoPrevisto}  stroke="#D4A017" strokeDasharray="4 4" />
+                <ReferenceLine y={avancoRealAtual} stroke="#4169E1" strokeDasharray="4 4" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -4110,11 +4110,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="nome" tick={{ fontSize: 11 }} width={160} />
                 <Tooltip formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]} />
-                <Bar dataKey="previsto"  name="previsto"  fill="#3b82f6" radius={[0, 3, 3, 0]} maxBarSize={14}>
-                  <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 10, fill: "#3b82f6" }} />
+                <Bar dataKey="previsto"  name="previsto"  fill="#D4A017" radius={[0, 3, 3, 0]} maxBarSize={14}>
+                  <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 10, fill: "#D4A017" }} />
                 </Bar>
-                <Bar dataKey="realizado" name="realizado" fill="#10b981" radius={[0, 3, 3, 0]} maxBarSize={14}>
-                  <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 10, fill: "#10b981" }} />
+                <Bar dataKey="realizado" name="realizado" fill="#4169E1" radius={[0, 3, 3, 0]} maxBarSize={14}>
+                  <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 10, fill: "#4169E1" }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
