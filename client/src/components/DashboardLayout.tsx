@@ -133,10 +133,8 @@ const menuSectionsRHDP: MenuSection[] = [
   {
     title: "Tabelas e Configurações",
     items: [
-      { icon: CalendarDays, label: "Feriados",             path: "/feriados"            },
-      { icon: TrendingUp,   label: "Dissídio",             path: "/dissidio"            },
-      { icon: Wifi,         label: "Relógios de Ponto",    path: "/relogios-ponto"      },
-      { icon: Scale,        label: "Convenções Coletivas", path: "/convencoes-coletivas"},
+      { icon: CalendarDays, label: "Feriados", path: "/feriados" },
+      { icon: TrendingUp, label: "Dissídio", path: "/dissidio" },
     ],
   },
   {
@@ -322,6 +320,8 @@ const menuSectionsCadastro: MenuSection[] = [
       { icon: HardHat,   label: "Efetivo por Obra",    path: "/obras/efetivo"        },
       { icon: Layers,    label: "Setores",             path: "/setores"              },
       { icon: Briefcase, label: "Funções",             path: "/funcoes"              },
+      { icon: Wifi,      label: "Relógios de Ponto",   path: "/relogios-ponto"       },
+      { icon: Scale,     label: "Convenções Coletivas",path: "/convencoes-coletivas" },
       { icon: Wrench,    label: "Habilidades",         path: "/habilidades"          },
     ],
   },
