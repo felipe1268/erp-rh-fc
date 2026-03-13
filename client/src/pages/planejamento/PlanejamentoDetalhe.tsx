@@ -1987,12 +1987,13 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     const priData = dataInis[0]?.substring(0, 7) ?? null;
     const ultData = dataFins[dataFins.length - 1]?.substring(0, 7) ?? null;
     if (!priData || !ultData) return [];
-    return mesesRange(priData, ultData).map(mes => {
+
+    const meses = mesesRange(priData, ultData).map(mes => {
       const [ano, m] = mes.split("-").map(Number);
       let venda = 0, custo = 0;
       itens.forEach((item: any) => {
         if (!item.dataInicio || !item.dataFim) return;
-        const durTotal = Math.max(1, Math.round((new Date(item.dataFim).getTime() - new Date(item.dataInicio).getTime()) / 86400000) + 1);
+        const durTotal = Math.max(1, Math.round((new Date(item.dataFim + "T00:00:00").getTime() - new Date(item.dataInicio + "T00:00:00").getTime()) / 86400000) + 1);
         const diasMes = diasNoMes(item.dataInicio, item.dataFim, ano, m);
         if (diasMes === 0) return;
         const frac = diasMes / durTotal;
@@ -2006,6 +2007,15 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
         venda, custo,
       };
     });
+
+    // Guarantee totals match the budget exactly (eliminate float distribution drift)
+    const targetCusto = (cruzamento as any)?.valorBaseCusto ?? 0;
+    const targetVenda = (cruzamento as any)?.valorBase      ?? 0;
+    const sumCusto = meses.reduce((s, m) => s + m.custo, 0);
+    const sumVenda = meses.reduce((s, m) => s + m.venda, 0);
+    const scC = sumCusto > 0 && targetCusto > 0 ? targetCusto / sumCusto : 1;
+    const scV = sumVenda > 0 && targetVenda > 0 ? targetVenda / sumVenda : 1;
+    return meses.map(m => ({ ...m, custo: m.custo * scC, venda: m.venda * scV }));
   }, [cruzamento]);
 
   const baseV = n((cruzamento as any)?.valorBase ?? valorContrato);
@@ -2490,13 +2500,13 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
     const ultData = dataFins[dataFins.length - 1]?.substring(0, 7) ?? null;
     if (!priData || !ultData) return [];
 
-    return mesesRange(priData, ultData).map(mes => {
+    const meses = mesesRange(priData, ultData).map(mes => {
       const [ano, m] = mes.split("-").map(Number);
       let venda = 0, meta = 0, custo = 0, mat = 0, mdo = 0;
 
       itens.forEach((item: any) => {
         if (!item.dataInicio || !item.dataFim) return;
-        const durTotal = Math.max(1, Math.round((new Date(item.dataFim).getTime() - new Date(item.dataInicio).getTime()) / 86400000) + 1);
+        const durTotal = Math.max(1, Math.round((new Date(item.dataFim + "T00:00:00").getTime() - new Date(item.dataInicio + "T00:00:00").getTime()) / 86400000) + 1);
         const diasMes = diasNoMes(item.dataInicio, item.dataFim, ano, m);
         if (diasMes === 0) return;
         const frac = diasMes / durTotal;
@@ -2507,14 +2517,27 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
         mdo   += (item.custoMdo   ?? 0) * frac;
       });
 
-      return {
-        mes,
-        nomeMes: new Date(`${mes}-15`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-        venda, meta, custo, mat, mdo,
-        lucro: venda - custo,
-        margemMeta: venda - meta,
-      };
+      return { mes, nomeMes: new Date(`${mes}-15`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), venda, meta, custo, mat, mdo };
     });
+
+    // Scale to budget totals to eliminate distribution drift
+    const tC = (cruzamento as any)?.valorBaseCusto ?? 0;
+    const tV = (cruzamento as any)?.valorBase      ?? 0;
+    const tM = (cruzamento as any)?.valorBaseMeta  ?? 0;
+    const sC = meses.reduce((s, x) => s + x.custo, 0);
+    const sV = meses.reduce((s, x) => s + x.venda, 0);
+    const sM = meses.reduce((s, x) => s + x.meta,  0);
+    const fcC = sC > 0 && tC > 0 ? tC / sC : 1;
+    const fcV = sV > 0 && tV > 0 ? tV / sV : 1;
+    const fcM = sM > 0 && tM > 0 ? tM / sM : 1;
+    return meses.map(x => ({
+      ...x,
+      custo: x.custo * fcC,
+      venda: x.venda * fcV,
+      meta:  x.meta  * fcM,
+      lucro: x.venda * fcV - x.custo * fcC,
+      margemMeta: x.venda * fcV - x.meta * fcM,
+    }));
   }, [cruzamento]);
 
   // Junta com medições
