@@ -414,26 +414,42 @@ function normCol(s: string): string {
     .replace(/[.\s_\-/()]/g, '');
 }
 
-// Mapa de aliases — mais específico ANTES do mais genérico dentro de cada campo
-// custo total é o ÚLTIMO fallback para evitar conflito com "P.Total" (grupo)
+// Mapa de aliases — mais específico ANTES do mais genérico dentro de cada campo.
+// REGRA DE DUPLICATAS: campos Mat e MO compartilham os mesmos aliases quando o cabeçalho
+// repete (ex: "Custo Preço" aparece 2× → 1ª ocorrência = Mat, 2ª = MO).
+// A função detectarColunas só atribui cada alias à 1ª coluna ainda não mapeada para aquele campo.
+// Aliases com ≤ 5 chars (custo, total, ct…) só casam por igualdade EXATA — nunca por prefixo.
 const COL_ALIASES: Record<string, string[]> = {
-  item:           ['item', 'codigoeap', 'eap', 'codigoservico'],
-  descricao:      ['descricao', 'descricaodoservico', 'denominacao', 'especificacao'],
+  item:           ['item', 'codigoeap', 'eap', 'codigoitem', 'codigoservico'],
+  descricao:      ['descricao', 'descricaodoservico', 'denominacao', 'especificacao', 'descricaoservico'],
   unidade:        ['unidade', 'und', 'unid', 'un'],
   quantidade:     ['quantidade', 'quant', 'qtd', 'qde', 'qt'],
   nivel:          ['nivel', 'hierarquia', 'niv'],
   composicaoTipo: ['composicaotipo', 'tipocomposicao', 'composicao', 'comp'],
   servicoCodigo:  ['codigoservico', 'codservico', 'cods'],
   tipo:           ['tipo'],
-  // Custo unitário — combinações "P.Unit.Mat" / "PU Mat" / "CU Mat"
-  cuUnitMat:      ['punitmat', 'pumat', 'cunitmat', 'custounitmat', 'precounitmat', 'valorunitmat', 'valorunitariomaterial', 'custounitariomaterial'],
-  cuUnitMdo:      ['punitmo', 'pumo', 'cunitmo', 'custounitmo', 'precounitmo', 'valorunitmo', 'valorunitariomo', 'custounitariomo'],
-  // Custo total por item — combinações "P.Total Mat" / "PT Mat" / "CT Mat"
-  cuTotalMat:     ['ptotalmat', 'pttotalmat', 'ctmat', 'custototalmat', 'totalmat', 'totalmaterial'],
-  cuTotalMdo:     ['ptotalmo', 'pttotalmo', 'ctmo', 'custototalmo', 'totalmo', 'totalmaodeobra'],
-  // Custo total do serviço — "Custo", "Total", "Custo Total"
-  custoTotal:     ['custototal', 'totalcusto', 'custo', 'total', 'ct'],
-  abc:            ['abc'],
+  // Custo unitário — col "Custo Preço" (FC/Sinapi) ou "P.Unit.Mat" (padrão clássico)
+  // "custopreco" aparece 2× → 1ª vez = Mat, 2ª vez = MO (pela lógica de duplicatas)
+  cuUnitMat:      ['punitmat', 'pumat', 'cunitmat', 'custounitmat', 'precounitmat',
+                   'valorunitmat', 'valorunitariomaterial', 'custounitariomaterial',
+                   'custopreco',        // "Custo Preço" (1ª ocorrência)
+                   'custoprecomaterial','custoprecounitmaterial'],
+  cuUnitMdo:      ['punitmo', 'pumo', 'cunitmo', 'custounitmo', 'precounitmo',
+                   'valorunitmo', 'valorunitariomo', 'custounitariomo',
+                   'custopreco',        // "Custo Preço" (2ª ocorrência — Mat já foi pego)
+                   'custoprecomo', 'custoprecounitmo'],
+  // Custo total por item — "Preço Total" (FC/Sinapi) ou "P.Total Mat" (padrão clássico)
+  // "precototal" aparece 2× → 1ª = Mat, 2ª = MO
+  cuTotalMat:     ['ptotalmat', 'pttotalmat', 'ctmat', 'custototalmat', 'totalmat', 'totalmaterial',
+                   'precototal',         // "Preço Total" (1ª ocorrência)
+                   'precototalmaterial', 'valortotalmat', 'precototalmat'],
+  cuTotalMdo:     ['ptotalmo', 'pttotalmo', 'ctmo', 'custototalmo', 'totalmo', 'totalmaodeobra',
+                   'precototal',         // "Preço Total" (2ª ocorrência — Mat já foi pego)
+                   'precototalmo', 'valortotalmo'],
+  // Custo total do serviço — "Custo" sozinho (col final de totais)
+  // IMPORTANTE: "custo" e "total" são aliases CURTOS → só casam por igualdade exata
+  custoTotal:     ['custototal', 'totalcusto', 'custogeral', 'totalgeral', 'custo', 'total', 'ct'],
+  abc:            ['abc', 'abcserv', 'abcinsumos', 'curvaabc'],
 };
 
 /**
@@ -457,7 +473,11 @@ function detectarColunas(labelRow: any[], parentRow: any[] | null): Record<strin
 
     for (const [field, aliases] of Object.entries(COL_ALIASES)) {
       if (colMap[field] !== undefined) continue;
-      if (candidates.some(c => aliases.some(a => c === a || c.startsWith(a)))) {
+      // Aliases curtos (≤5 chars): só igualdade exata para evitar falso-positivos
+      // Ex: "custo" não deve casar com "custopreco" via startsWith
+      if (candidates.some(c => aliases.some(a =>
+        c === a || (a.length >= 6 && c.startsWith(a))
+      ))) {
         colMap[field] = idx;
       }
     }
