@@ -137,6 +137,18 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  // ── Limpar todas as atividades de uma revisão (excluir cronograma importado) ─
+  limparCronograma: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(planejamentoAvancos)
+        .where(eq(planejamentoAvancos.projetoId, input.projetoId));
+      await db.delete(planejamentoAtividades)
+        .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+      return { success: true };
+    }),
+
   // ── Detalhe completo do projeto ───────────────────────────────────────────
   getProjetoById: protectedProcedure
     .input(z.object({ id: z.number() }))
