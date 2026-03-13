@@ -51,7 +51,8 @@ shared/         # Shared types and constants
 - Production: `node dist/index.js`
 
 ## Environment Variables
-- `DATABASE_URL` — MySQL connection string (mysql://user:pass@host:port/db)
+- `NEON_DATABASE_URL` — Neon PostgreSQL connection string (takes priority over DATABASE_URL)
+- `DATABASE_URL` — Replit internal PostgreSQL fallback (runtime-managed by Replit)
 - `JWT_SECRET` — JWT signing secret
 - `PORT` — Server port (default 5000 in dev)
 - `VITE_APP_TITLE` — App title shown in UI
@@ -59,6 +60,11 @@ shared/         # Shared types and constants
 - `OAUTH_SERVER_URL` — Manus OAuth server URL (optional)
 - `VITE_APP_ID` — OAuth App ID (optional)
 - `OWNER_OPEN_ID` — Owner user OpenID (optional)
+
+## Database
+- **Neon PostgreSQL** (production): `ep-young-water-ac67nuby.sa-east-1.aws.neon.tech`, db=`neondb`, project=`ERP INTEGRADO`
+- Neon uses pooler URL for app connections, direct URL for migrations
+- Priority: `NEON_DATABASE_URL` → `DATABASE_URL` (set in `server/_core/env.ts`)
 
 ## Planejamento Module
 - Routes: `/planejamento/:id` (tabs: cronograma, curva-s, avanco, refis, compras, ia-gestora, etc.)
