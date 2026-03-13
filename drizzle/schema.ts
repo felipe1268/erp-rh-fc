@@ -4265,6 +4265,18 @@ export const planejamentoRefis = pgTable("planejamento_refis", {
   criadoPor:                varchar("criado_por", { length: 200 }),
 });
 
+export const planejamentoMedicaoConfig = pgTable("planejamento_medicao_config", {
+  id:                serial().primaryKey(),
+  projetoId:         integer("projeto_id").notNull().unique(),
+  tipoMedicao:       varchar("tipo_medicao", { length: 20 }).notNull().default("avanco"),
+  diaCorte:          integer("dia_corte").notNull().default(25),
+  entrada:           numeric({ precision: 18, scale: 2 }).default("0"),
+  numeroParcelas:    integer("numero_parcelas").default(6),
+  inicioFaturamento: date("inicio_faturamento"),
+  criadoEm:          timestamp("criado_em").defaultNow(),
+  atualizadoEm:      timestamp("atualizado_em").defaultNow(),
+});
+
 export const planejamentoMedicoes = pgTable("planejamento_medicoes", {
   id:                   serial().primaryKey(),
   projetoId:            integer("projeto_id").notNull(),

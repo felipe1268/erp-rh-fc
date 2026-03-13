@@ -17,6 +17,7 @@ import {
   ChevronDown, Minus, Upload, XCircle, GripVertical,
   ShoppingCart, AlertOctagon, Cloud, CloudRain, Wind, Sun, Droplets,
   MapPin, Package, Filter, Trash2, Pencil, X, RefreshCw,
+  Settings, AlertCircle,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -1910,6 +1911,31 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const valorContrato = n(proj.valorContrato);
   const [cenario, setCenario] = useState<Cenario>("venda");
 
+  // ── Config de medição ───────────────────────────────────────────────────
+  const [showCfg, setShowCfg]       = useState(false);
+  const [cfgTipo, setCfgTipo]       = useState<"avanco" | "parcela_fixa">("avanco");
+  const [cfgDiaCorte, setCfgDiaCorte] = useState(25);
+  const [cfgEntrada, setCfgEntrada] = useState(0);
+  const [cfgParcelas, setCfgParcelas] = useState(6);
+  const [cfgInicioFat, setCfgInicioFat] = useState("");
+
+  const { data: configMed, refetch: refetchCfg } = trpc.planejamento.getConfigMedicao.useQuery(
+    { projetoId }, { enabled: !!projetoId });
+
+  const salvarCfgMut = trpc.planejamento.salvarConfigMedicao.useMutation({
+    onSuccess: () => { refetchCfg(); setShowCfg(false); },
+  });
+
+  React.useEffect(() => {
+    if (configMed) {
+      setCfgTipo((configMed.tipoMedicao as any) ?? "avanco");
+      setCfgDiaCorte(configMed.diaCorte ?? 25);
+      setCfgEntrada(n(configMed.entrada));
+      setCfgParcelas(configMed.numeroParcelas ?? 6);
+      setCfgInicioFat((configMed.inicioFaturamento as any) ?? "");
+    }
+  }, [configMed]);
+
   const { data: cruzamento, isLoading: loadCruz } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
     { projetoId }, { enabled: !!projetoId });
 
@@ -1956,6 +1982,71 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
       };
     });
   }, [cruzamento]);
+
+  // ── Previsão por avanço físico ─────────────────────────────────────────
+  const previsoesMensais = useMemo(() => {
+    if (cfgTipo !== "avanco") return {} as Record<string, number>;
+    const folhas = (atividades ?? []).filter((a: any) => !a.isGrupo);
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso = pesoTotal === 0;
+    const denom = semPeso ? (folhas.length || 1) : pesoTotal;
+    const baseV = n((cruzamento as any)?.valorBase ?? valorContrato);
+
+    // Pre-group avancos by activity (sorted by semana asc)
+    const avByAct: Record<number, { semana: string; pct: number }[]> = {};
+    (avancos ?? []).forEach((av: any) => {
+      if (!avByAct[av.atividadeId]) avByAct[av.atividadeId] = [];
+      avByAct[av.atividadeId].push({ semana: av.semana, pct: n(av.percentualAcumulado) });
+    });
+    Object.values(avByAct).forEach(arr => arr.sort((a, b) => a.semana.localeCompare(b.semana)));
+
+    const result: Record<string, number> = {};
+    dadosMensais.forEach((d: any) => {
+      const [ano, m] = d.mes.split("-").map(Number);
+      const lastDay = new Date(ano, m, 0).getDate();
+      const corte = Math.min(cfgDiaCorte, lastDay);
+      const cutoff = `${d.mes}-${String(corte).padStart(2, "0")}`;
+      let soma = 0;
+      folhas.forEach((a: any) => {
+        const acts = avByAct[a.id] ?? [];
+        let pct = 0;
+        for (const av of acts) {
+          if (av.semana <= cutoff) pct = av.pct;
+          else break;
+        }
+        const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+        soma += (pct * peso) / denom;
+      });
+      result[d.mes] = +(soma / 100 * baseV).toFixed(2);
+    });
+    return result;
+  }, [cfgTipo, cfgDiaCorte, dadosMensais, avancos, atividades, cruzamento, valorContrato]);
+
+  // ── Fluxo de Caixa (parcelas fixas) ────────────────────────────────────
+  const fluxoCaixa = useMemo(() => {
+    if (cfgTipo !== "parcela_fixa" || dadosMensais.length === 0) return [];
+    const baseV = n((cruzamento as any)?.valorBase ?? valorContrato);
+    const saldoParcelar = Math.max(0, baseV - cfgEntrada);
+    const valorParcela  = cfgParcelas > 0 ? saldoParcelar / cfgParcelas : 0;
+    const inicioMes = cfgInicioFat ? cfgInicioFat.substring(0, 7) : (dadosMensais[0]?.mes ?? "");
+    let caixaAcum = 0;
+
+    return dadosMensais.map((d: any) => {
+      let recebido = 0;
+      if (d.mes === inicioMes) {
+        recebido = cfgEntrada;
+      } else if (d.mes > inicioMes) {
+        const startDate = new Date(inicioMes + "-01");
+        const thisDate  = new Date(d.mes + "-01");
+        const diffM = (thisDate.getFullYear() - startDate.getFullYear()) * 12
+                    + (thisDate.getMonth() - startDate.getMonth());
+        if (diffM >= 1 && diffM <= cfgParcelas) recebido = valorParcela;
+      }
+      const saldoMes = recebido - d.custo;
+      caixaAcum += saldoMes;
+      return { mes: d.mes, nomeMes: d.nomeMes, custo: d.custo, recebido, saldoMes, caixaAcum };
+    });
+  }, [cfgTipo, cfgEntrada, cfgParcelas, cfgInicioFat, dadosMensais, cruzamento, valorContrato]);
 
   // Junta com medições
   const rows = useMemo(() => {
@@ -2048,6 +2139,108 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
 
   return (
     <div className="space-y-5">
+
+      {/* ── Painel de Configuração de Medição ─────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowCfg(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Settings className="h-4 w-4 text-slate-500" />
+            <span className="text-sm font-semibold text-slate-700">Configuração de Medição</span>
+            {configMed && (
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfgTipo === "avanco" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                {cfgTipo === "avanco" ? `Por Avanço · Corte dia ${cfgDiaCorte}` : `Parcelas Fixas · ${cfgParcelas}x · Corte dia ${cfgDiaCorte}`}
+              </span>
+            )}
+            {!configMed && <span className="text-[10px] text-slate-400 italic">Não configurado</span>}
+          </div>
+          <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${showCfg ? "rotate-180" : ""}`} />
+        </button>
+
+        {showCfg && (
+          <div className="border-t border-slate-100 px-4 py-4 bg-slate-50/60">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Tipo de medição */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Modalidade</p>
+                <div className="flex gap-3">
+                  {[
+                    { v: "avanco",       l: "Por Avanço",      desc: "Medição baseada no progresso físico acumulado até o dia de corte" },
+                    { v: "parcela_fixa", l: "Parcelas Fixas",  desc: "Entrada + saldo dividido em parcelas fixas independente do avanço" },
+                  ].map(opt => (
+                    <button key={opt.v}
+                      onClick={() => setCfgTipo(opt.v as any)}
+                      title={opt.desc}
+                      className={`flex-1 text-xs font-semibold py-2 px-3 rounded-lg border-2 transition-all text-left ${
+                        cfgTipo === opt.v
+                          ? (opt.v === "avanco" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-amber-500 bg-amber-50 text-amber-700")
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      {opt.l}
+                      <span className="block text-[10px] font-normal mt-0.5 opacity-70 leading-tight">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Campos comuns + específicos */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Parâmetros</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-1">Dia de Corte</label>
+                    <input type="number" min={1} max={31} value={cfgDiaCorte}
+                      onChange={e => setCfgDiaCorte(Math.max(1, Math.min(31, parseInt(e.target.value) || 25)))}
+                      className="h-8 w-full text-xs border border-slate-200 rounded-lg px-3 bg-white focus:ring-1 focus:ring-blue-400 outline-none"
+                      placeholder="Ex: 25" />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Dia do mês para linha de corte</p>
+                  </div>
+
+                  {cfgTipo === "parcela_fixa" && (
+                    <>
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-1">Entrada (R$)</label>
+                        <input type="number" min={0} step={0.01} value={cfgEntrada}
+                          onChange={e => setCfgEntrada(parseFloat(e.target.value) || 0)}
+                          className="h-8 w-full text-xs border border-slate-200 rounded-lg px-3 bg-white focus:ring-1 focus:ring-amber-400 outline-none" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-1">Nº de Parcelas</label>
+                        <input type="number" min={1} max={120} value={cfgParcelas}
+                          onChange={e => setCfgParcelas(Math.max(1, parseInt(e.target.value) || 6))}
+                          className="h-8 w-full text-xs border border-slate-200 rounded-lg px-3 bg-white focus:ring-1 focus:ring-amber-400 outline-none" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-1">Início Faturamento</label>
+                        <input type="month" value={cfgInicioFat}
+                          onChange={e => setCfgInicioFat(e.target.value)}
+                          className="h-8 w-full text-xs border border-slate-200 rounded-lg px-3 bg-white focus:ring-1 focus:ring-amber-400 outline-none" />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-100">
+              <button onClick={() => { setShowCfg(false); if (configMed) { setCfgTipo((configMed.tipoMedicao as any) ?? "avanco"); setCfgDiaCorte(configMed.diaCorte ?? 25); setCfgEntrada(n(configMed.entrada)); setCfgParcelas(configMed.numeroParcelas ?? 6); setCfgInicioFat((configMed.inicioFaturamento as any) ?? ""); } }}
+                className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100">
+                Cancelar
+              </button>
+              <button
+                onClick={() => salvarCfgMut.mutate({ projetoId, tipoMedicao: cfgTipo, diaCorte: cfgDiaCorte, entrada: cfgEntrada, numeroParcelas: cfgParcelas, inicioFaturamento: cfgInicioFat || null })}
+                disabled={salvarCfgMut.isPending}
+                className="text-xs px-4 py-1.5 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50">
+                {salvarCfgMut.isPending ? "Salvando..." : "Salvar Configuração"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Banner de cruzamento */}
       {qtdCruz > 0 ? (
         <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs text-emerald-700">
@@ -2153,6 +2346,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               <th className="py-2 px-3 text-right text-emerald-700">Lucro Prev. <span className="font-normal opacity-60">(V−C)</span></th>
               <th className="py-2 px-3 text-right text-violet-700">Lucro Des. <span className="font-normal opacity-60">(V−M)</span></th>
               <th className="py-2 px-3 text-right">Prev.Acum%</th>
+              {cfgTipo === "avanco" && <th className="py-2 px-3 text-right text-indigo-700 whitespace-nowrap">Prev. Medição</th>}
               <th className="py-2 px-3 text-right text-blue-700">Medido</th>
               <th className="py-2 px-3 text-right">Real.Acum%</th>
               <th className="py-2 px-3 text-right">Desvio</th>
@@ -2186,6 +2380,14 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                       {r.margemMeta >= 0 ? "+" : ""}{fmt(r.margemMeta)}
                     </td>
                     <td className="py-2 px-3 text-right text-slate-500">{cumCen.toFixed(1)}%</td>
+                    {cfgTipo === "avanco" && (() => {
+                      const prev = previsoesMensais[r.mes];
+                      return (
+                        <td className="py-2 px-3 text-right font-semibold text-indigo-600">
+                          {prev != null && prev > 0 ? fmt(prev) : <span className="text-slate-300">—</span>}
+                        </td>
+                      );
+                    })()}
                     <td className="py-2 px-3 text-right font-semibold text-blue-700">
                       {r.valorReal > 0 ? fmt(r.valorReal) : <span className="text-slate-300">—</span>}
                     </td>
@@ -2217,7 +2419,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                   </tr>
                   {isEdit && (
                     <tr className="bg-blue-50 border-b border-blue-100">
-                      <td colSpan={13} className="px-4 py-3">
+                      <td colSpan={cfgTipo === "avanco" ? 14 : 13} className="px-4 py-3">
                         <div className="flex flex-wrap items-center gap-3">
                           <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-slate-600">Valor Medido (R$):</label>
@@ -2263,6 +2465,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                 <td className={`py-2 px-3 text-right font-bold ${totalLucro >= 0 ? "text-emerald-300" : "text-red-400"}`}>{totalLucro >= 0 ? "+" : ""}{fmt(totalLucro)}</td>
                 <td className={`py-2 px-3 text-right font-bold ${totalLucroDesejado >= 0 ? "text-violet-300" : "text-red-400"}`}>{totalLucroDesejado >= 0 ? "+" : ""}{fmt(totalLucroDesejado)}</td>
                 <td className="py-2 px-3" />
+                {cfgTipo === "avanco" && <td className="py-2 px-3" />}
                 <td className="py-2 px-3 text-right font-bold text-blue-300">{fmt(totalReal)}</td>
                 <td colSpan={4} />
               </tr>
@@ -2277,7 +2480,111 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
       </div>
       <p className="text-[10px] text-slate-400 text-center">
         * Lucro Previsto (V−C) = Venda − Custo | Lucro Desejado (V−M) = Venda − Meta | Valores normalizados ao orçamento (valor_negociado, totalMeta, totalCusto).
+        {cfgTipo === "avanco" && " | Prev. Medição = % acumulado até o dia de corte × valor contrato."}
       </p>
+
+      {/* ── Fluxo de Caixa — Parcelas Fixas ─────────────────────────────── */}
+      {cfgTipo === "parcela_fixa" && fluxoCaixa.length > 0 && (() => {
+        const baseV = n((cruzamento as any)?.valorBase ?? valorContrato);
+        const saldoParcelar = Math.max(0, baseV - cfgEntrada);
+        const valorParcela  = cfgParcelas > 0 ? saldoParcelar / cfgParcelas : 0;
+        const totalRecebido = fluxoCaixa.reduce((s, r) => s + r.recebido, 0);
+        const totalCustoFC  = fluxoCaixa.reduce((s, r) => s + r.custo, 0);
+        const mesesNeg      = fluxoCaixa.filter(r => r.caixaAcum < 0).length;
+
+        return (
+          <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+            <div className="bg-amber-600 text-white px-4 py-2.5 flex items-center gap-2 rounded-t-xl">
+              <TrendingUp className="h-4 w-4 shrink-0" />
+              <p className="text-xs font-semibold">Fluxo de Caixa — Parcelas Fixas</p>
+              {mesesNeg > 0 && (
+                <span className="ml-auto flex items-center gap-1 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  <AlertCircle className="h-3 w-3" />
+                  {mesesNeg} {mesesNeg === 1 ? "mês" : "meses"} com caixa negativo
+                </span>
+              )}
+            </div>
+
+            {/* Resumo */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4 py-3 border-b border-amber-100 bg-amber-50/50">
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wide">Valor Contrato</p>
+                <p className="text-sm font-bold text-slate-700">{fmt(baseV)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wide">Entrada</p>
+                <p className="text-sm font-bold text-amber-700">{fmt(cfgEntrada)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wide">Parcela ({cfgParcelas}x)</p>
+                <p className="text-sm font-bold text-amber-700">{fmt(valorParcela)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wide">Saldo Caixa Final</p>
+                <p className={`text-sm font-bold ${fluxoCaixa[fluxoCaixa.length - 1]?.caixaAcum >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                  {fmt(fluxoCaixa[fluxoCaixa.length - 1]?.caixaAcum ?? 0)}
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="py-2 px-3 text-left">Competência</th>
+                    <th className="py-2 px-3 text-right">Custo Previsto</th>
+                    <th className="py-2 px-3 text-right text-amber-700">Recebimento</th>
+                    <th className="py-2 px-3 text-right">Saldo Mês</th>
+                    <th className="py-2 px-3 text-right font-semibold">Caixa Acumulado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fluxoCaixa.map((r, idx) => {
+                    const isNeg = r.caixaAcum < 0;
+                    return (
+                      <tr key={r.mes} className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/30"} ${isNeg ? "bg-red-50/60" : ""}`}>
+                        <td className="py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">
+                          {new Date(`${r.mes}-15`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+                        </td>
+                        <td className="py-2 px-3 text-right text-red-600">{fmt(r.custo)}</td>
+                        <td className={`py-2 px-3 text-right font-semibold ${r.recebido > 0 ? "text-amber-700" : "text-slate-300"}`}>
+                          {r.recebido > 0 ? fmt(r.recebido) : "—"}
+                        </td>
+                        <td className={`py-2 px-3 text-right font-semibold ${r.saldoMes >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {r.saldoMes >= 0 ? "+" : ""}{fmt(r.saldoMes)}
+                        </td>
+                        <td className={`py-2 px-3 text-right font-bold text-sm ${isNeg ? "text-red-700" : "text-emerald-700"}`}>
+                          <div className="flex items-center justify-end gap-1">
+                            {isNeg && <AlertCircle className="h-3 w-3 text-red-500" />}
+                            {r.caixaAcum >= 0 ? "+" : ""}{fmt(r.caixaAcum)}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-slate-700 text-white text-[11px]">
+                  <tr>
+                    <td className="py-2 px-3 font-bold">TOTAL</td>
+                    <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(totalCustoFC)}</td>
+                    <td className="py-2 px-3 text-right font-bold text-amber-300">{fmt(totalRecebido)}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {mesesNeg > 0 && (
+              <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border-t border-red-200">
+                <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-700">
+                  <strong>Atenção:</strong> {mesesNeg} {mesesNeg === 1 ? "mês apresenta" : "meses apresentam"} caixa acumulado negativo.
+                  Isso indica que o custo de execução supera os recebimentos no período — o que pode comprometer a operação. Avalie renegociar o cronograma de parcelas ou o prazo de início do faturamento.
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
