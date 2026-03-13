@@ -161,15 +161,19 @@ ${atrasadas.slice(0, 10).map(a => `  - [${a.eapCodigo ?? ""}] ${a.nome} | prazo:
 ${climaTexto}`;
 
       const systemPrompt = buildSystemPrompt(conhecimentos);
+      const mensagemComContexto = `${contextoProjeto}
+
+---
+**Pergunta do gestor:** ${input.mensagem}`;
       const messagesForLLM = [
-        { role: "system" as const, content: systemPrompt + "\n\n" + contextoProjeto },
+        { role: "system" as const, content: systemPrompt },
         ...historicoDb.map(m => ({ role: m.role as "user" | "assistant", content: m.conteudo })),
-        { role: "user" as const, content: input.mensagem },
+        { role: "user" as const, content: mensagemComContexto },
       ];
 
       let resposta: string;
       try {
-        const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 1500 });
+        const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 2500 });
         const rawContent = result.choices?.[0]?.message?.content;
         resposta = typeof rawContent === "string" ? rawContent : "Não foi possível processar. Tente novamente.";
       } catch (err: any) {
@@ -400,33 +404,37 @@ ${climaTexto}`;
 
       const systemPrompt = buildSystemPrompt(conhecimentos) + `
 
-## Modo: SIMULADOR DE CENÁRIOS — ANÁLISE INTEGRADA (PRAZO + CUSTO + CAIXA + MARGEM)
+## Modo: SIMULADOR DE CENÁRIOS — ANÁLISE INTEGRADA
 
-Você está em modo de simulação avançada. O gestor quer entender o impacto COMPLETO do cenário proposto.
-Analise SEMPRE os 5 eixos abaixo, mesmo que o usuário não pergunte explicitamente:
+Você está em modo de simulação avançada. Analise o impacto COMPLETO do cenário proposto em 5 eixos:
+1. **PRAZO** — dias ganhos/perdidos, SPI projetado
+2. **CUSTO** — custo adicional (mão de obra, equipamentos, horas extras)
+3. **CAIXA** — impacto nas próximas medições
+4. **MARGEM** — risco à margem bruta e como protegê-la
+5. **AÇÃO IMEDIATA** — o que fazer ESTA SEMANA
 
-1. **PRAZO** — Impacto no cronograma físico (dias ganhos/perdidos, SPI projetado)
-2. **CUSTO** — Custo adicional do cenário (mão de obra, equipamentos, horas extras)
-3. **CAIXA** — Quando o desvio/custo bate no caixa da obra (próximas medições, antecipações)
-4. **MARGEM** — Risco à margem bruta e estratégias para protegê-la
-5. **SOLUÇÃO IMEDIATA** — O que fazer AGORA, esta semana, para minimizar o impacto
+Estruture sua resposta com estas seções usando ## como cabeçalho. Seja técnico, específico e direto.`;
 
-## Formato obrigatório de resposta:
-Use sempre este formato estruturado com as seções marcadas.
+      const contextoProjeto = `## Dados do Projeto
+- **Projeto:** ${proj?.nome ?? "não informado"}
+- **Local:** ${proj?.local ?? "não informado"}
+- **Término contratual:** ${proj?.dataTerminoContratual ?? "não informado"}
+- **Total de atividades:** ${atividades.length} | **Atrasadas:** ${atrasadas.length}
+${contextFinanceiro}
 
-Projeto: ${proj?.nome} | Local: ${proj?.local} | Término contratual: ${proj?.dataTerminoContratual}
-Total atividades: ${atividades.length} | Atrasadas: ${atrasadas.length}
-Parâmetros do cenário: ${JSON.stringify(input.parametros ?? {})}${contextFinanceiro}`;
+## Solicitação do Gestor
+**Tipo:** ${input.titulo}
+**Descrição:** ${input.mensagem}`;
 
       const messagesForLLM = [
         { role: "system" as const, content: systemPrompt },
         ...historicoCenario.map(m => ({ role: m.role as "user" | "assistant", content: m.conteudo })),
-        { role: "user" as const, content: `**Cenário: ${input.titulo}**\n\n${input.mensagem}` },
+        { role: "user" as const, content: contextoProjeto },
       ];
 
       let resposta: string;
       try {
-        const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 2000 });
+        const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 3000 });
         const rawContent = result.choices?.[0]?.message?.content;
         resposta = typeof rawContent === "string" ? rawContent : "Não foi possível simular.";
       } catch (err: any) {
