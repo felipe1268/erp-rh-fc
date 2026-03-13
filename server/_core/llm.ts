@@ -209,7 +209,13 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
+const isGoogleKey = () => !!ENV.googleApiKey && ENV.googleApiKey.startsWith("AIza");
+
 const resolveApiUrl = () => {
+  // Google Gemini (OpenAI-compatible endpoint)
+  if (isGoogleKey()) {
+    return "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  }
   if (ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0) {
     return `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`;
   }
@@ -220,8 +226,10 @@ const resolveApiUrl = () => {
   return "https://forge.manus.im/v1/chat/completions";
 };
 
+const resolveApiKey = () => isGoogleKey() ? ENV.googleApiKey : ENV.forgeApiKey;
+
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
+  if (!ENV.forgeApiKey && !ENV.googleApiKey) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
 };
@@ -286,7 +294,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const isOpenAiKey = ENV.forgeApiKey?.startsWith("sk-");
-  const model = isOpenAiKey ? "gpt-4o" : "gemini-2.5-flash";
+  const model = isGoogleKey()
+    ? "gemini-2.0-flash"
+    : isOpenAiKey ? "gpt-4o" : "gemini-2.5-flash";
 
   const payload: Record<string, unknown> = {
     model,
@@ -305,8 +315,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  // max_tokens and thinking only for Gemini/Forge models (not OpenAI)
-  if (!isOpenAiKey) {
+  // max_tokens / thinking por provedor
+  if (isGoogleKey()) {
+    payload.max_tokens = params.maxTokens ?? params.max_tokens ?? 4096;
+  } else if (!isOpenAiKey) {
+    // Forge/Manus (Gemini via Forge)
     payload.max_tokens = 8192;
     payload.thinking = { budget_tokens: 128 };
   } else {
@@ -328,7 +341,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${resolveApiKey()}`,
     },
     body: JSON.stringify(payload),
   });
