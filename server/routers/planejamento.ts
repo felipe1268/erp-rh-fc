@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql, isNotNull } from "drizzle-orm";
 import {
   planejamentoProjetos,
   planejamentoRevisoes,
@@ -32,6 +33,7 @@ export const planejamentoRouter = router({
   criarProjeto: protectedProcedure
     .input(z.object({
       companyId:             z.number(),
+      obraId:                z.number().optional(),
       orcamentoId:           z.number().optional(),
       nome:                  z.string(),
       cliente:               z.string().optional(),
@@ -45,8 +47,27 @@ export const planejamentoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+
+      // Regra: 1 planejamento por obra
+      if (input.obraId) {
+        const [existe] = await db.select({ id: planejamentoProjetos.id })
+          .from(planejamentoProjetos)
+          .where(and(
+            eq(planejamentoProjetos.companyId, input.companyId),
+            eq(planejamentoProjetos.obraId, input.obraId),
+          ))
+          .limit(1);
+        if (existe) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Esta obra já possui um planejamento cadastrado.",
+          });
+        }
+      }
+
       const [projeto] = await db.insert(planejamentoProjetos).values({
         companyId:             input.companyId,
+        obraId:                input.obraId ?? null,
         orcamentoId:           input.orcamentoId ?? null,
         nome:                  input.nome,
         cliente:               input.cliente ?? null,

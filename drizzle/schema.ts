@@ -4134,6 +4134,7 @@ export const encargosSociais = pgTable("encargos_sociais", {
 export const planejamentoProjetos = pgTable("planejamento_projetos", {
   id:                     serial().primaryKey(),
   companyId:              integer("company_id").notNull(),
+  obraId:                 integer("obra_id"),
   orcamentoId:            integer("orcamento_id"),
   nome:                   varchar({ length: 300 }).notNull(),
   cliente:                varchar({ length: 200 }),
