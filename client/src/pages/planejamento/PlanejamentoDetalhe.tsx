@@ -1387,14 +1387,16 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   }, [folhas, semanaAtual]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
+  // Prioriza avancoLocal (edições não salvas / import) sobre avancoExistente (banco)
   const realizadoAcum = useMemo(() => {
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 100;
     let soma = 0;
     folhas.forEach((a: any) => {
-      soma += ((avancoExistente[a.id] ?? 0) * n(a.pesoFinanceiro)) / pesoTotal;
+      const val = avancoLocal[a.id] !== undefined ? avancoLocal[a.id] : (avancoExistente[a.id] ?? 0);
+      soma += (val * n(a.pesoFinanceiro)) / pesoTotal;
     });
     return +soma.toFixed(1);
-  }, [folhas, avancoExistente]);
+  }, [folhas, avancoExistente, avancoLocal]);
 
   const delta = +(realizadoAcum - previsto).toFixed(1);
 
