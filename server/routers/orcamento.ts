@@ -1761,6 +1761,22 @@ export const orcamentoRouter = router({
       return { success: true };
     }),
 
+  // Alias para compatibilidade com o frontend
+  changeStatus: protectedProcedure
+    .input(z.object({
+      id:     z.number(),
+      status: z.enum(['rascunho', 'aguardando_aprovacao', 'aprovado', 'fechado']),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
+      if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      if (orc.status === 'fechado' && input.status !== 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento fechado não pode ser reaberto.' });
+      await db.update(orcamentos).set({ status: input.status }).where(eq(orcamentos.id, input.id));
+      return { success: true };
+    }),
+
   // ── Importar BDI separadamente para um orçamento existente ──
   importarBdi: protectedProcedure
     .input(z.object({
