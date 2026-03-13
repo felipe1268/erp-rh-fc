@@ -125,7 +125,7 @@ export default function OrcamentoDetalhe() {
   const excluirMut = trpc.orcamento.excluir.useMutation({
     onSuccess: () => {
       toast.success("Orçamento excluído com sucesso.");
-      navigate("/orcamento");
+      navigate("/orcamento/lista");
     },
     onError: e => toast.error(e.message || "Erro ao excluir orçamento"),
   });
