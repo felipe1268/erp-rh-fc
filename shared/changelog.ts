@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 278,
+    titulo: "Clientes: corrigido erro na consulta automática de CNPJ",
+    descricao: "A consulta de CNPJ no cadastro de Clientes passava pelo servidor (tRPC) e falhava intermitentemente. Migrada para fetch direto do browser para a BrasilAPI — mesmo padrão usado em Fornecedores, Parceiros, EPIs e outras telas. Agora ao digitar 14 dígitos o formulário é preenchido automaticamente com Razão Social, Endereço, Telefone, E-mail e Situação cadastral.",
+    tipo: "correcao",
+    modulos: "Cadastro / Clientes",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:30:00",
+  },
+  {
     version: 277,
     titulo: "REFIS PDF: layout tipo apresentação profissional",
     descricao: "Reorganizado o CSS de impressão do REFIS: (1) Corrigido bug que forçava todos os grids a 3 colunas, quebrando os 4 indicadores KPI — agora usam sm:grid-cols-4 corretamente; (2) Adicionadas quebras de página explícitas — Bloco 1+2 na pág 1, Curva S na pág 2, Grupos na pág 3+; (3) Blocos de etapa longos agora podem quebrar internamente (refis-block-tall); (4) Margens e espaçamentos compactados para eliminar páginas em branco ou com meia informação.",
