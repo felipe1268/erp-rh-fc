@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 265,
+    titulo: "Atividades em Atraso — Tela Cheia + Imprimir/PDF com dados do usuário (Regra de Ouro)",
+    descricao: "O modal de Atividades em Atraso foi transformado em uma tela cheia profissional. Barra de ação sticky com: botão Voltar, Imprimir e Gerar PDF (A4). NOVA REGRA DE OURO: todo PDF/impressão gerado pelo sistema inclui obrigatoriamente o cabeçalho com logo da empresa, título do relatório, nome completo do usuário, cargo, e-mail e data/hora de geração (horário de Brasília). Layout dos cards redesenhado: borda esquerda vermelha, cabeçalho âmbar, barras de progresso mais espessas com valor interno, card de desvio em destaque. PrintHeader.tsx atualizado para aceitar dados do usuário.",
+    tipo: "feature",
+    modulos: "Planejamento / Visão Geral",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 22:00:00",
+  },
+  {
     version: 264,
     titulo: "Menu lateral — Drag-and-drop de seções com Ajuda fixada por último",
     descricao: "Cada seção do menu lateral (ex: PLANEJAMENTO, ABAS DO PROJETO) pode ser arrastada para reorganizar sua posição. Ao passar o mouse sobre o cabeçalho da seção, aparece um ícone de arrastar (⠿) na esquerda. Arrastar e soltar reordena as seções e persiste a ordem no localStorage (separado por módulo). A seção 'Ajuda' é sempre fixada por último e não pode ser movida — exibe '(fixo)' discretamente ao lado do título. Feedback visual: a seção sendo arrastada fica com opacidade reduzida; a zona de destino recebe destaque âmbar.",
