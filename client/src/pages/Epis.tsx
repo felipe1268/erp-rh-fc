@@ -1750,58 +1750,30 @@ export default function Epis() {
           </div>
         )}
 
-        {/* Tabs - scroll horizontal em mobile */}
-        <div className="overflow-x-auto -mx-2 px-2">
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-max sm:w-full">
-          <button onClick={() => setViewMode("catalogo")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "catalogo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <Package className="h-3.5 w-3.5 inline mr-1" /> Catálogo
-          </button>
-          <button onClick={() => setViewMode("entregas")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "entregas" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <ClipboardList className="h-3.5 w-3.5 inline mr-1" /> Entregas
-          </button>
-          <button onClick={() => setViewMode("estoque_obra")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "estoque_obra" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <Warehouse className="h-3.5 w-3.5 inline mr-1" /> Estoque Obra
-          </button>
-          <button onClick={() => setViewMode("transferencias")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "transferencias" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <ArrowLeftRight className="h-3.5 w-3.5 inline mr-1" /> Transferências
-          </button>
-          <button onClick={() => setViewMode("checklist")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "checklist" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <ClipboardList className="h-3.5 w-3.5 inline mr-1" /> Checklists
-          </button>
-          <button onClick={() => setViewMode("validade")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "validade" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <Clock className="h-3.5 w-3.5 inline mr-1" /> Validade
-          </button>
-          <button onClick={() => setViewMode("minimo")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "minimo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <Bell className="h-3.5 w-3.5 inline mr-1" /> Mínimos
-          </button>
-          <button onClick={() => setViewMode("custos")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "custos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <BarChart3 className="h-3.5 w-3.5 inline mr-1" /> Custos
-          </button>
-          <button onClick={() => setViewMode("ia")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "ia" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <Brain className="h-3.5 w-3.5 inline mr-1" /> IA
-          </button>
-          <button onClick={() => setViewMode("capacidade")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "capacidade" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <Users className="h-3.5 w-3.5 inline mr-1" /> Capacidade
-          </button>
-          <button onClick={() => setViewMode("descontos")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "descontos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <Ban className="h-3.5 w-3.5 inline mr-1" /> Descontos
-          </button>
-          <button onClick={() => setViewMode("config")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "config" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <Settings2 className="h-3.5 w-3.5 inline mr-1" /> Config
-          </button>
-          </div>
+        {/* Tabs - multi-linha sem scroll */}
+        <div className="bg-gray-100 p-1 rounded-lg flex flex-wrap gap-1">
+          {(([
+            { mode: "catalogo",      icon: <Package className="h-3.5 w-3.5" />,       label: "Catálogo" },
+            { mode: "entregas",      icon: <ClipboardList className="h-3.5 w-3.5" />,  label: "Entregas" },
+            { mode: "estoque_obra",  icon: <Warehouse className="h-3.5 w-3.5" />,      label: "Estoque Obra" },
+            { mode: "transferencias",icon: <ArrowLeftRight className="h-3.5 w-3.5" />, label: "Transferências" },
+            { mode: "checklist",     icon: <ClipboardList className="h-3.5 w-3.5" />,  label: "Checklists" },
+            { mode: "validade",      icon: <Clock className="h-3.5 w-3.5" />,          label: "Validade" },
+            { mode: "minimo",        icon: <Bell className="h-3.5 w-3.5" />,           label: "Mínimos" },
+            { mode: "custos",        icon: <BarChart3 className="h-3.5 w-3.5" />,      label: "Custos" },
+            { mode: "ia",            icon: <Brain className="h-3.5 w-3.5" />,          label: "IA" },
+            { mode: "capacidade",    icon: <Users className="h-3.5 w-3.5" />,          label: "Capacidade" },
+            { mode: "descontos",     icon: <Ban className="h-3.5 w-3.5" />,            label: "Descontos" },
+            { mode: "config",        icon: <Settings2 className="h-3.5 w-3.5" />,      label: "Config" },
+          ]) as { mode: typeof viewMode; icon: React.ReactNode; label: string }[]).map(({ mode, icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${viewMode === mode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              {icon} {label}
+            </button>
+          ))}
         </div>
 
         {/* Search + Filters - ocultar nas novas abas que têm seus próprios filtros */}
