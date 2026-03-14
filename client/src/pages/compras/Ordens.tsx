@@ -1,3 +1,4 @@
+import DashboardLayout from "@/components/DashboardLayout";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -103,6 +104,7 @@ export default function Ordens() {
   const totalItens = itens.reduce((s, it) => s + (parseFloat(it.quantidade) || 0) * (parseFloat(it.precoUnitario) || 0), 0);
 
   return (
+    <DashboardLayout>
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -423,5 +425,6 @@ export default function Ordens() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   );
 }

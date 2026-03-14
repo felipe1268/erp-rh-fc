@@ -1,3 +1,4 @@
+import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -189,6 +190,7 @@ export default function Fornecedores() {
   const detalhe = detalheId !== null ? fornecedores.find(f => f.id === detalheId) : null;
 
   return (
+    <DashboardLayout>
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4">
@@ -499,5 +501,6 @@ export default function Fornecedores() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   );
 }
