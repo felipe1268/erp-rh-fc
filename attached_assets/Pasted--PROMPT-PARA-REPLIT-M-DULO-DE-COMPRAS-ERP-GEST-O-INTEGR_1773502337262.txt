@@ -1,0 +1,456 @@
+# PROMPT PARA REPLIT — MÓDULO DE COMPRAS ERP GESTÃO INTEGRADA
+
+---
+
+Preciso que você construa um **Módulo de Compras completo** no meu ERP (React + Express + tRPC + Drizzle ORM + MySQL). Leia todo este documento antes de começar. Não pule nenhum item.
+
+---
+
+## CONTEXTO DO SISTEMA
+
+- Stack: React 19, TypeScript, tRPC v11, Drizzle ORM, MySQL, shadcn/ui, Tailwind
+- Já existem módulos: RH, SST, Jurídico, Obras, Orçamento
+- O módulo de Orçamento já tem a **planilha meta** com campos: `venda`, `custo` e `meta` por item da EAP, vinculada a cada obra
+- Cada obra tem uma EAP (Estrutura Analítica do Projeto) com insumos orçados
+- Usuários têm login individual e papel (role): `admin_master`, `admin`, `user`
+- Cada usuário (engenheiro/aux_adm) é vinculado a uma ou mais obras
+
+---
+
+## O QUE CONSTRUIR
+
+### 1. MÓDULO ALMOXARIFADO CENTRAL
+Criar antes de compras, pois compras depende dele.
+
+**Tabelas:**
+```sql
+almoxarifado_items (
+  id, nome, unidade, quantidade_atual, quantidade_minima,
+  categoria, codigo_interno, observacoes,
+  created_at, updated_at
+)
+
+almoxarifado_movements (
+  id, item_id, tipo ENUM('entrada','saida','reserva','cancelamento'),
+  quantidade, obra_id, solicitacao_id,
+  motivo, usuario_id, usuario_nome,
+  created_at
+)
+```
+
+**Funcionalidades:**
+- CRUD de itens do estoque
+- Entrada e saída de materiais com histórico
+- Alerta visual quando quantidade abaixo do mínimo
+- Ao criar uma Solicitação de Compra: **o sistema consulta o almoxarifado automaticamente**
+  - Se tiver estoque suficiente → bloqueia compra e obriga retirada do almoxarifado
+  - Se tiver estoque parcial → permite pedir apenas a diferença
+  - Se não tiver → libera a solicitação normalmente
+
+---
+
+### 2. CADASTRO DE FORNECEDORES
+
+**Tabela:**
+```sql
+suppliers (
+  id, cnpj, razao_social, nome_fantasia, situacao_receita,
+  endereco, bairro, cidade, estado, cep,
+  telefone, email,
+  contato_nome, contato_celular, contato_email,
+  banco, agencia, conta, pix,
+  categorias JSON,  -- ex: ["Cimento","Aço","Elétrico"]
+  ativo BOOLEAN DEFAULT true,
+  historico_precos JSON,  -- calculado automaticamente
+  created_at, updated_at
+)
+```
+
+**Funcionalidades:**
+- Ao digitar o CNPJ → busca automática na **BrasilAPI** (`https://brasilapi.com.br/api/cnpj/v1/{cnpj}`)
+- Preenche automaticamente: razão social, nome fantasia, endereço, telefone, e-mail, CNAE
+- Se situação da Receita for INAPTA/BAIXADA/SUSPENSA → bloqueia o cadastro com aviso
+- Campos manuais obrigatórios após busca: contato comercial, dados bancários, categorias de produtos
+- Histórico de preços por insumo (alimentado automaticamente pelas cotações)
+
+---
+
+### 3. MÓDULO DE COMPRAS — FLUXO PRINCIPAL
+
+#### 3.1 Solicitação de Compra (SC)
+
+**Tabela:**
+```sql
+purchase_requests (
+  id, obra_id, eap_item_id, solicitante_id, solicitante_nome,
+  status ENUM('rascunho','aguardando_aprovacao','aprovada','recusada','em_cotacao','concluida','cancelada'),
+  emergencial BOOLEAN DEFAULT false,
+  justificativa_emergencial TEXT,
+  prazo_necessidade DATE,
+  justificativa_recusa TEXT,
+  aprovador_id, aprovador_nome, aprovado_em,
+  created_at, updated_at
+)
+
+purchase_request_items (
+  id, solicitacao_id, insumo_nome, unidade, quantidade,
+  quantidade_estoque_disponivel,
+  quantidade_retirada_estoque,
+  quantidade_a_comprar,
+  valor_meta_unitario DECIMAL,  -- vem da planilha meta do orçamento
+  observacoes
+)
+```
+
+**Regras:**
+- O solicitante **só vê as obras vinculadas ao seu usuário**
+- Ao selecionar o insumo: sistema mostra o valor meta da planilha do orçamento
+- Ao selecionar o insumo: sistema cruza com almoxarifado e informa disponibilidade
+- Toggle **"⚡ COMPRA EMERGENCIAL"** bem visível — se marcado, campo de justificativa obrigatório
+- SC emergencial vai para o **topo da fila de aprovação e do comprador**
+
+#### 3.2 Aprovação
+
+**Regras:**
+- Aprovador é o engenheiro responsável da obra (configurável)
+- Compara o valor solicitado com o **valor meta da planilha do orçamento**:
+  - Dentro da meta → pode aprovar normalmente
+  - Acima da meta (mesmo R$ 0,01) → alerta visual de estouro, aprovação com confirmação explícita, escala para superior
+- Aprovador pode: Aprovar ✅ ou Recusar ❌ com justificativa obrigatória
+- SC emergencial: badge vermelho ⚡, notificação imediata, prazo de resposta menor
+
+#### 3.3 Mapa de Cotação
+
+**Tabelas:**
+```sql
+quotations (
+  id, solicitacao_id, status ENUM('aberta','encerrada','cancelada'),
+  minimo_fornecedores INT DEFAULT 3,
+  fornecedor_vencedor_id,
+  comprador_id, comprador_nome,
+  created_at, updated_at
+)
+
+quotation_suppliers (
+  id, cotacao_id, supplier_id, supplier_nome,
+  status ENUM('aguardando','respondida','recusada'),
+  valor_unitario DECIMAL, valor_total DECIMAL,
+  prazo_entrega INT,  -- dias
+  condicao_pagamento VARCHAR,
+  observacoes,
+  respondido_em
+)
+```
+
+**Funcionalidades:**
+- Compras abre cotação com mínimo 3 fornecedores do cadastro
+- Sistema exibe **histórico de preços** daquele insumo nos fornecedores
+- Após preencher: **ranking automático** por menor preço total
+- Comprador define o vencedor (pode não ser o mais barato — pode ter justificativa)
+
+#### 3.4 Ordem de Compra (OC)
+
+**Tabelas:**
+```sql
+purchase_orders (
+  id, solicitacao_id, cotacao_id, supplier_id, supplier_nome,
+  obra_id, comprador_id, comprador_nome,
+  status ENUM('emitida','aprovada','entregue_parcial','entregue_total','cancelada'),
+  valor_total DECIMAL,
+  forma_pagamento VARCHAR,
+  prazo_entrega DATE,
+  condicao_entrega TEXT,
+  observacoes,
+  emitida_em, created_at, updated_at
+)
+
+purchase_order_items (
+  id, ordem_id, insumo_nome, unidade,
+  quantidade_pedida, quantidade_recebida DEFAULT 0,
+  valor_unitario, valor_total,
+  valor_meta_unitario  -- referência da planilha meta
+)
+```
+
+**Funcionalidades:**
+- Gerada a partir do vencedor da cotação
+- Ao emitir OC → **gera automaticamente um compromisso financeiro** (contas a pagar)
+- Alerta automático se `prazo_entrega` vencer sem recebimento total
+- PDF da OC para envio ao fornecedor
+
+#### 3.5 Recebimento na Obra
+
+**Tabelas:**
+```sql
+receipts (
+  id, ordem_id, obra_id, recebedor_id, recebedor_nome,
+  status ENUM('parcial','total'),
+  nota_fiscal_numero VARCHAR,
+  nota_fiscal_url TEXT,  -- upload do arquivo
+  observacoes,
+  recebido_em, created_at
+)
+
+receipt_items (
+  id, recebimento_id, ordem_item_id,
+  insumo_nome, unidade,
+  quantidade_pedida, quantidade_recebida,
+  quantidade_pendente
+)
+```
+
+**Regras:**
+- Recebimento parcial:
+  - OC atualizada automaticamente com quantidades recebidas
+  - Alerta para: solicitante, aprovador, comprador, gestor
+  - Pagamento liberado **apenas proporcional ao que chegou**
+  - OC permanece aberta aguardando saldo
+- Recebimento total: OC encerrada, pagamento liberado integralmente
+- Obrigatório anexar nota fiscal
+
+---
+
+### 4. REALOCAÇÃO DE SALDO
+
+**Tabela:**
+```sql
+budget_reallocations (
+  id, obra_id,
+  origem_eap_item_id, origem_eap_item_nome,
+  destino_eap_item_id, destino_eap_item_nome,
+  valor_realocado DECIMAL,
+  motivo TEXT,
+  usuario_id, usuario_nome,
+  created_at
+)
+```
+
+**Regras:**
+- Disponível apenas para itens com **economia confirmada** (OC recebida totalmente, valor abaixo da meta)
+- Saldo = meta do item - valor total das OCs daquele item
+- Um saldo só pode ser usado **uma vez** — sistema bloqueia reutilização
+- Realocação fica registrada com rastreabilidade total
+- Saldo realocado aparece como "comprometido" no item de origem imediatamente
+
+---
+
+### 5. MÓDULO FINANCEIRO — CONTAS A PAGAR (criar junto com compras)
+
+**Tabela:**
+```sql
+accounts_payable (
+  id, ordem_id, supplier_id, supplier_nome,
+  obra_id, descricao,
+  valor_total DECIMAL, valor_pago DECIMAL DEFAULT 0,
+  status ENUM('pendente','pago_parcial','pago_total','cancelado'),
+  forma_pagamento VARCHAR,
+  data_vencimento DATE, data_pagamento DATE,
+  bloqueado_recebimento BOOLEAN DEFAULT true,
+  -- bloqueado até confirmação de recebimento
+  comprovante_url TEXT,
+  created_at, updated_at
+)
+```
+
+**Regras:**
+- Criado automaticamente quando OC é emitida
+- `bloqueado_recebimento = true` até o recebimento ser confirmado
+- Recebimento parcial → libera pagamento proporcional
+- Recebimento total → libera pagamento integral
+
+---
+
+### 6. COMISSÃO DO COMPRADOR
+
+**Tabela:**
+```sql
+buyer_commissions (
+  id, obra_id, obra_nome,
+  comprador_id, comprador_nome,
+  valor_meta_total DECIMAL,
+  valor_comprado_total DECIMAL,
+  economia_total DECIMAL,
+  percentual_participacao DECIMAL,  -- % das OCs que esse comprador atendeu
+  valor_comissao DECIMAL,  -- economia × participação × 20%
+  status ENUM('em_aberto','calculada','aprovada_diretor','paga','cancelada'),
+  aprovado_por VARCHAR, aprovado_em DATETIME,
+  observacoes TEXT,
+  calculado_em DATETIME, created_at
+)
+```
+
+**Regras:**
+- Calculada **somente no encerramento da obra**
+- Fórmula: `Comissão = (Meta Total - Gasto Total) × 20%`
+- Se obra estoura a meta → comissão zero (empresa teve prejuízo)
+- Mais de 1 comprador → divide proporcional ao **valor das OCs que cada um atendeu dentro da meta**
+  ```
+  Comprador A: atendeu R$ 90k em OCs → 90/(90+10) = 90% da comissão
+  Comprador B: atendeu R$ 10k em OCs → 10/(90+10) = 10% da comissão
+  ```
+- Apenas o **Diretor** pode aprovar e liberar o pagamento
+- Quando aprovada → gera lançamento no financeiro (contas a pagar para o comprador)
+
+---
+
+### 7. INDICADORES DE EMERGÊNCIA POR ENGENHEIRO
+
+**Tabela:**
+```sql
+emergency_metrics (
+  id, engenheiro_id, engenheiro_nome, obra_id, obra_nome,
+  mes INT, ano INT,
+  total_solicitacoes INT,
+  total_emergenciais INT,
+  percentual_emergencial DECIMAL,
+  created_at, updated_at
+)
+```
+
+**Regras:**
+- Atualizado automaticamente a cada SC criada
+- Percentual = (emergenciais / total) × 100
+- Semáforo: 🟢 até 5% / 🟡 até 15% / 🔴 acima de 15%
+- Visível para o gestor/diretor com ranking de engenheiros
+- O próprio engenheiro vê seu indicador no dashboard dele
+
+---
+
+## TELAS A CRIAR
+
+### 1. `/almoxarifado` — Almoxarifado Central
+- Lista de itens com estoque atual e alertas de mínimo
+- Modal de entrada/saída
+- Histórico de movimentações
+
+### 2. `/fornecedores` — Fornecedores
+- Lista com busca e filtro por categoria/estado
+- Modal de cadastro com busca automática por CNPJ (BrasilAPI)
+- Detalhe do fornecedor com histórico de cotações e preços médios
+
+### 3. `/compras/solicitacoes` — Solicitações de Compra
+- Lista filtrada por status, obra, emergencial
+- SCs emergenciais sempre no topo com badge vermelho ⚡
+- Modal de nova SC com: seleção de obra, item da EAP, verificação de estoque automática
+- Toggle emergencial bem visível
+
+### 4. `/compras/aprovacoes` — Aprovações (para o aprovador)
+- Fila de SCs aguardando aprovação
+- Emergenciais fixas no topo com timer "há X horas aguardando"
+- Comparativo visual: valor solicitado vs. valor meta
+- Alerta visual se valor estourar a meta
+
+### 5. `/compras/cotacoes` — Cotações (para o comprador)
+- Fila de SCs aprovadas aguardando cotação
+- Emergenciais no topo com badge vermelho e timer SLA
+- Modal de mapa de cotação com múltiplos fornecedores
+- Histórico de preços de cada fornecedor para aquele insumo
+- Ranking automático após preencher cotações
+
+### 6. `/compras/ordens` — Ordens de Compra
+- Lista de OCs com status
+- Alertas de prazo vencendo
+- Detalhe com rastreabilidade completa: SC → Cotação → OC → Recebimento
+
+### 7. `/compras/recebimentos` — Recebimentos
+- OCs aguardando recebimento
+- Modal de recebimento com campos por item (quantidade recebida)
+- Upload de nota fiscal
+- Alerta ao registrar recebimento parcial
+
+### 8. `/financeiro/contas-pagar` — Contas a Pagar
+- Lista de compromissos gerados pelas OCs
+- Status de bloqueio (aguardando recebimento)
+- Filtros por obra, fornecedor, vencimento
+- Baixa de pagamento com upload de comprovante
+
+### 9. `/compras/realocacao` — Realocação de Saldo
+- Lista de saldos disponíveis por obra
+- Formulário de realocação com seleção de origem e destino
+- Histórico de realocações com rastreabilidade
+
+### 10. `/compras/comissoes` — Comissões de Compradores
+- Lista de obras encerradas com cálculo de comissão
+- Detalhe por comprador com participação proporcional
+- Botão "Aprovar e Liberar" visível apenas para Diretor
+- Gera lançamento no financeiro ao aprovar
+
+---
+
+## DASHBOARDS
+
+### Dashboard do Comprador (aparece na tela principal dele)
+```
+┌─────────────────────────────────────────────────┐
+│  Bom dia, [Nome]! 💰                            │
+├─────────────────────────────────────────────────┤
+│  OBRAS ATIVAS — Comissão Estimada               │
+│  Obra Alpha: Meta R$127k | Gasto R$104k         │
+│  Economia: R$22.500 | 💰 Sua parte: R$4.500    │
+│  ▓▓▓▓▓▓▓▓░░ 78% das compras realizadas         │
+├─────────────────────────────────────────────────┤
+│  ⚡ Emergenciais aguardando ação: 2             │
+│  📋 Cotações em aberto: 5                       │
+│  ⏰ OCs com prazo vencendo hoje: 1              │
+├─────────────────────────────────────────────────┤
+│  Comissões pagas este ano: R$10.000 ✅           │
+└─────────────────────────────────────────────────┘
+```
+
+### Dashboard do Gestor/Diretor
+- Total de SCs por status em tempo real
+- Ranking de engenheiros por % de emergenciais (semáforo)
+- Obras com orçamento em risco (próximo de estourar)
+- Compras do dia: quantas SC → aprovações → OCs → recebimentos
+
+---
+
+## REGRAS GERAIS DE NEGÓCIO
+
+1. Solicitante só vê obras vinculadas ao seu usuário
+2. Comprador vê todas as obras, mas filtra por responsabilidade
+3. SC emergencial sempre no topo de qualquer fila
+4. Sistema bloqueia pagamento se recebimento não confirmado
+5. Realocação de saldo: rastreada, irreversível, sem reuso
+6. Comissão zero se obra estourar a meta global
+7. Busca de CNPJ: bloqueia fornecedor com situação irregular na Receita
+8. Recebimento parcial: ajusta OC, alerta todos, libera pagamento proporcional
+
+---
+
+## INTEGRAÇÃO COM MÓDULOS EXISTENTES
+
+- **Orçamento**: ler planilha meta (campos `meta`, `custo`, `venda`) por item da EAP de cada obra
+- **Obras**: usar tabela `obras` existente para vincular SCs e OCs
+- **Usuários**: usar tabela `users` e vínculos `user_company_links` para controle de acesso por obra
+- **Notificações**: usar o sistema de notificações existente (`notifications` router) para alertas
+
+---
+
+## ORDEM DE IMPLEMENTAÇÃO SUGERIDA
+
+1. Schema do banco (todas as tabelas acima com Drizzle)
+2. Migração do banco (`pnpm db:push`)
+3. Almoxarifado Central (tabelas + router tRPC + tela)
+4. Fornecedores (tabelas + router + tela com busca CNPJ)
+5. Solicitações de Compra (router + tela)
+6. Aprovações (router + tela)
+7. Cotações / Mapa de Compras (router + tela)
+8. Ordens de Compra (router + tela + geração de contas a pagar)
+9. Recebimentos (router + tela + upload NF + liberação pagamento)
+10. Financeiro — Contas a Pagar (router + tela)
+11. Realocação de Saldo (router + tela)
+12. Comissões (cálculo automático + tela + aprovação Diretor)
+13. Dashboard do Comprador (widget na home)
+14. Dashboard do Gestor (indicadores de emergência + ranking)
+15. Adicionar links no menu lateral do ERP
+
+---
+
+**Importante:** Siga o padrão já existente no projeto:
+- Routers tRPC em `server/routers/`
+- Páginas React em `client/src/pages/`
+- Schema Drizzle em `drizzle/schema.ts`
+- Componentes shadcn/ui já instalados
+- Notificações via router existente `notifications`
+- Autenticação via `ctx.user` no tRPC context
