@@ -101,8 +101,6 @@ const DEFAULT_MENU = [
     { label: "Funções", path: "/funcoes", visible: true },
     { label: "Relógios de Ponto", path: "/relogios-ponto", visible: true },
     { label: "Convenções Coletivas", path: "/convencoes-coletivas", visible: true },
-  ]},
-  { title: "Financeiro", items: [
     { label: "Contas Bancárias", path: "/contas-bancarias", visible: true },
   ]},
   { title: "Operacional", items: [
