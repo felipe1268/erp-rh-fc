@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 274,
+    titulo: "Cronograma: botão Consolidar / Desconsolidar",
+    descricao: "Adicionado botão 'Consolidar' na aba Cronograma do Planejamento. Quando o cronograma tem atividades, o botão aparece em verde (cadeado fechado) para consolidar e proteger contra cliques acidentais. Ao consolidar: botões Importar, Excluir e Editar ficam ocultos/desabilitados; badge 'Consolidado' aparece no título. O botão vira âmbar 'Desconsolidar' (cadeado aberto) com confirmação obrigatória para liberar. Estado salvo na coluna 'consolidado' da tabela planejamento_revisoes.",
+    tipo: "feature",
+    modulos: "Planejamento / Cronograma",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:30:00",
+  },
+  {
     version: 273,
     titulo: "Módulo Clientes: CRUD completo com auto-fetch CNPJ",
     descricao: "Novo módulo Clientes no cadastro. Tabela 'clientes' criada no banco (PJ/PF, CNPJ, CPF, endereço, contato). Router tRPC completo (list, criar, atualizar, excluir). Página Clientes.tsx com cards visuais, busca, modal de cadastro/edição com auto-preenchimento via Receita Federal (mesmo endpoint buscarCNPJ do módulo Compras). Link na sidebar Cadastro. Rota /clientes registrada.",

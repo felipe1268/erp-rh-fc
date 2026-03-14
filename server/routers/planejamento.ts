@@ -527,6 +527,16 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  consolidarRevisao: protectedProcedure
+    .input(z.object({ revisaoId: z.number(), consolidado: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(planejamentoRevisoes)
+        .set({ consolidado: input.consolidado })
+        .where(eq(planejamentoRevisoes.id, input.revisaoId));
+      return { success: true };
+    }),
+
   limparAvancos: protectedProcedure
     .input(z.object({ projetoId: z.number() }))
     .mutation(async ({ input }) => {

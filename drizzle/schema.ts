@@ -4209,6 +4209,7 @@ export const planejamentoRevisoes = pgTable("planejamento_revisoes", {
   status:       varchar({ length: 50 }).default("aprovada"),
   observacao:   text(),
   isBaseline:   boolean("is_baseline").default(false),
+  consolidado:  boolean("consolidado").default(false),
   criadoEm:     timestamp("criado_em").defaultNow(),
 });
 
