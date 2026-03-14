@@ -3242,13 +3242,18 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   }, [cfgDiaCorte, cfgSinalPct, cfgRetencaoPct, cfgDataInicioObra, dadosMensais, avancos, atividades, baseV]);
 
   // ── Fluxo de Caixa (parcelas fixas) ──────────────────────────────────────
+  // SELIC anual estimada para sugestão de reajuste pós-obra
+  const SELIC_ANUAL = 0.105;
+
   const fluxoCaixa = useMemo(() => {
     if (dadosMensais.length === 0) return [];
     const saldoParcelar = Math.max(0, baseV - cfgEntrada);
     const valorParcela  = cfgParcelas > 0 ? saldoParcelar / cfgParcelas : 0;
     const inicioMes = cfgInicioFat ? cfgInicioFat.substring(0, 7) : (dadosMensais[0]?.mes ?? "");
     let caixaAcum = 0;
-    return dadosMensais.map((d: any) => {
+    let parcelasAtribuidas = 0;
+
+    const rows: any[] = dadosMensais.map((d: any) => {
       let recebido = 0;
       if (d.mes === inicioMes) {
         recebido = cfgEntrada;
@@ -3257,14 +3262,45 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
         const thisDate  = new Date(d.mes + "-01");
         const diffM = (thisDate.getFullYear() - startDate.getFullYear()) * 12
                     + (thisDate.getMonth() - startDate.getMonth());
-        if (diffM >= 1 && diffM <= cfgParcelas) recebido = valorParcela;
+        if (diffM >= 1 && diffM <= cfgParcelas) { recebido = valorParcela; parcelasAtribuidas++; }
       }
       const reforco = reforcos[d.mes] ?? 0;
       recebido += reforco;
       const saldoMes = recebido - d.custo;
       caixaAcum += saldoMes;
-      return { ...d, recebido, reforco, saldoMes, caixaAcum };
+      return { ...d, recebido, reforco, saldoMes, caixaAcum, aposObra: false, nParcela: 0 };
     });
+
+    // Parcelas que ficaram além do fim do cronograma (obra concluída, cliente ainda pagando)
+    const ultMesObra = dadosMensais[dadosMensais.length - 1]?.mes ?? "";
+    const parcelasRestantes = cfgParcelas - parcelasAtribuidas;
+    if (parcelasRestantes > 0 && ultMesObra && inicioMes) {
+      for (let extra = 1; extra <= parcelasRestantes; extra++) {
+        const refDate = new Date(ultMesObra + "-01");
+        refDate.setMonth(refDate.getMonth() + extra);
+        const mes = `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, "0")}`;
+        const mesesAposObra = extra;
+        // Sugestão de reajuste SELIC: juros simples sobre a parcela (meses × SELIC/12)
+        const reajuste = valorParcela * (SELIC_ANUAL / 12) * mesesAposObra;
+        const reforco  = reforcos[mes] ?? 0;
+        const recebido = valorParcela + reforco;
+        const saldoMes = recebido;
+        caixaAcum += saldoMes;
+        rows.push({
+          mes,
+          nomeMes: new Date(`${mes}-15`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+          nomeMesCurto: new Date(`${mes}-15`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+          custo: 0, venda: 0,
+          recebido, reforco, saldoMes, caixaAcum,
+          aposObra: true,
+          mesesAposObra,
+          reajusteSelic: reajuste,
+          nParcela: parcelasAtribuidas + extra,
+        });
+      }
+    }
+
+    return rows;
   }, [cfgEntrada, cfgParcelas, cfgInicioFat, dadosMensais, baseV, reforcos]);
 
   const mesesNeg = fluxoCaixa.filter(r => r.caixaAcum < 0).length;
@@ -3858,44 +3894,99 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                     const baixa = baixas[r.mes];
                     const confirmado = !!baixa?.confirmado;
                     const temRecebimento = r.recebido > 0;
+                    const aposObra: boolean = !!r.aposObra;
                     return (
-                      <tr key={r.mes} className={`border-b border-slate-50 ${confirmado ? "!bg-emerald-50/60" : isNeg ? "!bg-red-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
-                        <td className="py-2 px-3 font-semibold text-slate-700">{r.nomeMes}</td>
-                        <td className="py-2 px-3 text-right text-red-600">{fmt(r.custo)}</td>
-                        <td className={`py-2 px-3 text-right font-semibold ${temRecebimento ? (confirmado ? "text-emerald-600 line-through" : "text-amber-700") : "text-slate-300"}`}>
-                          {temRecebimento ? fmt(r.recebido) : "—"}
-                        </td>
-                        <td className={`py-2 px-3 text-right font-semibold ${r.saldoMes >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                          {r.saldoMes >= 0 ? "+" : ""}{fmt(r.saldoMes)}
-                        </td>
-                        <td className={`py-2 px-3 text-right font-bold text-sm ${isNeg ? "text-red-700" : "text-emerald-700"}`}>
-                          <div className="flex items-center justify-end gap-1">
-                            {isNeg && <AlertCircle className="h-3 w-3 text-red-500" />}
-                            {r.caixaAcum >= 0 ? "+" : ""}{fmt(r.caixaAcum)}
-                          </div>
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {temRecebimento ? (
-                            <button
-                              onClick={() => toggleBaixa(r.mes, r.recebido)}
-                              title={confirmado ? `Recebido em ${baixa.data} — clique para desfazer` : "Marcar como recebido"}
-                              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
-                                confirmado
-                                  ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
-                                  : "bg-white border-slate-300 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50"
-                              }`}
-                            >
-                              {confirmado ? (
-                                <><CheckCircle2 className="h-3 w-3" /> Recebido</>
-                              ) : (
-                                <><Circle className="h-3 w-3" /> Dar Baixa</>
+                      <React.Fragment key={r.mes}>
+                        <tr
+                          className={`border-b border-slate-50 ${
+                            aposObra
+                              ? "!bg-orange-50/70 border-orange-100"
+                              : confirmado
+                              ? "!bg-emerald-50/60"
+                              : isNeg
+                              ? "!bg-red-50/60"
+                              : idx % 2 === 0
+                              ? "bg-white"
+                              : "bg-slate-50/30"
+                          }`}
+                        >
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-semibold ${aposObra ? "text-orange-700" : "text-slate-700"}`}>
+                                {r.nomeMes}
+                              </span>
+                              {aposObra && (
+                                <span
+                                  title="Parcela após conclusão da obra — situação não recomendada"
+                                  className="inline-flex items-center gap-1 bg-orange-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                >
+                                  <AlertCircle className="h-2.5 w-2.5" />
+                                  pós-obra
+                                </span>
                               )}
-                            </button>
-                          ) : (
-                            <span className="text-slate-300 text-[10px]">—</span>
-                          )}
-                        </td>
-                      </tr>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 text-right text-red-600">
+                            {r.custo > 0 ? fmt(r.custo) : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className={`py-2 px-3 text-right font-semibold ${temRecebimento ? (confirmado ? "text-emerald-600 line-through" : aposObra ? "text-orange-600" : "text-amber-700") : "text-slate-300"}`}>
+                            {temRecebimento ? fmt(r.recebido) : "—"}
+                          </td>
+                          <td className={`py-2 px-3 text-right font-semibold ${r.saldoMes >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            {r.saldoMes >= 0 ? "+" : ""}{fmt(r.saldoMes)}
+                          </td>
+                          <td className={`py-2 px-3 text-right font-bold text-sm ${isNeg ? "text-red-700" : "text-emerald-700"}`}>
+                            <div className="flex items-center justify-end gap-1">
+                              {isNeg && <AlertCircle className="h-3 w-3 text-red-500" />}
+                              {r.caixaAcum >= 0 ? "+" : ""}{fmt(r.caixaAcum)}
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            {temRecebimento ? (
+                              <button
+                                onClick={() => toggleBaixa(r.mes, r.recebido)}
+                                title={confirmado ? `Recebido em ${baixa.data} — clique para desfazer` : "Marcar como recebido"}
+                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
+                                  confirmado
+                                    ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
+                                    : "bg-white border-slate-300 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50"
+                                }`}
+                              >
+                                {confirmado ? (
+                                  <><CheckCircle2 className="h-3 w-3" /> Recebido</>
+                                ) : (
+                                  <><Circle className="h-3 w-3" /> Dar Baixa</>
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-slate-300 text-[10px]">—</span>
+                            )}
+                          </td>
+                        </tr>
+                        {/* Alerta SELIC para parcelas pós-obra */}
+                        {aposObra && (
+                          <tr key={`${r.mes}-selic`} className="bg-orange-50/40 border-b border-orange-100">
+                            <td colSpan={6} className="px-3 pb-2 pt-0">
+                              <div className="flex items-start gap-2 bg-orange-100/70 border border-orange-300 rounded-lg px-3 py-1.5 text-[10px] text-orange-800">
+                                <AlertCircle className="h-3 w-3 mt-0.5 shrink-0 text-orange-600" />
+                                <div>
+                                  <span className="font-bold">Não recomendado</span>
+                                  {" — parcela recebida "}
+                                  {r.mesesAposObra === 1 ? "1 mês" : `${r.mesesAposObra} meses`}
+                                  {" após a conclusão da obra. Considere negociar um reajuste de "}
+                                  <span className="font-bold text-orange-900">
+                                    {((SELIC_ANUAL / 12) * r.mesesAposObra * 100).toFixed(2)}%
+                                  </span>
+                                  {` sobre o valor (SELIC ${(SELIC_ANUAL * 100).toFixed(1)}% a.a. × ${r.mesesAposObra} ${r.mesesAposObra === 1 ? "mês" : "meses"}) = `}
+                                  <span className="font-bold text-orange-900">{fmt(r.reajusteSelic)}</span>
+                                  {" adicionais, totalizando "}
+                                  <span className="font-bold">{fmt(r.recebido + r.reajusteSelic)}</span>.
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
