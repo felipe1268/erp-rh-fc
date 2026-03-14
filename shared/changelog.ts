@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 285,
+    titulo: "Diagrama de Rede — card mostra Previsto/Realizado/Desvio",
+    descricao: "Card de atividade no Diagrama de Rede ampliado (72→82px) com nova linha: 'Prev: XX% · Real: XX% · ±XXpp'. O desvio positivo aparece em verde e o negativo em vermelho. A barra de progresso ganhou um marcador vertical roxo indicando o % previsto esperado para hoje, enquanto a barra colorida representa o realizado.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:45:00",
+  },
+  {
     version: 284,
     titulo: "Dar Baixa — valor editável + saldo automático ao próximo mês",
     descricao: "Botão 'Dar Baixa' agora abre modal para digitar o valor efetivamente recebido (pré-preenchido com o previsto). Se o cliente pagar menos, o saldo pendente é exibido automaticamente na próxima competência como crédito a recuperar. Toast de sucesso informa o valor recebido e o saldo carregado. Confirmação também via Enter no campo.",

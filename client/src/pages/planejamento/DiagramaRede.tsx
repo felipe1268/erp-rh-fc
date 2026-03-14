@@ -50,7 +50,7 @@ interface Edge {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const NW = 200;
-const NH = 72;
+const NH = 82;
 const COL_GAP = 80;
 const ROW_GAP = 16;
 
@@ -380,8 +380,13 @@ function NodeCard({
   }
 
   // ── FOLHA node ───────────────────────────────────────────────────────────
-  const c    = STATUS_COLOR[node.status];
-  const barW = Math.round((NW - 24) * Math.min(node.avanco, 100) / 100);
+  const c       = STATUS_COLOR[node.status];
+  const barW    = Math.round((NW - 24) * Math.min(node.avanco, 100) / 100);
+  const espW    = Math.round((NW - 24) * Math.min(node.esperado, 100) / 100);
+  const desvio  = node.avanco - node.esperado;
+  const temEsp  = node.esperado > 0;
+  const desvioColor = desvio >= 0 ? "#16a34a" : "#dc2626";
+  const desvioStr   = desvio >= 0 ? `+${desvio.toFixed(0)}pp` : `${desvio.toFixed(0)}pp`;
 
   return (
     <g
@@ -406,21 +411,40 @@ function NodeCard({
       <text x={NW - 8} y={16} fontSize={9} fill={c.text} textAnchor="end" fontFamily="monospace" fontWeight={700} opacity={0.9}>
         {node.eap}
       </text>
-      {/* Progress % */}
+      {/* Realizado % (large, left) */}
       <text x={14} y={16} fontSize={10} fill={c.dot} fontWeight={800}>
         {node.avanco.toFixed(0)}%
       </text>
       {/* Name */}
-      <text x={14} y={33} fontSize={11} fill="#1e293b" fontWeight={600}>
+      <text x={14} y={30} fontSize={11} fill="#1e293b" fontWeight={600}>
         {name}
       </text>
       {/* Date */}
-      <text x={14} y={48} fontSize={9} fill="#94a3b8">
+      <text x={14} y={42} fontSize={9} fill="#94a3b8">
         {node.dataFim ? `◷ até ${fmtBR(node.dataFim)}` : "sem prazo"}
       </text>
-      {/* Progress bar */}
-      <rect x={12} y={56} width={NW - 24} height={5} rx={3} fill="rgba(0,0,0,0.07)" />
-      {barW > 0 && <rect x={12} y={56} width={barW} height={5} rx={3} fill={c.dot} />}
+      {/* Previsto | Realizado | Desvio row */}
+      {temEsp ? (
+        <>
+          <text x={14} y={53} fontSize={8} fill="#64748b">
+            Prev: <tspan fontWeight={700} fill="#6366f1">{node.esperado.toFixed(0)}%</tspan>
+            {"  "}Real: <tspan fontWeight={700} fill={c.dot}>{node.avanco.toFixed(0)}%</tspan>
+            {"  "}<tspan fontWeight={800} fill={desvioColor}>{desvioStr}</tspan>
+          </text>
+        </>
+      ) : (
+        <text x={14} y={53} fontSize={8} fill="#cbd5e1">
+          Real: <tspan fontWeight={700} fill={c.dot}>{node.avanco.toFixed(0)}%</tspan>
+        </text>
+      )}
+      {/* Progress bar track */}
+      <rect x={12} y={60} width={NW - 24} height={5} rx={3} fill="rgba(0,0,0,0.07)" />
+      {/* Previsto marker (thin vertical line) */}
+      {temEsp && espW > 0 && (
+        <rect x={12 + espW - 1} y={58} width={2} height={9} rx={1} fill="#6366f1" opacity={0.7} />
+      )}
+      {/* Realizado bar */}
+      {barW > 0 && <rect x={12} y={60} width={barW} height={5} rx={3} fill={c.dot} />}
       {selected && <rect width={NW} height={NH} rx={10} fill="none" stroke="#2563eb" strokeWidth={3} strokeOpacity={0.3} />}
     </g>
   );
