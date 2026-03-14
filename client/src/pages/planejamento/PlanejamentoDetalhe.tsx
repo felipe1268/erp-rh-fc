@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import ImportarCronograma from "./ImportarCronograma";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
+import { DiagramaRede } from "./DiagramaRede";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +24,7 @@ import {
   Bot, Brain, Sparkles, MessageSquare, Send, Zap,
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer,
-  TrendingDown, ArrowUpRight, ArrowDownRight, Circle, CalendarClock,
+  TrendingDown, ArrowUpRight, ArrowDownRight, Circle, CalendarClock, Network,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -35,7 +36,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora" | "prog-semanal";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora" | "prog-semanal" | "diagrama-rede";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -103,6 +104,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "compras",              label: "Cronograma de Compras", Icon: ShoppingCart },
   { id: "prev-medicao",         label: "Prev. Medição",      Icon: ClipboardList },
   { id: "prog-semanal",         label: "Prog. Semanal",      Icon: CalendarClock },
+  { id: "diagrama-rede",        label: "Diagrama de Rede",   Icon: Network },
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
   { id: "ia-gestora",           label: "IA Gestora",         Icon: Bot },
@@ -585,6 +587,12 @@ export default function PlanejamentoDetalhe() {
             proj={proj}
             atividades={atividades}
             avancos={avancos}
+          />
+        )}
+        {aba === "diagrama-rede" && (
+          <DiagramaRede
+            atividades={atividades}
+            avancosMap={avancosMap}
           />
         )}
         {aba === "compras" && (

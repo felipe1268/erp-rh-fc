@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 262,
+    titulo: "Planejamento — Nova aba Diagrama de Rede",
+    descricao: "Adicionada aba 'Diagrama de Rede' no módulo de Planejamento. O diagrama renderiza as atividades como nós (retângulos) conectados por setas de dependência conforme o campo predecessora. Layout automático por níveis topológicos (BFS). Código de cores: Verde = Concluída (100%), Azul = Em andamento, Vermelho = Atrasada (prazo vencido e incompleta), Amarelo = Em risco (atrás do esperado proporcional). Funcionalidades: zoom por scroll, pan por arraste, filtro por status, toggle de grupos, painel de detalhes ao clicar em uma atividade (datas, progresso atual vs. esperado, desvio em pp), botão 'Encaixar na tela'. Legenda visual e barra de resumo por status.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:00:00",
+  },
+  {
     version: 261,
     titulo: "Programação Semanal — Badge 'Semana Atual' + Seletor de Quantidade de Semanas",
     descricao: "Na aba Programação Semanal do Planejamento: (1) Badge verde pulsante 'Semana Atual' aparece no navegador central quando a semana exibida corresponde à semana corrente do calendário. (2) No modo Relatório, botões 1 a 6 permitem ao usuário selecionar quantas semanas exibir no relatório; o botão principal reflete dinamicamente o número escolhido (ex: 'Relatório 4 Semanas'). Grid do relatório ajusta colunas automaticamente conforme o número de semanas.",
