@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 264,
+    titulo: "Menu lateral — Drag-and-drop de seções com Ajuda fixada por último",
+    descricao: "Cada seção do menu lateral (ex: PLANEJAMENTO, ABAS DO PROJETO) pode ser arrastada para reorganizar sua posição. Ao passar o mouse sobre o cabeçalho da seção, aparece um ícone de arrastar (⠿) na esquerda. Arrastar e soltar reordena as seções e persiste a ordem no localStorage (separado por módulo). A seção 'Ajuda' é sempre fixada por último e não pode ser movida — exibe '(fixo)' discretamente ao lado do título. Feedback visual: a seção sendo arrastada fica com opacidade reduzida; a zona de destino recebe destaque âmbar.",
+    tipo: "melhoria",
+    modulos: "Menu Lateral (todos os módulos)",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 21:45:00",
+  },
+  {
     version: 263,
     titulo: "REFIS — Redesign profissional do Bloco 'Evolução Física Global'",
     descricao: "Layout do bloco Evolução Física Global reformulado para apresentações e PDF: cabeçalho dark com gradiente, barras bullet com fundo colorido suave, marcadores de milestone em 25%/50%/75%, label 'Saldo' visível no espaço restante da barra, linha de referência do previsto sobreposta na barra do realizado, valores em tipografia bold, rodapé com datas da obra e SPI inline. Cards KPI reorganizados em grid vertical (desktop) com mini-barras de escala. Nenhum espaço em branco desperdiçado — layout preparado para impressão.",

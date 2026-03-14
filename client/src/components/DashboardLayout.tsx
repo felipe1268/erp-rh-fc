@@ -35,7 +35,7 @@ import {
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
-  Home, Tag,
+  Home, Tag, GripVertical,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -560,7 +560,53 @@ function DashboardLayoutContent({
   }, []);
   const isCollapsed = state === "collapsed";
 
-  // Drag-and-drop de itens do menu lateral
+  // ── Drag-and-drop de SEÇÕES inteiras ──────────────────────────────────────
+  const SECTION_ORDER_KEY = `fc-section-order-${activeModule}`;
+  const PINNED_LAST = "Ajuda"; // sempre fica por último
+  const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`fc-section-order-${activeModule}`) || "[]"); } catch { return []; }
+  });
+  useEffect(() => {
+    try { setSectionOrder(JSON.parse(localStorage.getItem(`fc-section-order-${activeModule}`) || "[]")); } catch { setSectionOrder([]); }
+  }, [activeModule]);
+  const draggingSection = useRef<string | null>(null);
+  const dragOverSection = useRef<string | null>(null);
+  const [dragActiveSection, setDragActiveSection] = useState<string | null>(null);
+  const [dragTargetSection, setDragTargetSection] = useState<string | null>(null);
+
+  function handleSectionDragStart(title: string) {
+    if (title === PINNED_LAST) return;
+    draggingSection.current = title;
+    setDragActiveSection(title);
+  }
+  function handleSectionDragOver(e: React.DragEvent, title: string) {
+    e.preventDefault();
+    if (!draggingSection.current || title === PINNED_LAST || draggingSection.current === title) return;
+    dragOverSection.current = title;
+    setDragTargetSection(title);
+  }
+  function handleSectionDrop(orderedDisplaySections: MenuSection[]) {
+    if (!draggingSection.current || !dragOverSection.current) { handleSectionDragEnd(); return; }
+    const movable = orderedDisplaySections.filter(s => s.title !== PINNED_LAST);
+    const titles = movable.map(s => s.title);
+    const fromIdx = titles.indexOf(draggingSection.current);
+    const toIdx   = titles.indexOf(dragOverSection.current);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) { handleSectionDragEnd(); return; }
+    const newOrder = [...titles];
+    newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, draggingSection.current);
+    setSectionOrder(newOrder);
+    localStorage.setItem(SECTION_ORDER_KEY, JSON.stringify(newOrder));
+    handleSectionDragEnd();
+  }
+  function handleSectionDragEnd() {
+    draggingSection.current = null;
+    dragOverSection.current = null;
+    setDragActiveSection(null);
+    setDragTargetSection(null);
+  }
+
+  // ── Drag-and-drop de itens do menu lateral ─────────────────────────────────
   const MENU_ORDER_KEY = `fc-menu-items-${activeModule}`;
   const [itemOrder, setItemOrder] = useState<Record<string, string[]>>(() => {
     try { return JSON.parse(localStorage.getItem(`fc-menu-items-${activeModule}`) || "{}"); } catch { return {}; }
@@ -863,6 +909,22 @@ function DashboardLayoutContent({
     return sections.filter(s => s.items.length > 0);
   }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, savedMenuConfig]);
 
+  // Aplicar ordem de seções salva, mantendo Ajuda sempre por último
+  const orderedSections = useMemo(() => {
+    const pinned   = effectiveSections.filter(s => s.title === PINNED_LAST);
+    const movable  = effectiveSections.filter(s => s.title !== PINNED_LAST);
+    if (sectionOrder.length === 0) return [...movable, ...pinned];
+    const sorted = [...movable].sort((a, b) => {
+      const ai = sectionOrder.indexOf(a.title);
+      const bi = sectionOrder.indexOf(b.title);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    return [...sorted, ...pinned];
+  }, [effectiveSections, sectionOrder]);
+
   const allEffectiveItems = effectiveSections.flatMap(s => s.items);
   const allModuleItems = Object.values(MODULE_SECTIONS).flatMap(sections => sections.flatMap(s => s.items));
   const activeMenuItem = allEffectiveItems.find(item => item.path === location)
@@ -1042,20 +1104,45 @@ function DashboardLayoutContent({
             className="gap-0"
             onScroll={(e) => { _sidebarScrollTop = (e.target as HTMLDivElement).scrollTop; }}
           >
-            {effectiveSections.map(section => (
-              <div key={section.title} className="mb-1">
+            {orderedSections.map(section => {
+              const isPinned = section.title === PINNED_LAST;
+              const isSectionDragging = dragActiveSection === section.title;
+              const isSectionTarget  = dragTargetSection  === section.title && !isSectionDragging;
+              return (
+              <div
+                key={section.title}
+                className={`mb-1 transition-all ${isSectionDragging ? "opacity-40" : ""} ${isSectionTarget ? "ring-1 ring-[#D4A843]/60 rounded-lg bg-sidebar-accent/20" : ""}`}
+                draggable={!isCollapsed && !isPinned}
+                onDragStart={() => handleSectionDragStart(section.title)}
+                onDragOver={(e) => handleSectionDragOver(e, section.title)}
+                onDrop={() => handleSectionDrop(orderedSections)}
+                onDragEnd={handleSectionDragEnd}
+              >
                 {!isCollapsed ? (
-                  <button
-                    onClick={() => toggleSection(section.title)}
-                    className="flex items-center justify-between w-full px-4 py-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 hover:text-sidebar-foreground/80 transition-colors"
-                  >
-                    {section.title}
-                    {expandedSections[section.title] ? (
-                      <ChevronDown className="h-3 w-3" />
-                    ) : (
-                      <ChevronRight className="h-3 w-3" />
+                  <div className="flex items-center w-full group/sec">
+                    {!isPinned && (
+                      <span
+                        className="pl-2 pr-1 py-2 cursor-grab opacity-0 group-hover/sec:opacity-60 hover:!opacity-100 transition-opacity text-sidebar-foreground/40"
+                        title="Arrastar para reorganizar"
+                      >
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </span>
                     )}
-                  </button>
+                    <button
+                      onClick={() => toggleSection(section.title)}
+                      className={`flex items-center justify-between flex-1 ${!isPinned ? "pl-1" : "pl-4"} pr-4 py-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 hover:text-sidebar-foreground/80 transition-colors`}
+                    >
+                      <span className="flex items-center gap-1">
+                        {section.title}
+                        {isPinned && <span className="text-[8px] opacity-40 normal-case tracking-normal">(fixo)</span>}
+                      </span>
+                      {expandedSections[section.title] ? (
+                        <ChevronDown className="h-3 w-3" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3" />
+                      )}
+                    </button>
+                  </div>
                 ) : null}
                 {(isCollapsed || expandedSections[section.title]) ? (
                   <SidebarMenu className="px-2 py-0.5">
@@ -1119,7 +1206,8 @@ function DashboardLayoutContent({
                   </SidebarMenu>
                 ) : null}
               </div>
-            ))}
+              );
+            })}
           </SidebarContent>
 
           <SidebarFooter className="p-3">
