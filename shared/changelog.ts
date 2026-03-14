@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 283,
+    titulo: "Fix 'Salvar Configuração' de Medição não salvava",
+    descricao: "Botão 'Salvar Configuração' em Configuração de Medição movido para fora do bloco pointer-events-none (que bloqueava cliques quando cfgBloqueado era true). Adicionado type='button' para evitar submit acidental de form. Feedback de erro visível via toast quando a mutação falha, e toast de sucesso ao salvar corretamente.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:00:00",
+  },
+  {
     version: 260,
     titulo: "Visão Geral — Remove card 'Dados do Projeto' redundante",
     descricao: "Removido o card 'Dados do Projeto' da aba Visão Geral do Planejamento, pois as mesmas informações já estão disponíveis no cabeçalho fixo da tela. O widget de Atividades em Atraso passou a ocupar largura total.",

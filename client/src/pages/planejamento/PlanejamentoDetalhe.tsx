@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/contexts/PermissionsContext";
@@ -3673,8 +3674,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     { projetoId }, { enabled: !!projetoId });
 
   const salvarCfgMut = trpc.planejamento.salvarConfigMedicao.useMutation({
-    onSuccess: () => { refetchCfg(); setSalvando(false); setSaved(true); setTimeout(() => setSaved(false), 2000); },
-    onError:   () => { setSalvando(false); },
+    onSuccess: () => { refetchCfg(); setSalvando(false); setSaved(true); toast.success("Configuração de medição salva!"); setTimeout(() => setSaved(false), 2500); },
+    onError:   (err) => { setSalvando(false); toast.error(`Erro ao salvar: ${err.message || "Tente novamente."}`); },
   });
 
   const toggleBloqueioMut = trpc.planejamento.toggleBloqueioMedicao.useMutation({
@@ -4189,12 +4190,20 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                 ? `Valor base do contrato: ${fmt(baseV)}`
                 : `Contrato: ${fmt(baseV)} · Entrada: ${fmt(cfgEntrada)} · Parcela: ${fmt(valorParcela)}`}
             </p>
-            <button onClick={salvarConfig} disabled={salvando}
-              className="flex items-center gap-2 text-xs px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
-              {saved ? "Salvo!" : "Salvar Configuração"}
-            </button>
           </div>
+        </div>
+
+        {/* ── Salvar Configuração — fora do pointer-events-none ─────────── */}
+        <div className="px-4 pb-2 flex justify-end">
+          <button
+            type="button"
+            onClick={salvarConfig}
+            disabled={salvando || cfgBloqueado}
+            className="flex items-center gap-2 text-xs px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
+            {saved ? "Salvo!" : "Salvar Configuração"}
+          </button>
         </div>
 
         {/* ── Barra de Bloqueio — fora do pointer-events-none ───────────── */}
@@ -4215,6 +4224,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
             </button>
           ) : (
             <button
+              type="button"
               onClick={bloquearConfig}
               disabled={toggleBloqueioMut.isPending || salvando}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-700 text-white font-semibold hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap">
