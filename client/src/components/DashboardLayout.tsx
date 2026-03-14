@@ -74,12 +74,6 @@ const menuSectionsRHDP: MenuSection[] = [
     ],
   },
   {
-    title: "Financeiro",
-    items: [
-      { icon: ClipboardList, label: "Contas Bancárias", path: "/contas-bancarias" },
-    ],
-  },
-  {
     title: "Operacional",
     items: [
       { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
@@ -314,15 +308,16 @@ const menuSectionsCadastro: MenuSection[] = [
   {
     title: "Cadastro",
     items: [
-      { icon: Building2, label: "Empresas",            path: "/empresas"             },
-      { icon: Users,     label: "Colaboradores",       path: "/colaboradores"        },
-      { icon: Landmark,  label: "Obras",               path: "/obras"                },
-      { icon: HardHat,   label: "Efetivo por Obra",    path: "/obras/efetivo"        },
-      { icon: Layers,    label: "Setores",             path: "/setores"              },
-      { icon: Briefcase, label: "Funções",             path: "/funcoes"              },
-      { icon: Wifi,      label: "Relógios de Ponto",   path: "/relogios-ponto"       },
-      { icon: Scale,     label: "Convenções Coletivas",path: "/convencoes-coletivas" },
-      { icon: Wrench,    label: "Habilidades",         path: "/habilidades"          },
+      { icon: Building2,     label: "Empresas",            path: "/empresas"             },
+      { icon: Users,         label: "Colaboradores",       path: "/colaboradores"        },
+      { icon: Landmark,      label: "Obras",               path: "/obras"                },
+      { icon: HardHat,       label: "Efetivo por Obra",    path: "/obras/efetivo"        },
+      { icon: Layers,        label: "Setores",             path: "/setores"              },
+      { icon: Briefcase,     label: "Funções",             path: "/funcoes"              },
+      { icon: Wifi,          label: "Relógios de Ponto",   path: "/relogios-ponto"       },
+      { icon: Scale,         label: "Convenções Coletivas",path: "/convencoes-coletivas" },
+      { icon: Wrench,        label: "Habilidades",         path: "/habilidades"          },
+      { icon: ClipboardList, label: "Contas Bancárias",    path: "/contas-bancarias"     },
     ],
   },
 ];
