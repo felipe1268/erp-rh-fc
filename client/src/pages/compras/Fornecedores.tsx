@@ -331,169 +331,167 @@ export default function Fornecedores() {
 
       {/* Modal de Cadastro/Edição */}
       <Dialog open={modalAberto} onOpenChange={v => !v && fecharModal()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editando ? "Editar Fornecedor" : "Novo Fornecedor"}</DialogTitle>
+        <DialogContent className="max-w-4xl w-full">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-base">{editando ? "Editar Fornecedor" : "Novo Fornecedor"}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6 pb-2">
-            {/* CNPJ */}
-            <div>
-              <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">CNPJ</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  value={form.cnpj}
-                  onChange={e => setForm(p => ({ ...p, cnpj: formatCNPJ(e.target.value) }))}
-                  placeholder="00.000.000/0000-00"
-                  className="font-mono"
-                  maxLength={18}
-                />
-                <Button type="button" variant="outline" onClick={buscarCNPJ} disabled={buscandoCNPJ || form.cnpj.replace(/\D/g, "").length !== 14}>
-                  {buscandoCNPJ ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
-                </Button>
-              </div>
-              {erroCNPJ && (
-                <div className="flex items-start gap-2 mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  {erroCNPJ}
+          <div className="space-y-3">
+            {/* Linha 1: CNPJ + Razão Social */}
+            <div className="grid grid-cols-12 gap-3 items-end">
+              <div className="col-span-3">
+                <Label className="text-xs text-slate-500">CNPJ</Label>
+                <div className="flex gap-1 mt-0.5">
+                  <Input
+                    value={form.cnpj}
+                    onChange={e => setForm(p => ({ ...p, cnpj: formatCNPJ(e.target.value) }))}
+                    placeholder="00.000.000/0000-00"
+                    className="font-mono h-8 text-xs"
+                    maxLength={18}
+                  />
+                  <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-xs shrink-0" onClick={buscarCNPJ} disabled={buscandoCNPJ || form.cnpj.replace(/\D/g, "").length !== 14}>
+                    {buscandoCNPJ ? <Loader2 className="h-3 w-3 animate-spin" /> : "Buscar"}
+                  </Button>
                 </div>
-              )}
-              <p className="text-[11px] text-slate-400 mt-1">Digite o CNPJ e clique em Buscar para preencher automaticamente.</p>
-            </div>
-
-            {/* Dados básicos */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <Label className="text-xs">Razão Social *</Label>
-                <Input value={form.razaoSocial} onChange={e => setForm(p => ({ ...p, razaoSocial: e.target.value }))} className="mt-1" />
               </div>
-              <div>
-                <Label className="text-xs">Nome Fantasia</Label>
-                <Input value={form.nomeFantasia} onChange={e => setForm(p => ({ ...p, nomeFantasia: e.target.value }))} className="mt-1" />
+              <div className="col-span-6">
+                <Label className="text-xs text-slate-500">Razão Social *</Label>
+                <Input value={form.razaoSocial} onChange={e => setForm(p => ({ ...p, razaoSocial: e.target.value }))} className="mt-0.5 h-8 text-xs" />
               </div>
-              <div>
-                <Label className="text-xs">Situação na Receita</Label>
-                <Input value={form.situacaoReceita} readOnly className="mt-1 bg-slate-50" />
+              <div className="col-span-3">
+                <Label className="text-xs text-slate-500">Nome Fantasia</Label>
+                <Input value={form.nomeFantasia} onChange={e => setForm(p => ({ ...p, nomeFantasia: e.target.value }))} className="mt-0.5 h-8 text-xs" />
               </div>
             </div>
 
-            {/* Endereço */}
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Endereço</p>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <Label className="text-xs">Logradouro</Label>
-                  <Input value={form.endereco} onChange={e => setForm(p => ({ ...p, endereco: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Número</Label>
-                  <Input value={form.numero} onChange={e => setForm(p => ({ ...p, numero: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Complemento</Label>
-                  <Input value={form.complemento} onChange={e => setForm(p => ({ ...p, complemento: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Bairro</Label>
-                  <Input value={form.bairro} onChange={e => setForm(p => ({ ...p, bairro: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">CEP</Label>
-                  <Input value={form.cep} onChange={e => setForm(p => ({ ...p, cep: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Cidade</Label>
-                  <Input value={form.cidade} onChange={e => setForm(p => ({ ...p, cidade: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Estado</Label>
-                  <Input value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value.toUpperCase().slice(0, 2) }))} className="mt-1" maxLength={2} />
-                </div>
+            {erroCNPJ && (
+              <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                {erroCNPJ}
               </div>
-            </div>
+            )}
 
-            {/* Contato */}
+            {/* Linha 2: Endereço */}
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Contato</p>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label className="text-xs">Telefone</Label>
-                  <Input value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: e.target.value }))} className="mt-1" />
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Endereço</p>
+              <div className="grid grid-cols-12 gap-2">
+                <div className="col-span-5">
+                  <Label className="text-xs text-slate-500">Logradouro</Label>
+                  <Input value={form.endereco} onChange={e => setForm(p => ({ ...p, endereco: e.target.value }))} className="mt-0.5 h-8 text-xs" />
+                </div>
+                <div className="col-span-1">
+                  <Label className="text-xs text-slate-500">Nº</Label>
+                  <Input value={form.numero} onChange={e => setForm(p => ({ ...p, numero: e.target.value }))} className="mt-0.5 h-8 text-xs" />
                 </div>
                 <div className="col-span-2">
-                  <Label className="text-xs">E-mail</Label>
-                  <Input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className="mt-1" type="email" />
+                  <Label className="text-xs text-slate-500">Complemento</Label>
+                  <Input value={form.complemento} onChange={e => setForm(p => ({ ...p, complemento: e.target.value }))} className="mt-0.5 h-8 text-xs" />
                 </div>
-                <div>
-                  <Label className="text-xs">Contato Comercial</Label>
-                  <Input value={form.contatoNome} onChange={e => setForm(p => ({ ...p, contatoNome: e.target.value }))} className="mt-1" />
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-500">Bairro</Label>
+                  <Input value={form.bairro} onChange={e => setForm(p => ({ ...p, bairro: e.target.value }))} className="mt-0.5 h-8 text-xs" />
                 </div>
-                <div>
-                  <Label className="text-xs">Celular do Contato</Label>
-                  <Input value={form.contatoCelular} onChange={e => setForm(p => ({ ...p, contatoCelular: e.target.value }))} className="mt-1" />
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-500">CEP</Label>
+                  <Input value={form.cep} onChange={e => setForm(p => ({ ...p, cep: e.target.value }))} className="mt-0.5 h-8 text-xs" />
                 </div>
-                <div>
-                  <Label className="text-xs">E-mail do Contato</Label>
-                  <Input value={form.contatoEmail} onChange={e => setForm(p => ({ ...p, contatoEmail: e.target.value }))} className="mt-1" type="email" />
+                <div className="col-span-4">
+                  <Label className="text-xs text-slate-500">Cidade</Label>
+                  <Input value={form.cidade} onChange={e => setForm(p => ({ ...p, cidade: e.target.value }))} className="mt-0.5 h-8 text-xs" />
                 </div>
-              </div>
-            </div>
-
-            {/* Dados bancários */}
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Dados Bancários</p>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label className="text-xs">Banco</Label>
-                  <Input value={form.banco} onChange={e => setForm(p => ({ ...p, banco: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Agência</Label>
-                  <Input value={form.agencia} onChange={e => setForm(p => ({ ...p, agencia: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Conta</Label>
-                  <Input value={form.conta} onChange={e => setForm(p => ({ ...p, conta: e.target.value }))} className="mt-1" />
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-500">Estado</Label>
+                  <Input value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value.toUpperCase().slice(0, 2) }))} className="mt-0.5 h-8 text-xs" maxLength={2} />
                 </div>
                 <div className="col-span-3">
-                  <Label className="text-xs">Chave PIX</Label>
-                  <Input value={form.pix} onChange={e => setForm(p => ({ ...p, pix: e.target.value }))} className="mt-1" placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória" />
+                  <Label className="text-xs text-slate-500">Situação Receita</Label>
+                  <Input value={form.situacaoReceita} readOnly className="mt-0.5 h-8 text-xs bg-slate-50" />
                 </div>
               </div>
             </div>
 
-            {/* Categorias */}
+            {/* Linha 3: Contato */}
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Categorias de Fornecimento</p>
-              <div className="flex flex-wrap gap-2">
-                {todasCategorias.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => toggleCategoria(c)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                      form.categorias.includes(c)
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Contato</p>
+              <div className="grid grid-cols-12 gap-2">
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-500">Telefone</Label>
+                  <Input value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: e.target.value }))} className="mt-0.5 h-8 text-xs" />
+                </div>
+                <div className="col-span-4">
+                  <Label className="text-xs text-slate-500">E-mail</Label>
+                  <Input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className="mt-0.5 h-8 text-xs" type="email" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-500">Contato Comercial</Label>
+                  <Input value={form.contatoNome} onChange={e => setForm(p => ({ ...p, contatoNome: e.target.value }))} className="mt-0.5 h-8 text-xs" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-500">Celular</Label>
+                  <Input value={form.contatoCelular} onChange={e => setForm(p => ({ ...p, contatoCelular: e.target.value }))} className="mt-0.5 h-8 text-xs" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-500">E-mail Contato</Label>
+                  <Input value={form.contatoEmail} onChange={e => setForm(p => ({ ...p, contatoEmail: e.target.value }))} className="mt-0.5 h-8 text-xs" type="email" />
+                </div>
               </div>
             </div>
 
-            {/* Observações */}
+            {/* Linha 4: Dados bancários */}
             <div>
-              <Label className="text-xs">Observações</Label>
-              <Textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} className="mt-1" rows={3} />
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Dados Bancários</p>
+              <div className="grid grid-cols-12 gap-2">
+                <div className="col-span-3">
+                  <Label className="text-xs text-slate-500">Banco</Label>
+                  <Input value={form.banco} onChange={e => setForm(p => ({ ...p, banco: e.target.value }))} className="mt-0.5 h-8 text-xs" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-500">Agência</Label>
+                  <Input value={form.agencia} onChange={e => setForm(p => ({ ...p, agencia: e.target.value }))} className="mt-0.5 h-8 text-xs" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-500">Conta</Label>
+                  <Input value={form.conta} onChange={e => setForm(p => ({ ...p, conta: e.target.value }))} className="mt-0.5 h-8 text-xs" />
+                </div>
+                <div className="col-span-5">
+                  <Label className="text-xs text-slate-500">Chave PIX</Label>
+                  <Input value={form.pix} onChange={e => setForm(p => ({ ...p, pix: e.target.value }))} className="mt-0.5 h-8 text-xs" placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória" />
+                </div>
+              </div>
+            </div>
+
+            {/* Linha 5: Categorias + Observações lado a lado */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Categorias de Fornecimento</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {todasCategorias.map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => toggleCategoria(c)}
+                      className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${
+                        form.categorias.includes(c)
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Observações</Label>
+                <Textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} className="mt-1.5 text-xs resize-none" rows={3} />
+              </div>
             </div>
 
             {/* Botões */}
             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-              <Button variant="outline" onClick={fecharModal}>Cancelar</Button>
-              <Button onClick={salvar} disabled={criarMut.isPending || atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
-                {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              <Button variant="outline" size="sm" onClick={fecharModal}>Cancelar</Button>
+              <Button size="sm" onClick={salvar} disabled={criarMut.isPending || atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
+                {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> : null}
                 {editando ? "Salvar Alterações" : "Cadastrar Fornecedor"}
               </Button>
             </div>
