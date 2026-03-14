@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 272,
+    titulo: "Editar Projeto: campos pré-preenchidos da obra vinculada",
+    descricao: "Ao abrir o modal Editar Projeto, os campos Cliente, Responsável, Local e Valor do Contrato agora são preenchidos automaticamente a partir do cadastro da obra vinculada (obraId) quando o projeto não os tem salvos. Garante que o usuário não veja campos em branco que já estão no cadastro.",
+    tipo: "bugfix",
+    modulos: "Planejamento / Lista de Projetos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:10:00",
+  },
+  {
     version: 271,
     titulo: "Planejamento: botão Editar no card de projeto",
     descricao: "Adicionado botão Editar (ícone lápis, âmbar) nos cards da lista de projetos de planejamento. Ao clicar, abre modal com todos os campos editáveis: Nome, Cliente, Responsável, Local, Data Início, Término Contratual, Valor do Contrato, Status (dropdown Em andamento / Concluído / Suspenso / Atrasado / Planejamento) e Observações. Salva via mutation atualizarProjeto e atualiza o card imediatamente.",

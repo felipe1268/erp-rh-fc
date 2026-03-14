@@ -70,14 +70,17 @@ export default function PlanejamentoLista() {
   });
 
   function abrirEdicao(proj: any) {
+    const obraVinculada = (obras as any[]).find((o: any) => o.id === proj.obraId);
     setFormEdit({
       nome:                  proj.nome ?? "",
-      cliente:               proj.cliente ?? "",
-      local:                 proj.local ?? "",
-      responsavel:           proj.responsavel ?? "",
+      cliente:               proj.cliente || obraVinculada?.cliente || "",
+      local:                 proj.local || (obraVinculada
+                               ? ([obraVinculada.cidade, obraVinculada.estado].filter(Boolean).join(" / ") || obraVinculada.endereco || "")
+                               : ""),
+      responsavel:           proj.responsavel || obraVinculada?.responsavel || "",
       dataInicio:            proj.dataInicio ?? "",
       dataTerminoContratual: proj.dataTerminoContratual ?? "",
-      valorContrato:         proj.valorContrato ? String(n(proj.valorContrato)) : "",
+      valorContrato:         proj.valorContrato ? String(n(proj.valorContrato)) : (obraVinculada?.valorContrato ? String(n(obraVinculada.valorContrato)) : ""),
       status:                proj.status ?? "Em andamento",
       descricao:             proj.descricao ?? "",
     });
