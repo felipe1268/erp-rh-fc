@@ -57,6 +57,17 @@ export default function Obras() {
 
   const clientesQ = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const clientes = clientesQ.data ?? [];
+  const criarClienteMut = trpc.clientes.criar.useMutation({
+    onSuccess: (novo: any) => {
+      clientesQ.refetch();
+      setForm(f => ({ ...f, cliente: novo.razaoSocial }));
+      setNovoClienteModal(false);
+      setNovoClienteForm({ razaoSocial: "", nomeFantasia: "", telefone: "", email: "" });
+      setClienteOpen(false);
+      toast.success("Cliente cadastrado e selecionado!");
+    },
+    onError: (e: any) => toast.error(`Erro ao cadastrar cliente: ${e.message}`),
+  });
 
   const [saving, setSaving] = useState(false);
   const createMut = trpc.obras.create.useMutation({
@@ -208,6 +219,8 @@ export default function Obras() {
   const [clienteOpen, setClienteOpen] = useState(false);
   const [clienteBusca, setClienteBusca] = useState("");
   const clienteRef = useRef<HTMLDivElement>(null);
+  const [novoClienteModal, setNovoClienteModal] = useState(false);
+  const [novoClienteForm, setNovoClienteForm] = useState({ razaoSocial: "", nomeFantasia: "", telefone: "", email: "" });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -417,7 +430,18 @@ export default function Obras() {
               <Label className="flex items-center gap-1.5">
                 <UserCheck className="h-3.5 w-3.5 text-blue-500" />
                 Cliente
-                <span className="text-muted-foreground text-xs font-normal">(opcional)</span>
+                <button
+                  type="button"
+                  className="ml-auto flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  onClick={() => {
+                    setNovoClienteForm({ razaoSocial: clienteBusca || "", nomeFantasia: "", telefone: "", email: "" });
+                    setClienteOpen(false);
+                    setNovoClienteModal(true);
+                  }}
+                >
+                  <Plus className="h-3 w-3" />
+                  Cadastrar cliente
+                </button>
               </Label>
               <div className="relative mt-1">
                 <Input
@@ -447,31 +471,55 @@ export default function Obras() {
                 {clienteOpen && (
                   <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
                     {clientesFiltrados.length === 0 ? (
-                      <div className="px-3 py-6 text-center text-sm text-slate-400">
-                        {clientes.length === 0
-                          ? "Nenhum cliente cadastrado. Acesse Cadastro → Clientes."
-                          : "Nenhum cliente encontrado para esta busca."}
-                      </div>
-                    ) : (
-                      clientesFiltrados.map((c: any) => (
+                      <div className="px-3 py-4 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
+                        <span>{clientes.length === 0 ? "Nenhum cliente cadastrado ainda." : "Nenhum cliente encontrado."}</span>
                         <button
-                          key={c.id}
                           type="button"
-                          className="w-full text-left px-3 py-2.5 hover:bg-blue-50 flex items-start gap-2.5 border-b border-slate-50 last:border-0"
+                          className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md px-3 py-1.5 hover:bg-blue-50"
                           onClick={() => {
-                            setForm(f => ({ ...f, cliente: c.razaoSocial }));
+                            setNovoClienteForm({ razaoSocial: clienteBusca, nomeFantasia: "", telefone: "", email: "" });
                             setClienteOpen(false);
+                            setNovoClienteModal(true);
                           }}
                         >
-                          <UserCheck className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium text-slate-800">{c.razaoSocial}</p>
-                            {c.nomeFantasia && c.nomeFantasia !== c.razaoSocial && (
-                              <p className="text-xs text-slate-500">{c.nomeFantasia}</p>
-                            )}
-                          </div>
+                          <Plus className="h-3.5 w-3.5" />
+                          Cadastrar "{clienteBusca || "novo cliente"}"
                         </button>
-                      ))
+                      </div>
+                    ) : (
+                      <>
+                        {clientesFiltrados.map((c: any) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2.5 hover:bg-blue-50 flex items-start gap-2.5 border-b border-slate-50 last:border-0"
+                            onClick={() => {
+                              setForm(f => ({ ...f, cliente: c.razaoSocial }));
+                              setClienteOpen(false);
+                            }}
+                          >
+                            <UserCheck className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">{c.razaoSocial}</p>
+                              {c.nomeFantasia && c.nomeFantasia !== c.razaoSocial && (
+                                <p className="text-xs text-slate-500">{c.nomeFantasia}</p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 flex items-center gap-2 border-t border-slate-100 text-blue-600 hover:bg-blue-50 text-xs font-medium"
+                          onClick={() => {
+                            setNovoClienteForm({ razaoSocial: clienteBusca, nomeFantasia: "", telefone: "", email: "" });
+                            setClienteOpen(false);
+                            setNovoClienteModal(true);
+                          }}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Cadastrar novo cliente
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -749,6 +797,80 @@ export default function Obras() {
           </div>
         </div>
       </FullScreenDialog>
+
+      {/* ── MINI-MODAL: CADASTRO RÁPIDO DE CLIENTE ───────────────────── */}
+      <Dialog open={novoClienteModal} onOpenChange={setNovoClienteModal}>
+        <DialogContent style={{ background: '#ffffff', color: '#111827' }} className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-blue-500" />
+              Cadastrar Novo Cliente
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div>
+              <Label className="text-xs font-medium">Razão Social / Nome <span className="text-red-500">*</span></Label>
+              <Input
+                value={novoClienteForm.razaoSocial}
+                onChange={e => setNovoClienteForm(f => ({ ...f, razaoSocial: e.target.value }))}
+                placeholder="Nome completo ou Razão Social"
+                className="mt-1"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium">Nome Fantasia</Label>
+              <Input
+                value={novoClienteForm.nomeFantasia}
+                onChange={e => setNovoClienteForm(f => ({ ...f, nomeFantasia: e.target.value }))}
+                placeholder="Opcional"
+                className="mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-medium">Telefone</Label>
+                <Input
+                  value={novoClienteForm.telefone}
+                  onChange={e => setNovoClienteForm(f => ({ ...f, telefone: e.target.value }))}
+                  placeholder="(00) 00000-0000"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium">E-mail</Label>
+                <Input
+                  value={novoClienteForm.email}
+                  onChange={e => setNovoClienteForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="email@exemplo.com"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">O cliente será salvo no módulo Cadastro → Clientes e já selecionado na obra automaticamente.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNovoClienteModal(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!novoClienteForm.razaoSocial.trim()) { toast.error("Informe o nome/razão social do cliente."); return; }
+                criarClienteMut.mutate({
+                  companyId,
+                  razaoSocial: novoClienteForm.razaoSocial.trim(),
+                  nomeFantasia: novoClienteForm.nomeFantasia.trim() || undefined,
+                  telefone: novoClienteForm.telefone.trim() || undefined,
+                  email: novoClienteForm.email.trim() || undefined,
+                });
+              }}
+              disabled={criarClienteMut.isPending}
+              className="bg-[#1B2A4A] hover:bg-[#243660] min-w-[120px]"
+            >
+              {criarClienteMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar Cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
           <PrintFooterLGPD />
     </DashboardLayout>
   );
