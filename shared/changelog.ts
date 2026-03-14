@@ -483,4 +483,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 23:00:00",
   },
+  {
+    version: 248,
+    titulo: "Fix: Notificações E-mail — erro ao adicionar destinatário",
+    descricao: "Corrigido bug pré-existente na rota createRecipient das Notificações por E-mail: (1) Insert no banco estava sem .returning(), fazendo o Drizzle retornar um QueryResult não-iterável; (2) Desestruturação const [result] = ... lançava '(Intermediate value) is not iterable'; (3) O spread ...input incluía campo companyIds inexistente na tabela; (4) Agora o insert usa colunas explícitas + .returning() e retorna corretamente o id do destinatário criado.",
+    tipo: "fix",
+    modulos: "RH-DP, Configurações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:30:00",
+  },
 ];
