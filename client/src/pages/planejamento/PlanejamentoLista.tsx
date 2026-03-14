@@ -75,7 +75,10 @@ export default function PlanejamentoLista() {
       nome:                  proj.nome ?? "",
       cliente:               proj.cliente || obraVinculada?.cliente || "",
       local:                 proj.local || (obraVinculada
-                               ? ([obraVinculada.cidade, obraVinculada.estado].filter(Boolean).join(" / ") || obraVinculada.endereco || "")
+                               ? [
+                                   obraVinculada.endereco,
+                                   [obraVinculada.cidade, obraVinculada.estado].filter(Boolean).join(" / "),
+                                 ].filter(Boolean).join(", ")
                                : ""),
       responsavel:           proj.responsavel || obraVinculada?.responsavel || "",
       dataInicio:            proj.dataInicio ?? "",
