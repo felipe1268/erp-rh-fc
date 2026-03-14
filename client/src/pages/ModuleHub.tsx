@@ -614,7 +614,7 @@ export default function ModuleHub() {
               </div>
 
               {/* Module Tiles - App grid style */}
-              <div className="grid grid-cols-3 gap-2.5 mt-3 relative z-10">
+              <div className="flex flex-wrap gap-2 mt-3 relative z-10">
                 {sortedActiveModules.map((mod, idx) => {
                   const isBeingDragged = dragActive === mod.id;
                   const isDropTarget = dragTarget === mod.id && dragActive !== mod.id;
@@ -631,6 +631,7 @@ export default function ModuleHub() {
                       style={{
                         animationDelay: `${0.3 + idx * 0.07}s`,
                         opacity: isBeingDragged ? 0.4 : 1,
+                        width: '96px',
                         minHeight: '80px',
                         background: `linear-gradient(145deg, ${mod.accentFrom}16, ${mod.accentTo}0a)`,
                         border: isDropTarget
