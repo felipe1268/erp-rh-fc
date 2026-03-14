@@ -7898,7 +7898,11 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
     onSuccess: () => refetchHistorico(),
   });
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [historico]);
+  useEffect(() => {
+    if (historico && historico.length > 0) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [historico]);
 
   function enviarMensagem(msg?: string) {
     const texto = (msg ?? inputMsg).trim();
