@@ -35,7 +35,7 @@ import {
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
-  Home,
+  Home, Tag,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -310,6 +310,12 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
     title: "Estoque",
     items: [
       { icon: Warehouse, label: "Almoxarifado Central", path: "/almoxarifado" },
+    ],
+  },
+  {
+    title: "Configurações",
+    items: [
+      { icon: Tag, label: "Categorias", path: "/almoxarifado/categorias" },
     ],
   },
 ];

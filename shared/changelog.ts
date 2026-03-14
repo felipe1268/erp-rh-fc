@@ -502,6 +502,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 23:45:00",
   },
   {
+    version: 253,
+    titulo: "Almoxarifado: cadastro de categorias com CRUD completo",
+    descricao: "Criada tabela almoxarifado_categorias no banco de dados. Nova página /almoxarifado/categorias permite ao usuário criar, editar e excluir categorias. Pré-populada com 29 categorias dos insumos de construção civil (Aglomerantes, Agregados, Alvenarias, Aço Estrutural, EPIs, Ferramentas, Hidráulica, Elétrica, etc.). Campo Categoria no formulário de Novo Item agora é dropdown selecionável (não mais texto livre). Sidebar do Almoxarifado ganhou seção 'Configurações' com link para Categorias.",
+    tipo: "feature",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 03:00:00",
+  },
+  {
     version: 252,
     titulo: "Notificações: mensagem de erro correta ao falhar envio de e-mail",
     descricao: "Corrigido bug no toast do 'Enviar Teste': quando o SMTP falha (enviados=0, erros>0), a mensagem mostrada era incorretamente 'Nenhum destinatário ativo para este tipo'. Agora exibe o erro real retornado pelo serviço (ex: 'SMTP não configurado. Defina SMTP_HOST, SMTP_EMAIL e SMTP_PASSWORD.'). O servidor passou a rastrear o primeiro erro de envio em primeiroErro e retorná-lo no campo erroMensagem. O cliente usa erros>0 para distinguir falha de SMTP de ausência de destinatários.",

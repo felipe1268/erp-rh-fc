@@ -130,6 +130,7 @@ const PainelCompras = lazy(() => import("./pages/compras/Painel"));
 const Fornecedores = lazy(() => import("./pages/compras/Fornecedores"));
 const Almoxarifado = lazy(() => import("./pages/compras/Almoxarifado"));
 const AlmoxarifadoPage = lazy(() => import("./pages/almoxarifado/index"));
+const AlmoxarifadoCategorias = lazy(() => import("./pages/almoxarifado/Categorias"));
 const Solicitacoes = lazy(() => import("./pages/compras/Solicitacoes"));
 const Cotacoes = lazy(() => import("./pages/compras/Cotacoes"));
 const Ordens = lazy(() => import("./pages/compras/Ordens"));
@@ -278,6 +279,7 @@ function Router() {
         <Route path="/planejamento"              component={PlanejamentoLista} />
         <Route path="/planejamento/:id"          component={PlanejamentoDetalhe} />
         {/* Compras */}
+        <Route path="/almoxarifado/categorias"   component={AlmoxarifadoCategorias} />
         <Route path="/almoxarifado"              component={AlmoxarifadoPage} />
         <Route path="/compras/painel"            component={PainelCompras} />
         <Route path="/compras/fornecedores"      component={Fornecedores} />

@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte } from "drizzle-orm";
 import {
   fornecedores, almoxarifadoItens, almoxarifadoMovimentacoes,
+  almoxarifadoCategorias,
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
   comprasOrdens, comprasOrdensItens,
@@ -375,19 +376,66 @@ export const comprasRouter = router({
         .limit(input.limite ?? 200);
     }),
 
-  // Categorias distintas dos itens do almoxarifado
+  // Categorias distintas dos itens do almoxarifado (legado - mantido para compatibilidade)
   listarCategoriasAlmoxarifado: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const rows = await db.selectDistinct({ categoria: almoxarifadoItens.categoria })
-        .from(almoxarifadoItens)
+      const rows = await db.select().from(almoxarifadoCategorias)
+        .where(eq(almoxarifadoCategorias.companyId, input.companyId))
+        .orderBy(asc(almoxarifadoCategorias.ordem), asc(almoxarifadoCategorias.nome));
+      return rows.map(r => r.nome);
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // CATEGORIAS DO ALMOXARIFADO (CRUD)
+  // ══════════════════════════════════════════════════════════════
+  listarCategorias: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select().from(almoxarifadoCategorias)
+        .where(eq(almoxarifadoCategorias.companyId, input.companyId))
+        .orderBy(asc(almoxarifadoCategorias.ordem), asc(almoxarifadoCategorias.nome));
+    }),
+
+  criarCategoria: protectedProcedure
+    .input(z.object({ companyId: z.number(), nome: z.string().min(1, "Nome obrigatório"), ordem: z.number().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const existing = await db.select().from(almoxarifadoCategorias)
+        .where(and(eq(almoxarifadoCategorias.companyId, input.companyId), eq(almoxarifadoCategorias.nome, input.nome.trim())));
+      if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "Categoria já existe" });
+      const [cat] = await db.insert(almoxarifadoCategorias).values({
+        companyId: input.companyId,
+        nome: input.nome.trim(),
+        ordem: input.ordem ?? 0,
+      }).returning();
+      return cat;
+    }),
+
+  atualizarCategoria: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number(), nome: z.string().min(1), ordem: z.number().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const dup = await db.select().from(almoxarifadoCategorias)
         .where(and(
-          eq(almoxarifadoItens.companyId, input.companyId),
-          eq(almoxarifadoItens.ativo, true),
-        ))
-        .orderBy(asc(almoxarifadoItens.categoria));
-      return rows.map(r => r.categoria).filter(Boolean) as string[];
+          eq(almoxarifadoCategorias.companyId, input.companyId),
+          eq(almoxarifadoCategorias.nome, input.nome.trim()),
+        ));
+      if (dup.length > 0 && dup[0].id !== input.id) throw new TRPCError({ code: "CONFLICT", message: "Já existe uma categoria com este nome" });
+      await db.update(almoxarifadoCategorias).set({ nome: input.nome.trim(), ordem: input.ordem ?? 0 })
+        .where(and(eq(almoxarifadoCategorias.id, input.id), eq(almoxarifadoCategorias.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  excluirCategoria: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(almoxarifadoCategorias)
+        .where(and(eq(almoxarifadoCategorias.id, input.id), eq(almoxarifadoCategorias.companyId, input.companyId)));
+      return { success: true };
     }),
 
   // Categorias distintas dos fornecedores
