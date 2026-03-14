@@ -557,6 +557,7 @@ export default function PlanejamentoDetalhe() {
             utils={utils}
             fmt={fmt}
             fPct={fPct}
+            isAdminMaster={isAdminMaster}
             initialSemana={refisInitSemana}
             onInitialSemanaConsumed={() => setRefisInitSemana(null)}
           />
@@ -6342,7 +6343,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_, initialSemana, onInitialSemanaConsumed }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_, isAdminMaster, initialSemana, onInitialSemanaConsumed }: any) {
   const [semana, setSemana] = useState(() => toMonday(new Date()));
   const [obs, setObs] = useState("");
   const [collapsedGrupos, setCollapsedGrupos] = useState<Set<string | number>>(new Set());
