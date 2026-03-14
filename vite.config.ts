@@ -170,24 +170,6 @@ export default defineConfig({
     target: 'es2020',
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            // Heavy charting libs — load only on chart pages
-            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory') || id.includes('lodash')) return 'vendor-charts';
-            // UI primitives
-            if (id.includes('@radix-ui') || id.includes('cmdk') || id.includes('vaul') || id.includes('embla')) return 'vendor-ui';
-            // Date / Office / file utils
-            if (id.includes('date-fns') || id.includes('xlsx') || id.includes('exceljs') || id.includes('jspdf') || id.includes('html2canvas')) return 'vendor-utils';
-            // Data fetching / state
-            if (id.includes('@trpc') || id.includes('@tanstack')) return 'vendor-data';
-            // React itself
-            if (id.includes('react-dom') || id.includes('react/')) return 'vendor-react';
-            // superjson / zod / other small utils
-            if (id.includes('superjson') || id.includes('zod') || id.includes('clsx') || id.includes('tailwind-merge')) return 'vendor-utils-sm';
-            // Everything else (lucide, etc.)
-            return 'vendor-core';
-          }
-        },
       },
     },
     chunkSizeWarningLimit: 600,
