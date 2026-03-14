@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 276,
+    titulo: "Visão Geral: indicadores KPI em faixa horizontal inferior",
+    descricao: "Os 4 indicadores do bloco 'Evolução Física Global' (Avanço Semanal Previsto, Avanço Semanal Realizado, SPI e Desvio Físico) foram movidos da coluna lateral direita para uma faixa horizontal na parte inferior do card, exibidos lado a lado (grid 4 colunas). Responsivo: 2 colunas em telas pequenas, 4 colunas em sm+.",
+    tipo: "melhoria",
+    modulos: "Planejamento / Visão Geral",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:55:00",
+  },
+  {
     version: 275,
     titulo: "Clientes: busca CNPJ automática ao completar 14 dígitos",
     descricao: "Removido botão 'Buscar Receita'. Agora ao digitar o CNPJ completo (14 dígitos) a consulta na Receita Federal é feita automaticamente — spinner aparece durante a busca, checkmark verde quando dados foram preenchidos, alerta âmbar se situação não for 'Ativa', e mensagem em vermelho se CNPJ não for encontrado (permitindo preencher manualmente). Ao editar cliente existente, o campo não busca novamente.",

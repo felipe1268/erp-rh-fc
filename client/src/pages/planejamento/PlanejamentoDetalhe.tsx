@@ -6920,7 +6920,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+        <div className="flex flex-col divide-y divide-slate-100">
           {/* ── Área de barras ─────────────────────────────────────────────── */}
           <div className="px-6 py-5 space-y-5">
             {/* BARRA PREVISTO */}
@@ -7020,8 +7020,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             </div>
           </div>
 
-          {/* ── Cards KPI ────────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 lg:grid-cols-1 gap-0 divide-x lg:divide-x-0 lg:divide-y divide-slate-100 w-full lg:w-52">
+          {/* ── Cards KPI — faixa horizontal inferior ────────────────────────── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-100">
             {/* ADV SEMANAL PREVISTO */}
             <div className="flex flex-col items-center justify-center px-4 py-4 text-center" style={{ background: "#fffbeb" }}>
               <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "#92400e" }}>Avanço Semanal</p>
@@ -7044,7 +7044,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
             {/* SPI */}
             <div
-              className="flex flex-col items-center justify-center px-4 py-4 text-center col-span-1"
+              className="flex flex-col items-center justify-center px-4 py-4 text-center"
               style={{ background: avancoPrevisto === 0 ? "#f1f5f9" : spi >= 1 ? "#f0fdf4" : spi >= 0.9 ? "#fef9c3" : "#fef2f2" }}
             >
               <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: avancoPrevisto === 0 ? "#64748b" : spi >= 1 ? "#166534" : spi >= 0.9 ? "#92400e" : "#991b1b" }}>
