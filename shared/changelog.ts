@@ -1,6 +1,9 @@
 /**
  * Changelog centralizado do ERP.
- * 
+ * Rev. 246 — Modal "Nova SC" redesenhado: layout compacto (sem scroll), tema definitivamente claro
+ *            (style inline branco), 3 colunas Setor/Data/Prioridade, itens com scroll interno;
+ *            todos os DialogContent de Compras (Solicitacoes, Cotacoes, Ordens) forçam bg branco.
+ *
  * COMO USAR:
  * Ao criar uma nova revisão, basta adicionar uma entrada no final deste array.
  * O servidor sincroniza automaticamente com o banco de dados no startup.
