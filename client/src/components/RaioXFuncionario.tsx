@@ -855,6 +855,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <th className="p-3 text-left font-semibold text-blue-900">Médico</th>
                         <th className="p-3 text-left font-semibold text-blue-900">CRM</th>
                         <th className="p-3 text-left font-semibold text-blue-900">Exames</th>
+                        <th className="p-3 text-left font-semibold text-blue-900">Arquivo</th>
                       </tr></thead>
                       <tbody>
                         {asos.map((a: any) => (
@@ -868,6 +869,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             <td className="p-3">{a.medico || "-"}</td>
                             <td className="p-3">{a.crm || "-"}</td>
                             <td className="p-3 max-w-[300px]">{a.examesRealizados || "-"}</td>
+                            <td className="p-3">{a.documentoUrl ? <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 whitespace-nowrap"><FileText className="h-3.5 w-3.5" /> Ver ASO</a> : <span className="text-muted-foreground text-xs">—</span>}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -891,6 +893,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <th className="p-3 text-left font-semibold text-emerald-900">Validade</th>
                         <th className="p-3 text-left font-semibold text-emerald-900">Status</th>
                         <th className="p-3 text-left font-semibold text-emerald-900">Instrutor</th>
+                        <th className="p-3 text-left font-semibold text-emerald-900">Certificado</th>
                       </tr></thead>
                       <tbody>
                         {treinamentos.map((t: any) => (
@@ -902,6 +905,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             <td className="p-3">{formatDate(t.dataValidade)}</td>
                             <td className="p-3">{t.dataValidade ? <StatusBadge status={t.statusCalculado || "VÁLIDO"} diasRestantes={t.diasRestantes || 999} /> : "-"}</td>
                             <td className="p-3">{t.instrutor || "-"}</td>
+                            <td className="p-3">{t.certificadoUrl ? <a href={t.certificadoUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline flex items-center gap-1 whitespace-nowrap"><FileText className="h-3.5 w-3.5" /> Ver Cert.</a> : <span className="text-muted-foreground text-xs">—</span>}</td>
                           </tr>
                         ))}
                       </tbody>
