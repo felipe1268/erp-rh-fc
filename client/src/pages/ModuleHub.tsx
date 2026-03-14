@@ -547,7 +547,7 @@ export default function ModuleHub() {
         </header>
 
         {/* ═══════════ HERO SECTION - Robot + Title + Modules ═══════════ */}
-        <main className="relative max-w-[1440px] mx-auto px-6 lg:px-10">
+        <main className="relative max-w-[1440px] mx-auto px-10 lg:px-16">
 
           {/* ──── HERO ROW: Robot Left | Content Right ──── */}
           <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-0 pt-3 lg:pt-2">
@@ -614,7 +614,7 @@ export default function ModuleHub() {
               </div>
 
               {/* Module Tiles - App grid style */}
-              <div className="flex flex-wrap gap-2 mt-3 relative z-10">
+              <div className="flex flex-wrap gap-3 mt-3 relative z-10">
                 {sortedActiveModules.map((mod, idx) => {
                   const isBeingDragged = dragActive === mod.id;
                   const isDropTarget = dragTarget === mod.id && dragActive !== mod.id;
@@ -627,12 +627,12 @@ export default function ModuleHub() {
                       onDrop={() => handleDrop(mod.id)}
                       onDragEnd={handleDragEnd}
                       onClick={() => { if (!didDrag.current) { setActiveModule(mod.id as ModuleId); navigate(mod.path); } }}
-                      className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-2.5 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.04] select-none`}
+                      className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.04] select-none`}
                       style={{
                         animationDelay: `${0.3 + idx * 0.07}s`,
                         opacity: isBeingDragged ? 0.4 : 1,
-                        width: '96px',
-                        minHeight: '80px',
+                        width: '115px',
+                        minHeight: '96px',
                         background: `linear-gradient(145deg, ${mod.accentFrom}16, ${mod.accentTo}0a)`,
                         border: isDropTarget
                           ? `2px solid ${mod.accentFrom}`
@@ -648,20 +648,20 @@ export default function ModuleHub() {
 
                       {/* Icon */}
                       <div
-                        className="h-9 w-9 rounded-xl flex items-center justify-center mb-1.5 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5"
+                        className="h-11 w-11 rounded-xl flex items-center justify-center mb-2 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5"
                         style={{
                           background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
                           boxShadow: `0 4px 12px -3px ${mod.accentGlow || mod.accentFrom + "55"}`,
                         }}
                       >
-                        <mod.icon className="h-4 w-4 text-white" />
+                        <mod.icon className="h-5 w-5 text-white" />
                       </div>
 
                       {/* Title */}
-                      <p className="text-[10.5px] font-extrabold leading-tight text-[#1B2A4A] tracking-tight w-full truncate">{mod.title}</p>
+                      <p className="text-[12px] font-extrabold leading-tight text-[#1B2A4A] tracking-tight w-full truncate">{mod.title}</p>
 
                       {/* Subtitle */}
-                      <p className="text-[8px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitle}</p>
+                      <p className="text-[9.5px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitle}</p>
                     </div>
                   );
                 })}
