@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 275,
+    titulo: "Clientes: busca CNPJ automática ao completar 14 dígitos",
+    descricao: "Removido botão 'Buscar Receita'. Agora ao digitar o CNPJ completo (14 dígitos) a consulta na Receita Federal é feita automaticamente — spinner aparece durante a busca, checkmark verde quando dados foram preenchidos, alerta âmbar se situação não for 'Ativa', e mensagem em vermelho se CNPJ não for encontrado (permitindo preencher manualmente). Ao editar cliente existente, o campo não busca novamente.",
+    tipo: "melhoria",
+    modulos: "Cadastro / Clientes",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:45:00",
+  },
+  {
     version: 274,
     titulo: "Cronograma: botão Consolidar / Desconsolidar",
     descricao: "Adicionado botão 'Consolidar' na aba Cronograma do Planejamento. Quando o cronograma tem atividades, o botão aparece em verde (cadeado fechado) para consolidar e proteger contra cliques acidentais. Ao consolidar: botões Importar, Excluir e Editar ficam ocultos/desabilitados; badge 'Consolidado' aparece no título. O botão vira âmbar 'Desconsolidar' (cadeado aberto) com confirmação obrigatória para liberar. Estado salvo na coluna 'consolidado' da tabela planejamento_revisoes.",

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -9,10 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import {
   Plus, Search, Pencil, Trash2, UserCheck, Building2, Phone, Mail,
-  MapPin, Loader2, RefreshCw, AlertCircle, CheckCircle2, X, User,
+  MapPin, Loader2, AlertCircle, CheckCircle2, CheckCircle, User,
 } from "lucide-react";
-
-const n = (v: any) => parseFloat(v || "0") || 0;
 
 function formatCNPJ(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 14);
@@ -49,18 +47,41 @@ export default function Clientes() {
   const [modalAberto, setModalAberto] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
-  const [buscandoCNPJ, setBuscandoCNPJ] = useState(false);
-  const [erroCNPJ, setErroCNPJ] = useState<string | null>(null);
+  const [cnpjPreenchido, setCnpjPreenchido] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: lista = [], isLoading } = trpc.clientes.list.useQuery(
     { companyId }, { enabled: !!companyId }
   );
 
-  const buscarCNPJQuery = trpc.compras.buscarCNPJ.useQuery(
-    { cnpj: form.cnpj.replace(/\D/g, "") },
-    { enabled: false }
-  );
+  const cnpjDigits = form.cnpj.replace(/\D/g, "");
+  const cnpjCompleto = form.tipo === "PJ" && cnpjDigits.length === 14 && modalAberto;
+
+  const { data: cnpjData, isLoading: buscandoCNPJ, isError: erroCNPJ } =
+    trpc.compras.buscarCNPJ.useQuery(
+      { cnpj: cnpjDigits },
+      { enabled: cnpjCompleto && !cnpjPreenchido, retry: false, staleTime: 1000 * 60 * 5 }
+    );
+
+  useEffect(() => {
+    if (!cnpjData || cnpjPreenchido) return;
+    setForm(prev => ({
+      ...prev,
+      razaoSocial:     cnpjData.razaoSocial     || prev.razaoSocial,
+      nomeFantasia:    cnpjData.nomeFantasia     || prev.nomeFantasia,
+      situacaoReceita: cnpjData.situacaoReceita  || prev.situacaoReceita,
+      endereco:        cnpjData.endereco         || prev.endereco,
+      numero:          cnpjData.numero           || prev.numero,
+      complemento:     cnpjData.complemento      || prev.complemento,
+      bairro:          cnpjData.bairro           || prev.bairro,
+      cidade:          cnpjData.cidade           || prev.cidade,
+      estado:          cnpjData.estado           || prev.estado,
+      cep:             cnpjData.cep              || prev.cep,
+      telefone:        cnpjData.telefone         || prev.telefone,
+      email:           cnpjData.email            || prev.email,
+    }));
+    setCnpjPreenchido(true);
+  }, [cnpjData]);
 
   const criarMut = trpc.clientes.criar.useMutation({
     onSuccess: () => { utils.clientes.list.invalidate(); fecharModal(); toast.success("Cliente criado com sucesso!"); },
@@ -77,14 +98,14 @@ export default function Clientes() {
   function fecharModal() {
     setModalAberto(false);
     setEditandoId(null);
-    setErroCNPJ(null);
+    setCnpjPreenchido(false);
     setForm({ ...EMPTY_FORM });
   }
 
   function abrirNovo() {
     setForm({ ...EMPTY_FORM });
     setEditandoId(null);
-    setErroCNPJ(null);
+    setCnpjPreenchido(false);
     setModalAberto(true);
   }
 
@@ -111,52 +132,17 @@ export default function Clientes() {
       observacoes:     c.observacoes ?? "",
     });
     setEditandoId(c.id);
-    setErroCNPJ(null);
+    setCnpjPreenchido(true);
     setModalAberto(true);
-  }
-
-  async function buscarCNPJ() {
-    const cnpj = form.cnpj.replace(/\D/g, "");
-    if (cnpj.length !== 14) { setErroCNPJ("Digite um CNPJ completo (14 dígitos)."); return; }
-    setBuscandoCNPJ(true);
-    setErroCNPJ(null);
-    try {
-      const res = await buscarCNPJQuery.refetch();
-      const d = res.data;
-      if (!d) { setErroCNPJ("CNPJ não encontrado na Receita Federal."); return; }
-      const situacaoCod = d.situacaoCodigo ?? 0;
-      if (situacaoCod !== 2) {
-        setErroCNPJ(`Atenção: situação "${d.situacaoReceita}". Verifique antes de cadastrar.`);
-      }
-      setForm(prev => ({
-        ...prev,
-        razaoSocial:     d.razaoSocial     || prev.razaoSocial,
-        nomeFantasia:    d.nomeFantasia     || prev.nomeFantasia,
-        situacaoReceita: d.situacaoReceita  || prev.situacaoReceita,
-        endereco:        d.endereco         || prev.endereco,
-        numero:          d.numero           || prev.numero,
-        complemento:     d.complemento      || prev.complemento,
-        bairro:          d.bairro           || prev.bairro,
-        cidade:          d.cidade           || prev.cidade,
-        estado:          d.estado           || prev.estado,
-        cep:             d.cep              || prev.cep,
-        telefone:        d.telefone         || prev.telefone,
-        email:           d.email            || prev.email,
-      }));
-    } catch {
-      setErroCNPJ("Erro ao consultar a Receita Federal. Verifique o CNPJ e tente novamente.");
-    } finally {
-      setBuscandoCNPJ(false);
-    }
   }
 
   function salvar() {
     if (!form.razaoSocial.trim()) { toast.error("Razão Social / Nome é obrigatório."); return; }
     const payload = {
       ...form,
-      cnpj:   form.cnpj.replace(/\D/g, "") || undefined,
-      cpf:    form.cpf.replace(/\D/g, "")  || undefined,
-      cep:    form.cep.replace(/\D/g, "")  || undefined,
+      cnpj: form.cnpj.replace(/\D/g, "") || undefined,
+      cpf:  form.cpf.replace(/\D/g, "")  || undefined,
+      cep:  form.cep.replace(/\D/g, "")  || undefined,
     };
     if (editandoId) {
       atualizarMut.mutate({ id: editandoId, ...payload });
@@ -174,6 +160,9 @@ export default function Clientes() {
   [lista, busca]);
 
   const isPending = criarMut.isPending || atualizarMut.isPending;
+
+  const cnpjSituacaoAtiva = cnpjData?.situacaoReceita?.toLowerCase().includes("ativa") ?? false;
+  const cnpjSituacaoAlerta = cnpjCompleto && cnpjPreenchido && cnpjData && !cnpjSituacaoAtiva;
 
   return (
     <DashboardLayout>
@@ -339,7 +328,7 @@ export default function Clientes() {
                   {["PJ", "PF"].map(t => (
                     <button
                       key={t}
-                      onClick={() => setForm(f => ({ ...f, tipo: t, cnpj: "", cpf: "" }))}
+                      onClick={() => { setForm(f => ({ ...f, tipo: t, cnpj: "", cpf: "" })); setCnpjPreenchido(false); }}
                       className={`flex-1 py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
                         form.tipo === t
                           ? (t === "PJ" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-emerald-500 bg-emerald-50 text-emerald-700")
@@ -355,36 +344,56 @@ export default function Clientes() {
               {/* CNPJ / CPF */}
               <div>
                 <Label className="text-xs font-medium">{form.tipo === "PJ" ? "CNPJ" : "CPF"}</Label>
-                <div className="flex gap-2 mt-1">
+                <div className="relative mt-1">
                   <Input
                     value={form.tipo === "PJ" ? form.cnpj : form.cpf}
                     onChange={e => {
                       const v = form.tipo === "PJ" ? formatCNPJ(e.target.value) : formatCPF(e.target.value);
                       setForm(f => form.tipo === "PJ" ? { ...f, cnpj: v } : { ...f, cpf: v });
-                      setErroCNPJ(null);
+                      if (form.tipo === "PJ") setCnpjPreenchido(false);
                     }}
                     placeholder={form.tipo === "PJ" ? "00.000.000/0000-00" : "000.000.000-00"}
-                    className="font-mono"
+                    className={`font-mono pr-8 ${buscandoCNPJ ? "border-blue-300" : cnpjPreenchido && cnpjCompleto && !cnpjSituacaoAlerta ? "border-emerald-300" : ""}`}
                   />
-                  {form.tipo === "PJ" && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-10 px-3 text-xs shrink-0 gap-1"
-                      onClick={buscarCNPJ}
-                      disabled={buscandoCNPJ || form.cnpj.replace(/\D/g, "").length !== 14}
-                    >
-                      {buscandoCNPJ ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                      {buscandoCNPJ ? "Buscando..." : "Buscar Receita"}
-                    </Button>
+                  {/* Status indicator inside input */}
+                  {form.tipo === "PJ" && cnpjCompleto && (
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      {buscandoCNPJ && <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />}
+                      {!buscandoCNPJ && cnpjPreenchido && !cnpjSituacaoAlerta && <CheckCircle className="h-4 w-4 text-emerald-500" />}
+                      {!buscandoCNPJ && cnpjSituacaoAlerta && <AlertCircle className="h-4 w-4 text-amber-500" />}
+                      {!buscandoCNPJ && erroCNPJ && !cnpjPreenchido && <AlertCircle className="h-4 w-4 text-red-400" />}
+                    </div>
                   )}
                 </div>
-                {erroCNPJ && (
-                  <div className={`mt-1.5 flex items-start gap-1.5 text-xs rounded px-2 py-1.5 ${erroCNPJ.includes("Atenção") ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}`}>
-                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    {erroCNPJ}
-                  </div>
+
+                {/* Status messages */}
+                {form.tipo === "PJ" && cnpjCompleto && !buscandoCNPJ && (
+                  <>
+                    {erroCNPJ && !cnpjPreenchido && (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-red-600 bg-red-50 px-2 py-1.5 rounded">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        CNPJ não encontrado na Receita Federal. Preencha os dados manualmente.
+                      </p>
+                    )}
+                    {cnpjSituacaoAlerta && (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-2 py-1.5 rounded">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        Atenção: situação "{cnpjData?.situacaoReceita}". Verifique antes de cadastrar.
+                      </p>
+                    )}
+                    {cnpjPreenchido && cnpjSituacaoAtiva && (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2 py-1.5 rounded">
+                        <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+                        Dados preenchidos automaticamente pela Receita Federal.
+                      </p>
+                    )}
+                  </>
+                )}
+                {form.tipo === "PJ" && cnpjCompleto && buscandoCNPJ && (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-blue-600">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                    Consultando Receita Federal...
+                  </p>
                 )}
               </div>
 
