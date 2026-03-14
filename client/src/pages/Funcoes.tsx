@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -299,26 +300,11 @@ export default function Funcoes() {
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Funções / Cargos</h1>
             <p className="text-muted-foreground text-xs sm:text-sm">Cadastro de funções com descrição de atividades e Ordem de Serviço (NR-1)</p>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            <PrintActions title="Funções" />
-            {incompletas > 0 && (
-              <Button
-                variant="outline"
-                onClick={handleBatchGenerate}
-                disabled={batchGenerating}
-                className="text-purple-700 border-purple-300 hover:bg-purple-50"
-              >
-                {batchGenerating ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {batchProgress || 'Gerando...'}</>
-                ) : (
-                  <><Sparkles className="h-4 w-4 mr-2" /> Gerar Todos com IA ({incompletas})</>
-                )}
-              </Button>
-            )}
-            <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
-              <Plus className="h-4 w-4 mr-2" /> Nova Função
-            </Button>
-          </div>
+          <DraggableCommandBar barId="funcoes" items={[
+            { id: "print", node: <PrintActions title="Funções" /> },
+            ...(incompletas > 0 ? [{ id: "gerar-ia", node: <Button variant="outline" onClick={handleBatchGenerate} disabled={batchGenerating} className="text-purple-700 border-purple-300 hover:bg-purple-50">{batchGenerating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {batchProgress || 'Gerando...'}</> : <><Sparkles className="h-4 w-4 mr-2" /> Gerar Todos com IA ({incompletas})</>}</Button> }] : []),
+            { id: "nova", node: <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]"><Plus className="h-4 w-4 mr-2" /> Nova Função</Button> },
+          ]} />
         </div>
 
         {/* Stats - responsivo */}

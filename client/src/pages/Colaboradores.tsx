@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -579,15 +580,11 @@ export default function Colaboradores() {
             <h1 className="text-2xl font-bold tracking-tight">Colaboradores</h1>
             <p className="text-muted-foreground text-sm mt-1">Cadastro e gestão de colaboradores</p>
           </div>
-          <div className="flex items-center gap-3">
-            <PrintActions title="Colaboradores" />
-            <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!hasValidSelection} className="gap-2">
-              <Upload className="h-4 w-4" /> Importar Excel
-            </Button>
-            <Button onClick={openNew} disabled={!hasValidSelection} className="gap-2">
-              <Plus className="h-4 w-4" /> Novo
-            </Button>
-          </div>
+          <DraggableCommandBar barId="colaboradores" items={[
+            { id: "print", node: <PrintActions title="Colaboradores" /> },
+            { id: "importar", node: <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!hasValidSelection} className="gap-2"><Upload className="h-4 w-4" /> Importar Excel</Button> },
+            { id: "novo", node: <Button onClick={openNew} disabled={!hasValidSelection} className="gap-2"><Plus className="h-4 w-4" /> Novo</Button> },
+          ]} />
         </div>
 
         {/* Barra de ações em massa */}

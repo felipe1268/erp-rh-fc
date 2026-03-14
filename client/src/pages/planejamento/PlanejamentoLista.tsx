@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -153,10 +154,9 @@ export default function PlanejamentoLista() {
               </p>
             </div>
           </div>
-          <Button onClick={() => setModalAberto(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-4 w-4" />
-            Novo Projeto
-          </Button>
+          <DraggableCommandBar barId="planejamento-lista" items={[
+            { id: "novo-projeto", node: <Button onClick={() => setModalAberto(true)} className="gap-2 bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /> Novo Projeto</Button> },
+          ]} />
         </div>
 
         {/* KPIs rápidos */}

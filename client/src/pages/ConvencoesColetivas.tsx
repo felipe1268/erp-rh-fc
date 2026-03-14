@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
@@ -385,9 +386,9 @@ export default function ConvencoesColetivas() {
               Visão geral de todas as convenções coletivas cadastradas nas empresas
             </p>
           </div>
-          <Button onClick={openNew} className="bg-indigo-600 hover:bg-indigo-700">
-            <Plus className="h-4 w-4 mr-2" /> Nova Convenção
-          </Button>
+          <DraggableCommandBar barId="convencoes-coletivas" items={[
+            { id: "nova", node: <Button onClick={openNew} className="bg-indigo-600 hover:bg-indigo-700"><Plus className="h-4 w-4 mr-2" /> Nova Convenção</Button> },
+          ]} />
         </div>
 
         {/* KPIs */}

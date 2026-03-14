@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -142,9 +143,9 @@ export default function Cotacoes() {
             <p className="text-sm text-gray-500">Registre propostas de fornecedores e compare preços</p>
           </div>
         </div>
-        <Button onClick={() => setShowNova(true)} className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
-          <Plus className="h-4 w-4" /> Nova Cotação
-        </Button>
+        <DraggableCommandBar barId="cotacoes" items={[
+          { id: "nova", node: <Button onClick={() => setShowNova(true)} className="bg-blue-600 hover:bg-blue-500 text-white gap-2"><Plus className="h-4 w-4" /> Nova Cotação</Button> },
+        ]} />
       </div>
 
       {/* Filtros */}

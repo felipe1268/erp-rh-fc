@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -96,15 +97,10 @@ export default function Feriados() {
           </h2>
           <p className="text-sm text-muted-foreground mt-1">Gerencie feriados nacionais, estaduais e municipais para cálculos de ponto e folha</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => seedMut.mutate({ companyId, companyIds, ano: anoFiltro })} disabled={seedMut.isPending}>
-            {seedMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 mr-1" />}
-            Carregar Nacionais {anoFiltro}
-          </Button>
-          <Button size="sm" onClick={abrirNovo}>
-            <Plus className="w-4 h-4 mr-1" /> Novo Feriado
-          </Button>
-        </div>
+        <DraggableCommandBar barId="feriados" items={[
+          { id: "carregar", node: <Button variant="outline" size="sm" onClick={() => seedMut.mutate({ companyId, companyIds, ano: anoFiltro })} disabled={seedMut.isPending}>{seedMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 mr-1" />}Carregar Nacionais {anoFiltro}</Button> },
+          { id: "novo", node: <Button size="sm" onClick={abrirNovo}><Plus className="w-4 h-4 mr-1" /> Novo Feriado</Button> },
+        ]} />
       </div>
 
       {/* Filtros */}

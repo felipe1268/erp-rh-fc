@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -147,17 +148,10 @@ export default function Almoxarifado() {
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} no estoque</p>
           </div>
-          <div className="flex items-center gap-3">
-            {totalCriticos > 0 && (
-              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
-                <AlertTriangle className="h-4 w-4 text-red-500" />
-                <span className="text-xs font-semibold text-red-700">{totalCriticos} item{totalCriticos !== 1 ? "s" : ""} abaixo do mínimo</span>
-              </div>
-            )}
-            <Button onClick={abrirNovoItem} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              <Plus className="h-4 w-4 mr-2" /> Novo Item
-            </Button>
-          </div>
+          <DraggableCommandBar barId="almoxarifado" items={[
+            ...(totalCriticos > 0 ? [{ id: "criticos", node: <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5"><AlertTriangle className="h-4 w-4 text-red-500" /><span className="text-xs font-semibold text-red-700">{totalCriticos} item{totalCriticos !== 1 ? "s" : ""} abaixo do mínimo</span></div> }] : []),
+            { id: "novo-item", node: <Button onClick={abrirNovoItem} className="bg-emerald-600 hover:bg-emerald-700 text-white"><Plus className="h-4 w-4 mr-2" /> Novo Item</Button> },
+          ]} />
         </div>
       </div>
 

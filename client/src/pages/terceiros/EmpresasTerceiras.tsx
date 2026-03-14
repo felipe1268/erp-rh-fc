@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
@@ -165,9 +166,9 @@ export default function EmpresasTerceiras() {
               <p className="text-sm text-muted-foreground">{empresas.length} empresa(s) cadastrada(s)</p>
             </div>
           </div>
-          <Button onClick={openNew} className="bg-orange-500 hover:bg-orange-600">
-            <Plus className="h-4 w-4 mr-1" /> Nova Empresa
-          </Button>
+          <DraggableCommandBar barId="empresas-terceiras" items={[
+            { id: "nova", node: <Button onClick={openNew} className="bg-orange-500 hover:bg-orange-600"><Plus className="h-4 w-4 mr-1" /> Nova Empresa</Button> },
+          ]} />
         </div>
 
         {/* Search */}

@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -166,12 +167,10 @@ export default function ContasBancarias() {
               Contas bancárias da empresa para pagamento de folha
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <PrintActions title="Contas Bancárias" />
-            <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
-              <Plus className="h-4 w-4 mr-2" /> Nova Conta
-            </Button>
-          </div>
+          <DraggableCommandBar barId="contas-bancarias" items={[
+            { id: "print", node: <PrintActions title="Contas Bancárias" /> },
+            { id: "nova", node: <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]"><Plus className="h-4 w-4 mr-2" /> Nova Conta</Button> },
+          ]} />
         </div>
 
         {/* Cards resumo */}

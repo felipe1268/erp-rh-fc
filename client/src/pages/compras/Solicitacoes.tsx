@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -147,9 +148,9 @@ export default function Solicitacoes() {
             <p className="text-sm text-gray-500">Requisições internas de materiais e serviços</p>
           </div>
         </div>
-        <Button onClick={() => setShowNova(true)} className="bg-amber-600 hover:bg-amber-500 text-white gap-2">
-          <Plus className="h-4 w-4" /> Nova SC
-        </Button>
+        <DraggableCommandBar barId="solicitacoes-compra" items={[
+          { id: "nova-sc", node: <Button onClick={() => setShowNova(true)} className="bg-amber-600 hover:bg-amber-500 text-white gap-2"><Plus className="h-4 w-4" /> Nova SC</Button> },
+        ]} />
       </div>
 
       {/* KPI badges */}

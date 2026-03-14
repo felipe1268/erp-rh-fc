@@ -572,6 +572,62 @@ function DashboardLayoutContent({
   const dragOverItem = useRef<{ sectionTitle: string; path: string } | null>(null);
   const [dragActiveItem, setDragActiveItem] = useState<string | null>(null);
   const [dragTargetItem, setDragTargetItem] = useState<string | null>(null);
+
+  function getSidebarOrderedItems(section: MenuSection): MenuItem[] {
+    const order = itemOrder[section.title];
+    if (!order || order.length === 0) return section.items;
+    return [...section.items].sort((a, b) => {
+      const ai = order.indexOf(a.path);
+      const bi = order.indexOf(b.path);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }
+
+  function handleSidebarDragStart(sectionTitle: string, path: string) {
+    draggingItem.current = { sectionTitle, path };
+    setDragActiveItem(path);
+  }
+
+  function handleSidebarDragOver(e: React.DragEvent, sectionTitle: string, path: string) {
+    e.preventDefault();
+    if (draggingItem.current?.sectionTitle !== sectionTitle) return;
+    dragOverItem.current = { sectionTitle, path };
+    setDragTargetItem(path);
+  }
+
+  function handleSidebarDrop(sectionTitle: string) {
+    if (!draggingItem.current || !dragOverItem.current) { handleSidebarDragEnd(); return; }
+    if (draggingItem.current.sectionTitle !== sectionTitle) { handleSidebarDragEnd(); return; }
+
+    const section = effectiveSections.find(s => s.title === sectionTitle);
+    if (!section) { handleSidebarDragEnd(); return; }
+
+    const ordered = getSidebarOrderedItems(section);
+    const currentOrder = ordered.map(i => i.path);
+    const fromIdx = currentOrder.indexOf(draggingItem.current.path);
+    const toIdx = currentOrder.indexOf(dragOverItem.current.path);
+
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) { handleSidebarDragEnd(); return; }
+
+    const newOrder = [...currentOrder];
+    newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, draggingItem.current.path);
+
+    const newItemOrder = { ...itemOrder, [sectionTitle]: newOrder };
+    setItemOrder(newItemOrder);
+    localStorage.setItem(`fc-menu-items-${activeModule}`, JSON.stringify(newItemOrder));
+    handleSidebarDragEnd();
+  }
+
+  function handleSidebarDragEnd() {
+    draggingItem.current = null;
+    dragOverItem.current = null;
+    setDragActiveItem(null);
+    setDragTargetItem(null);
+  }
   const [sidebarActiveParam, setSidebarActiveParam] = useState<string>(() => {
     const s = window.location.search;
     return s.startsWith('?') ? s.slice(1) : '';
@@ -1003,12 +1059,23 @@ function DashboardLayoutContent({
                 ) : null}
                 {(isCollapsed || expandedSections[section.title]) ? (
                   <SidebarMenu className="px-2 py-0.5">
-                    {section.items.map((item: any) => {
+                    {getSidebarOrderedItems(section).map((item: any) => {
                       const isActive = item.path.includes('?')
                         ? location === item.path.split('?')[0] && item.path.split('?')[1] === sidebarActiveParam
                         : location === item.path;
+                      const isDragging = dragActiveItem === item.path;
+                      const isDropTarget = dragTargetItem === item.path;
                       return (
-                        <SidebarMenuItem key={item.path}>
+                        <SidebarMenuItem
+                          key={item.path}
+                          draggable={!isCollapsed}
+                          onDragStart={() => handleSidebarDragStart(section.title, item.path)}
+                          onDragOver={(e: React.DragEvent) => handleSidebarDragOver(e, section.title, item.path)}
+                          onDrop={() => handleSidebarDrop(section.title)}
+                          onDragEnd={handleSidebarDragEnd}
+                          style={{ cursor: isCollapsed ? undefined : "grab", opacity: isDragging ? 0.4 : 1 }}
+                          className={`transition-all ${isDropTarget && !isDragging ? "ring-1 ring-[#D4A843]/60 rounded-lg bg-sidebar-accent/30" : ""}`}
+                        >
                           <SidebarMenuButton
                             isActive={isActive}
                             onClick={() => {
