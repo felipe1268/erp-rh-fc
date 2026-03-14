@@ -209,109 +209,7 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const isAnthropicKey = () => !!ENV.anthropicApiKey && ENV.anthropicApiKey.startsWith("sk-ant-");
-const isGoogleKey    = () => !!ENV.googleApiKey && ENV.googleApiKey.startsWith("AIza");
-
-// ── Anthropic Claude — invoked natively (not via OpenAI-compat endpoint) ────
-async function invokeAnthropic(params: InvokeParams): Promise<InvokeResult> {
-  const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    maxTokens,
-    max_tokens,
-  } = params;
-
-  // Anthropic separates system prompt from messages
-  const systemMsg = messages.find(m => m.role === "system");
-  const otherMsgs = messages.filter(m => m.role !== "system");
-
-  const anthropicMessages = otherMsgs.map(m => ({
-    role: m.role as "user" | "assistant",
-    content: typeof m.content === "string" ? m.content : (Array.isArray(m.content)
-      ? m.content.map(p => typeof p === "string" ? { type: "text", text: p } : p)
-      : m.content),
-  }));
-
-  const body: Record<string, unknown> = {
-    model: "claude-sonnet-4-5",
-    max_tokens: maxTokens ?? max_tokens ?? 4096,
-    messages: anthropicMessages,
-  };
-
-  if (systemMsg) {
-    const sysContent = typeof systemMsg.content === "string"
-      ? systemMsg.content
-      : Array.isArray(systemMsg.content)
-        ? systemMsg.content.map(p => typeof p === "string" ? p : JSON.stringify(p)).join("\n")
-        : String(systemMsg.content);
-    body.system = sysContent;
-  }
-
-  if (tools && tools.length > 0) {
-    body.tools = tools.map(t => ({
-      name: t.function.name,
-      description: t.function.description,
-      input_schema: t.function.parameters ?? { type: "object", properties: {} },
-    }));
-    const tc = toolChoice || tool_choice;
-    if (tc) {
-      if (tc === "none") body.tool_choice = { type: "none" };
-      else if (tc === "auto") body.tool_choice = { type: "auto" };
-      else if (tc === "required") body.tool_choice = { type: "any" };
-      else if (typeof tc === "object" && "name" in tc) body.tool_choice = { type: "tool", name: tc.name };
-      else if (typeof tc === "object" && "function" in tc) body.tool_choice = { type: "tool", name: (tc as ToolChoiceExplicit).function.name };
-    }
-  }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": ENV.anthropicApiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Anthropic invoke failed: ${response.status} ${response.statusText} – ${errorText}`);
-  }
-
-  const data = await response.json() as any;
-
-  // Normalize to OpenAI-compatible InvokeResult shape
-  const textContent = (data.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
-  const toolCalls: ToolCall[] = (data.content ?? [])
-    .filter((c: any) => c.type === "tool_use")
-    .map((c: any, i: number) => ({
-      id: c.id ?? `call_${i}`,
-      type: "function" as const,
-      function: { name: c.name, arguments: JSON.stringify(c.input ?? {}) },
-    }));
-
-  return {
-    id: data.id ?? "ant-0",
-    created: Math.floor(Date.now() / 1000),
-    model: data.model ?? "claude-sonnet-4-5",
-    choices: [{
-      index: 0,
-      message: {
-        role: "assistant",
-        content: textContent,
-        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
-      },
-      finish_reason: data.stop_reason ?? null,
-    }],
-    usage: data.usage ? {
-      prompt_tokens: data.usage.input_tokens ?? 0,
-      completion_tokens: data.usage.output_tokens ?? 0,
-      total_tokens: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0),
-    } : undefined,
-  };
-}
+const isGoogleKey = () => !!ENV.googleApiKey && ENV.googleApiKey.startsWith("AIza");
 
 const resolveApiUrl = () => {
   // Google Gemini (OpenAI-compatible endpoint)
@@ -331,8 +229,8 @@ const resolveApiUrl = () => {
 const resolveApiKey = () => isGoogleKey() ? ENV.googleApiKey : ENV.forgeApiKey;
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey && !ENV.googleApiKey && !ENV.anthropicApiKey) {
-    throw new Error("Nenhuma chave de IA configurada (ANTHROPIC_API_KEY, GOOGLE_API_KEY ou OPENAI_API_KEY)");
+  if (!ENV.forgeApiKey && !ENV.googleApiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
   }
 };
 
@@ -383,11 +281,6 @@ const normalizeResponseFormat = ({
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
-
-  // Prioridade: Anthropic Claude → Google Gemini → OpenAI/Forge
-  if (isAnthropicKey()) {
-    return invokeAnthropic(params);
-  }
 
   const {
     messages,
