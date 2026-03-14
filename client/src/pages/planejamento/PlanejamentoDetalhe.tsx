@@ -891,6 +891,7 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
 // ═════════════════════════════════════════════════════════════════════════════
 function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, onEditarProjeto, onVerRefisCompleto }: any) {
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
+  const [atrasosAberto, setAtrasosAberto] = useState(false);
   const totalAtiv   = atividades.filter((a: any) => !a.isGrupo).length;
   const concluidas  = atividades.filter((a: any) => !a.isGrupo).filter((a: any) => {
     const avMap: Record<number, number> = {};
@@ -916,7 +917,33 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
   const avMap: Record<number, number> = {};
   avancos.forEach((av: any) => { avMap[av.atividadeId] = n(av.percentualAcumulado); });
 
-  const criticas = atividades.filter((a: any) => !a.isGrupo && a.dataFim && a.dataFim < hoje && (avMap[a.id] ?? 0) < 100);
+  // Calcula o progresso esperado para uma atividade na data de hoje
+  function progressoEsperadoHoje(a: any): number {
+    if (!a.dataInicio || !a.dataFim) return a.dataFim && a.dataFim <= hoje ? 100 : 0;
+    const inicio = new Date(a.dataInicio).getTime();
+    const fim    = new Date(a.dataFim).getTime();
+    const agora  = new Date(hoje).getTime();
+    if (agora >= fim)    return 100;
+    if (agora <= inicio) return 0;
+    return Math.round(((agora - inicio) / (fim - inicio)) * 100);
+  }
+
+  // Atividades em atraso: prazo vencido mas não 100%, OU progresso atual < esperado hoje
+  const criticas = atividades.filter((a: any) => {
+    if (a.isGrupo) return false;
+    const real = avMap[a.id] ?? 0;
+    if (real >= 100) return false;
+    const esperado = progressoEsperadoHoje(a);
+    return esperado > real;
+  });
+
+  // Dias de atraso em relação ao prazo original
+  function diasAtraso(a: any): number {
+    if (!a.dataFim || a.dataFim >= hoje) return 0;
+    const fim   = new Date(a.dataFim).getTime();
+    const agora = new Date(hoje).getTime();
+    return Math.floor((agora - fim) / (1000 * 60 * 60 * 24));
+  }
 
   return (
     <div className="space-y-5">
@@ -933,31 +960,179 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
         ))}
       </div>
 
+      {/* Modal Detalhado de Atividades em Atraso */}
+      <Dialog open={atrasosAberto} onOpenChange={setAtrasosAberto}>
+        <DialogContent style={{ background: '#ffffff', color: '#111827', maxWidth: 760, maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0 }}>
+          <DialogHeader style={{ padding: '20px 24px 16px', borderBottom: '1px solid #f1f5f9' }}>
+            <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
+              <AlertTriangle style={{ color: '#ef4444', width: 18, height: 18 }} />
+              Atividades em Atraso — {proj.nome}
+              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 400, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, padding: '2px 10px' }}>
+                {criticas.length} atividade{criticas.length !== 1 ? 's' : ''}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <div style={{ overflowY: 'auto', flex: 1, padding: '16px 24px 24px' }}>
+            {criticas.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: '#16a34a' }}>
+                <CheckCircle2 style={{ width: 32, height: 32, margin: '0 auto 8px' }} />
+                <p style={{ fontWeight: 600 }}>Nenhuma atividade em atraso!</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {criticas.map((a: any) => {
+                  const real     = avMap[a.id] ?? 0;
+                  const esperado = progressoEsperadoHoje(a);
+                  const desvio   = real - esperado;
+                  const dias     = diasAtraso(a);
+                  const semPrazo = !a.dataFim || a.dataFim >= hoje;
+                  return (
+                    <div key={a.id} style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 10, padding: '14px 16px' }}>
+                      {/* Header */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {a.eapCodigo && (
+                            <span style={{ fontSize: 10, fontFamily: 'monospace', background: '#fee2e2', color: '#b91c1c', borderRadius: 4, padding: '1px 6px', marginRight: 6 }}>
+                              {a.eapCodigo}
+                            </span>
+                          )}
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{a.nome}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                          {dias > 0 && (
+                            <span style={{ fontSize: 10, background: '#dc2626', color: '#fff', borderRadius: 5, padding: '2px 8px', fontWeight: 700 }}>
+                              {dias}d de atraso
+                            </span>
+                          )}
+                          {semPrazo && (
+                            <span style={{ fontSize: 10, background: '#f59e0b', color: '#fff', borderRadius: 5, padding: '2px 8px', fontWeight: 700 }}>
+                              Em risco
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Datas */}
+                      <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
+                        <span>Início: <strong style={{ color: '#374151' }}>{fmtBR(a.dataInicio) || '—'}</strong></span>
+                        <span>Prazo: <strong style={{ color: a.dataFim && a.dataFim < hoje ? '#dc2626' : '#374151' }}>{fmtBR(a.dataFim) || '—'}</strong></span>
+                      </div>
+
+                      {/* Barras de progresso */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {/* Barra esperado */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6b7280', marginBottom: 2 }}>
+                            <span>Deveria estar hoje</span>
+                            <span style={{ fontWeight: 700, color: '#2563eb' }}>{esperado.toFixed(1)}%</span>
+                          </div>
+                          <div style={{ background: '#dbeafe', borderRadius: 99, height: 7, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', borderRadius: 99, background: '#3b82f6', width: `${Math.min(esperado, 100)}%`, transition: 'width 0.4s' }} />
+                          </div>
+                        </div>
+                        {/* Barra real */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6b7280', marginBottom: 2 }}>
+                            <span>Realizado hoje</span>
+                            <span style={{ fontWeight: 700, color: real === 0 ? '#9ca3af' : '#16a34a' }}>{real.toFixed(1)}%</span>
+                          </div>
+                          <div style={{ background: '#f3f4f6', borderRadius: 99, height: 7, overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%', borderRadius: 99,
+                              background: real === 0 ? '#d1d5db' : desvio >= -5 ? '#22c55e' : desvio >= -20 ? '#f59e0b' : '#ef4444',
+                              width: `${Math.min(real, 100)}%`, transition: 'width 0.4s'
+                            }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Desvio resumido */}
+                      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <TrendingDown style={{ width: 12, height: 12, color: '#ef4444' }} />
+                        <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 600 }}>
+                          Desvio: {desvio.toFixed(1)} pp
+                        </span>
+                        {real === 0 && esperado > 0 && (
+                          <span style={{ fontSize: 10, color: '#9ca3af' }}>— ainda não iniciada</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Alerta atividades críticas */}
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-500" />
-            Atividades em Atraso ({criticas.length})
-          </p>
+          <button
+            onClick={() => setAtrasosAberto(true)}
+            className="w-full text-left flex items-center justify-between mb-3 group"
+          >
+            <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              Atividades em Atraso ({criticas.length})
+            </p>
+            {criticas.length > 0 && (
+              <span className="text-[10px] flex items-center gap-1 text-red-500 group-hover:text-red-700 transition-colors">
+                Ver detalhes <ChevronRight className="h-3 w-3" />
+              </span>
+            )}
+          </button>
           {criticas.length === 0 ? (
             <p className="text-xs text-emerald-600 flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4" /> Nenhuma atividade em atraso
             </p>
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {criticas.map((a: any) => (
-                <div key={a.id} className="flex items-center justify-between text-xs p-2 bg-red-50 rounded-lg border border-red-100">
-                  <div className="flex-1 min-w-0">
-                    {a.eapCodigo && <span className="text-red-400 font-mono mr-1">{a.eapCodigo}</span>}
-                    <span className="text-slate-700 truncate">{a.nome}</span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <span className="text-slate-500">Previsto: {fmtBR(a.dataFim)}</span>
-                    <span className="font-semibold text-red-700">{fPct(avMap[a.id] ?? 0)}</span>
-                  </div>
-                </div>
-              ))}
+              {criticas.map((a: any) => {
+                const real     = avMap[a.id] ?? 0;
+                const esperado = progressoEsperadoHoje(a);
+                const desvio   = real - esperado;
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => setAtrasosAberto(true)}
+                    className="w-full text-left p-2 bg-red-50 rounded-lg border border-red-100 hover:bg-red-100 transition-colors"
+                  >
+                    {/* Linha 1: código + nome */}
+                    <div className="flex items-center gap-1 mb-1.5">
+                      {a.eapCodigo && <span className="text-[10px] text-red-400 font-mono shrink-0">{a.eapCodigo}</span>}
+                      <span className="text-xs text-slate-700 truncate font-medium">{a.nome}</span>
+                    </div>
+                    {/* Linha 2: barras + valores */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 space-y-1">
+                        {/* Esperado */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] text-slate-400 w-16 shrink-0">Deveria:</span>
+                          <div className="flex-1 bg-blue-100 rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-blue-500 h-full rounded-full" style={{ width: `${Math.min(esperado, 100)}%` }} />
+                          </div>
+                          <span className="text-[10px] font-bold text-blue-700 w-8 text-right shrink-0">{esperado.toFixed(0)}%</span>
+                        </div>
+                        {/* Real */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] text-slate-400 w-16 shrink-0">Hoje:</span>
+                          <div className="flex-1 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${Math.min(real, 100)}%`,
+                                background: real === 0 ? '#d1d5db' : desvio >= -5 ? '#22c55e' : desvio >= -20 ? '#f59e0b' : '#ef4444',
+                              }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-bold text-red-700 w-8 text-right shrink-0">{real.toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
