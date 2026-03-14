@@ -2055,6 +2055,12 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     },
   });
 
+  const consolidarMut = trpc.planejamento.consolidarRevisao.useMutation({
+    onSuccess: () => utils.planejamento.getProjetoById.invalidate({ id: projetoId }),
+  });
+
+  const isConsolidado = !!revisaoAtiva?.consolidado;
+
   function adicionarLinha() {
     setLinhas(l => [...l, {
       id: undefined, eapCodigo: "", nome: "", nivel: 1,
@@ -2154,6 +2160,11 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
             Cronograma — Rev. {String(revisaoAtiva.numero).padStart(2, "0")}
             {revisaoAtiva.isBaseline && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Baseline</span>}
           </p>
+          {isConsolidado && (
+            <span className="flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
+              <Lock className="h-2.5 w-2.5" /> Consolidado
+            </span>
+          )}
           <span className="text-xs text-slate-400">
             {periodoRange
               ? <>{displayAtiv.filter((a: any) => !a.isGrupo).length} <span className="text-blue-500">de {atividades.filter((a: any) => !a.isGrupo).length}</span> atividades</>
@@ -2173,7 +2184,37 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
             </>
           ) : (
             <>
-              {revisaoAtiva && (
+              {/* Botão Consolidar / Desconsolidar */}
+              {atividades.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`gap-1.5 ${isConsolidado
+                    ? "border-amber-300 text-amber-700 hover:bg-amber-50"
+                    : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                  }`}
+                  disabled={consolidarMut.isPending}
+                  title={isConsolidado ? "Clique para desconsolidar e liberar edições" : "Consolide para proteger o cronograma de cliques acidentais"}
+                  onClick={() => {
+                    if (isConsolidado) {
+                      if (!confirm("Desconsolidar o cronograma? Isso vai liberar edição, importação e exclusão.")) return;
+                      consolidarMut.mutate({ revisaoId: revisaoAtiva.id, consolidado: false });
+                    } else {
+                      consolidarMut.mutate({ revisaoId: revisaoAtiva.id, consolidado: true });
+                    }
+                  }}
+                >
+                  {consolidarMut.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : isConsolidado
+                      ? <LockOpen className="h-3.5 w-3.5" />
+                      : <Lock className="h-3.5 w-3.5" />
+                  }
+                  {isConsolidado ? "Desconsolidar" : "Consolidar"}
+                </Button>
+              )}
+              {/* Importar — oculto quando consolidado */}
+              {revisaoAtiva && !isConsolidado && (
                 <ImportarCronograma
                   projetoId={projetoId}
                   revisaoAtiva={revisaoAtiva}
@@ -2182,7 +2223,8 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                   onImportado={() => utils.planejamento.listarAtividades.invalidate()}
                 />
               )}
-              {atividades.length > 0 && !confirmExcluir && (
+              {/* Excluir — oculto quando consolidado */}
+              {atividades.length > 0 && !confirmExcluir && !isConsolidado && (
                 <Button size="sm" variant="outline"
                   className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50"
                   onClick={() => setConfirmExcluir(true)}>
@@ -2190,7 +2232,8 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                   Excluir Cronograma
                 </Button>
               )}
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={iniciarEdicao}>
+              {/* Editar — desabilitado quando consolidado */}
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={iniciarEdicao} disabled={isConsolidado} title={isConsolidado ? "Desconsolide o cronograma para editar" : undefined}>
                 <Edit3 className="h-3.5 w-3.5" />
                 Editar Cronograma
               </Button>
