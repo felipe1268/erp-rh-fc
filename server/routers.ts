@@ -1092,7 +1092,7 @@ export const appRouter = router({
       if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
       // Usar o SDK para gerar o token no formato correto (openId, appId, name)
       const { sdk } = await import("./_core/sdk");
-      const token = await sdk.createSessionToken(user.openId, { expiresInMs: 7 * 24 * 60 * 60 * 1000, name: user.name || "" });
+      const token = await sdk.createSessionToken(user.openId, { expiresInMs: 7 * 24 * 60 * 60 * 1000, name: user.name || user.username || user.openId });
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
       await db.update(users).set({ lastSignedIn: new Date().toISOString() }).where(eq(users.id, user.id));

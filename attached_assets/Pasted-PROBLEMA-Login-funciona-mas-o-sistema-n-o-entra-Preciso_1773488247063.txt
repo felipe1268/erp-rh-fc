@@ -1,0 +1,28 @@
+PROBLEMA: Login funciona mas o sistema não entra. Preciso que você corrija.
+O sistema está publicado no Railway conectado ao banco Neon (PostgreSQL). O banco tem as tabelas criadas (Rev. 199) mas está vazio (sem empresas, sem dados).
+O que acontece:
+	1.	A tela de login carrega normalmente ✅
+	2.	O endpoint loginLocal retorna status 200 (sucesso) ✅
+	3.	Mas TODAS as chamadas autenticadas depois do login falham com 401 ❌
+	4.	O log do servidor mostra repetidamente: [Auth] Session payload missing required fields
+	5.	O usuário volta para a tela de login em loop
+A causa raiz:
+O token JWT gerado no loginLocal não contém todos os campos que o middleware de autenticação exige. Provavelmente falta companyId porque o banco está vazio — não existe nenhuma empresa cadastrada. Como o sistema é multi-empresa, o middleware rejeita o token.
+O que precisa ser corrigido:
+	1.	Encontre o arquivo que contém a mensagem Session payload missing required fields — este é o middleware de autenticação. Veja quais campos ele exige no payload do JWT (provavelmente userId, companyId, role, etc).
+	2.	Encontre a mutation loginLocal no router de userManagement — veja o que ela coloca no token JWT ao fazer o login.
+	3.	Corrija o initSetup (o serviço que cria o admin master a partir das variáveis de ambiente ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_USERNAME, ADMIN_NAME) para que ele também:
+	∙	Crie uma empresa padrão chamada “FC Engenharia” se nenhuma empresa existir no banco
+	∙	Vincule o usuário admin_master a essa empresa
+	∙	Garanta que o admin tenha role admin_master
+	4.	Corrija o loginLocal para que o token JWT inclua TODOS os campos que o middleware exige, mesmo que alguns sejam null ou default. O admin_master deve conseguir logar mesmo sem empresa vinculada — ele é superusuário.
+	5.	Corrija o middleware de autenticação para que o admin_master não seja bloqueado por falta de companyId. Um admin_master deve ter acesso mesmo sem empresa vinculada.
+Variáveis de ambiente disponíveis:
+	∙	DATABASE_URL — conexão com Neon PostgreSQL
+	∙	JWT_SECRET — chave para tokens
+	∙	ADMIN_EMAIL = felipe@fcengenhariacivil.com.br
+	∙	ADMIN_PASSWORD = 142168Fe@
+	∙	ADMIN_USERNAME = admin
+	∙	ADMIN_NAME = Felipe
+Teste de sucesso: Após as correções, ao fazer login com email felipe@fcengenhariacivil.com.br e senha 142168Fe@, o sistema deve entrar no dashboard sem voltar para a tela de login.
+IMPORTANTE: Não mude a estrutura do banco de dados. Não delete tabelas. Não altere o schema. Apenas corrija a lógica de autenticação e o setup inicial.
