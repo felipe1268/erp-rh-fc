@@ -58,4 +58,4 @@ externalPort = 3000
 [deployment]
 deploymentTarget = "autoscale"
 run = ["node", "dist/index.js"]
-build = ["bash", "-c", "npm install --legacy-peer-deps && pnpm run build"]
+build = ["pnpm", "run", "build"]
