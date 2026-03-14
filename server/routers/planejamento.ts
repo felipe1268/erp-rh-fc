@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { eq, and, desc, asc, sql, isNotNull, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike } from "drizzle-orm";
 import {
   planejamentoProjetos,
   planejamentoRevisoes,
@@ -1097,31 +1097,59 @@ export const planejamentoRouter = router({
   // ── Programação Semanal — recursos por EAP ───────────────────────────────
   buscarRecursosSemana: protectedProcedure
     .input(z.object({
-      companyId:  z.number(),
-      orcamentoId: z.number(),
-      eapCodigos: z.array(z.string()),
+      companyId:       z.number(),
+      orcamentoId:     z.number(),
+      eapCodigos:      z.array(z.string()),
+      atividadeNomes:  z.array(z.string()).optional(),
     }))
     .query(async ({ input }) => {
-      if (!input.eapCodigos.length) return { itens: [], insumos: [] };
+      if (!input.eapCodigos.length && !input.atividadeNomes?.length) return { itens: [], insumos: [], matchedByNome: false };
       const db = await getDb();
 
-      const itens = await db.select({
-        eapCodigo:      orcamentoItens.eapCodigo,
-        descricao:      orcamentoItens.descricao,
-        unidade:        orcamentoItens.unidade,
-        quantidade:     orcamentoItens.quantidade,
-        custoUnitMat:   orcamentoItens.custoUnitMat,
-        custoUnitMdo:   orcamentoItens.custoUnitMdo,
-        custoTotal:     orcamentoItens.custoTotal,
-        servicoCodigo:  orcamentoItens.servicoCodigo,
-        tipo:           orcamentoItens.tipo,
-      }).from(orcamentoItens)
-        .where(and(
-          eq(orcamentoItens.orcamentoId, input.orcamentoId),
-          eq(orcamentoItens.companyId,   input.companyId),
-          inArray(orcamentoItens.eapCodigo, input.eapCodigos),
-        ));
+      const colSelect = {
+        eapCodigo:     orcamentoItens.eapCodigo,
+        descricao:     orcamentoItens.descricao,
+        unidade:       orcamentoItens.unidade,
+        quantidade:    orcamentoItens.quantidade,
+        custoUnitMat:  orcamentoItens.custoUnitMat,
+        custoUnitMdo:  orcamentoItens.custoUnitMdo,
+        custoTotal:    orcamentoItens.custoTotal,
+        servicoCodigo: orcamentoItens.servicoCodigo,
+        tipo:          orcamentoItens.tipo,
+      };
 
+      // 1ª tentativa: match por EAP código
+      let itens: any[] = [];
+      if (input.eapCodigos.length) {
+        itens = await db.select(colSelect).from(orcamentoItens)
+          .where(and(
+            eq(orcamentoItens.orcamentoId, input.orcamentoId),
+            eq(orcamentoItens.companyId,   input.companyId),
+            inArray(orcamentoItens.eapCodigo, input.eapCodigos),
+          ));
+      }
+
+      // 2ª tentativa: fallback por nome da atividade (quando EAPs não coincidem)
+      let matchedByNome = false;
+      if (itens.length === 0 && input.atividadeNomes?.length) {
+        const nomes = input.atividadeNomes.slice(0, 15); // limita a 15 buscas
+        const conditions = nomes
+          .map(n => n.trim().substring(0, 40))
+          .filter(n => n.length >= 5)
+          .map(n => ilike(orcamentoItens.descricao, `%${n}%`));
+
+        if (conditions.length) {
+          itens = await db.select(colSelect).from(orcamentoItens)
+            .where(and(
+              eq(orcamentoItens.orcamentoId, input.orcamentoId),
+              eq(orcamentoItens.companyId,   input.companyId),
+              or(...conditions),
+            ));
+          if (itens.length > 0) matchedByNome = true;
+        }
+      }
+
+      // Busca insumos das composições ligadas aos itens encontrados
       const servCodes = [...new Set(itens.map(i => i.servicoCodigo).filter(Boolean))] as string[];
       let insumos: any[] = [];
       if (servCodes.length) {
@@ -1140,7 +1168,7 @@ export const planejamentoRouter = router({
           ));
       }
 
-      return { itens, insumos };
+      return { itens, insumos, matchedByNome };
     }),
 
   // ── Validação EAP cronograma × orçamento ─────────────────────────────────

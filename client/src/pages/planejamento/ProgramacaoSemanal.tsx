@@ -159,17 +159,25 @@ export function ProgramacaoSemanal({
     return [...eaps];
   }, [proximas3]);
 
+  const atividadeNomes = useMemo(
+    () => [...new Set(
+      proximas3.flatMap(({ atividades: at }) => at.map((a: any) => a.nome as string).filter(Boolean))
+    )],
+    [proximas3]
+  );
+
   const recursosQuery = trpc.planejamento.buscarRecursosSemana.useQuery(
-    { companyId, orcamentoId: orcamentoId ?? 0, eapCodigos: todosEaps },
-    { enabled: !!orcamentoId && todosEaps.length > 0 }
+    { companyId, orcamentoId: orcamentoId ?? 0, eapCodigos: todosEaps, atividadeNomes },
+    { enabled: !!orcamentoId && (todosEaps.length > 0 || atividadeNomes.length > 0) }
   );
 
   const recursos = recursosQuery.data;
 
   // ── AI alerts mutation ────────────────────────────────────────────────────
+  const [iaErro, setIaErro] = useState<string | null>(null);
   const alertasMut = trpc.iaCronograma.alertasSemana.useMutation({
-    onSuccess: (data) => { setAlertas(data); setLoadIA(false); },
-    onError:   ()     => { setLoadIA(false); },
+    onSuccess: (data) => { setAlertas(data); setLoadIA(false); setIaErro(null); },
+    onError:   (err)  => { setLoadIA(false); setIaErro(err.message ?? "Erro ao consultar a IA."); },
   });
 
   function gerarAlertas() {
@@ -410,7 +418,7 @@ export function ProgramacaoSemanal({
               </Button>
             </div>
 
-            {!alertas && !loadIA && (
+            {!alertas && !loadIA && !iaErro && (
               <div className="py-8 text-center text-slate-400 text-xs">
                 Clique em "Analisar" para o JULINHO avaliar as próximas 3 semanas com base no cronograma.
               </div>
@@ -419,6 +427,15 @@ export function ProgramacaoSemanal({
               <div className="py-8 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
                 Analisando programação das próximas {proximas3.length} semanas…
+              </div>
+            )}
+            {iaErro && !loadIA && (
+              <div className="m-4 flex items-start gap-2 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2.5">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-semibold mb-0.5">Erro ao consultar o JULINHO</div>
+                  <div className="text-red-500">{iaErro}</div>
+                </div>
               </div>
             )}
             {alertas && <AlertasBlock alertas={alertas} semanas={proximas3.map(p => p.semana)} />}
@@ -437,6 +454,7 @@ export function ProgramacaoSemanal({
           recursos={recursos}
           alertas={alertas}
           loadIA={loadIA}
+          iaErro={iaErro}
           onGerarAlertas={gerarAlertas}
         />
       )}
@@ -447,7 +465,11 @@ export function ProgramacaoSemanal({
 // ── Sub-componentes ───────────────────────────────────────────────────────────
 
 function RecursosDaSemana({ recursos, eapsAtivas }: { recursos: any; eapsAtivas: string[] }) {
-  const itensAtivos = (recursos.itens ?? []).filter((it: any) => eapsAtivas.includes(it.eapCodigo));
+  const matchedByNome = !!recursos.matchedByNome;
+  // Quando matched por nome, mostra todos os itens; quando por EAP, filtra pela semana atual
+  const itensAtivos = matchedByNome
+    ? (recursos.itens ?? [])
+    : (recursos.itens ?? []).filter((it: any) => eapsAtivas.includes(it.eapCodigo));
   const servCodes   = new Set(itensAtivos.map((it: any) => it.servicoCodigo).filter(Boolean));
   const insumos     = (recursos.insumos ?? []).filter((ins: any) => servCodes.has(ins.composicaoCodigo));
 
@@ -455,11 +477,17 @@ function RecursosDaSemana({ recursos, eapsAtivas }: { recursos: any; eapsAtivas:
   const mo  = insumos.filter((i: any) => parseFloat(i.alocacaoMdo ?? "0") > 0);
 
   if (!itensAtivos.length) {
-    return <p className="text-xs text-slate-400 p-4">Orçamento vinculado, mas sem EAPs correspondentes.</p>;
+    return <p className="text-xs text-slate-400 p-4">Sem recursos de orçamento vinculados a estas atividades.</p>;
   }
 
   return (
     <div className="p-4 space-y-3">
+      {matchedByNome && (
+        <div className="flex items-center gap-1.5 text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span>EAPs do cronograma e orçamento não coincidem — recursos buscados por nome da atividade.</span>
+        </div>
+      )}
       {mo.length > 0 && (
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
@@ -565,7 +593,7 @@ function AlertasBlock({ alertas, semanas }: { alertas: any; semanas: Week[] }) {
 
 function RelatorioTresSemanas({
   proximas3, avancosMap, today, nomeProjeto, nomeCliente,
-  recursos, alertas, loadIA, onGerarAlertas,
+  recursos, alertas, loadIA, iaErro, onGerarAlertas,
 }: {
   proximas3: { semana: Week; atividades: any[] }[];
   avancosMap: Record<number, number>;
@@ -575,6 +603,7 @@ function RelatorioTresSemanas({
   recursos: any;
   alertas: any;
   loadIA: boolean;
+  iaErro: string | null;
   onGerarAlertas: () => void;
 }) {
   const dataGeracao = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -582,7 +611,7 @@ function RelatorioTresSemanas({
   return (
     <div className="space-y-3">
       {/* Gerar alertas antes de imprimir */}
-      {!alertas && (
+      {!alertas && !iaErro && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-blue-700">
             <Brain className="h-4 w-4" />
@@ -591,6 +620,21 @@ function RelatorioTresSemanas({
           <Button size="sm" className="bg-blue-600 hover:bg-blue-700 gap-1.5 text-xs" onClick={onGerarAlertas} disabled={loadIA}>
             {loadIA ? <Loader2 className="h-3 w-3 animate-spin" /> : <Brain className="h-3 w-3" />}
             {loadIA ? "Analisando…" : "Gerar alertas IA"}
+          </Button>
+        </div>
+      )}
+      {iaErro && !loadIA && (
+        <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2 text-sm text-red-600">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <div>
+              <div className="font-semibold text-[13px]">Erro ao consultar o JULINHO</div>
+              <div className="text-[11px] text-red-500 mt-0.5">{iaErro}</div>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" className="text-xs border-red-200 text-red-600 hover:bg-red-100 gap-1" onClick={onGerarAlertas} disabled={loadIA}>
+            <RefreshCcw className="h-3 w-3" />
+            Tentar novamente
           </Button>
         </div>
       )}

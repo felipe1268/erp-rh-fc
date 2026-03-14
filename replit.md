@@ -69,8 +69,14 @@ shared/         # Shared types and constants
 ## Planejamento Module
 - Routes: `/planejamento/:id` (tabs: cronograma, curva-s, avanco, refis, compras, ia-gestora, etc.)
 - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` — main file ~7430 lines
-- Projects in DB: id=4 (Hotel do Papa), id=6 (Chlorum Palmeira), id=7 (Hotel QIU 2 - 4 Fase)
+- Projects in DB: id=4 (Hotel do Papa), id=6 (Chlorum Palmeira), id=7 (Hotel QIU 2 - 4 Fase), id=8 (active)
 - **JULINHO AI**: Google Gemini (gemini-2.5-flash) via GOOGLE_API_KEY, system prompt = persona only, project context in user message
+- **Prog. Semanal — Recursos**: `buscarRecursosSemana` endpoint (planejamento.ts:1100) has two-stage matching:
+  1. Primary: match by `eapCodigo` (when cronograma and orçamento use the same EAP numbering)
+  2. Fallback: match by `atividadeNomes` via ILIKE (when EAP codes differ — e.g. project 8 uses `2.4` vs `01.04`)
+  - Returns `matchedByNome: true` flag; frontend shows amber warning badge when fallback used
+  - Frontend file: `ProgramacaoSemanal.tsx`, `RecursosDaSemana` component (~line 460)
+- **Prog. Semanal — JULINHO errors**: `iaErro` state captures and shows mutation errors (no more silent fail)
 - **Curva S**: Shows spinner while loading; server generates curve using equal weights when no peso_financeiro set
 - **Avanço Semanal**: Import MS Project (XML/XLSX) → uses `salvarAvancoLote` batch endpoint (NOT 1512 individual requests)
   - `salvarAvancoLote` endpoint: 1 request with all items, processed in chunks of 50 on server
