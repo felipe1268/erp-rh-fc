@@ -309,4 +309,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-05 08:00:00",
   },
+  {
+    version: 229,
+    titulo: "Correção do Gráfico CronogramaFinanceiro (Planejamento)",
+    descricao: "Corrigidos dois bugs críticos que impediam a exibição das barras no gráfico de Cronograma Financeiro do módulo Planejamento. (1) Bug de renderização Recharts: os elementos Bar e Line estavam envolvidos em React.Fragment dentro de ternário condicional — o Recharts v2 usa React.Children.forEach internamente e ignora fragmentos, tornando todas as barras invisíveis apesar dos dados corretos. Solução: substituir os fragments por condicionais individuais {cenario === 'lucro' && <Bar/>}. (2) Bug de timezone em mesesRange(): new Date('2026-02-01') é interpretado como UTC meia-noite, retornando Janeiro (mês 0) em navegadores UTC-3 (Brasil) em vez de Fevereiro, deslocando todos os meses por 1. Solução: usar new Date(y, m-1, 1) que cria data em horário local. Ambas as correções garantem exibição correta dos cenários Venda, Meta, Custo e Lucro com barras mensais e linhas de acumulado percentual.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 14:33:00",
+  },
 ];
