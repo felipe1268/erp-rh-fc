@@ -613,8 +613,8 @@ export default function ModuleHub() {
                 </div>
               </div>
 
-              {/* Module Bubbles */}
-              <div className="flex flex-wrap gap-3 mt-6 relative z-10">
+              {/* Module Bubbles - 2 col grid */}
+              <div className="grid grid-cols-2 gap-3 mt-6 relative z-10">
                 {sortedActiveModules.map((mod, idx) => {
                   const isBeingDragged = dragActive === mod.id;
                   const isDropTarget = dragTarget === mod.id && dragActive !== mod.id;
@@ -627,43 +627,43 @@ export default function ModuleHub() {
                       onDrop={() => handleDrop(mod.id)}
                       onDragEnd={handleDragEnd}
                       onClick={() => { if (!didDrag.current) { setActiveModule(mod.id as ModuleId); navigate(mod.path); } }}
-                      className={`group relative flex items-center gap-3 rounded-2xl px-4 py-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-105 select-none`}
+                      className={`group relative flex items-center gap-3 rounded-2xl px-4 py-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.03] select-none`}
                       style={{
                         animationDelay: `${0.3 + idx * 0.08}s`,
                         opacity: isBeingDragged ? 0.4 : 1,
                         background: `linear-gradient(135deg, ${mod.accentFrom}18, ${mod.accentTo}10)`,
                         border: isDropTarget
                           ? `2px solid ${mod.accentFrom}`
-                          : `1.5px solid ${mod.accentFrom}35`,
-                        boxShadow: `0 4px 16px -4px ${mod.accentGlow || mod.accentFrom + "30"}`,
+                          : `1.5px solid ${mod.accentFrom}40`,
+                        boxShadow: `0 4px 18px -4px ${mod.accentGlow || mod.accentFrom + "30"}`,
                       }}
                     >
                       {/* Hover glow overlay */}
                       <div
                         className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                        style={{ background: `radial-gradient(ellipse at 20% 50%, ${mod.accentFrom}22 0%, transparent 65%)` }}
+                        style={{ background: `radial-gradient(ellipse at 20% 50%, ${mod.accentFrom}28 0%, transparent 65%)` }}
                       />
 
                       {/* Icon */}
                       <div
-                        className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md transition-transform duration-200 group-hover:scale-110"
+                        className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110"
                         style={{
                           background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                          boxShadow: `0 4px 14px -2px ${mod.accentGlow || mod.accentFrom + "50"}`,
+                          boxShadow: `0 4px 14px -2px ${mod.accentGlow || mod.accentFrom + "55"}`,
                         }}
                       >
                         <mod.icon className="h-5 w-5 text-white" />
                       </div>
 
                       {/* Text */}
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-extrabold leading-tight text-[#1B2A4A] tracking-tight">{mod.title}</p>
-                        <p className="text-[9px] text-gray-400 leading-tight mt-0.5 whitespace-nowrap">{mod.subtitle}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-extrabold leading-tight text-[#1B2A4A] tracking-tight truncate">{mod.title}</p>
+                        <p className="text-[9px] text-gray-400 leading-tight mt-0.5 truncate">{mod.subtitle}</p>
                       </div>
 
-                      {/* Arrow indicator */}
+                      {/* Arrow */}
                       <ArrowRight
-                        className="h-3.5 w-3.5 ml-1 flex-shrink-0 opacity-30 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200"
+                        className="h-3.5 w-3.5 flex-shrink-0 opacity-25 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200"
                         style={{ color: mod.accentFrom }}
                       />
                     </div>
