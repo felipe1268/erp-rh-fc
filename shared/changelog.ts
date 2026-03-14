@@ -573,4 +573,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 13:00:00",
   },
+  {
+    version: 258,
+    titulo: "REFIS BLOCO 5 — Colapso de Seções por Pavimento/Grupo",
+    descricao: "Aba REFIS do Planejamento: cada card de grupo (Pavimento/Bloco) no BLOCO 5 (Avanço por Etapa) ganhou botão +/− no cabeçalho para expandir ou recolher o gráfico de barras. Clicar no cabeçalho todo também aciona o toggle. Todas as seções iniciam expandidas por padrão. Corrija também import incorreto de AuthContext em Fornecedores.tsx.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 21:00:00",
+  },
 ];

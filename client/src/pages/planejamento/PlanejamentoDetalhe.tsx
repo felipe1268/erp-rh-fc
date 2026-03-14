@@ -5866,6 +5866,15 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
 function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_, initialSemana, onInitialSemanaConsumed }: any) {
   const [semana, setSemana] = useState(() => toMonday(new Date()));
   const [obs, setObs] = useState("");
+  const [collapsedGrupos, setCollapsedGrupos] = useState<Set<string | number>>(new Set());
+
+  function toggleGrupo(id: string | number) {
+    setCollapsedGrupos(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   // Navegação a partir do popup da Visão Geral: pré-selecionar a semana
   useEffect(() => {
@@ -6952,68 +6961,86 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 5 — AVANÇO POR ETAPA DENTRO DE CADA GRUPO (pavimento)
       ══════════════════════════════════════════════════════════════════════ */}
-      {grupos.filter((g: any) => g.etapas?.length > 0).map((g: any) => (
+      {grupos.filter((g: any) => g.etapas?.length > 0).map((g: any) => {
+        const isCollapsed = collapsedGrupos.has(g.id);
+        return (
         <div key={g.id} className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Header do grupo */}
-          <div className="bg-slate-700 text-white px-5 py-2.5 flex items-center justify-between">
+          <div
+            className="bg-slate-700 text-white px-5 py-2.5 flex items-center justify-between cursor-pointer select-none"
+            onClick={() => toggleGrupo(g.id)}
+          >
             <div className="flex items-center gap-3">
               <span className="text-xs font-mono bg-slate-600 rounded px-2 py-0.5">{g.eapCodigo}</span>
               <p className="text-sm font-bold uppercase tracking-wide">{g.nome}</p>
             </div>
-            <div className="flex gap-4 text-xs">
-              <span className="text-blue-300">Previsto: <strong className="text-white">{fPct_(g.previsto)}</strong></span>
-              <span className="text-emerald-300">Realizado: <strong className="text-white">{fPct_(g.realizado)}</strong></span>
-              <span className={g.realizado >= g.previsto ? "text-emerald-300" : "text-red-300"}>
-                Desvio: <strong className="text-white">{g.realizado >= g.previsto ? "+" : ""}{fPct_(g.realizado - g.previsto)}</strong>
-              </span>
+            <div className="flex items-center gap-4">
+              <div className="flex gap-4 text-xs">
+                <span className="text-blue-300">Previsto: <strong className="text-white">{fPct_(g.previsto)}</strong></span>
+                <span className="text-emerald-300">Realizado: <strong className="text-white">{fPct_(g.realizado)}</strong></span>
+                <span className={g.realizado >= g.previsto ? "text-emerald-300" : "text-red-300"}>
+                  Desvio: <strong className="text-white">{g.realizado >= g.previsto ? "+" : ""}{fPct_(g.realizado - g.previsto)}</strong>
+                </span>
+              </div>
+              <div
+                className="flex items-center justify-center h-6 w-6 rounded-full bg-slate-600 hover:bg-slate-500 transition-colors text-white font-bold text-sm shrink-0"
+                title={isCollapsed ? "Expandir seção" : "Recolher seção"}
+              >
+                {isCollapsed ? "+" : "−"}
+              </div>
             </div>
           </div>
 
           {/* Gráfico de barras por etapa */}
-          <div className="px-4 py-3" style={{ height: Math.max(160, g.etapas.length * 48 + 40) }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={g.etapas}
-                layout="vertical"
-                margin={{ top: 4, right: 60, bottom: 4, left: 0 }}
-                barCategoryGap="28%"
-                barGap={2}
-              >
-                <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f8fafc" />
-                <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-                <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={150} />
-                <Tooltip formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]} />
-                <Bar dataKey="previsto"  name="previsto"  fill="#6097f8" radius={[0, 3, 3, 0]} maxBarSize={12}>
-                  <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 9, fill: "#3b82f6" }} />
-                </Bar>
-                <Bar dataKey="realizado" name="realizado" fill="#34d399" radius={[0, 3, 3, 0]} maxBarSize={12}>
-                  <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 9, fill: "#059669" }} />
-                  {g.etapas.map((e: any) => (
-                    <Cell
-                      key={e.id}
-                      fill={e.realizado >= e.previsto ? "#34d399" : e.previsto - e.realizado > 10 ? "#f87171" : "#fbbf24"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {!isCollapsed && (
+            <>
+              <div className="px-4 py-3" style={{ height: Math.max(160, g.etapas.length * 48 + 40) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={g.etapas}
+                    layout="vertical"
+                    margin={{ top: 4, right: 60, bottom: 4, left: 0 }}
+                    barCategoryGap="28%"
+                    barGap={2}
+                  >
+                    <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f8fafc" />
+                    <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={150} />
+                    <Tooltip formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]} />
+                    <Bar dataKey="previsto"  name="previsto"  fill="#6097f8" radius={[0, 3, 3, 0]} maxBarSize={12}>
+                      <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 9, fill: "#3b82f6" }} />
+                    </Bar>
+                    <Bar dataKey="realizado" name="realizado" fill="#34d399" radius={[0, 3, 3, 0]} maxBarSize={12}>
+                      <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 9, fill: "#059669" }} />
+                      {g.etapas.map((e: any) => (
+                        <Cell
+                          key={e.id}
+                          fill={e.realizado >= e.previsto ? "#34d399" : e.previsto - e.realizado > 10 ? "#f87171" : "#fbbf24"}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
 
-          {/* Mini legenda desvios */}
-          {g.etapas.some((e: any) => e.previsto - e.realizado > 5) && (
-            <div className="border-t border-slate-100 px-4 py-2 flex flex-wrap gap-2">
-              {g.etapas
-                .filter((e: any) => e.previsto - e.realizado > 5)
-                .map((e: any) => (
-                  <span key={e.id} className="inline-flex items-center gap-1 text-[11px] bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5">
-                    ⚠ {e.nome}: −{fPct_(e.previsto - e.realizado)}
-                  </span>
-                ))
-              }
-            </div>
+              {/* Mini legenda desvios */}
+              {g.etapas.some((e: any) => e.previsto - e.realizado > 5) && (
+                <div className="border-t border-slate-100 px-4 py-2 flex flex-wrap gap-2">
+                  {g.etapas
+                    .filter((e: any) => e.previsto - e.realizado > 5)
+                    .map((e: any) => (
+                      <span key={e.id} className="inline-flex items-center gap-1 text-[11px] bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5">
+                        ⚠ {e.nome}: −{fPct_(e.previsto - e.realizado)}
+                      </span>
+                    ))
+                  }
+                </div>
+              )}
+            </>
           )}
         </div>
-      ))}
+        );
+      })}
 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 6 — FATURAMENTO PREVISTO / REALIZADO + Observações
