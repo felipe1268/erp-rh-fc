@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 291,
+    titulo: "Login — removidos botão OAuth e aviso de senha padrão",
+    descricao: "Removidos da tela de login: botão 'Entrar com Manus OAuth', divisor 'ou' e texto 'Senha padrão para primeiro acesso: asdf1020'. Tela de login agora exibe apenas o formulário de e-mail e senha.",
+    tipo: "feature",
+    modulos: "Auth / Login",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:35:00",
+  },
+  {
     version: 290,
     titulo: "Menu RH & DP — link Colaboradores adicionado à seção Principal",
     descricao: "Adicionado atalho direto para a página de Colaboradores no menu lateral do módulo RH & DP, na seção Principal, ao lado do Painel RH. Facilita acesso imediato à lista de funcionários sem precisar ir ao módulo Cadastro.",

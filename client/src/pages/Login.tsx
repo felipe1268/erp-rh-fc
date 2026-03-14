@@ -198,31 +198,6 @@ export default function Login() {
                   </Button>
                 </form>
 
-                {/* Divider */}
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-100" />
-                  </div>
-                  <div className="relative flex justify-center text-xs">
-                    <span className="bg-white px-3 text-gray-300">ou</span>
-                  </div>
-                </div>
-
-                {/* OAuth */}
-                <Button
-                  variant="outline"
-                  className="w-full h-11 rounded-xl border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-500 font-medium"
-                  onClick={() => { window.location.href = getLoginUrl(); }}
-                >
-                  <svg className="h-4 w-4 mr-2 text-[#1B2A4A]" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                  </svg>
-                  Entrar com Manus OAuth
-                </Button>
-
-                <p className="text-center text-xs text-gray-300 pt-2">
-                  Senha padrão para primeiro acesso: <span className="font-mono font-medium text-gray-500">asdf1020</span>
-                </p>
               </div>
             )}
 
