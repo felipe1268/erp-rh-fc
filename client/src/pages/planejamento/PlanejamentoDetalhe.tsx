@@ -729,94 +729,6 @@ export default function PlanejamentoDetalhe() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Modal Dar Baixa com valor editável ─────────────────────────────── */}
-      <Dialog open={!!baixaModal} onOpenChange={(o) => { if (!o) setBaixaModal(null); }}>
-        <DialogContent style={{ background: "#ffffff", color: "#111827" }} className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              Confirmar Recebimento
-            </DialogTitle>
-          </DialogHeader>
-          {baixaModal && (() => {
-            const valNum = parseFloat(baixaValorInputStr.replace(/\./g, "").replace(",", ".")) || 0;
-            const pendente = Math.max(0, baixaModal.valorPrevisto - valNum);
-            const isPartial = valNum < baixaModal.valorPrevisto && valNum > 0;
-            return (
-              <div className="space-y-4 pt-1">
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Competência</p>
-                  <p className="text-sm font-semibold text-slate-800">{baixaModal.label}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Valor previsto da parcela</p>
-                  <p className="text-sm font-semibold text-amber-700">{fmt(baixaModal.valorPrevisto)}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">
-                    Valor efetivamente recebido (R$)
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    autoFocus
-                    value={baixaInputFocused
-                      ? baixaValorInputStr
-                      : (parseFloat(baixaValorInputStr.replace(/\./g, "").replace(",", ".")) || 0)
-                          .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                    }
-                    onFocus={() => setBaixaInputFocused(true)}
-                    onBlur={() => setBaixaInputFocused(false)}
-                    onChange={e => {
-                      const raw = e.target.value.replace(/[^\d,]/g, "");
-                      setBaixaValorInputStr(raw);
-                    }}
-                    onKeyDown={e => { if (e.key === "Enter") confirmarBaixaValor(); }}
-                    className="h-10 w-full text-sm border border-slate-300 rounded-lg px-3 focus:ring-2 focus:ring-emerald-400 outline-none font-semibold"
-                    placeholder="0,00"
-                  />
-                </div>
-                {isPartial && (
-                  <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
-                    <AlertCircle className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
-                    <div className="text-xs text-orange-700">
-                      <p className="font-semibold">Pagamento parcial</p>
-                      <p>Saldo de <strong>{fmt(pendente)}</strong> será exibido no próximo mês como crédito pendente.</p>
-                    </div>
-                  </div>
-                )}
-                {valNum > baixaModal.valorPrevisto && (
-                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-700">
-                      Valor acima do previsto (+{fmt(valNum - baixaModal.valorPrevisto)}).
-                    </p>
-                  </div>
-                )}
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setBaixaModal(null)}
-                    className="flex-1 h-9 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-colors font-medium"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmarBaixaValor}
-                    disabled={valNum <= 0}
-                    className="flex-1 h-9 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Confirmar Baixa
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
-
     </DashboardLayout>
   );
 }
@@ -5029,6 +4941,95 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
           )}
         </div>
       )}
+
+      {/* ── Modal Dar Baixa com valor editável ─────────────────────────────── */}
+      <Dialog open={!!baixaModal} onOpenChange={(o) => { if (!o) setBaixaModal(null); }}>
+        <DialogContent style={{ background: "#ffffff", color: "#111827" }} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              Confirmar Recebimento
+            </DialogTitle>
+          </DialogHeader>
+          {baixaModal && (() => {
+            const valNum = parseFloat(baixaValorInputStr.replace(/\./g, "").replace(",", ".")) || 0;
+            const pendente = Math.max(0, baixaModal.valorPrevisto - valNum);
+            const isPartial = valNum < baixaModal.valorPrevisto && valNum > 0;
+            return (
+              <div className="space-y-4 pt-1">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Competência</p>
+                  <p className="text-sm font-semibold text-slate-800">{baixaModal.label}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Valor previsto da parcela</p>
+                  <p className="text-sm font-semibold text-amber-700">{fmt(baixaModal.valorPrevisto)}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">
+                    Valor efetivamente recebido (R$)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoFocus
+                    value={baixaInputFocused
+                      ? baixaValorInputStr
+                      : (parseFloat(baixaValorInputStr.replace(/\./g, "").replace(",", ".")) || 0)
+                          .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    }
+                    onFocus={() => setBaixaInputFocused(true)}
+                    onBlur={() => setBaixaInputFocused(false)}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/[^\d,]/g, "");
+                      setBaixaValorInputStr(raw);
+                    }}
+                    onKeyDown={e => { if (e.key === "Enter") confirmarBaixaValor(); }}
+                    className="h-10 w-full text-sm border border-slate-300 rounded-lg px-3 focus:ring-2 focus:ring-emerald-400 outline-none font-semibold"
+                    placeholder="0,00"
+                  />
+                </div>
+                {isPartial && (
+                  <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                    <AlertCircle className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
+                    <div className="text-xs text-orange-700">
+                      <p className="font-semibold">Pagamento parcial</p>
+                      <p>Saldo de <strong>{fmt(pendente)}</strong> será exibido no próximo mês como crédito pendente.</p>
+                    </div>
+                  </div>
+                )}
+                {valNum > baixaModal.valorPrevisto && (
+                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-700">
+                      Valor acima do previsto (+{fmt(valNum - baixaModal.valorPrevisto)}).
+                    </p>
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setBaixaModal(null)}
+                    className="flex-1 h-9 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-colors font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmarBaixaValor}
+                    disabled={valNum <= 0}
+                    className="flex-1 h-9 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Confirmar Baixa
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
