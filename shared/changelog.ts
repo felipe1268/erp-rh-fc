@@ -319,6 +319,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 14:33:00",
   },
   {
+    version: 237,
+    titulo: "Compras Fase 3 — SC Aprovação/Recebimento, OC Totais, Cotações Descrição",
+    descricao: "Solicitações de Compra: widget de aprovação (Aguardando/Aprovar/Recusar), recebimento por item com barra de progresso, vínculo com Projeto/Obra, campo Título e Prioridade, KPI badges clicáveis, bug fix aprovando. Ordens de Compra: painel de totalizadores (Subtotal + Frete + Outras Despesas + Impostos - Desconto = Total), visualização da composição no detalhe. Cotações: campo Descrição no formulário e detalhe, dropdown de SC mostra título. Todos os novos campos persistidos no banco (schema Drizzle + DB).",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 18:00:00",
+  },
+  {
     version: 236,
     titulo: "Planejamento — Cores da barra: Amarelo Ouro + Azul Royal Escuro",
     descricao: "Barra Previsto agora usa Amarelo Ouro (#C9A000) com fundo crème e texto #B8860B. Barra Realizado usa Azul Royal Escuro (#1B3A8A) fixo em todas as faixas de progresso.",

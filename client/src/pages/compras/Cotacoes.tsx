@@ -41,7 +41,7 @@ export default function Cotacoes() {
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
 
   const [form, setForm] = useState({
-    solicitacaoId: "", fornecedorId: "", dataValidade: "",
+    descricao: "", solicitacaoId: "", fornecedorId: "", dataValidade: "",
     condicaoPagamento: "", prazoEntregaDias: "", observacoes: "",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
@@ -72,7 +72,7 @@ export default function Cotacoes() {
   });
 
   function resetForm() {
-    setForm({ solicitacaoId: "", fornecedorId: "", dataValidade: "", condicaoPagamento: "", prazoEntregaDias: "", observacoes: "" });
+    setForm({ descricao: "", solicitacaoId: "", fornecedorId: "", dataValidade: "", condicaoPagamento: "", prazoEntregaDias: "", observacoes: "" });
     setItens([newItem()]);
   }
 
@@ -89,6 +89,7 @@ export default function Cotacoes() {
     if (validos.length === 0) return toast.error("Adicione pelo menos um item com preço.");
     criar.mutate({
       companyId,
+      descricao: form.descricao || undefined,
       solicitacaoId: form.solicitacaoId ? parseInt(form.solicitacaoId) : undefined,
       fornecedorId: form.fornecedorId ? parseInt(form.fornecedorId) : undefined,
       dataValidade: form.dataValidade || undefined,
@@ -163,13 +164,13 @@ export default function Cotacoes() {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700 hover:bg-transparent">
-              <TableHead className="text-slate-400">Número</TableHead>
-              <TableHead className="text-slate-400">SC Vinculada</TableHead>
-              <TableHead className="text-slate-400">Fornecedor</TableHead>
-              <TableHead className="text-slate-400">Total</TableHead>
-              <TableHead className="text-slate-400">Validade</TableHead>
-              <TableHead className="text-slate-400">Status</TableHead>
-              <TableHead className="w-16"></TableHead>
+              <TableHead className="text-slate-400 text-xs">Número</TableHead>
+              <TableHead className="text-slate-400 text-xs">Descrição / SC</TableHead>
+              <TableHead className="text-slate-400 text-xs">Fornecedor</TableHead>
+              <TableHead className="text-slate-400 text-xs">Total</TableHead>
+              <TableHead className="text-slate-400 text-xs">Validade</TableHead>
+              <TableHead className="text-slate-400 text-xs">Status</TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -182,8 +183,11 @@ export default function Cotacoes() {
               const forn = fornecedores.find(f => f.id === cot.fornecedorId);
               return (
                 <TableRow key={cot.id} className="border-slate-700 hover:bg-slate-800/50 cursor-pointer" onClick={() => setShowDetalhe(cot.id)}>
-                  <TableCell className="text-white font-mono font-semibold">{cot.numeroCotacao}</TableCell>
-                  <TableCell className="text-slate-400 text-sm">{cot.solicitacaoId ? `SC #${cot.solicitacaoId}` : "—"}</TableCell>
+                  <TableCell className="text-white font-mono font-semibold text-xs">{cot.numeroCotacao}</TableCell>
+                  <TableCell>
+                    <div className="text-white text-sm">{(cot as any).descricao || "—"}</div>
+                    {cot.solicitacaoId && <div className="text-slate-500 text-xs">SC #{cot.solicitacaoId}</div>}
+                  </TableCell>
                   <TableCell className="text-slate-300 text-sm">{forn?.nomeFantasia || forn?.razaoSocial || "—"}</TableCell>
                   <TableCell className="text-green-400 font-semibold">
                     {parseFloat(cot.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
@@ -205,6 +209,10 @@ export default function Cotacoes() {
             <DialogTitle className="text-white">Nova Cotação</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-slate-300">Descrição da Cotação</Label>
+              <Input className="bg-slate-800 border-slate-700 text-white" placeholder="Ex: Cotação de materiais de elétrica - Forn. XYZ" value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-slate-300">SC Vinculada (opcional)</Label>
@@ -215,7 +223,7 @@ export default function Cotacoes() {
                   <SelectContent className="bg-slate-800 border-slate-700">
                     <SelectItem value="">Nenhuma</SelectItem>
                     {(scsQ.data ?? []).filter(s => ["pendente", "cotacao"].includes(s.status)).map(s => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.numeroSc} — {s.departamento}</SelectItem>
+                      <SelectItem key={s.id} value={String(s.id)}>{s.numeroSc}{(s as any).titulo ? ` — ${(s as any).titulo}` : s.departamento ? ` — ${s.departamento}` : ""}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -323,13 +331,16 @@ export default function Cotacoes() {
             const st = STATUS_LABELS[detalhe.status] ?? STATUS_LABELS.pendente;
             return (
               <div className="space-y-5 pt-2">
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div><span className="text-slate-400">Fornecedor:</span> <span className="text-white ml-2">{forn?.nomeFantasia || forn?.razaoSocial || "—"}</span></div>
-                  <div><span className="text-slate-400">Status:</span> <span className={`ml-2 inline-flex px-2 py-0.5 rounded text-xs border ${st.color}`}>{st.label}</span></div>
-                  <div><span className="text-slate-400">Cond. Pagamento:</span> <span className="text-white ml-2">{detalhe.condicaoPagamento || "—"}</span></div>
-                  <div><span className="text-slate-400">Prazo Entrega:</span> <span className="text-white ml-2">{detalhe.prazoEntregaDias ? `${detalhe.prazoEntregaDias} dias` : "—"}</span></div>
-                  <div><span className="text-slate-400">Validade:</span> <span className="text-white ml-2">{detalhe.dataValidade ? new Date(detalhe.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</span></div>
-                  <div><span className="text-slate-400">Total:</span> <span className="text-green-400 font-bold ml-2">{parseFloat(detalhe.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></div>
+                {(detalhe as any).descricao && (
+                  <div className="text-slate-300 text-sm bg-slate-800 rounded-lg px-3 py-2">{(detalhe as any).descricao}</div>
+                )}
+                <div className="grid grid-cols-2 gap-3 text-sm bg-slate-800 rounded-lg p-3">
+                  <div><span className="text-slate-400 text-xs">Fornecedor</span><p className="text-white font-medium">{forn?.nomeFantasia || forn?.razaoSocial || "—"}</p></div>
+                  <div><span className="text-slate-400 text-xs">Status</span><p><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${st.color}`}>{st.label}</span></p></div>
+                  <div><span className="text-slate-400 text-xs">Cond. Pagamento</span><p className="text-white font-medium">{detalhe.condicaoPagamento || "—"}</p></div>
+                  <div><span className="text-slate-400 text-xs">Prazo Entrega</span><p className="text-white font-medium">{detalhe.prazoEntregaDias ? `${detalhe.prazoEntregaDias} dias` : "—"}</p></div>
+                  <div><span className="text-slate-400 text-xs">Validade</span><p className="text-white font-medium">{detalhe.dataValidade ? new Date(detalhe.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
+                  <div><span className="text-slate-400 text-xs">Total</span><p className="text-green-400 font-bold">{parseFloat(detalhe.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p></div>
                 </div>
 
                 <div className="rounded-lg border border-slate-700 overflow-hidden">
