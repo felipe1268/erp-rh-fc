@@ -152,8 +152,8 @@ export const epiAvancadoRouter = router({
         nome: input.nome,
         funcao: input.funcao,
         descricao: input.descricao || null,
-      });
-      const kitId = result[0].id;
+      }).returning({ id: epiKits.id });
+      const kitId = result.id;
 
       if (input.items.length > 0) {
         await db.insert(epiKitItems).values(
@@ -245,10 +245,10 @@ export const epiAvancadoRouter = router({
         nome: "Kit Básico Obra",
         funcao: "Geral",
         descricao: "Kit padrão para todos os funcionários de obra (NR-6)",
-      });
+      }).returning({ id: epiKits.id });
       await db.insert(epiKitItems).values(
         DEFAULT_KIT_BASICO.map(item => ({
-          kitId: basicResult[0].id,
+          kitId: basicResult.id,
           nomeEpi: item.nomeEpi,
           categoria: item.categoria,
           quantidade: item.quantidade,
@@ -264,11 +264,11 @@ export const epiAvancadoRouter = router({
           nome: config.nome,
           funcao,
           descricao: `Kit específico para ${funcao} - inclui kit básico + itens adicionais`,
-        });
+        }).returning({ id: epiKits.id });
         const allItems = [...DEFAULT_KIT_BASICO, ...config.itensExtras.map(e => ({ ...e, obrigatorio: 1 }))];
         await db.insert(epiKitItems).values(
           allItems.map(item => ({
-            kitId: result[0].id,
+            kitId: result.id,
             nomeEpi: item.nomeEpi,
             categoria: item.categoria,
             quantidade: item.quantidade,
@@ -586,11 +586,11 @@ export const epiAvancadoRouter = router({
           status: "pendente",
           criadoPor: ctx.user?.name || "Sistema",
           criadoPorUserId: ctx.user?.id || null,
-        });
+        }).returning({ id: epiChecklists.id });
 
         await db.insert(epiChecklistItems).values(
           kitItems.map(item => ({
-            checklistId: result[0].id,
+            checklistId: result.id,
             nomeEpi: item.nomeEpi,
             categoria: item.categoria,
             quantidade: item.quantidade,
@@ -598,7 +598,7 @@ export const epiAvancadoRouter = router({
           }))
         );
 
-        return { id: result[0].id, kitUsado: kitToUse?.nome || "Kit Básico", totalItens: kitItems.length };
+        return { id: result.id, kitUsado: kitToUse?.nome || "Kit Básico", totalItens: kitItems.length };
       } else {
         // Devolução: generate from last deliveries
         const entregas = await db.select({
@@ -624,12 +624,12 @@ export const epiAvancadoRouter = router({
           status: "pendente",
           criadoPor: ctx.user?.name || "Sistema",
           criadoPorUserId: ctx.user?.id || null,
-        });
+        }).returning({ id: epiChecklists.id });
 
         if (entregas.length > 0) {
           await db.insert(epiChecklistItems).values(
             entregas.map(e => ({
-              checklistId: result[0].id,
+              checklistId: result.id,
               nomeEpi: e.nomeEpi || "EPI",
               categoria: (e.categoria || "EPI") as "EPI" | "Uniforme" | "Calcado",
               quantidade: e.quantidade,
@@ -638,7 +638,7 @@ export const epiAvancadoRouter = router({
           );
         }
 
-        return { id: result[0].id, totalItens: entregas.length };
+        return { id: result.id, totalItens: entregas.length };
       }
     }),
 
@@ -1429,9 +1429,9 @@ Forneça sugestões concretas com quantidades específicas.`;
           tipo: "manual",
           resultado: parsed?.resumo || "Análise concluída",
           sugestoes: parsed || null,
-        });
+        }).returning({ id: epiAiAnalises.id });
 
-        return { id: result[0].id, analise: parsed };
+        return { id: result.id, analise: parsed };
       } catch (err: any) {
         return { id: 0, analise: null, erro: err.message || "Erro ao analisar estoque" };
       }
@@ -1474,16 +1474,16 @@ Forneça sugestões concretas com quantidades específicas.`;
         const [basicResult] = await db.insert(epiKits).values({
           companyId: input.companyId, nome: "Kit Básico Obra", funcao: "Geral",
           descricao: "Kit padrão para todos os funcionários de obra (NR-6)",
-        });
-        await db.insert(epiKitItems).values(DEFAULT_KIT_BASICO.map(item => ({ kitId: basicResult[0].id, ...item })));
+        }).returning({ id: epiKits.id });
+        await db.insert(epiKitItems).values(DEFAULT_KIT_BASICO.map(item => ({ kitId: basicResult.id, ...item })));
         
         for (const [funcao, config] of Object.entries(DEFAULT_KITS_POR_FUNCAO)) {
           const [result] = await db.insert(epiKits).values({
             companyId: input.companyId, nome: config.nome, funcao,
             descricao: `Kit específico para ${funcao}`,
-          });
+          }).returning({ id: epiKits.id });
           const allItems = [...DEFAULT_KIT_BASICO, ...config.itensExtras.map(e => ({ ...e, obrigatorio: 1 }))];
-          await db.insert(epiKitItems).values(allItems.map(item => ({ kitId: result[0].id, ...item })));
+          await db.insert(epiKitItems).values(allItems.map(item => ({ kitId: result.id, ...item })));
         }
         results.push("6 kits criados");
       }
@@ -1581,8 +1581,8 @@ Forneça sugestões concretas com quantidades específicas.`;
           funcao: 'Geral',
           descricao: 'Kit padrão de EPIs necessários para equipar um novo funcionário',
           ativo: 1,
-        });
-        kitId = result[0].id;
+        }).returning({ id: epiKits.id });
+        kitId = result.id;
       }
 
       // Inserir novos itens
@@ -1934,12 +1934,12 @@ Forneça sugestões concretas com quantidades específicas.`;
         nome: 'Kit Básico Contratação',
         funcao: 'Geral',
         descricao: 'Kit padrão de EPIs para contratação de novos funcionários (NR-6)',
-      });
+      }).returning({ id: epiKits.id });
       // Inserir itens padrão
       await db.insert(epiKitItems).values(
-        DEFAULT_KIT_BASICO.map(item => ({ kitId: result[0].id, ...item }))
+        DEFAULT_KIT_BASICO.map(item => ({ kitId: result.id, ...item }))
       );
-      return { created: true, kitId: result[0].id, message: `Kit básico criado com ${DEFAULT_KIT_BASICO.length} itens` };
+      return { created: true, kitId: result.id, message: `Kit básico criado com ${DEFAULT_KIT_BASICO.length} itens` };
     }),
 
   // ============================================================
@@ -1985,8 +1985,8 @@ Forneça sugestões concretas com quantidades específicas.`;
           ativo: input.ativo,
           emailDestinatarios: input.emailDestinatarios || null,
           intervaloMinHoras: input.intervaloMinHoras || 24,
-        });
-        return { id: result[0].id, updated: false };
+        }).returning({ id: epiAlertaCapacidade.id });
+        return { id: result.id, updated: false };
       }
     }),
 
