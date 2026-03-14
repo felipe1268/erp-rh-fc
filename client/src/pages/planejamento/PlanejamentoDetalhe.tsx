@@ -366,7 +366,7 @@ export default function PlanejamentoDetalhe() {
                 }}
                 onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
                 onClick={() => setAba(id)}
-                className={`group flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border-b-2 whitespace-nowrap transition-all cursor-grab active:cursor-grabbing ${
+                className={`group flex items-center justify-center gap-1 w-full px-2 py-1.5 text-xs font-medium border-b-2 whitespace-nowrap transition-all cursor-grab active:cursor-grabbing ${
                   isActive
                     ? "border-blue-600 text-blue-600 bg-blue-50/40"
                     : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
@@ -381,12 +381,20 @@ export default function PlanejamentoDetalhe() {
           return (
             <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden shadow-sm select-none bg-white">
               {/* Linha 1 */}
-              <div className="flex flex-wrap border-b border-slate-100 bg-slate-50/60">
-                {tabOrder.slice(0, half).map((id, i) => renderTabBtn(id, i))}
+              <div className="flex border-b border-slate-100 bg-slate-50/60">
+                {tabOrder.slice(0, half).map((id, i) => (
+                  <div key={id} className="flex-1 flex justify-center">
+                    {renderTabBtn(id, i)}
+                  </div>
+                ))}
               </div>
               {/* Linha 2 */}
-              <div className="flex flex-wrap">
-                {tabOrder.slice(half).map((id, i) => renderTabBtn(id, half + i))}
+              <div className="flex">
+                {tabOrder.slice(half).map((id, i) => (
+                  <div key={id} className="flex-1 flex justify-center">
+                    {renderTabBtn(id, half + i)}
+                  </div>
+                ))}
               </div>
             </div>
           );
