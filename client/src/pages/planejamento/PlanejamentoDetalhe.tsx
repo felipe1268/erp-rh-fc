@@ -251,6 +251,16 @@ export default function PlanejamentoDetalhe() {
     return Math.min(100, ponderado);
   }, [atividades, avancosMap]);
 
+  // Previsto para hoje (último ponto da curvaPlanejada com semana <= hoje)
+  const avancoPrevistoDia = useMemo(() => {
+    if (!curvaData?.curvaPlanejada?.length) return null;
+    const hoje = new Date().toISOString().split("T")[0];
+    const passados = (curvaData.curvaPlanejada as { semana: string; acumulado: number }[])
+      .filter(p => p.semana <= hoje);
+    if (passados.length === 0) return 0;
+    return passados[passados.length - 1].acumulado;
+  }, [curvaData]);
+
   if (loadingProj) return (
     <DashboardLayout>
       <div className="flex items-center justify-center py-32 gap-2 text-slate-400">
@@ -313,24 +323,67 @@ export default function PlanejamentoDetalhe() {
           </div>
         </div>
 
-        {/* ── Barra de progresso geral ─────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 mb-4 flex items-center gap-4">
-          <span className="text-xs font-medium text-slate-500 shrink-0">Avanço físico</span>
-          <div className="flex-1 bg-slate-100 rounded-full h-3 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${avancoAtual >= 90 ? "bg-emerald-500" : avancoAtual >= 60 ? "bg-blue-600" : avancoAtual >= 30 ? "bg-amber-500" : "bg-sky-500"}`}
-              style={{ width: `${avancoAtual}%` }}
-            />
-          </div>
-          <span className="text-sm font-bold text-slate-800 shrink-0 w-12 text-right">
-            {fPct(avancoAtual)}
-          </span>
-          {revisaoAtiva && (
-            <span className="text-[10px] text-slate-400 shrink-0">
-              Rev. {String(revisaoAtiva.numero).padStart(2, "0")}
-            </span>
-          )}
-        </div>
+        {/* ── Barras de progresso: Previsto vs Realizado ───────────────── */}
+        {(() => {
+          const realizado = avancoAtual;
+          const previsto  = avancoPrevistoDia;
+          const temPrevisto = previsto !== null;
+          const desvio = temPrevisto ? realizado - previsto! : null;
+          const desvioPositivo = desvio !== null && desvio > 0;
+          const desvioNegativo = desvio !== null && desvio < 0;
+          return (
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold text-slate-600">Avanço Físico</span>
+                <div className="flex items-center gap-3">
+                  {revisaoAtiva && (
+                    <span className="text-[10px] text-slate-400">Rev. {String(revisaoAtiva.numero).padStart(2, "0")}</span>
+                  )}
+                  {desvio !== null && Math.abs(desvio) >= 0.1 && (
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desvioPositivo ? "bg-emerald-50 text-emerald-700" : desvioNegativo ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-500"}`}>
+                      {desvioPositivo ? "+" : ""}{desvio.toFixed(1)}% {desvioPositivo ? "adiantado" : "atrasado"}
+                    </span>
+                  )}
+                  {desvio !== null && Math.abs(desvio) < 0.1 && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">No prazo</span>
+                  )}
+                </div>
+              </div>
+              {/* Barra Previsto */}
+              {temPrevisto && (
+                <div className="mb-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-amber-600 font-medium w-16 shrink-0">Previsto</span>
+                    <div className="flex-1 bg-amber-50 rounded-full h-2.5 overflow-hidden border border-amber-100">
+                      <div
+                        className="h-full rounded-full bg-amber-400 transition-all duration-500"
+                        style={{ width: `${Math.min(100, previsto!)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-amber-700 w-12 text-right shrink-0">
+                      {fPct(previsto!)}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {/* Barra Realizado */}
+              <div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-blue-600 font-medium w-16 shrink-0">Realizado</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${realizado >= 90 ? "bg-emerald-500" : realizado >= 60 ? "bg-blue-500" : realizado >= 30 ? "bg-blue-400" : "bg-sky-400"}`}
+                      style={{ width: `${Math.min(100, realizado)}%` }}
+                    />
+                  </div>
+                  <span className={`text-xs font-bold w-12 text-right shrink-0 ${realizado >= 90 ? "text-emerald-700" : "text-blue-700"}`}>
+                    {fPct(realizado)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Abas em duas linhas (drag-and-drop) ──────────────────────── */}
         {(() => {
