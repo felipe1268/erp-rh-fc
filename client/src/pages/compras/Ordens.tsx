@@ -53,7 +53,15 @@ export default function Ordens() {
     onError: (e) => toast.error(e.message),
   });
   const atualizarStatus = trpc.compras.atualizarStatusOrdem.useMutation({
-    onSuccess: () => { toast.success("Status atualizado!"); q.refetch(); detalheQ.refetch(); },
+    onSuccess: (res: any) => {
+      if (res?.almoxarifado) {
+        toast.success(`OC entregue! ${res.itens ?? 0} ite${res.itens === 1 ? "m enviado" : "ns enviados"} ao Almoxarifado automaticamente.`);
+      } else {
+        toast.success("Status atualizado!");
+      }
+      q.refetch();
+      detalheQ.refetch();
+    },
     onError: (e) => toast.error(e.message),
   });
   const excluir = trpc.compras.excluirOrdem.useMutation({

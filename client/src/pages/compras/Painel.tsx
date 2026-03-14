@@ -233,7 +233,7 @@ export default function PainelCompras() {
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-500 text-left">
                       <th className="pb-2 pr-3 font-medium">Número</th>
-                      <th className="pb-2 pr-3 font-medium">Título</th>
+                      <th className="pb-2 pr-3 font-medium">Título / Obra</th>
                       <th className="pb-2 pr-3 font-medium">Necessidade</th>
                       <th className="pb-2 font-medium">Status</th>
                     </tr>
@@ -245,8 +245,11 @@ export default function PainelCompras() {
                         <tr key={sc.id}
                           className="border-b border-gray-50 hover:bg-yellow-50 transition-colors cursor-pointer"
                           onClick={() => navigate("/compras/solicitacoes")}>
-                          <td className="py-2 pr-3 font-mono text-gray-700">{sc.numero}</td>
-                          <td className="py-2 pr-3 text-gray-800 truncate max-w-[200px]">{sc.titulo}</td>
+                          <td className="py-2 pr-3 font-mono text-gray-700">{sc.numero || sc.numeroSc}</td>
+                          <td className="py-2 pr-3 max-w-[200px]">
+                            <div className="text-gray-800 truncate">{sc.titulo}</div>
+                            {sc.obraNome && <div className="text-[10px] text-blue-600 truncate">{sc.obraNome}</div>}
+                          </td>
                           <td className="py-2 pr-3 text-gray-500">{fmtDate(sc.dataNecessidade)}</td>
                           <td className="py-2">
                             <span className={`border text-[10px] px-1.5 py-0.5 rounded font-medium ${st.cls}`}>{st.label}</span>
@@ -309,7 +312,7 @@ export default function PainelCompras() {
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-500 text-left">
                       <th className="pb-2 pr-3 font-medium">Número</th>
-                      <th className="pb-2 pr-3 font-medium">Fornecedor</th>
+                      <th className="pb-2 pr-3 font-medium">Fornecedor / Obra</th>
                       <th className="pb-2 pr-3 font-medium text-right">Total</th>
                       <th className="pb-2 pr-3 font-medium">Entrega</th>
                       <th className="pb-2 font-medium">Status</th>
@@ -323,7 +326,10 @@ export default function PainelCompras() {
                           className="border-b border-gray-50 hover:bg-indigo-50 transition-colors cursor-pointer"
                           onClick={() => navigate("/compras/ordens")}>
                           <td className="py-2 pr-3 font-mono text-gray-700">{oc.numeroOc}</td>
-                          <td className="py-2 pr-3 text-gray-800 truncate max-w-[140px]">{fornMap[oc.fornecedorId] || "—"}</td>
+                          <td className="py-2 pr-3 max-w-[140px]">
+                            <div className="text-gray-800 truncate">{fornMap[oc.fornecedorId] || "—"}</div>
+                            {oc.obraNome && <div className="text-[10px] text-blue-600 truncate">{oc.obraNome}</div>}
+                          </td>
                           <td className="py-2 pr-3 text-right font-medium text-gray-700">{BRL(parseFloat(oc.total ?? "0"))}</td>
                           <td className="py-2 pr-3 text-gray-500">{fmtDate(oc.dataEntregaPrevista)}</td>
                           <td className="py-2">
@@ -413,8 +419,9 @@ export default function PainelCompras() {
                       <button key={sc.id} onClick={() => navigate("/compras/solicitacoes")}
                         className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg w-full hover:bg-gray-50 border-b border-gray-50 transition-colors">
                         <div className="min-w-0 text-left">
-                          <div className="text-xs font-mono text-gray-600">{sc.numero}</div>
+                          <div className="text-xs font-mono text-gray-600">{sc.numero || sc.numeroSc}</div>
                           <div className="text-xs text-gray-800 truncate">{sc.titulo}</div>
+                          {sc.obraNome && <div className="text-[10px] text-blue-600 truncate">{sc.obraNome}</div>}
                         </div>
                         <span className={`border text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${st.cls}`}>{st.label}</span>
                       </button>

@@ -453,4 +453,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 21:20:00",
   },
+  {
+    version: 245,
+    titulo: "Compras: integração OC→Almoxarifado + obra no Painel",
+    descricao: "Conexão automática entre módulos Compras e Almoxarifado: (1) Ao marcar OC como 'Entregue', os itens entram automaticamente no Almoxarifado com movimentação de entrada registrada, vinculada à obra; (2) SC itens atualizam quantidadeAtendida ao receber entrega da OC; (3) SC é marcada 'concluída' automaticamente quando todos os itens são atendidos; (4) Painel de Compras exibe o nome da obra vinculada em SCs e OCs; (5) Toast informativo no módulo OC confirma quantos itens foram enviados ao Almoxarifado.",
+    tipo: "feature",
+    modulos: "Compras, Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 22:00:00",
+  },
 ];
