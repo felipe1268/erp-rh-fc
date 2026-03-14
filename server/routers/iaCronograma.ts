@@ -402,41 +402,76 @@ ${climaTexto}`;
 - SPI Atual: ${spiAtual !== null ? spiAtual.toFixed(2) : "não informado"}
 - Dias de atraso acumulado: ${diasAtrasoAtual} dias` : "";
 
-      const systemPrompt = buildSystemPrompt(conhecimentos) + `
+      const hoje2 = new Date().toLocaleDateString("pt-BR");
+      const systemPrompt = `Você é o JULINHO — Motor de Decisão Estratégica de Obras da FC Engenharia.
+Analise a solicitação do gestor e retorne EXCLUSIVAMENTE um objeto JSON válido. NENHUM texto fora do JSON.
 
-## Modo: SIMULADOR DE CENÁRIOS — ANÁLISE INTEGRADA
+Estrutura obrigatória:
+{
+  "diagnostico": {
+    "criticidade": "baixo|medio|alto|critico",
+    "resumo": "2-3 frases descrevendo a situação atual com os dados reais",
+    "causaRaiz": "causa principal do desvio ou problema identificado",
+    "alertaPrincipal": "o que acontece concretamente se nenhuma ação for tomada"
+  },
+  "cenarios": [
+    {
+      "id": "A",
+      "nome": "nome curto do cenário A",
+      "abordagem": "descrição técnica em 1-2 frases de como funciona esta abordagem",
+      "diasImpacto": 0,
+      "custoAdicional": 0,
+      "novaMargemPerc": 0.0,
+      "prazoResultante": "Nova data estimada de término: DD/MM/AAAA",
+      "impactoCaixa": "texto curto sobre efeito no fluxo de caixa das próximas medições",
+      "riscos": "principal risco desta abordagem em 1 frase",
+      "viabilidade": "alta|media|baixa",
+      "pro": "maior vantagem desta opção em 1 frase",
+      "contra": "maior desvantagem em 1 frase"
+    },
+    { "id": "B", "nome": "...", "abordagem": "...", "diasImpacto": 0, "custoAdicional": 0, "novaMargemPerc": 0.0, "prazoResultante": "...", "impactoCaixa": "...", "riscos": "...", "viabilidade": "alta|media|baixa", "pro": "...", "contra": "..." },
+    { "id": "C", "nome": "...", "abordagem": "...", "diasImpacto": 0, "custoAdicional": 0, "novaMargemPerc": 0.0, "prazoResultante": "...", "impactoCaixa": "...", "riscos": "...", "viabilidade": "alta|media|baixa", "pro": "...", "contra": "..." }
+  ],
+  "recomendado": "A|B|C",
+  "justificativa": "por que o cenário recomendado é o melhor para esta situação específica em 2-3 frases técnicas",
+  "acoesImediatas": [
+    "Ação concreta 1 — executar ESTA SEMANA com responsável e prazo",
+    "Ação concreta 2",
+    "Ação concreta 3",
+    "Ação concreta 4"
+  ],
+  "indicadores": [
+    "KPI 1: métrica a monitorar semanalmente e meta esperada",
+    "KPI 2",
+    "KPI 3"
+  ]
+}
 
-Você está em modo de simulação avançada. Analise o impacto COMPLETO do cenário proposto em 5 eixos:
-1. **PRAZO** — dias ganhos/perdidos, SPI projetado
-2. **CUSTO** — custo adicional (mão de obra, equipamentos, horas extras)
-3. **CAIXA** — impacto nas próximas medições
-4. **MARGEM** — risco à margem bruta e como protegê-la
-5. **AÇÃO IMEDIATA** — o que fazer ESTA SEMANA
+Base de conhecimento disponível: ${conhecimentos.slice(0, 10).map(k => k.palavrasChave).join(", ") || "não configurada"}
+Data de análise: ${hoje2}
+Seja técnico, preciso com os números e realista. Não use valores fictícios — baseie-se nos dados fornecidos.`;
 
-Estruture sua resposta com estas seções usando ## como cabeçalho. Seja técnico, específico e direto.`;
-
-      const contextoProjeto = `## Dados do Projeto
-- **Projeto:** ${proj?.nome ?? "não informado"}
-- **Local:** ${proj?.local ?? "não informado"}
-- **Término contratual:** ${proj?.dataTerminoContratual ?? "não informado"}
-- **Total de atividades:** ${atividades.length} | **Atrasadas:** ${atrasadas.length}
+      const contextoProjeto = `DADOS DO PROJETO:
+Projeto: ${proj?.nome ?? "não informado"}
+Local: ${proj?.local ?? "não informado"}
+Término contratual: ${proj?.dataTerminoContratual ?? "não informado"}
+Atividades: total=${atividades.length} | atrasadas=${atrasadas.length}
 ${contextFinanceiro}
 
-## Solicitação do Gestor
-**Tipo:** ${input.titulo}
-**Descrição:** ${input.mensagem}`;
+SOLICITAÇÃO:
+Tipo: ${input.titulo}
+Descrição: ${input.mensagem}`;
 
       const messagesForLLM = [
         { role: "system" as const, content: systemPrompt },
-        ...historicoCenario.map(m => ({ role: m.role as "user" | "assistant", content: m.conteudo })),
         { role: "user" as const, content: contextoProjeto },
       ];
 
       let resposta: string;
       try {
-        const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 3000 });
+        const result = await invokeLLM({ messages: messagesForLLM, maxTokens: 4000, response_format: { type: "json_object" } });
         const rawContent = result.choices?.[0]?.message?.content;
-        resposta = typeof rawContent === "string" ? rawContent : "Não foi possível simular.";
+        resposta = typeof rawContent === "string" ? rawContent : JSON.stringify({ diagnostico: { criticidade: "medio", resumo: "Não foi possível gerar análise.", causaRaiz: "—", alertaPrincipal: "—" }, cenarios: [], recomendado: null, justificativa: "—", acoesImediatas: [], indicadores: [] });
       } catch (err: any) {
         const isNoKey = err?.message?.includes("not configured");
         resposta = isNoKey
