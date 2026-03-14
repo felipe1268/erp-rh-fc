@@ -1,3 +1,4 @@
+import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -138,6 +139,7 @@ export default function Solicitacoes() {
   }
 
   return (
+    <DashboardLayout>
     <div className="p-6 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -483,5 +485,6 @@ export default function Solicitacoes() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   );
 }

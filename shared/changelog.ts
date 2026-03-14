@@ -408,4 +408,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 20:10:00",
   },
+  {
+    version: 240,
+    titulo: "Painel lateral adicionado em todas as páginas de Compras",
+    descricao: "Correção de regra de ouro: todas as páginas do módulo Compras (Painel, Solicitações, Cotações, Ordens de Compra, Almoxarifado, Fornecedores) agora envolvem seu conteúdo com DashboardLayout, garantindo que o painel lateral de navegação esteja sempre visível em qualquer tela do módulo.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 20:20:00",
+  },
 ];

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import DashboardLayout from "@/components/DashboardLayout";
 import {
   ClipboardList, FileText, ShoppingCart, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Users, Package,
@@ -115,9 +116,11 @@ export default function PainelCompras() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
-        <RefreshCw className="w-5 h-5 animate-spin" /> Carregando painel...
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
+          <RefreshCw className="w-5 h-5 animate-spin" /> Carregando painel...
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -126,6 +129,7 @@ export default function PainelCompras() {
   };
 
   return (
+    <DashboardLayout>
     <div className="p-5 space-y-5 min-h-screen bg-gray-50">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -368,5 +372,6 @@ export default function PainelCompras() {
         </div>
       </div>
     </div>
+    </DashboardLayout>
   );
 }

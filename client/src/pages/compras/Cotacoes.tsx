@@ -1,3 +1,4 @@
+import DashboardLayout from "@/components/DashboardLayout";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -126,6 +127,7 @@ export default function Cotacoes() {
   const totalItens = itens.reduce((s, it) => s + calcTotal(it), 0);
 
   return (
+    <DashboardLayout>
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -394,5 +396,6 @@ export default function Cotacoes() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   );
 }
