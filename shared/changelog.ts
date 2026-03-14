@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 287,
+    titulo: "Obras — campo Cliente obrigatório + cadastro rápido inline",
+    descricao: "Removido texto '(opcional)' do campo Cliente no formulário de obra. Adicionado botão '+ Cadastrar cliente' no label e opção ao final do dropdown. Ao clicar, abre mini-modal com campos: Razão Social (obrigatório), Nome Fantasia, Telefone e E-mail. Após salvar, o novo cliente é selecionado automaticamente na obra.",
+    tipo: "feature",
+    modulos: "Cadastro / Obras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:00:00",
+  },
+  {
     version: 286,
     titulo: "Fix IA Gestora — tab não rola mais a tela para baixo ao abrir",
     descricao: "O scroll automático do chat do JULINHO agora só é acionado quando há mensagens no histórico (historico.length > 0). Antes, o useEffect disparava ao montar o componente (mesmo sem mensagens) causando scroll indesejado para o final da tela ao clicar na aba IA Gestora.",
