@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -63,9 +64,9 @@ export default function AlmoxarifadoCategorias() {
               <p className="text-sm text-gray-500">{categorias.length} categorias cadastradas</p>
             </div>
           </div>
-          <Button onClick={() => { setShowNova(true); setNome(""); }} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Plus className="w-4 h-4 mr-1" /> Nova Categoria
-          </Button>
+          <DraggableCommandBar barId="almoxarifado-categorias" items={[
+            { id: "nova", node: <Button onClick={() => { setShowNova(true); setNome(""); }} className="bg-emerald-600 hover:bg-emerald-700 text-white"><Plus className="w-4 h-4 mr-1" /> Nova Categoria</Button> },
+          ]} />
         </div>
 
         {isLoading ? (

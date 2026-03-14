@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
@@ -160,9 +161,9 @@ export default function CadastroParceiros() {
               <p className="text-sm text-muted-foreground">{parceiros.length} parceiro(s)</p>
             </div>
           </div>
-          <Button onClick={openNew} className="bg-purple-500 hover:bg-purple-600">
-            <Plus className="h-4 w-4 mr-1" /> Novo Parceiro
-          </Button>
+          <DraggableCommandBar barId="parceiros" items={[
+            { id: "novo", node: <Button onClick={openNew} className="bg-purple-500 hover:bg-purple-600"><Plus className="h-4 w-4 mr-1" /> Novo Parceiro</Button> },
+          ]} />
         </div>
 
         {/* Search */}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { Link, useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
@@ -160,16 +161,10 @@ export default function OrcamentoLista() {
               {filtrado.length} orçamento{filtrado.length !== 1 ? "s" : ""} encontrado{filtrado.length !== 1 ? "s" : ""}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => refetch()}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            <Link href="/orcamento/importar">
-              <Button size="sm" className="gap-2">
-                <Upload className="h-4 w-4" /> Novo Orçamento
-              </Button>
-            </Link>
-          </div>
+          <DraggableCommandBar barId="orcamento-lista" items={[
+            { id: "atualizar", node: <Button variant="ghost" size="sm" onClick={() => refetch()}><RefreshCw className="h-4 w-4" /></Button> },
+            { id: "novo", node: <Link href="/orcamento/importar"><Button size="sm" className="gap-2"><Upload className="h-4 w-4" /> Novo Orçamento</Button></Link> },
+          ]} />
         </div>
 
         <div className="relative max-w-sm">

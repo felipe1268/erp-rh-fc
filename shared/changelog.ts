@@ -546,4 +546,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 10:00:00",
   },
+  {
+    version: 255,
+    titulo: "Drag-and-drop global: sidebar e barras de ação",
+    descricao: "Sidebar de todos os módulos suporta reordenação por drag-and-drop (itens ficam com cursor grab, drop target destacado com borda dourada). Ordem salva no localStorage por módulo. Componente DraggableCommandBar aplicado às barras de botões das páginas: Colaboradores, Empresas, Setores, Funções, Feriados, Aviso Prévio, Contas Bancárias, Dissídio, Relógios de Ponto, Usuários, Convenções Coletivas, SC/Cotações/OC/Fornecedores/Almoxarifado (Compras), Categorias do Almoxarifado, Planejamento (lista de projetos), Empresas/Funcionários/Obrigações Terceiras, Orçamentos, Parceiros. Cada barra persiste sua ordem de botões individualmente no localStorage.",
+    tipo: "feature",
+    modulos: "Global",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 11:00:00",
+  },
 ];

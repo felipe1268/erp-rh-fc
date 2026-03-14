@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
@@ -112,9 +113,9 @@ export default function ObrigacoesMensais() {
               <p className="text-sm text-muted-foreground">Controle de documentos trabalhistas mensais</p>
             </div>
           </div>
-          <Button onClick={criarObrigacaoParaTodas} className="bg-orange-500 hover:bg-orange-600">
-            <Plus className="h-4 w-4 mr-1" /> Gerar Obrigações do Mês
-          </Button>
+          <DraggableCommandBar barId="obrigacoes-mensais" items={[
+            { id: "gerar", node: <Button onClick={criarObrigacaoParaTodas} className="bg-orange-500 hover:bg-orange-600"><Plus className="h-4 w-4 mr-1" /> Gerar Obrigações do Mês</Button> },
+          ]} />
         </div>
 
         {/* Filters */}

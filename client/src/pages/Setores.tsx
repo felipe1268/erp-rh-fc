@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -73,12 +74,10 @@ const setoresQ = trpc.sectors.list.useQuery({ companyId, companyIds }, { enabled
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Setores</h1>
             <p className="text-muted-foreground text-sm">Cadastro e gestão de setores</p>
           </div>
-          <div className="flex items-center gap-3">
-            <PrintActions title="Setores" />
-            <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
-              <Plus className="h-4 w-4 mr-2" /> Novo Setor
-            </Button>
-          </div>
+          <DraggableCommandBar barId="setores" items={[
+            { id: "print", node: <PrintActions title="Setores" /> },
+            { id: "novo", node: <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]"><Plus className="h-4 w-4 mr-2" /> Novo Setor</Button> },
+          ]} />
         </div>
 
         <div className="flex items-center gap-3">

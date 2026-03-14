@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -149,12 +150,10 @@ export default function RelogiosPonto() {
               Cadastro de relógios de ponto (SN) e vinculação com obras
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <PrintActions title="Relógios de Ponto" />
-            <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
-              <Plus className="h-4 w-4 mr-2" /> Novo Relógio
-            </Button>
-          </div>
+          <DraggableCommandBar barId="relogios-ponto" items={[
+            { id: "print", node: <PrintActions title="Relógios de Ponto" /> },
+            { id: "novo", node: <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]"><Plus className="h-4 w-4 mr-2" /> Novo Relógio</Button> },
+          ]} />
         </div>
 
         {/* Cards resumo */}

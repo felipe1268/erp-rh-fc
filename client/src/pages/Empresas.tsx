@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -474,12 +475,10 @@ export default function Empresas() {
             <h1 className="text-2xl font-bold tracking-tight">Empresas</h1>
             <p className="text-muted-foreground text-sm mt-1">Gerencie as empresas do grupo</p>
           </div>
-          <div className="flex items-center gap-2">
-            <PrintActions title="Empresas" />
-            <Button onClick={openNew} className="gap-2">
-              <Plus className="h-4 w-4" /> Nova Empresa
-            </Button>
-          </div>
+          <DraggableCommandBar barId="empresas" items={[
+            { id: "print", node: <PrintActions title="Empresas" /> },
+            { id: "nova", node: <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> Nova Empresa</Button> },
+          ]} />
         </div>
 
         {isLoading ? (

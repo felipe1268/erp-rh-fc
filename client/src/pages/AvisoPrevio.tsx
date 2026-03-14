@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -262,19 +263,10 @@ export default function AvisoPrevio() {
               Gestão de avisos prévios conforme CLT Art. 487-491 e Lei 12.506/2011
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => recalcularTodos.mutate({ companyId })}
-              disabled={recalcularTodos.isPending || stats.emAndamento === 0}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${recalcularTodos.isPending ? 'animate-spin' : ''}`} />
-              {recalcularTodos.isPending ? 'Recalculando...' : 'Recalcular Todos'}
-            </Button>
-            <Button onClick={() => { setForm({}); setCalculoPreview(null); setEditingItem(null); setShowDialog(true); }}>
-              <Plus className="h-4 w-4 mr-2" /> Novo Aviso Prévio
-            </Button>
-          </div>
+          <DraggableCommandBar barId="aviso-previo" items={[
+            { id: "recalcular", node: <Button variant="outline" onClick={() => recalcularTodos.mutate({ companyId })} disabled={recalcularTodos.isPending || stats.emAndamento === 0}><RefreshCw className={`h-4 w-4 mr-2 ${recalcularTodos.isPending ? 'animate-spin' : ''}`} />{recalcularTodos.isPending ? 'Recalculando...' : 'Recalcular Todos'}</Button> },
+            { id: "novo", node: <Button onClick={() => { setForm({}); setCalculoPreview(null); setEditingItem(null); setShowDialog(true); }}><Plus className="h-4 w-4 mr-2" /> Novo Aviso Prévio</Button> },
+          ]} />
         </div>
 
         {/* Stats Cards */}

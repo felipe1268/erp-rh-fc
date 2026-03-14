@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -455,14 +456,10 @@ export default function Usuarios() {
               Gerencie usuários do sistema, defina perfis de acesso, módulos e empresas
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <PrintActions title="Usuários e Permissões" />
-            {isAdmin && (
-              <Button onClick={() => { resetNewUserForm(); setShowCreateUser(true); }} className="gap-2 bg-green-600 hover:bg-green-700">
-                <UserPlus className="h-4 w-4" /> Novo Usuário
-              </Button>
-            )}
-          </div>
+          <DraggableCommandBar barId="usuarios" items={[
+            { id: "print", node: <PrintActions title="Usuários e Permissões" /> },
+            ...(isAdmin ? [{ id: "novo", node: <Button onClick={() => { resetNewUserForm(); setShowCreateUser(true); }} className="gap-2 bg-green-600 hover:bg-green-700"><UserPlus className="h-4 w-4" /> Novo Usuário</Button> }] : []),
+          ]} />
         </div>
 
         {/* Search */}

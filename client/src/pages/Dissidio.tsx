@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -123,9 +124,9 @@ export default function Dissidio() {
             <h2 className="text-2xl font-bold flex items-center gap-2"><TrendingUp className="w-6 h-6 text-primary" /> Dissídio Coletivo</h2>
             <p className="text-sm text-muted-foreground mt-1">Gestão de reajustes salariais por ano — CLT Art. 611-A / MTE</p>
           </div>
-          <Button onClick={() => { setForm({ ...form, anoReferencia: new Date().getFullYear(), titulo: `Dissídio ${new Date().getFullYear()}` }); setShowCriarDialog(true); }}>
-            <Plus className="w-4 h-4 mr-2" /> Novo Dissídio
-          </Button>
+          <DraggableCommandBar barId="dissidio" items={[
+            { id: "novo", node: <Button onClick={() => { setForm({ ...form, anoReferencia: new Date().getFullYear(), titulo: `Dissídio ${new Date().getFullYear()}` }); setShowCriarDialog(true); }}><Plus className="w-4 h-4 mr-2" /> Novo Dissídio</Button> },
+          ]} />
         </div>
 
         {/* Critérios CLT/MTE */}

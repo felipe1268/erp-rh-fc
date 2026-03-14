@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -204,9 +205,9 @@ export default function Fornecedores() {
               {fornecedores.length} fornecedor{fornecedores.length !== 1 ? "es" : ""} cadastrado{fornecedores.length !== 1 ? "s" : ""}
             </p>
           </div>
-          <Button onClick={abrirNovo} className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Plus className="h-4 w-4 mr-2" /> Novo Fornecedor
-          </Button>
+          <DraggableCommandBar barId="fornecedores" items={[
+            { id: "novo", node: <Button onClick={abrirNovo} className="bg-blue-600 hover:bg-blue-700 text-white"><Plus className="h-4 w-4 mr-2" /> Novo Fornecedor</Button> },
+          ]} />
         </div>
       </div>
 

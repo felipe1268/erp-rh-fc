@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
@@ -126,9 +127,9 @@ export default function FuncionariosTerceiros() {
               <p className="text-sm text-muted-foreground">{funcionarios.length} funcionário(s)</p>
             </div>
           </div>
-          <Button onClick={openNew} className="bg-orange-500 hover:bg-orange-600">
-            <Plus className="h-4 w-4 mr-1" /> Novo Funcionário
-          </Button>
+          <DraggableCommandBar barId="funcionarios-terceiros" items={[
+            { id: "novo", node: <Button onClick={openNew} className="bg-orange-500 hover:bg-orange-600"><Plus className="h-4 w-4 mr-1" /> Novo Funcionário</Button> },
+          ]} />
         </div>
 
         {/* Filters */}
