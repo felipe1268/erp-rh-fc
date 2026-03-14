@@ -34,13 +34,9 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
   const today = new Date().toISOString().split('T')[0];
 
   // Executar todas as queries em paralelo para máxima performance
-  const [
-    statusDist, feriasEmGozo, sexDist, setorDist, funcaoDist, contratoDist,
-    estadoCivilDist, cidadeDist, ageDist, tenureDist, estadoDist,
-    admissoesMensal, demissoesMensal,
-    oldestArr, youngestArr, longestTenureArr, shortestTenureArr,
-    rankingAdvertencias, rankingAtestados, advertenciasTipo,
-  ] = await Promise.all([
+  let queryResults: any[];
+  try {
+    queryResults = await Promise.all([
     // 1. Status distribution
     db.select({ status: employees.status, count: sql<number>`count(*)` })
       .from(employees).where(baseWhere).groupBy(employees.status),
@@ -158,13 +154,25 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     // 20. Advertências por tipo
     db.select({ tipo: warnings.tipoAdvertencia, count: sql<number>`count(*)` })
       .from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia),
-  ]);
+    ]);
+  } catch (err: any) {
+    console.error('[getDashFuncionarios] Erro nas queries:', err?.message || err);
+    return null;
+  }
+
+  const [
+    statusDist, feriasEmGozo, sexDist, setorDist, funcaoDist, contratoDist,
+    estadoCivilDist, cidadeDist, ageDist, tenureDist, estadoDist,
+    admissoesMensal, demissoesMensal,
+    oldestArr, youngestArr, longestTenureArr, shortestTenureArr,
+    rankingAdvertencias, rankingAtestados, advertenciasTipo,
+  ] = queryResults;
 
   const [oldest] = oldestArr;
   const [youngest] = youngestArr;
   const [longestTenure] = longestTenureArr;
   const [shortestTenure] = shortestTenureArr;
-  const feriasExtraCount = new Set(feriasEmGozo.map(f => f.employeeId)).size;
+  const feriasExtraCount = new Set(feriasEmGozo.map((f: any) => f.employeeId)).size;
 
   const totalDesligados = statusDist.filter(s => s.status === 'Desligado' || s.status === 'Lista_Negra').reduce((s, r) => s + Number(r.count), 0);
   const totalAtivos = statusDist.filter(s => !['Desligado', 'Lista_Negra'].includes(s.status || '')).reduce((s, r) => s + Number(r.count), 0);

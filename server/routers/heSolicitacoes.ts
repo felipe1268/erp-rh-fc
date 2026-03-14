@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog } from "../db";
 import {
-  heSolicitacoes, heSolicitacaoFuncionarios, employees, obras,
+  heSolicitacoes, heSolicitacaoFuncionarios, employees, obras, terminationNotices,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -40,9 +40,9 @@ export const heSolicitacoesRouter = router({
       status: "pendente",
       solicitadoPor: ctx.user.name || "Sistema",
       solicitadoPorId: ctx.user.id,
-    });
+    }).returning({ id: heSolicitacoes.id });
 
-    const solicitacaoId = result[0].id;
+    const solicitacaoId = result.id;
 
     // Vincular funcionários
     if (input.funcionarioIds.length > 0) {
@@ -376,6 +376,65 @@ export const heSolicitacoesRouter = router({
         companyFilter(heSolicitacoes.companyId, input),
         eq(heSolicitacoes.status, "aprovada"),
         sql`${heSolicitacoes.dataSolicitacao} LIKE ${input.mesReferencia + '%'}`,
+      ));
+
+    return rows;
+  }),
+
+  // ===================== HISTÓRICO DE HE POR FUNCIONÁRIO =====================
+  historyByEmployee: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    employeeId: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+
+    const rows = await db.select({
+      id: heSolicitacoes.id,
+      dataSolicitacao: heSolicitacoes.dataSolicitacao,
+      horaInicio: heSolicitacoes.horaInicio,
+      horaFim: heSolicitacoes.horaFim,
+      motivo: heSolicitacoes.motivo,
+      status: heSolicitacoes.status,
+      solicitadoPor: heSolicitacoes.solicitadoPor,
+      aprovadoPor: heSolicitacoes.aprovadoPor,
+      aprovadoEm: heSolicitacoes.aprovadoEm,
+      motivoRejeicao: heSolicitacoes.motivoRejeicao,
+      observacaoAdmin: heSolicitacoes.observacaoAdmin,
+      obraId: heSolicitacoes.obraId,
+      createdAt: heSolicitacoes.createdAt,
+      obraNome: obras.nome,
+      heStatus: heSolicitacaoFuncionarios.status,
+      horasRealizadas: heSolicitacaoFuncionarios.horasRealizadas,
+    }).from(heSolicitacaoFuncionarios)
+      .innerJoin(heSolicitacoes, eq(heSolicitacaoFuncionarios.solicitacaoId, heSolicitacoes.id))
+      .leftJoin(obras, eq(heSolicitacoes.obraId, obras.id))
+      .where(and(
+        eq(heSolicitacaoFuncionarios.employeeId, input.employeeId),
+        eq(heSolicitacoes.companyId, input.companyId),
+      ))
+      .orderBy(desc(heSolicitacoes.dataSolicitacao));
+
+    return rows;
+  }),
+
+  // ===================== FUNCIONÁRIOS EM AVISO PRÉVIO =====================
+  // Retorna IDs dos funcionários com aviso prévio ativo na empresa
+  empregadosEmAvisoPrevio: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+
+    const rows = await db.select({
+      employeeId: terminationNotices.employeeId,
+      dataFim: terminationNotices.dataFim,
+      tipo: terminationNotices.tipo,
+    }).from(terminationNotices)
+      .where(and(
+        eq(terminationNotices.companyId, input.companyId),
+        eq(terminationNotices.status, 'em_andamento'),
+        sql`${terminationNotices.deletedAt} IS NULL`,
       ));
 
     return rows;
