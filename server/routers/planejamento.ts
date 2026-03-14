@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { eq, and, desc, asc, sql, isNotNull } from "drizzle-orm";
+import { eq, and, desc, asc, sql, isNotNull, inArray } from "drizzle-orm";
 import {
   planejamentoProjetos,
   planejamentoRevisoes,
@@ -15,6 +15,7 @@ import {
   planejamentoMedicaoConfig,
   orcamentos,
   orcamentoItens,
+  composicaoInsumos,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -1091,5 +1092,82 @@ export const planejamentoRouter = router({
         .set({ bloqueado: input.bloqueado, atualizadoEm: new Date() })
         .where(eq(planejamentoMedicaoConfig.id, existing.id));
       return { success: true };
+    }),
+
+  // ── Programação Semanal — recursos por EAP ───────────────────────────────
+  buscarRecursosSemana: protectedProcedure
+    .input(z.object({
+      companyId:  z.number(),
+      orcamentoId: z.number(),
+      eapCodigos: z.array(z.string()),
+    }))
+    .query(async ({ input }) => {
+      if (!input.eapCodigos.length) return { itens: [], insumos: [] };
+      const db = await getDb();
+
+      const itens = await db.select({
+        eapCodigo:      orcamentoItens.eapCodigo,
+        descricao:      orcamentoItens.descricao,
+        unidade:        orcamentoItens.unidade,
+        quantidade:     orcamentoItens.quantidade,
+        custoUnitMat:   orcamentoItens.custoUnitMat,
+        custoUnitMdo:   orcamentoItens.custoUnitMdo,
+        custoTotal:     orcamentoItens.custoTotal,
+        servicoCodigo:  orcamentoItens.servicoCodigo,
+        tipo:           orcamentoItens.tipo,
+      }).from(orcamentoItens)
+        .where(and(
+          eq(orcamentoItens.orcamentoId, input.orcamentoId),
+          eq(orcamentoItens.companyId,   input.companyId),
+          inArray(orcamentoItens.eapCodigo, input.eapCodigos),
+        ));
+
+      const servCodes = [...new Set(itens.map(i => i.servicoCodigo).filter(Boolean))] as string[];
+      let insumos: any[] = [];
+      if (servCodes.length) {
+        insumos = await db.select({
+          composicaoCodigo: composicaoInsumos.composicaoCodigo,
+          insumoDescricao:  composicaoInsumos.insumoDescricao,
+          unidade:          composicaoInsumos.unidade,
+          quantidade:       composicaoInsumos.quantidade,
+          alocacaoMat:      composicaoInsumos.alocacaoMat,
+          alocacaoMdo:      composicaoInsumos.alocacaoMdo,
+          custoUnitTotal:   composicaoInsumos.custoUnitTotal,
+        }).from(composicaoInsumos)
+          .where(and(
+            eq(composicaoInsumos.companyId, input.companyId),
+            inArray(composicaoInsumos.composicaoCodigo, servCodes),
+          ));
+      }
+
+      return { itens, insumos };
+    }),
+
+  // ── Validação EAP cronograma × orçamento ─────────────────────────────────
+  validarEapCronograma: protectedProcedure
+    .input(z.object({
+      companyId:   z.number(),
+      orcamentoId: z.number(),
+      eapCodigos:  z.array(z.string()),
+    }))
+    .query(async ({ input }) => {
+      if (!input.orcamentoId || !input.eapCodigos.length) return { ok: [], semOrcamento: [], semCronograma: [] };
+      const db = await getDb();
+
+      const itens = await db.select({ eapCodigo: orcamentoItens.eapCodigo })
+        .from(orcamentoItens)
+        .where(and(
+          eq(orcamentoItens.orcamentoId, input.orcamentoId),
+          eq(orcamentoItens.companyId,   input.companyId),
+        ));
+
+      const eapOrc  = new Set(itens.map(i => i.eapCodigo));
+      const eapCron = new Set(input.eapCodigos);
+
+      const ok             = input.eapCodigos.filter(e => eapOrc.has(e));
+      const semOrcamento   = input.eapCodigos.filter(e => !eapOrc.has(e));
+      const semCronograma  = [...eapOrc].filter(e => !eapCron.has(e));
+
+      return { ok, semOrcamento, semCronograma };
     }),
 });

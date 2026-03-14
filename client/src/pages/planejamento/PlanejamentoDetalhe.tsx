@@ -3,6 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import ImportarCronograma from "./ImportarCronograma";
+import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,7 @@ import {
   Bot, Brain, Sparkles, MessageSquare, Send, Zap,
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer,
-  TrendingDown, ArrowUpRight, ArrowDownRight, Circle,
+  TrendingDown, ArrowUpRight, ArrowDownRight, Circle, CalendarClock,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -33,7 +34,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora" | "prog-semanal";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -100,6 +101,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "caminho-critico",      label: "Caminho Crítico",    Icon: AlertOctagon },
   { id: "compras",              label: "Compras",            Icon: ShoppingCart },
   { id: "prev-medicao",         label: "Prev. Medição",      Icon: ClipboardList },
+  { id: "prog-semanal",         label: "Prog. Semanal",      Icon: CalendarClock },
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
   { id: "ia-gestora",           label: "IA Gestora",         Icon: Bot },
@@ -228,25 +230,26 @@ export default function PlanejamentoDetalhe() {
   );
 
   // ── Avanço atual (média ponderada das atividades folha) ───────────────────
+  const avancosMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    const semMap: Record<number, string> = {};
+    avancos.forEach((av: any) => {
+      const id = av.atividadeId;
+      if (!semMap[id] || av.semana > semMap[id]) { semMap[id] = av.semana; m[id] = n(av.percentualAcumulado); }
+    });
+    return m;
+  }, [avancos]);
+
   const avancoAtual = useMemo(() => {
     if (!atividades.length) return 0;
     const folhas = atividades.filter((a: any) => !a.isGrupo);
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length;
-    const avancoMap: Record<number, number> = {};
-    const semanaMap: Record<number, string> = {};
-    avancos.forEach((av: any) => {
-      const id = av.atividadeId;
-      if (!semanaMap[id] || av.semana > semanaMap[id]) {
-        semanaMap[id] = av.semana;
-        avancoMap[id] = n(av.percentualAcumulado);
-      }
-    });
     const ponderado = folhas.reduce((s: number, a: any) => {
       const peso = n(a.pesoFinanceiro) || 1;
-      return s + (avancoMap[a.id] ?? 0) * (peso / pesoTotal);
+      return s + (avancosMap[a.id] ?? 0) * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);
-  }, [atividades, avancos]);
+  }, [atividades, avancosMap]);
 
   if (loadingProj) return (
     <DashboardLayout>
@@ -495,6 +498,18 @@ export default function PlanejamentoDetalhe() {
             atividades={atividades}
             avancos={avancos}
             fmt={fmt}
+          />
+        )}
+        {aba === "prog-semanal" && (
+          <ProgramacaoSemanal
+            projetoId={projetoId}
+            revisaoId={revisaoAtiva?.id ?? 0}
+            orcamentoId={proj?.orcamentoId ?? null}
+            companyId={proj?.companyId ?? 0}
+            nomeProjeto={proj?.nome ?? ""}
+            nomeCliente={proj?.cliente ?? ""}
+            atividades={atividades}
+            avancosMap={avancosMap}
           />
         )}
 
