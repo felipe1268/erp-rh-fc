@@ -6367,6 +6367,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [modoMascara, setModoMascara] = useState(false);
   const [analiseDesvio, setAnaliseDesvio] = useState<string | null>(null);
   const [analiseExpanded, setAnaliseExpanded] = useState(true);
+  const [colBloco2, setColBloco2] = useState(false);
+  const [colBloco3A, setColBloco3A] = useState(false);
+  const [colBloco3B, setColBloco3B] = useState(false);
+  const [colBloco4, setColBloco4] = useState(false);
+  const [colBloco6, setColBloco6] = useState(false);
+  const [colBloco7, setColBloco7] = useState(false);
 
   // ── Cruzamento orçamento × cronograma (para calcular venda prevista/realizada mensal) ──
   const { data: cruzamento } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
@@ -7038,7 +7044,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       ══════════════════════════════════════════════════════════════════════ */}
       <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Cabeçalho profissional */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200" style={{ background: "linear-gradient(135deg,#1e293b 0%,#0f172a 100%)" }}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 cursor-pointer select-none" style={{ background: "linear-gradient(135deg,#1e293b 0%,#0f172a 100%)" }} onClick={() => setColBloco2(v => !v)}>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Evolução Física Global</p>
             <p className="text-sm font-bold text-white mt-0.5">Avanço Acumulado da Obra</p>
@@ -7052,10 +7058,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               <span className="inline-block w-4 h-2 rounded" style={{ background: "#3b82f6" }} />
               <span className="text-[11px] font-medium">Realizado</span>
             </span>
+            <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${colBloco2 ? "rotate-180" : ""}`} />
           </div>
         </div>
 
-        <div className="flex flex-col divide-y divide-slate-100">
+        {!colBloco2 && <div className="flex flex-col divide-y divide-slate-100">
           {/* ── Área de barras ─────────────────────────────────────────────── */}
           <div className="px-6 py-5 space-y-5">
             {/* BARRA PREVISTO */}
@@ -7213,6 +7220,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             </div>
           </div>
         </div>
+        }
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -7371,17 +7379,18 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* BLOCO 3A — Curva S Física */}
       {curvaFiltrada.length > 1 && (
         <div className="refis-block refis-break-before bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
+          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3A(v => !v)}>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Curva S Física — Avanço Acumulado (%)
             </p>
-            <div className="flex gap-3 text-xs text-slate-500 flex-wrap">
+            <div className="flex gap-3 text-xs text-slate-500 flex-wrap items-center">
               <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
               <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#1A3461" }} /> Realizado</span>
               <span className="flex items-center gap-1.5"><span className="inline-block w-6 border-t-2 border-dashed" style={{ borderColor: "#9b59b6" }} /> Tendência</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3A ? "rotate-180" : ""}`} />
             </div>
           </div>
-          <div className="px-4 py-3" style={{ height: 240 }}>
+          {!colBloco3A && (<><div className="px-4 py-3" style={{ height: 240 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={curvaFiltrada} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -7413,23 +7422,25 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               </span>
             </div>
           </div>
+          </>)}
         </div>
       )}
 
       {/* BLOCO 3B — Curva S Financeira */}
       {curvaFinanceira.length > 1 && !modoMascara && (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
+          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3B(v => !v)}>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Curva S Financeira — Faturamento Acumulado (R$)
             </p>
-            <div className="flex gap-3 text-xs text-slate-500 flex-wrap">
+            <div className="flex gap-3 text-xs text-slate-500 flex-wrap items-center">
               <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
               <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#1A3461" }} /> Realizado</span>
               <span className="flex items-center gap-1.5"><span className="inline-block w-6 border-t-2 border-dashed" style={{ borderColor: "#9b59b6" }} /> Tendência</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3B ? "rotate-180" : ""}`} />
             </div>
           </div>
-          <div className="px-4 py-3" style={{ height: 240 }}>
+          {!colBloco3B && (<><div className="px-4 py-3" style={{ height: 240 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={curvaFinanceira} margin={{ top: 5, right: 20, bottom: 5, left: 55 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -7460,6 +7471,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               </span>
             </div>
           </div>
+          </>)}
         </div>
       )}
 
@@ -7477,12 +7489,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         const rowHG = 72;
         return (
         <div className="refis-block refis-break-before bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2">
+          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco4(v => !v)}>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Avanço Físico por Grupo
             </p>
+            <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco4 ? "rotate-180" : ""}`} />
           </div>
-          <div className="px-4 py-3" style={{ height: Math.max(200, grupos.length * rowHG + 40) }}>
+          {!colBloco4 && (<><div className="px-4 py-3" style={{ height: Math.max(200, grupos.length * rowHG + 40) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={gruposChart}
@@ -7612,6 +7625,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             );
           })()
         )}
+        </>)}
         </div>
         );
       })}
@@ -7619,17 +7633,21 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 6 — FATURAMENTO PREVISTO / REALIZADO + Observações
       ══════════════════════════════════════════════════════════════════════ */}
-      <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-1">
+      <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between flex-wrap gap-1 bg-slate-100 border-b border-slate-200 px-5 py-2 cursor-pointer select-none" onClick={() => setColBloco6(v => !v)}>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Faturamento do Mês</p>
-          {vendaMes > 0 && !modoMascara && (
-            <p className="text-[10px] text-slate-400">
-              Faturamento contratual do mês ({new Date(mesSemana + "-15").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}):
-              <span className="font-semibold text-slate-600 ml-1">{fmt(vendaMes)}</span>
-            </p>
-          )}
+          <div className="flex items-center gap-3">
+            {vendaMes > 0 && !modoMascara && (
+              <p className="text-[10px] text-slate-400">
+                Faturamento contratual do mês ({new Date(mesSemana + "-15").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}):
+                <span className="font-semibold text-slate-600 ml-1">{fmt(vendaMes)}</span>
+              </p>
+            )}
+            <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco6 ? "rotate-180" : ""}`} />
+          </div>
         </div>
 
+        {!colBloco6 && <div className="p-4 space-y-3">
         {!modoMascara ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Faturamento Previsto */}
@@ -7712,6 +7730,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             rows={3}
           />
         </div>
+        </div>}
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -7719,12 +7738,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       ══════════════════════════════════════════════════════════════════════ */}
       {refisLista.length > 0 && (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-800 text-white px-5 py-2.5 flex items-center gap-2">
+          <div className="bg-slate-800 text-white px-5 py-2.5 flex items-center gap-2 cursor-pointer select-none" onClick={() => setColBloco7(v => !v)}>
             <History className="h-4 w-4 text-slate-300" />
             <p className="text-xs font-bold uppercase tracking-wider">Histórico de Relatórios Emitidos</p>
             <span className="ml-auto text-[11px] text-slate-400">{refisLista.length} {refisLista.length === 1 ? "relatório" : "relatórios"}</span>
+            <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ml-2 ${colBloco7 ? "rotate-180" : ""}`} />
           </div>
-          <div className="overflow-x-auto">
+          {!colBloco7 && <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
@@ -7776,7 +7796,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   })}
               </tbody>
             </table>
-          </div>
+          </div>}
         </div>
       )}
 

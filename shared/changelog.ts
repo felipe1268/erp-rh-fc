@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 293,
+    titulo: "REFIS — Todos os blocos com colapso/expansão",
+    descricao: "Adicionado botão de colapso/expansão (chevron) em todos os blocos do relatório REFIS: Evolução Física Global, Curva S Física, Curva S Financeira, Avanço Físico por Grupo, Faturamento do Mês e Histórico de Relatórios Emitidos. Clique no cabeçalho de qualquer seção para fechar ou expandir.",
+    tipo: "feature",
+    modulos: "Planejamento / REFIS",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 01:00:00",
+  },
+  {
     version: 292,
     titulo: "Obras — Cliente e Responsável somente leitura na edição",
     descricao: "Na tela 'Editar Projeto' de Obras, os campos Cliente e Engenheiro/Responsável agora são exibidos como texto não editável. O botão '+ Cadastrar cliente' e os comboboxes interativos aparecem apenas no cadastro de nova obra, evitando alterações acidentais.",
