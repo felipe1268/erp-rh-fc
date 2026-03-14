@@ -353,14 +353,14 @@ export default function PlanejamentoDetalhe() {
               {temPrevisto && (
                 <div className="mb-2">
                   <div className="flex items-center gap-3">
-                    <span className="text-[11px] text-amber-600 font-medium w-16 shrink-0">Previsto</span>
-                    <div className="flex-1 bg-amber-50 rounded-full h-2.5 overflow-hidden border border-amber-100">
+                    <span className="text-[11px] font-medium w-16 shrink-0" style={{ color: "#B8860B" }}>Previsto</span>
+                    <div className="flex-1 rounded-full h-2.5 overflow-hidden" style={{ background: "#FFF8DC" }}>
                       <div
-                        className="h-full rounded-full bg-amber-400 transition-all duration-500"
-                        style={{ width: `${Math.min(100, previsto!)}%` }}
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, previsto!)}%`, background: "#C9A000" }}
                       />
                     </div>
-                    <span className="text-xs font-bold text-amber-700 w-12 text-right shrink-0">
+                    <span className="text-xs font-bold w-12 text-right shrink-0" style={{ color: "#B8860B" }}>
                       {fPct(previsto!)}
                     </span>
                   </div>
@@ -369,14 +369,14 @@ export default function PlanejamentoDetalhe() {
               {/* Barra Realizado */}
               <div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-blue-600 font-medium w-16 shrink-0">Realizado</span>
+                  <span className="text-[11px] font-medium w-16 shrink-0" style={{ color: "#1B3A8A" }}>Realizado</span>
                   <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${realizado >= 90 ? "bg-emerald-500" : realizado >= 60 ? "bg-blue-500" : realizado >= 30 ? "bg-blue-400" : "bg-sky-400"}`}
-                      style={{ width: `${Math.min(100, realizado)}%` }}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, realizado)}%`, background: "#1B3A8A" }}
                     />
                   </div>
-                  <span className={`text-xs font-bold w-12 text-right shrink-0 ${realizado >= 90 ? "text-emerald-700" : "text-blue-700"}`}>
+                  <span className="text-xs font-bold w-12 text-right shrink-0" style={{ color: "#1B3A8A" }}>
                     {fPct(realizado)}
                   </span>
                 </div>

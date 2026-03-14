@@ -319,6 +319,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 14:33:00",
   },
   {
+    version: 236,
+    titulo: "Planejamento — Cores da barra: Amarelo Ouro + Azul Royal Escuro",
+    descricao: "Barra Previsto agora usa Amarelo Ouro (#C9A000) com fundo crème e texto #B8860B. Barra Realizado usa Azul Royal Escuro (#1B3A8A) fixo em todas as faixas de progresso.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 22:00:00",
+  },
+  {
     version: 235,
     titulo: "Compras — Modal Novo Fornecedor sem scroll",
     descricao: "Reorganização do formulário 'Novo Fornecedor' em layout compacto de grade (12 colunas). Todos os campos cabem na tela sem barra de rolagem: CNPJ + Razão Social + Nome Fantasia em uma linha; Endereço completo em uma linha com subcampos distribuídos; Contato em uma linha; Dados Bancários em uma linha; Categorias e Observações lado a lado. Inputs com height h-8 e texto xs para ocupar menos espaço vertical.",
