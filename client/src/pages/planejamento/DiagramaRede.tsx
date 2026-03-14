@@ -1,8 +1,9 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from "react";
 import {
-  ZoomIn, ZoomOut, Maximize2, RefreshCw,
+  ZoomIn, ZoomOut, Maximize2, Minimize2, RefreshCw,
   CheckCircle2, Clock, AlertTriangle, TrendingDown, Circle,
   Search, X, ChevronDown, GitBranch, LayoutDashboard, Info,
+  CalendarRange, Calendar,
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -486,6 +487,18 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   const [filtroGrupo, setFiltroGrupo]   = useState<string>("todos");
   const [busca, setBusca]               = useState("");
   const [selectedId, setSelectedId]     = useState<number | null>(null);
+  const [fullscreen, setFullscreen]     = useState(false);
+  const [filtroSemana, setFiltroSemana] = useState<string>("todas");
+  const [periodoInicio, setPeriodoInicio] = useState("");
+  const [periodoFim, setPeriodoFim]       = useState("");
+  const [showPeriodoCustom, setShowPeriodoCustom] = useState(false);
+
+  // Escape key exits fullscreen
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Zoom/pan
   const [zoom, setZoom]         = useState(0.75);
@@ -513,15 +526,63 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
     return Array.from(s).sort();
   }, [folhas]);
 
-  // Filtered by grupo — hierarchy uses todos, rede uses folhas only
-  const todosFiltrados = useMemo(() =>
-    filtroGrupo === "todos" ? todos : todos.filter(a => a.grupo === filtroGrupo),
-    [todos, filtroGrupo]
-  );
-  const folhasFiltradas = useMemo(() =>
-    filtroGrupo === "todos" ? folhas : folhas.filter(a => a.grupo === filtroGrupo),
-    [folhas, filtroGrupo]
-  );
+  // ── SEMANAS DO PROJETO ────────────────────────────────────────────────────
+  const semanas = useMemo(() => {
+    const datas = folhas
+      .flatMap(a => [a.dataInicio, a.dataFim].filter(Boolean) as string[]);
+    if (datas.length === 0) return [];
+    const minDate = new Date(datas.reduce((a, b) => a < b ? a : b));
+    const maxDate = new Date(datas.reduce((a, b) => a > b ? a : b));
+    // Snap start to Monday of first week
+    const dow = minDate.getDay(); // 0=Sun
+    const diffToMon = dow === 0 ? -6 : 1 - dow;
+    const semStart = new Date(minDate);
+    semStart.setDate(semStart.getDate() + diffToMon);
+    const result: { label: string; num: number; inicio: string; fim: string }[] = [];
+    let cur = new Date(semStart);
+    let i = 1;
+    while (cur <= maxDate && i <= 200) {
+      const ini = cur.toISOString().split("T")[0];
+      const fimD = new Date(cur);
+      fimD.setDate(fimD.getDate() + 6);
+      const fim = fimD.toISOString().split("T")[0];
+      const fmtMini = (s: string) => { const [y,m,d] = s.split("-"); return `${d}/${m}`; };
+      result.push({ num: i, label: `Semana ${String(i).padStart(2,"0")} (${fmtMini(ini)}–${fmtMini(fim)})`, inicio: ini, fim });
+      cur.setDate(cur.getDate() + 7);
+      i++;
+    }
+    return result;
+  }, [folhas]);
+
+  // ── Período ativo (de semana selecionada ou custom) ───────────────────────
+  const periodoAtivo = useMemo((): { ini: string; fim: string } | null => {
+    if (filtroSemana !== "todas") {
+      const s = semanas.find(s => String(s.num) === filtroSemana);
+      if (s) return { ini: s.inicio, fim: s.fim };
+    }
+    if (periodoInicio || periodoFim) return { ini: periodoInicio || "0000-01-01", fim: periodoFim || "9999-12-31" };
+    return null;
+  }, [filtroSemana, periodoInicio, periodoFim, semanas]);
+
+  // Helper: atividade overlaps with period?
+  const overlaps = useCallback((a: Atividade, p: { ini: string; fim: string }) => {
+    const aIni = a.dataInicio ?? "0000-01-01";
+    const aFim = a.dataFim ?? "9999-12-31";
+    return aIni <= p.fim && aFim >= p.ini;
+  }, []);
+
+  // Filtered by grupo + periodo — hierarchy uses todos, rede uses folhas only
+  const todosFiltrados = useMemo(() => {
+    let list = filtroGrupo === "todos" ? todos : todos.filter(a => a.grupo === filtroGrupo);
+    if (periodoAtivo) list = list.filter(a => overlaps(a, periodoAtivo));
+    return list;
+  }, [todos, filtroGrupo, periodoAtivo, overlaps]);
+
+  const folhasFiltradas = useMemo(() => {
+    let list = filtroGrupo === "todos" ? folhas : folhas.filter(a => a.grupo === filtroGrupo);
+    if (periodoAtivo) list = list.filter(a => overlaps(a, periodoAtivo));
+    return list;
+  }, [folhas, filtroGrupo, periodoAtivo, overlaps]);
 
   // Build graph
   const hierarquia = useMemo(
@@ -646,12 +707,20 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
     );
   }
 
+  const hasActivePeriod = periodoAtivo !== null;
+
   return (
-    <div className="flex flex-col gap-2" style={{ height: "calc(100vh - 200px)", minHeight: 560 }}>
+    <div
+      className="flex flex-col gap-2"
+      style={fullscreen
+        ? { position: "fixed", inset: 0, zIndex: 9999, background: "#f8fafc", padding: "12px" }
+        : { height: "calc(100vh - 200px)", minHeight: 560 }
+      }
+    >
 
       {/* ── TOOLBAR ─────────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-2.5 flex flex-col gap-2.5">
-        {/* Row 1: mode + search + grupo + zoom */}
+        {/* Row 1: mode + search + grupo + zoom + fullscreen */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* View mode toggle */}
           <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px] shrink-0">
@@ -701,6 +770,41 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
             </div>
           )}
 
+          {/* ── Semana filter ────────────────────────────────────────────── */}
+          {semanas.length > 0 && (
+            <div className="relative">
+              <select
+                value={filtroSemana}
+                onChange={e => {
+                  setFiltroSemana(e.target.value);
+                  setPeriodoInicio("");
+                  setPeriodoFim("");
+                  setShowPeriodoCustom(false);
+                }}
+                className={`text-[11px] border rounded-lg pl-2.5 pr-6 py-1.5 bg-white appearance-none transition-colors ${filtroSemana !== "todas" ? "border-blue-400 text-blue-700 font-semibold" : "border-slate-200 text-slate-600"}`}
+              >
+                <option value="todas">Todas as semanas</option>
+                {semanas.map(s => <option key={s.num} value={String(s.num)}>{s.label}</option>)}
+              </select>
+              <ChevronDown className="h-3 w-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          )}
+
+          {/* ── Período custom toggle ─────────────────────────────────── */}
+          <button
+            onClick={() => {
+              setShowPeriodoCustom(p => !p);
+              if (showPeriodoCustom) { setPeriodoInicio(""); setPeriodoFim(""); }
+              setFiltroSemana("todas");
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${showPeriodoCustom || (periodoInicio || periodoFim) ? "bg-violet-50 border-violet-300 text-violet-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+            title="Filtrar por período personalizado"
+          >
+            <CalendarRange className="h-3.5 w-3.5" />
+            Período
+            {(periodoInicio || periodoFim) && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
+          </button>
+
           <div className="ml-auto flex items-center gap-1.5">
             {/* Zoom controls */}
             <button onClick={() => setZoom(z => Math.min(z * 1.2, 4))} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
@@ -713,8 +817,59 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
               <Maximize2 className="h-3.5 w-3.5 text-slate-600" />
             </button>
             <span className="text-[10px] text-slate-400 w-8 text-center">{Math.round(zoom * 100)}%</span>
+
+            {/* ── Fullscreen button ─────────────────────────────────────── */}
+            <button
+              onClick={() => setFullscreen(f => !f)}
+              className={`h-7 px-2.5 flex items-center gap-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${fullscreen ? "bg-slate-800 text-white border-slate-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+              title={fullscreen ? "Sair da tela cheia (Esc)" : "Tela cheia"}
+            >
+              {fullscreen
+                ? <><Minimize2 className="h-3.5 w-3.5" /> Sair</>
+                : <><Maximize2 className="h-3.5 w-3.5" /> Tela cheia</>
+              }
+            </button>
           </div>
         </div>
+
+        {/* ── Período custom inputs ─────────────────────────────────────────── */}
+        {showPeriodoCustom && (
+          <div className="flex items-center gap-2 flex-wrap border-t border-slate-100 pt-2">
+            <Calendar className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+            <span className="text-[11px] text-slate-500 font-semibold">Período:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400">De</span>
+              <input
+                type="date"
+                value={periodoInicio}
+                onChange={e => { setPeriodoInicio(e.target.value); setFiltroSemana("todas"); }}
+                className="text-[11px] border border-slate-200 rounded-lg px-2 py-1 text-slate-600 bg-white"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400">até</span>
+              <input
+                type="date"
+                value={periodoFim}
+                onChange={e => { setPeriodoFim(e.target.value); setFiltroSemana("todas"); }}
+                className="text-[11px] border border-slate-200 rounded-lg px-2 py-1 text-slate-600 bg-white"
+              />
+            </div>
+            {(periodoInicio || periodoFim) && (
+              <button
+                onClick={() => { setPeriodoInicio(""); setPeriodoFim(""); }}
+                className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-3 w-3" /> Limpar
+              </button>
+            )}
+            {periodoInicio && periodoFim && (
+              <span className="text-[10px] bg-violet-50 text-violet-700 rounded-full px-2 py-0.5 font-semibold">
+                {visibleNodes.length} atividades neste período
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Row 2: status pills */}
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -727,6 +882,14 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
           {busca && (
             <span className="text-[11px] text-slate-400 ml-1">
               {visibleNodes.length} resultado{visibleNodes.length !== 1 ? "s" : ""}
+            </span>
+          )}
+          {/* Badge período ativo */}
+          {hasActivePeriod && !showPeriodoCustom && filtroSemana !== "todas" && (
+            <span className="ml-2 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5 font-semibold flex items-center gap-1">
+              <Calendar className="h-2.5 w-2.5" />
+              {semanas.find(s => String(s.num) === filtroSemana)?.label}
+              <button onClick={() => setFiltroSemana("todas")} className="ml-0.5 hover:text-blue-900"><X className="h-2.5 w-2.5" /></button>
             </span>
           )}
         </div>
