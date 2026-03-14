@@ -3025,8 +3025,11 @@ function diasNoMes(ini: string, fim: string, ano: number, mes: number): number {
 }
 
 function mesesRange(from: string | null, to: string | null): string[] {
-  const s = from ? new Date(from + "-01") : new Date();
-  const e = to   ? new Date(to   + "-01") : new Date();
+  // Usar new Date(y, m-1, 1) evita bug de timezone UTC: new Date("2026-02-01") parseia como UTC meia-noite
+  // causando Jan 31 21h em UTC-3, fazendo getMonth() retornar Janeiro em vez de Fevereiro.
+  const parseYM = (ym: string): Date => { const [y, m] = ym.split("-").map(Number); return new Date(y, m - 1, 1); };
+  const s = from ? parseYM(from) : new Date();
+  const e = to   ? parseYM(to)   : new Date();
   const meses: string[] = [];
   let cur = new Date(s.getFullYear(), s.getMonth(), 1);
   const end = new Date(e.getFullYear(), e.getMonth(), 1);
@@ -4477,20 +4480,17 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                   return pcts.includes(name) ? `${Number(v).toFixed(1)}%` : fmt(Number(v));
                 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                {cenario === "lucro" ? (<>
-                  <Bar yAxisId="val" dataKey="Custo"     name="Custo"             fill="#ef4444" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
-                  <Bar yAxisId="val" dataKey="LucroPrev" name="Lucro Prev. (V−C)" fill="#10b981" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
-                  <Bar yAxisId="val" dataKey="LucroDes"  name="Lucro Des. (V−M)"  fill="#8b5cf6" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
-                  <Bar yAxisId="val" dataKey="Medido"    name="Medido"            fill="#3b82f6" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
-                  <Line yAxisId="pct" type="monotone" dataKey="VendaAcum" name="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive={false} />
-                </>) : (<>
-                  <Bar yAxisId="val" dataKey="Previsto" name="Previsto" fill="#FFB800" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
-                  <Bar yAxisId="val" dataKey="Material" name="Material" fill="#a855f7" isAnimationActive={false} minPointSize={2} radius={[0,0,0,0]} />
-                  <Bar yAxisId="val" dataKey="MO"       name="M.O."    fill="#3b82f6" isAnimationActive={false} minPointSize={2} radius={[0,0,0,0]} />
-                  <Bar yAxisId="val" dataKey="Medido"   name="Medido"  fill="#1A3461" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
-                  <Line yAxisId="pct" type="monotone" dataKey="PrevAcum" name="Prev.Acum%" stroke="#FFB800" strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive={false} />
-                  <Line yAxisId="pct" type="monotone" dataKey="RealAcum" name="Real.Acum%" stroke="#1A3461" strokeWidth={2} dot={false} isAnimationActive={false} />
-                </>)}
+                {cenario === "lucro" && <Bar yAxisId="val" dataKey="Custo"     name="Custo"             fill="#ef4444" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
+                {cenario === "lucro" && <Bar yAxisId="val" dataKey="LucroPrev" name="Lucro Prev. (V−C)" fill="#10b981" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
+                {cenario === "lucro" && <Bar yAxisId="val" dataKey="LucroDes"  name="Lucro Des. (V−M)"  fill="#8b5cf6" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
+                {cenario === "lucro" && <Bar yAxisId="val" dataKey="Medido"    name="Medido"            fill="#3b82f6" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
+                {cenario === "lucro" && <Line yAxisId="pct" type="monotone" dataKey="VendaAcum" name="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive={false} />}
+                {cenario !== "lucro" && <Bar yAxisId="val" dataKey="Previsto" name="Previsto" fill="#FFB800" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
+                {cenario !== "lucro" && <Bar yAxisId="val" dataKey="Material" name="Material" fill="#a855f7" isAnimationActive={false} minPointSize={2} radius={[0,0,0,0]} />}
+                {cenario !== "lucro" && <Bar yAxisId="val" dataKey="MO"       name="M.O."    fill="#3b82f6" isAnimationActive={false} minPointSize={2} radius={[0,0,0,0]} />}
+                {cenario !== "lucro" && <Bar yAxisId="val" dataKey="Medido"   name="Medido"  fill="#1A3461" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
+                {cenario !== "lucro" && <Line yAxisId="pct" type="monotone" dataKey="PrevAcum" name="Prev.Acum%" stroke="#FFB800" strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive={false} />}
+                {cenario !== "lucro" && <Line yAxisId="pct" type="monotone" dataKey="RealAcum" name="Real.Acum%" stroke="#1A3461" strokeWidth={2} dot={false} isAnimationActive={false} />}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
