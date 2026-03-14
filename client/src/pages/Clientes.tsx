@@ -57,31 +57,53 @@ export default function Clientes() {
   const cnpjDigits = form.cnpj.replace(/\D/g, "");
   const cnpjCompleto = form.tipo === "PJ" && cnpjDigits.length === 14 && modalAberto;
 
-  const { data: cnpjData, isLoading: buscandoCNPJ, isError: erroCNPJ } =
-    trpc.compras.buscarCNPJ.useQuery(
-      { cnpj: cnpjDigits },
-      { enabled: cnpjCompleto && !cnpjPreenchido, retry: false, staleTime: 1000 * 60 * 5 }
-    );
+  const [buscandoCNPJ, setBuscandoCNPJ] = useState(false);
+  const [erroCNPJ, setErroCNPJ] = useState(false);
+  const [cnpjData, setCnpjData] = useState<any>(null);
 
   useEffect(() => {
-    if (!cnpjData || cnpjPreenchido) return;
-    setForm(prev => ({
-      ...prev,
-      razaoSocial:     cnpjData.razaoSocial     || prev.razaoSocial,
-      nomeFantasia:    cnpjData.nomeFantasia     || prev.nomeFantasia,
-      situacaoReceita: cnpjData.situacaoReceita  || prev.situacaoReceita,
-      endereco:        cnpjData.endereco         || prev.endereco,
-      numero:          cnpjData.numero           || prev.numero,
-      complemento:     cnpjData.complemento      || prev.complemento,
-      bairro:          cnpjData.bairro           || prev.bairro,
-      cidade:          cnpjData.cidade           || prev.cidade,
-      estado:          cnpjData.estado           || prev.estado,
-      cep:             cnpjData.cep              || prev.cep,
-      telefone:        cnpjData.telefone         || prev.telefone,
-      email:           cnpjData.email            || prev.email,
-    }));
-    setCnpjPreenchido(true);
-  }, [cnpjData]);
+    if (!cnpjCompleto || cnpjPreenchido) return;
+    setBuscandoCNPJ(true);
+    setErroCNPJ(false);
+    fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjDigits}`)
+      .then(r => r.ok ? r.json() : Promise.reject("not_found"))
+      .then((data: any) => {
+        const parsed = {
+          cnpj:            cnpjDigits,
+          razaoSocial:     data.razao_social ?? "",
+          nomeFantasia:    data.nome_fantasia ?? "",
+          situacaoReceita: data.descricao_situacao_cadastral ?? "",
+          endereco:        data.logradouro ? `${data.tipo_logradouro ?? ""} ${data.logradouro}`.trim() : "",
+          numero:          data.numero ?? "",
+          complemento:     data.complemento ?? "",
+          bairro:          data.bairro ?? "",
+          cidade:          data.municipio ?? "",
+          estado:          data.uf ?? "",
+          cep:             data.cep ?? "",
+          telefone:        data.ddd_telefone_1 ?? "",
+          email:           data.email ?? "",
+        };
+        setCnpjData(parsed);
+        setForm(prev => ({
+          ...prev,
+          razaoSocial:     parsed.razaoSocial     || prev.razaoSocial,
+          nomeFantasia:    parsed.nomeFantasia     || prev.nomeFantasia,
+          situacaoReceita: parsed.situacaoReceita  || prev.situacaoReceita,
+          endereco:        parsed.endereco         || prev.endereco,
+          numero:          parsed.numero           || prev.numero,
+          complemento:     parsed.complemento      || prev.complemento,
+          bairro:          parsed.bairro           || prev.bairro,
+          cidade:          parsed.cidade           || prev.cidade,
+          estado:          parsed.estado           || prev.estado,
+          cep:             parsed.cep              || prev.cep,
+          telefone:        parsed.telefone         || prev.telefone,
+          email:           parsed.email            || prev.email,
+        }));
+        setCnpjPreenchido(true);
+      })
+      .catch(() => setErroCNPJ(true))
+      .finally(() => setBuscandoCNPJ(false));
+  }, [cnpjDigits, cnpjCompleto]);
 
   const criarMut = trpc.clientes.criar.useMutation({
     onSuccess: () => { utils.clientes.list.invalidate(); fecharModal(); toast.success("Cliente criado com sucesso!"); },
@@ -99,6 +121,9 @@ export default function Clientes() {
     setModalAberto(false);
     setEditandoId(null);
     setCnpjPreenchido(false);
+    setBuscandoCNPJ(false);
+    setErroCNPJ(false);
+    setCnpjData(null);
     setForm({ ...EMPTY_FORM });
   }
 
@@ -106,6 +131,9 @@ export default function Clientes() {
     setForm({ ...EMPTY_FORM });
     setEditandoId(null);
     setCnpjPreenchido(false);
+    setBuscandoCNPJ(false);
+    setErroCNPJ(false);
+    setCnpjData(null);
     setModalAberto(true);
   }
 
@@ -133,6 +161,9 @@ export default function Clientes() {
     });
     setEditandoId(c.id);
     setCnpjPreenchido(true);
+    setBuscandoCNPJ(false);
+    setErroCNPJ(false);
+    setCnpjData(null);
     setModalAberto(true);
   }
 
@@ -328,7 +359,7 @@ export default function Clientes() {
                   {["PJ", "PF"].map(t => (
                     <button
                       key={t}
-                      onClick={() => { setForm(f => ({ ...f, tipo: t, cnpj: "", cpf: "" })); setCnpjPreenchido(false); }}
+                      onClick={() => { setForm(f => ({ ...f, tipo: t, cnpj: "", cpf: "" })); setCnpjPreenchido(false); setErroCNPJ(false); setCnpjData(null); }}
                       className={`flex-1 py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
                         form.tipo === t
                           ? (t === "PJ" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-emerald-500 bg-emerald-50 text-emerald-700")
@@ -350,7 +381,7 @@ export default function Clientes() {
                     onChange={e => {
                       const v = form.tipo === "PJ" ? formatCNPJ(e.target.value) : formatCPF(e.target.value);
                       setForm(f => form.tipo === "PJ" ? { ...f, cnpj: v } : { ...f, cpf: v });
-                      if (form.tipo === "PJ") setCnpjPreenchido(false);
+                      if (form.tipo === "PJ") { setCnpjPreenchido(false); setErroCNPJ(false); setCnpjData(null); }
                     }}
                     placeholder={form.tipo === "PJ" ? "00.000.000/0000-00" : "000.000.000-00"}
                     className={`font-mono pr-8 ${buscandoCNPJ ? "border-blue-300" : cnpjPreenchido && cnpjCompleto && !cnpjSituacaoAlerta ? "border-emerald-300" : ""}`}
