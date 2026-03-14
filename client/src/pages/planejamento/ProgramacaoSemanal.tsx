@@ -125,6 +125,7 @@ export function ProgramacaoSemanal({
   const semanas  = useMemo(() => computeWeeks(atividades), [atividades]);
   const [idx, setIdx] = useState<number>(() => currentWeekIdx(semanas));
   const [modoRelatorio, setModoRelatorio] = useState(false);
+  const [qtdSemanas, setQtdSemanas] = useState(3);
   const [alertas, setAlertas]  = useState<any>(null);
   const [loadIA, setLoadIA]    = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -143,14 +144,14 @@ export function ProgramacaoSemanal({
     [atividadesSemAtual]
   );
 
-  // ── Próximas 3 semanas para o relatório ──────────────────────────────────
+  // ── Próximas N semanas para o relatório ──────────────────────────────────
   const proximas3 = useMemo(() => {
     const result = [];
-    for (let i = idx; i < Math.min(idx + 3, semanas.length); i++) {
+    for (let i = idx; i < Math.min(idx + qtdSemanas, semanas.length); i++) {
       result.push({ semana: semanas[i], atividades: atividadesDaSemana(atividades, semanas[i]) });
     }
     return result;
-  }, [idx, semanas, atividades]);
+  }, [idx, semanas, atividades, qtdSemanas]);
 
   // ── Recursos do orçamento ─────────────────────────────────────────────────
   const todosEaps = useMemo(() => {
@@ -248,14 +249,33 @@ export function ProgramacaoSemanal({
           <span className="text-sm font-semibold text-slate-700">Programação Semanal</span>
           <span className="text-xs text-slate-400">{semanas.length} semanas no cronograma</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Seletor de quantidade de semanas (visível em modo relatório) */}
+          {modoRelatorio && (
+            <div className="flex items-center gap-1.5 bg-slate-100 rounded-lg px-2 py-1">
+              <span className="text-[10px] text-slate-500 font-medium">Semanas:</span>
+              {[1, 2, 3, 4, 5, 6].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setQtdSemanas(n)}
+                  className={`h-5 w-5 text-[10px] font-bold rounded transition-colors ${
+                    qtdSemanas === n
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-slate-600 hover:bg-blue-50 border border-slate-200"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          )}
           <Button
             variant="outline" size="sm"
             className="gap-1.5 text-xs"
             onClick={() => { setModoRelatorio(!modoRelatorio); }}
           >
             {modoRelatorio ? <Home className="h-3.5 w-3.5" /> : <CalendarRange className="h-3.5 w-3.5" />}
-            {modoRelatorio ? "Visão Semanal" : "Relatório 3 Semanas"}
+            {modoRelatorio ? "Visão Semanal" : `Relatório ${qtdSemanas} Semana${qtdSemanas !== 1 ? "s" : ""}`}
           </Button>
           {modoRelatorio && (
             <Button size="sm" className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700" onClick={imprimir}>
@@ -279,7 +299,15 @@ export function ProgramacaoSemanal({
             </button>
 
             <div className="text-center flex-1">
-              <p className="text-xs text-slate-500 font-medium">Semana {semanaAtual?.numero}</p>
+              <div className="flex items-center justify-center gap-2 mb-0.5">
+                <p className="text-xs text-slate-500 font-medium">Semana {semanaAtual?.numero}</p>
+                {semanaAtual && dateStr(semanaAtual.ini) <= today && dateStr(semanaAtual.fim) >= today && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-full px-2 py-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                    Semana Atual
+                  </span>
+                )}
+              </div>
               <p className="text-base font-bold text-slate-800">
                 {semanaAtual ? `${fmtBRDate(semanaAtual.ini)} — ${fmtBRDate(semanaAtual.fim)}` : "—"}
               </p>
@@ -661,8 +689,13 @@ function RelatorioTresSemanas({
           </div>
         </div>
 
-        {/* 3 colunas de semana */}
-        <div className={`grid gap-0 divide-x divide-slate-200 ${proximas3.length === 3 ? "grid-cols-3" : proximas3.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+        {/* N colunas de semana */}
+        <div className={`grid gap-0 divide-x divide-slate-200 ${
+          proximas3.length >= 5 ? "grid-cols-3" :
+          proximas3.length === 4 ? "grid-cols-4" :
+          proximas3.length === 3 ? "grid-cols-3" :
+          proximas3.length === 2 ? "grid-cols-2" : "grid-cols-1"
+        } ${proximas3.length >= 5 ? "flex-wrap" : ""}`}>
           {proximas3.map(({ semana, atividades: at }) => {
             const itensEap = (recursos?.itens ?? []).filter((it: any) => at.some((a: any) => a.eapCodigo === it.eapCodigo));
             const servs    = new Set(itensEap.map((it: any) => it.servicoCodigo).filter(Boolean));
