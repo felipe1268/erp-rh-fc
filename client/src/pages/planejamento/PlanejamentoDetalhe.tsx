@@ -3026,6 +3026,18 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [entradaFocused, setEntradaFocused] = useState(false);
   const [cfgBloqueado, setCfgBloqueado] = useState(false);
 
+  // ── Reforços de Parcela (anti-caixa negativo) — persiste em localStorage ──
+  const reforcoKey = `reforcos_${projetoId}`;
+  const [reforcos, setReforcos] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem(reforcoKey) ?? "{}"); } catch { return {}; }
+  });
+  const persistReforcos = (next: Record<string, number>) => {
+    setReforcos(next);
+    localStorage.setItem(reforcoKey, JSON.stringify(next));
+  };
+  const [novoReforcoMes, setNovoReforcoMes] = useState("");
+  const [novoReforcoValor, setNovoReforcoValor] = useState("");
+
   // ── Baixa de Pagamentos (manual, persiste em localStorage) ────────────────
   const baixaKey = `baixas_${projetoId}`;
   const [baixas, setBaixasRaw] = useState<Record<string, { confirmado: boolean; data: string; valor: number }>>(() => {
@@ -3221,11 +3233,13 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                     + (thisDate.getMonth() - startDate.getMonth());
         if (diffM >= 1 && diffM <= cfgParcelas) recebido = valorParcela;
       }
+      const reforco = reforcos[d.mes] ?? 0;
+      recebido += reforco;
       const saldoMes = recebido - d.custo;
       caixaAcum += saldoMes;
-      return { ...d, recebido, saldoMes, caixaAcum };
+      return { ...d, recebido, reforco, saldoMes, caixaAcum };
     });
-  }, [cfgEntrada, cfgParcelas, cfgInicioFat, dadosMensais, baseV]);
+  }, [cfgEntrada, cfgParcelas, cfgInicioFat, dadosMensais, baseV, reforcos]);
 
   const mesesNeg = fluxoCaixa.filter(r => r.caixaAcum < 0).length;
   const valorParcela = cfgParcelas > 0 ? Math.max(0, baseV - cfgEntrada) / cfgParcelas : 0;
@@ -3421,6 +3435,87 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
             </button>
           </div>
         </div>
+
+        {/* ── Reforços de Parcela (anti-caixa negativo) ───────────────────── */}
+        {cfgTipo === "parcela_fixa" && (
+          <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+              <p className="text-[11px] font-semibold text-slate-700">Reforços de Parcela</p>
+              <span className="text-[10px] text-slate-400 font-normal">— pagamentos extras para evitar caixa negativo</span>
+              {mesesNeg > 0 && (
+                <span className="ml-auto text-[10px] bg-red-100 text-red-700 font-semibold px-2 py-0.5 rounded-full">
+                  {mesesNeg} {mesesNeg === 1 ? "mês" : "meses"} negativo{mesesNeg > 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+
+            {/* Reforços cadastrados */}
+            {Object.keys(reforcos).length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {Object.entries(reforcos).sort().map(([mes, val]) => {
+                  const nomeMes = (dadosMensais as any[]).find(d => d.mes === mes)?.nomeMes ?? mes;
+                  const isNeg = fluxoCaixa.find(r => r.mes === mes && r.caixaAcum < 0);
+                  return (
+                    <div key={mes} className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-lg px-2.5 py-1.5 text-xs">
+                      <span className={`font-semibold ${isNeg ? "text-red-700" : "text-slate-700"}`}>{nomeMes}</span>
+                      <span className="text-emerald-700 font-bold">+{fmt(val)}</span>
+                      <button
+                        onClick={() => { const n = { ...reforcos }; delete n[mes]; persistReforcos(n); }}
+                        className="text-slate-300 hover:text-red-500 transition-colors ml-0.5">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Adicionar novo reforço */}
+            <div className="flex gap-2 items-center">
+              <select
+                value={novoReforcoMes}
+                onChange={e => setNovoReforcoMes(e.target.value)}
+                className="flex-1 h-8 text-xs border border-orange-200 rounded-lg px-2 bg-white focus:ring-1 focus:ring-orange-400 outline-none">
+                <option value="">— Selecione o mês —</option>
+                {(dadosMensais as any[]).map((d: any) => {
+                  const r = fluxoCaixa.find(f => f.mes === d.mes);
+                  const neg = r && r.caixaAcum < 0;
+                  return (
+                    <option key={d.mes} value={d.mes}>
+                      {d.nomeMes}{neg ? " ⚠ caixa neg." : ""}
+                    </option>
+                  );
+                })}
+              </select>
+              <input
+                type="text"
+                value={novoReforcoValor}
+                onChange={e => setNovoReforcoValor(e.target.value.replace(/[^\d,]/g, ""))}
+                placeholder="Valor R$"
+                className="w-32 h-8 text-xs border border-orange-200 rounded-lg px-2 bg-white focus:ring-1 focus:ring-orange-400 outline-none" />
+              <button
+                onClick={() => {
+                  if (!novoReforcoMes || !novoReforcoValor) return;
+                  const val = parseFloat(novoReforcoValor.replace(",", ".")) || 0;
+                  if (val <= 0) return;
+                  persistReforcos({ ...reforcos, [novoReforcoMes]: val });
+                  setNovoReforcoMes("");
+                  setNovoReforcoValor("");
+                }}
+                disabled={!novoReforcoMes || !novoReforcoValor}
+                className="h-8 px-3 text-xs bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap">
+                + Adicionar
+              </button>
+            </div>
+            {Object.keys(reforcos).length > 0 && (
+              <p className="text-[10px] text-slate-400 mt-1.5">
+                Total de reforços: <b className="text-orange-700">{fmt(Object.values(reforcos).reduce((s, v) => s + v, 0))}</b>
+                {" · "}Os reforços são somados ao recebimento do mês correspondente no fluxo de caixa.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Modo: Por Avanço Físico ────────────────────────────────────────── */}
