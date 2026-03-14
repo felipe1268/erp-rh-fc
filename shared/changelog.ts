@@ -399,4 +399,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 20:00:00",
   },
+  {
+    version: 239,
+    titulo: "Botão Tela Inicial na barra de topo",
+    descricao: "Adicionado botão 'Início' fixo na barra de topo (header) de todas as páginas internas do sistema, ao lado esquerdo do nome do módulo ativo. O botão exibe ícone Home e leva diretamente à tela inicial (Hub de Módulos). Visível em todos os módulos.",
+    tipo: "improvement",
+    modulos: "Global",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 20:10:00",
+  },
 ];

@@ -35,6 +35,7 @@ import {
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
+  Home,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -1052,6 +1053,7 @@ function DashboardLayoutContent({
 
 function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLabel: string }) {
   const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany, isConstrutoras, construtorasIds } = useCompany();
+  const [, setLocation] = useLocation();
   const hasConstrutoras = construtorasIds.length >= 2;
   const logoUrl = selectedCompany?.logoUrl;
 
@@ -1059,6 +1061,15 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
     <div className="flex border-b h-14 items-center justify-between bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
       <div className="flex items-center gap-2">
         {isMobile ? <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" /> : null}
+        <button
+          onClick={() => setLocation("/")}
+          title="Tela Inicial"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shrink-0"
+        >
+          <Home className="h-3.5 w-3.5" />
+          <span className="text-xs font-medium hidden sm:inline">Início</span>
+        </button>
+        <span className="text-muted-foreground/40 text-sm hidden sm:inline">/</span>
         <span className="tracking-tight text-foreground font-medium text-sm">
           {activeLabel}
         </span>
