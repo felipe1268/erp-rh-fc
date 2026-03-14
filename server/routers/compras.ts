@@ -592,6 +592,7 @@ export const comprasRouter = router({
       companyId: z.number(),
       descricao: z.string().optional(),
       prioridade: z.string().optional(),
+      obraId: z.number().nullable().optional(),
       solicitacaoId: z.number().nullable().optional(),
       fornecedorId: z.number().nullable().optional(),
       dataValidade: z.string().optional(),
@@ -623,6 +624,7 @@ export const comprasRouter = router({
         numeroCotacao,
         descricao: input.descricao,
         prioridade: input.prioridade ?? "normal",
+        obraId: input.obraId ?? null,
         solicitacaoId: input.solicitacaoId ?? null,
         fornecedorId: input.fornecedorId ?? null,
         dataValidade: input.dataValidade,
@@ -728,6 +730,7 @@ export const comprasRouter = router({
         companyId: input.companyId,
         numeroOc,
         cotacaoId: input.cotacaoId,
+        obraId: cot.obraId ?? null,
         fornecedorId: cot.fornecedorId ?? null,
         status: "pendente",
         aprovacaoStatus: "aguardando",
@@ -761,6 +764,7 @@ export const comprasRouter = router({
   criarOrdemManual: protectedProcedure
     .input(z.object({
       companyId: z.number(),
+      obraId: z.number().nullable().optional(),
       fornecedorId: z.number().nullable().optional(),
       dataEntregaPrevista: z.string().optional(),
       observacoes: z.string().optional(),
@@ -789,6 +793,7 @@ export const comprasRouter = router({
       const [oc] = await db.insert(comprasOrdens).values({
         companyId: input.companyId,
         numeroOc,
+        obraId: input.obraId ?? null,
         fornecedorId: input.fornecedorId ?? null,
         dataEntregaPrevista: input.dataEntregaPrevista,
         observacoes: input.observacoes,

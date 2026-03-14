@@ -444,4 +444,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 20:50:00",
   },
+  {
+    version: 244,
+    titulo: "Compras: tema claro + obraId obrigatório + fluxo no canvas",
+    descricao: "Refatoração completa das páginas SC, Cotações e OC do módulo Compras: (1) Conversão total para tema claro (light theme) com fundo branco/cinza, bordas suaves e badges coloridos sólidos; (2) Campo 'Obra / Centro de Custo' obrigatório em todas as etapas do fluxo, usando obras ativas do cadastro; (3) obraId adicionado ao schema e banco de dados de compras_cotacoes e compras_ordens; (4) Backend atualizado para propagar obraId em criarCotacao, criarOrdemManual e criarOrdemDeCotacao; (5) Diagrama de fluxo integrado desenhado no canvas.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 21:20:00",
+  },
 ];
