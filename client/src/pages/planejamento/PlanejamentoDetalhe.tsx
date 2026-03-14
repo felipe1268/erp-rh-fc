@@ -6736,93 +6736,181 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          BLOCO 2 — EVOLUÇÃO FÍSICA GLOBAL (barras horizontais + cards semanal)
+          BLOCO 2 — EVOLUÇÃO FÍSICA GLOBAL (redesign profissional)
       ══════════════════════════════════════════════════════════════════════ */}
       <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-600">Evolução Física Global</p>
-          <div className="flex gap-4 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#FFB800" }} />% Previsto
+        {/* Cabeçalho profissional */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200" style={{ background: "linear-gradient(135deg,#1e293b 0%,#0f172a 100%)" }}>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Evolução Física Global</p>
+            <p className="text-sm font-bold text-white mt-0.5">Avanço Acumulado da Obra</p>
+          </div>
+          <div className="flex items-center gap-5 text-xs">
+            <span className="flex items-center gap-2 text-slate-300">
+              <span className="inline-block w-4 h-2 rounded" style={{ background: "#FFB800" }} />
+              <span className="text-[11px] font-medium">Previsto</span>
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#1A3461" }} />% Realizado
+            <span className="flex items-center gap-2 text-slate-300">
+              <span className="inline-block w-4 h-2 rounded" style={{ background: "#3b82f6" }} />
+              <span className="text-[11px] font-medium">Realizado</span>
             </span>
           </div>
         </div>
 
-        <div className="px-5 py-4 flex gap-4">
-          {/* Barras de gauge */}
-          <div className="flex-1 space-y-3">
-            {/* Escala */}
-            <div className="flex justify-between text-[10px] text-slate-400 px-0 mb-1">
-              {[0,10,20,30,40,50,60,70,80,90,100].map(v => (
-                <span key={v}>{v}%</span>
-              ))}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+          {/* ── Área de barras ─────────────────────────────────────────────── */}
+          <div className="px-6 py-5 space-y-5">
+            {/* BARRA PREVISTO */}
+            <div>
+              <div className="flex items-end justify-between mb-2">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Previsto Acumulado</span>
+                  <p className="text-2xl font-black leading-none" style={{ color: "#d97706" }}>{fPct_(avancoPrevisto)}</p>
+                </div>
+                <span className="text-[11px] text-slate-400 pb-0.5">Meta: <strong className="text-slate-600">100%</strong></span>
+              </div>
+              {/* Barra bullet */}
+              <div className="relative h-9 rounded-md overflow-hidden" style={{ background: "#fef3c7" }}>
+                {/* Milestones */}
+                {[25,50,75].map(m => (
+                  <div key={m} className="absolute top-0 bottom-0 w-px" style={{ left: `${m}%`, background: "rgba(180,130,0,0.25)" }}>
+                    <span className="absolute -top-0.5 left-0.5 text-[9px]" style={{ color: "#92400e" }}>{m}%</span>
+                  </div>
+                ))}
+                {/* Filled */}
+                <div
+                  className="absolute left-0 top-0 bottom-0 flex items-center"
+                  style={{ width: `${Math.max(avancoPrevisto, 0)}%`, background: "linear-gradient(90deg,#d97706,#FFB800)", minWidth: avancoPrevisto > 0 ? 4 : 0 }}
+                >
+                  {avancoPrevisto > 6 && (
+                    <span className="absolute right-2 text-[12px] font-black text-white drop-shadow-sm">{fPct_(avancoPrevisto)}</span>
+                  )}
+                </div>
+                {/* Restante label (apenas se tiver espaço suficiente) */}
+                {avancoPrevisto < 70 && (
+                  <div className="absolute right-3 top-0 bottom-0 flex items-center">
+                    <span className="text-[11px] font-semibold" style={{ color: "#92400e" }}>
+                      saldo {fPct_(100 - avancoPrevisto)}
+                    </span>
+                  </div>
+                )}
+                {/* Meta marker */}
+                <div className="absolute right-0 top-0 bottom-0 w-1" style={{ background: "#d97706" }} />
+              </div>
             </div>
 
-            {/* Barra Previsto */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="w-16 text-right font-semibold" style={{ color: "#CC9000" }}>{fPct_(avancoPrevisto)}</span>
-                <div className="relative flex-1 h-7 bg-slate-100 rounded overflow-hidden">
-                  <div
-                    className="h-full transition-all duration-700 flex items-center justify-end pr-2"
-                    style={{ width: `${Math.max(avancoPrevisto, 0)}%`, background: "#FFB800" }}
-                  >
-                    {avancoPrevisto > 8 && (
-                      <span className="text-[11px] font-bold text-white">{fPct_(avancoPrevisto)}</span>
-                    )}
-                  </div>
+            {/* BARRA REALIZADO */}
+            <div>
+              <div className="flex items-end justify-between mb-2">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Realizado Acumulado</span>
+                  <p className="text-2xl font-black leading-none" style={{ color: desvioFisico >= 0 ? "#1d4ed8" : "#1d4ed8" }}>{fPct_(avancoRealAtual)}</p>
                 </div>
+                <span className={`text-[11px] pb-0.5 font-semibold ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                  {desvioFisico >= 0 ? <ArrowUpRight className="h-3.5 w-3.5 inline" /> : <ArrowDownRight className="h-3.5 w-3.5 inline" />}
+                  Desvio {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
+                </span>
               </div>
-              <p className="text-[10px] text-slate-400 pl-[4.5rem]">% Previsto Acumulado</p>
+              {/* Barra bullet */}
+              <div className="relative h-9 rounded-md overflow-hidden" style={{ background: "#dbeafe" }}>
+                {/* Milestones */}
+                {[25,50,75].map(m => (
+                  <div key={m} className="absolute top-0 bottom-0 w-px" style={{ left: `${m}%`, background: "rgba(30,64,175,0.20)" }}>
+                    <span className="absolute -top-0.5 left-0.5 text-[9px]" style={{ color: "#1e3a8a" }}>{m}%</span>
+                  </div>
+                ))}
+                {/* Referência previsto (linha fina) */}
+                {avancoPrevisto > 0 && (
+                  <div className="absolute top-0 bottom-0 w-0.5 z-10" style={{ left: `${avancoPrevisto}%`, background: "#FFB800", opacity: 0.8 }}>
+                    <div className="absolute -top-0 left-1 text-[9px] font-bold" style={{ color: "#d97706" }}>▾ prev</div>
+                  </div>
+                )}
+                {/* Filled */}
+                <div
+                  className="absolute left-0 top-0 bottom-0 flex items-center"
+                  style={{ width: `${Math.max(avancoRealAtual, 0)}%`, background: "linear-gradient(90deg,#1d4ed8,#3b82f6)", minWidth: avancoRealAtual > 0 ? 4 : 0 }}
+                >
+                  {avancoRealAtual > 6 && (
+                    <span className="absolute right-2 text-[12px] font-black text-white drop-shadow-sm">{fPct_(avancoRealAtual)}</span>
+                  )}
+                </div>
+                {/* Restante label */}
+                {avancoRealAtual < 70 && (
+                  <div className="absolute right-3 top-0 bottom-0 flex items-center">
+                    <span className="text-[11px] font-semibold" style={{ color: "#1e3a8a" }}>
+                      saldo {fPct_(100 - avancoRealAtual)}
+                    </span>
+                  </div>
+                )}
+                {/* Meta marker */}
+                <div className="absolute right-0 top-0 bottom-0 w-1" style={{ background: "#1d4ed8" }} />
+              </div>
             </div>
 
-            {/* Barra Realizado */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="w-16 text-right font-semibold" style={{ color: "#1A3461" }}>{fPct_(avancoRealAtual)}</span>
-                <div className="relative flex-1 h-7 bg-slate-100 rounded overflow-hidden">
-                  <div
-                    className="h-full transition-all duration-700 flex items-center justify-end pr-2"
-                    style={{ width: `${Math.max(avancoRealAtual, 0)}%`, background: "#1A3461" }}
-                  >
-                    {avancoRealAtual > 8 && (
-                      <span className="text-[11px] font-bold text-white">{fPct_(avancoRealAtual)}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 pl-[4.5rem]">% Realizado Acumulado</p>
+            {/* Linha separadora com comparativo */}
+            <div className="flex items-center gap-6 pt-1 border-t border-slate-100 text-xs text-slate-500">
+              <span>Início: <strong className="text-slate-700">{proj.dataInicio ? new Date(proj.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</strong></span>
+              <span>Prazo contratual: <strong className="text-slate-700">{proj.dataTerminoContratual ? new Date(proj.dataTerminoContratual + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</strong></span>
+              <span className="ml-auto">
+                SPI: <strong className={spi >= 1 ? "text-emerald-600" : "text-red-600"}>{avancoPrevisto === 0 ? "—" : spi.toFixed(2)}</strong>
+              </span>
             </div>
           </div>
 
-          {/* Cards semanal */}
-          <div className="shrink-0 flex flex-col gap-2 w-44">
-            <div className="rounded-lg border px-3 py-2.5 text-center" style={{ background: "#FFFAEB", borderColor: "#FFD966" }}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#CC9000" }}>Avanço Semanal Previsto</p>
-              <p className="text-2xl font-bold mt-0.5" style={{ color: "#FFB800" }}>{fPct_(avancoPrevSemanal)}</p>
+          {/* ── Cards KPI ────────────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-0 divide-x lg:divide-x-0 lg:divide-y divide-slate-100 w-full lg:w-52">
+            {/* ADV SEMANAL PREVISTO */}
+            <div className="flex flex-col items-center justify-center px-4 py-4 text-center" style={{ background: "#fffbeb" }}>
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "#92400e" }}>Avanço Semanal</p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: "#b45309" }}>Previsto</p>
+              <p className="text-3xl font-black leading-none" style={{ color: "#d97706" }}>{fPct_(avancoPrevSemanal)}</p>
+              <div className="mt-2 w-full h-1 rounded-full" style={{ background: "#fde68a" }}>
+                <div className="h-full rounded-full" style={{ width: `${Math.min(avancoPrevSemanal * 10, 100)}%`, background: "#FFB800" }} />
+              </div>
             </div>
-            <div className="rounded-lg border px-3 py-2.5 text-center" style={{ background: "#E8EDF5", borderColor: "#6B85B5" }}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#1A3461" }}>Avanço Semanal Real</p>
-              <p className="text-2xl font-bold mt-0.5" style={{ color: "#1A3461" }}>{fPct_(avancoRealSemanal)}</p>
+
+            {/* ADV SEMANAL REAL */}
+            <div className="flex flex-col items-center justify-center px-4 py-4 text-center" style={{ background: "#eff6ff" }}>
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "#1e3a8a" }}>Avanço Semanal</p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: "#1d4ed8" }}>Realizado</p>
+              <p className="text-3xl font-black leading-none" style={{ color: "#2563eb" }}>{fPct_(avancoRealSemanal)}</p>
+              <div className="mt-2 w-full h-1 rounded-full" style={{ background: "#bfdbfe" }}>
+                <div className="h-full rounded-full" style={{ width: `${Math.min(avancoRealSemanal * 10, 100)}%`, background: "#3b82f6" }} />
+              </div>
             </div>
-            <div className={`rounded-lg px-3 py-2 text-center ${avancoPrevisto === 0 ? "bg-slate-400" : spi >= 1 ? "bg-emerald-600" : "bg-red-500"}`}>
-              <p className="text-[10px] font-semibold text-white/70 uppercase tracking-wider">SPI</p>
-              <p className="text-xl font-bold text-white mt-0.5">{avancoPrevisto === 0 ? "—" : spi.toFixed(2)}</p>
-              <p className="text-[10px] text-white/80">{avancoPrevisto === 0 ? "Sem prev." : spi >= 1 ? "Dentro do prazo" : "Abaixo do previsto"}</p>
+
+            {/* SPI */}
+            <div
+              className="flex flex-col items-center justify-center px-4 py-4 text-center col-span-1"
+              style={{ background: avancoPrevisto === 0 ? "#f1f5f9" : spi >= 1 ? "#f0fdf4" : spi >= 0.9 ? "#fef9c3" : "#fef2f2" }}
+            >
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: avancoPrevisto === 0 ? "#64748b" : spi >= 1 ? "#166534" : spi >= 0.9 ? "#92400e" : "#991b1b" }}>
+                SPI — Índice de Desempenho
+              </p>
+              <p
+                className="text-3xl font-black leading-none"
+                style={{ color: avancoPrevisto === 0 ? "#94a3b8" : spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }}
+              >
+                {avancoPrevisto === 0 ? "—" : spi.toFixed(2)}
+              </p>
+              <p className="text-[9px] mt-2 font-semibold" style={{ color: avancoPrevisto === 0 ? "#94a3b8" : spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }}>
+                {avancoPrevisto === 0 ? "Sem previsto" : spi >= 1 ? "✓ Dentro do prazo" : spi >= 0.9 ? "⚠ Atenção" : "✗ Abaixo do previsto"}
+              </p>
             </div>
-            <div className={`rounded-lg px-3 py-2.5 text-center border ${desvioFisico >= 0 ? "bg-emerald-50 border-emerald-300" : "bg-red-50 border-red-300"}`}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Desvio Físico</p>
-              <p className={`text-xl font-bold mt-0.5 ${desvioFisico >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+
+            {/* DESVIO FÍSICO */}
+            <div
+              className="flex flex-col items-center justify-center px-4 py-4 text-center"
+              style={{ background: desvioFisico >= 0 ? "#f0fdf4" : "#fef2f2" }}
+            >
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-2 text-slate-500">Desvio Físico</p>
+              <p className={`text-3xl font-black leading-none ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                 {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
               </p>
-              <p className="text-[10px] text-slate-500 flex items-center justify-center gap-0.5">
+              <p className={`text-[9px] mt-2 font-semibold flex items-center gap-0.5 ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                 {desvioFisico >= 0
-                  ? <ArrowUpRight className="h-3 w-3 text-emerald-600" />
-                  : <ArrowDownRight className="h-3 w-3 text-red-500" />}
-                {desvioFisico >= 0 ? "Adiantado" : "Atrasado"}
+                  ? <><ArrowUpRight className="h-3 w-3" /> Adiantado</>
+                  : <><ArrowDownRight className="h-3 w-3" /> Atrasado</>}
               </p>
             </div>
           </div>

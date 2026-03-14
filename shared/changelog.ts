@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 263,
+    titulo: "REFIS — Redesign profissional do Bloco 'Evolução Física Global'",
+    descricao: "Layout do bloco Evolução Física Global reformulado para apresentações e PDF: cabeçalho dark com gradiente, barras bullet com fundo colorido suave, marcadores de milestone em 25%/50%/75%, label 'Saldo' visível no espaço restante da barra, linha de referência do previsto sobreposta na barra do realizado, valores em tipografia bold, rodapé com datas da obra e SPI inline. Cards KPI reorganizados em grid vertical (desktop) com mini-barras de escala. Nenhum espaço em branco desperdiçado — layout preparado para impressão.",
+    tipo: "melhoria",
+    modulos: "Planejamento / REFIS",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 21:30:00",
+  },
+  {
     version: 262,
     titulo: "Planejamento — Nova aba Diagrama de Rede",
     descricao: "Adicionada aba 'Diagrama de Rede' no módulo de Planejamento. O diagrama renderiza as atividades como nós (retângulos) conectados por setas de dependência conforme o campo predecessora. Layout automático por níveis topológicos (BFS). Código de cores: Verde = Concluída (100%), Azul = Em andamento, Vermelho = Atrasada (prazo vencido e incompleta), Amarelo = Em risco (atrás do esperado proporcional). Funcionalidades: zoom por scroll, pan por arraste, filtro por status, toggle de grupos, painel de detalhes ao clicar em uma atividade (datas, progresso atual vs. esperado, desvio em pp), botão 'Encaixar na tela'. Legenda visual e barra de resumo por status.",
