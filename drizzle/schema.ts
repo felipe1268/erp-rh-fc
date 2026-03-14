@@ -4494,6 +4494,16 @@ export const fornecedores = pgTable("fornecedores", {
   atualizadoEm:     timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const avaliacoesFornecedor = pgTable("avaliacoes_fornecedor", {
+  id:           serial().primaryKey(),
+  fornecedorId: integer("fornecedor_id").notNull(),
+  companyId:    integer("company_id").notNull(),
+  nota:         integer().notNull(),
+  comentario:   text(),
+  criadoPor:    integer("criado_por"),
+  criadoEm:     timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const almoxarifadoCategorias = pgTable("almoxarifado_categorias", {
   id:        serial().primaryKey(),
   companyId: integer("company_id").notNull(),
