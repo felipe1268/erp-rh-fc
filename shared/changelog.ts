@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 280,
+    titulo: "Diagrama de Rede: filtro por semana, período e tela cheia",
+    descricao: "Adicionados três recursos ao Diagrama de Rede / Hierarquia EAP: (1) Filtro por Semana do Projeto (Semana 01, Semana 02… calculadas automaticamente a partir das datas das atividades); (2) Filtro por Período Personalizado (campos 'De' e 'Até'); (3) Botão Tela Cheia que expande o diagrama para ocupar 100% da viewport, com saída via Esc ou botão 'Sair'. Os filtros de semana e período são mutuamente exclusivos e se limpam automaticamente.",
+    tipo: "funcionalidade",
+    modulos: "Planejamento / Diagrama de Rede",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 01:30:00",
+  },
+  {
     version: 279,
     titulo: "Obras: campo Cliente com combobox buscável",
     descricao: "Adicionado campo 'Cliente' no formulário de Nova/Editar Obra. Combobox buscável que carrega a lista do cadastro de Clientes. Permite seleção por nome ou razão social. O cliente selecionado é salvo na obra e exibido nos cards da listagem com ícone azul.",
