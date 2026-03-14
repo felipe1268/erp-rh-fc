@@ -414,6 +414,50 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     setTimeout(() => printWindow.print(), 600);
   };
 
+  const handleExportSST = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    const logoUrl = selectedCompany?.logoUrl || "https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png";
+    const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "Empresa";
+    const cnpjEmpresa = selectedCompany?.cnpj || "";
+    const dataEmissao = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const css = `@page{size:A4 portrait;margin:12mm 15mm 20mm 15mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}a{color:inherit!important}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.4}.logo-bar{background:#1B2A4A;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:16px;border-radius:6px}.logo-bar img{height:50px;object-fit:contain}.logo-bar .title{color:white;flex:1}.logo-bar .title h1{font-size:16px;font-weight:bold;letter-spacing:1.5px;margin-bottom:2px}.logo-bar .title p{font-size:10px;opacity:0.85}.logo-bar .info-right{color:white;text-align:right;font-size:9px;opacity:0.9}.logo-bar .info-right p{margin-bottom:2px}.emp-bar{background:#f0f4f8;border-left:4px solid #1B2A4A;padding:10px 16px;margin-bottom:14px;border-radius:0 4px 4px 0;display:flex;justify-content:space-between;align-items:center}.emp-bar h2{font-size:15px;font-weight:700;color:#1B2A4A}.emp-bar .sub{font-size:10px;color:#4b5563;margin-top:2px}.section{margin-bottom:14px;page-break-inside:avoid}.section-title{font-size:12px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #2d4a7a;padding-bottom:3px;margin-bottom:6px}.notice{background:#fffbeb;border:1px solid #fde68a;border-radius:4px;padding:8px 12px;font-size:9px;color:#78350f;margin-bottom:12px}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#e8edf4;color:#1B2A4A;font-weight:600;text-align:left;padding:4px 6px;border:1px solid #d1d9e6}td{padding:4px 6px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:600}.bg{background:#dcfce7;color:#166534}.br{background:#fef2f2;color:#991b1b}.by{background:#fefce8;color:#854d0e}.link{color:#1d4ed8;text-decoration:underline}.footer{margin-top:20px;border-top:1px solid #e5e7eb;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#6b7280}`;
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SST - ${emp?.nomeCompleto || ""}</title><style>${css}</style></head><body>`;
+    html += `<div class="logo-bar"><img src="${logoUrl}" alt="Logo" /><div class="title"><h1>DOCUMENTOS SST — ASOs &amp; TREINAMENTOS</h1><p>${nomeEmpresa.toUpperCase()}${cnpjEmpresa ? ' — CNPJ: ' + cnpjEmpresa : ''}</p></div><div class="info-right"><p>Emitido em: ${dataEmissao}</p><p>Emitido por: ${userName}</p></div></div>`;
+    html += `<div class="emp-bar"><div><h2>${emp?.nomeCompleto || "-"}</h2><div class="sub">Função: ${emp?.funcao || emp?.cargo || "-"} | CPF: ${formatCPF(emp?.cpf || "")} | Admissão: ${formatDate(emp?.dataAdmissao)}</div></div></div>`;
+    html += `<div class="notice">⚠️ Este documento é de uso confidencial. Os links abaixo levam aos arquivos originais anexados no sistema. Para imprimir com acesso completo, abra cada link em um navegador conectado à internet.</div>`;
+    html += `<div class="section"><div class="section-title">🩺 ASOs (${asos.length})</div>`;
+    if (asos.length === 0) {
+      html += `<p style="color:#6b7280;font-size:9px">Nenhum ASO registrado.</p>`;
+    } else {
+      html += `<table><thead><tr><th>Tipo</th><th>Data Exame</th><th>Validade</th><th>Status</th><th>Vencimento</th><th>Resultado</th><th>Médico</th><th>CRM</th><th>Exames</th><th>Arquivo</th></tr></thead><tbody>`;
+      (asos as any[]).forEach((a: any) => {
+        const bc = a.status === "VENCIDO" ? "br" : a.status?.includes("DIAS") ? "by" : "bg";
+        const linkCell = a.documentoUrl ? `<a class="link" href="${a.documentoUrl}" target="_blank">📄 Ver ASO</a>` : `<span style="color:#9ca3af">—</span>`;
+        html += `<tr><td>${a.tipo}</td><td>${formatDate(a.dataExame)}</td><td>${a.validadeDias || 365} dias</td><td><span class="badge ${bc}">${a.status || "VÁLIDO"}</span></td><td>${formatDate(a.dataVencimento)}</td><td style="color:${a.resultado === "Apto" ? "#166534" : "#991b1b"};font-weight:600">${a.resultado}</td><td>${a.medico || "-"}</td><td>${a.crm || "-"}</td><td style="max-width:120px">${a.examesRealizados || "-"}</td><td>${linkCell}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+    }
+    html += `</div>`;
+    html += `<div class="section"><div class="section-title">🎓 Treinamentos (${treinamentos.length})</div>`;
+    if (treinamentos.length === 0) {
+      html += `<p style="color:#6b7280;font-size:9px">Nenhum treinamento registrado.</p>`;
+    } else {
+      html += `<table><thead><tr><th>Treinamento</th><th>Norma</th><th>Carga H.</th><th>Realização</th><th>Validade</th><th>Status</th><th>Instrutor</th><th>Certificado</th></tr></thead><tbody>`;
+      (treinamentos as any[]).forEach((t: any) => {
+        const bc = t.statusCalculado === "VENCIDO" ? "br" : t.statusCalculado?.includes("DIAS") ? "by" : "bg";
+        const linkCell = t.certificadoUrl ? `<a class="link" href="${t.certificadoUrl}" target="_blank">📄 Ver Cert.</a>` : `<span style="color:#9ca3af">—</span>`;
+        html += `<tr><td>${t.nome}</td><td>${t.norma || "-"}</td><td>${t.cargaHoraria || "-"}</td><td>${formatDate(t.dataRealizacao)}</td><td>${formatDate(t.dataValidade)}</td><td><span class="badge ${bc}">${t.statusCalculado || "VÁLIDO"}</span></td><td>${t.instrutor || "-"}</td><td>${linkCell}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+    }
+    html += `</div>`;
+    html += `<div class="footer"><span>ERP FC Engenharia — Gestão SST</span><span>LGPD: Dados protegidos pela Lei 13.709/2018</span><span>${dataEmissao}</span></div></body></html>`;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 600);
+  };
+
   // ===================== FULL SCREEN OVERLAY =====================
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col" style={{ width: "100vw", height: "100vh" }}>
@@ -840,6 +884,12 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
 
               {/* ============ ASOs ============ */}
               <TabsContent value="asos" className="mt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm font-medium text-muted-foreground">{asos.length} registro(s)</span>
+                  <Button size="sm" variant="outline" onClick={handleExportSST} className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50">
+                    <FileDown className="h-3.5 w-3.5" /> Exportar SST (ASOs + Treinamentos)
+                  </Button>
+                </div>
                 {asos.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">Nenhum ASO registrado</div>
                 ) : (
@@ -880,6 +930,12 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
 
               {/* ============ TREINAMENTOS ============ */}
               <TabsContent value="trein" className="mt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm font-medium text-muted-foreground">{treinamentos.length} registro(s)</span>
+                  <Button size="sm" variant="outline" onClick={handleExportSST} className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50">
+                    <FileDown className="h-3.5 w-3.5" /> Exportar SST (ASOs + Treinamentos)
+                  </Button>
+                </div>
                 {treinamentos.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">Nenhum treinamento registrado</div>
                 ) : (
