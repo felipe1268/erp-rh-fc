@@ -34,7 +34,7 @@ import {
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
-  Warehouse, Wrench, Calculator, Target, Package,
+  Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -281,6 +281,22 @@ const menuSectionsParceiros: MenuSection[] = [
   },
 ];
 
+const menuSectionsCompras: MenuSection[] = [
+  {
+    title: "Compras",
+    items: [
+      { icon: ShoppingCart,    label: "Fornecedores",         path: "/compras/fornecedores"     },
+      { icon: Warehouse,       label: "Almoxarifado",         path: "/compras/almoxarifado"     },
+    ],
+  },
+  {
+    title: "Integrações",
+    items: [
+      { icon: ArrowRightLeft,  label: "Mas Controle ERP",     path: "/integracoes/mas-controle" },
+    ],
+  },
+];
+
 const menuSectionsOrcamento: MenuSection[] = [
   {
     title: "Orçamento",
@@ -332,6 +348,7 @@ const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "orcamento":     menuSectionsOrcamento,
   "planejamento":  menuSectionsPlanejamento,
   "cadastro":      menuSectionsCadastro,
+  "compras":       menuSectionsCompras,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
 
@@ -393,6 +410,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "orcamento":     "/orcamento/painel",
   "planejamento":  "/planejamento",
   "cadastro":      "/empresas",
+  "compras":       "/compras/fornecedores",
   "all": "/painel",
 };
 
@@ -406,7 +424,8 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "parceiros":     { icon: Handshake,  color: "text-purple-400", bg: "bg-purple-500/20"  },
   "orcamento":     { icon: Calculator, color: "text-cyan-400",   bg: "bg-cyan-500/20"    },
   "planejamento":  { icon: Target,     color: "text-green-400",  bg: "bg-green-500/20"   },
-  "cadastro":      { icon: BookOpen,   color: "text-indigo-400", bg: "bg-indigo-500/20"  },
+  "cadastro":      { icon: BookOpen,      color: "text-indigo-400", bg: "bg-indigo-500/20"  },
+  "compras":       { icon: ShoppingCart,  color: "text-rose-400",   bg: "bg-rose-500/20"    },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
 
@@ -487,6 +506,7 @@ function DashboardLayoutContent({
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
     "orcamento": "orcamento", "planejamento": "planejamento", "cadastro": "cadastro",
+    "compras": "compras",
   };
   const isModEnabled = (modId: string) => isModuleEnabled(hubToConfigKey[modId] ?? modId);
 
@@ -785,6 +805,7 @@ function DashboardLayoutContent({
     { id: "orcamento",   label: "Orçamento",      icon: Calculator,  color: "text-cyan-400",    bg: "bg-cyan-500/20",    path: "/orcamento/painel",   canSee: () => isModEnabled("orcamento") },
     { id: "planejamento",label: "Planejamento",   icon: Target,      color: "text-green-400",   bg: "bg-green-500/20",   path: "/planejamento",       canSee: () => isModEnabled("planejamento") },
     { id: "cadastro",    label: "Cadastro",       icon: BookOpen,    color: "text-indigo-400",  bg: "bg-indigo-500/20",  path: "/empresas",           canSee: () => isModEnabled("cadastro") },
+    { id: "compras",     label: "Compras",        icon: ShoppingCart,color: "text-rose-400",    bg: "bg-rose-500/20",    path: "/compras/fornecedores", canSee: () => permIsAdminMaster || isModEnabled("compras") },
   ];
   const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
   const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :
