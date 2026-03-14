@@ -474,11 +474,13 @@ export default function AlmoxarifadoPage() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-700">Categoria</label>
-                  <input
-                    className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400"
-                    placeholder="Ex: Cimento e Argamassa"
+                  <select
+                    className="mt-1 w-full h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white outline-none focus:border-emerald-400 text-gray-900"
                     value={formItem.categoria} onChange={e => setFormItem(p => ({ ...p, categoria: e.target.value }))}
-                  />
+                  >
+                    <option value="">— Selecionar —</option>
+                    {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </div>
               </div>
 
