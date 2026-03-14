@@ -426,4 +426,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 20:30:00",
   },
+  {
+    version: 242,
+    titulo: "Contas Bancárias removida do menu RH & DP",
+    descricao: "Removido o item 'Contas Bancárias' da seção 'Financeiro' do menu lateral do módulo RH & DP (já existente no módulo Cadastro). Alteração aplicada tanto no menu salvo no banco de dados quanto no menu padrão do painel de personalização.",
+    tipo: "fix",
+    modulos: "RH & DP, Cadastro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 20:40:00",
+  },
 ];
