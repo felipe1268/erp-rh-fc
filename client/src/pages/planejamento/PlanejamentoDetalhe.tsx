@@ -132,45 +132,6 @@ export default function PlanejamentoDetalhe() {
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
   const [overIdx, setOverIdx]   = useState<number | null>(null);
 
-  // ── Tab-bar scroll arrows ─────────────────────────────────────────────────
-  const tabsScrollRef  = useRef<HTMLDivElement>(null);
-  const [canScrollL, setCanScrollL] = useState(false);
-  const [canScrollR, setCanScrollR] = useState(false);
-
-  const checkTabScroll = useCallback(() => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    setCanScrollL(el.scrollLeft > 2);
-    setCanScrollR(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
-  }, []);
-
-  useEffect(() => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    checkTabScroll();
-    el.addEventListener("scroll", checkTabScroll, { passive: true });
-    const ro = new ResizeObserver(checkTabScroll);
-    ro.observe(el);
-    return () => { el.removeEventListener("scroll", checkTabScroll); ro.disconnect(); };
-  }, [checkTabScroll, tabOrder]);
-
-  // Scroll aba ativa para o centro quando muda
-  useEffect(() => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    const active = el.querySelector<HTMLElement>("[data-active='true']");
-    if (active) {
-      const elRect  = el.getBoundingClientRect();
-      const btnRect = active.getBoundingClientRect();
-      const offset  = btnRect.left - elRect.left - elRect.width / 2 + btnRect.width / 2;
-      el.scrollBy({ left: offset, behavior: "smooth" });
-    }
-  }, [aba]);
-
-  function scrollTabs(dir: "left" | "right") {
-    tabsScrollRef.current?.scrollBy({ left: dir === "right" ? 160 : -160, behavior: "smooth" });
-  }
-
   // ── Queries ───────────────────────────────────────────────────────────────
   const utils = trpc.useUtils();
   const { data: proj, isLoading: loadingProj } = trpc.planejamento.getProjetoById.useQuery(
@@ -371,82 +332,65 @@ export default function PlanejamentoDetalhe() {
           )}
         </div>
 
-        {/* ── Abas (drag-and-drop + scroll automático ao dar zoom) ─────── */}
-        <div className="relative mb-4 border-b border-slate-200">
-          {/* Seta esquerda */}
-          {canScrollL && (
-            <button
-              onClick={() => scrollTabs("left")}
-              className="absolute left-0 top-0 bottom-0 z-10 flex items-center px-1.5 bg-gradient-to-r from-white via-white/90 to-transparent text-slate-400 hover:text-blue-600 transition-colors"
-              aria-label="Scroll abas para esquerda"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
-
-          {/* Container com scroll */}
-          <div
-            ref={tabsScrollRef}
-            className="flex gap-0 overflow-x-auto select-none scrollbar-none"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            {tabOrder.map((id, idx) => {
-              const t = TAB_DEFS.find(d => d.id === id);
-              if (!t) return null;
-              const isActive  = aba === id;
-              const isDragged = dragIdx === idx;
-              const isOver    = overIdx === idx;
-              return (
-                <button
-                  key={id}
-                  data-active={isActive ? "true" : "false"}
-                  draggable
-                  onDragStart={e => {
-                    setDragIdx(idx);
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setDragImage(e.currentTarget, 20, 16);
-                  }}
-                  onDragOver={e => { e.preventDefault(); setOverIdx(idx); }}
-                  onDragEnter={e => { e.preventDefault(); setOverIdx(idx); }}
-                  onDragLeave={() => setOverIdx(null)}
-                  onDrop={e => {
-                    e.preventDefault();
-                    if (dragIdx !== null && dragIdx !== idx) {
-                      const next = [...tabOrder];
-                      const [moved] = next.splice(dragIdx, 1);
-                      next.splice(idx, 0, moved);
-                      setTabOrder(next);
-                      try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
-                    }
-                    setDragIdx(null); setOverIdx(null);
-                  }}
-                  onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
-                  onClick={() => setAba(id)}
-                  className={`group flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-all cursor-grab active:cursor-grabbing shrink-0 ${
-                    isActive
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-slate-500 hover:text-slate-700"
-                  } ${isDragged ? "opacity-40" : ""} ${isOver && dragIdx !== idx ? "border-blue-400 bg-blue-50/60" : ""}`}
-                >
-                  <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-30 shrink-0 -ml-1 mr-0.5 transition-opacity" />
-                  <t.Icon className="h-3.5 w-3.5 shrink-0" />
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Seta direita */}
-          {canScrollR && (
-            <button
-              onClick={() => scrollTabs("right")}
-              className="absolute right-0 top-0 bottom-0 z-10 flex items-center px-1.5 bg-gradient-to-l from-white via-white/90 to-transparent text-slate-400 hover:text-blue-600 transition-colors"
-              aria-label="Scroll abas para direita"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+        {/* ── Abas em duas linhas (drag-and-drop) ──────────────────────── */}
+        {(() => {
+          const half = Math.ceil(tabOrder.length / 2);
+          const renderTabBtn = (id: Tab, globalIdx: number) => {
+            const t = TAB_DEFS.find(d => d.id === id);
+            if (!t) return null;
+            const isActive  = aba === id;
+            const isDragged = dragIdx === globalIdx;
+            const isOver    = overIdx === globalIdx;
+            return (
+              <button
+                key={id}
+                draggable
+                onDragStart={e => {
+                  setDragIdx(globalIdx);
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setDragImage(e.currentTarget, 20, 16);
+                }}
+                onDragOver={e => { e.preventDefault(); setOverIdx(globalIdx); }}
+                onDragEnter={e => { e.preventDefault(); setOverIdx(globalIdx); }}
+                onDragLeave={() => setOverIdx(null)}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (dragIdx !== null && dragIdx !== globalIdx) {
+                    const next = [...tabOrder];
+                    const [moved] = next.splice(dragIdx, 1);
+                    next.splice(globalIdx, 0, moved);
+                    setTabOrder(next);
+                    try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
+                  }
+                  setDragIdx(null); setOverIdx(null);
+                }}
+                onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                onClick={() => setAba(id)}
+                className={`group flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border-b-2 whitespace-nowrap transition-all cursor-grab active:cursor-grabbing ${
+                  isActive
+                    ? "border-blue-600 text-blue-600 bg-blue-50/40"
+                    : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                } ${isDragged ? "opacity-40" : ""} ${isOver && dragIdx !== globalIdx ? "border-blue-400 bg-blue-50/60" : ""}`}
+              >
+                <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-30 shrink-0 transition-opacity" />
+                <t.Icon className="h-3.5 w-3.5 shrink-0" />
+                <span>{t.label}</span>
+              </button>
+            );
+          };
+          return (
+            <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden shadow-sm select-none bg-white">
+              {/* Linha 1 */}
+              <div className="flex flex-wrap border-b border-slate-100 bg-slate-50/60">
+                {tabOrder.slice(0, half).map((id, i) => renderTabBtn(id, i))}
+              </div>
+              {/* Linha 2 */}
+              <div className="flex flex-wrap">
+                {tabOrder.slice(half).map((id, i) => renderTabBtn(id, half + i))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Conteúdo das abas ────────────────────────────────────────── */}
         {aba === "visao-geral" && (
