@@ -30,6 +30,7 @@ const Auditoria = lazy(() => import("./pages/Auditoria"));
 const Configuracoes = lazy(() => import("./pages/Configuracoes"));
 const Migration = lazy(() => import("./pages/Migration"));
 const Obras = lazy(() => import("./pages/Obras"));
+const Clientes = lazy(() => import("./pages/Clientes"));
 const ObraEfetivo = lazy(() => import("./pages/ObraEfetivo"));
 const FechamentoPonto = lazy(() => import("./pages/FechamentoPonto"));
 const FolhaPagamento = lazy(() => import("./pages/FolhaPagamento"));
@@ -179,6 +180,7 @@ function Router() {
         <Route path={"/painel/juridico"} component={PainelJuridico} />
         <Route path={"/empresas"} component={Empresas} />
         <Route path={"/colaboradores"} component={Colaboradores} />
+        <Route path={"/clientes"} component={Clientes} />
         <Route path={"/obras"} component={Obras} />
         <Route path={"/obras/efetivo"} component={ObraEfetivo} />
         <Route path={"/setores"} component={Setores} />

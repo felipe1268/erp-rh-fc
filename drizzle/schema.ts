@@ -4494,6 +4494,33 @@ export const fornecedores = pgTable("fornecedores", {
   atualizadoEm:     timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const clientes = pgTable("clientes", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  tipo:             varchar({ length: 10 }).default("PJ").notNull(),
+  cnpj:             varchar({ length: 18 }),
+  cpf:              varchar({ length: 14 }),
+  razaoSocial:      varchar("razao_social", { length: 255 }).notNull(),
+  nomeFantasia:     varchar("nome_fantasia", { length: 255 }),
+  situacaoReceita:  varchar("situacao_receita", { length: 50 }),
+  endereco:         varchar({ length: 255 }),
+  numero:           varchar({ length: 20 }),
+  complemento:      varchar({ length: 100 }),
+  bairro:           varchar({ length: 100 }),
+  cidade:           varchar({ length: 100 }),
+  estado:           varchar({ length: 2 }),
+  cep:              varchar({ length: 10 }),
+  telefone:         varchar({ length: 20 }),
+  email:            varchar({ length: 255 }),
+  contatoNome:      varchar("contato_nome", { length: 255 }),
+  contatoCelular:   varchar("contato_celular", { length: 20 }),
+  contatoEmail:     varchar("contato_email", { length: 255 }),
+  observacoes:      text(),
+  ativo:            boolean().default(true),
+  criadoEm:         timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:     timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
 export const avaliacoesFornecedor = pgTable("avaliacoes_fornecedor", {
   id:           serial().primaryKey(),
   fornecedorId: integer("fornecedor_id").notNull(),

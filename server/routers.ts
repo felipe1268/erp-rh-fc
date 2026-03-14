@@ -92,6 +92,7 @@ import { orcamentoRouter } from "./routers/orcamento";
 import { planejamentoRouter } from "./routers/planejamento";
 import { iaCronogramaRouter } from "./routers/iaCronograma";
 import { comprasRouter } from "./routers/compras";
+import { clientesRouter } from "./routers/clientes";
 import { masControleRouter } from "./routers/masControle";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
@@ -132,6 +133,7 @@ export const appRouter = router({
   planejamento: planejamentoRouter,
   iaCronograma: iaCronogramaRouter,
   compras: comprasRouter,
+  clientes: clientesRouter,
   masControle: masControleRouter,
   portalExterno: portalExternoRouter,
   payrollEngine: payrollEngineRouter,
