@@ -287,8 +287,24 @@ export default function OrcamentoDashTab({
       {/* ── Row 4: Curva ABC (area+bar) ─────────────────────────── */}
       {abcCurva.length > 0 && (
         <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-1">Curva ABC — Top 30 Insumos</p>
-          <p className="text-[10px] text-slate-500 mb-3">Barras = participação individual · Linha = acumulado %</p>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Curva ABC — Top 30 Insumos</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Análise de Pareto: poucos insumos concentram a maior parte do custo</p>
+            </div>
+            {/* Legenda visual */}
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px]">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm bg-blue-500 shrink-0" />
+                <span className="text-slate-600">Barra = participação individual no custo total</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-0.5 bg-red-500 shrink-0" />
+                <span className="text-slate-600">Linha = % acumulado (eixo direito)</span>
+              </div>
+            </div>
+          </div>
+
           <ResponsiveContainer width="100%" height={230}>
             <ComposedChart data={abcCurva} margin={{ top: 0, right: 40, left: 0, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -299,11 +315,26 @@ export default function OrcamentoDashTab({
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0]?.payload;
+                  const classe = d.acc <= 80 ? "A" : d.acc <= 95 ? "B" : "C";
+                  const classeColor = classe === "A" ? "text-red-600" : classe === "B" ? "text-amber-600" : "text-green-600";
                   return (
-                    <div className="bg-white border rounded shadow px-3 py-2 text-xs">
-                      <p className="font-semibold mb-0.5">#{d.idx} {d.label}</p>
-                      <p>Part.: <b>{d.pct}%</b></p>
-                      <p>Acum.: <b>{d.acc}%</b></p>
+                    <div className="bg-white border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[160px]">
+                      <p className="font-semibold mb-1 text-slate-700">#{d.idx} {d.label}</p>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <div className="w-2.5 h-2.5 rounded-sm bg-blue-500" />
+                        <span>Participação: <b>{d.pct}%</b></span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="w-2.5 h-0.5 bg-red-500" />
+                        <span>Acumulado: <b>{d.acc}%</b></span>
+                      </div>
+                      <div className="border-t pt-1 mt-1">
+                        <span>Classe: <b className={classeColor}>{classe}</b>
+                          <span className="text-slate-400 font-normal ml-1">
+                            {classe === "A" ? "(controle rigoroso)" : classe === "B" ? "(controle moderado)" : "(controle simples)"}
+                          </span>
+                        </span>
+                      </div>
                     </div>
                   );
                 }}
@@ -312,6 +343,31 @@ export default function OrcamentoDashTab({
               <Line   yAxisId="acc" dataKey="acc" name="Acum. %" stroke="#ef4444" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
+
+          {/* Legenda ABC */}
+          <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-[11px]">
+            <div className="flex items-start gap-2 bg-red-50 rounded-lg p-2">
+              <div className="w-4 h-4 rounded flex items-center justify-center bg-red-100 text-red-700 font-bold text-[10px] shrink-0 mt-0.5">A</div>
+              <div>
+                <p className="font-semibold text-red-700">Classe A — até 80%</p>
+                <p className="text-slate-500 leading-tight">Poucos insumos, alto valor. Exigem negociação e acompanhamento diário.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 bg-amber-50 rounded-lg p-2">
+              <div className="w-4 h-4 rounded flex items-center justify-center bg-amber-100 text-amber-700 font-bold text-[10px] shrink-0 mt-0.5">B</div>
+              <div>
+                <p className="font-semibold text-amber-700">Classe B — 80–95%</p>
+                <p className="text-slate-500 leading-tight">Insumos intermediários. Controle moderado e revisão periódica.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 bg-green-50 rounded-lg p-2">
+              <div className="w-4 h-4 rounded flex items-center justify-center bg-green-100 text-green-700 font-bold text-[10px] shrink-0 mt-0.5">C</div>
+              <div>
+                <p className="font-semibold text-green-700">Classe C — 95–100%</p>
+                <p className="text-slate-500 leading-tight">Muitos itens, baixo impacto. Gestão simplificada.</p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
