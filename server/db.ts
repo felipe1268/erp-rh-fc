@@ -1,4 +1,4 @@
-import { eq, and, like, or, desc, asc, sql, isNull, isNotNull, inArray } from "drizzle-orm";
+import { eq, and, like, ilike, or, desc, asc, sql, isNull, isNotNull, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -499,14 +499,13 @@ export async function getEmployees(companyId: number, search?: string, status?: 
     else if (['aprendiz', 'jovem aprendiz'].some(t => s.includes(t))) tipoContratoSearch = 'Aprendiz';
 
     const orConditions = [
-      like(employees.nomeCompleto, `%${search}%`),
-      like(employees.cpf, `%${search}%`),
-      like(employees.rg, `%${search}%`),
-      like(employees.cargo, `%${search}%`),
-      like(employees.funcao, `%${search}%`),
-      like(employees.codigoInterno, `%${search}%`),
-      like(employees.setor, `%${search}%`),
-      
+      ilike(employees.nomeCompleto, `%${search}%`),
+      ilike(employees.cpf, `%${search}%`),
+      ilike(employees.rg, `%${search}%`),
+      ilike(employees.cargo, `%${search}%`),
+      ilike(employees.funcao, `%${search}%`),
+      ilike(employees.codigoInterno, `%${search}%`),
+      ilike(employees.setor, `%${search}%`),
     ];
     if (tipoContratoSearch) {
       orConditions.push(eq(employees.tipoContrato, tipoContratoSearch as any));

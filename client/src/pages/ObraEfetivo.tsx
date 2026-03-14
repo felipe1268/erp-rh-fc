@@ -284,6 +284,7 @@ export default function ObraEfetivo() {
     retorno: "Retorno",
     saida: "Saída",
     temporario: "Temporário",
+    gestor_obra: "Responsável / Gestor",
   };
 
   const tipoColor: Record<string, string> = {
@@ -292,6 +293,7 @@ export default function ObraEfetivo() {
     retorno: "bg-purple-100 text-purple-800",
     saida: "bg-red-100 text-red-800",
     temporario: "bg-yellow-100 text-yellow-800",
+    gestor_obra: "bg-emerald-100 text-emerald-800",
   };
 
   return (

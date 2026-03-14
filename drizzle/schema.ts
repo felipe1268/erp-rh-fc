@@ -2001,6 +2001,7 @@ export const obras = pgTable("obras", {
         usarConvencaoMatriz: smallint().default(1).notNull(),
         convencaoId: integer(),
         convencaoDivergencias: text("convencao_divergencias"),
+        responsavelId: integer(),
 },
 (table) => [
         index("idx_obra_company").on(table.companyId),
