@@ -501,4 +501,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 23:45:00",
   },
+  {
+    version: 250,
+    titulo: "Planejamento: todas as abas do projeto acessíveis pela sidebar",
+    descricao: "Ao navegar para um projeto no módulo Planejamento (/planejamento/:id), a sidebar exibe dinamicamente a seção 'Abas do Projeto' com todos os 14 itens de navegação (Visão Geral, Cronograma, Gantt, Linha de Balanços, Crono. Financeiro, Curva S, Avanço Semanal, Caminho Crítico, Compras, Prev. Medição, Prog. Semanal, Revisões, REFIS, IA Gestora). Clique em qualquer item da sidebar troca a aba imediatamente usando o padrão navParamsUpdated/sessionStorage já existente. Item ativo na sidebar é destacado corretamente (mesmo mecanismo sidebarActiveParam dos demais módulos). PlanejamentoDetalhe inicializa a aba a partir dos parâmetros de URL/sessionStorage ao montar.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 00:00:00",
+  },
 ];

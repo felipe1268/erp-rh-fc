@@ -127,10 +127,35 @@ export default function PlanejamentoDetalhe() {
   const [, params]    = useRoute("/planejamento/:id");
   const [, setLoc]    = useLocation();
   const projetoId     = params?.id ? parseInt(params.id) : 0;
-  const [aba, setAba] = useState<Tab>("visao-geral");
+  const [aba, setAba] = useState<Tab>(() => {
+    const stored = sessionStorage.getItem('_navParams');
+    if (stored) {
+      const sp = new URLSearchParams(stored);
+      const t = sp.get('tab') as Tab;
+      if (t && TAB_IDS.includes(t)) return t;
+    }
+    const p = new URLSearchParams(window.location.search);
+    const t = p.get('tab') as Tab;
+    return (t && TAB_IDS.includes(t)) ? t : 'visao-geral';
+  });
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
   const [overIdx, setOverIdx]   = useState<number | null>(null);
+
+  // ── Sidebar tab navigation ─────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = () => {
+      const raw = sessionStorage.getItem('_navParams');
+      if (raw) {
+        const sp = new URLSearchParams(raw);
+        const tab = sp.get('tab') as Tab;
+        if (tab && TAB_IDS.includes(tab)) setAba(tab);
+        sessionStorage.removeItem('_navParams');
+      }
+    };
+    window.addEventListener('navParamsUpdated', handler);
+    return () => window.removeEventListener('navParamsUpdated', handler);
+  }, []);
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const utils = trpc.useUtils();
