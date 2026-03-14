@@ -40,7 +40,7 @@ export default function DashFuncionarios() {
   const companyId = Number(selectedCompanyId) || 0;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
-  const { data, isLoading } = trpc.dashboards.funcionarios.useQuery({ companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
+  const { data, isLoading, isError } = trpc.dashboards.funcionarios.useQuery({ companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
 
   // Drill-down state
   const [drillDown, setDrillDown] = useState<{ open: boolean; title: string; filterType: string; filterValue: string }>({
@@ -54,6 +54,12 @@ export default function DashFuncionarios() {
   if (isLoading) return (
     <DashboardLayout>
       <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+    </DashboardLayout>
+  );
+
+  if (isError) return (
+    <DashboardLayout>
+      <div className="text-center py-16 text-destructive">Erro ao carregar o dashboard. Tente novamente mais tarde.</div>
     </DashboardLayout>
   );
 

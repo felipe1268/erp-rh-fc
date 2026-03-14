@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { fmtNum } from "@/lib/formatters";
 import {
   Clock, Plus, CheckCircle, XCircle, AlertTriangle, Send,
-  Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2,
+  Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2, History, Ban,
 } from "lucide-react";
 
 type TabType = "solicitar" | "aprovacoes" | "historico";
@@ -46,6 +46,8 @@ export default function SolicitacaoHE() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [heHistoryEmployeeId, setHeHistoryEmployeeId] = useState<number | null>(null);
+  const [heHistoryEmployeeName, setHeHistoryEmployeeName] = useState<string>("");
   const [detailSolId, setDetailSolId] = useState<number | null>(null);
   const [adminObs, setAdminObs] = useState("");
   const [rejectReason, setRejectReason] = useState("");
@@ -86,6 +88,14 @@ export default function SolicitacaoHE() {
   const countsQuery = trpc.heSolicitacoes.counts.useQuery(
     { companyId },
     { enabled: companyId > 0 || companyIds.length > 0 }
+  );
+  const avisoPrevioQuery = trpc.heSolicitacoes.empregadosEmAvisoPrevio.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const heHistoryQuery = trpc.heSolicitacoes.historyByEmployee.useQuery(
+    { companyId, employeeId: heHistoryEmployeeId! },
+    { enabled: !!heHistoryEmployeeId && companyId > 0 }
   );
 
   const utils = trpc.useUtils();
@@ -159,6 +169,12 @@ export default function SolicitacaoHE() {
   const activeEmployees = useMemo(() => {
     return (employeesQuery.data || []).filter((e: any) => e.status === "Ativo" && !e.deletedAt);
   }, [employeesQuery.data]);
+
+  const avisoPrevioSet = useMemo(() => {
+    const ids = new Set<number>();
+    (avisoPrevioQuery.data || []).forEach((a: any) => ids.add(a.employeeId));
+    return ids;
+  }, [avisoPrevioQuery.data]);
 
   // Query para buscar funcionários alocados na obra via tabela obraFuncionarios
   const obraFuncsQuery = trpc.obras.funcionarios.useQuery(
@@ -235,8 +251,13 @@ export default function SolicitacaoHE() {
     }));
   }
 
+  function openHEHistory(empId: number, empName: string) {
+    setHeHistoryEmployeeId(empId);
+    setHeHistoryEmployeeName(empName);
+  }
+
   function selectAllEmployees() {
-    const allIds = obraEmployees.map((e: any) => e.id);
+    const allIds = obraEmployees.filter((e: any) => !avisoPrevioSet.has(e.id)).map((e: any) => e.id);
     setFormData(prev => ({ ...prev, funcionarioIds: allIds }));
   }
 
@@ -391,6 +412,22 @@ export default function SolicitacaoHE() {
                 </div>
               </div>
 
+              {/* Aviso Prévio Alert */}
+              {avisoPrevioSet.size > 0 && (
+                <div className="flex items-start gap-3 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm">
+                  <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-orange-800">Atenção — Aviso Prévio</p>
+                    <p className="text-orange-700 text-xs mt-0.5">
+                      {avisoPrevioSet.size === 1
+                        ? "1 funcionário desta lista está em aviso prévio"
+                        : `${avisoPrevioSet.size} funcionários desta lista estão em aviso prévio`} e <strong>não pode(m) realizar horas extras</strong> conforme a CLT. Eles estão marcados com o ícone
+                      {" "}<Ban className="h-3 w-3 inline text-orange-500" /> e não podem ser selecionados.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Seleção de Funcionários */}
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
@@ -400,7 +437,7 @@ export default function SolicitacaoHE() {
                   </Label>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" className="text-xs md:text-sm" onClick={selectAllEmployees}>
-                      Selecionar Todos ({obraEmployees.length})
+                      Selecionar Todos ({obraEmployees.filter((e: any) => !avisoPrevioSet.has(e.id)).length})
                     </Button>
                     <Button variant="outline" size="sm" className="text-xs md:text-sm" onClick={deselectAllEmployees}>
                       Limpar Seleção
@@ -424,25 +461,51 @@ export default function SolicitacaoHE() {
                         </tr>
                       </thead>
                       <tbody>
-                        {obraEmployees.map((emp: any) => (
-                          <tr
-                            key={emp.id}
-                            className={`border-t cursor-pointer hover:bg-blue-50 ${formData.funcionarioIds.includes(emp.id) ? "bg-blue-50" : ""}`}
-                            onClick={() => toggleEmployee(emp.id)}
-                          >
-                            <td className="p-2">
-                              <input
-                                type="checkbox"
-                                checked={formData.funcionarioIds.includes(emp.id)}
-                                onChange={() => toggleEmployee(emp.id)}
-                                className="rounded"
-                              />
-                            </td>
-                            <td className="p-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
-                            <td className="p-2 text-muted-foreground">{emp.funcao || "-"}</td>
-                            <td className="p-2 text-muted-foreground">{emp.cpf || "-"}</td>
-                          </tr>
-                        ))}
+                        {obraEmployees.map((emp: any) => {
+                          const isAviso = avisoPrevioSet.has(emp.id);
+                          const isSelected = formData.funcionarioIds.includes(emp.id);
+                          return (
+                            <tr
+                              key={emp.id}
+                              className={`border-t transition-colors ${
+                                isAviso
+                                  ? "bg-orange-50 cursor-not-allowed"
+                                  : isSelected
+                                    ? "bg-blue-50 cursor-pointer hover:bg-blue-100"
+                                    : "cursor-pointer hover:bg-blue-50"
+                              }`}
+                              onClick={() => { if (!isAviso) toggleEmployee(emp.id); }}
+                            >
+                              <td className="p-2" onClick={e => e.stopPropagation()}>
+                                {isAviso ? (
+                                  <Ban className="h-4 w-4 text-orange-400 mx-auto" title="Em aviso prévio — HE não permitida" />
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleEmployee(emp.id)}
+                                    className="rounded"
+                                  />
+                                )}
+                              </td>
+                              <td
+                                className={`p-2 font-medium cursor-pointer hover:underline flex items-center gap-1.5 ${isAviso ? "text-orange-600" : "text-blue-700"}`}
+                                onClick={e => { e.stopPropagation(); openHEHistory(emp.id, emp.nomeCompleto); }}
+                                title="Ver histórico de horas extras"
+                              >
+                                <History className="h-3.5 w-3.5 opacity-60 shrink-0" />
+                                {emp.nomeCompleto}
+                                {isAviso && (
+                                  <span className="ml-1 text-[10px] font-semibold bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                    AVISO PRÉVIO
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2 text-muted-foreground">{emp.funcao || "-"}</td>
+                              <td className="p-2 text-muted-foreground">{emp.cpf || "-"}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table></div>
                   )}
@@ -1020,6 +1083,92 @@ export default function SolicitacaoHE() {
       </FullScreenDialog>
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {/* ========== MODAL: HISTÓRICO DE HE DO FUNCIONÁRIO ========== */}
+      <FullScreenDialog
+        open={!!heHistoryEmployeeId}
+        onClose={() => { setHeHistoryEmployeeId(null); setHeHistoryEmployeeName(""); }}
+        title={`Histórico de HE — ${heHistoryEmployeeName}`}
+      >
+        <div className="max-w-3xl mx-auto space-y-4 p-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground pb-2 border-b">
+            <History className="h-4 w-4 text-blue-600" />
+            <span>Todas as solicitações de horas extras deste funcionário</span>
+          </div>
+
+          {heHistoryQuery.isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+          ) : !heHistoryQuery.data || heHistoryQuery.data.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <History className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">Nenhuma HE registrada</p>
+              <p className="text-sm">Este funcionário ainda não tem solicitações de horas extras.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">{heHistoryQuery.data.length} solicitação(ões) encontrada(s)</p>
+              {heHistoryQuery.data.map((row: any) => (
+                <Card key={`${row.id}-${row.heStatus}`} className={`border-l-4 ${
+                  row.status === "aprovada" ? "border-l-green-400" :
+                  row.status === "rejeitada" ? "border-l-red-400" :
+                  row.status === "cancelada" ? "border-l-gray-400" :
+                  "border-l-yellow-400"
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge className={`text-xs ${STATUS_COLORS[row.status] || STATUS_COLORS.pendente}`}>
+                            {STATUS_LABELS[row.status] || row.status}
+                          </Badge>
+                          <span className="text-sm font-semibold">
+                            #{row.id} — {new Date(row.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+                          </span>
+                        </div>
+                        {row.obraNome && (
+                          <p className="text-xs flex items-center gap-1 text-muted-foreground">
+                            <Building2 className="h-3 w-3" /> {row.obraNome}
+                          </p>
+                        )}
+                        <p className="text-sm"><strong>Motivo:</strong> {row.motivo}</p>
+                        {row.horaInicio && row.horaFim && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" /> {row.horaInicio} — {row.horaFim}
+                          </p>
+                        )}
+                        {row.horasRealizadas && (
+                          <p className="text-xs text-green-700 font-medium">
+                            ✓ Horas realizadas: {row.horasRealizadas}h
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Solicitado por: {row.solicitadoPor}
+                          {row.createdAt && ` em ${new Date(row.createdAt).toLocaleString("pt-BR")}`}
+                        </p>
+                        {row.aprovadoPor && (
+                          <p className="text-xs text-muted-foreground">
+                            {row.status === "aprovada" ? "✓ Aprovado" : "✗ Rejeitado"} por: {row.aprovadoPor}
+                            {row.aprovadoEm && ` em ${new Date(row.aprovadoEm).toLocaleString("pt-BR")}`}
+                          </p>
+                        )}
+                        {row.motivoRejeicao && (
+                          <p className="text-xs text-red-600">Motivo rejeição: {row.motivoRejeicao}</p>
+                        )}
+                        {row.observacaoAdmin && (
+                          <p className="text-xs text-blue-700">Obs: {row.observacaoAdmin}</p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </FullScreenDialog>
+
     <PrintFooterLGPD />
     </DashboardLayout>
   );
