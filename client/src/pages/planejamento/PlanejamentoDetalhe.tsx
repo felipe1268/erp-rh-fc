@@ -785,7 +785,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
   const kpis = [
     { label: "Atividades",         value: `${concluidas}/${totalAtiv}`,    color: "text-blue-600",   bg: "bg-blue-50",   icon: <ClipboardList className="h-4 w-4" /> },
     { label: "Avanço Físico",      value: fPct(avancoAtual),               color: "text-emerald-600",bg: "bg-emerald-50",icon: <TrendingUp className="h-4 w-4" /> },
-    { label: "SPI (prazo)",        value: spi.toFixed(2),                  color: spi >= 1 ? "text-emerald-600" : "text-red-600", bg: spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" /> },
+    { label: "SPI (prazo)",        value: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "—" : spi.toFixed(2), color: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" /> },
     { label: "CPI (custo)",        value: cpi.toFixed(2),                  color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" /> },
     { label: "REFIs emitidos",     value: String(refisLista.length),       color: "text-purple-600", bg: "bg-purple-50", icon: <FileText className="h-4 w-4" /> },
     { label: "Valor do Contrato",  value: fmt(n(proj.valorContrato)),      color: "text-slate-700",  bg: "bg-slate-100", icon: <DollarSign className="h-4 w-4" /> },
@@ -898,8 +898,8 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
                   <td className="py-1.5 px-3 text-slate-700">{r.semana}</td>
                   <td className="py-1.5 px-3 text-right text-slate-600">{fPct(n(r.avancoPrevisto))}</td>
                   <td className="py-1.5 px-3 text-right font-semibold text-emerald-700">{fPct(n(r.avancoRealizado))}</td>
-                  <td className={`py-1.5 px-3 text-right font-bold ${n(r.spi) >= 1 ? "text-emerald-700" : "text-red-600"}`}>
-                    {n(r.spi).toFixed(2)}
+                  <td className={`py-1.5 px-3 text-right font-bold ${n(r.avancoPrevisto) === 0 ? "text-slate-400" : n(r.spi) >= 1 ? "text-emerald-700" : "text-red-600"}`}>
+                    {n(r.avancoPrevisto) === 0 ? "—" : n(r.spi).toFixed(2)}
                   </td>
                   <td className="py-1.5 px-3">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${r.status === "emitido" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
@@ -5315,7 +5315,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   }, [atividades, avancos, semAntes]);
 
   const avancoRealSemanal = Math.max(0, avancoRealAtual - avancoRealAntes);
-  const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 1;
+  const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
 
   // ── Mapa realizado por atividade (último avanço até a semana selecionada) ──
   const realMap = useMemo(() => {
@@ -5904,10 +5904,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#1A3461" }}>Avanço Semanal Real</p>
               <p className="text-2xl font-bold mt-0.5" style={{ color: "#1A3461" }}>{fPct_(avancoRealSemanal)}</p>
             </div>
-            <div className={`rounded-lg px-3 py-2 text-center ${spi >= 1 ? "bg-emerald-600" : "bg-red-500"}`}>
+            <div className={`rounded-lg px-3 py-2 text-center ${avancoPrevisto === 0 ? "bg-slate-400" : spi >= 1 ? "bg-emerald-600" : "bg-red-500"}`}>
               <p className="text-[10px] font-semibold text-white/70 uppercase tracking-wider">SPI</p>
-              <p className="text-xl font-bold text-white mt-0.5">{spi.toFixed(2)}</p>
-              <p className="text-[10px] text-white/80">{spi >= 1 ? "Dentro do prazo" : "Abaixo do previsto"}</p>
+              <p className="text-xl font-bold text-white mt-0.5">{avancoPrevisto === 0 ? "—" : spi.toFixed(2)}</p>
+              <p className="text-[10px] text-white/80">{avancoPrevisto === 0 ? "Sem prev." : spi >= 1 ? "Dentro do prazo" : "Abaixo do previsto"}</p>
             </div>
             <div className={`rounded-lg px-3 py-2.5 text-center border ${desvioFisico >= 0 ? "bg-emerald-50 border-emerald-300" : "bg-red-50 border-red-300"}`}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Desvio Físico</p>
@@ -6418,8 +6418,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                         <td className={`px-4 py-2.5 text-right font-bold ${desvR >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                           {desvR >= 0 ? "+" : ""}{fPct_(desvR)}
                         </td>
-                        <td className={`px-4 py-2.5 text-right font-semibold ${n(r.spi) >= 1 ? "text-emerald-600" : "text-red-600"}`}>
-                          {n(r.spi).toFixed(2)}
+                        <td className={`px-4 py-2.5 text-right font-semibold ${n(r.avancoPrevisto) === 0 ? "text-slate-400" : n(r.spi) >= 1 ? "text-emerald-600" : "text-red-600"}`}>
+                          {n(r.avancoPrevisto) === 0 ? "—" : n(r.spi).toFixed(2)}
                         </td>
                         {!modoMascara && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoPrevisto > 0 ? fmt(n(r.custoPrevisto)) : "—"}</td>}
                         {!modoMascara && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoRealizado > 0 ? fmt(n(r.custoRealizado)) : "—"}</td>}
@@ -6665,7 +6665,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
     prevAcum  = Math.min(100, prevAcum);
     realAcum  = Math.min(100, realAcum);
     const desvio = realAcum - prevAcum;
-    const spi    = prevAcum > 0 ? realAcum / prevAcum : 1;
+    const spi    = prevAcum > 0 ? realAcum / prevAcum : 0;
     // Calcular dias restantes para término
     const termino = proj?.dataTerminoContratual;
     const diasRestantes = termino
