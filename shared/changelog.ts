@@ -319,6 +319,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 14:33:00",
   },
   {
+    version: 235,
+    titulo: "Compras — Modal Novo Fornecedor sem scroll",
+    descricao: "Reorganização do formulário 'Novo Fornecedor' em layout compacto de grade (12 colunas). Todos os campos cabem na tela sem barra de rolagem: CNPJ + Razão Social + Nome Fantasia em uma linha; Endereço completo em uma linha com subcampos distribuídos; Contato em uma linha; Dados Bancários em uma linha; Categorias e Observações lado a lado. Inputs com height h-8 e texto xs para ocupar menos espaço vertical.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 21:30:00",
+  },
+  {
     version: 234,
     titulo: "Planejamento — Barra dupla Previsto vs Realizado com Desvio",
     descricao: "O cabeçalho da tela de detalhe do projeto agora exibe duas barras de avanço físico em vez de uma: Previsto (âmbar) calculado com base no último ponto da curva planejada até hoje, e Realizado (azul/verde). Badge de desvio no canto direito: '+X.X% adiantado' (verde) ou '-X.X% atrasado' (vermelho). Se o desvio for < 0,1 pp exibe 'No prazo'. A barra previsto só aparece quando há dados de curva S disponíveis.",
