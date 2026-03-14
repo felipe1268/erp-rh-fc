@@ -72,6 +72,7 @@ const menuSectionsRHDP: MenuSection[] = [
     title: "Principal",
     items: [
       { icon: LayoutDashboard, label: "Painel RH", path: "/painel/rh" },
+      { icon: Users, label: "Colaboradores", path: "/colaboradores" },
     ],
   },
   {

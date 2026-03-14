@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 290,
+    titulo: "Menu RH & DP — link Colaboradores adicionado à seção Principal",
+    descricao: "Adicionado atalho direto para a página de Colaboradores no menu lateral do módulo RH & DP, na seção Principal, ao lado do Painel RH. Facilita acesso imediato à lista de funcionários sem precisar ir ao módulo Cadastro.",
+    tipo: "feature",
+    modulos: "RH & DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:30:00",
+  },
+  {
     version: 289,
     titulo: "Obras — busca de colaboradores corrigida + responsavelId + timeline",
     descricao: "1) Corrigido bug de busca case-sensitive em Colaboradores (LIKE → ILIKE no PostgreSQL). 2) listLiderancas corrigido para usar status='Ativo' em vez de isActive=1 (campo inexistente). 3) Adicionada coluna responsavelId na tabela obras, armazenando o ID do colaborador selecionado. 4) Ao vincular responsável em uma obra, entra entrada 'gestor_obra' na timeline do colaborador (Efetivo nas Obras → histórico). 5) ObraEfetivo.tsx exibe tipo 'Responsável / Gestor' em verde.",
