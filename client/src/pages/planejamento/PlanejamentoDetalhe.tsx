@@ -3908,8 +3908,8 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const valorContrato = n(proj.valorContrato);
   const [cenario, setCenario] = useState<Cenario>("venda");
 
-  const { data: cruzamento, isLoading: loadCruz } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
-    { projetoId }, { enabled: !!projetoId });
+  const { data: cruzamento, isLoading: loadCruz, isError: cruzError } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
+    { projetoId }, { enabled: !!projetoId, retry: 1 });
 
   const { data: medicoes = [], refetch } = trpc.planejamento.listarMedicoes.useQuery(
     { projetoId }, { enabled: !!projetoId });
@@ -4057,6 +4057,13 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
     </div>
   );
 
+  if (cruzError) return (
+    <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-xs text-red-700">
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      Erro ao carregar cruzamento orçamento × cronograma. Tente recarregar a página.
+    </div>
+  );
+
   return (
     <div className="space-y-5">
 
@@ -4130,33 +4137,35 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               <p className="text-[10px] text-slate-400">Barras = valores mensais (eixo esq.) · Linhas = acumulado % (eixo dir.)</p>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={chartData} margin={{ top: 4, right: 52, bottom: 0, left: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} />
-              <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} width={64} />
-              <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 100]} width={36} />
-              <Tooltip formatter={(v: any, name: string) => {
-                const pcts = ["Prev.Acum%","Real.Acum%","Venda Acum.%"];
-                return pcts.includes(name) ? `${Number(v).toFixed(1)}%` : fmt(Number(v));
-              }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {cenario === "lucro" ? (<>
-                <Bar yAxisId="val" dataKey="Custo"     name="Custo"             fill="#ef4444" fillOpacity={0.5} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="LucroPrev" name="Lucro Prev. (V−C)" fill="#10b981" fillOpacity={0.7} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="LucroDes"  name="Lucro Des. (V−M)"  fill="#8b5cf6" fillOpacity={0.6} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="Medido"    name="Medido"            fill="#3b82f6" fillOpacity={0.7} radius={[3,3,0,0]} />
-                <Line yAxisId="pct" type="monotone" dataKey="VendaAcum" name="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-              </>) : (<>
-                <Bar yAxisId="val" dataKey="Previsto" name="Previsto" fill="#FFB800" fillOpacity={0.85} radius={[3,3,0,0]} />
-                <Bar yAxisId="val" dataKey="Material" name="Material" fill="#a855f7" fillOpacity={0.65} radius={[0,0,0,0]} />
-                <Bar yAxisId="val" dataKey="MO"       name="M.O."    fill="#3b82f6" fillOpacity={0.65} radius={[0,0,0,0]} />
-                <Bar yAxisId="val" dataKey="Medido"   name="Medido"  fill="#1A3461" fillOpacity={0.85}  radius={[3,3,0,0]} />
-                <Line yAxisId="pct" type="monotone" dataKey="PrevAcum" name="Prev.Acum%" stroke="#FFB800" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                <Line yAxisId="pct" type="monotone" dataKey="RealAcum" name="Real.Acum%" stroke="#1A3461" strokeWidth={2} dot={false} />
-              </>)}
-            </ComposedChart>
-          </ResponsiveContainer>
+          <div style={{ width: "100%", height: 320 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart key={`${projetoId}-${cenario}`} data={chartData} margin={{ top: 8, right: 56, bottom: 24, left: 12 }} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} />
+                <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} width={68} />
+                <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 100]} width={40} />
+                <Tooltip formatter={(v: any, name: string) => {
+                  const pcts = ["Prev.Acum%","Real.Acum%","Venda Acum.%"];
+                  return pcts.includes(name) ? `${Number(v).toFixed(1)}%` : fmt(Number(v));
+                }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {cenario === "lucro" ? (<>
+                  <Bar yAxisId="val" dataKey="Custo"     name="Custo"             fill="#ef4444" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
+                  <Bar yAxisId="val" dataKey="LucroPrev" name="Lucro Prev. (V−C)" fill="#10b981" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
+                  <Bar yAxisId="val" dataKey="LucroDes"  name="Lucro Des. (V−M)"  fill="#8b5cf6" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
+                  <Bar yAxisId="val" dataKey="Medido"    name="Medido"            fill="#3b82f6" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
+                  <Line yAxisId="pct" type="monotone" dataKey="VendaAcum" name="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive={false} />
+                </>) : (<>
+                  <Bar yAxisId="val" dataKey="Previsto" name="Previsto" fill="#FFB800" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
+                  <Bar yAxisId="val" dataKey="Material" name="Material" fill="#a855f7" isAnimationActive={false} minPointSize={2} radius={[0,0,0,0]} />
+                  <Bar yAxisId="val" dataKey="MO"       name="M.O."    fill="#3b82f6" isAnimationActive={false} minPointSize={2} radius={[0,0,0,0]} />
+                  <Bar yAxisId="val" dataKey="Medido"   name="Medido"  fill="#1A3461" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />
+                  <Line yAxisId="pct" type="monotone" dataKey="PrevAcum" name="Prev.Acum%" stroke="#FFB800" strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive={false} />
+                  <Line yAxisId="pct" type="monotone" dataKey="RealAcum" name="Real.Acum%" stroke="#1A3461" strokeWidth={2} dot={false} isAnimationActive={false} />
+                </>)}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 
