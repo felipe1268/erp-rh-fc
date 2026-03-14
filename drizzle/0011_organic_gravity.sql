@@ -1,1 +1,0 @@
-ALTER TABLE `payroll_periods` MODIFY COLUMN `status` enum('aberta','ponto_importado','aferida','vale_gerado','pagamento_simulado','consolidada','travada') NOT NULL DEFAULT 'aberta';
