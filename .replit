@@ -17,7 +17,7 @@ NODE_ENV = "development"
 OAUTH_SERVER_URL = "https://forge.manus.ai"
 VITE_OAUTH_PORTAL_URL = "https://manus.im"
 VITE_APP_ID = "W4MM458SKqYRWRGGQrfw8A"
-NEON_DATABASE_URL = "postgresql://neondb_owner:npg_WH4YF3IjTAXh@ep-young-water-ac67nuby-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require"
+NEON_DATABASE_URL = "postgresql://neondb_owner:npg_z04uOWlTndZF@ep-young-water-ac67nuby-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 [workflows]
 runButton = "Project"
