@@ -2,8 +2,13 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { eq, and, desc, asc, ilike, or, sql } from "drizzle-orm";
-import { fornecedores, almoxarifadoItens, almoxarifadoMovimentacoes } from "../../drizzle/schema";
+import { eq, and, desc, asc, ilike, or, sql, gte, lte } from "drizzle-orm";
+import {
+  fornecedores, almoxarifadoItens, almoxarifadoMovimentacoes,
+  comprasSolicitacoes, comprasSolicitacoesItens,
+  comprasCotacoes, comprasCotacoesItens,
+  comprasOrdens, comprasOrdensItens,
+} from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -396,5 +401,373 @@ export const comprasRouter = router({
         if (Array.isArray(r.categorias)) (r.categorias as string[]).forEach(c => set.add(c));
       });
       return Array.from(set).sort();
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // SOLICITAÇÕES DE COMPRA (SC)
+  // ══════════════════════════════════════════════════════════════
+
+  listarSolicitacoes: protectedProcedure
+    .input(z.object({ companyId: z.number(), status: z.string().optional(), busca: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.select().from(comprasSolicitacoes)
+        .where(and(
+          eq(comprasSolicitacoes.companyId, input.companyId),
+          input.status ? eq(comprasSolicitacoes.status, input.status) : undefined,
+        ))
+        .orderBy(desc(comprasSolicitacoes.criadoEm));
+      if (input.busca) {
+        const b = input.busca.toLowerCase();
+        return rows.filter(r =>
+          r.numeroSc?.toLowerCase().includes(b) ||
+          r.departamento?.toLowerCase().includes(b) ||
+          r.observacoes?.toLowerCase().includes(b)
+        );
+      }
+      return rows;
+    }),
+
+  getSolicitacao: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [sc] = await db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
+      if (!sc) throw new TRPCError({ code: "NOT_FOUND" });
+      const itens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+      return { ...sc, itens };
+    }),
+
+  criarSolicitacao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().nullable().optional(),
+      solicitanteId: z.number().nullable().optional(),
+      departamento: z.string().optional(),
+      dataNecessidade: z.string().optional(),
+      observacoes: z.string().optional(),
+      itens: z.array(z.object({
+        descricao: z.string(),
+        unidade: z.string().optional(),
+        quantidade: z.number(),
+        observacoes: z.string().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
+      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+      const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
+      const [sc] = await db.insert(comprasSolicitacoes).values({
+        companyId: input.companyId,
+        numeroSc,
+        obraId: input.obraId ?? null,
+        solicitanteId: input.solicitanteId ?? null,
+        departamento: input.departamento,
+        dataNecessidade: input.dataNecessidade,
+        observacoes: input.observacoes,
+        status: "pendente",
+      }).returning();
+      if (input.itens.length > 0) {
+        await db.insert(comprasSolicitacoesItens).values(
+          input.itens.map(it => ({
+            solicitacaoId: sc.id,
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: String(it.quantidade),
+            observacoes: it.observacoes,
+          }))
+        );
+      }
+      return sc;
+    }),
+
+  atualizarStatusSolicitacao: protectedProcedure
+    .input(z.object({ id: z.number(), status: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(comprasSolicitacoes).set({ status: input.status, atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.id));
+      return { ok: true };
+    }),
+
+  excluirSolicitacao: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+      await db.delete(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
+      return { ok: true };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // COTAÇÕES
+  // ══════════════════════════════════════════════════════════════
+
+  listarCotacoes: protectedProcedure
+    .input(z.object({ companyId: z.number(), status: z.string().optional(), solicitacaoId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select().from(comprasCotacoes)
+        .where(and(
+          eq(comprasCotacoes.companyId, input.companyId),
+          input.status ? eq(comprasCotacoes.status, input.status) : undefined,
+          input.solicitacaoId ? eq(comprasCotacoes.solicitacaoId, input.solicitacaoId) : undefined,
+        ))
+        .orderBy(desc(comprasCotacoes.criadoEm));
+    }),
+
+  getCotacao: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
+      return { ...cot, itens };
+    }),
+
+  criarCotacao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      solicitacaoId: z.number().nullable().optional(),
+      fornecedorId: z.number().nullable().optional(),
+      dataValidade: z.string().optional(),
+      condicaoPagamento: z.string().optional(),
+      prazoEntregaDias: z.number().nullable().optional(),
+      observacoes: z.string().optional(),
+      itens: z.array(z.object({
+        solicitacaoItemId: z.number().nullable().optional(),
+        descricao: z.string(),
+        unidade: z.string().optional(),
+        quantidade: z.number(),
+        precoUnitario: z.number(),
+        descontoPct: z.number().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId));
+      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+      const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
+      const itensMapped = input.itens.map(it => {
+        const desc = it.descontoPct ?? 0;
+        const total = n(it.quantidade) * n(it.precoUnitario) * (1 - desc / 100);
+        return { ...it, total: total.toFixed(2) };
+      });
+      const totalGeral = itensMapped.reduce((s, it) => s + n(it.total), 0);
+      const [cot] = await db.insert(comprasCotacoes).values({
+        companyId: input.companyId,
+        numeroCotacao,
+        solicitacaoId: input.solicitacaoId ?? null,
+        fornecedorId: input.fornecedorId ?? null,
+        dataValidade: input.dataValidade,
+        condicaoPagamento: input.condicaoPagamento,
+        prazoEntregaDias: input.prazoEntregaDias ?? null,
+        observacoes: input.observacoes,
+        total: String(totalGeral.toFixed(2)),
+        status: "pendente",
+      }).returning();
+      if (itensMapped.length > 0) {
+        await db.insert(comprasCotacoesItens).values(
+          itensMapped.map(it => ({
+            cotacaoId: cot.id,
+            solicitacaoItemId: it.solicitacaoItemId ?? null,
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: String(it.quantidade),
+            precoUnitario: String(it.precoUnitario),
+            descontoPct: String(it.descontoPct ?? 0),
+            total: it.total,
+          }))
+        );
+      }
+      if (input.solicitacaoId) {
+        await db.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+      }
+      return cot;
+    }),
+
+  aprovarCotacao: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(comprasCotacoes).set({ status: "aprovada" }).where(eq(comprasCotacoes.id, input.id));
+      return { ok: true };
+    }),
+
+  atualizarStatusCotacao: protectedProcedure
+    .input(z.object({ id: z.number(), status: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(comprasCotacoes).set({ status: input.status }).where(eq(comprasCotacoes.id, input.id));
+      return { ok: true };
+    }),
+
+  excluirCotacao: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
+      await db.delete(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
+      return { ok: true };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // ORDENS DE COMPRA (OC)
+  // ══════════════════════════════════════════════════════════════
+
+  listarOrdens: protectedProcedure
+    .input(z.object({ companyId: z.number(), status: z.string().optional(), busca: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.select().from(comprasOrdens)
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          input.status ? eq(comprasOrdens.status, input.status) : undefined,
+        ))
+        .orderBy(desc(comprasOrdens.criadoEm));
+      if (input.busca) {
+        const b = input.busca.toLowerCase();
+        return rows.filter(r => r.numeroOc?.toLowerCase().includes(b) || r.observacoes?.toLowerCase().includes(b));
+      }
+      return rows;
+    }),
+
+  getOrdem: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND" });
+      const itens = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+      let fornecedor = null;
+      if (oc.fornecedorId) {
+        const [f] = await db.select({ razaoSocial: fornecedores.razaoSocial, cnpj: fornecedores.cnpj, telefone: fornecedores.telefone, email: fornecedores.email }).from(fornecedores).where(eq(fornecedores.id, oc.fornecedorId));
+        fornecedor = f ?? null;
+      }
+      return { ...oc, itens, fornecedor };
+    }),
+
+  criarOrdemDeCotacao: protectedProcedure
+    .input(z.object({ companyId: z.number(), cotacaoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
+      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+      const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+      const [oc] = await db.insert(comprasOrdens).values({
+        companyId: input.companyId,
+        numeroOc,
+        cotacaoId: input.cotacaoId,
+        fornecedorId: cot.fornecedorId ?? null,
+        status: "pendente",
+        total: cot.total ?? "0",
+      }).returning();
+      if (itens.length > 0) {
+        await db.insert(comprasOrdensItens).values(
+          itens.map(it => ({
+            ordemId: oc.id,
+            solicitacaoItemId: it.solicitacaoItemId ?? null,
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: String(it.quantidade),
+            precoUnitario: String(it.precoUnitario),
+            total: String(it.total),
+          }))
+        );
+      }
+      await db.update(comprasCotacoes).set({ status: "aprovada" }).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (cot.solicitacaoId) {
+        await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+      }
+      return oc;
+    }),
+
+  criarOrdemManual: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fornecedorId: z.number().nullable().optional(),
+      dataEntregaPrevista: z.string().optional(),
+      observacoes: z.string().optional(),
+      itens: z.array(z.object({
+        descricao: z.string(),
+        unidade: z.string().optional(),
+        quantidade: z.number(),
+        precoUnitario: z.number(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
+      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+      const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+      const total = input.itens.reduce((s, it) => s + n(it.quantidade) * n(it.precoUnitario), 0);
+      const [oc] = await db.insert(comprasOrdens).values({
+        companyId: input.companyId,
+        numeroOc,
+        fornecedorId: input.fornecedorId ?? null,
+        dataEntregaPrevista: input.dataEntregaPrevista,
+        observacoes: input.observacoes,
+        status: "pendente",
+        total: String(total.toFixed(2)),
+      }).returning();
+      if (input.itens.length > 0) {
+        await db.insert(comprasOrdensItens).values(
+          input.itens.map(it => ({
+            ordemId: oc.id,
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: String(it.quantidade),
+            precoUnitario: String(it.precoUnitario),
+            total: String((n(it.quantidade) * n(it.precoUnitario)).toFixed(2)),
+          }))
+        );
+      }
+      return oc;
+    }),
+
+  atualizarStatusOrdem: protectedProcedure
+    .input(z.object({ id: z.number(), status: z.string(), dataEntregaReal: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(comprasOrdens).set({
+        status: input.status,
+        dataEntregaReal: input.dataEntregaReal,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(comprasOrdens.id, input.id));
+      return { ok: true };
+    }),
+
+  excluirOrdem: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+      await db.delete(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      return { ok: true };
+    }),
+
+  // Resumo/contadores para dashboard
+  resumoCompras: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [scs, cots, ocs] = await Promise.all([
+        db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId)),
+        db.select().from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId)),
+        db.select().from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId)),
+      ]);
+      return {
+        scPendentes: scs.filter(r => r.status === "pendente").length,
+        scTotal: scs.length,
+        cotPendentes: cots.filter(r => r.status === "pendente").length,
+        cotTotal: cots.length,
+        ocPendentes: ocs.filter(r => r.status === "pendente").length,
+        ocTotal: ocs.length,
+        totalOCsValor: ocs.reduce((s, r) => s + n(r.total), 0),
+      };
     }),
 });

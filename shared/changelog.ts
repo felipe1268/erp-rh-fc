@@ -319,6 +319,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 14:33:00",
   },
   {
+    version: 233,
+    titulo: "Módulo Compras — Fase 2: SC, Cotações e Ordens de Compra",
+    descricao: "Implementação do fluxo completo de compras. Solicitações de Compra (SC): criação com itens (descrição/unidade/qtd), filtro por status, detalhamento e cancelamento; numeração automática SC-AAAA-NNNN. Cotações: vinculação opcional a uma SC, seleção de fornecedor, validade, condição de pagamento, prazo de entrega, itens com preço unitário e desconto percentual, cálculo automático do total; botão 'Aprovar e Gerar OC' que cria automaticamente a OC e atualiza status da SC/cotação. Ordens de Compra: criação automática via cotação aprovada ou manual, KPIs no topo (pendentes/aprovadas/entregues/total em R$), fluxo de status (pendente → aprovada → entrega parcial → entregue), detalhamento com itens e quantidade entregue. Tabelas novas: compras_solicitacoes, compras_solicitacoes_itens, compras_cotacoes, compras_cotacoes_itens, compras_ordens, compras_ordens_itens. Menu lateral reorganizado com 3 seções: Fluxo de Compras / Cadastros / Integrações.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 20:00:00",
+  },
+  {
     version: 232,
     titulo: "Módulo Compras — Ativação no Hub e Menu Lateral",
     descricao: "Módulo Compras agora aparece no ModuleHub como ativo (card clicável com link para /compras/fornecedores). Menu lateral criado com seções: Compras (Fornecedores, Almoxarifado) e Integrações (Mas Controle ERP). Módulo registrado no seletor de módulos, contexto de rotas e temas do sistema (ícone ShoppingCart rosa). Ao clicar nas páginas de compras/integracoes, o sidebar muda automaticamente para o módulo Compras.",

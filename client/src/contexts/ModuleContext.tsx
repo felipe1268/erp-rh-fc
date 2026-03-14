@@ -70,8 +70,11 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/orcamento/biblioteca":   "orcamento" as ModuleId,
   "/planejamento":           "planejamento" as ModuleId,
   "/comparativo-convencoes": "rh-dp" as ModuleId,
-  "/compras/fornecedores":   "compras" as ModuleId,
-  "/compras/almoxarifado":   "compras" as ModuleId,
+  "/compras/fornecedores":     "compras" as ModuleId,
+  "/compras/almoxarifado":     "compras" as ModuleId,
+  "/compras/solicitacoes":     "compras" as ModuleId,
+  "/compras/cotacoes":         "compras" as ModuleId,
+  "/compras/ordens":           "compras" as ModuleId,
   "/integracoes/mas-controle": "compras" as ModuleId,
   // Cadastro routes
   "/habilidades":            "cadastro" as ModuleId,

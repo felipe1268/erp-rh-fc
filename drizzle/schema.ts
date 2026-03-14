@@ -4519,3 +4519,85 @@ export const almoxarifadoMovimentacoes = pgTable("almoxarifado_movimentacoes", {
   observacoes:  text(),
   criadoEm:     timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MÓDULO DE COMPRAS — FASE 2: SC → COTAÇÃO → OC → FINANCEIRO
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const comprasSolicitacoes = pgTable("compras_solicitacoes", {
+  id:              serial().primaryKey(),
+  companyId:       integer("company_id").notNull(),
+  numeroSc:        varchar("numero_sc", { length: 20 }).notNull(),
+  obraId:          integer("obra_id"),
+  solicitanteId:   integer("solicitante_id"),
+  departamento:    varchar({ length: 100 }),
+  dataNecessidade: varchar("data_necessidade", { length: 10 }),
+  status:          varchar({ length: 30 }).notNull().default("rascunho"),
+  observacoes:     text(),
+  criadoEm:        timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:    timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const comprasSolicitacoesItens = pgTable("compras_solicitacoes_itens", {
+  id:                serial().primaryKey(),
+  solicitacaoId:     integer("solicitacao_id").notNull(),
+  descricao:         varchar({ length: 300 }).notNull(),
+  unidade:           varchar({ length: 30 }),
+  quantidade:        numeric({ precision: 10, scale: 3 }).notNull().default("1"),
+  quantidadeAtendida:numeric("quantidade_atendida", { precision: 10, scale: 3 }).default("0"),
+  observacoes:       text(),
+});
+
+export const comprasCotacoes = pgTable("compras_cotacoes", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  numeroCotacao:    varchar("numero_cotacao", { length: 20 }).notNull(),
+  solicitacaoId:    integer("solicitacao_id"),
+  fornecedorId:     integer("fornecedor_id"),
+  dataValidade:     varchar("data_validade", { length: 10 }),
+  condicaoPagamento:varchar("condicao_pagamento", { length: 100 }),
+  prazoEntregaDias: integer("prazo_entrega_dias"),
+  status:           varchar({ length: 30 }).notNull().default("pendente"),
+  observacoes:      text(),
+  total:            numeric({ precision: 14, scale: 2 }).default("0"),
+  criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const comprasCotacoesItens = pgTable("compras_cotacoes_itens", {
+  id:               serial().primaryKey(),
+  cotacaoId:        integer("cotacao_id").notNull(),
+  solicitacaoItemId:integer("solicitacao_item_id"),
+  descricao:        varchar({ length: 300 }).notNull(),
+  unidade:          varchar({ length: 30 }),
+  quantidade:       numeric({ precision: 10, scale: 3 }).notNull().default("1"),
+  precoUnitario:    numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
+  descontoPct:      numeric("desconto_pct", { precision: 5, scale: 2 }).default("0"),
+  total:            numeric({ precision: 14, scale: 2 }).default("0"),
+});
+
+export const comprasOrdens = pgTable("compras_ordens", {
+  id:                 serial().primaryKey(),
+  companyId:          integer("company_id").notNull(),
+  numeroOc:           varchar("numero_oc", { length: 20 }).notNull(),
+  cotacaoId:          integer("cotacao_id"),
+  fornecedorId:       integer("fornecedor_id"),
+  dataEntregaPrevista:varchar("data_entrega_prevista", { length: 10 }),
+  dataEntregaReal:    varchar("data_entrega_real", { length: 10 }),
+  status:             varchar({ length: 30 }).notNull().default("pendente"),
+  total:              numeric({ precision: 14, scale: 2 }).default("0"),
+  observacoes:        text(),
+  criadoEm:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const comprasOrdensItens = pgTable("compras_ordens_itens", {
+  id:               serial().primaryKey(),
+  ordemId:          integer("ordem_id").notNull(),
+  solicitacaoItemId:integer("solicitacao_item_id"),
+  descricao:        varchar({ length: 300 }).notNull(),
+  unidade:          varchar({ length: 30 }),
+  quantidade:       numeric({ precision: 10, scale: 3 }).notNull().default("1"),
+  quantidadeEntregue:numeric("quantidade_entregue", { precision: 10, scale: 3 }).default("0"),
+  precoUnitario:    numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
+  total:            numeric({ precision: 14, scale: 2 }).default("0"),
+});
