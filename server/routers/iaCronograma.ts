@@ -1066,4 +1066,110 @@ Responda EXATAMENTE neste formato (seja conciso e direto):
 
       return { analise };
     }),
+
+  // ── Programação Semanal — Alertas IA das próximas semanas ────────────────
+  alertasSemana: protectedProcedure
+    .input(z.object({
+      projetoId:    z.number(),
+      nomeProjeto:  z.string(),
+      semanas: z.array(z.object({
+        numero:   z.number(),
+        ini:      z.string(),
+        fim:      z.string(),
+        atividades: z.array(z.object({
+          eapCodigo:         z.string().optional(),
+          nome:              z.string(),
+          dataInicio:        z.string().optional(),
+          dataFim:           z.string().optional(),
+          recursoPrincipal:  z.string().optional(),
+          avancoPrevisto:    z.number().optional(),
+          avancoReal:        z.number().optional(),
+          atrasada:          z.boolean().optional(),
+        })),
+        insumos: z.array(z.object({
+          descricao: z.string(),
+          unidade:   z.string().optional(),
+          quantidade: z.string().optional(),
+          tipo:      z.string().optional(),
+        })).optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const semanasTexto = input.semanas.map(s => {
+        const atv = s.atividades.map(a => {
+          const status = a.atrasada ? " [ATRASADA]" : "";
+          const avs = a.avancoPrevisto !== undefined
+            ? ` | Previsto: ${a.avancoPrevisto.toFixed(1)}% | Real: ${(a.avancoReal ?? 0).toFixed(1)}%`
+            : "";
+          return `  - [${a.eapCodigo ?? "?"}] ${a.nome}${status} (${a.dataInicio ?? "?"} → ${a.dataFim ?? "?"})${avs}${a.recursoPrincipal ? ` | Recurso: ${a.recursoPrincipal}` : ""}`;
+        }).join("\n");
+        const ins = (s.insumos ?? []).slice(0, 20).map(i =>
+          `  • ${i.descricao}${i.quantidade ? ` — ${i.quantidade} ${i.unidade ?? ""}` : ""}${i.tipo ? ` [${i.tipo}]` : ""}`
+        ).join("\n");
+        return `### SEMANA ${s.numero} (${s.ini} a ${s.fim})\nAtividades:\n${atv || "  (nenhuma)"}\n${ins ? `Insumos previstos:\n${ins}` : ""}`;
+      }).join("\n\n");
+
+      const systemPrompt = `Você é o JULINHO, engenheiro sênior de planejamento de obras da FC Engenharia. Analise a programação das próximas semanas e forneça alertas práticos e objetivos sobre: mobilização de recursos, riscos de atraso, sugestões de frentes alternativas e revisão de prazo. Use tom técnico e direto. Responda APENAS com JSON válido no formato especificado.`;
+
+      const userPrompt = `Projeto: ${input.nomeProjeto}
+
+${semanasTexto}
+
+Retorne um JSON com esta estrutura exata:
+{
+  "resumo": "string — síntese executiva do período (2-3 frases)",
+  "alertas": [
+    {
+      "tipo": "recurso" | "atraso" | "alternativa" | "revisao",
+      "severidade": "alta" | "media" | "baixa",
+      "semana": numero_da_semana,
+      "titulo": "string curto",
+      "descricao": "string detalhada com recomendação prática"
+    }
+  ],
+  "mobilizacao": [
+    {
+      "semana": numero,
+      "itens": ["string — recurso ou material a mobilizar"]
+    }
+  ],
+  "frentesAlternativas": [
+    {
+      "semana": numero,
+      "sugestao": "string — frente alternativa com justificativa"
+    }
+  ],
+  "previsaoImpacto": "string — impacto estimado no prazo geral caso os alertas não sejam atendidos"
+}`;
+
+      let resultado: any = null;
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user",   content: userPrompt },
+          ],
+          maxTokens: 2500,
+        });
+        const raw = result.choices?.[0]?.message?.content ?? "";
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (match) resultado = JSON.parse(match[0]);
+      } catch (err: any) {
+        resultado = {
+          resumo: "IA indisponível no momento.",
+          alertas: [],
+          mobilizacao: [],
+          frentesAlternativas: [],
+          previsaoImpacto: "",
+        };
+      }
+
+      return resultado ?? {
+        resumo: "Sem dados suficientes para análise.",
+        alertas: [],
+        mobilizacao: [],
+        frentesAlternativas: [],
+        previsaoImpacto: "",
+      };
+    }),
 });
