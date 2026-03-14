@@ -15,7 +15,7 @@ import { trpc } from "@/lib/trpc";
 import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { EMPLOYEE_STATUS, EMPLOYEE_STATUS_MANUAL } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -127,6 +127,7 @@ export default function Colaboradores() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [blacklistAlert, setBlacklistAlert] = useState<string | null>(null);
   const [cpfDuplicateAlert, setCpfDuplicateAlert] = useState<string | null>(null);
+  const pendingFotoRef = useRef<{ base64: string; mimeType: string; fileName: string } | null>(null);
   const [desligamentoDialogOpen, setDesligamentoDialogOpen] = useState(false);
   const [previousStatus, setPreviousStatus] = useState<string>("");
 
@@ -192,7 +193,18 @@ export default function Colaboradores() {
   }, [employees, skillEmployeeIds]);
 
   const createMut = trpc.employees.create.useMutation({
-    onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); setDialogOpen(false); toast.success("Colaborador cadastrado!"); },
+    onSuccess: (result: any) => {
+      const newId = result?.id;
+      if (newId && pendingFotoRef.current && companyId) {
+        const { base64, mimeType, fileName } = pendingFotoRef.current;
+        pendingFotoRef.current = null;
+        uploadFotoMut.mutate({ employeeId: newId, companyId, base64, mimeType, fileName });
+      }
+      utils.employees.list.invalidate();
+      utils.employees.stats.invalidate();
+      setDialogOpen(false);
+      toast.success("Colaborador cadastrado!");
+    },
     onError: (e) => toast.error("Erro: " + e.message),
   });
   const updateMut = trpc.employees.update.useMutation({
@@ -232,11 +244,10 @@ export default function Colaboradores() {
       if (editingId && companyId) {
         uploadFotoMut.mutate({ employeeId: editingId, companyId, base64, mimeType: file.type, fileName: file.name });
       } else {
-        // Para novo funcionário, salvar base64 temporariamente no form
+        // Para novo funcionário, armazenar no ref (não mandar base64 para o banco)
+        pendingFotoRef.current = { base64, mimeType: file.type, fileName: file.name };
+        // Mostrar preview usando data URL apenas no form visual, mas não será enviada ao servidor
         set("fotoUrl", reader.result as string);
-        set("_fotoBase64", base64);
-        set("_fotoMimeType", file.type);
-        set("_fotoFileName", file.name);
       }
     };
     reader.readAsDataURL(file);
@@ -290,6 +301,7 @@ export default function Colaboradores() {
     setForm({ status: "Ativo", companyId: selectedCompany });
     setBlacklistAlert(null);
     setCpfDuplicateAlert(null);
+    pendingFotoRef.current = null;
     setDialogOpen(true);
   };
 
@@ -379,9 +391,13 @@ export default function Colaboradores() {
       const { companyId: _cid, id: _id, createdAt: _ca, updatedAt: _ua, empresa: _emp, ...rest } = form;
       // Remover campos temporários de jornada dia a dia do form
       const data: Record<string, any> = {};
-      Object.entries(rest).forEach(([k, v]) => { if (!k.startsWith("jornada_")) data[k] = v; });
+      Object.entries(rest).forEach(([k, v]) => {
+        if (!k.startsWith("jornada_") && !k.startsWith("_foto")) data[k] = v;
+      });
       // Limpar valores "none" dos selects
       delete data.obraAtualId; // obraAtualId removido - alocação via obra_funcionarios
+      // Nunca enviar data URL de foto para o servidor
+      if (typeof data.fotoUrl === "string" && data.fotoUrl.startsWith("data:")) delete data.fotoUrl;
       Object.keys(data).forEach(k => { if ((data as any)[k] === "none") (data as any)[k] = ""; });
       (data as any).jornadaTrabalho = jornadaStr;
       updateMut.mutate({ id: editingId, companyId: targetCompanyId, data });
@@ -389,8 +405,12 @@ export default function Colaboradores() {
       const { empresa: _emp, ...restCreate } = form;
       // Remover campos temporários de jornada dia a dia do form
       const createData: Record<string, any> = {};
-      Object.entries(restCreate).forEach(([k, v]) => { if (!k.startsWith("jornada_")) createData[k] = v; });
+      Object.entries(restCreate).forEach(([k, v]) => {
+        if (!k.startsWith("jornada_") && !k.startsWith("_foto")) createData[k] = v;
+      });
       delete (createData as any).obraAtualId; // obraAtualId removido - alocação via obra_funcionarios
+      // Nunca enviar data URL de foto para o servidor — upload é feito após criar (via pendingFotoRef)
+      if (typeof createData.fotoUrl === "string" && createData.fotoUrl.startsWith("data:")) delete createData.fotoUrl;
       Object.keys(createData).forEach(k => { if ((createData as any)[k] === "none") (createData as any)[k] = ""; });
       (createData as any).jornadaTrabalho = jornadaStr;
       createMut.mutate({ ...createData, companyId: targetCompanyId } as any);
@@ -788,7 +808,8 @@ export default function Colaboradores() {
                     if (editingId && companyId) {
                       removeFotoMut.mutate({ employeeId: editingId, companyId });
                     } else {
-                      set("fotoUrl", ""); set("_fotoBase64", ""); set("_fotoMimeType", ""); set("_fotoFileName", "");
+                      set("fotoUrl", "");
+                      pendingFotoRef.current = null;
                     }
                   }}
                 >
