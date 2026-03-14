@@ -550,7 +550,7 @@ export default function ModuleHub() {
         <main className="relative max-w-[1440px] mx-auto px-6 lg:px-10">
 
           {/* ──── HERO ROW: Robot Left | Content Right ──── */}
-          <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-0 pt-6 lg:pt-4">
+          <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-0 pt-3 lg:pt-2">
 
             {/* LEFT: Robot Image - HIDDEN on mobile, visible on lg+ */}
             <div
@@ -564,7 +564,7 @@ export default function ModuleHub() {
                   className="w-full h-auto object-contain drop-shadow-2xl"
                   style={{
                     filter: "drop-shadow(0 20px 40px rgba(27,42,74,0.15))",
-                    maxHeight: "520px",
+                    maxHeight: "420px",
                   }}
                 />
               </div>
@@ -589,12 +589,12 @@ export default function ModuleHub() {
               </div>
 
               {/* Greeting */}
-              <div className={`mb-4 relative z-10 ${mounted ? 'hub-animate-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
-                <div className="flex items-center gap-2 mb-2">
+              <div className={`mb-2 relative z-10 ${mounted ? 'hub-animate-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
+                <div className="flex items-center gap-2 mb-1">
                   <div className="h-1.5 w-1.5 rounded-full bg-[#D4A843] hub-glow-dot" />
                   <span className="text-[10px] font-bold text-[#D4A843] uppercase tracking-[0.25em]">Plataforma Corporativa</span>
                 </div>
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight">
+                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight">
                   <span className="text-[#1B2A4A]">Gestão</span>
                   <br />
                   <span style={{
@@ -603,7 +603,7 @@ export default function ModuleHub() {
                     WebkitTextFillColor: "transparent",
                   }}>Integrada</span>
                 </h2>
-                <div className="flex items-center gap-3 mt-3">
+                <div className="flex items-center gap-3 mt-2">
                   <p className="text-gray-400 text-sm flex items-center gap-1.5 font-medium">
                     <Clock className="h-3.5 w-3.5" />
                     {greeting}, <span className="text-[#1B2A4A] font-semibold">{firstName}</span>
@@ -614,7 +614,7 @@ export default function ModuleHub() {
               </div>
 
               {/* Module Tiles - App grid style */}
-              <div className="grid grid-cols-3 gap-2.5 mt-6 relative z-10">
+              <div className="grid grid-cols-3 gap-2.5 mt-3 relative z-10">
                 {sortedActiveModules.map((mod, idx) => {
                   const isBeingDragged = dragActive === mod.id;
                   const isDropTarget = dragTarget === mod.id && dragActive !== mod.id;
@@ -669,7 +669,7 @@ export default function ModuleHub() {
           </div>
 
           {/* ──── FUTURE MODULES ──── */}
-          <div className={`mt-10 mb-10 ${mounted ? 'hub-animate-up' : 'opacity-0'}`} style={{ animationDelay: '0.7s' }}>
+          <div className={`mt-6 mb-6 ${mounted ? 'hub-animate-up' : 'opacity-0'}`} style={{ animationDelay: '0.7s' }}>
             <div className="flex items-center gap-3 mb-5">
               <div className="h-6 w-1 rounded-full bg-gradient-to-b from-gray-300 to-gray-200" />
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Em Desenvolvimento</h3>
