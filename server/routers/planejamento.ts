@@ -874,8 +874,8 @@ export const planejamentoRouter = router({
             i.unidade                              AS unidade,
             COALESCE(i.quantidade::numeric, 0)     AS quantidade,
             a.id                                   AS ativ_id,
-            a.data_inicio                          AS data_inicio,
-            a.data_fim                             AS data_fim,
+            a.data_inicio::text                    AS data_inicio,
+            a.data_fim::text                       AS data_fim,
             a.ordem                                AS ordem
           FROM orcamento_itens i
           JOIN planejamento_projetos p
