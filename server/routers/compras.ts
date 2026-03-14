@@ -4,7 +4,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte } from "drizzle-orm";
 import {
-  fornecedores, almoxarifadoItens, almoxarifadoMovimentacoes,
+  fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
   almoxarifadoCategorias,
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
@@ -1122,5 +1122,71 @@ export const comprasRouter = router({
       const gastosMensais = Object.entries(seisM).sort(([a], [b]) => a.localeCompare(b)).slice(-6).map(([mes, valor]) => ({ mes, valor }));
 
       return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn, obraMap };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // AVALIAÇÕES DE FORNECEDORES
+  // ══════════════════════════════════════════════════════════════
+
+  avaliarFornecedor: protectedProcedure
+    .input(z.object({
+      fornecedorId: z.number(),
+      companyId:    z.number(),
+      nota:         z.number().min(1).max(5),
+      comentario:   z.string().optional(),
+      criadoPor:    z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.insert(avaliacoesFornecedor).values({
+        fornecedorId: input.fornecedorId,
+        companyId:    input.companyId,
+        nota:         input.nota,
+        comentario:   input.comentario ?? null,
+        criadoPor:    input.criadoPor ?? null,
+      });
+      return { ok: true };
+    }),
+
+  listarAvaliacoesFornecedor: protectedProcedure
+    .input(z.object({ fornecedorId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db
+        .select()
+        .from(avaliacoesFornecedor)
+        .where(and(
+          eq(avaliacoesFornecedor.fornecedorId, input.fornecedorId),
+          eq(avaliacoesFornecedor.companyId, input.companyId),
+        ))
+        .orderBy(desc(avaliacoesFornecedor.criadoEm));
+      return rows;
+    }),
+
+  rankingFornecedores: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.execute(sql`
+        SELECT
+          f.id,
+          f.razao_social   AS "razaoSocial",
+          f.nome_fantasia  AS "nomeFantasia",
+          f.categorias,
+          f.cidade,
+          f.estado,
+          COUNT(a.id)::int                        AS "totalAvaliacoes",
+          ROUND(AVG(a.nota)::numeric, 1)::float   AS "mediaEstrelas"
+        FROM fornecedores f
+        LEFT JOIN avaliacoes_fornecedor a
+          ON a.fornecedor_id = f.id AND a.company_id = ${input.companyId}
+        WHERE f.company_id = ${input.companyId}
+          AND f.ativo = true
+        GROUP BY f.id, f.razao_social, f.nome_fantasia, f.categorias, f.cidade, f.estado
+        HAVING COUNT(a.id) > 0
+        ORDER BY "mediaEstrelas" DESC, "totalAvaliacoes" DESC
+        LIMIT 50
+      `);
+      return rows as any[];
     }),
 });

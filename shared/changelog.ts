@@ -564,4 +564,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 12:00:00",
   },
+  {
+    version: 257,
+    titulo: "Avaliação de Fornecedores com Estrelas e Ranking",
+    descricao: "Módulo Compras > Fornecedores ganhou sistema completo de avaliação: botão 'Avaliar' em cada fornecedor abre modal com seleção de 1 a 5 estrelas + comentário opcional e rótulo descritivo (Ruim/Regular/Bom/Muito Bom/Excelente). Nova aba 'Ranking de Avaliações' exibe os fornecedores ordenados por média de estrelas com medalhas (🥇🥈🥉). Tabela avaliacoes_fornecedor criada no banco para persistir histórico de avaliações.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 13:00:00",
+  },
 ];

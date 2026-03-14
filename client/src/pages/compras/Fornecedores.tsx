@@ -3,6 +3,7 @@ import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,28 @@ import { toast } from "sonner";
 import {
   Search, Plus, Pencil, Building2, Phone, Mail, MapPin,
   CheckCircle2, XCircle, AlertTriangle, Loader2, X, ChevronDown, ChevronUp, Users,
+  Star, Trophy, Medal,
 } from "lucide-react";
+
+function StarRating({ value, onChange, size = 18 }: { value: number; onChange?: (v: number) => void; size?: number }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star
+          key={i}
+          style={{ width: size, height: size }}
+          className={`transition-colors cursor-${onChange ? 'pointer' : 'default'} ${
+            i <= (hover || value) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 fill-slate-200'
+          }`}
+          onMouseEnter={() => onChange && setHover(i)}
+          onMouseLeave={() => onChange && setHover(0)}
+          onClick={() => onChange && onChange(i)}
+        />
+      ))}
+    </div>
+  );
+}
 
 const CATEGORIAS_PADRAO = [
   "Cimento e Argamassa", "Aço e Ferro", "Madeira e Compensado", "Elétrico",
@@ -50,11 +72,20 @@ const EMPTY_FORM = {
 
 export default function Fornecedores() {
   const { selectedCompany } = useCompany();
+  const { user } = useAuth();
   const companyId = selectedCompany?.id ?? 0;
 
+  const [aba, setAba] = useState<"lista" | "ranking">("lista");
   const [busca, setBusca]       = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAtivos, setApenasAtivos] = useState(true);
+
+  // Avaliação
+  const [modalAvalId, setModalAvalId] = useState<number | null>(null);
+  const [modalAvalNome, setModalAvalNome] = useState("");
+  const [notaEstrela, setNotaEstrela] = useState(0);
+  const [comentarioAval, setComentarioAval] = useState("");
+  const [verAvalId, setVerAvalId] = useState<number | null>(null);
 
   const { data: fornecedores = [], refetch, isLoading } = trpc.compras.listarFornecedores.useQuery(
     { companyId, ativo: apenasAtivos || undefined },
@@ -98,6 +129,42 @@ export default function Fornecedores() {
   const criarMut    = trpc.compras.criarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Fornecedor cadastrado!"); } });
   const atualizarMut = trpc.compras.atualizarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Fornecedor atualizado!"); } });
   const excluirMut  = trpc.compras.excluirFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Fornecedor desativado."); } });
+
+  const avaliarMut  = trpc.compras.avaliarFornecedor.useMutation({
+    onSuccess: () => {
+      toast.success("Avaliação registrada!");
+      setModalAvalId(null);
+      setNotaEstrela(0);
+      setComentarioAval("");
+      refetchRanking();
+      if (verAvalId) refetchAvaliacoes();
+    },
+  });
+  const { data: ranking = [], refetch: refetchRanking } = trpc.compras.rankingFornecedores.useQuery(
+    { companyId }, { enabled: !!companyId && aba === "ranking" }
+  );
+  const { data: avaliacoesForn = [], refetch: refetchAvaliacoes } = trpc.compras.listarAvaliacoesFornecedor.useQuery(
+    { fornecedorId: verAvalId ?? 0, companyId },
+    { enabled: !!verAvalId && !!companyId }
+  );
+
+  function abrirAvaliacao(id: number, nome: string) {
+    setModalAvalId(id);
+    setModalAvalNome(nome);
+    setNotaEstrela(0);
+    setComentarioAval("");
+  }
+
+  function salvarAvaliacao() {
+    if (!notaEstrela) { toast.error("Selecione uma nota de 1 a 5 estrelas."); return; }
+    avaliarMut.mutate({
+      fornecedorId: modalAvalId!,
+      companyId,
+      nota: notaEstrela,
+      comentario: comentarioAval || undefined,
+      criadoPor: user?.id,
+    });
+  }
 
   function abrirNovo() {
     setForm({ ...EMPTY_FORM });
@@ -209,9 +276,68 @@ export default function Fornecedores() {
             { id: "novo", node: <Button onClick={abrirNovo} className="bg-blue-600 hover:bg-blue-700 text-white"><Plus className="h-4 w-4 mr-2" /> Novo Fornecedor</Button> },
           ]} />
         </div>
+        {/* Tabs */}
+        <div className="max-w-7xl mx-auto mt-3 flex gap-1">
+          {([["lista", "Lista de Fornecedores", Building2], ["ranking", "Ranking de Avaliações", Trophy]] as const).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              onClick={() => setAba(id)}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                aba === id ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-5 space-y-4">
+
+        {/* ═══ ABA: RANKING ═══ */}
+        {aba === "ranking" && (
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <Trophy className="h-5 w-5 text-amber-500" />
+              <h2 className="text-base font-bold text-slate-800">Ranking de Melhores Fornecedores</h2>
+              <span className="text-xs text-slate-400">por média de estrelas</span>
+            </div>
+            {ranking.length === 0 ? (
+              <div className="bg-white rounded-xl border border-dashed border-slate-200 p-12 text-center">
+                <Star className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">Nenhuma avaliação registrada ainda</p>
+                <p className="text-sm text-slate-400 mt-1">Avalie fornecedores na aba "Lista" clicando no botão de estrela</p>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {ranking.map((f: any, i: number) => {
+                  const medalIcons = ["🥇", "🥈", "🥉"];
+                  return (
+                    <div key={f.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex items-center gap-4">
+                      <div className="text-2xl w-8 text-center shrink-0">{medalIcons[i] ?? `#${i + 1}`}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-800">{f.nomeFantasia || f.razaoSocial}</p>
+                        {f.nomeFantasia && f.nomeFantasia !== f.razaoSocial && <p className="text-xs text-slate-500">{f.razaoSocial}</p>}
+                        {f.cidade && <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{f.cidade}/{f.estado}</p>}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <StarRating value={Math.round(f.mediaEstrelas)} size={16} />
+                        <p className="text-xs text-slate-500 mt-1">
+                          <span className="font-bold text-slate-700">{Number(f.mediaEstrelas).toFixed(1)}</span>
+                          {" "}/ 5 · {f.totalAvaliacoes} avaliação{f.totalAvaliacoes !== 1 ? "ões" : ""}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ ABA: LISTA ═══ */}
+        {aba === "lista" && (<>
         {/* Filtros */}
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[220px]">
@@ -283,7 +409,16 @@ export default function Fornecedores() {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex gap-2 shrink-0 items-center">
+                    {/* Botão avaliar */}
+                    <Button
+                      size="sm" variant="outline"
+                      className="h-8 gap-1.5 text-amber-600 border-amber-200 hover:bg-amber-50"
+                      onClick={() => abrirAvaliacao(f.id, f.nomeFantasia || f.razaoSocial)}
+                    >
+                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                      Avaliar
+                    </Button>
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setDetalheId(detalheId === f.id ? null : f.id)}>
                       {detalheId === f.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
@@ -330,7 +465,56 @@ export default function Fornecedores() {
             ))}
           </div>
         )}
+        </>)}
       </div>
+
+      {/* Modal de Avaliação */}
+      <Dialog open={!!modalAvalId} onOpenChange={v => !v && setModalAvalId(null)}>
+        <DialogContent style={{ background: '#ffffff', color: '#111827' }} className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+              Avaliar Fornecedor
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <p className="text-sm text-slate-600 font-medium">{modalAvalNome}</p>
+            <div>
+              <Label className="text-xs text-slate-500 mb-2 block">Nota (1 a 5 estrelas) *</Label>
+              <div className="flex items-center gap-3">
+                <StarRating value={notaEstrela} onChange={setNotaEstrela} size={28} />
+                {notaEstrela > 0 && (
+                  <span className="text-sm font-semibold text-amber-600">
+                    {["", "Ruim", "Regular", "Bom", "Muito Bom", "Excelente"][notaEstrela]}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-500 mb-1 block">Comentário (opcional)</Label>
+              <Textarea
+                value={comentarioAval}
+                onChange={e => setComentarioAval(e.target.value)}
+                placeholder="Descreva sua experiência com este fornecedor..."
+                rows={3}
+                className="text-sm resize-none"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-1 border-t border-slate-100">
+              <Button variant="outline" size="sm" onClick={() => setModalAvalId(null)}>Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={salvarAvaliacao}
+                disabled={!notaEstrela || avaliarMut.isPending}
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                {avaliarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> : <Star className="h-3.5 w-3.5 mr-2 fill-white" />}
+                Registrar Avaliação
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Cadastro/Edição */}
       <Dialog open={modalAberto} onOpenChange={v => !v && fecharModal()}>
