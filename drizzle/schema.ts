@@ -4424,3 +4424,67 @@ export const lobConfig = pgTable("lob_config", {
   criadoEm:             timestamp("criado_em").defaultNow(),
   atualizadoEm:         timestamp("atualizado_em").defaultNow(),
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MÓDULO DE COMPRAS — FASE 1: FORNECEDORES + ALMOXARIFADO
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const fornecedores = pgTable("fornecedores", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  cnpj:             varchar({ length: 18 }),
+  razaoSocial:      varchar("razao_social", { length: 255 }).notNull(),
+  nomeFantasia:     varchar("nome_fantasia", { length: 255 }),
+  situacaoReceita:  varchar("situacao_receita", { length: 50 }),
+  endereco:         varchar({ length: 255 }),
+  numero:           varchar({ length: 20 }),
+  complemento:      varchar({ length: 100 }),
+  bairro:           varchar({ length: 100 }),
+  cidade:           varchar({ length: 100 }),
+  estado:           varchar({ length: 2 }),
+  cep:              varchar({ length: 10 }),
+  telefone:         varchar({ length: 20 }),
+  email:            varchar({ length: 255 }),
+  contatoNome:      varchar("contato_nome", { length: 255 }),
+  contatoCelular:   varchar("contato_celular", { length: 20 }),
+  contatoEmail:     varchar("contato_email", { length: 255 }),
+  banco:            varchar({ length: 100 }),
+  agencia:          varchar({ length: 20 }),
+  conta:            varchar({ length: 30 }),
+  pix:              varchar({ length: 255 }),
+  categorias:       json().default([]),
+  ativo:            boolean().default(true),
+  observacoes:      text(),
+  criadoEm:         timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+  atualizadoEm:     timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const almoxarifadoItens = pgTable("almoxarifado_itens", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  nome:             varchar({ length: 255 }).notNull(),
+  unidade:          varchar({ length: 20 }).notNull().default("un"),
+  categoria:        varchar({ length: 100 }),
+  codigoInterno:    varchar("codigo_interno", { length: 50 }),
+  quantidadeAtual:  numeric("quantidade_atual", { precision: 14, scale: 3 }).default("0"),
+  quantidadeMinima: numeric("quantidade_minima", { precision: 14, scale: 3 }).default("0"),
+  observacoes:      text(),
+  ativo:            boolean().default(true),
+  criadoEm:         timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+  atualizadoEm:     timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const almoxarifadoMovimentacoes = pgTable("almoxarifado_movimentacoes", {
+  id:           serial().primaryKey(),
+  companyId:    integer("company_id").notNull(),
+  itemId:       integer("item_id").notNull(),
+  tipo:         varchar({ length: 20 }).notNull(),
+  quantidade:   numeric({ precision: 14, scale: 3 }).notNull(),
+  obraId:       integer("obra_id"),
+  obraNome:     varchar("obra_nome", { length: 255 }),
+  motivo:       text(),
+  usuarioId:    integer("usuario_id"),
+  usuarioNome:  varchar("usuario_nome", { length: 255 }),
+  observacoes:  text(),
+  criadoEm:     timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+});
