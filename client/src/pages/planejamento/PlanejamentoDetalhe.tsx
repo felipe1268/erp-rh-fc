@@ -729,6 +729,94 @@ export default function PlanejamentoDetalhe() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Modal Dar Baixa com valor editável ─────────────────────────────── */}
+      <Dialog open={!!baixaModal} onOpenChange={(o) => { if (!o) setBaixaModal(null); }}>
+        <DialogContent style={{ background: "#ffffff", color: "#111827" }} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              Confirmar Recebimento
+            </DialogTitle>
+          </DialogHeader>
+          {baixaModal && (() => {
+            const valNum = parseFloat(baixaValorInputStr.replace(/\./g, "").replace(",", ".")) || 0;
+            const pendente = Math.max(0, baixaModal.valorPrevisto - valNum);
+            const isPartial = valNum < baixaModal.valorPrevisto && valNum > 0;
+            return (
+              <div className="space-y-4 pt-1">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Competência</p>
+                  <p className="text-sm font-semibold text-slate-800">{baixaModal.label}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Valor previsto da parcela</p>
+                  <p className="text-sm font-semibold text-amber-700">{fmt(baixaModal.valorPrevisto)}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">
+                    Valor efetivamente recebido (R$)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoFocus
+                    value={baixaInputFocused
+                      ? baixaValorInputStr
+                      : (parseFloat(baixaValorInputStr.replace(/\./g, "").replace(",", ".")) || 0)
+                          .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    }
+                    onFocus={() => setBaixaInputFocused(true)}
+                    onBlur={() => setBaixaInputFocused(false)}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/[^\d,]/g, "");
+                      setBaixaValorInputStr(raw);
+                    }}
+                    onKeyDown={e => { if (e.key === "Enter") confirmarBaixaValor(); }}
+                    className="h-10 w-full text-sm border border-slate-300 rounded-lg px-3 focus:ring-2 focus:ring-emerald-400 outline-none font-semibold"
+                    placeholder="0,00"
+                  />
+                </div>
+                {isPartial && (
+                  <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                    <AlertCircle className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
+                    <div className="text-xs text-orange-700">
+                      <p className="font-semibold">Pagamento parcial</p>
+                      <p>Saldo de <strong>{fmt(pendente)}</strong> será exibido no próximo mês como crédito pendente.</p>
+                    </div>
+                  </div>
+                )}
+                {valNum > baixaModal.valorPrevisto && (
+                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-700">
+                      Valor acima do previsto (+{fmt(valNum - baixaModal.valorPrevisto)}).
+                    </p>
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setBaixaModal(null)}
+                    className="flex-1 h-9 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-colors font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmarBaixaValor}
+                    disabled={valNum <= 0}
+                    className="flex-1 h-9 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Confirmar Baixa
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
     </DashboardLayout>
   );
 }
@@ -3652,23 +3740,51 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
 
   // ── Baixa de Pagamentos (manual, persiste em localStorage) ────────────────
   const baixaKey = `baixas_${projetoId}`;
-  const [baixas, setBaixasRaw] = useState<Record<string, { confirmado: boolean; data: string; valor: number }>>(() => {
+  const [baixas, setBaixasRaw] = useState<Record<string, { confirmado: boolean; data: string; valor: number; pendente?: number }>>(() => {
     try { return JSON.parse(localStorage.getItem(baixaKey) ?? "{}"); } catch { return {}; }
   });
   const persistBaixas = (next: Record<string, any>) => {
     setBaixasRaw(next);
     localStorage.setItem(baixaKey, JSON.stringify(next));
   };
-  const toggleBaixa = (mes: string, valorPrevisto: number) => {
+
+  const [baixaModal, setBaixaModal] = useState<{ mes: string; valorPrevisto: number; label: string } | null>(null);
+  const [baixaValorInputStr, setBaixaValorInputStr] = useState("");
+  const [baixaInputFocused, setBaixaInputFocused] = useState(false);
+
+  const abrirBaixa = (mes: string, valorPrevisto: number, label: string) => {
     const atual = baixas[mes];
     if (atual?.confirmado) {
       const next = { ...baixas };
       delete next[mes];
       persistBaixas(next);
     } else {
-      persistBaixas({ ...baixas, [mes]: { confirmado: true, data: new Date().toISOString().substring(0, 10), valor: valorPrevisto } });
+      setBaixaModal({ mes, valorPrevisto, label });
+      setBaixaValorInputStr(valorPrevisto.toFixed(2).replace(".", ","));
+      setBaixaInputFocused(false);
     }
   };
+
+  function confirmarBaixaValor() {
+    if (!baixaModal) return;
+    const val = parseFloat(baixaValorInputStr.replace(/\./g, "").replace(",", ".")) || 0;
+    const pendente = Math.max(0, baixaModal.valorPrevisto - val);
+    persistBaixas({
+      ...baixas,
+      [baixaModal.mes]: {
+        confirmado: true,
+        data: new Date().toISOString().substring(0, 10),
+        valor: val,
+        pendente: pendente > 0 ? pendente : undefined,
+      },
+    });
+    setBaixaModal(null);
+    toast.success(
+      pendente > 0
+        ? `Baixa registrada: ${fmt(val)} recebidos. Saldo de ${fmt(pendente)} será carregado ao próximo mês.`
+        : `Baixa registrada: ${fmt(val)} recebidos integralmente.`
+    );
+  }
 
   const { data: configMed, refetch: refetchCfg } = trpc.planejamento.getConfigMedicao.useQuery(
     { projetoId }, { enabled: !!projetoId });
@@ -4548,7 +4664,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
                             <td className="py-2 px-3 text-center">
                               <button
-                                onClick={() => toggleBaixa(r.mes, r.liquido)}
+                                type="button"
+                                onClick={() => abrirBaixa(r.mes, r.liquido, r.nomeMes)}
                                 title={confirmado ? `Recebido em ${baixa?.data} — clique para desfazer` : "Marcar sinal como recebido"}
                                 className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
                                   confirmado
@@ -4601,7 +4718,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                           <td className="py-2 px-3 text-center">
                             {temLiquido ? (
                               <button
-                                onClick={() => toggleBaixa(r.mes, r.liquido)}
+                                type="button"
+                                onClick={() => abrirBaixa(r.mes, r.liquido, r.nomeMes)}
                                 title={confirmado ? `Recebido em ${baixa.data} — clique para desfazer` : "Marcar líquido como recebido"}
                                 className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
                                   confirmado
@@ -4756,6 +4874,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                     const confirmado = !!baixa?.confirmado;
                     const temRecebimento = r.recebido > 0;
                     const aposObra: boolean = !!r.aposObra;
+                    const valorRealRecebido = confirmado ? (baixa.valor ?? r.recebido) : r.recebido;
+                    const pendenteMesAnterior = idx > 0 ? (baixas[fluxoCaixa[idx - 1]?.mes]?.pendente ?? 0) : 0;
+                    const saldoPendenteEsteMes = baixa?.pendente ?? 0;
                     return (
                       <React.Fragment key={r.mes}>
                         <tr
@@ -4790,8 +4911,37 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                           <td className="py-2 px-3 text-right text-red-600">
                             {r.custo > 0 ? fmt(r.custo) : <span className="text-slate-300">—</span>}
                           </td>
-                          <td className={`py-2 px-3 text-right font-semibold ${temRecebimento ? (confirmado ? "text-emerald-600 line-through" : aposObra ? "text-orange-600" : "text-amber-700") : "text-slate-300"}`}>
-                            {temRecebimento ? fmt(r.recebido) : "—"}
+                          <td className="py-2 px-3 text-right">
+                            {temRecebimento ? (
+                              <div className="flex flex-col items-end gap-0.5">
+                                {confirmado ? (
+                                  <>
+                                    <span className="font-semibold text-emerald-600">{fmt(valorRealRecebido)}</span>
+                                    {saldoPendenteEsteMes > 0 && (
+                                      <span className="text-[9px] text-orange-600 font-semibold">
+                                        saldo: {fmt(saldoPendenteEsteMes)} →
+                                      </span>
+                                    )}
+                                    {valorRealRecebido !== r.recebido && (
+                                      <span className="text-[9px] text-slate-400 line-through">{fmt(r.recebido)}</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className={`font-semibold ${aposObra ? "text-orange-600" : "text-amber-700"}`}>
+                                      {fmt(r.recebido + pendenteMesAnterior)}
+                                    </span>
+                                    {pendenteMesAnterior > 0 && (
+                                      <span className="text-[9px] text-orange-500 font-semibold">
+                                        +{fmt(pendenteMesAnterior)} saldo ant.
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
                           </td>
                           <td className={`py-2 px-3 text-right font-semibold ${r.saldoMes >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                             {r.saldoMes >= 0 ? "+" : ""}{fmt(r.saldoMes)}
@@ -4805,7 +4955,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                           <td className="py-2 px-3 text-center">
                             {temRecebimento ? (
                               <button
-                                onClick={() => toggleBaixa(r.mes, r.recebido)}
+                                type="button"
+                                onClick={() => abrirBaixa(r.mes, r.recebido, r.nomeMes)}
                                 title={confirmado ? `Recebido em ${baixa.data} — clique para desfazer` : "Marcar como recebido"}
                                 className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
                                   confirmado

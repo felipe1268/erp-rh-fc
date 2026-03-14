@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 284,
+    titulo: "Dar Baixa — valor editável + saldo automático ao próximo mês",
+    descricao: "Botão 'Dar Baixa' agora abre modal para digitar o valor efetivamente recebido (pré-preenchido com o previsto). Se o cliente pagar menos, o saldo pendente é exibido automaticamente na próxima competência como crédito a recuperar. Toast de sucesso informa o valor recebido e o saldo carregado. Confirmação também via Enter no campo.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:30:00",
+  },
+  {
     version: 283,
     titulo: "Fix 'Salvar Configuração' de Medição não salvava",
     descricao: "Botão 'Salvar Configuração' em Configuração de Medição movido para fora do bloco pointer-events-none (que bloqueava cliques quando cfgBloqueado era true). Adicionado type='button' para evitar submit acidental de form. Feedback de erro visível via toast quando a mutação falha, e toast de sucesso ao salvar corretamente.",
