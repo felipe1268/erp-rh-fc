@@ -11,9 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
@@ -28,6 +28,7 @@ const STATUS_OPTIONS = [
 
 type ObraForm = {
   nome: string; numOrcamento: string;
+  cliente: string;
   status: string; cep: string; endereco: string;
   dataInicio: string; dataPrevisaoFim: string; observacoes: string;
   usarConvencaoMatriz: number; convencaoId: number | null;
@@ -35,6 +36,7 @@ type ObraForm = {
 
 const emptyForm: ObraForm = {
   nome: "", numOrcamento: "",
+  cliente: "",
   status: "Planejamento", cep: "", endereco: "",
   dataInicio: "", dataPrevisaoFim: "", observacoes: "",
   usarConvencaoMatriz: 1, convencaoId: null,
@@ -52,6 +54,9 @@ export default function Obras() {
 
   const availableSnsQ = trpc.obras.listAvailableSns.useQuery({ companyId }, { enabled: !!companyId });
   const availableSns = availableSnsQ.data ?? [];
+
+  const clientesQ = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
+  const clientes = clientesQ.data ?? [];
 
   const [saving, setSaving] = useState(false);
   const createMut = trpc.obras.create.useMutation({
@@ -151,11 +156,12 @@ export default function Obras() {
     return list;
   }, [obras, search, statusFilter, snsByObra]);
 
-  const openNew = () => { setEditingId(null); setForm(emptyForm); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setDialogOpen(true); };
+  const openNew = () => { setEditingId(null); setForm(emptyForm); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setDialogOpen(true); };
   const openEdit = (obra: any) => {
     setEditingId(obra.id);
     setForm({
       nome: obra.nome || "", numOrcamento: obra.numOrcamento || obra.codigo || "",
+      cliente: obra.cliente || "",
       status: obra.status || "Planejamento",
       cep: obra.cep || "", endereco: obra.endereco || "",
       dataInicio: obra.dataInicio || "", dataPrevisaoFim: obra.dataPrevisaoFim || "",
@@ -164,6 +170,7 @@ export default function Obras() {
       convencaoId: obra.convencaoId ?? null,
     });
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
+    setClienteOpen(false); setClienteBusca("");
     setDialogOpen(true);
   };
 
@@ -198,6 +205,27 @@ export default function Obras() {
   };
 
   const [nomeError, setNomeError] = useState(false);
+  const [clienteOpen, setClienteOpen] = useState(false);
+  const [clienteBusca, setClienteBusca] = useState("");
+  const clienteRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (clienteRef.current && !clienteRef.current.contains(e.target as Node)) {
+        setClienteOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const clientesFiltrados = useMemo(() => {
+    const q = clienteBusca.toLowerCase();
+    return clientes.filter((c: any) =>
+      (c.razaoSocial || "").toLowerCase().includes(q) ||
+      (c.nomeFantasia || "").toLowerCase().includes(q)
+    ).slice(0, 20);
+  }, [clientes, clienteBusca]);
 
   const handleSave = () => {
     if (saving) return;
@@ -307,6 +335,12 @@ export default function Obras() {
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-base truncate">{obra.nome}</h3>
                         {(obra.numOrcamento || obra.codigo) && <p className="text-xs text-muted-foreground">Orç: {obra.numOrcamento || obra.codigo}</p>}
+                        {obra.cliente && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <UserCheck className="h-3 w-3 text-blue-400 shrink-0" />
+                            <p className="text-xs text-blue-700 font-medium truncate">{obra.cliente}</p>
+                          </div>
+                        )}
                       </div>
                       {getStatusBadge(obra.status)}
                     </div>
@@ -377,6 +411,73 @@ export default function Obras() {
               />
               {nomeError && <p className="text-xs text-red-500 mt-1">Informe o nome da obra ou o Nº do Orçamento.</p>}
             </div>
+
+            {/* ── CLIENTE (combobox buscável) ────────────────────────────── */}
+            <div className="sm:col-span-2" ref={clienteRef}>
+              <Label className="flex items-center gap-1.5">
+                <UserCheck className="h-3.5 w-3.5 text-blue-500" />
+                Cliente
+                <span className="text-muted-foreground text-xs font-normal">(opcional)</span>
+              </Label>
+              <div className="relative mt-1">
+                <Input
+                  value={clienteOpen ? clienteBusca : form.cliente}
+                  onChange={e => {
+                    setClienteBusca(e.target.value);
+                    setForm(f => ({ ...f, cliente: e.target.value }));
+                    setClienteOpen(true);
+                  }}
+                  onFocus={() => { setClienteBusca(form.cliente); setClienteOpen(true); }}
+                  placeholder={clientes.length === 0 ? "Nenhum cliente cadastrado" : "Selecione ou digite o nome do cliente..."}
+                  className="pr-8"
+                />
+                <ChevronDown
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer"
+                  onClick={() => { setClienteBusca(""); setClienteOpen(o => !o); }}
+                />
+                {form.cliente && !clienteOpen && (
+                  <button
+                    type="button"
+                    className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    onClick={() => { setForm(f => ({ ...f, cliente: "" })); setClienteBusca(""); }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {clienteOpen && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                    {clientesFiltrados.length === 0 ? (
+                      <div className="px-3 py-6 text-center text-sm text-slate-400">
+                        {clientes.length === 0
+                          ? "Nenhum cliente cadastrado. Acesse Cadastro → Clientes."
+                          : "Nenhum cliente encontrado para esta busca."}
+                      </div>
+                    ) : (
+                      clientesFiltrados.map((c: any) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="w-full text-left px-3 py-2.5 hover:bg-blue-50 flex items-start gap-2.5 border-b border-slate-50 last:border-0"
+                          onClick={() => {
+                            setForm(f => ({ ...f, cliente: c.razaoSocial }));
+                            setClienteOpen(false);
+                          }}
+                        >
+                          <UserCheck className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-slate-800">{c.razaoSocial}</p>
+                            {c.nomeFantasia && c.nomeFantasia !== c.razaoSocial && (
+                              <p className="text-xs text-slate-500">{c.nomeFantasia}</p>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div>
               <Label>N° do Orçamento</Label>
               <Input value={form.numOrcamento} onChange={e => setForm(f => ({ ...f, numOrcamento: e.target.value }))} placeholder="Ex: ORC-2026-001" />
