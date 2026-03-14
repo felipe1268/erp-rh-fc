@@ -417,4 +417,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 20:20:00",
   },
+  {
+    version: 241,
+    titulo: "Painel de Compras totalmente interativo",
+    descricao: "Refatoração do Painel de Compras para navegação SPA completa. KPI cards clicáveis com navegação direta para SC, Cotações e OC. Novos atalhos de navegação rápida (3 botões de acesso rápido). Todas as linhas das tabelas de SC, Cotações e OC clicáveis navegando para a página correta. Alertas de entrega clicáveis. Fornecedores ativos com link para página de fornecedores. Uso de useLocation (wouter) em vez de <a href> para navegação SPA sem recarregamento.",
+    tipo: "improvement",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 20:30:00",
+  },
 ];
