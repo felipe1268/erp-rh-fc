@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 281,
+    titulo: "JULINHO: corrigido erro de validação em 'Alertas das próximas semanas'",
+    descricao: "O JULINHO falhava ao clicar em Analisar no painel de Alertas das próximas 3 semanas com erro 'Invalid input: expected string, received null'. Causa: campos opcionais (recursoPrincipal, eapCodigo, dataInicio, dataFim, avancoPrevisto, avancoReal, atrasada) estavam definidos como z.string().optional() no schema Zod, que aceita undefined mas rejeita null. Corrigido para z.string().nullish() (aceita undefined E null) em todos os campos do array de atividades e insumos da rota alertasSemana.",
+    tipo: "correcao",
+    modulos: "Planejamento / IA (JULINHO)",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 02:00:00",
+  },
+  {
     version: 280,
     titulo: "Diagrama de Rede: filtro por semana, período e tela cheia",
     descricao: "Adicionados três recursos ao Diagrama de Rede / Hierarquia EAP: (1) Filtro por Semana do Projeto (Semana 01, Semana 02… calculadas automaticamente a partir das datas das atividades); (2) Filtro por Período Personalizado (campos 'De' e 'Até'); (3) Botão Tela Cheia que expande o diagrama para ocupar 100% da viewport, com saída via Esc ou botão 'Sair'. Os filtros de semana e período são mutuamente exclusivos e se limpam automaticamente.",
