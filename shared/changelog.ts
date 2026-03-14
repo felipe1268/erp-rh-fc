@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 267,
+    titulo: "Diagrama de Rede — Reescrita completa: hierarquia EAP + rede CPM, filtros, setas, painel de detalhes",
+    descricao: "DiagramaRede.tsx completamente reescrito. Dois modos: (1) Hierarquia EAP — árvore horizontal baseada nos códigos EAP, sempre disponível, setas pai→filho; (2) Rede de Precedências — diagrama CPM topológico baseado no campo predecessora, com indicador quando sem dependências cadastradas. Filtros: status em pills clicáveis, busca por nome/EAP, filtro de grupo dropdown. Interatividade: clique em nó destaca predecessoras/sucessoras com setas coloridas, dimming dos demais nós, painel lateral com detalhes completos (EAP, status, datas, progresso, desvio, lista de predecessoras/sucessoras clicáveis). Zoom/pan suave, fit-to-view automático, barra de status com contagem por categoria.",
+    tipo: "feature",
+    modulos: "Planejamento / Diagrama de Rede",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:00:00",
+  },
+  {
     version: 266,
     titulo: "REGRA DE OURO — Nova aba SEMPRE vai para a barra lateral; Diagrama de Rede adicionado",
     descricao: "Estabelecida regra de ouro: toda nova aba criada em qualquer módulo deve ser adicionada simultaneamente à barra de comando lateral (seção 'Abas do Projeto' para Planejamento, ou seção correspondente). Aplicação imediata: 'Diagrama de Rede' (tab=diagrama-rede) adicionado ao planTabItems em DashboardLayout com ícone Network, logo após 'Prog. Semanal'. Ícone Network importado do lucide-react.",
