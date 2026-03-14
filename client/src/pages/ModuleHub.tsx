@@ -158,8 +158,9 @@ const MODULES: Module[] = [
   },
   {
     id: "compras", title: "Compras", subtitle: "Suprimentos",
-    description: "Cotações, pedidos e controle de fornecedores.",
-    icon: ShoppingCart, accentFrom: "#F43F5E", accentTo: "#E11D48", accentGlow: "", iconBg: "", path: "", active: false, features: [],
+    description: "Fornecedores com CNPJ auto-preenchido, almoxarifado com saldo em tempo real e integração com o Mas Controle ERP.",
+    icon: ShoppingCart, accentFrom: "#F43F5E", accentTo: "#E11D48", accentGlow: "rgba(244,63,94,0.35)", iconBg: "rgba(244,63,94,0.12)", path: "/compras/fornecedores", active: true,
+    features: ["Cadastro de Fornecedores", "Almoxarifado / Estoque", "Importação Mas Controle"],
   },
   {
     id: "crm", title: "CRM", subtitle: "Gestão de Relacionamento",

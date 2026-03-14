@@ -319,6 +319,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 14:33:00",
   },
   {
+    version: 232,
+    titulo: "Módulo Compras — Ativação no Hub e Menu Lateral",
+    descricao: "Módulo Compras agora aparece no ModuleHub como ativo (card clicável com link para /compras/fornecedores). Menu lateral criado com seções: Compras (Fornecedores, Almoxarifado) e Integrações (Mas Controle ERP). Módulo registrado no seletor de módulos, contexto de rotas e temas do sistema (ícone ShoppingCart rosa). Ao clicar nas páginas de compras/integracoes, o sidebar muda automaticamente para o módulo Compras.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 19:00:00",
+  },
+  {
     version: 231,
     titulo: "Integração Mas Controle ERP — Migração de Dados",
     descricao: "Módulo completo de integração e migração do Mas Controle ERP. Configuração de credenciais da API (Basic Auth); teste de conexão com detecção automática de URL base; importação via API REST (obras, fornecedores, insumos) com fallback automático; importação via CSV/Excel (método garantido) com parser que aceita vírgula ou ponto-e-vírgula como separador; mapeamento flexível de colunas com múltiplos candidatos de nome; importação idempotente por nome/CNPJ (nunca duplica dados); log completo por tipo de dado (encontrados, importados, duplicados, erros com detalhes); histórico de todas as migrações; marcação de migração como concluída. Tabelas: migration_logs, mas_controle_config. Rota: /integracoes/mas-controle (apenas admin_master).",
