@@ -445,24 +445,32 @@ export default function Obras() {
               {nomeError && <p className="text-xs text-red-500 mt-1">Informe o nome da obra ou o Nº do Orçamento.</p>}
             </div>
 
-            {/* ── CLIENTE (combobox buscável) ────────────────────────────── */}
+            {/* ── CLIENTE ────────────────────────────── */}
             <div className="sm:col-span-2" ref={clienteRef}>
               <Label className="flex items-center gap-1.5">
                 <UserCheck className="h-3.5 w-3.5 text-blue-500" />
                 Cliente
-                <button
-                  type="button"
-                  className="ml-auto flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  onClick={() => {
-                    setNovoClienteForm({ razaoSocial: clienteBusca || "", nomeFantasia: "", telefone: "", email: "" });
-                    setClienteOpen(false);
-                    setNovoClienteModal(true);
-                  }}
-                >
-                  <Plus className="h-3 w-3" />
-                  Cadastrar cliente
-                </button>
+                {!editingId && (
+                  <button
+                    type="button"
+                    className="ml-auto flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    onClick={() => {
+                      setNovoClienteForm({ razaoSocial: clienteBusca || "", nomeFantasia: "", telefone: "", email: "" });
+                      setClienteOpen(false);
+                      setNovoClienteModal(true);
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Cadastrar cliente
+                  </button>
+                )}
               </Label>
+              {editingId ? (
+                <div className="mt-1 flex items-center gap-2 h-10 px-3 rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-600">
+                  <UserCheck className="h-4 w-4 text-blue-300 shrink-0" />
+                  <span className="truncate">{form.cliente || <span className="text-slate-400 italic">Não informado</span>}</span>
+                </div>
+              ) : (
               <div className="relative mt-1">
                 <Input
                   value={clienteOpen ? clienteBusca : form.cliente}
@@ -544,15 +552,22 @@ export default function Obras() {
                   </div>
                 )}
               </div>
+              )}
             </div>
 
-            {/* ── ENGENHEIRO RESPONSÁVEL (combobox de colaboradores liderança) ── */}
+            {/* ── ENGENHEIRO RESPONSÁVEL ── */}
             <div className="sm:col-span-2" ref={responsavelRef}>
               <Label className="flex items-center gap-1.5">
                 <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
                 Engenheiro / Responsável
-                {liderancas.length === 0 && <span className="text-xs text-slate-400 font-normal ml-1">(cadastre colaboradores com cargos de liderança em RH)</span>}
+                {!editingId && liderancas.length === 0 && <span className="text-xs text-slate-400 font-normal ml-1">(cadastre colaboradores com cargos de liderança em RH)</span>}
               </Label>
+              {editingId ? (
+                <div className="mt-1 flex items-center gap-2 h-10 px-3 rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-600">
+                  <UserCheck className="h-4 w-4 text-emerald-300 shrink-0" />
+                  <span className="truncate">{form.responsavel || <span className="text-slate-400 italic">Não informado</span>}</span>
+                </div>
+              ) : (
               <div className="relative mt-1">
                 <Input
                   value={responsavelOpen ? responsavelBusca : form.responsavel}
@@ -604,6 +619,7 @@ export default function Obras() {
                   </div>
                 )}
               </div>
+              )}
             </div>
 
             <div>

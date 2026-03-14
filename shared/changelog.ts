@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 292,
+    titulo: "Obras — Cliente e Responsável somente leitura na edição",
+    descricao: "Na tela 'Editar Projeto' de Obras, os campos Cliente e Engenheiro/Responsável agora são exibidos como texto não editável. O botão '+ Cadastrar cliente' e os comboboxes interativos aparecem apenas no cadastro de nova obra, evitando alterações acidentais.",
+    tipo: "feature",
+    modulos: "Cadastro / Obras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:40:00",
+  },
+  {
     version: 291,
     titulo: "Login — removidos botão OAuth e aviso de senha padrão",
     descricao: "Removidos da tela de login: botão 'Entrar com Manus OAuth', divisor 'ou' e texto 'Senha padrão para primeiro acesso: asdf1020'. Tela de login agora exibe apenas o formulário de e-mail e senha.",
