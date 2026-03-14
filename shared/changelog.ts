@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 286,
+    titulo: "Fix IA Gestora — tab não rola mais a tela para baixo ao abrir",
+    descricao: "O scroll automático do chat do JULINHO agora só é acionado quando há mensagens no histórico (historico.length > 0). Antes, o useEffect disparava ao montar o componente (mesmo sem mensagens) causando scroll indesejado para o final da tela ao clicar na aba IA Gestora.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:00:00",
+  },
+  {
     version: 285,
     titulo: "Diagrama de Rede — card mostra Previsto/Realizado/Desvio",
     descricao: "Card de atividade no Diagrama de Rede ampliado (72→82px) com nova linha: 'Prev: XX% · Real: XX% · ±XXpp'. O desvio positivo aparece em verde e o negativo em vermelho. A barra de progresso ganhou um marcador vertical roxo indicando o % previsto esperado para hoje, enquanto a barra colorida representa o realizado.",
