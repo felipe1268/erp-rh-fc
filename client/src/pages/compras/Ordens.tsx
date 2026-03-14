@@ -36,7 +36,7 @@ export default function Ordens() {
   const [novoStatus, setNovoStatus] = useState("");
   const [dataEntregaReal, setDataEntregaReal] = useState("");
 
-  const [form, setForm] = useState({ fornecedorId: "", dataEntregaPrevista: "", observacoes: "" });
+  const [form, setForm] = useState({ fornecedorId: "", dataEntregaPrevista: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "" });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
 
   const q = trpc.compras.listarOrdens.useQuery(
@@ -60,7 +60,7 @@ export default function Ordens() {
   });
 
   function resetForm() {
-    setForm({ fornecedorId: "", dataEntregaPrevista: "", observacoes: "" });
+    setForm({ fornecedorId: "", dataEntregaPrevista: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "" });
     setItens([newItem()]);
   }
 
@@ -72,6 +72,10 @@ export default function Ordens() {
       fornecedorId: form.fornecedorId ? parseInt(form.fornecedorId) : undefined,
       dataEntregaPrevista: form.dataEntregaPrevista || undefined,
       observacoes: form.observacoes || undefined,
+      frete: parseFloat(form.frete) || 0,
+      outrasDespesas: parseFloat(form.outrasDespesas) || 0,
+      impostos: parseFloat(form.impostos) || 0,
+      desconto: parseFloat(form.desconto) || 0,
       itens: validos.map(i => ({
         descricao: i.descricao,
         unidade: i.unidade,
@@ -265,8 +269,34 @@ export default function Ordens() {
                   </div>
                 ))}
               </div>
-              <div className="flex justify-end">
-                <span className="text-slate-400 text-sm">Total: <span className="text-green-400 font-bold text-base">{totalItens.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></span>
+            </div>
+
+            {/* Totalizadores */}
+            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-widest mb-3">Totalizadores</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-slate-400 text-xs">Subtotal (Itens)</Label>
+                  <div className="text-white font-mono text-sm">{totalItens.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+                </div>
+                {[
+                  { label: "Frete (R$)", key: "frete" as const, sign: "+" },
+                  { label: "Outras Despesas (R$)", key: "outrasDespesas" as const, sign: "+" },
+                  { label: "Impostos (R$)", key: "impostos" as const, sign: "+" },
+                  { label: "Desconto (R$)", key: "desconto" as const, sign: "−" },
+                ].map(f => (
+                  <div key={f.key} className="space-y-1">
+                    <Label className="text-slate-400 text-xs">{f.sign} {f.label}</Label>
+                    <Input type="number" min="0" step="0.01" className="bg-slate-700 border-slate-600 text-white h-8 text-sm"
+                      value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between items-center pt-3 border-t border-slate-600 mt-2">
+                <span className="text-slate-300 font-semibold text-sm">Total da OC</span>
+                <span className="text-green-400 font-bold text-lg">
+                  {(totalItens + (parseFloat(form.frete) || 0) + (parseFloat(form.outrasDespesas) || 0) + (parseFloat(form.impostos) || 0) - (parseFloat(form.desconto) || 0)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                </span>
               </div>
             </div>
 
@@ -292,14 +322,48 @@ export default function Ordens() {
             const st = STATUS_LABELS[detalhe.status] ?? STATUS_LABELS.pendente;
             return (
               <div className="space-y-5 pt-2">
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div><span className="text-slate-400">Fornecedor:</span> <span className="text-white ml-2">{(detalhe as any).fornecedor?.razaoSocial || "—"}</span></div>
-                  <div><span className="text-slate-400">Status:</span> <span className={`ml-2 inline-flex px-2 py-0.5 rounded text-xs border ${st.color}`}>{st.label}</span></div>
-                  <div><span className="text-slate-400">Entrega prevista:</span> <span className="text-white ml-2">{detalhe.dataEntregaPrevista ? new Date(detalhe.dataEntregaPrevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</span></div>
-                  <div><span className="text-slate-400">Entrega real:</span> <span className="text-white ml-2">{detalhe.dataEntregaReal ? new Date(detalhe.dataEntregaReal + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</span></div>
-                  <div><span className="text-slate-400">Origem:</span> <span className="text-white ml-2">{detalhe.cotacaoId ? `Cotação #${detalhe.cotacaoId}` : "Manual"}</span></div>
-                  <div><span className="text-slate-400">Total:</span> <span className="text-green-400 font-bold ml-2">{parseFloat(detalhe.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></div>
+                <div className="grid grid-cols-2 gap-3 text-sm bg-slate-800 rounded-lg p-3">
+                  <div><span className="text-slate-400 text-xs">Fornecedor</span><p className="text-white font-medium">{(detalhe as any).fornecedor?.nomeFantasia || (detalhe as any).fornecedor?.razaoSocial || "—"}</p></div>
+                  <div><span className="text-slate-400 text-xs">Status</span><p><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${st.color}`}>{st.label}</span></p></div>
+                  <div><span className="text-slate-400 text-xs">Entrega prevista</span><p className="text-white font-medium">{detalhe.dataEntregaPrevista ? new Date(detalhe.dataEntregaPrevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
+                  <div><span className="text-slate-400 text-xs">Entrega real</span><p className="text-white font-medium">{detalhe.dataEntregaReal ? new Date(detalhe.dataEntregaReal + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
+                  <div><span className="text-slate-400 text-xs">Origem</span><p className="text-white font-medium">{detalhe.cotacaoId ? `Cotação #${detalhe.cotacaoId}` : "Manual"}</p></div>
+                  <div><span className="text-slate-400 text-xs">Criado em</span><p className="text-white font-medium">{new Date(detalhe.criadoEm).toLocaleDateString("pt-BR")}</p></div>
                 </div>
+
+                {/* Totais */}
+                {(() => {
+                  const subtotal = parseFloat((detalhe as any).subtotal ?? detalhe.total ?? "0");
+                  const frete = parseFloat((detalhe as any).frete ?? "0");
+                  const outrasDespesas = parseFloat((detalhe as any).outrasDespesas ?? "0");
+                  const impostos = parseFloat((detalhe as any).impostos ?? "0");
+                  const desconto = parseFloat((detalhe as any).desconto ?? "0");
+                  const total = parseFloat(detalhe.total ?? "0");
+                  const hasExtras = frete > 0 || outrasDespesas > 0 || impostos > 0 || desconto > 0;
+                  if (!hasExtras) return null;
+                  const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                  return (
+                    <div className="rounded-lg border border-slate-700 bg-slate-800/30 p-3 text-sm space-y-1.5">
+                      <div className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-2">Composição do Total</div>
+                      {[
+                        { label: "Subtotal itens", value: subtotal, sign: "" },
+                        { label: "Frete", value: frete, sign: "+" },
+                        { label: "Outras despesas", value: outrasDespesas, sign: "+" },
+                        { label: "Impostos", value: impostos, sign: "+" },
+                        { label: "Desconto", value: desconto, sign: "−", neg: true },
+                      ].filter(r => r.value !== 0).map(r => (
+                        <div key={r.label} className="flex justify-between">
+                          <span className="text-slate-400">{r.sign ? `${r.sign} ` : ""}{r.label}</span>
+                          <span className={r.neg ? "text-red-400" : "text-slate-300"}>{r.neg ? `-${fmt(r.value)}` : fmt(r.value)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between border-t border-slate-600 pt-2 mt-1">
+                        <span className="text-white font-semibold">Total</span>
+                        <span className="text-green-400 font-bold text-base">{fmt(total)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="rounded-lg border border-slate-700 overflow-hidden">
                   <Table>

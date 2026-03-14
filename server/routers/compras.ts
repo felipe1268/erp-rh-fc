@@ -408,24 +408,39 @@ export const comprasRouter = router({
   // ══════════════════════════════════════════════════════════════
 
   listarSolicitacoes: protectedProcedure
-    .input(z.object({ companyId: z.number(), status: z.string().optional(), busca: z.string().optional() }))
+    .input(z.object({ companyId: z.number(), status: z.string().optional(), aprovacaoStatus: z.string().optional(), busca: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const rows = await db.select().from(comprasSolicitacoes)
         .where(and(
           eq(comprasSolicitacoes.companyId, input.companyId),
           input.status ? eq(comprasSolicitacoes.status, input.status) : undefined,
+          input.aprovacaoStatus ? eq(comprasSolicitacoes.aprovacaoStatus, input.aprovacaoStatus) : undefined,
         ))
         .orderBy(desc(comprasSolicitacoes.criadoEm));
+      // attach item counts
+      const ids = rows.map(r => r.id);
+      let itensCounts: Record<number, { total: number; atendidos: number }> = {};
+      if (ids.length > 0) {
+        const allItens = await db.select().from(comprasSolicitacoesItens)
+          .where(sql`${comprasSolicitacoesItens.solicitacaoId} = ANY(${sql.raw("ARRAY[" + ids.join(",") + "]::int[]")})`);
+        allItens.forEach(it => {
+          if (!itensCounts[it.solicitacaoId]) itensCounts[it.solicitacaoId] = { total: 0, atendidos: 0 };
+          itensCounts[it.solicitacaoId].total++;
+          if (n(it.quantidadeAtendida) >= n(it.quantidade)) itensCounts[it.solicitacaoId].atendidos++;
+        });
+      }
+      let result = rows.map(r => ({ ...r, _itens: itensCounts[r.id] ?? { total: 0, atendidos: 0 } }));
       if (input.busca) {
         const b = input.busca.toLowerCase();
-        return rows.filter(r =>
+        result = result.filter(r =>
           r.numeroSc?.toLowerCase().includes(b) ||
+          r.titulo?.toLowerCase().includes(b) ||
           r.departamento?.toLowerCase().includes(b) ||
           r.observacoes?.toLowerCase().includes(b)
         );
       }
-      return rows;
+      return result;
     }),
 
   getSolicitacao: protectedProcedure
@@ -442,8 +457,11 @@ export const comprasRouter = router({
     .input(z.object({
       companyId: z.number(),
       obraId: z.number().nullable().optional(),
+      projetoId: z.number().nullable().optional(),
       solicitanteId: z.number().nullable().optional(),
       departamento: z.string().optional(),
+      titulo: z.string().optional(),
+      prioridade: z.string().optional(),
       dataNecessidade: z.string().optional(),
       observacoes: z.string().optional(),
       itens: z.array(z.object({
@@ -462,11 +480,15 @@ export const comprasRouter = router({
         companyId: input.companyId,
         numeroSc,
         obraId: input.obraId ?? null,
+        projetoId: input.projetoId ?? null,
         solicitanteId: input.solicitanteId ?? null,
         departamento: input.departamento,
+        titulo: input.titulo,
+        prioridade: input.prioridade ?? "normal",
         dataNecessidade: input.dataNecessidade,
         observacoes: input.observacoes,
         status: "pendente",
+        aprovacaoStatus: "aguardando",
       }).returning();
       if (input.itens.length > 0) {
         await db.insert(comprasSolicitacoesItens).values(
@@ -476,6 +498,7 @@ export const comprasRouter = router({
             unidade: it.unidade,
             quantidade: String(it.quantidade),
             observacoes: it.observacoes,
+            statusItem: "pendente",
           }))
         );
       }
@@ -488,6 +511,44 @@ export const comprasRouter = router({
       const db = await getDb();
       await db.update(comprasSolicitacoes).set({ status: input.status, atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.id));
       return { ok: true };
+    }),
+
+  aprovarSolicitacao: protectedProcedure
+    .input(z.object({ id: z.number(), aprovacaoStatus: z.string(), aprovadorId: z.number().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(comprasSolicitacoes).set({
+        aprovacaoStatus: input.aprovacaoStatus,
+        aprovadorId: input.aprovadorId ?? null,
+        aprovadoEm: input.aprovacaoStatus !== "aguardando" ? new Date().toISOString() : null,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(comprasSolicitacoes.id, input.id));
+      return { ok: true };
+    }),
+
+  registrarRecebimentoItem: protectedProcedure
+    .input(z.object({ itemId: z.number(), solicitacaoId: z.number(), quantidadeAtendida: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [item] = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.id, input.itemId));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      const qtdTotal = n(item.quantidade);
+      const novaQtd = Math.min(input.quantidadeAtendida, qtdTotal);
+      const novoStatus = novaQtd >= qtdTotal ? "recebido" : novaQtd > 0 ? "recebido_parcial" : "pendente";
+      await db.update(comprasSolicitacoesItens).set({
+        quantidadeAtendida: String(novaQtd),
+        statusItem: novoStatus,
+      }).where(eq(comprasSolicitacoesItens.id, input.itemId));
+      // update SC status based on all items
+      const allItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.solicitacaoId));
+      const todoRecebido = allItens.every(it => n(it.quantidadeAtendida) >= n(it.quantidade));
+      const algumRecebido = allItens.some(it => n(it.quantidadeAtendida) > 0);
+      if (todoRecebido) {
+        await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+      } else if (algumRecebido) {
+        await db.update(comprasSolicitacoes).set({ atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+      }
+      return { ok: true, statusItem: novoStatus };
     }),
 
   excluirSolicitacao: protectedProcedure
@@ -529,6 +590,8 @@ export const comprasRouter = router({
   criarCotacao: protectedProcedure
     .input(z.object({
       companyId: z.number(),
+      descricao: z.string().optional(),
+      prioridade: z.string().optional(),
       solicitacaoId: z.number().nullable().optional(),
       fornecedorId: z.number().nullable().optional(),
       dataValidade: z.string().optional(),
@@ -558,6 +621,8 @@ export const comprasRouter = router({
       const [cot] = await db.insert(comprasCotacoes).values({
         companyId: input.companyId,
         numeroCotacao,
+        descricao: input.descricao,
+        prioridade: input.prioridade ?? "normal",
         solicitacaoId: input.solicitacaoId ?? null,
         fornecedorId: input.fornecedorId ?? null,
         dataValidade: input.dataValidade,
@@ -658,13 +723,20 @@ export const comprasRouter = router({
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+      const subtotal = n(cot.total);
       const [oc] = await db.insert(comprasOrdens).values({
         companyId: input.companyId,
         numeroOc,
         cotacaoId: input.cotacaoId,
         fornecedorId: cot.fornecedorId ?? null,
         status: "pendente",
-        total: cot.total ?? "0",
+        aprovacaoStatus: "aguardando",
+        subtotal: String(subtotal.toFixed(2)),
+        frete: "0",
+        outrasDespesas: "0",
+        impostos: "0",
+        desconto: "0",
+        total: String(subtotal.toFixed(2)),
       }).returning();
       if (itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
@@ -692,6 +764,10 @@ export const comprasRouter = router({
       fornecedorId: z.number().nullable().optional(),
       dataEntregaPrevista: z.string().optional(),
       observacoes: z.string().optional(),
+      frete: z.number().optional(),
+      outrasDespesas: z.number().optional(),
+      impostos: z.number().optional(),
+      desconto: z.number().optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
@@ -704,7 +780,12 @@ export const comprasRouter = router({
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
-      const total = input.itens.reduce((s, it) => s + n(it.quantidade) * n(it.precoUnitario), 0);
+      const subtotal = input.itens.reduce((s, it) => s + n(it.quantidade) * n(it.precoUnitario), 0);
+      const frete = n(input.frete);
+      const outrasDespesas = n(input.outrasDespesas);
+      const impostos = n(input.impostos);
+      const desconto = n(input.desconto);
+      const total = subtotal + frete + outrasDespesas + impostos - desconto;
       const [oc] = await db.insert(comprasOrdens).values({
         companyId: input.companyId,
         numeroOc,
@@ -712,6 +793,12 @@ export const comprasRouter = router({
         dataEntregaPrevista: input.dataEntregaPrevista,
         observacoes: input.observacoes,
         status: "pendente",
+        aprovacaoStatus: "aguardando",
+        subtotal: String(subtotal.toFixed(2)),
+        frete: String(frete.toFixed(2)),
+        outrasDespesas: String(outrasDespesas.toFixed(2)),
+        impostos: String(impostos.toFixed(2)),
+        desconto: String(desconto.toFixed(2)),
         total: String(total.toFixed(2)),
       }).returning();
       if (input.itens.length > 0) {
@@ -727,6 +814,41 @@ export const comprasRouter = router({
         );
       }
       return oc;
+    }),
+
+  atualizarOrdem: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      frete: z.number().optional(),
+      outrasDespesas: z.number().optional(),
+      impostos: z.number().optional(),
+      desconto: z.number().optional(),
+      dataEntregaPrevista: z.string().optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND" });
+      const itens = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+      const subtotal = itens.reduce((s, it) => s + n(it.total), 0);
+      const frete = n(input.frete ?? oc.frete);
+      const outrasDespesas = n(input.outrasDespesas ?? oc.outrasDespesas);
+      const impostos = n(input.impostos ?? oc.impostos);
+      const desconto = n(input.desconto ?? oc.desconto);
+      const total = subtotal + frete + outrasDespesas + impostos - desconto;
+      await db.update(comprasOrdens).set({
+        subtotal: String(subtotal.toFixed(2)),
+        frete: String(frete.toFixed(2)),
+        outrasDespesas: String(outrasDespesas.toFixed(2)),
+        impostos: String(impostos.toFixed(2)),
+        desconto: String(desconto.toFixed(2)),
+        total: String(total.toFixed(2)),
+        dataEntregaPrevista: input.dataEntregaPrevista ?? oc.dataEntregaPrevista ?? undefined,
+        observacoes: input.observacoes ?? oc.observacoes ?? undefined,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(comprasOrdens.id, input.id));
+      return { ok: true, total };
     }),
 
   atualizarStatusOrdem: protectedProcedure
