@@ -555,15 +555,15 @@ export const avisoPrevioFeriasRouter = router({
           const obraId = empObraAloc?.obraId || null;
           let cfgRows: any[] = [];
           if (obraId) {
-            const [rows] = await db.execute(
+            const rows = ((await db.execute(
               sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId = ${obraId} AND ativo = 1 LIMIT 1`
-            ) as any[];
+            )) as any).rows || [];
             cfgRows = rows || [];
           }
           if (cfgRows.length === 0) {
-            const [rows] = await db.execute(
+            const rows = ((await db.execute(
               sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
-            ) as any[];
+            )) as any).rows || [];
             cfgRows = rows || [];
           }
           if (cfgRows.length > 0) {
@@ -593,9 +593,9 @@ export const avisoPrevioFeriasRouter = router({
         
         // 1. Adiantamentos pendentes (aprovados mas não descontados)
         try {
-          const [advRows] = await db.execute(
+          const advRows = ((await db.execute(
             sql`SELECT mesReferencia, valorAdiantamento FROM advances WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND aprovado = 'Aprovado' ORDER BY mesReferencia DESC`
-          ) as any[];
+          )) as any).rows || [];
           // Considerar o último adiantamento como pendente de desconto na rescisão
           if (advRows && advRows.length > 0) {
             const lastAdv = advRows[0];
@@ -613,9 +613,9 @@ export const avisoPrevioFeriasRouter = router({
         
         // 2. EPIs com desconto pendente
         try {
-          const [epiRows] = await db.execute(
+          const epiRows = ((await db.execute(
             sql`SELECT descricao, valorDesconto, createdAt FROM epi_discount_alerts WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND status = 'pendente' ORDER BY createdAt DESC`
-          ) as any[];
+          )) as any).rows || [];
           if (epiRows) {
             for (const epi of epiRows) {
               const val = parseBRL(epi.valorDesconto);
@@ -633,9 +633,9 @@ export const avisoPrevioFeriasRouter = router({
         // 3. Descontos do ponto do mês atual (não fechados/abonados)
         try {
           const mesRef = dataDesligamento.substring(0, 7); // YYYY-MM
-          const [pontoRows] = await db.execute(
+          const pontoRows = ((await db.execute(
             sql`SELECT tipo, valorTotal FROM ponto_descontos WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND mesReferencia = ${mesRef} AND status IN ('calculado','revisado') ORDER BY data ASC`
-          ) as any[];
+          )) as any).rows || [];
           if (pontoRows) {
             let totalPonto = 0;
             for (const p of pontoRows) {
@@ -721,15 +721,15 @@ export const avisoPrevioFeriasRouter = router({
           const obraId = empObraAloc?.obraId || null;
           let cfgRows: any[] = [];
           if (obraId) {
-            const [rows] = await db.execute(
+            const rows = ((await db.execute(
               sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId = ${obraId} AND ativo = 1 LIMIT 1`
-            ) as any[];
+            )) as any).rows || [];
             cfgRows = rows || [];
           }
           if (cfgRows.length === 0) {
-            const [rows] = await db.execute(
+            const rows = ((await db.execute(
               sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
-            ) as any[];
+            )) as any).rows || [];
             cfgRows = rows || [];
           }
           if (cfgRows.length > 0) {
@@ -750,18 +750,18 @@ export const avisoPrevioFeriasRouter = router({
         // ============================================================
         const descontos: Array<{ descricao: string; valor: number; tipo: string }> = [];
         try {
-          const [advRows] = await db.execute(
+          const advRows = ((await db.execute(
             sql`SELECT mesReferencia, valorAdiantamento FROM advances WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND aprovado = 'Aprovado' ORDER BY mesReferencia DESC`
-          ) as any[];
+          )) as any).rows || [];
           if (advRows && advRows.length > 0) {
             const val = parseBRL(advRows[0].valorAdiantamento);
             if (val > 0) descontos.push({ descricao: `Adiantamento (${advRows[0].mesReferencia})`, valor: val, tipo: 'adiantamento' });
           }
         } catch {}
         try {
-          const [epiRows] = await db.execute(
+          const epiRows = ((await db.execute(
             sql`SELECT descricao, valorDesconto FROM epi_discount_alerts WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND status = 'pendente'`
-          ) as any[];
+          )) as any).rows || [];
           if (epiRows) {
             for (const epi of epiRows) {
               const val = parseBRL(epi.valorDesconto);
@@ -887,15 +887,15 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         try {
           if (input.obraId) {
-            const [rows] = await db.execute(
+            const rows = ((await db.execute(
               sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND obraId = ${input.obraId} AND ativo = 1 LIMIT 1`
-            ) as any[];
+            )) as any).rows || [];
             if (rows && rows.length > 0) return rows[0];
           }
           // Fallback: config padrão da empresa
-          const [rows] = await db.execute(
+          const rows = ((await db.execute(
             sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
-          ) as any[];
+          )) as any).rows || [];
           return rows && rows.length > 0 ? rows[0] : null;
         } catch {
           return null;
@@ -908,9 +908,9 @@ export const avisoPrevioFeriasRouter = router({
       .query(async ({ input }) => {
         const db = (await getDb())!;
         try {
-          const [rows] = await db.execute(
+          const rows = ((await db.execute(
             sql`SELECT mbc.*, o.nome as obraNome FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc.obraId = o.id WHERE mbc.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) ORDER BY mbc.obraId IS NULL DESC, o.nome ASC`
-          ) as any[];
+          )) as any).rows || [];
           return rows || [];
         } catch {
           return [];
@@ -959,11 +959,11 @@ export const avisoPrevioFeriasRouter = router({
           );
           return { success: true, id: input.id };
         } else {
-          const [result] = await db.execute(
-            sql`INSERT INTO meal_benefit_configs (companyId, obraId, nome, cafeManhaDia, lancheTardeDia, valeAlimentacaoMes, jantaDia, totalVA_iFood, diasUteisRef, cafeAtivo, lancheAtivo, jantaAtivo, observacoes)
-            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.observacoes || null})`
-          ) as any;
-          return { success: true, id: result[0].id };
+          const result = ((await db.execute(
+            sql`INSERT INTO meal_benefit_configs ("companyId", "obraId", nome, "cafeManhaDia", "lancheTardeDia", "valeAlimentacaoMes", "jantaDia", "totalVA_iFood", "diasUteisRef", "cafeAtivo", "lancheAtivo", "jantaAtivo", observacoes)
+            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.observacoes || null}) RETURNING id`
+          )) as any).rows || [];
+          return { success: true, id: result[0]?.id };
         }
       }),
 

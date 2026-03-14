@@ -111,12 +111,12 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
   // Pirâmide etária por gênero
   const ageDist = await db.select({
     faixa: sql<string>`CASE 
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 21 THEN '14-20'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 26 THEN '21-25'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 31 THEN '26-30'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 41 THEN '31-40'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 51 THEN '41-50'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 61 THEN '51-60'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 21 THEN '14-20'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 26 THEN '21-25'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 31 THEN '26-30'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 41 THEN '31-40'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 51 THEN '41-50'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 61 THEN '51-60'
       ELSE '61+'
     END`,
     sexo: employees.sexo,
@@ -124,53 +124,53 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
   }).from(employees)
     .where(and(activeWhere, sql`dataNascimento IS NOT NULL`))
     .groupBy(sql`CASE 
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 21 THEN '14-20'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 26 THEN '21-25'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 31 THEN '26-30'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 41 THEN '31-40'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 51 THEN '41-50'
-      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 61 THEN '51-60'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 21 THEN '14-20'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 26 THEN '21-25'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 31 THEN '26-30'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 41 THEN '31-40'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 51 THEN '41-50'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 61 THEN '51-60'
       ELSE '61+'
     END`, employees.sexo);
 
   // Tempo de empresa (distribuição)
   const tenureDist = await db.select({
     faixa: sql<string>`CASE 
-      WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 3 THEN '< 3 meses'
-      WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 6 THEN '3-6 meses'
-      WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 12 THEN '6-12 meses'
-      WHEN TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 2 THEN '1-2 anos'
-      WHEN TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 5 THEN '2-5 anos'
-      WHEN TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 10 THEN '5-10 anos'
+      WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 3 THEN '< 3 meses'
+      WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 6 THEN '3-6 meses'
+      WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 12 THEN '6-12 meses'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 2 THEN '1-2 anos'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 5 THEN '2-5 anos'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 10 THEN '5-10 anos'
       ELSE '10+ anos'
     END`,
     count: sql<number>`count(*)`,
   }).from(employees)
     .where(and(activeWhere, sql`dataAdmissao IS NOT NULL`))
     .groupBy(sql`CASE 
-      WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 3 THEN '< 3 meses'
-      WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 6 THEN '3-6 meses'
-      WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 12 THEN '6-12 meses'
-      WHEN TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 2 THEN '1-2 anos'
-      WHEN TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 5 THEN '2-5 anos'
-      WHEN TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 10 THEN '5-10 anos'
+      WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 3 THEN '< 3 meses'
+      WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 6 THEN '3-6 meses'
+      WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 12 THEN '6-12 meses'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 2 THEN '1-2 anos'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 5 THEN '2-5 anos'
+      WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 10 THEN '5-10 anos'
       ELSE '10+ anos'
     END`);
 
   // Admissões e demissões por mês (últimos 12 meses)
   const admissoesMensal = await db.select({
-    mes: sql<string>`DATE_FORMAT(dataAdmissao, '%Y-%m')`,
+    mes: sql<string>`TO_CHAR(dataAdmissao, 'YYYY-MM')`,
     count: sql<number>`count(*)`,
   }).from(employees)
-    .where(and(companyWhere(employees, companyId, companyIds), sql`dataAdmissao >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`, sql`${employees.deletedAt} IS NULL`))
-    .groupBy(sql`DATE_FORMAT(dataAdmissao, '%Y-%m')`).orderBy(sql`DATE_FORMAT(dataAdmissao, '%Y-%m')`);
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataAdmissao >= CURRENT_DATE - INTERVAL '12 months'`, sql`${employees.deletedAt} IS NULL`))
+    .groupBy(sql`TO_CHAR(dataAdmissao, 'YYYY-MM')`).orderBy(sql`TO_CHAR(dataAdmissao, 'YYYY-MM')`);
 
   const demissoesMensal = await db.select({
-    mes: sql<string>`DATE_FORMAT(dataDemissao, '%Y-%m')`,
+    mes: sql<string>`TO_CHAR(dataDemissao, 'YYYY-MM')`,
     count: sql<number>`count(*)`,
   }).from(employees)
-    .where(and(companyWhere(employees, companyId, companyIds), sql`dataDemissao >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`, sql`${employees.deletedAt} IS NULL`))
-    .groupBy(sql`DATE_FORMAT(dataDemissao, '%Y-%m')`).orderBy(sql`DATE_FORMAT(dataDemissao, '%Y-%m')`);
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataDemissao >= CURRENT_DATE - INTERVAL '12 months'`, sql`${employees.deletedAt} IS NULL`))
+    .groupBy(sql`TO_CHAR(dataDemissao, 'YYYY-MM')`).orderBy(sql`TO_CHAR(dataDemissao, 'YYYY-MM')`);
 
   // Destaques (apenas ativos)
   const [oldest] = await db.select({
@@ -449,7 +449,7 @@ async function getDashFolhaPagamento(companyId: number, mesRef?: string, company
     totalInss: sql<number>`COALESCE(SUM(CAST(valorInss AS DECIMAL(12,2))), 0)`,
     funcionarios: sql<number>`count(DISTINCT employeeId)`,
   }).from(monthlyPayrollSummary)
-    .where(and(companyWhere(monthlyPayrollSummary, companyId, companyIds), sql`mesReferencia >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y-%m')`))
+    .where(and(companyWhere(monthlyPayrollSummary, companyId, companyIds), sql`mesReferencia >= TO_CHAR(CURRENT_DATE - INTERVAL '12 months', 'YYYY-MM')`))
     .groupBy(monthlyPayrollSummary.mesReferencia)
     .orderBy(monthlyPayrollSummary.mesReferencia);
 
@@ -1339,8 +1339,8 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
       };
       const [min, max] = ranges[filterValue] || [0, 120];
       whereClause = and(whereClause, sql`dataNascimento IS NOT NULL`,
-        sql`TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) >= ${min}`,
-        sql`TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) <= ${max}`);
+        sql`EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) >= ${min}`,
+        sql`EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) <= ${max}`);
       break;
     }
     case 'faixaEtariaSexo': {
@@ -1352,20 +1352,20 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
       };
       const [min2, max2] = ranges2[faixa] || [0, 120];
       whereClause = and(whereClause, sql`dataNascimento IS NOT NULL`,
-        sql`TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) >= ${min2}`,
-        sql`TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) <= ${max2}`,
+        sql`EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) >= ${min2}`,
+        sql`EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) <= ${max2}`,
         sql`${employees.sexo} = ${sexo}`);
       break;
     }
     case 'tempoEmpresa': {
       const tenureRanges: Record<string, string> = {
-        '< 3 meses': 'TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 3',
-        '3-6 meses': 'TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) >= 3 AND TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 6',
-        '6-12 meses': 'TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) >= 6 AND TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 12',
-        '1-2 anos': 'TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) >= 1 AND TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 2',
-        '2-5 anos': 'TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) >= 2 AND TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 5',
-        '5-10 anos': 'TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) >= 5 AND TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 10',
-        '10+ anos': 'TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) >= 10',
+        '< 3 meses': '(EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 3',
+        '3-6 meses': '(EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) >= 3 AND (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 6',
+        '6-12 meses': '(EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) >= 6 AND (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 12',
+        '1-2 anos': 'EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) >= 1 AND EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 2',
+        '2-5 anos': 'EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) >= 2 AND EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 5',
+        '5-10 anos': 'EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) >= 5 AND EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 10',
+        '10+ anos': 'EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) >= 10',
       };
       const tenureSql = tenureRanges[filterValue];
       if (tenureSql) {
@@ -1375,12 +1375,12 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
     }
     case 'admissaoMes': {
       // filterValue = "2025-03"
-      whereClause = and(whereClause, sql`DATE_FORMAT(dataAdmissao, '%Y-%m') = ${filterValue}`);
+      whereClause = and(whereClause, sql`TO_CHAR(dataAdmissao, 'YYYY-MM') = ${filterValue}`);
       break;
     }
     case 'demissaoMes': {
       // filterValue = "2025-03"
-      whereClause = and(whereClause, sql`DATE_FORMAT(dataDemissao, '%Y-%m') = ${filterValue}`);
+      whereClause = and(whereClause, sql`TO_CHAR(dataDemissao, 'YYYY-MM') = ${filterValue}`);
       break;
     }
     default:
@@ -2319,11 +2319,11 @@ async function getDashDocumentos(companyId: number, companyIds?: number[]) {
   const atestPorTipo = await db.select({ tipo: atestados.tipo, count: sql<number>`count(*)` })
     .from(atestados).where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt))).groupBy(atestados.tipo);
   const atestPorMes = await db.select({
-    mes: sql<string>`DATE_FORMAT(${atestados.dataEmissao}, '%Y-%m')`,
+    mes: sql<string>`TO_CHAR(${atestados.dataEmissao}, 'YYYY-MM')`,
     count: sql<number>`count(*)`,
     diasTotal: sql<number>`COALESCE(SUM(${atestados.diasAfastamento}), 0)`,
-  }).from(atestados).where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt), sql`${atestados.dataEmissao} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
-    .groupBy(sql`DATE_FORMAT(${atestados.dataEmissao}, '%Y-%m')`).orderBy(sql`DATE_FORMAT(${atestados.dataEmissao}, '%Y-%m')`);
+  }).from(atestados).where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt), sql`${atestados.dataEmissao} >= CURRENT_DATE - INTERVAL '12 months'`))
+    .groupBy(sql`TO_CHAR(${atestados.dataEmissao}, 'YYYY-MM')`).orderBy(sql`TO_CHAR(${atestados.dataEmissao}, 'YYYY-MM')`);
 
   // ── ADVERTÊNCIAS ──
   const advTotal = await db.select({ count: sql<number>`count(*)` })
@@ -2331,10 +2331,10 @@ async function getDashDocumentos(companyId: number, companyIds?: number[]) {
   const advPorTipo = await db.select({ tipo: warnings.tipoAdvertencia, count: sql<number>`count(*)` })
     .from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia);
   const advPorMes = await db.select({
-    mes: sql<string>`DATE_FORMAT(${warnings.dataOcorrencia}, '%Y-%m')`,
+    mes: sql<string>`TO_CHAR(${warnings.dataOcorrencia}, 'YYYY-MM')`,
     count: sql<number>`count(*)`,
-  }).from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt), sql`${warnings.dataOcorrencia} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
-    .groupBy(sql`DATE_FORMAT(${warnings.dataOcorrencia}, '%Y-%m')`).orderBy(sql`DATE_FORMAT(${warnings.dataOcorrencia}, '%Y-%m')`);
+  }).from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt), sql`${warnings.dataOcorrencia} >= CURRENT_DATE - INTERVAL '12 months'`))
+    .groupBy(sql`TO_CHAR(${warnings.dataOcorrencia}, 'YYYY-MM')`).orderBy(sql`TO_CHAR(${warnings.dataOcorrencia}, 'YYYY-MM')`);
 
   // ── DOCUMENTOS PESSOAIS ──
   const docTotal = await db.select({ count: sql<number>`count(*)` })
@@ -2681,61 +2681,61 @@ async function getDashCompetenciasAnual(companyId: number, ano?: number, company
   const year = ano || new Date().getFullYear();
 
   // All periods for the year
-  const [periods] = await db.execute(sql`
+  const periods = ((await db.execute(sql`
     SELECT * FROM payroll_periods 
-    WHERE companyId = ${companyId} AND mesReferencia LIKE ${year + '%'}
-    ORDER BY mesReferencia ASC
-  `) as any[];
+    WHERE "companyId" = ${companyId} AND "mesReferencia" LIKE ${year + '%'}
+    ORDER BY "mesReferencia" ASC
+  `)) as any).rows || [];
 
   // Monthly payment summaries
-  const [monthlySums] = await db.execute(sql`
-    SELECT mesReferencia,
-      COUNT(*) as totalFuncionarios,
-      SUM(CAST(salarioBrutoMes AS DECIMAL(12,2))) as totalBruto,
-      SUM(CAST(horasExtrasValor AS DECIMAL(12,2))) as totalHE,
-      SUM(CAST(totalDescontos AS DECIMAL(12,2))) as totalDescontos,
-      SUM(CAST(salarioLiquido AS DECIMAL(12,2))) as totalLiquido,
-      SUM(CAST(COALESCE(vaValor,'0') AS DECIMAL(12,2))) as totalVA,
-      SUM(CAST(COALESCE(vtValor,'0') AS DECIMAL(12,2))) as totalVT,
-      SUM(CAST(COALESCE(vrValor,'0') AS DECIMAL(12,2))) as totalVR,
-      SUM(CAST(COALESCE(fgtsValor,'0') AS DECIMAL(12,2))) as totalFGTS,
-      SUM(CAST(COALESCE(inssValor,'0') AS DECIMAL(12,2))) as totalINSS,
-      SUM(CAST(COALESCE(seguroVidaValor,'0') AS DECIMAL(12,2))) as totalSeguro,
-      SUM(CAST(descontoAdiantamento AS DECIMAL(12,2))) as totalAdiantamento,
-      SUM(CAST(descontoFaltas AS DECIMAL(12,2))) as totalDescontoFaltas,
-      SUM(descontoFaltasQtd) as totalFaltasQtd
+  const monthlySums = ((await db.execute(sql`
+    SELECT "mesReferencia",
+      COUNT(*) as "totalFuncionarios",
+      SUM(CAST("salarioBrutoMes" AS DECIMAL(12,2))) as "totalBruto",
+      SUM(CAST("horasExtrasValor" AS DECIMAL(12,2))) as "totalHE",
+      SUM(CAST("totalDescontos" AS DECIMAL(12,2))) as "totalDescontos",
+      SUM(CAST("salarioLiquido" AS DECIMAL(12,2))) as "totalLiquido",
+      SUM(CAST(COALESCE("vaValor",'0') AS DECIMAL(12,2))) as "totalVA",
+      SUM(CAST(COALESCE("vtValor",'0') AS DECIMAL(12,2))) as "totalVT",
+      SUM(CAST(COALESCE("vrValor",'0') AS DECIMAL(12,2))) as "totalVR",
+      SUM(CAST(COALESCE("fgtsValor",'0') AS DECIMAL(12,2))) as "totalFGTS",
+      SUM(CAST(COALESCE("inssValor",'0') AS DECIMAL(12,2))) as "totalINSS",
+      SUM(CAST(COALESCE("seguroVidaValor",'0') AS DECIMAL(12,2))) as "totalSeguro",
+      SUM(CAST("descontoAdiantamento" AS DECIMAL(12,2))) as "totalAdiantamento",
+      SUM(CAST("descontoFaltas" AS DECIMAL(12,2))) as "totalDescontoFaltas",
+      SUM("descontoFaltasQtd") as "totalFaltasQtd"
     FROM payroll_payments
-    WHERE companyId = ${companyId} AND mesReferencia LIKE ${year + '%'}
-    GROUP BY mesReferencia
-    ORDER BY mesReferencia ASC
-  `) as any[];
+    WHERE "companyId" = ${companyId} AND "mesReferencia" LIKE ${year + '%'}
+    GROUP BY "mesReferencia"
+    ORDER BY "mesReferencia" ASC
+  `)) as any).rows || [];
 
   // Inconsistencies summary per month
-  const [inconsistencias] = await db.execute(sql`
-    SELECT mesCompetencia,
+  const inconsistencias = ((await db.execute(sql`
+    SELECT "mesCompetencia",
       COUNT(*) as total,
-      SUM(CASE WHEN isInconsistente = 1 THEN 1 ELSE 0 END) as inconsistentes,
-      SUM(CASE WHEN inconsistenciaResolvida = 1 THEN 1 ELSE 0 END) as resolvidas
+      SUM(CASE WHEN "isInconsistente" = true THEN 1 ELSE 0 END) as inconsistentes,
+      SUM(CASE WHEN "inconsistenciaResolvida" = true THEN 1 ELSE 0 END) as resolvidas
     FROM timecard_daily
-    WHERE companyId = ${companyId} AND mesCompetencia LIKE ${year + '%'}
-    GROUP BY mesCompetencia
-    ORDER BY mesCompetencia ASC
-  `) as any[];
+    WHERE "companyId" = ${companyId} AND "mesCompetencia" LIKE ${year + '%'}
+    GROUP BY "mesCompetencia"
+    ORDER BY "mesCompetencia" ASC
+  `)) as any).rows || [];
 
   // Cost per obra (annual)
-  const [custoObra] = await db.execute(sql`
-    SELECT o.nome as obraNome, o.id as obraId,
-      COUNT(DISTINCT td.employeeId) as funcionarios,
-      COUNT(DISTINCT td.data) as diasTrabalhados,
-      SUM(CAST(COALESCE(td.totalHorasNormais,'0') AS DECIMAL(10,2))) as horasNormais,
-      SUM(CAST(COALESCE(td.totalHorasExtras,'0') AS DECIMAL(10,2))) as horasExtras
+  const custoObra = ((await db.execute(sql`
+    SELECT o.nome as "obraNome", o.id as "obraId",
+      COUNT(DISTINCT td."employeeId") as funcionarios,
+      COUNT(DISTINCT td.data) as "diasTrabalhados",
+      SUM(CAST(COALESCE(td."totalHorasNormais",'0') AS DECIMAL(10,2))) as "horasNormais",
+      SUM(CAST(COALESCE(td."totalHorasExtras",'0') AS DECIMAL(10,2))) as "horasExtras"
     FROM timecard_daily td
-    LEFT JOIN obras o ON td.obraId = o.id
-  WHERE td.companyId IN (${sql.join((companyIds || [companyId]).map(id => sql`${id}`), sql`, `)}) AND td.mesCompetencia LIKE ${year + '%'}
-    AND td.obraId IS NOT NULL
+    LEFT JOIN obras o ON td."obraId" = o.id
+    WHERE td."companyId" IN (${sql.join((companyIds || [companyId]).map(id => sql`${id}`), sql`, `)}) AND td."mesCompetencia" LIKE ${year + '%'}
+    AND td."obraId" IS NOT NULL
     GROUP BY o.id, o.nome
-    ORDER BY horasNormais DESC
-  `) as any[];
+    ORDER BY "horasNormais" DESC
+  `)) as any).rows || [];
 
   // Totals
   const totalBrutoAnual = (monthlySums || []).reduce((s: number, r: any) => s + Number(r.totalBruto || 0), 0);

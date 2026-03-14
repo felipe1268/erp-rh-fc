@@ -881,15 +881,15 @@ export const controleDocumentosRouter = router({
         ));
 
       // Funcionários ativos SEM nenhum ASO
-      const [semAsoCount] = await db.execute(sql`
+      const semAsoRows = ((await db.execute(sql`
         SELECT COUNT(*) as cnt FROM employees e
-        WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
-          AND e.deletedAt IS NULL
+        WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
+          AND e."deletedAt" IS NULL
           AND e.status = 'Ativo'
           AND NOT EXISTS (
-            SELECT 1 FROM asos a WHERE a.employeeId = e.id AND a.deletedAt IS NULL
+            SELECT 1 FROM asos a WHERE a."employeeId" = e.id AND a."deletedAt" IS NULL
           )
-      `) as any[];
+      `)) as any).rows || [];
 
       return {
         totalASOs: Number(asoCount.count),
@@ -900,7 +900,7 @@ export const controleDocumentosRouter = router({
         asosAVencer: Number(asosAVencer.count),
         treinVencidos: Number(treinVencidos.count),
         treinAVencer: Number(treinAVencer.count),
-        semASO: Number((semAsoCount as any[])[0]?.cnt || 0),
+        semASO: Number(semAsoRows[0]?.cnt || 0),
       };
     }),
 
@@ -909,20 +909,20 @@ export const controleDocumentosRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const [rows] = await db.execute(sql`
-        SELECT e.id, e.nomeCompleto, e.cpf, e.funcao, e.dataAdmissao, e.status,
-          ob.nome as obraNome
+      const rows = ((await db.execute(sql`
+        SELECT e.id, e."nomeCompleto", e.cpf, e.funcao, e."dataAdmissao", e.status,
+          ob.nome as "obraNome"
         FROM employees e
-        LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
-        LEFT JOIN obras ob ON of2.obraId = ob.id
-        WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
-          AND e.deletedAt IS NULL
+        LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = true
+        LEFT JOIN obras ob ON of2."obraId" = ob.id
+        WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
+          AND e."deletedAt" IS NULL
           AND e.status = 'Ativo'
           AND NOT EXISTS (
-            SELECT 1 FROM asos a WHERE a.employeeId = e.id AND a.deletedAt IS NULL
+            SELECT 1 FROM asos a WHERE a."employeeId" = e.id AND a."deletedAt" IS NULL
           )
-        ORDER BY e.nomeCompleto ASC
-      `) as any[];
+        ORDER BY e."nomeCompleto" ASC
+      `)) as any).rows || [];
       return rows as { id: number; nomeCompleto: string; cpf: string | null; funcao: string | null; dataAdmissao: string | null; status: string; obraNome: string | null }[];
     }),
 
