@@ -315,7 +315,7 @@ export default function PlanejamentoDetalhe() {
           <span className="text-xs font-medium text-slate-500 shrink-0">Avanço físico</span>
           <div className="flex-1 bg-slate-100 rounded-full h-3 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${avancoAtual >= 90 ? "bg-emerald-500" : avancoAtual >= 60 ? "bg-blue-500" : avancoAtual >= 30 ? "bg-amber-500" : "bg-slate-400"}`}
+              className={`h-full rounded-full transition-all ${avancoAtual >= 90 ? "bg-emerald-500" : avancoAtual >= 60 ? "bg-blue-600" : avancoAtual >= 30 ? "bg-amber-500" : "bg-sky-500"}`}
               style={{ width: `${avancoAtual}%` }}
             />
           </div>
