@@ -872,7 +872,7 @@ export const comprasRouter = router({
       return { ok: true };
     }),
 
-  // Resumo/contadores para dashboard
+  // Resumo/contadores para dashboard (legado)
   resumoCompras: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
@@ -891,5 +891,63 @@ export const comprasRouter = router({
         ocTotal: ocs.length,
         totalOCsValor: ocs.reduce((s, r) => s + n(r.total), 0),
       };
+    }),
+
+  getDashboardCompras: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const today = new Date().toISOString().slice(0, 10);
+
+      const [scs, cots, ocs, forn] = await Promise.all([
+        db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId)).orderBy(desc(comprasSolicitacoes.criadoEm)),
+        db.select().from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId)).orderBy(desc(comprasCotacoes.criadoEm)),
+        db.select().from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId)).orderBy(desc(comprasOrdens.criadoEm)),
+        db.select().from(fornecedores).where(and(eq(fornecedores.companyId, input.companyId), eq(fornecedores.ativo, true))),
+      ]);
+
+      // KPIs
+      const kpis = {
+        scPendentes:      scs.filter(r => r.status === "pendente").length,
+        scAguardandoAprov:scs.filter(r => r.aprovacaoStatus === "aguardando").length,
+        cotPendentes:     cots.filter(r => r.status === "pendente").length,
+        ocPendentes:      ocs.filter(r => r.status === "pendente").length,
+        ocAprovadas:      ocs.filter(r => r.status === "aprovada").length,
+        totalValorOCs:    ocs.filter(r => !["cancelada"].includes(r.status)).reduce((s, r) => s + n(r.total), 0),
+        fornecedoresAtivos: forn.length,
+      };
+
+      // Alertas: OCs com entrega vencida ou hoje
+      const alertasOC = ocs.filter(r =>
+        r.dataEntregaPrevista &&
+        r.dataEntregaPrevista <= today &&
+        !["entregue", "cancelada"].includes(r.status)
+      ).map(r => ({
+        id: r.id, numeroOc: r.numeroOc, dataEntregaPrevista: r.dataEntregaPrevista,
+        status: r.status, fornecedorId: r.fornecedorId, total: r.total,
+        atrasado: r.dataEntregaPrevista! < today,
+      }));
+
+      // SCs aguardando aprovação
+      const scsPendentesAprov = scs.filter(r => r.aprovacaoStatus === "aguardando" && r.status !== "cancelado").slice(0, 8);
+
+      // Cotações pendentes (mais antigas primeiro)
+      const cotsPendentes = cots.filter(r => r.status === "pendente").slice(0, 8);
+
+      // OCs recentes (últimas 8)
+      const ocsRecentes = ocs.slice(0, 8);
+
+      // SCs recentes (últimas 8)
+      const scsRecentes = scs.slice(0, 8);
+
+      // Gastos por mês (últimos 6 meses) — baseado na data de criação das OCs aprovadas/entregues
+      const seisM: Record<string, number> = {};
+      ocs.filter(r => !["cancelada"].includes(r.status)).forEach(r => {
+        const mes = r.criadoEm.slice(0, 7); // YYYY-MM
+        seisM[mes] = (seisM[mes] ?? 0) + n(r.total);
+      });
+      const gastosMensais = Object.entries(seisM).sort(([a], [b]) => a.localeCompare(b)).slice(-6).map(([mes, valor]) => ({ mes, valor }));
+
+      return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn };
     }),
 });

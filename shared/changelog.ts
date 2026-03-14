@@ -390,4 +390,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 16:00:00",
   },
+  {
+    version: 238,
+    titulo: "Painel de Controle — Módulo de Compras",
+    descricao: "Novo painel de controle centralizado do módulo Compras em /compras/painel. KPIs em tempo real: SCs pendentes e aguardando aprovação, Cotações pendentes, OCs em aberto e valor total. Seções: alertas de entregas vencidas, SCs aguardando aprovação, cotações pendentes, OCs recentes, gráfico de barras de gastos mensais, SCs recentes. Atualização automática a cada 60s. Menu Compras agora abre no Painel por padrão.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 20:00:00",
+  },
 ];

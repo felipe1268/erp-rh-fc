@@ -126,6 +126,7 @@ const PlanejamentoLista   = lazy(() => import("./pages/planejamento/Planejamento
 const PlanejamentoDetalhe = lazy(() => import("./pages/planejamento/PlanejamentoDetalhe"));
 
 // Compras
+const PainelCompras = lazy(() => import("./pages/compras/Painel"));
 const Fornecedores = lazy(() => import("./pages/compras/Fornecedores"));
 const Almoxarifado = lazy(() => import("./pages/compras/Almoxarifado"));
 const Solicitacoes = lazy(() => import("./pages/compras/Solicitacoes"));
@@ -276,6 +277,7 @@ function Router() {
         <Route path="/planejamento"              component={PlanejamentoLista} />
         <Route path="/planejamento/:id"          component={PlanejamentoDetalhe} />
         {/* Compras */}
+        <Route path="/compras/painel"            component={PainelCompras} />
         <Route path="/compras/fornecedores"      component={Fornecedores} />
         <Route path="/compras/almoxarifado"      component={Almoxarifado} />
         <Route path="/compras/solicitacoes"      component={Solicitacoes} />

@@ -283,6 +283,12 @@ const menuSectionsParceiros: MenuSection[] = [
 
 const menuSectionsCompras: MenuSection[] = [
   {
+    title: "Painel",
+    items: [
+      { icon: LayoutDashboard, label: "Painel de Controle",   path: "/compras/painel"           },
+    ],
+  },
+  {
     title: "Fluxo de Compras",
     items: [
       { icon: ClipboardList,   label: "Solicitações (SC)",    path: "/compras/solicitacoes"     },
@@ -418,7 +424,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "orcamento":     "/orcamento/painel",
   "planejamento":  "/planejamento",
   "cadastro":      "/empresas",
-  "compras":       "/compras/solicitacoes",
+  "compras":       "/compras/painel",
   "all": "/painel",
 };
 
