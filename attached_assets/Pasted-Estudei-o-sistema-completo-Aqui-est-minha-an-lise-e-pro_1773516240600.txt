@@ -1,0 +1,43 @@
+Estudei o sistema completo. Aqui está minha análise e proposta antes de executar qualquer coisa:
+
+O que existe hoje
+Almoxarifado atual:
+
+Uma única tela "Almoxarifado Central" com itens gerais
+Integrado ao fluxo de Compras (OC → entrada automática no almoxarifado)
+Itens têm: nome, unidade, categoria (texto livre), foto, estoque, movimentações
+EPIs no SST (módulo separado):
+
+Sistema muito especializado: Certificado de Aprovação (CA), validade, entrega por funcionário com assinatura, checklist, estoque por obra, transferências entre obras
+É um sistema de conformidade legal (NR-6), não só de estoque
+11 páginas dedicadas no sistema SST
+Minha proposta: Multi-Almoxarifado por Tipo
+A ideia é criar um sistema de múltiplos almoxarifados onde cada almoxarifado é uma entidade independente, definida pelo usuário.
+
+Estrutura proposta:
+
+MÓDULO ALMOXARIFADO
+├── [+ Novo Almoxarifado]
+├── 📦 Almoxarifado de Insumos     → /almoxarifado/1
+├── 🔧 Almoxarifado de Ferramentas → /almoxarifado/2
+├── 🏗️ Almoxarifado de Equipamentos → /almoxarifado/3
+└── 🦺 Almoxarifado de EPIs        → /almoxarifado/4  (NOVO - stock control)
+Sobre a questão do EPI — importante:
+
+Recomendo NÃO migrar o sistema de EPIs do SST para cá. O motivo: o EPI do SST é um sistema de compliance (CA, assinatura de recebimento, validade, entrega por funcionário) — ele é obrigatório por lei. Já o "Almoxarifado de EPIs" que propus seria apenas para controle de estoque físico (quantas unidades tem no galpão). Os dois sistemas podem coexistir e até se comunicar futuramente (ex: quando o SST registra uma entrega de EPI, baixa automaticamente do almoxarifado).
+
+O que muda no banco de dados:
+
+Nova tabela almoxarifados (id, nome, tipo, cor, ícone, descrição)
+Campo almoxarifadoId na tabela de itens existente (itens atuais migram para um "Almoxarifado Central" padrão)
+O que muda na tela:
+
+Sidebar mostra lista dinâmica de almoxarifados (igual ao padrão dos projetos no Planejamento)
+Botão "Novo Almoxarifado" na sidebar
+Cada almoxarifado tem sua própria tela isolada de itens/estoque/movimentações
+Dashboard geral mostrando todos os almoxarifados com totais
+O que fica IGUAL:
+
+Toda a lógica atual de itens, movimentações, fotos, Compras→Almoxarifado
+O módulo SST de EPIs não é tocado
+Aprova essa abordagem? Ou quer ajustar algum ponto — como os tipos de almoxarifado, a relação com o SST, ou como a sidebar deve se organizar?
