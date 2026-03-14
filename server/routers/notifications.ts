@@ -31,14 +31,16 @@ export const notificationsRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const [result] = await db!.insert(notificationRecipients).values({
-        ...input,
+      const rows = await db!.insert(notificationRecipients).values({
+        companyId: input.companyId,
+        nome: input.nome,
+        email: input.email,
         notificarContratacao: input.notificarContratacao ? 1 : 0,
         notificarDemissao: input.notificarDemissao ? 1 : 0,
         notificarTransferencia: input.notificarTransferencia ? 1 : 0,
         notificarAfastamento: input.notificarAfastamento ? 1 : 0,
-      });
-      return { id: result[0].id, success: true };
+      }).returning();
+      return { id: rows[0]?.id, success: true };
     }),
 
   updateRecipient: protectedProcedure
