@@ -38,7 +38,13 @@ export async function getDb() {
   const dbUrl = ENV.databaseUrl || process.env.DATABASE_URL;
   if (!_db && dbUrl) {
     try {
-      const pool = new Pool({ connectionString: dbUrl });
+      const pool = new Pool({
+        connectionString: dbUrl,
+        max: 10,                          // max 10 concurrent connections
+        idleTimeoutMillis: 30000,         // release idle connections after 30s
+        connectionTimeoutMillis: 5000,    // fail fast if no connection in 5s
+        allowExitOnIdle: false,
+      });
       _db = drizzle(pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);

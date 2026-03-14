@@ -96,6 +96,15 @@ shared/         # Shared types and constants
 - Login: `felipe@fcengenhariacivil.com.br` / `asdf1020` (role: admin_master, userId: 601043)
 - Company IDs: 60002 (FC Engenharia), 60004 (CF Hotelaria), 60005 (Julio Ferraz), 90001 (Locnow)
 
+## Performance Optimizations (March 2026)
+- **Gzip compression**: `compression` middleware added as first middleware in Express (`server/_core/index.ts`). Level 6, threshold 1KB. Reduces vendor bundles from ~1.2MB → ~350KB over the wire.
+- **Static asset caching**: `/assets/*` served with `Cache-Control: max-age=31536000, immutable` (1 year). `index.html` served with `no-cache` to force re-check.
+- **React Query staleTime=30s**: All queries now cached for 30 seconds after fetch. Navigation between pages no longer triggers redundant API calls. `refetchOnWindowFocus: false` prevents refetch on tab switch. Smart retry: no retry on 401/403/404.
+- **DB connection pool**: Explicit `max: 10`, `idleTimeoutMillis: 30000`, `connectionTimeoutMillis: 5000`.
+- **12 new composite DB indexes**: `idx_emp_company_status_deleted` (employees), `idx_emp_company_deleted`, `idx_td_company_mes` (timecard_daily), `idx_td_emp_mes`, `idx_aso_company_emp_deleted`, `idx_of_employee_active`, `idx_emp_nome_search` (GIN trigram), `idx_ppay_company_mes_emp`, `idx_ed_company_emp_deleted`, `idx_vp_company_emp_status`, `idx_pp_company_status` (payroll_periods), `idx_he_company_status` (he_solicitacoes).
+- **pg_trgm extension**: Enabled for fast text search on employee names.
+- **Vite build**: `sourcemap: false`, target `es2020`, finer manual chunks (added `vendor-utils-sm` for superjson/zod/clsx).
+
 ## Notes
 - Default password for first login: `asdf1020`
 - After every completed adjustment, click **Publish** to deploy (autoscale, build=`pnpm run build`, run=`node dist/index.js`)
