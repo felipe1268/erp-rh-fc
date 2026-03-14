@@ -173,7 +173,7 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules')) {
             // Heavy charting libs — load only on chart pages
-            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory')) return 'vendor-charts';
+            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory') || id.includes('lodash')) return 'vendor-charts';
             // UI primitives
             if (id.includes('@radix-ui') || id.includes('cmdk') || id.includes('vaul') || id.includes('embla')) return 'vendor-ui';
             // Date / Office / file utils
