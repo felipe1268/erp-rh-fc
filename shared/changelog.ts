@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 288,
+    titulo: "Obras — Engenheiro Responsável vinculado a colaboradores RH",
+    descricao: "O campo 'Engenheiro / Responsável' no formulário de Obras agora exibe um combobox buscável conectado ao banco de colaboradores. Somente funcionários com cargos/funções de liderança aparecem (Engenheiro, Encarregado, Mestre, Coordenador, Supervisor, Gerente, Diretor, Técnico, Arquiteto, Gestor, Líder). O nome selecionado é salvo no campo 'responsavel' da obra para rastreabilidade.",
+    tipo: "feature",
+    modulos: "Cadastro / Obras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:30:00",
+  },
+  {
     version: 287,
     titulo: "Obras — campo Cliente obrigatório + cadastro rápido inline",
     descricao: "Removido texto '(opcional)' do campo Cliente no formulário de obra. Adicionado botão '+ Cadastrar cliente' no label e opção ao final do dropdown. Ao clicar, abre mini-modal com campos: Razão Social (obrigatório), Nome Fantasia, Telefone e E-mail. Após salvar, o novo cliente é selecionado automaticamente na obra.",

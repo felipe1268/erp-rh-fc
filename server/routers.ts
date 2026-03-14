@@ -41,7 +41,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
 import { obraSns, employees, blacklistReactivationRequests, companies } from "../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, or, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
 import { dashboardsRouter } from "./routers/dashboards";
@@ -878,6 +878,24 @@ export const appRouter = router({
       await deleteObra(input.id, ctx.user.id, ctx.user.name ?? "Sistema");
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "obras", entityType: "obra", entityId: input.id, details: `Obra excluída (lixeira)` });
       return { success: true };
+    }),
+    // Lista colaboradores com cargos de liderança para o campo "Engenheiro Responsável"
+    listLiderancas: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
+      const db = await getDb();
+      const LIDERANCA_KEYWORDS = ["engenheiro", "encarregado", "mestre", "coordenador", "supervisor", "gerente", "diretor", "técnico", "tecnico", "arquiteto", "gestor", "lider", "líder"];
+      const rows = await db
+        .select({ id: employees.id, nomeCompleto: employees.nomeCompleto, funcao: employees.funcao, cargo: employees.cargo, fotoUrl: employees.fotoUrl })
+        .from(employees)
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          eq(employees.isActive, 1),
+          or(...LIDERANCA_KEYWORDS.flatMap(kw => [
+            ilike(employees.funcao, `%${kw}%`),
+            ilike(employees.cargo, `%${kw}%`),
+          ]))
+        ))
+        .orderBy(employees.nomeCompleto);
+      return rows;
     }),
     // Funcionários alocados
     funcionarios: protectedProcedure.input(z.object({ obraId: z.number(), obraIds: z.array(z.number()).optional() })).query(({ input }) => getObraFuncionarios(input.obraId, input.obraIds)),

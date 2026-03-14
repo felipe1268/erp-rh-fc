@@ -29,6 +29,7 @@ const STATUS_OPTIONS = [
 type ObraForm = {
   nome: string; numOrcamento: string;
   cliente: string;
+  responsavel: string;
   status: string; cep: string; endereco: string;
   dataInicio: string; dataPrevisaoFim: string; observacoes: string;
   usarConvencaoMatriz: number; convencaoId: number | null;
@@ -37,6 +38,7 @@ type ObraForm = {
 const emptyForm: ObraForm = {
   nome: "", numOrcamento: "",
   cliente: "",
+  responsavel: "",
   status: "Planejamento", cep: "", endereco: "",
   dataInicio: "", dataPrevisaoFim: "", observacoes: "",
   usarConvencaoMatriz: 1, convencaoId: null,
@@ -54,6 +56,9 @@ export default function Obras() {
 
   const availableSnsQ = trpc.obras.listAvailableSns.useQuery({ companyId }, { enabled: !!companyId });
   const availableSns = availableSnsQ.data ?? [];
+
+  const liderancasQ = trpc.obras.listLiderancas.useQuery({ companyId }, { enabled: !!companyId });
+  const liderancas = liderancasQ.data ?? [];
 
   const clientesQ = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const clientes = clientesQ.data ?? [];
@@ -167,12 +172,13 @@ export default function Obras() {
     return list;
   }, [obras, search, statusFilter, snsByObra]);
 
-  const openNew = () => { setEditingId(null); setForm(emptyForm); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setDialogOpen(true); };
+  const openNew = () => { setEditingId(null); setForm(emptyForm); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca(""); setDialogOpen(true); };
   const openEdit = (obra: any) => {
     setEditingId(obra.id);
     setForm({
       nome: obra.nome || "", numOrcamento: obra.numOrcamento || obra.codigo || "",
       cliente: obra.cliente || "",
+      responsavel: obra.responsavel || "",
       status: obra.status || "Planejamento",
       cep: obra.cep || "", endereco: obra.endereco || "",
       dataInicio: obra.dataInicio || "", dataPrevisaoFim: obra.dataPrevisaoFim || "",
@@ -181,7 +187,7 @@ export default function Obras() {
       convencaoId: obra.convencaoId ?? null,
     });
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
-    setClienteOpen(false); setClienteBusca("");
+    setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca("");
     setDialogOpen(true);
   };
 
@@ -222,10 +228,21 @@ export default function Obras() {
   const [novoClienteModal, setNovoClienteModal] = useState(false);
   const [novoClienteForm, setNovoClienteForm] = useState({ razaoSocial: "", nomeFantasia: "", telefone: "", email: "" });
 
+  const [responsavelOpen, setResponsavelOpen] = useState(false);
+  const [responsavelBusca, setResponsavelBusca] = useState("");
+  const responsavelRef = useRef<HTMLDivElement>(null);
+  const liderancasFiltradas = useMemo(() => {
+    const q = responsavelBusca.toLowerCase();
+    return q ? liderancas.filter((l: any) => l.nomeCompleto?.toLowerCase().includes(q) || (l.funcao || l.cargo || "").toLowerCase().includes(q)) : liderancas;
+  }, [liderancas, responsavelBusca]);
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (clienteRef.current && !clienteRef.current.contains(e.target as Node)) {
         setClienteOpen(false);
+      }
+      if (responsavelRef.current && !responsavelRef.current.contains(e.target as Node)) {
+        setResponsavelOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -520,6 +537,66 @@ export default function Obras() {
                           Cadastrar novo cliente
                         </button>
                       </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── ENGENHEIRO RESPONSÁVEL (combobox de colaboradores liderança) ── */}
+            <div className="sm:col-span-2" ref={responsavelRef}>
+              <Label className="flex items-center gap-1.5">
+                <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                Engenheiro / Responsável
+                {liderancas.length === 0 && <span className="text-xs text-slate-400 font-normal ml-1">(cadastre colaboradores com cargos de liderança em RH)</span>}
+              </Label>
+              <div className="relative mt-1">
+                <Input
+                  value={responsavelOpen ? responsavelBusca : form.responsavel}
+                  onChange={e => { setResponsavelBusca(e.target.value); setForm(f => ({ ...f, responsavel: e.target.value })); setResponsavelOpen(true); }}
+                  onFocus={() => { setResponsavelBusca(form.responsavel); setResponsavelOpen(true); }}
+                  placeholder={liderancas.length === 0 ? "Nenhum colaborador de liderança encontrado" : "Selecione ou digite o nome..."}
+                  className="pr-8"
+                />
+                <ChevronDown
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer"
+                  onClick={() => { setResponsavelBusca(""); setResponsavelOpen(o => !o); }}
+                />
+                {form.responsavel && !responsavelOpen && (
+                  <button
+                    type="button"
+                    className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    onClick={() => { setForm(f => ({ ...f, responsavel: "" })); setResponsavelBusca(""); }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {responsavelOpen && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                    {liderancasFiltradas.length === 0 ? (
+                      <div className="px-3 py-5 text-center text-sm text-slate-400">
+                        {liderancas.length === 0
+                          ? "Nenhum colaborador de liderança cadastrado. Acesse RH → Colaboradores e verifique os cargos."
+                          : "Nenhum colaborador encontrado para esta busca."}
+                      </div>
+                    ) : (
+                      liderancasFiltradas.map((l: any) => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          className="w-full text-left px-3 py-2.5 hover:bg-emerald-50 flex items-center gap-2.5 border-b border-slate-50 last:border-0"
+                          onClick={() => { setForm(f => ({ ...f, responsavel: l.nomeCompleto })); setResponsavelOpen(false); }}
+                        >
+                          {l.fotoUrl
+                            ? <img src={l.fotoUrl} className="h-7 w-7 rounded-full object-cover shrink-0" />
+                            : <div className="h-7 w-7 rounded-full bg-emerald-100 flex items-center justify-center shrink-0"><UserCheck className="h-3.5 w-3.5 text-emerald-600" /></div>
+                          }
+                          <div>
+                            <p className="text-sm font-medium text-slate-800">{l.nomeCompleto}</p>
+                            {(l.funcao || l.cargo) && <p className="text-xs text-slate-500">{l.funcao || l.cargo}</p>}
+                          </div>
+                        </button>
+                      ))
                     )}
                   </div>
                 )}
