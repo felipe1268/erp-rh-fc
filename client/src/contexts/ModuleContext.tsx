@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "cadastro" | "compras" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "cadastro" | "compras" | "almoxarifado" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -71,7 +71,8 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/planejamento":           "planejamento" as ModuleId,
   "/comparativo-convencoes": "rh-dp" as ModuleId,
   "/compras/painel":           "compras" as ModuleId,
-  "/compras/almoxarifado":     "compras" as ModuleId,
+  "/compras/almoxarifado":     "almoxarifado" as ModuleId,
+  "/almoxarifado":             "almoxarifado" as ModuleId,
   "/compras/solicitacoes":     "compras" as ModuleId,
   "/compras/cotacoes":         "compras" as ModuleId,
   "/compras/ordens":           "compras" as ModuleId,
@@ -102,6 +103,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "planejamento": "Planejamento",
   "cadastro": "Cadastro",
   "compras": "Compras",
+  "almoxarifado": "Almoxarifado",
   "all": "Todos os Módulos",
 };
 
@@ -111,7 +113,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "cadastro" || saved === "compras" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp"; // Default to RH & DP
