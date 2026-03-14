@@ -344,3 +344,8 @@
     min-height: 18px !important;
   }
 }
+
+/* Hide scrollbar for tab bar — visually clean while remaining scrollable */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
