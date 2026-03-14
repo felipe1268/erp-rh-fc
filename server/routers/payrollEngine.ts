@@ -149,11 +149,11 @@ export const payrollEngineRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const ano = input.ano || new Date().getFullYear();
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT * FROM payroll_periods 
         WHERE companyId = ${input.companyId} AND mesReferencia LIKE ${ano + '%'}
         ORDER BY mesReferencia DESC
-      `) as any[];
+      `)) as any).rows || [];
       return rows || [];
     }),
 
@@ -162,11 +162,11 @@ export const payrollEngineRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT * FROM payroll_periods 
         WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
         LIMIT 1
-      `) as any[];
+      `)) as any).rows || [];
       const period = rows[0];
       if (!period) return null;
       return period;
@@ -189,28 +189,28 @@ export const payrollEngineRouter = router({
       const escuroFim = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
       // Check if already exists
-      const [existing] = await db.execute(sql`
+      const existing = ((await db.execute(sql`
         SELECT id FROM payroll_periods 
         WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
       if (existing[0]) {
         return { id: existing[0].id, message: "Competência já existe" };
       }
 
       // Count active employees
-      const [empCount] = await db.execute(sql`
+      const empCount = ((await db.execute(sql`
         SELECT COUNT(*) as total FROM employees 
         WHERE companyId = ${input.companyId} 
         AND tipoContrato = 'CLT'
         AND status IN ('Ativo', 'Ferias')
         AND deletedAt IS NULL
-      `) as any[];
+      `)) as any).rows || [];
       const totalFunc = empCount[0]?.total || 0;
 
-      const [result] = await db.execute(sql`
+      const result = ((await db.execute(sql`
         INSERT INTO payroll_periods (companyId, mesReferencia, pontoInicio, pontoFim, escuroInicio, escuroFim, status, totalFuncionarios)
         VALUES (${input.companyId}, ${input.mesReferencia}, ${pontoInicio}, ${pontoFim}, ${escuroInicio}, ${escuroFim}, 'aberta', ${totalFunc})
-      `) as any[];
+      `)) as any).rows || [];
       return { id: result[0].id, message: "Competência aberta com sucesso" };
     }),
 
@@ -224,9 +224,9 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
       // Validate period exists and is in correct status
-      const [periods] = await db.execute(
-        sql`SELECT id, status FROM payroll_periods WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} LIMIT 1`
-      ) as any[];
+      const periods = ((await db.execute(
+        sql`SELECT id, status FROM payroll_periods WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} LIMIT 1`
+      )) as any).rows || [];
       if (!periods[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Competência não encontrada. Abra a competência primeiro." });
       if (periods[0].status !== "aberta" && periods[0].status !== "ponto_importado") {
         throw new TRPCError({ code: "BAD_REQUEST", message: `Competência está no status '${periods[0].status}'. Para reprocessar o ponto, limpe a etapa primeiro.` });
@@ -482,7 +482,7 @@ export const payrollEngineRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, o.nome as obraNome
         FROM timecard_daily td
         LEFT JOIN employees e ON td.employeeId = e.id
@@ -491,7 +491,7 @@ export const payrollEngineRouter = router({
         AND td.mesCompetencia = ${input.mesReferencia}
         AND td.is_inconsistente = 1
         ORDER BY td.data, e.nomeCompleto
-      `) as any[];
+      `)) as any).rows || [];
       return rows || [];
     }),
 
@@ -577,7 +577,7 @@ export const payrollEngineRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT 
           SUM(CASE WHEN is_inconsistente = 1 THEN 1 ELSE 0 END) as pendentes,
           SUM(CASE WHEN inconsistencia_resolvida = 1 THEN 1 ELSE 0 END) as resolvidas,
@@ -587,7 +587,7 @@ export const payrollEngineRouter = router({
           SUM(CASE WHEN inconsistencia_tipo = 'saida_faltando' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as saidasFaltando
         FROM timecard_daily 
         WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
       return rows[0] || { pendentes: 0, resolvidas: 0, batidasImpares: 0, sobreposicoes: 0, entradasFaltando: 0, saidasFaltando: 0 };
     }),
 
@@ -630,13 +630,13 @@ export const payrollEngineRouter = router({
       `);
 
       // Buscar registros escuro (inclui os que acabaram de ser resetados)
-      const [escuroRecords] = await db.execute(sql`
+      const escuroRecords = ((await db.execute(sql`
         SELECT * FROM timecard_daily 
         WHERE companyId = ${input.companyId} 
         AND mesCompetencia = ${prevMes}
         AND statusDia = 'escuro'
         ORDER BY employeeId, data
-      `) as any[];
+      `)) as any).rows || [];
       if (!escuroRecords || (escuroRecords as any[]).length === 0) {
         await db.execute(sql`
           UPDATE payroll_periods SET status = 'aferida', afericaoRealizada = 1, afericaoEm = NOW(), afericaoPor = ${ctx.user.name || "Sistema"}
@@ -866,7 +866,7 @@ export const payrollEngineRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT pa.*, e.nomeCompleto, e.funcao, e.codigoInterno
         FROM payroll_adjustments pa
         LEFT JOIN employees e ON pa.employeeId = e.id
@@ -874,7 +874,7 @@ export const payrollEngineRouter = router({
         AND pa.mesDesconto = ${input.mesReferencia}
         AND pa.status = 'pendente_decisao'
         ORDER BY e.nomeCompleto, pa.data
-      `) as any[];
+      `)) as any).rows || [];
       return rows || [];
     }),
 
@@ -905,16 +905,16 @@ export const payrollEngineRouter = router({
             WHERE id = ${dec.adjustmentId} AND companyId = ${input.companyId}
           `);
           // Atualizar timecard_daily para aferido (trabalhado)
-          const [adjRow] = await db.execute(sql`
+          const adjRow = ((await db.execute(sql`
             SELECT timecardDailyId FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
-          `) as any[];
+          `)) as any).rows || [];
           const tcId = (adjRow as any[])?.[0]?.timecardDailyId;
           if (tcId) {
             await db.execute(sql`
               UPDATE timecard_daily SET 
                 statusDia = 'aferido',
                 afericaoResultado = 'ok',
-                afericaoObs = CONCAT(IFNULL(afericaoObs, ''), ' [Erro do relógio - mantido como trabalhado]'),
+                afericaoObs = CONCAT(COALESCE(afericaoObs, ''), ' [Erro do relógio - mantido como trabalhado]'),
                 isFalta = 0, isAtraso = 0
               WHERE id = ${tcId}
             `);
@@ -930,16 +930,16 @@ export const payrollEngineRouter = router({
             WHERE id = ${dec.adjustmentId} AND companyId = ${input.companyId}
           `);
           // Atualizar timecard_daily para falta
-          const [adjRow2] = await db.execute(sql`
+          const adjRow2 = ((await db.execute(sql`
             SELECT timecardDailyId FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
-          `) as any[];
+          `)) as any).rows || [];
           const tcId2 = (adjRow2 as any[])?.[0]?.timecardDailyId;
           if (tcId2) {
             await db.execute(sql`
               UPDATE timecard_daily SET 
                 statusDia = 'aferido',
                 afericaoResultado = 'falta',
-                afericaoObs = CONCAT(IFNULL(afericaoObs, ''), ' [Falta real confirmada]'),
+                afericaoObs = CONCAT(COALESCE(afericaoObs, ''), ' [Falta real confirmada]'),
                 isFalta = 1
               WHERE id = ${tcId2}
             `);
@@ -988,7 +988,7 @@ export const payrollEngineRouter = router({
       // Count faltas ONLY from day 1 to 15 of current month (not the full ponto period)
       const primeiroDiaMes = `${year}-${String(month).padStart(2, '0')}-01`;
       const dia15Mes = `${year}-${String(month).padStart(2, '0')}-15`;
-      const [faltasRows] = await db.execute(sql`
+      const faltasRows = ((await db.execute(sql`
         SELECT employeeId, SUM(isFalta) as totalFaltas
         FROM timecard_daily 
         WHERE companyId = ${input.companyId} 
@@ -997,14 +997,14 @@ export const payrollEngineRouter = router({
         AND data <= ${dia15Mes}
         AND statusDia = 'registrado'
         GROUP BY employeeId
-      `) as any[];
+      `)) as any).rows || [];
       const faltasMap = new Map<number, number>();
       for (const r of (faltasRows || [])) {
         faltasMap.set(r.employeeId, r.totalFaltas || 0);
       }
 
       // Get overtime (HE) values from time_records for the ponto period
-      const [heRows] = await db.execute(sql`
+      const heRows = ((await db.execute(sql`
         SELECT employeeId, 
           SUM(CASE WHEN horasExtras IS NOT NULL AND horasExtras != '' AND horasExtras != '0:00' 
             THEN CAST(SUBSTRING_INDEX(horasExtras, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(horasExtras, ':', -1) AS UNSIGNED) 
@@ -1014,7 +1014,7 @@ export const payrollEngineRouter = router({
         AND mesCompetencia = ${input.mesReferencia}
         AND statusDia = 'registrado'
         GROUP BY employeeId
-      `) as any[];
+      `)) as any).rows || [];
       const heMap = new Map<number, number>();
       for (const r of (heRows || [])) {
         heMap.set(r.employeeId, r.totalMinutosHE || 0);
@@ -1133,13 +1133,13 @@ export const payrollEngineRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT pa.*, e.nomeCompleto, e.funcao, e.codigoInterno
         FROM payroll_advances pa
         LEFT JOIN employees e ON pa.employeeId = e.id
         WHERE pa.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pa.mesReferencia = ${input.mesReferencia}
         ORDER BY e.nomeCompleto
-      `) as any[];
+      `)) as any).rows || [];
       return rows || [];
     }),
 
@@ -1168,17 +1168,17 @@ export const payrollEngineRouter = router({
           // Aprovar: mudar status para 'calculado', bloqueado = 0
           await db.execute(sql`
             UPDATE payroll_advances SET status = 'calculado', bloqueado = 0,
-              motivoBloqueio = CONCAT(IFNULL(motivoBloqueio, ''), ' [APROVADO por ${ctx.user.name || "Usuário"}]')
+              motivoBloqueio = CONCAT(COALESCE(motivoBloqueio, ''), ' [APROVADO por ${ctx.user.name || "Usuário"}]')
             WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND employeeId = ${decisao.employeeId}
           `);
           // Create financial event for approved
-          const [advRows] = await db.execute(sql`
+          const advRows = ((await db.execute(sql`
             SELECT valorTotalVale FROM payroll_advances 
             WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND employeeId = ${decisao.employeeId}
-          `) as any[];
+          `)) as any).rows || [];
           const adv = (advRows as any[])?.[0];
           if (adv) {
-            const [empRows] = await db.execute(sql`SELECT nomeCompleto FROM employees WHERE id = ${decisao.employeeId}`) as any[];
+            const empRows = ((await db.execute(sql`SELECT nomeCompleto FROM employees WHERE id = ${decisao.employeeId}`)) as any).rows || [];
             const empName = (empRows as any[])?.[0]?.nomeCompleto || 'Funcionário';
             await db.execute(sql`
               INSERT INTO financial_events (companyId, tipo, categoria, mesCompetencia, dataPrevista, valor, status, employeeId, employeeName, descricao, origemTipo, criadoPor)
@@ -1190,7 +1190,7 @@ export const payrollEngineRouter = router({
           // Rejeitar: mudar status para 'rejeitado', manter bloqueado = 1
           await db.execute(sql`
             UPDATE payroll_advances SET status = 'rejeitado',
-              motivoBloqueio = CONCAT(IFNULL(motivoBloqueio, ''), ' [REJEITADO por ${ctx.user.name || "Usuário"}]')
+              motivoBloqueio = CONCAT(COALESCE(motivoBloqueio, ''), ' [REJEITADO por ${ctx.user.name || "Usuário"}]')
             WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND employeeId = ${decisao.employeeId}
           `);
           rejeitados++;
@@ -1248,20 +1248,20 @@ export const payrollEngineRouter = router({
       );
 
       // Get advances for this month
-      const [advRows] = await db.execute(sql`
+      const advRows = ((await db.execute(sql`
         SELECT * FROM payroll_advances 
         WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
       const advMap = new Map<number, any>();
       for (const a of (advRows || [])) {
         advMap.set(a.employeeId, a);
       }
 
       // Get adjustments (from escuro aferição) for this month
-      const [adjRows] = await db.execute(sql`
+      const adjRows = ((await db.execute(sql`
         SELECT * FROM payroll_adjustments 
         WHERE companyId = ${input.companyId} AND mesDesconto = ${input.mesReferencia} AND status = 'pendente'
-      `) as any[];
+      `)) as any).rows || [];
       const adjMap = new Map<number, any[]>();
       for (const a of (adjRows || [])) {
         if (!adjMap.has(a.employeeId)) adjMap.set(a.employeeId, []);
@@ -1269,7 +1269,7 @@ export const payrollEngineRouter = router({
       }
 
       // Get faltas from timecard_daily for the ponto period (registrado only)
-      const [faltasRows2] = await db.execute(sql`
+      const faltasRows2 = ((await db.execute(sql`
         SELECT employeeId, 
           SUM(isFalta) as totalFaltas,
           SUM(isAtraso) as totalAtrasos,
@@ -1279,14 +1279,14 @@ export const payrollEngineRouter = router({
         AND mesCompetencia = ${input.mesReferencia}
         AND statusDia = 'registrado'
         GROUP BY employeeId
-      `) as any[];
+      `)) as any).rows || [];
       const faltasMap = new Map<number, any>();
       for (const r of (faltasRows2 || [])) {
         faltasMap.set(r.employeeId, r);
       }
 
       // Get HE values
-      const [heRows2] = await db.execute(sql`
+      const heRows2 = ((await db.execute(sql`
         SELECT employeeId, 
           SUM(CASE WHEN horasExtras IS NOT NULL AND horasExtras != '' AND horasExtras != '0:00' 
             THEN CAST(SUBSTRING_INDEX(horasExtras, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(horasExtras, ':', -1) AS UNSIGNED) 
@@ -1295,7 +1295,7 @@ export const payrollEngineRouter = router({
         WHERE companyId = ${input.companyId} 
         AND mesCompetencia = ${input.mesReferencia}
         GROUP BY employeeId
-      `) as any[];
+      `)) as any).rows || [];
       const heMap = new Map<number, number>();
       for (const r of (heRows2 || [])) {
         heMap.set(r.employeeId, r.totalMinutosHE || 0);
@@ -1336,11 +1336,11 @@ export const payrollEngineRouter = router({
         const descontoVrFaltas = criteria.descontoVrFalta ? faltasQtd * vrDiario : 0;
 
         // VA (Vale Alimentação) - buscar do módulo vr_benefits (lançamento mensal)
-        const [vaRows] = await db.execute(sql`
+        const vaRows = ((await db.execute(sql`
           SELECT valorTotal FROM vr_benefits 
           WHERE companyId = ${input.companyId} AND employeeId = ${emp.id} AND mesReferencia = ${input.mesReferencia}
           LIMIT 1
-        `) as any[];
+        `)) as any).rows || [];
         const vaLancamento = vaRows?.[0] ? parseBRL(vaRows[0].valorTotal) : 0;
         // Desconto de 5% do VA (conforme convenção coletiva) proporcional aos dias trabalhados
         const vaDescontoPct = 0.05; // 5% conforme convenção
@@ -1390,7 +1390,7 @@ export const payrollEngineRouter = router({
         const inssValor = inssPerc > 0 ? salarioBruto * (inssPerc / 100) : 0;
 
         // Rateio por obra: buscar dias trabalhados por obra no mês
-        const [obraDiasRows] = await db.execute(sql`
+        const obraDiasRows = ((await db.execute(sql`
           SELECT obraId, COUNT(*) as dias, o.nome as obraNome
           FROM timecard_daily td
           LEFT JOIN obras o ON td.obraId = o.id
@@ -1398,7 +1398,7 @@ export const payrollEngineRouter = router({
           AND td.mesCompetencia = ${input.mesReferencia} AND td.statusDia = 'registrado'
           AND td.obraId IS NOT NULL
           GROUP BY td.obraId, o.nome
-        `) as any[];
+        `)) as any).rows || [];
         const totalDiasObra = (obraDiasRows || []).reduce((s: number, r: any) => s + Number(r.dias), 0) || diasUteis;
         const rateioPorObra = (obraDiasRows || []).map((r: any) => {
           const proporcao = Number(r.dias) / totalDiasObra;
@@ -1418,13 +1418,13 @@ export const payrollEngineRouter = router({
         });
 
         // Convênios (farmácia, posto, etc.) - buscar lançamentos aprovados do mês
-        const [convenioRows] = await db.execute(sql`
+        const convenioRows = ((await db.execute(sql`
           SELECT COALESCE(SUM(CAST(lp.valor AS DECIMAL(15,2))), 0) as totalConvenio
           FROM lancamentos_parceiros lp
           WHERE lp.employee_id = ${emp.id} AND lp.company_id = ${input.companyId}
           AND lp.competencia_desconto = ${input.mesReferencia}
           AND lp.status_lancamento_parceiro IN ('pendente', 'aprovado')
-        `) as any[];
+        `)) as any).rows || [];
         const descontoConvenio = parseFloat((convenioRows as any[])?.[0]?.totalConvenio || '0');
 
         const totalDescontos = descontoAdiantamento + descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVaTotal + descontoVtFaltas + descontoPensao + acertoEscuroValor + inssValor + descontoConvenio;
@@ -1515,13 +1515,13 @@ export const payrollEngineRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT pp.*, e.nomeCompleto, e.funcao, e.codigoInterno
         FROM payroll_payments pp
         LEFT JOIN employees e ON pp.employeeId = e.id
         WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia}
         ORDER BY e.nomeCompleto
-      `) as any[];
+      `)) as any).rows || [];
       return rows || [];
     }),
 
@@ -1538,10 +1538,10 @@ export const payrollEngineRouter = router({
       const criteria = await getPayrollCriteria(db, input.companyId);
       if (criteria.conferenciaContabilidade !== 'opcional' && !input.ignorarConferencia) {
         // Verificar se já fez upload de PDF da contabilidade para este mês
-        const [uploads] = await db.execute(sql`
+        const uploads = ((await db.execute(sql`
           SELECT COUNT(*) as total FROM payroll_uploads
           WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
-        `) as any[];
+        `)) as any).rows || [];
         const totalUploads = uploads?.[0]?.total || 0;
         if (totalUploads === 0) {
           if (criteria.conferenciaContabilidade === 'obrigatoria') {
@@ -1568,11 +1568,11 @@ export const payrollEngineRouter = router({
       `);
 
       // Create financial events for payments
-      const [payments] = await db.execute(sql`
+      const payments = ((await db.execute(sql`
         SELECT pp.*, e.nomeCompleto FROM payroll_payments pp
         LEFT JOIN employees e ON pp.employeeId = e.id
         WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
 
       for (const p of (payments || [])) {
         await db.execute(sql`
@@ -1640,7 +1640,7 @@ export const payrollEngineRouter = router({
           ORDER BY td.data, e.nomeCompleto
         `;
       }
-      const [rows] = await db.execute(baseQuery) as any[];
+      const rows = ((await db.execute(baseQuery)) as any).rows || [];
       return rows || [];
     }),
 
@@ -1652,13 +1652,13 @@ export const payrollEngineRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT pa.*, e.nomeCompleto, e.funcao, e.codigoInterno
         FROM payroll_adjustments pa
         LEFT JOIN employees e ON pa.employeeId = e.id
         WHERE pa.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pa.mesDesconto = ${input.mesReferencia}
         ORDER BY pa.data, e.nomeCompleto
-      `) as any[];
+      `)) as any).rows || [];
       return rows || [];
     }),
 
@@ -1676,7 +1676,7 @@ export const payrollEngineRouter = router({
       } else {
         query = sql`SELECT * FROM payroll_alerts WHERE companyId = ${input.companyId} AND resolvido = 0 ORDER BY createdAt DESC LIMIT 50`;
       }
-      const [rows] = await db.execute(query) as any[];
+      const rows = ((await db.execute(query)) as any).rows || [];
       return rows || [];
     }),
 
@@ -1719,7 +1719,7 @@ export const payrollEngineRouter = router({
       } else {
         query = sql`SELECT * FROM financial_events WHERE companyId = ${input.companyId} ORDER BY dataPrevista DESC LIMIT ${lim}`;
       }
-      const [rows] = await db.execute(query) as any[];
+      const rows = ((await db.execute(query)) as any).rows || [];
       return rows || [];
     }),
 
@@ -1731,12 +1731,12 @@ export const payrollEngineRouter = router({
       const criteria = await getPayrollCriteria(db, input.companyId);
 
       // Get active employees for projection
-      const [empRows] = await db.execute(sql`
+      const empRows = ((await db.execute(sql`
         SELECT COUNT(*) as total, SUM(CAST(REPLACE(REPLACE(valorHora, '.', ''), ',', '.') AS DECIMAL(10,2))) as somaValorHora
         FROM employees 
         WHERE companyId = ${input.companyId} AND tipoContrato = 'CLT' AND status IN ('Ativo', 'Ferias') AND deletedAt IS NULL
         AND valorHora IS NOT NULL AND valorHora != ''
-      `) as any[];
+      `)) as any).rows || [];
       const totalEmps = empRows[0]?.total || 0;
       const somaValorHora = empRows[0]?.somaValorHora || 0;
 
@@ -1753,9 +1753,9 @@ export const payrollEngineRouter = router({
         const pagamentoEstimado = salarioEstimado - valeEstimado;
 
         // Check if there's actual data
-        const [actual] = await db.execute(sql`
+        const actual = ((await db.execute(sql`
           SELECT * FROM payroll_periods WHERE companyId = ${input.companyId} AND mesReferencia = ${mesRef} LIMIT 1
-        `) as any[];
+        `)) as any).rows || [];
         const period = actual[0];
 
         projections.push({
@@ -1784,7 +1784,7 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       
       // Get timecard_daily grouped by obra
-      const [obraRows] = await db.execute(sql`
+      const obraRows = ((await db.execute(sql`
         SELECT td.obraId, o.nome as obraNome,
           COUNT(DISTINCT td.employeeId) as totalFuncionarios,
           SUM(CASE WHEN td.isFalta = 1 THEN 1 ELSE 0 END) as totalFaltas,
@@ -1794,10 +1794,10 @@ export const payrollEngineRouter = router({
         WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
         GROUP BY td.obraId, o.nome
         ORDER BY totalFuncionarios DESC
-      `) as any[];
+      `)) as any).rows || [];
 
       // Get payment totals by obra (via employee allocation)
-      const [payRows] = await db.execute(sql`
+      const payRows = ((await db.execute(sql`
         SELECT of2.obraId as obraId, o.nome as obraNome,
           SUM(CAST(pp.salarioBrutoMes AS DECIMAL(15,2))) as totalBruto,
           SUM(CAST(pp.salarioLiquido AS DECIMAL(15,2))) as totalLiquido,
@@ -1810,10 +1810,10 @@ export const payrollEngineRouter = router({
         WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia}
         GROUP BY of2.obraId, o.nome
         ORDER BY totalBruto DESC
-      `) as any[];
+      `)) as any).rows || [];
 
       // Get employee-level detail per obra for expandable breakdown
-      const [detailRows] = await db.execute(sql`
+      const detailRows = ((await db.execute(sql`
         SELECT of2.obraId as obraId, pp.employeeId, e.nomeCompleto,
           e.funcao, e.cargo,
           CAST(pp.salarioBrutoMes AS DECIMAL(15,2)) as salarioBruto,
@@ -1838,7 +1838,7 @@ export const payrollEngineRouter = router({
         LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
         WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia}
         ORDER BY of2.obraId, e.nomeCompleto
-      `) as any[];
+      `)) as any).rows || [];
 
       return {
         porObra: payRows || [],
@@ -1865,9 +1865,9 @@ export const payrollEngineRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [existing] = await db.execute(sql`
+      const existing = ((await db.execute(sql`
         SELECT id FROM system_criteria WHERE companyId = ${input.companyId} AND chave = ${input.chave} LIMIT 1
-      `) as any[];
+      `)) as any).rows || [];
       if (existing[0]) {
         await db.execute(sql`
           UPDATE system_criteria SET valor = ${input.valor} WHERE id = ${existing[0].id}
@@ -1910,13 +1910,13 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
       // Period info
-      const [periodRows] = await db.execute(sql`
+      const periodRows = ((await db.execute(sql`
         SELECT * FROM payroll_periods WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} LIMIT 1
-      `) as any[];
+      `)) as any).rows || [];
       const period = periodRows[0] || null;
 
       // Timecard stats
-      const [tcStatsRows] = await db.execute(sql`
+      const tcStatsRows = ((await db.execute(sql`
         SELECT 
           COUNT(*) as totalRegistros,
           SUM(CASE WHEN statusDia = 'registrado' THEN 1 ELSE 0 END) as registrados,
@@ -1927,20 +1927,20 @@ export const payrollEngineRouter = router({
           COUNT(DISTINCT employeeId) as totalFuncionarios
         FROM timecard_daily 
         WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
 
       // Advances stats
-      const [advStatsRows] = await db.execute(sql`
+      const advStatsRows = ((await db.execute(sql`
         SELECT 
           COUNT(*) as total,
           SUM(CASE WHEN bloqueado = 1 THEN 1 ELSE 0 END) as bloqueados,
           SUM(CAST(valorTotalVale AS DECIMAL(15,2))) as totalVale
         FROM payroll_advances 
         WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
 
       // Payment stats
-      const [payStatsRows] = await db.execute(sql`
+      const payStatsRows = ((await db.execute(sql`
         SELECT 
           COUNT(*) as total,
           SUM(CAST(salarioBrutoMes AS DECIMAL(15,2))) as totalBruto,
@@ -1948,10 +1948,10 @@ export const payrollEngineRouter = router({
           SUM(CAST(salarioLiquido AS DECIMAL(15,2))) as totalLiquido
         FROM payroll_payments 
         WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
 
       // Adjustments stats
-      const [adjStatsRows] = await db.execute(sql`
+      const adjStatsRows = ((await db.execute(sql`
         SELECT 
           COUNT(*) as total,
           SUM(CASE WHEN status = 'pendente' THEN 1 ELSE 0 END) as pendentes,
@@ -1960,21 +1960,21 @@ export const payrollEngineRouter = router({
           SUM(CAST(valorTotal AS DECIMAL(15,2))) as totalValor
         FROM payroll_adjustments 
         WHERE companyId = ${input.companyId} AND mesDesconto = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
 
       // Alerts
-      const [alertStatsRows] = await db.execute(sql`
+      const alertStatsRows = ((await db.execute(sql`
         SELECT COUNT(*) as total, SUM(CASE WHEN lido = 0 THEN 1 ELSE 0 END) as naoLidos
         FROM payroll_alerts 
         WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
 
       // Financial events
-      const [finStatsRows] = await db.execute(sql`
+      const finStatsRows = ((await db.execute(sql`
         SELECT COUNT(*) as total, COALESCE(SUM(CAST(valor AS DECIMAL(15,2))), 0) as totalValor
         FROM financial_events 
         WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
 
       return {
         period,
@@ -1997,39 +1997,39 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
       // Get company info
-      const [companyRows] = await db.execute(sql`
+      const companyRows = ((await db.execute(sql`
         SELECT razaoSocial, nomeFantasia, cnpj, logoUrl FROM companies WHERE id = ${input.companyId} LIMIT 1
-      `) as any[];
+      `)) as any).rows || [];
       const company = companyRows[0] || {};
 
       // Get period info
-      const [periodRows] = await db.execute(sql`
+      const periodRows = ((await db.execute(sql`
         SELECT * FROM payroll_periods WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} LIMIT 1
-      `) as any[];
+      `)) as any).rows || [];
       const period = periodRows[0] || null;
 
       // Build employee filter
       const empFilter = input.employeeId ? sql` AND pp.employeeId = ${input.employeeId}` : sql``;
 
       // Get payments with employee details
-      const [payRows] = await db.execute(sql`
+      const payRows = ((await db.execute(sql`
         SELECT pp.*, e.nomeCompleto, e.funcao, e.codigoInterno, e.cpf, e.dataAdmissao, e.valorHora,
           e.pis, e.ctps, e.obraAtual
         FROM payroll_payments pp
         LEFT JOIN employees e ON pp.employeeId = e.id
         WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia} ${empFilter}
         ORDER BY e.nomeCompleto
-      `) as any[];
+      `)) as any).rows || [];
 
       // Get advances
-      const [advRows] = await db.execute(sql`
+      const advRows = ((await db.execute(sql`
         SELECT * FROM payroll_advances WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
       const advMap = new Map<number, any>();
       for (const a of (advRows || [])) advMap.set(a.employeeId, a);
 
       // Get obra names
-      const [obraRows] = await db.execute(sql`SELECT id, nome FROM obras WHERE companyId = ${input.companyId}`) as any[];
+      const obraRows = ((await db.execute(sql`SELECT id, nome FROM obras WHERE companyId = ${input.companyId}`)) as any).rows || [];
       const obraMap = new Map<number, string>();
       for (const o of (obraRows || [])) obraMap.set(o.id, o.nome);
 
@@ -2091,7 +2091,7 @@ export const payrollEngineRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       // Get the inconsistent record with employee details
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, e.dataAdmissao, e.status as empStatus,
           o.nome as obraNome
         FROM timecard_daily td
@@ -2099,25 +2099,25 @@ export const payrollEngineRouter = router({
         LEFT JOIN obras o ON td.obraId = o.id
         WHERE td.id = ${input.timecardDailyId}
         LIMIT 1
-      `) as any[];
+      `)) as any).rows || [];
       const record = rows[0];
       if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado" });
       // Get recent history for this employee (last 30 days)
-      const [histRows] = await db.execute(sql`
+      const histRows = ((await db.execute(sql`
         SELECT data, statusDia, isFalta, isAtraso, is_inconsistente, inconsistencia_tipo,
           entrada1, saida1, entrada2, saida2, horasTrabalhadas
         FROM timecard_daily
         WHERE employeeId = ${record.employeeId} AND companyId = ${input.companyId}
           AND mesCompetencia = ${input.mesReferencia}
         ORDER BY data DESC LIMIT 30
-      `) as any[];
+      `)) as any).rows || [];
       // Get golden rules for context
-      const [rulesRows] = await db.execute(sql`
+      const rulesRows = ((await db.execute(sql`
         SELECT titulo, descricao, categoria FROM golden_rules
         WHERE companyId = ${input.companyId} AND deletedAt IS NULL
         AND categoria IN ('rh', 'operacional', 'geral')
         ORDER BY prioridade LIMIT 10
-      `) as any[];
+      `)) as any).rows || [];
       // Get criteria
       const criteria = await getPayrollCriteria(db, input.companyId);
       // Build context for LLM
@@ -2240,9 +2240,9 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const { companyId, mesReferencia, etapa } = input;
 
       // Check period exists and is not travada
-      const [periods] = await db.execute(
-        sql`SELECT id, status FROM payroll_periods WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia} LIMIT 1`
-      ) as any[];
+      const periods = ((await db.execute(
+        sql`SELECT id, status FROM payroll_periods WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia} LIMIT 1`
+      )) as any).rows || [];
       if (!periods[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Competência não encontrada" });
       if (periods[0].status === "travada") throw new TRPCError({ code: "FORBIDDEN", message: "Competência travada. Não é possível limpar." });
 
@@ -2334,9 +2334,9 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const { companyId, mesReferencia } = input;
 
       // Check period exists and is not travada
-      const [periods] = await db.execute(
-        sql`SELECT id, status FROM payroll_periods WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia} LIMIT 1`
-      ) as any[];
+      const periods = ((await db.execute(
+        sql`SELECT id, status FROM payroll_periods WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia} LIMIT 1`
+      )) as any).rows || [];
       if (!periods[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Competência não encontrada" });
       if (periods[0].status === "travada") throw new TRPCError({ code: "FORBIDDEN", message: "Competência travada. Não é possível limpar." });
 
@@ -2380,7 +2380,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT 
           td.employeeId,
           e.nomeCompleto as employeeName,
@@ -2400,15 +2400,15 @@ Responda EXATAMENTE no formato JSON abaixo:`;
           SUM(CASE WHEN td.statusDia = 'registrado' THEN 1 ELSE 0 END) as diasRegistrados,
           SEC_TO_TIME(SUM(TIME_TO_SEC(CONCAT(td.horasTrabalhadas, ':00')))) as horasTrabalhadas,
           SEC_TO_TIME(SUM(TIME_TO_SEC(CONCAT(td.horasExtras, ':00')))) as horasExtras,
-          GROUP_CONCAT(DISTINCT td.obraId) as obraIds,
-          GROUP_CONCAT(DISTINCT o.nome) as obraNomes
+          STRING_AGG(DISTINCT td."obraId"::text, ',') as obraIds,
+          STRING_AGG(DISTINCT o.nome, ',') as obraNomes
         FROM timecard_daily td
         LEFT JOIN employees e ON td.employeeId = e.id
         LEFT JOIN obras o ON td.obraId = o.id
         WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
         GROUP BY td.employeeId, e.nomeCompleto, e.cpf, e.funcao, e.codigoInterno, e.funcao, e.codigoInterno
         ORDER BY e.nomeCompleto
-      `) as any[];
+      `)) as any).rows || [];
       
       // Parse the GROUP_CONCAT fields
       return (rows || []).map((r: any) => ({
@@ -2427,7 +2427,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, e.cpf, e.salarioBase,
                o.nome as obraNome
         FROM timecard_daily td
@@ -2437,7 +2437,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
           AND td.mesCompetencia = ${input.mesReferencia}
           AND td.employeeId = ${input.employeeId}
         ORDER BY td.data ASC
-      `) as any[];
+      `)) as any).rows || [];
       return rows || [];
     }),
 
@@ -2449,14 +2449,14 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT 
           td.employeeId,
           e.nomeCompleto as employeeName,
           td.data,
-          GROUP_CONCAT(DISTINCT td.obraId) as obraIds,
-          GROUP_CONCAT(DISTINCT o.nome) as obraNomes,
-          GROUP_CONCAT(CONCAT(COALESCE(td.entrada1,''), '|', COALESCE(td.saida1,''), '|', COALESCE(o.nome,''))) as detalhes
+          STRING_AGG(DISTINCT td."obraId"::text, ',') as obraIds,
+          STRING_AGG(DISTINCT o.nome, ',') as obraNomes,
+          STRING_AGG(CONCAT(COALESCE(td."entrada1",''), '|', COALESCE(td."saida1",''), '|', COALESCE(o.nome,'')), ',') as detalhes
         FROM timecard_daily td
         LEFT JOIN employees e ON td.employeeId = e.id
         LEFT JOIN obras o ON td.obraId = o.id
@@ -2465,7 +2465,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         GROUP BY td.employeeId, e.nomeCompleto, td.data
         HAVING COUNT(DISTINCT td.obraId) > 1
         ORDER BY td.data, e.nomeCompleto
-      `) as any[];
+      `)) as any).rows || [];
       return (rows || []).map((r: any) => ({
         ...r,
         obraIds: r.obraIds ? r.obraIds.split(',').map(Number) : [],
@@ -2486,33 +2486,33 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const ids = resolveCompanyIds(input);
 
       // 1. Buscar todos os funcionários ativos (não desligados/lista_negra) que são CLT
-      const [ativosRows] = await db.execute(sql`
+      const ativosRows = ((await db.execute(sql`
         SELECT id, nomeCompleto, funcao, tipoContrato, companyId, status, codigoInterno
         FROM employees
         WHERE companyId IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
           AND status NOT IN ('Desligado', 'Lista_Negra')
           AND deletedAt IS NULL
         ORDER BY nomeCompleto
-      `) as any[];
+      `)) as any).rows || [];
 
       // 2. Buscar employeeIds que têm pagamento processado neste mês
-      const [pagosRows] = await db.execute(sql`
+      const pagosRows = ((await db.execute(sql`
         SELECT DISTINCT employeeId
         FROM payroll_payments
         WHERE companyId IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
           AND mesReferencia = ${input.mesReferencia}
-      `) as any[];
+      `)) as any).rows || [];
       const pagosSet = new Set((pagosRows || []).map((r: any) => r.employeeId));
 
       // 3. Buscar employeeIds que têm lançamento na folha importada (folha_itens) neste mês
-      const [folhaRows] = await db.execute(sql`
+      const folhaRows = ((await db.execute(sql`
         SELECT DISTINCT fi.employeeId
         FROM folha_itens fi
         INNER JOIN folha_lancamentos fl ON fi.folhaLancamentoId = fl.id
         WHERE fl.companyId IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
           AND fl.mesReferencia = ${input.mesReferencia}
           AND fi.employeeId IS NOT NULL
-      `) as any[];
+      `)) as any).rows || [];
       const folhaSet = new Set((folhaRows || []).map((r: any) => r.employeeId));
 
       // 4. Unir os dois conjuntos (quem tem folha processada = payroll_payments OU folha_itens)
@@ -2560,22 +2560,22 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 // HELPER FUNCTIONS
 // ============================================================
 async function getEmployeeValorHora(db: any, employeeId: number): Promise<number> {
-  const [rows] = await db.execute(sql`SELECT valorHora FROM employees WHERE id = ${employeeId} LIMIT 1`) as any[];
+  const rows = ((await db.execute(sql`SELECT valorHora FROM employees WHERE id = ${employeeId} LIMIT 1`)) as any).rows || [];
   return parseBRL(rows[0]?.valorHora);
 }
 
 async function getEmployeeVrDiario(db: any, employeeId: number, companyId: number): Promise<number> {
   // Try to get from vr_benefits for current month
-  const [rows] = await db.execute(sql`
+  const rows = ((await db.execute(sql`
     SELECT valorDiario FROM vr_benefits 
     WHERE employeeId = ${employeeId} AND companyId = ${companyId}
     ORDER BY mesReferencia DESC LIMIT 1
-  `) as any[];
+  `)) as any).rows || [];
   if (rows[0]?.valorDiario) return parseBRL(rows[0].valorDiario);
   return 0;
 }
 
 async function getEmployeeVtDiario(db: any, employeeId: number): Promise<number> {
-  const [rows] = await db.execute(sql`SELECT vtValorDiario FROM employees WHERE id = ${employeeId} LIMIT 1`) as any[];
+  const rows = ((await db.execute(sql`SELECT vtValorDiario FROM employees WHERE id = ${employeeId} LIMIT 1`)) as any).rows || [];
   return parseBRL(rows[0]?.vtValorDiario);
 }

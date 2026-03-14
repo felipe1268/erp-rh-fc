@@ -1498,12 +1498,12 @@ export const fechamentoPontoRouter = router({
       let payrollResult = null;
       try {
         // 1. Ensure payroll_period exists for this competencia
-        const [existingPeriod] = await db.execute(sql`
+        const existingPeriodRows = ((await db.execute(sql`
           SELECT id, status FROM payroll_periods 
-          WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} LIMIT 1
-        `) as any[];
+          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} LIMIT 1
+        `)) as any).rows || [];
         
-        if (!existingPeriod[0]) {
+        if (!existingPeriodRows[0]) {
           // Create the payroll period with the correct date ranges
           const [yearStr, monthStr] = input.mesReferencia.split('-');
           const year = parseInt(yearStr), month = parseInt(monthStr);
@@ -1516,18 +1516,18 @@ export const fechamentoPontoRouter = router({
           const escuroInicio = `${year}-${String(month).padStart(2, '0')}-${String(diaCorte + 1).padStart(2, '0')}`;
           const escuroFim = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
           
-          const [empCount] = await db.execute(sql`
+          const empCountRows = ((await db.execute(sql`
             SELECT COUNT(*) as total FROM employees 
-            WHERE companyId = ${input.companyId} AND tipoContrato = 'CLT' AND status IN ('Ativo', 'Ferias') AND deletedAt IS NULL
-          `) as any[];
+            WHERE "companyId" = ${input.companyId} AND "tipoContrato" = 'CLT' AND status IN ('Ativo', 'Ferias') AND "deletedAt" IS NULL
+          `)) as any).rows || [];
           
           await db.execute(sql`
-            INSERT INTO payroll_periods (companyId, mesReferencia, pontoInicio, pontoFim, escuroInicio, escuroFim, status, totalFuncionarios)
-            VALUES (${input.companyId}, ${input.mesReferencia}, ${pontoInicio}, ${pontoFim}, ${escuroInicio}, ${escuroFim}, 'aberta', ${empCount[0]?.total || 0})
+            INSERT INTO payroll_periods ("companyId", "mesReferencia", "pontoInicio", "pontoFim", "escuroInicio", "escuroFim", status, "totalFuncionarios")
+            VALUES (${input.companyId}, ${input.mesReferencia}, ${pontoInicio}, ${pontoFim}, ${escuroInicio}, ${escuroFim}, 'aberta', ${empCountRows[0]?.total || 0})
           `);
-        } else if (existingPeriod[0].status !== 'aberta' && existingPeriod[0].status !== 'ponto_importado') {
+        } else if (existingPeriodRows[0].status !== 'aberta' && existingPeriodRows[0].status !== 'ponto_importado') {
           // Period exists but already advanced - don't reprocess
-          console.log(`[consolidarMes] Payroll period already at status '${existingPeriod[0].status}', skipping processarPonto`);
+          console.log(`[consolidarMes] Payroll period already at status '${existingPeriodRows[0].status}', skipping processarPonto`);
           return { success: true, consolidadoPor: ctx.user?.name || 'RH', consolidadoEm: now, payrollResult: null };
         }
         

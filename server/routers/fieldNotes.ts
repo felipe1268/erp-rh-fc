@@ -234,16 +234,16 @@ export const fieldNotesRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT 
           status,
           COUNT(*) as total,
           SUM(CASE WHEN prioridade = 'urgente' THEN 1 ELSE 0 END) as urgentes,
           SUM(CASE WHEN prioridade = 'alta' THEN 1 ELSE 0 END) as altas
         FROM field_notes
-        WHERE companyId = ${input.companyId} AND deletedAt IS NULL
+        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL
         GROUP BY status
-      `) as any[];
+      `)) as any).rows || [];
 
       const stats = { pendente: 0, em_analise: 0, resolvido: 0, arquivado: 0, urgentes: 0, altas: 0, total: 0 };
       for (const r of rows as any[]) {
@@ -268,16 +268,16 @@ export const fieldNotesRouter = router({
       if (input.dataFim) dataConds.push(sql`fn.data <= ${input.dataFim}`);
       const extraWhere = dataConds.length > 0 ? sql` AND ${sql.join(dataConds, sql` AND `)}` : sql``;
 
-      const [rows] = await db.execute(sql`
-        SELECT o.nome as obraNome, fn.obraId, COUNT(*) as total,
+      const rows = ((await db.execute(sql`
+        SELECT o.nome as "obraNome", fn."obraId", COUNT(*) as total,
           SUM(CASE WHEN fn.status = 'pendente' THEN 1 ELSE 0 END) as pendentes,
           SUM(CASE WHEN fn.status = 'resolvido' THEN 1 ELSE 0 END) as resolvidos
         FROM field_notes fn
-        LEFT JOIN obras o ON fn.obraId = o.id
-        WHERE fn.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND fn.deletedAt IS NULL ${extraWhere}
-        GROUP BY fn.obraId, o.nome
+        LEFT JOIN obras o ON fn."obraId" = o.id
+        WHERE fn."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND fn."deletedAt" IS NULL ${extraWhere}
+        GROUP BY fn."obraId", o.nome
         ORDER BY total DESC
-      `) as any[];
+      `)) as any).rows || [];
       return rows as { obraNome: string | null; obraId: number | null; total: number; pendentes: number; resolvidos: number }[];
     }),
 
@@ -287,16 +287,16 @@ export const fieldNotesRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const ano = input.ano || new Date().getFullYear();
-      const [rows] = await db.execute(sql`
-        SELECT DATE_FORMAT(data, '%Y-%m') as mes, COUNT(*) as total,
+      const rows = ((await db.execute(sql`
+        SELECT TO_CHAR(data, 'YYYY-MM') as mes, COUNT(*) as total,
           SUM(CASE WHEN status = 'resolvido' THEN 1 ELSE 0 END) as resolvidos,
           SUM(CASE WHEN status = 'pendente' THEN 1 ELSE 0 END) as pendentes
         FROM field_notes
-        WHERE companyId = ${input.companyId} AND deletedAt IS NULL
-          AND YEAR(data) = ${ano}
-        GROUP BY DATE_FORMAT(data, '%Y-%m')
+        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL
+          AND EXTRACT(YEAR FROM data) = ${ano}
+        GROUP BY TO_CHAR(data, 'YYYY-MM')
         ORDER BY mes ASC
-      `) as any[];
+      `)) as any).rows || [];
       return rows as { mes: string; total: number; resolvidos: number; pendentes: number }[];
     }),
 
@@ -311,19 +311,19 @@ export const fieldNotesRouter = router({
       if (input.dataFim) dataConds.push(sql`data <= ${input.dataFim}`);
       const extraWhere = dataConds.length > 0 ? sql` AND ${sql.join(dataConds, sql` AND `)}` : sql``;
 
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT 
           COUNT(*) as total,
           SUM(CASE WHEN status = 'resolvido' THEN 1 ELSE 0 END) as resolvidos,
           SUM(CASE WHEN status = 'pendente' THEN 1 ELSE 0 END) as pendentes,
-          SUM(CASE WHEN status = 'em_analise' THEN 1 ELSE 0 END) as emAnalise,
+          SUM(CASE WHEN status = 'em_analise' THEN 1 ELSE 0 END) as "emAnalise",
           SUM(CASE WHEN status = 'arquivado' THEN 1 ELSE 0 END) as arquivados,
           SUM(CASE WHEN prioridade = 'urgente' THEN 1 ELSE 0 END) as urgentes,
           SUM(CASE WHEN prioridade = 'alta' THEN 1 ELSE 0 END) as altas,
-          AVG(CASE WHEN resolvidoEm IS NOT NULL THEN TIMESTAMPDIFF(HOUR, createdAt, resolvidoEm) END) as tempoMedioResolucaoHoras
+          AVG(CASE WHEN "resolvidoEm" IS NOT NULL THEN EXTRACT(EPOCH FROM ("resolvidoEm" - "createdAt")) / 3600 END) as "tempoMedioResolucaoHoras"
         FROM field_notes
-        WHERE companyId = ${input.companyId} AND deletedAt IS NULL ${extraWhere}
-      `) as any[];
+        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL ${extraWhere}
+      `)) as any).rows || [];
       const r = (rows as any[])[0] || {};
       return {
         total: parseInt(r.total || '0'),
@@ -349,13 +349,13 @@ export const fieldNotesRouter = router({
       if (input.dataFim) dataConds.push(sql`data <= ${input.dataFim}`);
       const extraWhere = dataConds.length > 0 ? sql` AND ${sql.join(dataConds, sql` AND `)}` : sql``;
 
-      const [rows] = await db.execute(sql`
-        SELECT tipoOcorrencia, COUNT(*) as total
+      const rows = ((await db.execute(sql`
+        SELECT "tipoOcorrencia", COUNT(*) as total
         FROM field_notes
-        WHERE companyId = ${input.companyId} AND deletedAt IS NULL ${extraWhere}
-        GROUP BY tipoOcorrencia
+        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL ${extraWhere}
+        GROUP BY "tipoOcorrencia"
         ORDER BY total DESC
-      `) as any[];
+      `)) as any).rows || [];
 
       return rows as { tipoOcorrencia: string; total: number }[];
     }),

@@ -29,7 +29,7 @@ A full-stack HR/ERP system built for FC Engenharia. It handles employees, payrol
 ## Architecture
 - **Frontend**: React 19 + Tailwind CSS 4 + shadcn/ui + Wouter (routing)
 - **Backend**: Express 4 + tRPC 11 + Drizzle ORM
-- **Database**: MySQL 8 / TiDB (requires external MySQL connection via DATABASE_URL)
+- **Database**: PostgreSQL (Neon) — all raw SQL uses PG syntax
 - **Auth**: Manus OAuth (JWT) or local username/password
 - **Build**: Vite 7 (embedded in Express in dev mode), TypeScript 5
 - **Package Manager**: pnpm
@@ -86,10 +86,16 @@ shared/         # Shared types and constants
 - **IA Gestora tab** — CRONOS AI assistant with 4 sub-tabs
 
 ## User Preferences
-- After every completed adjustment, always remind the user to click **Publish** to deploy. Deployment config: autoscale, build=`pnpm run build`, run=`node dist/index.js`.
+- After every completed adjustment, remind the user to click **Publish** to deploy. Deployment config: autoscale, build=`pnpm run build`, run=`node dist/index.js`.
+
+## Critical DB Patterns (PostgreSQL/Neon)
+- `db.execute()` returns QueryResult object, NOT array. Use: `((await db.execute(sql`...`)) as any).rows || []`
+- All camelCase column names in raw SQL MUST be quoted: `"companyId"`, `"deletedAt"`, `"nomeCompleto"`, etc.
+- MySQL → PG conversions: `CURDATE()` → `CURRENT_DATE`; `DATE_FORMAT(c,'%Y-%m')` → `TO_CHAR(c,'YYYY-MM')`; `TIMESTAMPDIFF(YEAR,c,CURRENT_DATE)` → `EXTRACT(YEAR FROM AGE(CURRENT_DATE,"c"))`; `IFNULL(a,b)` → `COALESCE(a,b)`; `GROUP_CONCAT(x)` → `STRING_AGG(x,',')`; boolean: `= 1` → `= true`
+- Schema changes via raw SQL only (db:push broken); use `json()` not `jsonb()`
+- Login: `felipe@fcengenhariacivil.com.br` / `asdf1020` (role: admin_master, userId: 601043)
+- Company IDs: 60002 (FC Engenharia), 60004 (CF Hotelaria), 60005 (Julio Ferraz), 90001 (Locnow)
 
 ## Notes
-- The app runs without a database (gracefully returns empty data)
-- MySQL is required for full functionality; Replit provides PostgreSQL (incompatible)
-- To use a MySQL database, provide a `DATABASE_URL` with mysql:// scheme
 - Default password for first login: `asdf1020`
+- After every completed adjustment, click **Publish** to deploy (autoscale, build=`pnpm run build`, run=`node dist/index.js`)

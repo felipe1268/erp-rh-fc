@@ -23,7 +23,7 @@ export const valeAlimentacaoRouter = router({
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const [rows] = await db.execute(
+      const rows = ((await db.execute(
         sql`SELECT vr.*, e.nomeCompleto, e.cpf, e.cargo, e.funcao, e.status as empStatus,
             o.nome as obraNome
             FROM vr_benefits vr
@@ -33,7 +33,7 @@ export const valeAlimentacaoRouter = router({
             WHERE vr.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr.mesReferencia = ${input.mesReferencia}
             AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)
             ORDER BY e.nomeCompleto ASC`
-      ) as any[];
+      )) as any).rows || [];
       return rows || [];
     }),
 
@@ -47,13 +47,13 @@ export const valeAlimentacaoRouter = router({
       const db = (await getDb())!;
       
       // Total colaboradores ativos
-      const [empRows] = await db.execute(
+      const empRows = ((await db.execute(
         sql`SELECT COUNT(*) as total FROM employees WHERE companyId = ${input.companyId} AND status = 'Ativo' AND deletedAt IS NULL`
-      ) as any[];
+      )) as any).rows || [];
       const totalAtivos = empRows?.[0]?.total || 0;
 
       // Lançamentos do mês
-      const [vrRows] = await db.execute(
+      const vrRows = ((await db.execute(
         sql`SELECT 
           COUNT(*) as total,
           SUM(CASE WHEN vr.status = 'pendente' THEN 1 ELSE 0 END) as pendentes,
@@ -65,7 +65,7 @@ export const valeAlimentacaoRouter = router({
         LEFT JOIN employees e ON vr.employeeId = e.id
         WHERE vr.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr.mesReferencia = ${input.mesReferencia}
         AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)`
-      ) as any[];
+      )) as any).rows || [];
       
       const stats = vrRows?.[0] || {};
       return {
@@ -92,17 +92,17 @@ export const valeAlimentacaoRouter = router({
       const userName = input.geradoPor || ctx.user?.name || "Sistema";
 
       // Verificar se já existem lançamentos para o mês
-      const [existing] = await db.execute(
+      const existing = ((await db.execute(
         sql`SELECT COUNT(*) as total FROM vr_benefits WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}`
-      ) as any[];
+      )) as any).rows || [];
       if (existing?.[0]?.total > 0) {
         return { success: false, message: `Já existem ${existing[0].total} lançamentos para este mês. Use "Regerar" para substituir.` };
       }
 
       // Buscar configuração padrão da empresa
-      const [cfgRows] = await db.execute(
+      const cfgRows = ((await db.execute(
         sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND ativo = 1 ORDER BY obraId IS NULL DESC LIMIT 10`
-      ) as any[];
+      )) as any).rows || [];
       const configs = cfgRows || [];
       
       // Config padrão (obraId IS NULL)
@@ -114,14 +114,14 @@ export const valeAlimentacaoRouter = router({
       }
 
       // Buscar colaboradores ativos
-      const [empRows] = await db.execute(
+      const empRows = ((await db.execute(
         sql`SELECT e.id, e.nomeCompleto, e.cpf, e.cargo, e.funcao,
             of2.obraId
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
             WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e.deletedAt IS NULL
             ORDER BY e.nomeCompleto ASC`
-      ) as any[];
+      )) as any).rows || [];
       const emps = empRows || [];
 
       // Agrupar por employeeId (pode ter múltiplas obras)
@@ -185,9 +185,9 @@ export const valeAlimentacaoRouter = router({
       const userName = input.geradoPor || ctx.user?.name || "Sistema";
 
       // Buscar configuração
-      const [cfgRows] = await db.execute(
+      const cfgRows = ((await db.execute(
         sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND ativo = 1 ORDER BY obraId IS NULL DESC LIMIT 10`
-      ) as any[];
+      )) as any).rows || [];
       const configs = cfgRows || [];
       const cfgPadrao = configs.find((c: any) => !c.obraId) || null;
       const cfgPorObra: Record<number, any> = {};
@@ -195,13 +195,13 @@ export const valeAlimentacaoRouter = router({
         if (c.obraId) cfgPorObra[c.obraId] = c;
       }
 
-      const [empRows] = await db.execute(
+      const empRows = ((await db.execute(
         sql`SELECT e.id, e.nomeCompleto, of2.obraId
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
             WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e.deletedAt IS NULL
             ORDER BY e.nomeCompleto ASC`
-      ) as any[];
+      )) as any).rows || [];
       const emps = empRows || [];
       const empMap: Record<number, { emp: any; obraId: number | null }> = {};
       for (const e of emps) {
@@ -209,9 +209,9 @@ export const valeAlimentacaoRouter = router({
       }
 
       // Check which employees already have paid records
-      const [paidRows] = await db.execute(
+      const paidRows = ((await db.execute(
         sql`SELECT employeeId FROM vr_benefits WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND status = 'pago'`
-      ) as any[];
+      )) as any).rows || [];
       const paidEmpIds = new Set((paidRows || []).map((r: any) => r.employeeId));
 
       let gerados = 0;
@@ -301,10 +301,10 @@ export const valeAlimentacaoRouter = router({
         );
         return { success: true, aprovados: input.ids.length };
       } else {
-        const [result] = await db.execute(
-          sql`UPDATE vr_benefits SET status = 'aprovado', aprovadoPor = ${userName} WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND status = 'pendente'`
-        ) as any;
-        return { success: true, aprovados: result?.affectedRows || 0 };
+        const result = await db.execute(
+          sql`UPDATE vr_benefits SET status = 'aprovado', aprovadoPor = ${userName} WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pendente'`
+        );
+        return { success: true, aprovados: (result as any)?.rowCount || 0 };
       }
     }),
 
@@ -323,10 +323,10 @@ export const valeAlimentacaoRouter = router({
         );
         return { success: true, pagos: input.ids.length };
       } else {
-        const [result] = await db.execute(
-          sql`UPDATE vr_benefits SET status = 'pago' WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND status = 'aprovado'`
-        ) as any;
-        return { success: true, pagos: result?.affectedRows || 0 };
+        const result = await db.execute(
+          sql`UPDATE vr_benefits SET status = 'pago' WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'aprovado'`
+        );
+        return { success: true, pagos: (result as any)?.rowCount || 0 };
       }
     }),
 
@@ -345,10 +345,10 @@ export const valeAlimentacaoRouter = router({
         );
         return { success: true, revertidos: input.ids.length };
       } else {
-        const [result] = await db.execute(
-          sql`UPDATE vr_benefits SET status = 'aprovado' WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND status = 'pago'`
-        ) as any;
-        return { success: true, revertidos: result?.affectedRows || 0 };
+        const result = await db.execute(
+          sql`UPDATE vr_benefits SET status = 'aprovado' WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pago'`
+        );
+        return { success: true, revertidos: (result as any)?.rowCount || 0 };
       }
     }),
 
@@ -376,9 +376,9 @@ export const valeAlimentacaoRouter = router({
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const [rows] = await db.execute(
+      const rows = ((await db.execute(
         sql`SELECT * FROM vr_benefits WHERE companyId = ${input.companyId} AND employeeId = ${input.employeeId} ORDER BY mesReferencia DESC`
-      ) as any[];
+      )) as any).rows || [];
       return rows || [];
     }),
 
@@ -390,9 +390,9 @@ export const valeAlimentacaoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const [result] = await db.execute(
-        sql`DELETE FROM vr_benefits WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND status IN ('pendente', 'cancelado')`
-      ) as any;
-      return { success: true, removidos: result?.affectedRows || 0 };
+      const result = await db.execute(
+        sql`DELETE FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status IN ('pendente', 'cancelado')`
+      );
+      return { success: true, removidos: (result as any)?.rowCount || 0 };
     }),
 });
