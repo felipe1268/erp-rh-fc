@@ -91,6 +91,17 @@ shared/         # Shared types and constants
   - Histórico REFIS table (BLOCO 7) — shows all previous reports sortable by date
 - **IA Gestora tab** — CRONOS AI assistant with 4 sub-tabs
 
+## Integração Mas Controle ERP (Rev. 231)
+- **Rota**: `/integracoes/mas-controle` (visível para admin_master)
+- **Tabelas DB**: `mas_controle_config` (credenciais + status), `migration_logs` (log detalhado por tipo)
+- **Router server**: `server/routers/masControle.ts` → registrado como `masControle:` no appRouter
+- **Página**: `client/src/pages/integracoes/MasControle.tsx`
+- **Abas**: Configuração (credenciais + teste API) | Importar via API | Importar via CSV | Histórico
+- **Importação via API**: Basic Auth → tenta 3 URLs base diferentes do Mas Controle; fallback para CSV
+- **Importação via CSV**: Parser robusto (vírgula ou ponto-e-vírgula; campos com aspas); mapeamento flexível de colunas; sempre disponível
+- **Idempotente**: nunca duplica dados (verifica por CNPJ para fornecedores, nome para obras e insumos)
+- **Logs**: migration_logs registra total encontrado/importado/duplicado/erros por execução
+
 ## Módulo de Compras (Fase 1 — Rev. 230)
 - **Rotas**: `/compras/fornecedores`, `/compras/almoxarifado`
 - **Tabelas DB**: `fornecedores`, `almoxarifado_itens`, `almoxarifado_movimentacoes`

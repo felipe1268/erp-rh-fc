@@ -4426,6 +4426,37 @@ export const lobConfig = pgTable("lob_config", {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// INTEGRAÇÃO MAS CONTROLE — CONFIGURAÇÃO E LOGS DE MIGRAÇÃO
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const masControleConfig = pgTable("mas_controle_config", {
+  id:           serial().primaryKey(),
+  companyId:    integer("company_id").notNull().unique(),
+  loginEmail:   varchar("login_email", { length: 255 }),
+  token:        varchar({ length: 500 }),
+  apiOk:        boolean("api_ok").default(false),
+  migratedAt:   timestamp("migrated_at", { mode: 'string' }),
+  criadoEm:     timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const migrationLogs = pgTable("migration_logs", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  fonte:            varchar({ length: 50 }).notNull().default("mas_controle"),
+  tipoDado:         varchar("tipo_dado", { length: 50 }).notNull(),
+  totalEncontrado:  integer("total_encontrado").default(0),
+  totalImportado:   integer("total_importado").default(0),
+  totalDuplicado:   integer("total_duplicado").default(0),
+  totalErro:        integer("total_erro").default(0),
+  detalhes:         json().default([]),
+  executadoPorId:   integer("executado_por_id"),
+  executadoPorNome: varchar("executado_por_nome", { length: 255 }),
+  via:              varchar({ length: 20 }).default("csv"),
+  executadoEm:      timestamp("executado_em", { mode: 'string' }).defaultNow().notNull(),
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MÓDULO DE COMPRAS — FASE 1: FORNECEDORES + ALMOXARIFADO
 // ═══════════════════════════════════════════════════════════════════════════════
 

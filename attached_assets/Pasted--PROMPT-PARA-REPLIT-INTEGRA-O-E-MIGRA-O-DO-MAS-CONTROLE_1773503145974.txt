@@ -1,0 +1,244 @@
+# PROMPT PARA REPLIT — INTEGRAÇÃO E MIGRAÇÃO DO MAS CONTROLE
+
+---
+
+Este é um módulo **separado** do Módulo de Compras que já foi especificado.
+O objetivo é: **importar todos os dados do Mas Controle ERP para o nosso sistema**, e depois a empresa cancela o Mas Controle.
+
+---
+
+## CONTEXTO
+
+A empresa usa atualmente o **Mas Controle ERP** (maiscontroleerp.com.br) para gestão de obras.
+Precisamos migrar todos os dados deles para o nosso sistema antes de cancelar o contrato.
+
+O Mas Controle possui uma **API para Relatórios** com autenticação por login + token.
+
+### Como ativar a API do Mas Controle (o usuário já faz isso antes):
+1. No Mas Controle → Configurações → Integração → Configurar → Ativar API para Relatórios
+2. O sistema gera um **e-mail de login** e uma **senha/token**
+3. Esses dados são usados para autenticar todas as requisições
+
+---
+
+## O QUE CONSTRUIR
+
+### Tela de Configuração da Integração
+Criar uma página no ERP em `/integracoes/mas-controle` com:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Integração — Mas Controle ERP                          │
+├─────────────────────────────────────────────────────────┤
+│  Login (e-mail):  [________________________]            │
+│  Senha/Token:     [________________________]            │
+│                   [Testar Conexão]                      │
+├─────────────────────────────────────────────────────────┤
+│  Status: ✅ Conectado   (ou ❌ Credenciais inválidas)   │
+├─────────────────────────────────────────────────────────┤
+│  DADOS DISPONÍVEIS PARA IMPORTAR:                       │
+│  ☑ Obras                          [Ver prévia]         │
+│  ☑ EAP (Estrutura Analítica)      [Ver prévia]         │
+│  ☑ Orçamentos / Planilha Meta     [Ver prévia]         │
+│  ☑ Fornecedores                   [Ver prévia]         │
+│  ☑ Insumos / Materiais            [Ver prévia]         │
+│  ☑ Solicitações de Compra         [Ver prévia]         │
+│  ☑ Ordens de Compra               [Ver prévia]         │
+│  ☑ Histórico de Compras           [Ver prévia]         │
+│                                                         │
+│  [INICIAR MIGRAÇÃO COMPLETA]                            │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Processo de Migração
+
+Criar um router tRPC `masControleRouter` com as seguintes mutations/queries:
+
+#### 1. `testarConexao`
+- Faz uma requisição de teste na API do Mas Controle com as credenciais
+- Retorna: conectado ✅ ou erro ❌
+
+#### 2. `previewDados`
+- Busca uma amostra dos dados disponíveis (primeiros 5 registros de cada tipo)
+- Exibe na tela antes de confirmar a migração
+
+#### 3. `importarObras`
+- Busca todas as obras do Mas Controle
+- Mapeia para o formato da tabela `obras` do nosso sistema
+- Evita duplicatas (verifica por nome + CNPJ da empresa)
+- Registra log: quantas importadas, quantas já existiam, quantas deram erro
+
+#### 4. `importarEAP`
+- Busca a EAP de cada obra importada
+- Mapeia para as tabelas de orçamento do nosso sistema
+- Mantém a hierarquia de itens (grupos, subgrupos, insumos)
+
+#### 5. `importarOrcamento`
+- Busca os valores de orçamento (custo, venda, meta) por item da EAP
+- Popula a planilha meta que o módulo de Compras vai usar
+
+#### 6. `importarFornecedores`
+- Busca todos os fornecedores cadastrados no Mas Controle
+- Mapeia para a tabela `suppliers` do nosso sistema
+- Busca dados complementares via BrasilAPI (CNPJ) para completar o cadastro
+- Evita duplicatas por CNPJ
+
+#### 7. `importarInsumos`
+- Busca o catálogo de insumos/materiais do Mas Controle
+- Mapeia para `almoxarifado_items`
+
+#### 8. `importarHistoricoCompras`
+- Busca solicitações de compra e ordens de compra históricas
+- Importa como histórico (status = "importado_historico")
+- Mantém rastreabilidade: "importado do Mas Controle em DD/MM/AAAA"
+
+#### 9. `importarTudo`
+- Executa todos os passos acima em sequência
+- Exibe progresso em tempo real na tela (barra de progresso por tipo de dado)
+- Gera relatório final de migração
+
+---
+
+### Log de Migração
+
+**Tabela:**
+```sql
+migration_logs (
+  id,
+  fonte VARCHAR DEFAULT 'mas_controle',
+  tipo_dado VARCHAR,  -- 'obras', 'eap', 'fornecedores', etc.
+  total_encontrado INT,
+  total_importado INT,
+  total_duplicado INT,
+  total_erro INT,
+  detalhes JSON,  -- lista de erros se houver
+  executado_por_id INT,
+  executado_por_nome VARCHAR,
+  executado_em DATETIME
+)
+```
+
+**Tela de resultado da migração:**
+```
+✅ MIGRAÇÃO CONCLUÍDA
+
+Obras:           12 importadas  |  2 já existiam  |  0 erros
+EAP:            847 itens       |  0 duplicatas   |  0 erros
+Orçamento:      847 itens       |  0 duplicatas   |  3 erros ⚠️
+Fornecedores:    34 importados  |  5 já existiam  |  0 erros
+Insumos:        156 importados  |  0 duplicatas   |  0 erros
+Hist. Compras:  203 registros   |  0 duplicatas   |  0 erros
+
+⚠️ 3 itens de orçamento com erro — [Ver detalhes]
+
+[Baixar relatório PDF]   [Fechar]
+```
+
+---
+
+## MAPEAMENTO DE DADOS (Mas Controle → Nosso sistema)
+
+### Obras
+```
+Mas Controle          → Nossa tabela `obras`
+nome                  → nome
+codigo                → codigoInterno
+cliente               → cliente
+endereco              → endereco
+status                → status
+data_inicio           → dataInicio
+data_previsao_fim     → dataPrevisaoFim
+```
+
+### Fornecedores
+```
+Mas Controle          → Nossa tabela `suppliers`
+cnpj                  → cnpj
+razao_social          → razao_social
+nome_fantasia         → nome_fantasia
+email                 → email
+telefone              → telefone
+(buscar resto via BrasilAPI com o CNPJ)
+```
+
+### Insumos
+```
+Mas Controle          → Nossa tabela `almoxarifado_items`
+descricao             → nome
+unidade               → unidade
+codigo                → codigo_interno
+grupo/categoria       → categoria
+```
+
+---
+
+## CUIDADOS IMPORTANTES
+
+1. **Nunca sobrescrever dados existentes** — apenas criar registros novos ou pular duplicatas
+2. **Migração idempotente** — pode rodar várias vezes sem duplicar dados
+3. **Todos os dados importados recebem flag** `imported_from = 'mas_controle'`
+4. **Manter os IDs originais do Mas Controle** em um campo `external_id` para referência
+5. **Se a API do Mas Controle retornar paginação**, implementar loop para buscar todas as páginas
+6. **Rate limiting** — aguardar 500ms entre requisições para não sobrecarregar a API deles
+
+---
+
+## AUTENTICAÇÃO NA API DO MAS CONTROLE
+
+A API usa autenticação Basic Auth (login + senha gerados nas configurações):
+
+```javascript
+// Exemplo de requisição
+const response = await fetch('https://api.maiscontroleerp.com.br/v1/obras', {
+  headers: {
+    'Authorization': `Basic ${Buffer.from(`${login}:${token}`).toString('base64')}`,
+    'Content-Type': 'application/json'
+  }
+});
+```
+
+**IMPORTANTE:** A URL base e os endpoints exatos da API do Mas Controle precisam ser
+descobertos/confirmados. Se a API não estiver documentada publicamente:
+
+**Alternativa A — Exportação via CSV:**
+Se a API não tiver os endpoints necessários, criar um importador de CSV:
+- Usuário exporta dados do Mas Controle em Excel/CSV
+- Faz upload no nosso sistema
+- Sistema processa e importa automaticamente
+
+**Alternativa B — Scraping controlado (último recurso):**
+Só usar se API e CSV não funcionarem.
+
+**Implementar as duas opções** (API + CSV) para garantir que a migração funcione
+independente do que o Mas Controle disponibilizar.
+
+---
+
+## ONDE ADICIONAR NO SISTEMA
+
+- Menu lateral: **Configurações → Integrações → Mas Controle**
+- Visível apenas para `admin_master`
+- Após migração bem-sucedida: exibir badge "✅ Dados migrados em DD/MM/AAAA"
+
+---
+
+## ORDEM DE IMPLEMENTAÇÃO
+
+1. Tela de configuração com campos de credenciais + teste de conexão
+2. Tabela `migration_logs`
+3. Importador de Obras
+4. Importador de Fornecedores (com BrasilAPI para completar CNPJ)
+5. Importador de Insumos/Almoxarifado
+6. Importador de EAP + Orçamento/Meta
+7. Importador de Histórico de Compras
+8. Importador CSV como alternativa/backup
+9. Tela de resultado com relatório de migração
+10. Botão "Baixar relatório PDF" da migração
+
+---
+
+**Nota final:** Este módulo de migração é temporário — após a migração estar completa e
+confirmada, o cliente vai cancelar o Mas Controle. O módulo pode ficar no sistema como
+histórico mas não precisa de manutenção futura.
