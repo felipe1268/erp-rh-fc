@@ -104,6 +104,7 @@ shared/         # Shared types and constants
 - **12 new composite DB indexes**: `idx_emp_company_status_deleted` (employees), `idx_emp_company_deleted`, `idx_td_company_mes` (timecard_daily), `idx_td_emp_mes`, `idx_aso_company_emp_deleted`, `idx_of_employee_active`, `idx_emp_nome_search` (GIN trigram), `idx_ppay_company_mes_emp`, `idx_ed_company_emp_deleted`, `idx_vp_company_emp_status`, `idx_pp_company_status` (payroll_periods), `idx_he_company_status` (he_solicitacoes).
 - **pg_trgm extension**: Enabled for fast text search on employee names.
 - **Vite build**: `sourcemap: false`, target `es2020`, finer manual chunks (added `vendor-utils-sm` for superjson/zod/clsx).
+- **Dashboard queries parallelized with Promise.all**: Reduced from 66 sequential `await db.` calls to 8, using 10 `Promise.all()` groups. Each dashboard function now runs all independent queries in parallel: getDashFuncionarios (20→parallel), getDashDocumentos (26→parallel), getDashControleDocumentos (6→parallel), getDashHorasExtras (5→parallel), getDashEpis (5→parallel), getDashPerfilTempoCasa (5→parallel), getDashCompetenciasAnual (4→parallel), getDashFolhaPagamento (2→parallel), getDashCartaoPonto (2→parallel). Expected ~10x reduction in dashboard response time.
 
 ## Notes
 - Default password for first login: `asdf1020`
