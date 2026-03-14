@@ -566,6 +566,10 @@ function DashboardLayoutContent({
   const dragOverItem = useRef<{ sectionTitle: string; path: string } | null>(null);
   const [dragActiveItem, setDragActiveItem] = useState<string | null>(null);
   const [dragTargetItem, setDragTargetItem] = useState<string | null>(null);
+  const [sidebarActiveParam, setSidebarActiveParam] = useState<string>(() => {
+    const s = window.location.search;
+    return s.startsWith('?') ? s.slice(1) : '';
+  });
 
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -585,6 +589,18 @@ function DashboardLayoutContent({
 
   useEffect(() => { restoreScroll(); }, []);
   useEffect(() => { restoreScroll(); }, [location]);
+  useEffect(() => {
+    const s = window.location.search;
+    setSidebarActiveParam(s.startsWith('?') ? s.slice(1) : '');
+  }, [location]);
+  useEffect(() => {
+    const handler = () => {
+      const raw = sessionStorage.getItem('_navParams');
+      if (raw) setSidebarActiveParam(raw);
+    };
+    window.addEventListener('navParamsUpdated', handler);
+    return () => window.removeEventListener('navParamsUpdated', handler);
+  }, []);
 
   const isAdminUser = user?.role === 'admin' || user?.role === 'admin_master';
   const isMasterUser = user?.role === 'admin_master';
@@ -757,8 +773,33 @@ function DashboardLayoutContent({
         }));
       }
     }
+    // Inject dynamic tab sections when inside a Planejamento project page
+    if (activeModule === "planejamento") {
+      const planMatch = location.match(/^\/planejamento\/(\d+)$/);
+      if (planMatch) {
+        const planId = planMatch[1];
+        const planTabItems: MenuItem[] = [
+          { icon: BarChart3,     label: "Visão Geral",       path: `/planejamento/${planId}?tab=visao-geral` },
+          { icon: CalendarDays,  label: "Cronograma",        path: `/planejamento/${planId}?tab=cronograma` },
+          { icon: ClipboardCheck,label: "Gantt",             path: `/planejamento/${planId}?tab=gantt` },
+          { icon: Building2,     label: "Linha de Balanços", path: `/planejamento/${planId}?tab=lob` },
+          { icon: DollarSign,    label: "Crono. Financeiro", path: `/planejamento/${planId}?tab=cronograma-financeiro` },
+          { icon: TrendingUp,    label: "Curva S",           path: `/planejamento/${planId}?tab=curva-s` },
+          { icon: BarChart3,     label: "Avanço Semanal",    path: `/planejamento/${planId}?tab=avanco` },
+          { icon: AlertTriangle, label: "Caminho Crítico",   path: `/planejamento/${planId}?tab=caminho-critico` },
+          { icon: ShoppingCart,  label: "Compras",           path: `/planejamento/${planId}?tab=compras` },
+          { icon: ClipboardList, label: "Prev. Medição",     path: `/planejamento/${planId}?tab=prev-medicao` },
+          { icon: CalendarDays,  label: "Prog. Semanal",     path: `/planejamento/${planId}?tab=prog-semanal` },
+          { icon: GitBranch,     label: "Revisões",          path: `/planejamento/${planId}?tab=revisoes` },
+          { icon: FileText,      label: "REFIS",             path: `/planejamento/${planId}?tab=refis` },
+          { icon: Brain,         label: "IA Gestora",        path: `/planejamento/${planId}?tab=ia-gestora` },
+        ];
+        sections = [...sections, { title: "Abas do Projeto", items: planTabItems }];
+      }
+    }
+
     return sections.filter(s => s.items.length > 0);
-  }, [activeModule, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, savedMenuConfig]);
+  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, savedMenuConfig]);
 
   const allEffectiveItems = effectiveSections.flatMap(s => s.items);
   const allModuleItems = Object.values(MODULE_SECTIONS).flatMap(sections => sections.flatMap(s => s.items));
@@ -958,7 +999,7 @@ function DashboardLayoutContent({
                   <SidebarMenu className="px-2 py-0.5">
                     {section.items.map((item: any) => {
                       const isActive = item.path.includes('?')
-                        ? location === item.path.split('?')[0]
+                        ? location === item.path.split('?')[0] && item.path.split('?')[1] === sidebarActiveParam
                         : location === item.path;
                       return (
                         <SidebarMenuItem key={item.path}>
@@ -973,6 +1014,7 @@ function DashboardLayoutContent({
                                 // wouter doesn't support query params - store params in sessionStorage and navigate with setLocation
                                 const [basePath, queryString] = item.path.split('?');
                                 sessionStorage.setItem('_navParams', queryString);
+                                setSidebarActiveParam(queryString);
                                 if (location === basePath) {
                                   // Already on the same page - dispatch event to force re-read
                                   window.dispatchEvent(new Event('navParamsUpdated'));
