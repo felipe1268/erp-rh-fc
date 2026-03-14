@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 261,
+    titulo: "Programação Semanal — Badge 'Semana Atual' + Seletor de Quantidade de Semanas",
+    descricao: "Na aba Programação Semanal do Planejamento: (1) Badge verde pulsante 'Semana Atual' aparece no navegador central quando a semana exibida corresponde à semana corrente do calendário. (2) No modo Relatório, botões 1 a 6 permitem ao usuário selecionar quantas semanas exibir no relatório; o botão principal reflete dinamicamente o número escolhido (ex: 'Relatório 4 Semanas'). Grid do relatório ajusta colunas automaticamente conforme o número de semanas.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 22:30:00",
+  },
+  {
     version: 260,
     titulo: "Visão Geral — Remove card 'Dados do Projeto' redundante",
     descricao: "Removido o card 'Dados do Projeto' da aba Visão Geral do Planejamento, pois as mesmas informações já estão disponíveis no cabeçalho fixo da tela. O widget de Atividades em Atraso passou a ocupar largura total.",
