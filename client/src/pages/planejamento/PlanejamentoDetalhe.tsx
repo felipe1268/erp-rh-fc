@@ -1573,10 +1573,17 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     if (editando) return linhas;
     if (!periodoRange) return atividades;
     const [ini, fim] = periodoRange;
+    // Inclui atividades cujo início OU fim cai dentro do intervalo
+    // (atividade começa OU termina dentro do período selecionado)
     const matchIds = new Set(
-      atividades.filter((a: any) => a.dataInicio && a.dataFim && a.dataFim >= ini && a.dataInicio <= fim).map((a: any) => a.id)
+      atividades.filter((a: any) => {
+        if (!a.dataInicio) return false;
+        const inicioNoPeriodo = a.dataInicio >= ini && a.dataInicio <= fim;
+        const fimNoPeriodo    = a.dataFim && a.dataFim >= ini && a.dataFim <= fim;
+        return inicioNoPeriodo || fimNoPeriodo;
+      }).map((a: any) => a.id)
     );
-    if (matchIds.size === 0) return atividades.filter((a: any) => matchIds.has(a.id));
+    if (matchIds.size === 0) return [];
     const parentEaps = new Set<string>();
     atividades.filter((a: any) => matchIds.has(a.id) && a.eapCodigo).forEach((a: any) => {
       const parts = String(a.eapCodigo).split(".");
@@ -1594,7 +1601,11 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
             Cronograma — Rev. {String(revisaoAtiva.numero).padStart(2, "0")}
             {revisaoAtiva.isBaseline && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Baseline</span>}
           </p>
-          <span className="text-xs text-slate-400">{atividades.length} atividades</span>
+          <span className="text-xs text-slate-400">
+            {periodoRange
+              ? <>{displayAtiv.filter((a: any) => !a.isGrupo).length} <span className="text-blue-500">de {atividades.filter((a: any) => !a.isGrupo).length}</span> atividades</>
+              : <>{atividades.length} atividades</>}
+          </span>
         </div>
         <div className="flex gap-2 flex-wrap">
           {editando ? (
