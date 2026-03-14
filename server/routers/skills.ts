@@ -282,24 +282,24 @@ export const skillsRouter = router({
       const ids = resolveCompanyIds(input);
       
       // Get employees in the obra from obra_funcionarios, then count their skills
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT 
-          s.id as skillId,
-          s.nome as skillNome,
-          s.categoria as skillCategoria,
-          COUNT(DISTINCT es.employeeId) as qtd
+          s.id as "skillId",
+          s.nome as "skillNome",
+          s.categoria as "skillCategoria",
+          COUNT(DISTINCT es."employeeId") as qtd
         FROM employee_skills es
-        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
-        INNER JOIN obra_funcionarios of2 ON of2.employeeId = es.employeeId 
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL
+        INNER JOIN skills s ON s.id = es."skillId" AND s.deleted_at IS NULL
+        INNER JOIN obra_funcionarios of2 ON of2."employeeId" = es."employeeId" 
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL
           AND e.status NOT IN ('Desligado', 'Lista_Negra')
         WHERE es.deleted_at IS NULL
-          AND es.companyId IN (${sql.raw(ids.join(','))})
-          ${input.obraId ? sql`AND of2.obraId = ${input.obraId}` : sql``}
+          AND es."companyId" IN (${sql.raw(ids.join(','))})
+          ${input.obraId ? sql`AND of2."obraId" = ${input.obraId}` : sql``}
         GROUP BY s.id, s.nome, s.categoria
         ORDER BY qtd DESC, s.nome ASC
-      `);
-      return rows || [];
+      `)) as any).rows || [];
+      return rows;
     }),
 
   // Summary: skills per obra for all obras (for obra cards)
@@ -309,24 +309,24 @@ export const skillsRouter = router({
       const db = await getDb();
       const ids = resolveCompanyIds(input);
       
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT 
-          of2.obraId,
-          s.id as skillId,
-          s.nome as skillNome,
-          COUNT(DISTINCT es.employeeId) as qtd
+          of2."obraId",
+          s.id as "skillId",
+          s.nome as "skillNome",
+          COUNT(DISTINCT es."employeeId") as qtd
         FROM employee_skills es
-        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
-        INNER JOIN obra_funcionarios of2 ON of2.employeeId = es.employeeId 
-           AND of2.isActive = 1
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL
+        INNER JOIN skills s ON s.id = es."skillId" AND s.deleted_at IS NULL
+        INNER JOIN obra_funcionarios of2 ON of2."employeeId" = es."employeeId" 
+           AND of2."isActive" = 1
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL
           AND e.status NOT IN ('Desligado', 'Lista_Negra')
         WHERE es.deleted_at IS NULL
-          AND es.companyId IN (${sql.raw(ids.join(','))})
-        GROUP BY of2.obraId, s.id, s.nome
-        ORDER BY of2.obraId, qtd DESC
-      `);
-      return rows || [];
+          AND es."companyId" IN (${sql.raw(ids.join(','))})
+        GROUP BY of2."obraId", s.id, s.nome
+        ORDER BY of2."obraId", qtd DESC
+      `)) as any).rows || [];
+      return rows;
     }),
 
   // ─── Bulk Assignment ─────────────────────────────────────────────
@@ -421,31 +421,31 @@ export const skillsRouter = router({
       }
 
       // Get skills per obra with employee details
-      const [skillRows] = await db.execute(sql`
+      const skillRows = ((await db.execute(sql`
         SELECT 
-          of2.obraId,
-          s.id as skillId,
-          s.nome as skillNome,
-          s.categoria as skillCategoria,
+          of2."obraId",
+          s.id as "skillId",
+          s.nome as "skillNome",
+          s.categoria as "skillCategoria",
           es.nivel,
-          es.tempoExperiencia,
-          e.id as employeeId,
-          e.nomeCompleto as empNome,
-          e.funcao as empFuncao
+          es."tempoExperiencia",
+          e.id as "employeeId",
+          e."nomeCompleto" as "empNome",
+          e.funcao as "empFuncao"
         FROM employee_skills es
-        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
-        INNER JOIN obra_funcionarios of2 ON of2.employeeId = es.employeeId 
-           AND of2.isActive = 1
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL
+        INNER JOIN skills s ON s.id = es."skillId" AND s.deleted_at IS NULL
+        INNER JOIN obra_funcionarios of2 ON of2."employeeId" = es."employeeId" 
+           AND of2."isActive" = 1
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL
           AND e.status NOT IN ('Desligado', 'Lista_Negra')
         WHERE es.deleted_at IS NULL
-          AND es.companyId IN (${sql.raw(ids.join(','))})
-          ${input.obraId ? sql`AND of2.obraId = ${input.obraId}` : sql``}
-        ORDER BY of2.obraId, s.categoria, s.nome, e.nomeCompleto
-      `);
+          AND es."companyId" IN (${sql.raw(ids.join(','))})
+          ${input.obraId ? sql`AND of2."obraId" = ${input.obraId}` : sql``}
+        ORDER BY of2."obraId", s.categoria, s.nome, e."nomeCompleto"
+      `)) as any).rows || [];
 
       // Remap skill rows obraId to primary obraId for consolidated obras
-      const remappedSkillRows = (skillRows || []).map((r: any) => {
+      const remappedSkillRows = skillRows.map((r: any) => {
         const mapped = obraIdMapping.get(Number(r.obraId));
         return mapped ? { ...r, obraId: mapped } : r;
       });
@@ -471,20 +471,20 @@ export const skillsRouter = router({
       }
 
       // Get total employees per obra
-      const [empCountRows] = await db.execute(sql`
-        SELECT of2.obraId, COUNT(DISTINCT of2.employeeId) as total
+      const empCountRows = ((await db.execute(sql`
+        SELECT of2."obraId", COUNT(DISTINCT of2."employeeId") as total
         FROM obra_funcionarios of2
-        INNER JOIN employees e ON e.id = of2.employeeId AND e.deletedAt IS NULL
+        INNER JOIN employees e ON e.id = of2."employeeId" AND e."deletedAt" IS NULL
           AND e.status NOT IN ('Desligado', 'Lista_Negra')
-        WHERE of2.isActive = 1
-          AND of2.companyId IN (${sql.raw(ids.join(','))})
-        GROUP BY of2.obraId
-      `);
+        WHERE of2."isActive" = 1
+          AND of2."companyId" IN (${sql.raw(ids.join(','))})
+        GROUP BY of2."obraId"
+      `)) as any).rows || [];
 
       // Consolidate employee counts for merged obras
       const consolidatedEmpCounts: any[] = [];
       const empCountMap = new Map<number, number>();
-      for (const row of (empCountRows || []) as any[]) {
+      for (const row of empCountRows as any[]) {
         const primaryId = obraIdMapping.get(Number(row.obraId)) || Number(row.obraId);
         empCountMap.set(primaryId, (empCountMap.get(primaryId) || 0) + Number(row.total));
       }
@@ -510,81 +510,80 @@ export const skillsRouter = router({
       const ids = resolveCompanyIds(input);
 
       // KPIs
-      const [totalSkillsRows] = await db.execute(sql`
-        SELECT COUNT(DISTINCT UPPER(TRIM(nome))) as total FROM skills WHERE companyId IN (${sql.raw(ids.join(','))}) AND deleted_at IS NULL
-      `);
-      const [totalAssignmentsRows] = await db.execute(sql`
+      const totalSkillsRows = ((await db.execute(sql`
+        SELECT COUNT(DISTINCT UPPER(TRIM(nome))) as total FROM skills WHERE "companyId" IN (${sql.raw(ids.join(','))}) AND deleted_at IS NULL
+      `)) as any).rows || [];
+      const totalAssignmentsRows = ((await db.execute(sql`
         SELECT COUNT(*) as total FROM employee_skills es
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
-        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
-      `);
-      const [totalEmployeesWithSkillRows] = await db.execute(sql`
-        SELECT COUNT(DISTINCT es.employeeId) as total FROM employee_skills es
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
-        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
-      `);
-      const [totalActiveEmployeesRows] = await db.execute(sql`
-        SELECT COUNT(*) as total FROM employees WHERE companyId IN (${sql.raw(ids.join(','))}) AND deletedAt IS NULL AND status NOT IN ('Desligado','Lista_Negra')
-      `);
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es."companyId" IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+      `)) as any).rows || [];
+      const totalEmployeesWithSkillRows = ((await db.execute(sql`
+        SELECT COUNT(DISTINCT es."employeeId") as total FROM employee_skills es
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es."companyId" IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+      `)) as any).rows || [];
+      const totalActiveEmployeesRows = ((await db.execute(sql`
+        SELECT COUNT(*) as total FROM employees WHERE "companyId" IN (${sql.raw(ids.join(','))}) AND "deletedAt" IS NULL AND status NOT IN ('Desligado','Lista_Negra')
+      `)) as any).rows || [];
 
       // Distribution by category
-      const [byCategory] = await db.execute(sql`
-        SELECT s.categoria, COUNT(DISTINCT es.employeeId) as qtd
+      const byCategory = ((await db.execute(sql`
+        SELECT s.categoria, COUNT(DISTINCT es."employeeId") as qtd
         FROM employee_skills es
-        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
-        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+        INNER JOIN skills s ON s.id = es."skillId" AND s.deleted_at IS NULL
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es."companyId" IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
         GROUP BY s.categoria ORDER BY qtd DESC
-      `);
+      `)) as any).rows || [];
 
       // Distribution by level
-      const [byLevel] = await db.execute(sql`
+      const byLevel = ((await db.execute(sql`
         SELECT es.nivel, COUNT(*) as qtd
         FROM employee_skills es
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
-        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
-        GROUP BY es.nivel ORDER BY FIELD(es.nivel, 'Basico','Intermediario','Avancado')
-      `);
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es."companyId" IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+        GROUP BY es.nivel ORDER BY CASE es.nivel WHEN 'Basico' THEN 1 WHEN 'Intermediario' THEN 2 WHEN 'Avancado' THEN 3 ELSE 4 END
+      `)) as any).rows || [];
 
       // Top skills (most assigned)
-      const [topSkills] = await db.execute(sql`
-        SELECT s.id, s.nome, s.categoria, COUNT(DISTINCT es.employeeId) as qtd
+      const topSkills = ((await db.execute(sql`
+        SELECT s.id, s.nome, s.categoria, COUNT(DISTINCT es."employeeId") as qtd
         FROM employee_skills es
-        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
-        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+        INNER JOIN skills s ON s.id = es."skillId" AND s.deleted_at IS NULL
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es."companyId" IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
         GROUP BY s.id, s.nome, s.categoria ORDER BY qtd DESC LIMIT 15
-      `);
+      `)) as any).rows || [];
 
       // Skills per obra - group by obra name to consolidate construtoras
-      const [byObraRaw] = await db.execute(sql`
-        SELECT UPPER(TRIM(o.nome)) as obraNome, 
-          COUNT(DISTINCT es.employeeId) as empComSkill,
-          COUNT(DISTINCT s.id) as skillsDistintas
+      const byObra = ((await db.execute(sql`
+        SELECT UPPER(TRIM(o.nome)) as "obraNome", 
+          COUNT(DISTINCT es."employeeId") as "empComSkill",
+          COUNT(DISTINCT s.id) as "skillsDistintas"
         FROM employee_skills es
-        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
-        INNER JOIN obra_funcionarios of2 ON of2.employeeId = es.employeeId  AND of2.isActive = 1
-        INNER JOIN obras o ON o.id = of2.obraId AND o.deletedAt IS NULL
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
-        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
-        GROUP BY UPPER(TRIM(o.nome)) ORDER BY empComSkill DESC
-      `);
-      const byObra = byObraRaw || [];
+        INNER JOIN skills s ON s.id = es."skillId" AND s.deleted_at IS NULL
+        INNER JOIN obra_funcionarios of2 ON of2."employeeId" = es."employeeId" AND of2."isActive" = 1
+        INNER JOIN obras o ON o.id = of2."obraId" AND o."deletedAt" IS NULL
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es."companyId" IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+        GROUP BY UPPER(TRIM(o.nome)) ORDER BY "empComSkill" DESC
+      `)) as any).rows || [];
 
       // Employees without any skill
-      const [noSkillRows] = await db.execute(sql`
+      const noSkillRows = ((await db.execute(sql`
         SELECT COUNT(*) as total FROM employees e
-        WHERE e.companyId IN (${sql.raw(ids.join(','))}) AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE e."companyId" IN (${sql.raw(ids.join(','))}) AND e."deletedAt" IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
         AND e.id NOT IN (
-          SELECT DISTINCT es.employeeId FROM employee_skills es WHERE es.deleted_at IS NULL
+          SELECT DISTINCT es."employeeId" FROM employee_skills es WHERE es.deleted_at IS NULL
         )
-      `);
+      `)) as any).rows || [];
 
-      const totalSkills = Number((totalSkillsRows as any)?.[0]?.total || 0);
-      const totalAssignments = Number((totalAssignmentsRows as any)?.[0]?.total || 0);
-      const totalWithSkill = Number((totalEmployeesWithSkillRows as any)?.[0]?.total || 0);
-      const totalActive = Number((totalActiveEmployeesRows as any)?.[0]?.total || 0);
-      const totalNoSkill = Number((noSkillRows as any)?.[0]?.total || 0);
+      const totalSkills = Number(totalSkillsRows?.[0]?.total || 0);
+      const totalAssignments = Number(totalAssignmentsRows?.[0]?.total || 0);
+      const totalWithSkill = Number(totalEmployeesWithSkillRows?.[0]?.total || 0);
+      const totalActive = Number(totalActiveEmployeesRows?.[0]?.total || 0);
+      const totalNoSkill = Number(noSkillRows?.[0]?.total || 0);
 
       return {
         kpis: {
@@ -609,22 +608,22 @@ export const skillsRouter = router({
       const db = await getDb();
       const ids = resolveCompanyIds(input);
       
-      const [rows] = await db.execute(sql`
+      const rows = ((await db.execute(sql`
         SELECT 
-          s.id as skillId,
-          s.nome as skillNome,
-          s.categoria as skillCategoria,
+          s.id as "skillId",
+          s.nome as "skillNome",
+          s.categoria as "skillCategoria",
           es.nivel,
-          COUNT(DISTINCT es.employeeId) as qtd
+          COUNT(DISTINCT es."employeeId") as qtd
         FROM employee_skills es
-        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
-        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL
+        INNER JOIN skills s ON s.id = es."skillId" AND s.deleted_at IS NULL
+        INNER JOIN employees e ON e.id = es."employeeId" AND e."deletedAt" IS NULL
           AND e.status NOT IN ('Desligado', 'Lista_Negra')
         WHERE es.deleted_at IS NULL
-          AND es.companyId IN (${sql.raw(ids.join(','))})
+          AND es."companyId" IN (${sql.raw(ids.join(','))})
         GROUP BY s.id, s.nome, s.categoria, es.nivel
         ORDER BY s.categoria, s.nome, es.nivel
-      `);
-      return rows || [];
+      `)) as any).rows || [];
+      return rows;
     }),
 });
