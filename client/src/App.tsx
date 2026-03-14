@@ -129,6 +129,9 @@ const PlanejamentoDetalhe = lazy(() => import("./pages/planejamento/Planejamento
 const Fornecedores = lazy(() => import("./pages/compras/Fornecedores"));
 const Almoxarifado = lazy(() => import("./pages/compras/Almoxarifado"));
 
+// Integrações
+const MasControle = lazy(() => import("./pages/integracoes/MasControle"));
+
 // Sprint 6 - IA
 const ComparativoConvencoes = lazy(() => import("./pages/ComparativoConvencoes"));
 
@@ -272,6 +275,8 @@ function Router() {
         {/* Compras */}
         <Route path="/compras/fornecedores"      component={Fornecedores} />
         <Route path="/compras/almoxarifado"      component={Almoxarifado} />
+        {/* Integrações */}
+        <Route path="/integracoes/mas-controle"  component={MasControle} />
         {/* Sprint 6 - IA */}
         <Route path="/comparativo-convencoes" component={ComparativoConvencoes} />
         <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />

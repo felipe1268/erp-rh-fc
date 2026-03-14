@@ -319,6 +319,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 14:33:00",
   },
   {
+    version: 231,
+    titulo: "Integração Mas Controle ERP — Migração de Dados",
+    descricao: "Módulo completo de integração e migração do Mas Controle ERP. Configuração de credenciais da API (Basic Auth); teste de conexão com detecção automática de URL base; importação via API REST (obras, fornecedores, insumos) com fallback automático; importação via CSV/Excel (método garantido) com parser que aceita vírgula ou ponto-e-vírgula como separador; mapeamento flexível de colunas com múltiplos candidatos de nome; importação idempotente por nome/CNPJ (nunca duplica dados); log completo por tipo de dado (encontrados, importados, duplicados, erros com detalhes); histórico de todas as migrações; marcação de migração como concluída. Tabelas: migration_logs, mas_controle_config. Rota: /integracoes/mas-controle (apenas admin_master).",
+    tipo: "feature",
+    modulos: "Integrações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 17:00:00",
+  },
+  {
     version: 230,
     titulo: "Módulo de Compras — Fase 1: Fornecedores + Almoxarifado Central",
     descricao: "Implementação da Fase 1 do Módulo de Compras. Fornecedores: cadastro completo com busca automática de dados pela Receita Federal via CNPJ (BrasilAPI), dados de endereço, contato comercial, dados bancários/PIX, categorias de fornecimento e situação cadastral. Almoxarifado Central: cadastro de itens com unidades, categorias e estoque mínimo; movimentações de entrada/saída com validação de saldo; semáforo visual de estoque (OK/Baixo/Crítico); histórico completo de movimentações por item. Tabelas no banco: fornecedores, almoxarifado_itens, almoxarifado_movimentacoes. Rotas: /compras/fornecedores e /compras/almoxarifado.",
