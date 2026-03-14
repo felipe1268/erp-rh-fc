@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Plus, Search, Loader2, CalendarRange, Building2, User, DollarSign,
-  TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin, ArrowLeft,
+  TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin, ArrowLeft, Pencil,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -55,6 +55,35 @@ export default function PlanejamentoLista() {
     descricao: "",
   });
 
+  // Edição de projeto existente
+  const [editandoProjeto, setEditandoProjeto] = useState<any | null>(null);
+  const [formEdit, setFormEdit] = useState({
+    nome: "",
+    cliente: "",
+    local: "",
+    responsavel: "",
+    dataInicio: "",
+    dataTerminoContratual: "",
+    valorContrato: "",
+    status: "Em andamento",
+    descricao: "",
+  });
+
+  function abrirEdicao(proj: any) {
+    setFormEdit({
+      nome:                  proj.nome ?? "",
+      cliente:               proj.cliente ?? "",
+      local:                 proj.local ?? "",
+      responsavel:           proj.responsavel ?? "",
+      dataInicio:            proj.dataInicio ?? "",
+      dataTerminoContratual: proj.dataTerminoContratual ?? "",
+      valorContrato:         proj.valorContrato ? String(n(proj.valorContrato)) : "",
+      status:                proj.status ?? "Em andamento",
+      descricao:             proj.descricao ?? "",
+    });
+    setEditandoProjeto(proj);
+  }
+
   const utils = trpc.useUtils();
   const { data: projetos = [], isLoading } = trpc.planejamento.listarProjetos.useQuery(
     { companyId }, { enabled: !!companyId }
@@ -99,6 +128,27 @@ export default function PlanejamentoLista() {
   const excluirMutation = trpc.planejamento.excluirProjeto.useMutation({
     onSuccess: () => { utils.planejamento.listarProjetos.invalidate(); setExcluindo(null); },
   });
+
+  const editarMutation = trpc.planejamento.atualizarProjeto.useMutation({
+    onSuccess: () => { utils.planejamento.listarProjetos.invalidate(); setEditandoProjeto(null); },
+    onError: (err) => { alert(err.message || "Erro ao salvar as alterações."); },
+  });
+
+  function handleEditar() {
+    if (!editandoProjeto) return;
+    editarMutation.mutate({
+      id:                    editandoProjeto.id,
+      nome:                  formEdit.nome || undefined,
+      cliente:               formEdit.cliente || undefined,
+      local:                 formEdit.local || undefined,
+      responsavel:           formEdit.responsavel || undefined,
+      dataInicio:            formEdit.dataInicio || undefined,
+      dataTerminoContratual: formEdit.dataTerminoContratual || undefined,
+      valorContrato:         formEdit.valorContrato ? n(formEdit.valorContrato) : undefined,
+      status:                formEdit.status || undefined,
+      descricao:             formEdit.descricao || undefined,
+    });
+  }
 
   function resetForm() {
     setForm({ obraId: "", status: "Em andamento", descricao: "" });
@@ -265,6 +315,13 @@ export default function PlanejamentoLista() {
                       <Eye className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      onClick={e => { e.stopPropagation(); abrirEdicao(projeto); }}
+                      className="p-1 rounded hover:bg-amber-50 text-amber-500"
+                      title="Editar"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
                       onClick={e => { e.stopPropagation(); if (confirm("Excluir este projeto e todos os seus dados?")) excluirMutation.mutate({ id: projeto.id }); }}
                       className="p-1 rounded hover:bg-red-50 text-red-400"
                       title="Excluir"
@@ -277,6 +334,134 @@ export default function PlanejamentoLista() {
             ))}
           </div>
         )}
+
+        {/* ── Modal Editar Projeto ──────────────────────────────────────────── */}
+        <Dialog open={!!editandoProjeto} onOpenChange={open => { if (!open) setEditandoProjeto(null); }}>
+          <DialogContent className="max-w-lg" style={{ background: "#ffffff", color: "#111827" }}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="h-4 w-4 text-amber-500" />
+                Editar Projeto
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 gap-4 mt-1">
+              {/* Nome */}
+              <div>
+                <Label className="text-xs font-medium">Nome do Projeto</Label>
+                <Input
+                  value={formEdit.nome}
+                  onChange={e => setFormEdit(f => ({ ...f, nome: e.target.value }))}
+                  className="mt-1 text-sm"
+                />
+              </div>
+
+              {/* Cliente + Responsável */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-medium">Cliente</Label>
+                  <Input
+                    value={formEdit.cliente}
+                    onChange={e => setFormEdit(f => ({ ...f, cliente: e.target.value }))}
+                    className="mt-1 text-sm"
+                    placeholder="Nome do cliente"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">Responsável</Label>
+                  <Input
+                    value={formEdit.responsavel}
+                    onChange={e => setFormEdit(f => ({ ...f, responsavel: e.target.value }))}
+                    className="mt-1 text-sm"
+                    placeholder="Engenheiro responsável"
+                  />
+                </div>
+              </div>
+
+              {/* Local */}
+              <div>
+                <Label className="text-xs font-medium">Local / Endereço</Label>
+                <Input
+                  value={formEdit.local}
+                  onChange={e => setFormEdit(f => ({ ...f, local: e.target.value }))}
+                  className="mt-1 text-sm"
+                  placeholder="Cidade / Estado ou endereço"
+                />
+              </div>
+
+              {/* Datas */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-medium">Data de Início</Label>
+                  <Input
+                    type="date"
+                    value={formEdit.dataInicio}
+                    onChange={e => setFormEdit(f => ({ ...f, dataInicio: e.target.value }))}
+                    className="mt-1 text-sm"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">Término Contratual</Label>
+                  <Input
+                    type="date"
+                    value={formEdit.dataTerminoContratual}
+                    onChange={e => setFormEdit(f => ({ ...f, dataTerminoContratual: e.target.value }))}
+                    className="mt-1 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Valor do contrato + Status */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-medium">Valor do Contrato (R$)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={formEdit.valorContrato}
+                    onChange={e => setFormEdit(f => ({ ...f, valorContrato: e.target.value }))}
+                    className="mt-1 text-sm"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">Status da Obra</Label>
+                  <select
+                    value={formEdit.status}
+                    onChange={e => setFormEdit(f => ({ ...f, status: e.target.value }))}
+                    className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                  >
+                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Observações */}
+              <div>
+                <Label className="text-xs font-medium">Observações</Label>
+                <textarea
+                  value={formEdit.descricao}
+                  onChange={e => setFormEdit(f => ({ ...f, descricao: e.target.value }))}
+                  placeholder="Informações adicionais..."
+                  className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background resize-none"
+                  rows={2}
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-1">
+                <Button variant="outline" onClick={() => setEditandoProjeto(null)}>Cancelar</Button>
+                <Button
+                  disabled={!formEdit.nome || editarMutation.isPending}
+                  onClick={handleEditar}
+                  className="bg-amber-600 hover:bg-amber-700"
+                >
+                  {editarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar Alterações"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Modal novo projeto */}
         <Dialog open={modalAberto} onOpenChange={open => { setModalAberto(open); if (!open) resetForm(); }}>
