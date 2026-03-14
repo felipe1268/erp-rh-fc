@@ -6,35 +6,34 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
-  Plus, Search, Trash2, ClipboardList, ChevronRight, Loader2, X,
-  CheckCircle2, XCircle, Clock, AlertTriangle, Package,
+  Plus, Search, Trash2, ClipboardList, ChevronRight, Loader2,
+  CheckCircle2, XCircle, Clock, Building2,
 } from "lucide-react";
 
-const STATUS_CFG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  rascunho:  { label: "Rascunho",    bg: "bg-slate-500/20", text: "text-slate-300", border: "border-slate-500/30" },
-  pendente:  { label: "Pendente",    bg: "bg-amber-500/20",  text: "text-amber-300",  border: "border-amber-500/30" },
-  cotacao:   { label: "Em Cotação",  bg: "bg-blue-500/20",   text: "text-blue-300",   border: "border-blue-500/30" },
-  aprovado:  { label: "Concluído",   bg: "bg-emerald-500/20",text: "text-emerald-300",border: "border-emerald-500/30" },
-  recusado:  { label: "Recusado",    bg: "bg-red-500/20",    text: "text-red-300",    border: "border-red-500/30" },
-  cancelado: { label: "Cancelado",   bg: "bg-slate-600/20",  text: "text-slate-400",  border: "border-slate-600/30" },
+const STATUS_CFG: Record<string, { label: string; cls: string }> = {
+  rascunho:  { label: "Rascunho",    cls: "bg-gray-100 text-gray-600 border-gray-200" },
+  pendente:  { label: "Pendente",    cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  cotacao:   { label: "Em Cotação",  cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  aprovado:  { label: "Concluído",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  recusado:  { label: "Recusado",    cls: "bg-red-50 text-red-700 border-red-200" },
+  cancelado: { label: "Cancelado",   cls: "bg-gray-100 text-gray-500 border-gray-200" },
 };
 
-const APROV_CFG: Record<string, { label: string; icon: JSX.Element; color: string }> = {
-  aguardando: { label: "Aguardando", icon: <Clock className="h-3 w-3" />,        color: "text-amber-400" },
-  aprovado:   { label: "Aprovado",   icon: <CheckCircle2 className="h-3 w-3" />, color: "text-emerald-400" },
-  recusado:   { label: "Recusado",   icon: <XCircle className="h-3 w-3" />,      color: "text-red-400" },
+const APROV_CFG: Record<string, { label: string; icon: JSX.Element; cls: string }> = {
+  aguardando: { label: "Aguardando", icon: <Clock className="h-3 w-3" />,        cls: "text-amber-600" },
+  aprovado:   { label: "Aprovado",   icon: <CheckCircle2 className="h-3 w-3" />, cls: "text-emerald-600" },
+  recusado:   { label: "Recusado",   icon: <XCircle className="h-3 w-3" />,      cls: "text-red-600" },
 };
 
 const PRIORIDADES = ["baixa", "normal", "alta", "urgente"];
-const PRIORIDADE_CFG: Record<string, string> = {
-  baixa: "text-slate-400", normal: "text-blue-400", alta: "text-amber-400", urgente: "text-red-400"
+const PRIORIDADE_COR: Record<string, string> = {
+  baixa: "text-gray-500", normal: "text-blue-600", alta: "text-amber-600", urgente: "text-red-600"
 };
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
 
@@ -43,13 +42,12 @@ const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1"
 
 function StatusBadge({ status }: { status: string }) {
   const c = STATUS_CFG[status] ?? STATUS_CFG.pendente;
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${c.bg} ${c.text} ${c.border}`}>{c.label}</span>;
+  return <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${c.cls}`}>{c.label}</span>;
 }
-
 function AprovBadge({ status }: { status: string | null }) {
   const s = status ?? "aguardando";
   const c = APROV_CFG[s] ?? APROV_CFG.aguardando;
-  return <span className={`inline-flex items-center gap-1 text-xs font-medium ${c.color}`}>{c.icon}{c.label}</span>;
+  return <span className={`inline-flex items-center gap-1 text-xs font-medium ${c.cls}`}>{c.icon}{c.label}</span>;
 }
 
 export default function Solicitacoes() {
@@ -63,7 +61,7 @@ export default function Solicitacoes() {
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
 
   const [form, setForm] = useState({
-    titulo: "", departamento: "", projetoId: "", dataNecessidade: "", prioridade: "normal", observacoes: ""
+    titulo: "", departamento: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: ""
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
   const [recebQtd, setRecebQtd] = useState<Record<number, string>>({});
@@ -73,7 +71,7 @@ export default function Solicitacoes() {
     { enabled: companyId > 0 }
   );
   const detalheQ = trpc.compras.getSolicitacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
-  const projetosQ = trpc.planejamento.listarProjetos.useQuery({ companyId }, { enabled: companyId > 0 });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
 
   const criar = trpc.compras.criarSolicitacao.useMutation({
     onSuccess: () => { toast.success("SC criada!"); setShowNova(false); resetForm(); q.refetch(); },
@@ -84,7 +82,7 @@ export default function Solicitacoes() {
     onError: (e) => toast.error(e.message),
   });
   const receber = trpc.compras.registrarRecebimentoItem.useMutation({
-    onSuccess: (res: any) => { toast.success("Recebimento registrado!"); detalheQ.refetch(); q.refetch(); },
+    onSuccess: () => { toast.success("Recebimento registrado!"); detalheQ.refetch(); q.refetch(); },
     onError: (e) => toast.error(e.message),
   });
   const excluir = trpc.compras.excluirSolicitacao.useMutation({
@@ -97,20 +95,21 @@ export default function Solicitacoes() {
   });
 
   function resetForm() {
-    setForm({ titulo: "", departamento: "", projetoId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
+    setForm({ titulo: "", departamento: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
     setItens([newItem()]);
   }
 
   function handleSalvar() {
-    const validos = itens.filter(i => i.descricao.trim());
     if (!form.titulo.trim()) return toast.error("Informe o título da solicitação.");
+    if (!form.obraId || form.obraId === "none") return toast.error("Selecione a Obra (centro de custo) para esta solicitação.");
+    const validos = itens.filter(i => i.descricao.trim());
     if (validos.length === 0) return toast.error("Adicione pelo menos um item.");
     criar.mutate({
       companyId,
       solicitanteId: user?.id ? parseInt(String(user.id)) : undefined,
       titulo: form.titulo,
       departamento: form.departamento || undefined,
-      projetoId: (form.projetoId && form.projetoId !== "none") ? parseInt(form.projetoId) : undefined,
+      obraId: parseInt(form.obraId),
       dataNecessidade: form.dataNecessidade || undefined,
       prioridade: form.prioridade,
       observacoes: form.observacoes || undefined,
@@ -120,36 +119,32 @@ export default function Solicitacoes() {
 
   const lista = q.data ?? [];
   const detalhe = detalheQ.data;
-  const projetos = projetosQ.data ?? [];
+  const obras = obrasQ.data ?? [];
 
-  // KPIs
-  const kpis = useMemo(() => {
-    const all = lista;
-    return {
-      pendente:  all.filter(r => r.status === "pendente").length,
-      cotacao:   all.filter(r => r.status === "cotacao").length,
-      aprovado:  all.filter(r => r.status === "aprovado").length,
-      recusado:  all.filter(r => r.status === "recusado" || r.status === "cancelado").length,
-    };
-  }, [lista]);
+  const kpis = useMemo(() => ({
+    pendente: lista.filter(r => r.status === "pendente").length,
+    cotacao:  lista.filter(r => r.status === "cotacao").length,
+    aprovado: lista.filter(r => r.status === "aprovado").length,
+    recusado: lista.filter(r => r.status === "recusado" || r.status === "cancelado").length,
+  }), [lista]);
 
-  function nomeProjeto(id: number | null | undefined) {
+  function nomeObra(id: number | null | undefined) {
     if (!id) return null;
-    return projetos.find((p: any) => p.id === id)?.nome ?? null;
+    return obras.find((o: any) => o.id === id)?.nome ?? null;
   }
 
   return (
     <DashboardLayout>
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-5 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-            <ClipboardList className="h-5 w-5 text-amber-400" />
+          <div className="p-2 rounded-lg bg-amber-50 border border-amber-200">
+            <ClipboardList className="h-5 w-5 text-amber-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">Solicitações de Compra</h1>
-            <p className="text-sm text-slate-400">Requisições internas de materiais e serviços</p>
+            <h1 className="text-xl font-bold text-gray-900">Solicitações de Compra</h1>
+            <p className="text-sm text-gray-500">Requisições internas de materiais e serviços</p>
           </div>
         </div>
         <Button onClick={() => setShowNova(true)} className="bg-amber-600 hover:bg-amber-500 text-white gap-2">
@@ -160,80 +155,87 @@ export default function Solicitacoes() {
       {/* KPI badges */}
       <div className="flex flex-wrap gap-3">
         {[
-          { label: "Pendente",    count: kpis.pendente,  color: "bg-amber-500/10 border-amber-500/20 text-amber-300",   key: "pendente" },
-          { label: "Em Cotação", count: kpis.cotacao,   color: "bg-blue-500/10 border-blue-500/20 text-blue-300",       key: "cotacao" },
-          { label: "Concluído",  count: kpis.aprovado,  color: "bg-emerald-500/10 border-emerald-500/20 text-emerald-300", key: "aprovado" },
-          { label: "Recusado",   count: kpis.recusado,  color: "bg-red-500/10 border-red-500/20 text-red-300",           key: "recusado" },
+          { label: "Pendente",    count: kpis.pendente,  cls: "bg-amber-50 border-amber-200 text-amber-700",    key: "pendente" },
+          { label: "Em Cotação", count: kpis.cotacao,   cls: "bg-blue-50 border-blue-200 text-blue-700",        key: "cotacao" },
+          { label: "Concluído",  count: kpis.aprovado,  cls: "bg-emerald-50 border-emerald-200 text-emerald-700", key: "aprovado" },
+          { label: "Recusado",   count: kpis.recusado,  cls: "bg-red-50 border-red-200 text-red-700",            key: "recusado" },
         ].map(k => (
           <button key={k.key}
             onClick={() => setFiltroStatus(filtroStatus === k.key ? "todos" : k.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all ${k.color} ${filtroStatus === k.key ? "ring-1 ring-offset-1 ring-offset-slate-900" : "opacity-70 hover:opacity-100"}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all ${k.cls} ${filtroStatus === k.key ? "ring-2 ring-offset-1 ring-amber-400" : "opacity-80 hover:opacity-100"}`}>
             <span className="text-xl font-bold">{k.count}</span>
             <span>{k.label}</span>
           </button>
         ))}
       </div>
 
-      {/* Filtros */}
+      {/* Busca + filtro */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input placeholder="Buscar por número, título, setor..." className="pl-9 bg-slate-800 border-slate-700 text-white" value={busca} onChange={e => setBusca(e.target.value)} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input placeholder="Buscar por número, título, setor..." className="pl-9 bg-white border-gray-300 text-gray-900" value={busca} onChange={e => setBusca(e.target.value)} />
         </div>
         <button onClick={() => setFiltroStatus("todos")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === "todos" ? "bg-amber-600 border-amber-500 text-white" : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500"}`}>
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === "todos" ? "bg-amber-600 border-amber-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
           Todos
         </button>
       </div>
 
       {/* Tabela */}
-      <div className="rounded-xl border border-slate-700 overflow-hidden">
+      <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow className="border-slate-700 hover:bg-transparent">
-              <TableHead className="text-slate-400 text-xs">Número</TableHead>
-              <TableHead className="text-slate-400 text-xs">Título / Setor</TableHead>
-              <TableHead className="text-slate-400 text-xs">Projeto</TableHead>
-              <TableHead className="text-slate-400 text-xs">Necessidade</TableHead>
-              <TableHead className="text-slate-400 text-xs">Recebido</TableHead>
-              <TableHead className="text-slate-400 text-xs">Aprovação</TableHead>
-              <TableHead className="text-slate-400 text-xs">Status</TableHead>
-              <TableHead className="text-slate-400 text-xs w-8"></TableHead>
+            <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Número</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Título / Setor</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Obra</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Necessidade</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Recebido</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Aprovação</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Status</TableHead>
+              <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
             ) : lista.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10 text-slate-500">Nenhuma solicitação encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
             ) : lista.map((sc: any) => {
               const itC = sc._itens ?? { total: 0, atendidos: 0 };
               const pct = itC.total > 0 ? Math.round((itC.atendidos / itC.total) * 100) : 0;
               return (
-                <TableRow key={sc.id} className="border-slate-700 hover:bg-slate-800/50 cursor-pointer" onClick={() => setShowDetalhe(sc.id)}>
-                  <TableCell className="text-white font-mono font-semibold text-xs">{sc.numeroSc}</TableCell>
+                <TableRow key={sc.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setShowDetalhe(sc.id)}>
+                  <TableCell className="text-gray-900 font-mono font-semibold text-xs">{sc.numeroSc}</TableCell>
                   <TableCell>
-                    <div className="text-white text-sm font-medium">{sc.titulo || "—"}</div>
-                    {sc.departamento && <div className="text-slate-500 text-xs">{sc.departamento}</div>}
+                    <div className="text-gray-900 text-sm font-medium">{sc.titulo || "—"}</div>
+                    {sc.departamento && <div className="text-gray-400 text-xs">{sc.departamento}</div>}
                     {sc.prioridade && sc.prioridade !== "normal" && (
-                      <span className={`text-[10px] font-semibold uppercase ${PRIORIDADE_CFG[sc.prioridade] ?? "text-slate-400"}`}>{sc.prioridade}</span>
+                      <span className={`text-[10px] font-semibold uppercase ${PRIORIDADE_COR[sc.prioridade] ?? "text-gray-400"}`}>{sc.prioridade}</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-slate-400 text-xs">{nomeProjeto(sc.projetoId) ?? "—"}</TableCell>
-                  <TableCell className="text-slate-400 text-xs">{sc.dataNecessidade ? new Date(sc.dataNecessidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
+                  <TableCell>
+                    {sc.obraId ? (
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <Building2 className="h-3 w-3 text-gray-400" />
+                        {nomeObra(sc.obraId) ?? `#${sc.obraId}`}
+                      </div>
+                    ) : <span className="text-gray-300 text-xs">—</span>}
+                  </TableCell>
+                  <TableCell className="text-gray-500 text-xs">{sc.dataNecessidade ? new Date(sc.dataNecessidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
                   <TableCell>
                     {itC.total > 0 ? (
                       <div className="flex items-center gap-2 min-w-[80px]">
-                        <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                           <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="text-xs text-slate-400 shrink-0">{itC.atendidos}/{itC.total}</span>
+                        <span className="text-xs text-gray-500 shrink-0">{itC.atendidos}/{itC.total}</span>
                       </div>
-                    ) : <span className="text-slate-600 text-xs">—</span>}
+                    ) : <span className="text-gray-300 text-xs">—</span>}
                   </TableCell>
                   <TableCell><AprovBadge status={sc.aprovacaoStatus} /></TableCell>
                   <TableCell><StatusBadge status={sc.status} /></TableCell>
-                  <TableCell><ChevronRight className="h-4 w-4 text-slate-500" /></TableCell>
+                  <TableCell><ChevronRight className="h-4 w-4 text-gray-400" /></TableCell>
                 </TableRow>
               );
             })}
@@ -243,80 +245,87 @@ export default function Solicitacoes() {
 
       {/* ── Dialog Nova SC ─────────────────────────────────────────── */}
       <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) resetForm(); }}>
-        <DialogContent className="bg-slate-900 border-slate-700 max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">Nova Solicitação de Compra</DialogTitle>
+            <DialogTitle className="text-gray-900">Nova Solicitação de Compra</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            {/* Título + Projeto */}
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 space-y-1.5">
-                <Label className="text-slate-300 text-xs">Título da Solicitação *</Label>
-                <Input className="bg-slate-800 border-slate-700 text-white" placeholder="Ex: Materiais de alvenaria - Bloco A" value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} />
+                <Label className="text-gray-700 text-xs font-medium">Título da Solicitação *</Label>
+                <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: Materiais de alvenaria - Bloco A" value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Projeto / Obra</Label>
-                <Select value={form.projetoId} onValueChange={v => setForm(p => ({ ...p, projetoId: v }))}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white h-9">
-                    <SelectValue placeholder="Selecione..." />
+              <div className="col-span-2 space-y-1.5">
+                <Label className="text-gray-700 text-xs font-medium flex items-center gap-1">
+                  <Building2 className="h-3.5 w-3.5 text-amber-600" /> Obra / Centro de Custo *
+                </Label>
+                <Select value={form.obraId} onValueChange={v => setForm(p => ({ ...p, obraId: v }))}>
+                  <SelectTrigger className="bg-white border-gray-300 text-gray-900 h-9">
+                    <SelectValue placeholder="Selecione a obra vinculada..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {projetos.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.nome}</SelectItem>)}
+                  <SelectContent className="bg-white border-gray-200">
+                    {obrasQ.isLoading ? (
+                      <SelectItem value="none" disabled>Carregando...</SelectItem>
+                    ) : obras.length === 0 ? (
+                      <SelectItem value="none" disabled>Nenhuma obra ativa</SelectItem>
+                    ) : obras.map((o: any) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.codigo ? `[${o.codigo}] ` : ""}{o.nome}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-gray-400">Obrigatório — todos os custos serão apropriados a esta obra.</p>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Setor / Departamento</Label>
-                <Input className="bg-slate-800 border-slate-700 text-white" placeholder="Ex: Obras, Administrativo..." value={form.departamento} onChange={e => setForm(p => ({ ...p, departamento: e.target.value }))} />
+                <Label className="text-gray-700 text-xs font-medium">Setor / Departamento</Label>
+                <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: Obras, Administrativo..." value={form.departamento} onChange={e => setForm(p => ({ ...p, departamento: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Data de Necessidade</Label>
-                <Input type="date" className="bg-slate-800 border-slate-700 text-white" value={form.dataNecessidade} onChange={e => setForm(p => ({ ...p, dataNecessidade: e.target.value }))} />
+                <Label className="text-gray-700 text-xs font-medium">Data de Necessidade</Label>
+                <Input type="date" className="bg-white border-gray-300 text-gray-900" value={form.dataNecessidade} onChange={e => setForm(p => ({ ...p, dataNecessidade: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Prioridade</Label>
+                <Label className="text-gray-700 text-xs font-medium">Prioridade</Label>
                 <Select value={form.prioridade} onValueChange={v => setForm(p => ({ ...p, prioridade: v }))}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectTrigger className="bg-white border-gray-300 text-gray-900 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-white border-gray-200">
                     {PRIORIDADES.map(p => <SelectItem key={p} value={p} className="capitalize">{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="col-span-2 space-y-1.5">
-                <Label className="text-slate-300 text-xs">Observações</Label>
-                <Textarea className="bg-slate-800 border-slate-700 text-white resize-none" rows={2} value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} />
+                <Label className="text-gray-700 text-xs font-medium">Observações</Label>
+                <Textarea className="bg-white border-gray-300 text-gray-900 resize-none" rows={2} value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} />
               </div>
             </div>
 
             {/* Itens */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-slate-300 font-semibold text-xs">Itens Solicitados *</Label>
-                <Button type="button" size="sm" variant="outline" onClick={() => setItens(p => [...p, newItem()])} className="border-slate-600 text-slate-300 hover:bg-slate-700 gap-1 text-xs h-7 px-2">
+                <Label className="text-gray-700 font-semibold text-xs">Itens Solicitados *</Label>
+                <Button type="button" size="sm" variant="outline" onClick={() => setItens(p => [...p, newItem()])} className="border-gray-300 text-gray-600 hover:bg-gray-50 gap-1 text-xs h-7 px-2">
                   <Plus className="h-3 w-3" /> Item
                 </Button>
               </div>
               <div className="space-y-2">
                 {itens.map((it, idx) => (
-                  <div key={idx} className="flex gap-2 items-start p-2.5 rounded-lg bg-slate-800 border border-slate-700">
+                  <div key={idx} className="flex gap-2 items-start p-2.5 rounded-lg bg-gray-50 border border-gray-200">
                     <div className="flex-1 space-y-1.5">
-                      <Input className="bg-slate-700 border-slate-600 text-white text-sm h-8" placeholder="Descrição do item *" value={it.descricao} onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))} />
+                      <Input className="bg-white border-gray-300 text-gray-900 text-sm h-8" placeholder="Descrição do item *" value={it.descricao} onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))} />
                       <div className="flex gap-2">
                         <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
-                          <SelectTrigger className="w-20 bg-slate-700 border-slate-600 text-white text-sm h-7"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700">
+                          <SelectTrigger className="w-20 bg-white border-gray-300 text-gray-900 text-sm h-7"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-white border-gray-200">
                             {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                           </SelectContent>
                         </Select>
-                        <Input className="w-24 bg-slate-700 border-slate-600 text-white text-sm h-7" type="number" min="0.001" step="0.001" placeholder="Qtd" value={it.quantidade} onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))} />
-                        <Input className="flex-1 bg-slate-700 border-slate-600 text-white text-sm h-7" placeholder="Obs..." value={it.observacoes} onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x))} />
+                        <Input className="w-24 bg-white border-gray-300 text-gray-900 text-sm h-7" type="number" min="0.001" step="0.001" placeholder="Qtd" value={it.quantidade} onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))} />
+                        <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm h-7" placeholder="Obs..." value={it.observacoes} onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x))} />
                       </div>
                     </div>
                     {itens.length > 1 && (
-                      <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="p-1 text-slate-500 hover:text-red-400 mt-0.5"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="p-1 text-gray-400 hover:text-red-500 mt-0.5"><Trash2 className="h-4 w-4" /></button>
                     )}
                   </div>
                 ))}
@@ -324,7 +333,7 @@ export default function Solicitacoes() {
             </div>
 
             <div className="flex gap-3 pt-1">
-              <Button variant="outline" onClick={() => { setShowNova(false); resetForm(); }} className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800">Cancelar</Button>
+              <Button variant="outline" onClick={() => { setShowNova(false); resetForm(); }} className="flex-1 border-gray-300 text-gray-600 hover:bg-gray-50">Cancelar</Button>
               <Button onClick={handleSalvar} disabled={criar.isPending} className="flex-1 bg-amber-600 hover:bg-amber-500 text-white">
                 {criar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Solicitação"}
               </Button>
@@ -335,149 +344,123 @@ export default function Solicitacoes() {
 
       {/* ── Dialog Detalhe SC ─────────────────────────────────────── */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => { if (!v) { setShowDetalhe(null); setRecebQtd({}); } }}>
-        <DialogContent className="bg-slate-900 border-slate-700 max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 max-w-3xl max-h-[90vh] overflow-y-auto">
           {detalheQ.isLoading ? (
-            <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
+            <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
           ) : detalhe ? (
             <>
               <DialogHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs text-slate-500 uppercase tracking-widest mb-0.5">Solicitação de Compra</div>
-                    <DialogTitle className="text-white text-lg">{detalhe.numeroSc}</DialogTitle>
-                    {detalhe.titulo && <p className="text-slate-300 text-sm mt-0.5">{detalhe.titulo}</p>}
+                    <div className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">Solicitação de Compra</div>
+                    <DialogTitle className="text-gray-900 text-lg">{detalhe.numeroSc}</DialogTitle>
+                    {detalhe.titulo && <p className="text-gray-600 text-sm mt-0.5">{detalhe.titulo}</p>}
                   </div>
                   <StatusBadge status={detalhe.status} />
                 </div>
               </DialogHeader>
 
               {/* Info grid */}
-              <div className="grid grid-cols-3 gap-3 text-xs bg-slate-800 rounded-lg p-3">
+              <div className="grid grid-cols-3 gap-3 text-xs bg-gray-50 rounded-lg p-3 border border-gray-200">
                 {[
-                  { label: "Projeto", value: nomeProjeto(detalhe.projetoId) ?? "—" },
+                  { label: "Obra", value: nomeObra(detalhe.obraId) ?? "—" },
                   { label: "Setor", value: detalhe.departamento || "—" },
                   { label: "Necessidade", value: detalhe.dataNecessidade ? new Date(detalhe.dataNecessidade + "T00:00:00").toLocaleDateString("pt-BR") : "—" },
                   { label: "Prioridade", value: detalhe.prioridade ? (detalhe.prioridade.charAt(0).toUpperCase() + detalhe.prioridade.slice(1)) : "Normal" },
                   { label: "Criado em", value: new Date(detalhe.criadoEm).toLocaleDateString("pt-BR") },
                 ].map(f => (
                   <div key={f.label}>
-                    <span className="text-slate-500">{f.label}</span>
-                    <p className="text-white mt-0.5 font-medium">{f.value}</p>
+                    <span className="text-gray-400">{f.label}</span>
+                    <p className="text-gray-900 mt-0.5 font-medium">{f.value}</p>
                   </div>
                 ))}
               </div>
 
-              {/* Widget de Aprovação */}
-              <div className="border border-slate-700 rounded-lg p-3">
+              {/* Aprovação */}
+              <div className="border border-gray-200 rounded-lg p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Aprovação</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Aprovação</span>
                   <AprovBadge status={detalhe.aprovacaoStatus} />
                 </div>
                 <div className="flex gap-2">
                   {[
-                    { key: "aguardando", label: "Aguardando", cls: "border-amber-700 text-amber-300 hover:bg-amber-900/30" },
-                    { key: "aprovado",   label: "✓ Aprovar",  cls: "border-emerald-700 text-emerald-300 hover:bg-emerald-900/30" },
-                    { key: "recusado",   label: "✗ Recusar",  cls: "border-red-700 text-red-300 hover:bg-red-900/30" },
-                  ].map(opt => (
-                    <Button key={opt.key} size="sm" variant="outline"
-                      onClick={() => aprovar.mutate({ id: detalhe.id, aprovacaoStatus: opt.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined })}
-                      disabled={aprovar.isPending || detalhe.aprovacaoStatus === opt.key}
-                      className={`flex-1 text-xs h-8 border ${opt.cls} ${detalhe.aprovacaoStatus === opt.key ? "opacity-50 cursor-not-allowed" : ""}`}>
-                      {opt.label}
+                    { key: "aguardando", label: "Aguardando",    cls: "border-amber-300 text-amber-700 hover:bg-amber-50" },
+                    { key: "aprovado",   label: "Aprovar",        cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" },
+                    { key: "recusado",   label: "Recusar",        cls: "border-red-300 text-red-700 hover:bg-red-50" },
+                  ].filter(a => a.key !== detalhe.aprovacaoStatus).map(a => (
+                    <Button key={a.key} size="sm" variant="outline"
+                      onClick={() => aprovar.mutate({ id: detalhe.id, aprovacaoStatus: a.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined })}
+                      disabled={aprovar.isPending}
+                      className={`text-xs ${a.cls}`}>
+                      {a.label}
                     </Button>
                   ))}
                 </div>
               </div>
 
-              {/* Observações */}
-              {detalhe.observacoes && (
-                <div className="text-sm text-slate-400 bg-slate-800 rounded p-3">{detalhe.observacoes}</div>
-              )}
-
-              {/* Itens com recebimento */}
+              {/* Itens */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-slate-300 font-semibold text-sm flex items-center gap-2">
-                    <Package className="h-4 w-4" /> Itens ({detalhe.itens.length})
-                  </h3>
-                </div>
-                <div className="rounded-lg border border-slate-700 overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-slate-700 hover:bg-transparent">
-                        <TableHead className="text-slate-400 text-xs">Descrição</TableHead>
-                        <TableHead className="text-slate-400 text-xs w-14">Un.</TableHead>
-                        <TableHead className="text-slate-400 text-xs w-20">Solicitado</TableHead>
-                        <TableHead className="text-slate-400 text-xs w-28">Recebido</TableHead>
-                        <TableHead className="text-slate-400 text-xs w-24">Status</TableHead>
-                        <TableHead className="text-slate-400 text-xs w-20"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {detalhe.itens.map((it: any) => {
-                        const qtdAtend = parseFloat(it.quantidadeAtendida || "0");
-                        const qtdTotal = parseFloat(it.quantidade);
-                        const pct = qtdTotal > 0 ? Math.min(100, Math.round((qtdAtend / qtdTotal) * 100)) : 0;
-                        const statusIt = it.statusItem ?? "pendente";
-                        const statusColor = statusIt === "recebido" ? "text-emerald-400" : statusIt === "recebido_parcial" ? "text-amber-400" : "text-slate-500";
-                        const statusLabel = statusIt === "recebido" ? "Recebido" : statusIt === "recebido_parcial" ? "Parcial" : "Pendente";
-                        const inputVal = recebQtd[it.id] ?? "";
-                        return (
-                          <TableRow key={it.id} className="border-slate-700">
-                            <TableCell className="text-white text-sm">{it.descricao}</TableCell>
-                            <TableCell className="text-slate-400 text-sm">{it.unidade || "un"}</TableCell>
-                            <TableCell className="text-slate-300 text-sm font-mono">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
-                            <TableCell>
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-1">
-                                  <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                    <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
-                                  </div>
-                                  <span className="text-[10px] text-slate-400">{qtdAtend}/{qtdTotal}</span>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className={`text-xs font-medium ${statusColor}`}>{statusLabel}</TableCell>
-                            <TableCell>
-                              <div className="flex gap-1 items-center">
-                                <Input
-                                  className="w-16 h-6 text-xs bg-slate-700 border-slate-600 text-white text-center px-1"
-                                  type="number" min="0" step="0.001" max={String(qtdTotal)}
-                                  placeholder={String(qtdAtend || "")}
-                                  value={inputVal}
-                                  onChange={e => setRecebQtd(p => ({ ...p, [it.id]: e.target.value }))}
-                                />
-                                <Button size="sm" className="h-6 px-2 text-[10px] bg-emerald-700 hover:bg-emerald-600 text-white"
-                                  disabled={!inputVal || receber.isPending}
-                                  onClick={() => {
-                                    const v = parseFloat(inputVal);
-                                    if (isNaN(v) || v < 0) return;
-                                    receber.mutate({ itemId: it.id, solicitacaoId: detalhe.id, quantidadeAtendida: v });
-                                    setRecebQtd(p => ({ ...p, [it.id]: "" }));
-                                  }}>
-                                  OK
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Itens</div>
+                {(detalhe.itens as any[]).map((it: any) => {
+                  const qtdTotal = parseFloat(it.quantidade);
+                  const qtdAtend = parseFloat(it.quantidadeAtendida ?? "0");
+                  const pct = qtdTotal > 0 ? Math.round((qtdAtend / qtdTotal) * 100) : 0;
+                  return (
+                    <div key={it.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-gray-900 text-sm font-medium">{it.descricao}</p>
+                          <p className="text-gray-400 text-xs">{it.unidade || "un"} · Qtd: {qtdTotal.toLocaleString("pt-BR")}</p>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded border ${it.statusItem === "recebido" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : it.statusItem === "recebido_parcial" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
+                          {it.statusItem === "recebido" ? "Recebido" : it.statusItem === "recebido_parcial" ? `Parcial (${pct}%)` : "Pendente"}
+                        </span>
+                      </div>
+                      {qtdTotal > 0 && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs text-gray-400">{qtdAtend}/{qtdTotal}</span>
+                        </div>
+                      )}
+                      {!["aprovado"].includes(detalhe.status) && (
+                        <div className="flex gap-2 items-center">
+                          <Input
+                            type="number" min="0" max={qtdTotal} step="0.01"
+                            className="w-28 h-7 text-sm bg-white border-gray-300 text-gray-900"
+                            placeholder={`Máx ${qtdTotal}`}
+                            value={recebQtd[it.id] ?? ""}
+                            onChange={e => setRecebQtd(p => ({ ...p, [it.id]: e.target.value }))}
+                          />
+                          <Button size="sm" variant="outline"
+                            onClick={() => receber.mutate({ itemId: it.id, solicitacaoId: detalhe.id, quantidadeAtendida: parseFloat(recebQtd[it.id] ?? "0") || 0 })}
+                            disabled={receber.isPending || !recebQtd[it.id]}
+                            className="h-7 text-xs border-gray-300 text-gray-600 hover:bg-gray-50">
+                            Registrar Recebimento
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Ações */}
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700">
-                {(detalhe.status === "pendente" || detalhe.status === "rascunho") && (
-                  <Button size="sm" variant="outline" onClick={() => cancelar.mutate({ id: detalhe.id, status: "cancelado" })}
-                    className="border-red-700 text-red-400 hover:bg-red-900/20 text-xs">
-                    <X className="h-3 w-3 mr-1" /> Cancelar SC
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                {!["cancelado", "aprovado"].includes(detalhe.status) && (
+                  <Button size="sm" variant="outline"
+                    onClick={() => cancelar.mutate({ id: detalhe.id, status: "cancelado" })}
+                    disabled={cancelar.isPending}
+                    className="border-gray-300 text-gray-600 hover:bg-gray-50 text-xs">
+                    Cancelar SC
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => excluir.mutate({ id: detalhe.id })}
-                  className="border-slate-700 text-slate-400 hover:bg-slate-800 text-xs ml-auto">
-                  <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                <Button size="sm" variant="outline"
+                  onClick={() => excluir.mutate({ id: detalhe.id })}
+                  disabled={excluir.isPending}
+                  className="border-red-200 text-red-600 hover:bg-red-50 text-xs ml-auto gap-1">
+                  <Trash2 className="h-3 w-3" /> Excluir
                 </Button>
               </div>
             </>

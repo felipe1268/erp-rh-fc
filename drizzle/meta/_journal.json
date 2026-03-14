@@ -8,6 +8,13 @@
       "when": 1773435983297,
       "tag": "0000_marvelous_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773510314396,
+      "tag": "0001_sharp_blackheart",
+      "breakpoints": true
     }
   ]
 }
