@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 279,
+    titulo: "Obras: campo Cliente com combobox buscável",
+    descricao: "Adicionado campo 'Cliente' no formulário de Nova/Editar Obra. Combobox buscável que carrega a lista do cadastro de Clientes. Permite seleção por nome ou razão social. O cliente selecionado é salvo na obra e exibido nos cards da listagem com ícone azul.",
+    tipo: "funcionalidade",
+    modulos: "Cadastro / Obras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:50:00",
+  },
+  {
     version: 278,
     titulo: "Clientes: corrigido erro na consulta automática de CNPJ",
     descricao: "A consulta de CNPJ no cadastro de Clientes passava pelo servidor (tRPC) e falhava intermitentemente. Migrada para fetch direto do browser para a BrasilAPI — mesmo padrão usado em Fornecedores, Parceiros, EPIs e outras telas. Agora ao digitar 14 dígitos o formulário é preenchido automaticamente com Razão Social, Endereço, Telefone, E-mail e Situação cadastral.",
