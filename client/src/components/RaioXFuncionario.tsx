@@ -414,6 +414,34 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     setTimeout(() => printWindow.print(), 600);
   };
 
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+
+  const handleDownloadZip = async () => {
+    if (!employeeId) return;
+    setIsDownloadingZip(true);
+    try {
+      const response = await fetch(`/api/download/sst/${employeeId}`, { credentials: "include" });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Erro desconhecido" }));
+        alert(err.error || "Nenhum arquivo encontrado para download.");
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `SST_${emp?.nomeCompleto?.replace(/\s+/g, "_") || "Funcionario"}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Erro ao baixar arquivos. Verifique sua conexão.");
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  };
+
   const handleExportSST = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
@@ -886,9 +914,14 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               <TabsContent value="asos" className="mt-4">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-sm font-medium text-muted-foreground">{asos.length} registro(s)</span>
-                  <Button size="sm" variant="outline" onClick={handleExportSST} className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50">
-                    <FileDown className="h-3.5 w-3.5" /> Exportar SST (ASOs + Treinamentos)
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={handleExportSST} className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50">
+                      <FileDown className="h-3.5 w-3.5" /> Exportar PDF
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleDownloadZip} disabled={isDownloadingZip} className="gap-1.5 text-indigo-700 border-indigo-300 hover:bg-indigo-50">
+                      <FileDown className="h-3.5 w-3.5" /> {isDownloadingZip ? "Baixando..." : "Baixar ZIP"}
+                    </Button>
+                  </div>
                 </div>
                 {asos.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">Nenhum ASO registrado</div>
@@ -932,9 +965,14 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               <TabsContent value="trein" className="mt-4">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-sm font-medium text-muted-foreground">{treinamentos.length} registro(s)</span>
-                  <Button size="sm" variant="outline" onClick={handleExportSST} className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50">
-                    <FileDown className="h-3.5 w-3.5" /> Exportar SST (ASOs + Treinamentos)
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={handleExportSST} className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50">
+                      <FileDown className="h-3.5 w-3.5" /> Exportar PDF
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleDownloadZip} disabled={isDownloadingZip} className="gap-1.5 text-indigo-700 border-indigo-300 hover:bg-indigo-50">
+                      <FileDown className="h-3.5 w-3.5" /> {isDownloadingZip ? "Baixando..." : "Baixar ZIP"}
+                    </Button>
+                  </div>
                 </div>
                 {treinamentos.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">Nenhum treinamento registrado</div>
