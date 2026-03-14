@@ -217,7 +217,7 @@ export default function Cotacoes() {
 
       {/* Dialog Nova Cotação */}
       <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) resetForm(); }}>
-        <DialogContent className="bg-white border-gray-200 max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="border-gray-200 max-w-2xl max-h-[90vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           <DialogHeader>
             <DialogTitle className="text-gray-900">Nova Cotação</DialogTitle>
           </DialogHeader>
@@ -352,7 +352,7 @@ export default function Cotacoes() {
 
       {/* Dialog Detalhe Cotação */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => !v && setShowDetalhe(null)}>
-        <DialogContent className="bg-white border-gray-200 max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="border-gray-200 max-w-2xl max-h-[90vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           <DialogHeader>
             <DialogTitle className="text-gray-900">{detalhe?.numeroCotacao} — Detalhes</DialogTitle>
           </DialogHeader>

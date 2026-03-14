@@ -245,98 +245,149 @@ export default function Solicitacoes() {
 
       {/* ── Dialog Nova SC ─────────────────────────────────────────── */}
       <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) resetForm(); }}>
-        <DialogContent className="bg-white border-gray-200 max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="border-gray-200 max-w-2xl"
+          style={{ background: '#ffffff', color: '#111827' }}
+        >
           <DialogHeader>
-            <DialogTitle className="text-gray-900">Nova Solicitação de Compra</DialogTitle>
+            <DialogTitle style={{ color: '#111827' }} className="text-base font-semibold">Nova Solicitação de Compra</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 space-y-1.5">
-                <Label className="text-gray-700 text-xs font-medium">Título da Solicitação *</Label>
-                <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: Materiais de alvenaria - Bloco A" value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} />
+
+          <div className="space-y-3 pt-1">
+            {/* Linha 1: Título */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-700">Título da Solicitação *</label>
+              <input
+                className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                placeholder="Ex: Materiais de alvenaria - Bloco A"
+                value={form.titulo}
+                onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
+              />
+            </div>
+
+            {/* Linha 2: Obra */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
+                <Building2 className="h-3 w-3 text-amber-600" /> Obra / Centro de Custo *
+              </label>
+              <Select value={form.obraId} onValueChange={v => setForm(p => ({ ...p, obraId: v }))}>
+                <SelectTrigger className="h-8 text-sm border-gray-300 bg-white text-gray-900">
+                  <SelectValue placeholder="Selecione a obra..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-gray-200">
+                  {obrasQ.isLoading ? (
+                    <SelectItem value="none" disabled>Carregando...</SelectItem>
+                  ) : obras.length === 0 ? (
+                    <SelectItem value="none" disabled>Nenhuma obra ativa</SelectItem>
+                  ) : obras.map((o: any) => (
+                    <SelectItem key={o.id} value={String(o.id)}>
+                      {o.codigo ? `[${o.codigo}] ` : ""}{o.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Linha 3: Setor | Data | Prioridade */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-700">Setor / Depto.</label>
+                <input
+                  className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                  placeholder="Ex: Obras"
+                  value={form.departamento}
+                  onChange={e => setForm(p => ({ ...p, departamento: e.target.value }))}
+                />
               </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label className="text-gray-700 text-xs font-medium flex items-center gap-1">
-                  <Building2 className="h-3.5 w-3.5 text-amber-600" /> Obra / Centro de Custo *
-                </Label>
-                <Select value={form.obraId} onValueChange={v => setForm(p => ({ ...p, obraId: v }))}>
-                  <SelectTrigger className="bg-white border-gray-300 text-gray-900 h-9">
-                    <SelectValue placeholder="Selecione a obra vinculada..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-gray-200">
-                    {obrasQ.isLoading ? (
-                      <SelectItem value="none" disabled>Carregando...</SelectItem>
-                    ) : obras.length === 0 ? (
-                      <SelectItem value="none" disabled>Nenhuma obra ativa</SelectItem>
-                    ) : obras.map((o: any) => (
-                      <SelectItem key={o.id} value={String(o.id)}>
-                        {o.codigo ? `[${o.codigo}] ` : ""}{o.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-gray-400">Obrigatório — todos os custos serão apropriados a esta obra.</p>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-700">Data de Necessidade</label>
+                <input
+                  type="date"
+                  className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                  value={form.dataNecessidade}
+                  onChange={e => setForm(p => ({ ...p, dataNecessidade: e.target.value }))}
+                />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-gray-700 text-xs font-medium">Setor / Departamento</Label>
-                <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: Obras, Administrativo..." value={form.departamento} onChange={e => setForm(p => ({ ...p, departamento: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-gray-700 text-xs font-medium">Data de Necessidade</Label>
-                <Input type="date" className="bg-white border-gray-300 text-gray-900" value={form.dataNecessidade} onChange={e => setForm(p => ({ ...p, dataNecessidade: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-gray-700 text-xs font-medium">Prioridade</Label>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-700">Prioridade</label>
                 <Select value={form.prioridade} onValueChange={v => setForm(p => ({ ...p, prioridade: v }))}>
-                  <SelectTrigger className="bg-white border-gray-300 text-gray-900 h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-sm border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-white border-gray-200">
-                    {PRIORIDADES.map(p => <SelectItem key={p} value={p} className="capitalize">{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>)}
+                    {PRIORIDADES.map(p => <SelectItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label className="text-gray-700 text-xs font-medium">Observações</Label>
-                <Textarea className="bg-white border-gray-300 text-gray-900 resize-none" rows={2} value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} />
               </div>
             </div>
 
-            {/* Itens */}
-            <div className="space-y-3">
+            {/* Linha 4: Observações (compact) */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-700">Observações</label>
+              <textarea
+                className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300 resize-none"
+                rows={2}
+                value={form.observacoes}
+                onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))}
+              />
+            </div>
+
+            {/* Linha 5: Itens */}
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-gray-700 font-semibold text-xs">Itens Solicitados *</Label>
-                <Button type="button" size="sm" variant="outline" onClick={() => setItens(p => [...p, newItem()])} className="border-gray-300 text-gray-600 hover:bg-gray-50 gap-1 text-xs h-7 px-2">
+                <label className="text-xs font-semibold text-gray-700">Itens Solicitados *</label>
+                <button
+                  type="button"
+                  onClick={() => setItens(p => [...p, newItem()])}
+                  className="flex items-center gap-1 px-2 py-1 text-xs border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 transition"
+                >
                   <Plus className="h-3 w-3" /> Item
-                </Button>
+                </button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                 {itens.map((it, idx) => (
-                  <div key={idx} className="flex gap-2 items-start p-2.5 rounded-lg bg-gray-50 border border-gray-200">
-                    <div className="flex-1 space-y-1.5">
-                      <Input className="bg-white border-gray-300 text-gray-900 text-sm h-8" placeholder="Descrição do item *" value={it.descricao} onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))} />
-                      <div className="flex gap-2">
-                        <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
-                          <SelectTrigger className="w-20 bg-white border-gray-300 text-gray-900 text-sm h-7"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-white border-gray-200">
-                            {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <Input className="w-24 bg-white border-gray-300 text-gray-900 text-sm h-7" type="number" min="0.001" step="0.001" placeholder="Qtd" value={it.quantidade} onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))} />
-                        <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm h-7" placeholder="Obs..." value={it.observacoes} onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x))} />
-                      </div>
-                    </div>
+                  <div key={idx} className="flex gap-2 items-center p-2 rounded-lg bg-gray-50 border border-gray-200">
+                    <input
+                      className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
+                      placeholder="Descrição do item *"
+                      value={it.descricao}
+                      onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
+                    />
+                    <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
+                      <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-white border-gray-200">
+                        {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <input
+                      className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
+                      type="number" min="0.001" step="0.001" placeholder="Qtd"
+                      value={it.quantidade}
+                      onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
+                    />
                     {itens.length > 1 && (
-                      <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="p-1 text-gray-400 hover:text-red-500 mt-0.5"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     )}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="flex gap-3 pt-1">
-              <Button variant="outline" onClick={() => { setShowNova(false); resetForm(); }} className="flex-1 border-gray-300 text-gray-600 hover:bg-gray-50">Cancelar</Button>
-              <Button onClick={handleSalvar} disabled={criar.isPending} className="flex-1 bg-amber-600 hover:bg-amber-500 text-white">
+            {/* Botões */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => { setShowNova(false); resetForm(); }}
+                className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 font-medium transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSalvar}
+                disabled={criar.isPending}
+                className="flex-1 h-9 text-sm rounded-md bg-amber-600 hover:bg-amber-500 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2"
+              >
                 {criar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Solicitação"}
-              </Button>
+              </button>
             </div>
           </div>
         </DialogContent>
@@ -344,7 +395,7 @@ export default function Solicitacoes() {
 
       {/* ── Dialog Detalhe SC ─────────────────────────────────────── */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => { if (!v) { setShowDetalhe(null); setRecebQtd({}); } }}>
-        <DialogContent className="bg-white border-gray-200 max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="border-gray-200 max-w-3xl max-h-[90vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           {detalheQ.isLoading ? (
             <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
           ) : detalhe ? (
