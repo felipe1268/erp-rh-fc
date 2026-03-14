@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +10,9 @@ import { toast } from "sonner";
 import {
   CheckCircle2, XCircle, Loader2, Wifi, WifiOff, Upload,
   Building2, Users, Package, AlertTriangle, FileText, History,
-  Download, ChevronDown, ChevronUp, RefreshCw, Info,
+  Download, ChevronDown, ChevronUp, RefreshCw, Info, ArrowLeft,
 } from "lucide-react";
+import DashboardLayout from "@/components/DashboardLayout";
 
 // ── CSV Parser ─────────────────────────────────────────────────────────────
 function parseCSV(text: string): Record<string, string>[] {
@@ -231,6 +233,7 @@ function CSVUploadCard({
 export default function MasControle() {
   const { selectedCompany } = useCompany();
   const companyId = selectedCompany?.id ?? 0;
+  const [, navigate] = useLocation();
 
   const [tab, setTab] = useState<Tab>("config");
   const [loginEmail, setLoginEmail] = useState("");
@@ -300,12 +303,22 @@ export default function MasControle() {
   const anyApiLoading = importObrasApiMut.isPending || importFornApiMut.isPending || importInsApiMut.isPending;
 
   return (
+    <DashboardLayout>
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost" size="sm"
+                onClick={() => navigate("/compras/painel")}
+                className="gap-1.5 text-slate-500 hover:text-slate-800 -ml-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Voltar
+              </Button>
+              <div>
               <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                 <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
                   <span className="text-white text-[10px] font-bold">MC</span>
@@ -315,6 +328,7 @@ export default function MasControle() {
               <p className="text-sm text-slate-500 mt-0.5">
                 Migre todos os dados do Mas Controle para o seu ERP antes de cancelar o contrato
               </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {config?.migratedAt ? (
@@ -664,5 +678,6 @@ export default function MasControle() {
         )}
       </div>
     </div>
+    </DashboardLayout>
   );
 }

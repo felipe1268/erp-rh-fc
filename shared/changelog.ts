@@ -435,4 +435,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 20:40:00",
   },
+  {
+    version: 243,
+    titulo: "Botão Voltar e sidebar na página Integração Mas Controle",
+    descricao: "Adicionado botão 'Voltar' no cabeçalho da página de Integração Mas Controle ERP, que navega de volta ao Painel de Compras. Página agora utiliza DashboardLayout, exibindo o painel lateral de navegação do módulo Compras.",
+    tipo: "improvement",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 20:50:00",
+  },
 ];
