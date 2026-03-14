@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 270,
+    titulo: "Prev. Medição: tooltip fixo e tabela sem barra de rolagem",
+    descricao: "Tooltip 'Composição do Custo Total' deixava de aparecer porque o container da tabela tinha overflow-x-auto que cortava o popup absoluto. Solução: tooltip agora usa position:fixed renderizado no topo do componente (fora de qualquer overflow) via estado custoTooltip + onMouseEnter/Leave. Também removido overflow-x-auto da tabela e reduzido padding das células (py-1.5 px-2) e nomes de colunas (Custo Dir.→C. Dir., Prev.Acum%→Acum%, Real.Acum%→Real%) para que todas as colunas caibam sem barra de rolagem horizontal.",
+    tipo: "bugfix",
+    modulos: "Planejamento / Prev. Medição",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:55:00",
+  },
+  {
     version: 269,
     titulo: "Diagrama de Rede: setas aparecendo + import XML corrigido para UID→WBS",
     descricao: "Hierarquia EAP: grupos (isGrupo=true) agora são incluídos como nós pai (visual escuro distinto), gerando setas reais pai→filho. Antes: byEap filtrava grupos e zero setas eram criadas. Agora: buildHierarchyLayout recebe TODOS os itens; filtroStatus não esconde grupos em modo hierarquia. Import XML (MPP): corrigido para fazer dois passes — primeiro constrói mapa UID→WBS, depois converte referencias de UID para WBS, permitindo que predecessoras importadas apareçam no diagrama de rede. Import XLSX: já suportava leitura da coluna Predecessors nativamente.",

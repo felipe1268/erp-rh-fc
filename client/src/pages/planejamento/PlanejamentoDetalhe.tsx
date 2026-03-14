@@ -3592,6 +3592,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [saved, setSaved]             = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false);
   const [cfgBloqueado, setCfgBloqueado] = useState(false);
+  const [custoTooltip, setCustoTooltip] = useState<{ r: any; x: number; y: number } | null>(null);
 
   // ── Reforços de Parcela (anti-caixa negativo) — persiste em localStorage ──
   const reforcoKey = `reforcos_${projetoId}`;
@@ -3950,6 +3951,34 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
 
   return (
     <div className="space-y-6">
+
+      {/* ── Tooltip fixo para Custo Total (fora de qualquer overflow) ─────── */}
+      {custoTooltip && (
+        <div
+          style={{ position: "fixed", top: custoTooltip.y, left: custoTooltip.x, zIndex: 9999, pointerEvents: "none" }}
+          className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 min-w-[230px] text-left"
+        >
+          <p className="text-[10px] font-bold text-slate-600 mb-1.5 border-b pb-1">Composição do Custo Total</p>
+          {[
+            { label: "Material",       v: custoTooltip.r.mat },
+            { label: "Mão de Obra",    v: custoTooltip.r.mdo },
+            { label: "Ind. Obra (CI)", v: custoTooltip.r.custo - custoTooltip.r.mat - custoTooltip.r.mdo },
+            { label: "Adm. Central",   v: custoTooltip.r.admCentral },
+            { label: "Impostos",       v: custoTooltip.r.impostos },
+            { label: "Risco",          v: custoTooltip.r.risco },
+            { label: "Comissão",       v: custoTooltip.r.comissao },
+          ].map(({ label, v }) => (
+            <div key={label} className="flex justify-between text-[10px] py-0.5">
+              <span className="text-slate-500">{label}</span>
+              <span className="font-medium text-slate-700">{fmt(v)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between text-[10px] font-bold border-t mt-1 pt-1 text-amber-700">
+            <span>Total</span>
+            <span>{fmt(custoTooltip.r.custoTotal)}</span>
+          </div>
+        </div>
+      )}
 
       {/* ── Painel de Configuração ─────────────────────────────────────────── */}
       <div className={`bg-white rounded-xl shadow-sm overflow-hidden border-2 ${cfgBloqueado ? "border-emerald-400" : "border-slate-200"}`}>
@@ -5090,7 +5119,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
       )}
 
       {/* Tabela Detalhada */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="bg-slate-700 text-white px-4 py-2.5 flex items-center justify-between rounded-t-xl">
           <p className="text-xs font-semibold">Cronograma de Medições — Cenário: <span style={{ color: cen.cor }}>{cen.label}</span></p>
           <p className="text-[10px] text-slate-300">Clique em "Registrar" para lançar uma medição</p>
@@ -5098,20 +5127,20 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="py-2 px-3 text-left w-20">N° Med.</th>
-              <th className="py-2 px-3 text-left">Competência</th>
-              <th className="py-2 px-3 text-right">Venda</th>
-              <th className="py-2 px-3 text-right">Meta</th>
-              <th className="py-2 px-3 text-right">Custo Dir.</th>
-              {hasBdi && <th className="py-2 px-3 text-right text-amber-700">Custo Total <span className="font-normal opacity-60 text-[9px]" title="Custo Dir. + Adm.Central + Impostos + Risco + Comissão">ⓘ</span></th>}
-              <th className="py-2 px-3 text-right text-emerald-700">Lucro Prev. <span className="font-normal opacity-60">{hasBdi ? "(BDI)" : "(V−C)"}</span></th>
-              <th className="py-2 px-3 text-right text-violet-700">Lucro Des. <span className="font-normal opacity-60">(V−M)</span></th>
-              <th className="py-2 px-3 text-right">Prev.Acum%</th>
-              <th className="py-2 px-3 text-right text-blue-700">Medido</th>
-              <th className="py-2 px-3 text-right">Real.Acum%</th>
-              <th className="py-2 px-3 text-right">Desvio</th>
-              <th className="py-2 px-3 text-center w-20">Status</th>
-              <th className="py-2 px-3 w-20" />
+              <th className="py-1.5 px-2 text-left w-16">N° Med.</th>
+              <th className="py-1.5 px-2 text-left">Competência</th>
+              <th className="py-1.5 px-2 text-right">Venda</th>
+              <th className="py-1.5 px-2 text-right">Meta</th>
+              <th className="py-1.5 px-2 text-right">C. Dir.</th>
+              {hasBdi && <th className="py-1.5 px-2 text-right text-amber-700">C. Total <span className="font-normal opacity-60 text-[9px]" title="Custo Dir. + Adm.Central + Impostos + Risco + Comissão">ⓘ</span></th>}
+              <th className="py-1.5 px-2 text-right text-emerald-700">Lucro Prev. <span className="font-normal opacity-60 text-[9px]">{hasBdi ? "(BDI)" : "(V−C)"}</span></th>
+              <th className="py-1.5 px-2 text-right text-violet-700">Lucro Des. <span className="font-normal opacity-60 text-[9px]">(V−M)</span></th>
+              <th className="py-1.5 px-2 text-right">Acum%</th>
+              <th className="py-1.5 px-2 text-right text-blue-700">Medido</th>
+              <th className="py-1.5 px-2 text-right">Real%</th>
+              <th className="py-1.5 px-2 text-right">Desvio</th>
+              <th className="py-1.5 px-2 text-center w-16">Status</th>
+              <th className="py-1.5 px-2 w-16" />
             </tr>
           </thead>
           <tbody>
@@ -5124,63 +5153,47 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               return (
                 <React.Fragment key={r.mes}>
                   <tr className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} ${isEdit ? "!bg-blue-50" : ""}`}>
-                    <td className="py-2 px-3 font-mono text-slate-500 text-[10px]">
+                    <td className="py-1.5 px-2 font-mono text-slate-500 text-[10px]">
                       {r.valorReal > 0 ? `M-${String(r.numMed).padStart(2, "0")}` : <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">
+                    <td className="py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
                       {new Date(`${r.mes}-15`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
                     </td>
-                    <td className="py-2 px-3 text-right text-orange-600 font-medium">{fmt(r.venda)}</td>
-                    <td className="py-2 px-3 text-right text-violet-600">{fmt(r.meta)}</td>
-                    <td className="py-2 px-3 text-right text-red-600">{fmt(r.custo)}</td>
+                    <td className="py-1.5 px-2 text-right text-orange-600 font-medium">{fmt(r.venda)}</td>
+                    <td className="py-1.5 px-2 text-right text-violet-600">{fmt(r.meta)}</td>
+                    <td className="py-1.5 px-2 text-right text-red-600">{fmt(r.custo)}</td>
                     {hasBdi && (
-                      <td className="py-2 px-3 text-right text-amber-700">
-                        <div className="group relative inline-block">
-                          <span className="cursor-help underline decoration-dotted">{fmt(r.custoTotal)}</span>
-                          <div className="hidden group-hover:block absolute right-0 top-5 z-50 bg-white border border-slate-200 rounded-lg shadow-xl p-3 min-w-[220px] text-left">
-                            <p className="text-[10px] font-bold text-slate-600 mb-1.5 border-b pb-1">Composição do Custo Total</p>
-                            {[
-                              { label: "Material",         v: r.mat },
-                              { label: "Mão de Obra",      v: r.mdo },
-                              { label: "Ind. Obra (CI)",   v: r.custo - r.mat - r.mdo },
-                              { label: "Adm. Central",     v: r.admCentral },
-                              { label: "Impostos",         v: r.impostos },
-                              { label: "Risco",            v: r.risco },
-                              { label: "Comissão",         v: r.comissao },
-                            ].map(({ label, v }) => (
-                              <div key={label} className="flex justify-between text-[10px] py-0.5">
-                                <span className="text-slate-500">{label}</span>
-                                <span className="font-medium text-slate-700">{fmt(v)}</span>
-                              </div>
-                            ))}
-                            <div className="flex justify-between text-[10px] font-bold border-t mt-1 pt-1 text-amber-700">
-                              <span>Total</span>
-                              <span>{fmt(r.custoTotal)}</span>
-                            </div>
-                          </div>
-                        </div>
+                      <td className="py-1.5 px-2 text-right text-amber-700">
+                        <span
+                          className="cursor-help underline decoration-dotted"
+                          onMouseEnter={(e) => {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setCustoTooltip({ r, x: rect.left, y: rect.bottom + 4 });
+                          }}
+                          onMouseLeave={() => setCustoTooltip(null)}
+                        >{fmt(r.custoTotal)}</span>
                       </td>
                     )}
-                    <td className={`py-2 px-3 text-right font-semibold ${r.lucro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    <td className={`py-1.5 px-2 text-right font-semibold ${r.lucro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                       {r.lucro >= 0 ? "+" : ""}{fmt(r.lucro)}
                     </td>
-                    <td className={`py-2 px-3 text-right ${r.margemMeta >= 0 ? "text-violet-600" : "text-red-500"}`}>
+                    <td className={`py-1.5 px-2 text-right ${r.margemMeta >= 0 ? "text-violet-600" : "text-red-500"}`}>
                       {r.margemMeta >= 0 ? "+" : ""}{fmt(r.margemMeta)}
                     </td>
-                    <td className="py-2 px-3 text-right text-slate-500">{cumCen.toFixed(1)}%</td>
-                    <td className="py-2 px-3 text-right font-semibold text-blue-700">
+                    <td className="py-1.5 px-2 text-right text-slate-500">{cumCen.toFixed(1)}%</td>
+                    <td className="py-1.5 px-2 text-right font-semibold text-blue-700">
                       {r.valorReal > 0 ? fmt(r.valorReal) : <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="py-2 px-3 text-right text-blue-500">
+                    <td className="py-1.5 px-2 text-right text-blue-500">
                       {r.cumReal > 0 ? `${r.cumReal.toFixed(1)}%` : <span className="text-slate-300">—</span>}
                     </td>
-                    <td className={`py-2 px-3 text-right font-semibold ${r.valorReal > 0 ? (desvio >= 0 ? "text-emerald-600" : "text-red-600") : "text-slate-300"}`}>
+                    <td className={`py-1.5 px-2 text-right font-semibold ${r.valorReal > 0 ? (desvio >= 0 ? "text-emerald-600" : "text-red-600") : "text-slate-300"}`}>
                       {r.valorReal > 0 ? `${desvio >= 0 ? "+" : ""}${fmt(desvio)}` : "—"}
                     </td>
-                    <td className="py-2 px-3 text-center">
+                    <td className="py-1.5 px-2 text-center">
                       {(() => { const s = STATUS_MED.find(x => x.v === r.status) ?? STATUS_MED[0]; return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.c}`}>{s.l}</span>; })()}
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-1.5 px-2">
                       <div className="flex gap-1 justify-end">
                         {!isEdit && (
                           <button className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${isPast ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200" : "bg-slate-50 text-slate-400 border border-slate-200"}`}
