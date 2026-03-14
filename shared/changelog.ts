@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 269,
+    titulo: "Diagrama de Rede: setas aparecendo + import XML corrigido para UID→WBS",
+    descricao: "Hierarquia EAP: grupos (isGrupo=true) agora são incluídos como nós pai (visual escuro distinto), gerando setas reais pai→filho. Antes: byEap filtrava grupos e zero setas eram criadas. Agora: buildHierarchyLayout recebe TODOS os itens; filtroStatus não esconde grupos em modo hierarquia. Import XML (MPP): corrigido para fazer dois passes — primeiro constrói mapa UID→WBS, depois converte referencias de UID para WBS, permitindo que predecessoras importadas apareçam no diagrama de rede. Import XLSX: já suportava leitura da coluna Predecessors nativamente.",
+    tipo: "bugfix",
+    modulos: "Planejamento / Diagrama de Rede / Importar Cronograma",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:45:00",
+  },
+  {
     version: 268,
     titulo: "Bugfix: ReferenceError user is not defined na Visão Geral",
     descricao: "Corrigido erro crítico na aba Visão Geral ao clicar em 'Ver detalhes' das Atividades em Atraso. A função VisaoGeral é definida fora do escopo do componente principal e portanto não tinha acesso ao objeto 'user' do useAuth(). Solução: prop 'user' adicionada ao componente VisaoGeral e passada no ponto de chamada, mantendo acesso a user?.name, user?.role e user?.email para o PrintHeader.",

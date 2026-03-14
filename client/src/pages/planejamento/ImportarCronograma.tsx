@@ -106,6 +106,15 @@ function parseMSProjectXML(text: string): TarefaImportada[] {
   if (err) throw new Error("XML inválido");
 
   const taskEls = Array.from(doc.querySelectorAll("Task"));
+
+  // First pass: build UID → WBS map so we can resolve predecessor UIDs to WBS codes
+  const uidToWbs = new Map<string, string>();
+  for (const task of taskEls) {
+    const uid = task.querySelector("UID")?.textContent ?? "";
+    const wbs = task.querySelector("WBS")?.textContent?.trim() ?? "";
+    if (uid && wbs) uidToWbs.set(uid, wbs);
+  }
+
   const result: TarefaImportada[] = [];
 
   for (const task of taskEls) {
@@ -117,8 +126,12 @@ function parseMSProjectXML(text: string): TarefaImportada[] {
     const fin   = fmtDate(task.querySelector("Finish")?.textContent ?? "");
     const durRaw= task.querySelector("Duration")?.textContent ?? "";
     const summ  = task.querySelector("Summary")?.textContent === "1";
-    const pred  = task.querySelector("PredecessorLink UID")?.textContent ?? "";
     const res   = task.querySelector("Assignment ResourceUID")?.textContent ?? "";
+
+    // Collect ALL predecessor UIDs and convert them to WBS codes
+    const predUids = Array.from(task.querySelectorAll("PredecessorLink UID")).map(el => el.textContent ?? "");
+    const predWbs  = predUids.map(uid => uidToWbs.get(uid) ?? "").filter(Boolean);
+    const pred     = predWbs.join(",");
 
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;

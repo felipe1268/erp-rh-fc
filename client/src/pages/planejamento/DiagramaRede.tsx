@@ -37,6 +37,7 @@ interface Node {
   width: number;
   height: number;
   depth: number;
+  isGrupo: boolean;
 }
 
 interface Edge {
@@ -111,39 +112,34 @@ function parsePreds(pred?: string | null): string[] {
   return pred.split(/[,;|\s]+/).map(s => s.trim()).filter(Boolean);
 }
 
-// ── EAP Hierarchy Layout ──────────────────────────────────────────────────────
+// ── EAP Hierarchy Layout (inclui grupos como nós pai) ───────────────────────
 
 function buildHierarchyLayout(
-  folhas: Atividade[],
+  todos: Atividade[],       // ALL atividades, including groups
   avancosMap: Record<number, number>,
   hoje: string,
 ): { nodes: Node[]; edges: Edge[] } {
-  if (folhas.length === 0) return { nodes: [], edges: [] };
+  // Only items with an EAP code
+  const com = todos.filter(a => a.eapCodigo);
+  if (com.length === 0) return { nodes: [], edges: [] };
 
-  // Map by EAP code
+  // Map by EAP code (includes groups now)
   const byEap = new Map<string, Atividade>();
-  folhas.forEach(a => { if (a.eapCodigo) byEap.set(a.eapCodigo, a); });
+  com.forEach(a => byEap.set(a.eapCodigo!, a));
 
   // Find max depth
-  const depths = folhas
-    .filter(a => a.eapCodigo)
-    .map(a => eapDepth(a.eapCodigo!));
-  const maxDepth = Math.max(0, ...depths);
+  const maxDepth = Math.max(0, ...com.map(a => eapDepth(a.eapCodigo!)));
 
-  // Group by depth
+  // Group by depth, sorted by ordem
   const byDepth = new Map<number, Atividade[]>();
   for (let d = 0; d <= maxDepth; d++) byDepth.set(d, []);
-  folhas.forEach(a => {
-    if (!a.eapCodigo) return;
-    const d = eapDepth(a.eapCodigo);
-    byDepth.get(d)?.push(a);
-  });
+  com.forEach(a => byDepth.get(eapDepth(a.eapCodigo!))?.push(a));
   byDepth.forEach(arr => arr.sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)));
 
-  // Assign y positions within each depth column
+  // Assign x/y positions
   const posMap = new Map<number, { x: number; y: number }>();
   const colCounts = new Map<number, number>();
-  byDepth.forEach((arr, d) => colCounts.set(d, 0));
+  byDepth.forEach((_, d) => colCounts.set(d, 0));
 
   byDepth.forEach((arr, d) => {
     arr.forEach(a => {
@@ -153,12 +149,13 @@ function buildHierarchyLayout(
     });
   });
 
-  // Build nodes
-  const nodes: Node[] = folhas
-    .filter(a => a.eapCodigo && posMap.has(a.id))
+  // Build nodes (all items with EAP, groups included)
+  const nodes: Node[] = com
+    .filter(a => posMap.has(a.id))
     .map(a => {
       const avanco = avancosMap[a.id] ?? 0;
       const pos = posMap.get(a.id)!;
+      const isGrupo = a.isGrupo ?? false;
       return {
         id: a.id,
         eap: a.eapCodigo!,
@@ -166,18 +163,19 @@ function buildHierarchyLayout(
         grupo: a.grupo ?? null,
         dataInicio: a.dataInicio ?? null,
         dataFim: a.dataFim ?? null,
-        status: calcStatus(a, avanco, hoje),
-        avanco,
-        esperado: calcEsperado(a, hoje),
+        status: isGrupo ? "nao_iniciada" as Status : calcStatus(a, avanco, hoje),
+        avanco: isGrupo ? 0 : avanco,
+        esperado: isGrupo ? 0 : calcEsperado(a, hoje),
         x: pos.x,
         y: pos.y,
         width: NW,
         height: NH,
         depth: eapDepth(a.eapCodigo!),
+        isGrupo,
       };
     });
 
-  // Build EAP parent-child edges
+  // Build parent → child edges
   const nodeById = new Map<number, Node>();
   nodes.forEach(n => nodeById.set(n.id, n));
 
@@ -187,7 +185,7 @@ function buildHierarchyLayout(
     if (parentEap) {
       const parentAt = byEap.get(parentEap);
       if (parentAt && nodeById.has(parentAt.id)) {
-        edges.push({ fromId: parentAt.id, toId: n.id, label: "contém" });
+        edges.push({ fromId: parentAt.id, toId: n.id });
       }
     }
   });
@@ -284,6 +282,7 @@ function buildNetworkLayout(
         width: NW,
         height: NH,
         depth: lvl,
+        isGrupo: false,
       });
     });
   });
@@ -340,10 +339,48 @@ function NodeCard({
 }: {
   node: Node; selected: boolean; highlighted: boolean; dimmed: boolean; onClick: () => void;
 }) {
-  const c = STATUS_COLOR[node.status];
+  const opacity = dimmed ? 0.2 : 1;
   const name = node.nome.length > 30 ? node.nome.slice(0, 28) + "…" : node.nome;
+
+  // ── GRUPO node ───────────────────────────────────────────────────────────
+  if (node.isGrupo) {
+    const bg     = selected ? "#1e293b" : highlighted ? "#334155" : "#1e293b";
+    const border = selected ? "#60a5fa" : highlighted ? "#93c5fd" : "#334155";
+    const sw     = selected || highlighted ? 2.5 : 1.5;
+    return (
+      <g transform={`translate(${node.x},${node.y})`} onClick={onClick} style={{ cursor: "pointer", opacity }}>
+        <rect x={2} y={2} width={NW} height={NH} rx={8} fill="rgba(0,0,0,0.15)" />
+        <rect width={NW} height={NH} rx={8} fill={bg} stroke={border} strokeWidth={sw} />
+        {/* folder-tab accent */}
+        <rect width={NW} height={5} rx={0} fill="#3b82f6" />
+        <rect width={5} height={5} fill="#3b82f6" />
+        <rect x={NW - 5} width={5} height={5} fill="#3b82f6" />
+        {/* EAP badge */}
+        <text x={NW - 8} y={17} fontSize={9} fill="#93c5fd" textAnchor="end" fontFamily="monospace" fontWeight={700}>
+          {node.eap}
+        </text>
+        {/* Label: GRUPO */}
+        <text x={12} y={17} fontSize={8} fill="#64748b" fontWeight={700} letterSpacing={1}>
+          GRUPO
+        </text>
+        {/* Name */}
+        <text x={12} y={34} fontSize={11} fill="#f1f5f9" fontWeight={700}>
+          {name}
+        </text>
+        {/* Dates */}
+        <text x={12} y={50} fontSize={8} fill="#64748b">
+          {node.dataInicio ? fmtBR(node.dataInicio) : "—"}  →  {node.dataFim ? fmtBR(node.dataFim) : "—"}
+        </text>
+        {/* Children count placeholder bar */}
+        <rect x={12} y={58} width={NW - 24} height={3} rx={2} fill="#1d4ed8" opacity={0.4} />
+        {selected && <rect width={NW} height={NH} rx={8} fill="none" stroke="#60a5fa" strokeWidth={3} strokeOpacity={0.4} />}
+      </g>
+    );
+  }
+
+  // ── FOLHA node ───────────────────────────────────────────────────────────
+  const c    = STATUS_COLOR[node.status];
   const barW = Math.round((NW - 24) * Math.min(node.avanco, 100) / 100);
-  const opacity = dimmed ? 0.25 : 1;
 
   return (
     <g
@@ -368,7 +405,7 @@ function NodeCard({
       <text x={NW - 8} y={16} fontSize={9} fill={c.text} textAnchor="end" fontFamily="monospace" fontWeight={700} opacity={0.9}>
         {node.eap}
       </text>
-      {/* Progress % top-left */}
+      {/* Progress % */}
       <text x={14} y={16} fontSize={10} fill={c.dot} fontWeight={800}>
         {node.avanco.toFixed(0)}%
       </text>
@@ -378,18 +415,12 @@ function NodeCard({
       </text>
       {/* Date */}
       <text x={14} y={48} fontSize={9} fill="#94a3b8">
-        {node.dataFim ? `◷ até ${fmtBR(node.dataFim)}` : "sem prazo definido"}
+        {node.dataFim ? `◷ até ${fmtBR(node.dataFim)}` : "sem prazo"}
       </text>
-      {/* Progress bar bg */}
+      {/* Progress bar */}
       <rect x={12} y={56} width={NW - 24} height={5} rx={3} fill="rgba(0,0,0,0.07)" />
-      {/* Progress bar fill */}
-      {barW > 0 && (
-        <rect x={12} y={56} width={barW} height={5} rx={3} fill={c.dot} />
-      )}
-      {/* Selection ring */}
-      {selected && (
-        <rect width={NW} height={NH} rx={10} fill="none" stroke="#2563eb" strokeWidth={3} strokeOpacity={0.3} />
-      )}
+      {barW > 0 && <rect x={12} y={56} width={barW} height={5} rx={3} fill={c.dot} />}
+      {selected && <rect width={NW} height={NH} rx={10} fill="none" stroke="#2563eb" strokeWidth={3} strokeOpacity={0.3} />}
     </g>
   );
 }
@@ -463,51 +494,64 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   const dragStart               = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const containerRef            = useRef<HTMLDivElement>(null);
 
-  // Base atividades (sem grupos)
+  // All atividades with EAP code (for hierarchy — includes groups)
+  const todos = useMemo(() =>
+    atividades.filter(a => a.eapCodigo),
+    [atividades]
+  );
+
+  // Folhas only (for rede de precedências — groups don't have predecessoras)
   const folhas = useMemo(() =>
     atividades.filter(a => !a.isGrupo && (a.dataInicio || a.dataFim || a.eapCodigo)),
     [atividades]
   );
 
-  // Grupos disponíveis
+  // Grupos disponíveis (from leaf names)
   const grupos = useMemo(() => {
     const s = new Set<string>();
     folhas.forEach(a => { if (a.grupo) s.add(a.grupo); });
     return Array.from(s).sort();
   }, [folhas]);
 
-  // Filtered by grupo
-  const filtradas = useMemo(() =>
+  // Filtered by grupo — hierarchy uses todos, rede uses folhas only
+  const todosFiltrados = useMemo(() =>
+    filtroGrupo === "todos" ? todos : todos.filter(a => a.grupo === filtroGrupo),
+    [todos, filtroGrupo]
+  );
+  const folhasFiltradas = useMemo(() =>
     filtroGrupo === "todos" ? folhas : folhas.filter(a => a.grupo === filtroGrupo),
     [folhas, filtroGrupo]
   );
 
   // Build graph
   const hierarquia = useMemo(
-    () => buildHierarchyLayout(filtradas, avancosMap, hoje),
-    [filtradas, avancosMap, hoje]
+    () => buildHierarchyLayout(todosFiltrados, avancosMap, hoje),
+    [todosFiltrados, avancosMap, hoje]
   );
 
   const rede = useMemo(
-    () => buildNetworkLayout(filtradas, avancosMap, hoje),
-    [filtradas, avancosMap, hoje]
+    () => buildNetworkLayout(folhasFiltradas, avancosMap, hoje),
+    [folhasFiltradas, avancosMap, hoje]
   );
 
   const hasDeps = rede.hasDeps;
   const rawNodes = viewMode === "rede" ? rede.nodes : hierarquia.nodes;
   const rawEdges = viewMode === "rede" ? rede.edges : hierarquia.edges;
 
-  // Status counts (before busca filter)
+  // Status counts (leaves only — groups don't have meaningful status)
   const counts = useMemo(() => {
     const c: Record<Status, number> = { concluida: 0, em_andamento: 0, atrasada: 0, em_risco: 0, nao_iniciada: 0 };
-    rawNodes.forEach(n => c[n.status]++);
+    rawNodes.filter(n => !n.isGrupo).forEach(n => c[n.status]++);
     return c;
   }, [rawNodes]);
 
   // Apply status + busca filters
+  // In hierarchy mode: groups are always shown (they are parents, not filterable by status)
   const visibleNodes = useMemo(() => {
     let ns = rawNodes;
-    if (filtroStatus !== "todos") ns = ns.filter(n => n.status === filtroStatus);
+    if (filtroStatus !== "todos") {
+      ns = ns.filter(n => n.isGrupo || n.status === filtroStatus);
+    }
     if (busca.trim()) {
       const q = busca.trim().toLowerCase();
       ns = ns.filter(n => n.nome.toLowerCase().includes(q) || n.eap.toLowerCase().includes(q));
