@@ -3463,6 +3463,26 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     });
   }
 
+  async function bloquearConfig() {
+    if (!configMed) {
+      setSalvando(true);
+      try {
+        await salvarCfgMut.mutateAsync({
+          projetoId,
+          tipoMedicao: cfgTipo,
+          diaCorte: cfgDiaCorte,
+          entrada: cfgEntrada,
+          numeroParcelas: cfgParcelas,
+          inicioFaturamento: cfgInicioFat || null,
+          sinalPct: cfgSinalPct,
+          retencaoPct: cfgRetencaoPct,
+          dataInicioObra: cfgDataInicioObra || null,
+        });
+      } catch { return; } finally { setSalvando(false); }
+    }
+    toggleBloqueioMut.mutate({ projetoId, bloqueado: true });
+  }
+
   return (
     <div className="space-y-6">
 
@@ -3638,6 +3658,33 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
               {saved ? "Salvo!" : "Salvar Configuração"}
             </button>
           </div>
+        </div>
+
+        {/* ── Barra de Bloqueio — fora do pointer-events-none ───────────── */}
+        <div className={`border-t px-4 py-2.5 flex items-center justify-between gap-3 ${cfgBloqueado ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-100"}`}>
+          <div className="flex items-center gap-2">
+            {cfgBloqueado
+              ? <><Lock className="h-3.5 w-3.5 text-emerald-600 shrink-0" /><span className="text-xs font-semibold text-emerald-700">Configuração bloqueada — nenhuma alteração permitida</span></>
+              : <><LockOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" /><span className="text-xs text-slate-500">Bloqueie para evitar alterações acidentais na configuração</span></>
+            }
+          </div>
+          {cfgBloqueado ? (
+            <button
+              onClick={() => toggleBloqueioMut.mutate({ projetoId, bloqueado: false })}
+              disabled={toggleBloqueioMut.isPending}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-700 font-semibold hover:bg-emerald-50 transition-colors disabled:opacity-50 whitespace-nowrap">
+              <LockOpen className="h-3.5 w-3.5" />
+              Desbloquear
+            </button>
+          ) : (
+            <button
+              onClick={bloquearConfig}
+              disabled={toggleBloqueioMut.isPending || salvando}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-700 text-white font-semibold hover:bg-slate-800 transition-colors disabled:opacity-50 whitespace-nowrap">
+              <Lock className="h-3.5 w-3.5" />
+              {configMed ? "Bloquear" : "Salvar e Bloquear"}
+            </button>
+          )}
         </div>
 
         {/* ── Reforços de Parcela (anti-caixa negativo) ───────────────────── */}

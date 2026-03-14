@@ -492,4 +492,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 23:30:00",
   },
+  {
+    version: 249,
+    titulo: "Planejamento: barra de bloqueio visível na Configuração de Medição",
+    descricao: "Adicionada barra de bloqueio permanente na seção Configuração de Medição do Planejamento: (1) Barra cinza/verde sempre visível abaixo dos parâmetros, fora da área de pointer-events-none; (2) Botão 'Bloquear' trava toda a configuração (modalidade + parâmetros) impedindo qualquer edição acidental; (3) Botão 'Salvar e Bloquear' quando ainda não há config gravada — salva e bloqueia em uma ação; (4) Botão 'Desbloquear' com borda verde para reativar a edição; (5) Mantido o botão 'Congelar/Descongelar' no cabeçalho escuro como ação secundária.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:45:00",
+  },
 ];
