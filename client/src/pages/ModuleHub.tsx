@@ -613,8 +613,8 @@ export default function ModuleHub() {
                 </div>
               </div>
 
-              {/* Module Cards - Stacked */}
-              <div className="flex flex-col gap-3 mt-6 relative z-10">
+              {/* Module Bubbles */}
+              <div className="flex flex-wrap gap-3 mt-6 relative z-10">
                 {sortedActiveModules.map((mod, idx) => {
                   const isBeingDragged = dragActive === mod.id;
                   const isDropTarget = dragTarget === mod.id && dragActive !== mod.id;
@@ -626,75 +626,46 @@ export default function ModuleHub() {
                       onDragOver={e => handleDragOver(e, mod.id)}
                       onDrop={() => handleDrop(mod.id)}
                       onDragEnd={handleDragEnd}
-                      className={`hub-module-card group relative text-left rounded-2xl overflow-hidden hub-glass w-full ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-150`}
+                      onClick={() => { if (!didDrag.current) { setActiveModule(mod.id as ModuleId); navigate(mod.path); } }}
+                      className={`group relative flex items-center gap-3 rounded-2xl px-4 py-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-105 select-none`}
                       style={{
-                        animationDelay: `${0.3 + idx * 0.12}s`,
+                        animationDelay: `${0.3 + idx * 0.08}s`,
                         opacity: isBeingDragged ? 0.4 : 1,
-                        outline: isDropTarget ? `2px solid ${mod.accentFrom}` : "2px solid transparent",
-                        cursor: "grab",
-                        transform: isDropTarget ? "scale(1.015)" : "scale(1)",
+                        background: `linear-gradient(135deg, ${mod.accentFrom}18, ${mod.accentTo}10)`,
+                        border: isDropTarget
+                          ? `2px solid ${mod.accentFrom}`
+                          : `1.5px solid ${mod.accentFrom}35`,
+                        boxShadow: `0 4px 16px -4px ${mod.accentGlow || mod.accentFrom + "30"}`,
                       }}
                     >
-                      {/* Hover glow */}
+                      {/* Hover glow overlay */}
                       <div
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                        style={{
-                          background: `radial-gradient(ellipse 60% 80% at 0% 50%, ${mod.accentGlow} 0%, transparent 70%)`,
-                        }}
+                        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                        style={{ background: `radial-gradient(ellipse at 20% 50%, ${mod.accentFrom}22 0%, transparent 65%)` }}
                       />
 
-                      {/* Left accent bar */}
-                      <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl" style={{
-                        background: `linear-gradient(180deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                      }} />
-
-                      <div className="relative flex items-center gap-4 px-5 py-4 pl-6">
-                        {/* Drag handle */}
-                        <div
-                          className="absolute right-14 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-30 transition-opacity duration-200 cursor-grab active:cursor-grabbing"
-                          title="Arraste para reordenar"
-                        >
-                          <svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor" className="text-gray-400">
-                            <circle cx="3" cy="4" r="1.5"/><circle cx="9" cy="4" r="1.5"/>
-                            <circle cx="3" cy="10" r="1.5"/><circle cx="9" cy="10" r="1.5"/>
-                            <circle cx="3" cy="16" r="1.5"/><circle cx="9" cy="16" r="1.5"/>
-                          </svg>
-                        </div>
-
-                        {/* Icon */}
-                        <div
-                          className="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-110"
-                          style={{
-                            background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                            boxShadow: `0 6px 20px -4px ${mod.accentGlow}`,
-                          }}
-                        >
-                          <mod.icon className="h-6 w-6 text-white" />
-                        </div>
-
-                        {/* Text — click navigates */}
-                        <div
-                          className="flex-1 min-w-0 cursor-pointer"
-                          onClick={() => { if (!didDrag.current) { setActiveModule(mod.id as ModuleId); navigate(mod.path); } }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-base font-extrabold text-[#1B2A4A] tracking-tight">{mod.title}</h4>
-                            <span className="text-[10px] text-gray-300 font-medium hidden sm:inline">{mod.subtitle}</span>
-                          </div>
-                          <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{mod.description}</p>
-                        </div>
-
-                        {/* Arrow */}
-                        <div
-                          className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 opacity-40 group-hover:opacity-100 transition-all duration-300 group-hover:translate-x-1 cursor-pointer"
-                          style={{
-                            background: `linear-gradient(135deg, ${mod.accentFrom}15, ${mod.accentTo}10)`,
-                          }}
-                          onClick={() => { setActiveModule(mod.id as ModuleId); navigate(mod.path); }}
-                        >
-                          <ArrowRight className="h-4 w-4" style={{ color: mod.accentFrom }} />
-                        </div>
+                      {/* Icon */}
+                      <div
+                        className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md transition-transform duration-200 group-hover:scale-110"
+                        style={{
+                          background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
+                          boxShadow: `0 4px 14px -2px ${mod.accentGlow || mod.accentFrom + "50"}`,
+                        }}
+                      >
+                        <mod.icon className="h-5 w-5 text-white" />
                       </div>
+
+                      {/* Text */}
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-extrabold leading-tight text-[#1B2A4A] tracking-tight">{mod.title}</p>
+                        <p className="text-[9px] text-gray-400 leading-tight mt-0.5 whitespace-nowrap">{mod.subtitle}</p>
+                      </div>
+
+                      {/* Arrow indicator */}
+                      <ArrowRight
+                        className="h-3.5 w-3.5 ml-1 flex-shrink-0 opacity-30 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200"
+                        style={{ color: mod.accentFrom }}
+                      />
                     </div>
                   );
                 })}
@@ -704,54 +675,34 @@ export default function ModuleHub() {
 
           {/* ──── FUTURE MODULES ──── */}
           <div className={`mt-10 mb-10 ${mounted ? 'hub-animate-up' : 'opacity-0'}`} style={{ animationDelay: '0.7s' }}>
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-5">
               <div className="h-6 w-1 rounded-full bg-gradient-to-b from-gray-300 to-gray-200" />
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Em Desenvolvimento</h3>
               <div className="h-px flex-1 bg-gradient-to-r from-gray-200 to-transparent" />
-              <span className="flex items-center gap-1 text-[9px] font-bold text-[#D4A843] bg-[#D4A843]/10 px-2.5 py-1 rounded-full uppercase tracking-wider border border-[#D4A843]/20">
-                <Zap className="h-2.5 w-2.5" />
-                Em breve
-              </span>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              {futureModules.map((mod, idx) => (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {futureModules.map((mod) => (
                 <div
                   key={mod.id}
-                  className="group relative flex items-center gap-3 rounded-2xl px-4 py-3 cursor-default transition-all duration-300 hover:scale-105 hover:shadow-lg"
-                  style={{
-                    background: `linear-gradient(135deg, ${mod.accentFrom}12, ${mod.accentTo}08)`,
-                    border: `1.5px solid ${mod.accentFrom}25`,
-                    animationDelay: `${0.7 + idx * 0.05}s`,
-                  }}
+                  className="relative hub-glass rounded-2xl p-4 text-center cursor-default"
+                  style={{ opacity: 0.65 }}
                 >
-                  {/* Glow pulse on hover */}
+                  <Lock className="absolute top-2.5 right-2.5 h-3 w-3 text-gray-200" />
                   <div
-                    className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                    style={{ background: `radial-gradient(ellipse at 30% 50%, ${mod.accentFrom}15 0%, transparent 70%)` }}
-                  />
-
-                  {/* Icon bubble */}
-                  <div
-                    className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-                    style={{ background: `linear-gradient(135deg, ${mod.accentFrom}30, ${mod.accentTo}20)` }}
+                    className="h-10 w-10 rounded-xl flex items-center justify-center mx-auto mb-2 opacity-40"
+                    style={{
+                      background: `linear-gradient(135deg, ${mod.accentFrom}15, ${mod.accentTo}10)`,
+                    }}
                   >
-                    <mod.icon className="h-4 w-4" style={{ color: mod.accentFrom }} />
+                    <mod.icon className="h-5 w-5" style={{ color: mod.accentFrom }} />
                   </div>
-
-                  {/* Text */}
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold leading-tight" style={{ color: mod.accentFrom }}>{mod.title}</p>
-                    <p className="text-[9px] text-gray-400 leading-tight mt-0.5 whitespace-nowrap">{mod.subtitle}</p>
-                  </div>
-
-                  {/* Lock badge */}
-                  <div
-                    className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full flex items-center justify-center shadow-sm"
-                    style={{ background: `linear-gradient(135deg, ${mod.accentFrom}40, ${mod.accentTo}30)` }}
-                  >
-                    <Lock className="h-2 w-2 text-white/70" />
-                  </div>
+                  <h4 className="text-xs font-bold text-gray-400 mb-0.5">{mod.title}</h4>
+                  <p className="text-[9px] text-gray-300 mb-2">{mod.subtitle}</p>
+                  <span className="inline-flex items-center gap-1 text-[8px] font-bold text-[#D4A843]/60 bg-[#D4A843]/8 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                    <Zap className="h-2 w-2" />
+                    Em breve
+                  </span>
                 </div>
               ))}
             </div>
