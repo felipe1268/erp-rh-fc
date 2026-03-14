@@ -994,12 +994,42 @@ export const planejamentoRouter = router({
       const totalMat   = itens.reduce((s, i) => s + i.custoMat,   0);
       const totalMdo   = itens.reduce((s, i) => s + i.custoMdo,   0);
 
+      // Busca breakdown BDI do orçamento vinculado ao projeto
+      const bdiRes = await db.execute(sql`
+        SELECT DISTINCT ON (ob.codigo)
+          ob.codigo,
+          ob.percentual::float8          AS percentual,
+          ob."valorAbsoluto"::float8     AS valor_absoluto
+        FROM orcamento_bdi ob
+        JOIN planejamento_projetos p ON p.orcamento_id = ob."orcamentoId"
+        WHERE p.id = ${input.projetoId}
+          AND ob.codigo IN ('CI','DI-01','DI-02','DI-03','DI-04','DI-05','DI-06','DI-07','DI-08','DI-10','L-01')
+        ORDER BY ob.codigo, ob.id
+      `);
+      const bdiMap: Record<string, { pct: number; val: number }> = {};
+      (bdiRes.rows as any[]).forEach(r => {
+        bdiMap[String(r.codigo)] = {
+          pct: Number(r.percentual)    || 0,
+          val: Number(r.valor_absoluto) || 0,
+        };
+      });
+      const bdiBreakdown = {
+        ci:         bdiMap['CI']?.val ?? 0,   // valor absoluto do Custo Indireto da Obra
+        admCentral: bdiMap['DI-01']?.pct ?? 0, // % de Venda
+        impostos:   ['DI-02','DI-03','DI-04','DI-05','DI-06','DI-07']
+                      .reduce((s, c) => s + (bdiMap[c]?.pct ?? 0), 0), // soma % tributos sobre Venda
+        risco:      bdiMap['DI-08']?.pct ?? 0, // % de Venda
+        comissao:   bdiMap['DI-10']?.pct ?? 0, // % de Venda
+        lucro:      bdiMap['L-01']?.pct ?? 0,  // % de Venda (L-01 Lucro Bruto)
+      };
+
       return {
         itens,
         totalVenda, totalMeta, totalCusto, totalMat, totalMdo,
         valorBase: valorVenda,
         valorBaseMeta: valorMeta,
         valorBaseCusto: valorCusto,
+        bdiBreakdown,
       };
     }),
 

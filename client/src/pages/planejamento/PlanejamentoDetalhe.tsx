@@ -4584,23 +4584,48 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
     });
 
     // Scale to budget totals to eliminate distribution drift
-    const tC = (cruzamento as any)?.valorBaseCusto ?? 0;
-    const tV = (cruzamento as any)?.valorBase      ?? 0;
-    const tM = (cruzamento as any)?.valorBaseMeta  ?? 0;
-    const sC = meses.reduce((s, x) => s + x.custo, 0);
-    const sV = meses.reduce((s, x) => s + x.venda, 0);
-    const sM = meses.reduce((s, x) => s + x.meta,  0);
-    const fcC = sC > 0 && tC > 0 ? tC / sC : 1;
-    const fcV = sV > 0 && tV > 0 ? tV / sV : 1;
-    const fcM = sM > 0 && tM > 0 ? tM / sM : 1;
-    return meses.map(x => ({
-      ...x,
-      custo: x.custo * fcC,
-      venda: x.venda * fcV,
-      meta:  x.meta  * fcM,
-      lucro: x.venda * fcV - x.custo * fcC,
-      margemMeta: x.venda * fcV - x.meta * fcM,
-    }));
+    const tC   = (cruzamento as any)?.valorBaseCusto ?? 0;
+    const tV   = (cruzamento as any)?.valorBase      ?? 0;
+    const tM   = (cruzamento as any)?.valorBaseMeta  ?? 0;
+    const tMat = (cruzamento as any)?.totalMat       ?? 0;
+    const tMdo = (cruzamento as any)?.totalMdo       ?? 0;
+    const sC   = meses.reduce((s, x) => s + x.custo, 0);
+    const sV   = meses.reduce((s, x) => s + x.venda, 0);
+    const sM   = meses.reduce((s, x) => s + x.meta,  0);
+    const sMat = meses.reduce((s, x) => s + x.mat,   0);
+    const sMdo = meses.reduce((s, x) => s + x.mdo,   0);
+    const fcC   = sC   > 0 && tC   > 0 ? tC   / sC   : 1;
+    const fcV   = sV   > 0 && tV   > 0 ? tV   / sV   : 1;
+    const fcM   = sM   > 0 && tM   > 0 ? tM   / sM   : 1;
+    const fcMat = sMat > 0 && tMat > 0 ? tMat / sMat : fcC;
+    const fcMdo = sMdo > 0 && tMdo > 0 ? tMdo / sMdo : fcC;
+
+    // Frações BDI por componente (relativas à Venda)
+    const bdi = (cruzamento as any)?.bdiBreakdown ?? {};
+    const bdiAdmPct      = bdi.admCentral  ?? 0;
+    const bdiImpostosPct = bdi.impostos    ?? 0;
+    const bdiRiscoPct    = bdi.risco       ?? 0;
+    const bdiComissaoPct = bdi.comissao    ?? 0;
+    const bdiLucroPct    = bdi.lucro       ?? 0;
+
+    return meses.map(x => {
+      const venda  = x.venda * fcV;
+      const custo  = x.custo * fcC;
+      const meta   = x.meta  * fcM;
+      const mat    = x.mat   * fcMat;
+      const mdo    = x.mdo   * fcMdo;
+      // Componentes BDI proporcionais à Venda mensal
+      const admCentral = venda * bdiAdmPct;
+      const impostos   = venda * bdiImpostosPct;
+      const risco      = venda * bdiRiscoPct;
+      const comissao   = venda * bdiComissaoPct;
+      // Custo Total = Custo da Obra (CD+CI) + Despesas Indiretas (exceto Lucro)
+      const custoTotal = custo + admCentral + impostos + risco + comissao;
+      // Lucro Previsto via BDI (L-01 Lucro Bruto = % de Venda)
+      const lucro      = bdiLucroPct > 0 ? venda * bdiLucroPct : venda - custo;
+      const margemMeta = venda - meta;
+      return { mes: x.mes, nomeMes: x.nomeMes, venda, meta, custo, mat, mdo, admCentral, impostos, risco, comissao, custoTotal, lucro, margemMeta };
+    });
   }, [cruzamento]);
 
   // Junta com medições
@@ -4661,14 +4686,16 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const hoje      = new Date().toISOString().substring(0, 7);
   const qtdMed    = medicoes.length;
   const qtdCruz   = cruzamento?.itens?.length ?? 0;
-  const totalVenda = rows.reduce((s: number, r: any) => s + r.venda,     0);
-  const totalMeta  = rows.reduce((s: number, r: any) => s + r.meta,      0);
-  const totalCusto = rows.reduce((s: number, r: any) => s + r.custo,     0);
-  const totalLucro         = totalVenda - totalCusto;  // Lucro Previsto = Venda − Custo
-  const totalLucroDesejado = totalVenda - totalMeta;   // Lucro Desejado = Venda − Meta
+  const totalVenda     = rows.reduce((s: number, r: any) => s + r.venda,      0);
+  const totalMeta      = rows.reduce((s: number, r: any) => s + r.meta,       0);
+  const totalCusto     = rows.reduce((s: number, r: any) => s + r.custo,      0);
+  const totalCustoTot  = rows.reduce((s: number, r: any) => s + r.custoTotal, 0);
+  const totalLucro         = rows.reduce((s: number, r: any) => s + r.lucro,       0); // BDI L-01
+  const totalLucroDesejado = totalVenda - totalMeta;
   const margem             = totalVenda > 0 ? (totalLucro / totalVenda * 100) : 0;
   const margemDesejada     = totalVenda > 0 ? (totalLucroDesejado / totalVenda * 100) : 0;
   const totalReal  = rows.reduce((s: number, r: any) => s + r.valorReal, 0);
+  const hasBdi     = (cruzamento as any)?.bdiBreakdown?.lucro > 0;
   const cen = CENARIOS.find(c => c.id === cenario)!;
 
   // Dados do gráfico — chaves sem pontos/parênteses (Recharts interpreta "." como acesso aninhado)
@@ -4738,7 +4765,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
           { label: "Venda Negociada",   v: (cruzamento as any)?.valorBase ?? totalVenda,        c: "text-orange-600" },
           { label: "Meta Orçamento",    v: (cruzamento as any)?.valorBaseMeta ?? totalMeta,     c: "text-violet-600" },
           { label: "Custo Orçamento",   v: (cruzamento as any)?.valorBaseCusto ?? totalCusto,   c: "text-red-600"    },
-          { label: `Lucro Previsto (${margem.toFixed(1)}%) V−C`,        v: totalLucro,         c: totalLucro >= 0         ? "text-emerald-600" : "text-red-600" },
+          { label: `Lucro Previsto (${margem.toFixed(1)}%) ${hasBdi ? "BDI" : "V−C"}`,  v: totalLucro, c: totalLucro >= 0 ? "text-emerald-600" : "text-red-600" },
           { label: `Lucro Desejado (${margemDesejada.toFixed(1)}%) V−M`, v: totalLucroDesejado, c: totalLucroDesejado >= 0 ? "text-violet-600"  : "text-red-600" },
           { label: "Total Medido",      v: totalReal,  c: "text-blue-600"   },
         ].map((k, i) => (
@@ -4785,7 +4812,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {cenario === "lucro" && <Bar yAxisId="val" dataKey="Custo"     name="Custo"             fill="#ef4444" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
-                {cenario === "lucro" && <Bar yAxisId="val" dataKey="LucroPrev" name="Lucro Prev. (V−C)" fill="#10b981" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
+                {cenario === "lucro" && <Bar yAxisId="val" dataKey="LucroPrev" name={hasBdi ? "Lucro Prev. (BDI)" : "Lucro Prev. (V−C)"} fill="#10b981" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
                 {cenario === "lucro" && <Bar yAxisId="val" dataKey="LucroDes"  name="Lucro Des. (V−M)"  fill="#8b5cf6" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
                 {cenario === "lucro" && <Bar yAxisId="val" dataKey="Medido"    name="Medido"            fill="#3b82f6" isAnimationActive={false} minPointSize={2} radius={[3,3,0,0]} />}
                 {cenario === "lucro" && <Line yAxisId="pct" type="monotone" dataKey="VendaAcum" name="Venda Acum.%" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive={false} />}
@@ -4814,8 +4841,9 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               <th className="py-2 px-3 text-left">Competência</th>
               <th className="py-2 px-3 text-right">Venda</th>
               <th className="py-2 px-3 text-right">Meta</th>
-              <th className="py-2 px-3 text-right">Custo</th>
-              <th className="py-2 px-3 text-right text-emerald-700">Lucro Prev. <span className="font-normal opacity-60">(V−C)</span></th>
+              <th className="py-2 px-3 text-right">Custo Dir.</th>
+              {hasBdi && <th className="py-2 px-3 text-right text-amber-700">Custo Total <span className="font-normal opacity-60 text-[9px]" title="Custo Dir. + Adm.Central + Impostos + Risco + Comissão">ⓘ</span></th>}
+              <th className="py-2 px-3 text-right text-emerald-700">Lucro Prev. <span className="font-normal opacity-60">{hasBdi ? "(BDI)" : "(V−C)"}</span></th>
               <th className="py-2 px-3 text-right text-violet-700">Lucro Des. <span className="font-normal opacity-60">(V−M)</span></th>
               <th className="py-2 px-3 text-right">Prev.Acum%</th>
               <th className="py-2 px-3 text-right text-blue-700">Medido</th>
@@ -4844,6 +4872,34 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                     <td className="py-2 px-3 text-right text-orange-600 font-medium">{fmt(r.venda)}</td>
                     <td className="py-2 px-3 text-right text-violet-600">{fmt(r.meta)}</td>
                     <td className="py-2 px-3 text-right text-red-600">{fmt(r.custo)}</td>
+                    {hasBdi && (
+                      <td className="py-2 px-3 text-right text-amber-700">
+                        <div className="group relative inline-block">
+                          <span className="cursor-help underline decoration-dotted">{fmt(r.custoTotal)}</span>
+                          <div className="hidden group-hover:block absolute right-0 top-5 z-50 bg-white border border-slate-200 rounded-lg shadow-xl p-3 min-w-[220px] text-left">
+                            <p className="text-[10px] font-bold text-slate-600 mb-1.5 border-b pb-1">Composição do Custo Total</p>
+                            {[
+                              { label: "Material",         v: r.mat },
+                              { label: "Mão de Obra",      v: r.mdo },
+                              { label: "Ind. Obra (CI)",   v: r.custo - r.mat - r.mdo },
+                              { label: "Adm. Central",     v: r.admCentral },
+                              { label: "Impostos",         v: r.impostos },
+                              { label: "Risco",            v: r.risco },
+                              { label: "Comissão",         v: r.comissao },
+                            ].map(({ label, v }) => (
+                              <div key={label} className="flex justify-between text-[10px] py-0.5">
+                                <span className="text-slate-500">{label}</span>
+                                <span className="font-medium text-slate-700">{fmt(v)}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between text-[10px] font-bold border-t mt-1 pt-1 text-amber-700">
+                              <span>Total</span>
+                              <span>{fmt(r.custoTotal)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    )}
                     <td className={`py-2 px-3 text-right font-semibold ${r.lucro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                       {r.lucro >= 0 ? "+" : ""}{fmt(r.lucro)}
                     </td>
@@ -4882,7 +4938,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                   </tr>
                   {isEdit && (
                     <tr className="bg-blue-50 border-b border-blue-100">
-                      <td colSpan={13} className="px-4 py-3">
+                      <td colSpan={hasBdi ? 14 : 13} className="px-4 py-3">
                         <div className="flex flex-wrap items-center gap-3">
                           <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-slate-600">Valor Medido (R$):</label>
@@ -4925,6 +4981,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
                 <td className="py-2 px-3 text-right font-bold text-orange-300">{fmt(totalVenda)}</td>
                 <td className="py-2 px-3 text-right font-bold text-violet-300">{fmt(totalMeta)}</td>
                 <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(totalCusto)}</td>
+                {hasBdi && <td className="py-2 px-3 text-right font-bold text-amber-300">{fmt(totalCustoTot)}</td>}
                 <td className={`py-2 px-3 text-right font-bold ${totalLucro >= 0 ? "text-emerald-300" : "text-red-400"}`}>{totalLucro >= 0 ? "+" : ""}{fmt(totalLucro)}</td>
                 <td className={`py-2 px-3 text-right font-bold ${totalLucroDesejado >= 0 ? "text-violet-300" : "text-red-400"}`}>{totalLucroDesejado >= 0 ? "+" : ""}{fmt(totalLucroDesejado)}</td>
                 <td className="py-2 px-3" />
