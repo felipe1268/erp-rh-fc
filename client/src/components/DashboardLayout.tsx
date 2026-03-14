@@ -283,9 +283,17 @@ const menuSectionsParceiros: MenuSection[] = [
 
 const menuSectionsCompras: MenuSection[] = [
   {
-    title: "Compras",
+    title: "Fluxo de Compras",
     items: [
-      { icon: ShoppingCart,    label: "Fornecedores",         path: "/compras/fornecedores"     },
+      { icon: ClipboardList,   label: "Solicitações (SC)",    path: "/compras/solicitacoes"     },
+      { icon: FileText,        label: "Cotações",             path: "/compras/cotacoes"         },
+      { icon: ShoppingCart,    label: "Ordens de Compra (OC)",path: "/compras/ordens"           },
+    ],
+  },
+  {
+    title: "Cadastros",
+    items: [
+      { icon: Truck,           label: "Fornecedores",         path: "/compras/fornecedores"     },
       { icon: Warehouse,       label: "Almoxarifado",         path: "/compras/almoxarifado"     },
     ],
   },
