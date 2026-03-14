@@ -1728,8 +1728,13 @@ function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
   );
   const testeMut = trpc.notifications.testeEnvio.useMutation({
     onSuccess: (data) => {
-      if (data.enviados > 0) toast.success(`Teste enviado para ${data.enviados} destinatário(s)!`);
-      else toast.error("Nenhum destinatário ativo para este tipo");
+      if (data.enviados > 0) {
+        toast.success(`Teste enviado para ${data.enviados} destinatário(s)!`);
+      } else if (data.erros > 0) {
+        toast.error(`Falha no envio: ${data.erroMensagem || "Erro SMTP. Verifique as configurações de e-mail."}`);
+      } else {
+        toast.error("Nenhum destinatário ativo para este tipo de notificação.");
+      }
       logsQuery.refetch();
       statsQuery.refetch();
     },

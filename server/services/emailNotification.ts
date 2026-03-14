@@ -383,7 +383,7 @@ export async function dispararNotificacao(
   dados: DadosFuncionario & { employeeId?: number; statusAnterior?: string; statusNovo?: string },
   userId?: number,
   userName?: string,
-): Promise<{ enviados: number; erros: number; destinatarios: string[] }> {
+): Promise<{ enviados: number; erros: number; destinatarios: string[]; erroMensagem?: string }> {
   const db = await getDb();
   if (!db) return { enviados: 0, erros: 0, destinatarios: [] };
 
@@ -424,6 +424,7 @@ export async function dispararNotificacao(
   let enviados = 0;
   let erros = 0;
   const destinatariosNotificados: string[] = [];
+  let primeiroErro: string | null = null;
 
   for (const recipient of filteredRecipients) {
     const trackingId = crypto.randomUUID();
@@ -445,11 +446,13 @@ export async function dispararNotificacao(
       } else {
         erros++;
         envioErro = result.error || "Falha no envio SMTP";
+        if (!primeiroErro) primeiroErro = envioErro;
         console.error(`[EmailNotification] Falha ao enviar para ${recipient.email}: ${envioErro}`);
       }
     } catch (error: any) {
       erros++;
       envioErro = error?.message || "Erro desconhecido";
+      if (!primeiroErro) primeiroErro = envioErro;
       console.error(`[EmailNotification] Erro ao enviar para ${recipient.email}:`, error);
     }
 
@@ -516,7 +519,7 @@ export async function dispararNotificacao(
     console.error("[EmailNotification] Erro ao registrar audit log:", e);
   }
 
-  return { enviados, erros, destinatarios: destinatariosNotificados };
+  return { enviados, erros, destinatarios: destinatariosNotificados, erroMensagem: primeiroErro ?? undefined };
 }
 
 // ============================================================

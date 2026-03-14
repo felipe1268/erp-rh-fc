@@ -502,6 +502,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 23:45:00",
   },
   {
+    version: 252,
+    titulo: "Notificações: mensagem de erro correta ao falhar envio de e-mail",
+    descricao: "Corrigido bug no toast do 'Enviar Teste': quando o SMTP falha (enviados=0, erros>0), a mensagem mostrada era incorretamente 'Nenhum destinatário ativo para este tipo'. Agora exibe o erro real retornado pelo serviço (ex: 'SMTP não configurado. Defina SMTP_HOST, SMTP_EMAIL e SMTP_PASSWORD.'). O servidor passou a rastrear o primeiro erro de envio em primeiroErro e retorná-lo no campo erroMensagem. O cliente usa erros>0 para distinguir falha de SMTP de ausência de destinatários.",
+    tipo: "bugfix",
+    modulos: "Configurações / Notificações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 02:00:00",
+  },
+  {
     version: 251,
     titulo: "REFIS: popup de visualização rápida ao clicar no Histórico",
     descricao: "Ao clicar em qualquer linha do 'Histórico de REFIs' na Visão Geral do projeto, abre um popup (modal) com os dados completos daquele REFIS: cabeçalho escuro com número e semana, cards de avanço previsto/realizado/desvio com barra de progresso colorida, índices SPI e CPI com semáforo, seção financeira (custo previsto vs realizado), avanço semanal e observações. Botão 'Ver REFIS Completo' navega para a aba REFIS já com a semana pré-selecionada. Linhas da tabela agora têm cursor pointer e highlight azul no hover.",
