@@ -582,4 +582,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 21:00:00",
   },
+  {
+    version: 259,
+    titulo: "Atividades em Atraso — Progresso Esperado vs. Realizado + Modal Detalhado",
+    descricao: "Widget 'Atividades em Atraso' na Visão Geral do Planejamento reformulado: cada card agora exibe duas barras de progresso — 'Deveria estar hoje' (cálculo proporcional ao cronograma entre dataInicio e dataFim) e 'Realizado hoje' (avanço físico lançado). A lógica de detecção de atraso foi expandida para incluir atividades ainda dentro do prazo mas abaixo do esperado. Ao clicar no título ou em qualquer card, um modal detalhado se abre mostrando, para cada atividade: nome, código EAP, datas de início e fim, dias de atraso, barras visuais com percentuais e desvio em pontos percentuais.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 21:30:00",
+  },
 ];
