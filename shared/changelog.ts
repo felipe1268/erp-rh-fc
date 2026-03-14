@@ -555,4 +555,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 11:00:00",
   },
+  {
+    version: 256,
+    titulo: "Cronograma Financeiro: Lucro Previsto por BDI e Custo Total detalhado",
+    descricao: "Cronograma Financeiro do Planejamento agora calcula o Lucro Previsto usando o percentual real do BDI (código L-01 Lucro Bruto da tabela orcamento_bdi) em vez da simples diferença Venda−Custo. Nova coluna 'Custo Total' exibe o custo completo incluindo Adm. Central (DI-01), Impostos/Tributos (DI-02 a DI-07), Risco (DI-08) e Comissão (DI-10), todos proporcionais à Venda mensal. Tooltip sobre o valor do Custo Total mostra o detalhamento: Material, Mão de Obra, Ind. Obra (CI), Adm. Central, Impostos, Risco, Comissão. Cabeçalho Lucro Previsto mostra '(BDI)' quando dados BDI estão disponíveis. KPI e gráfico também atualizados.",
+    tipo: "fix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 12:00:00",
+  },
 ];
