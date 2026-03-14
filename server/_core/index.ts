@@ -2,6 +2,7 @@
 process.env.TZ = 'UTC';
 
 import "dotenv/config";
+import compression from "compression";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -34,6 +35,15 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  // Gzip/Brotli compression — must be FIRST for all routes
+  app.use(compression({
+    level: 6,
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) return false;
+      return compression.filter(req, res);
+    },
+  }));
   // Security headers (XSS, clickjacking, MIME sniffing, HSTS)
   app.use(securityHeaders());
   // Configure body parser with larger size limit for file uploads
