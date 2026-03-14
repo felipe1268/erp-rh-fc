@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 271,
+    titulo: "Planejamento: botão Editar no card de projeto",
+    descricao: "Adicionado botão Editar (ícone lápis, âmbar) nos cards da lista de projetos de planejamento. Ao clicar, abre modal com todos os campos editáveis: Nome, Cliente, Responsável, Local, Data Início, Término Contratual, Valor do Contrato, Status (dropdown Em andamento / Concluído / Suspenso / Atrasado / Planejamento) e Observações. Salva via mutation atualizarProjeto e atualiza o card imediatamente.",
+    tipo: "feature",
+    modulos: "Planejamento / Lista de Projetos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:05:00",
+  },
+  {
     version: 270,
     titulo: "Prev. Medição: tooltip fixo e tabela sem barra de rolagem",
     descricao: "Tooltip 'Composição do Custo Total' deixava de aparecer porque o container da tabela tinha overflow-x-auto que cortava o popup absoluto. Solução: tooltip agora usa position:fixed renderizado no topo do componente (fora de qualquer overflow) via estado custoTooltip + onMouseEnter/Leave. Também removido overflow-x-auto da tabela e reduzido padding das células (py-1.5 px-2) e nomes de colunas (Custo Dir.→C. Dir., Prev.Acum%→Acum%, Real.Acum%→Real%) para que todas as colunas caibam sem barra de rolagem horizontal.",
