@@ -502,6 +502,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 23:45:00",
   },
   {
+    version: 251,
+    titulo: "REFIS: popup de visualização rápida ao clicar no Histórico",
+    descricao: "Ao clicar em qualquer linha do 'Histórico de REFIs' na Visão Geral do projeto, abre um popup (modal) com os dados completos daquele REFIS: cabeçalho escuro com número e semana, cards de avanço previsto/realizado/desvio com barra de progresso colorida, índices SPI e CPI com semáforo, seção financeira (custo previsto vs realizado), avanço semanal e observações. Botão 'Ver REFIS Completo' navega para a aba REFIS já com a semana pré-selecionada. Linhas da tabela agora têm cursor pointer e highlight azul no hover.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 01:00:00",
+  },
+  {
     version: 250,
     titulo: "Planejamento: todas as abas do projeto acessíveis pela sidebar",
     descricao: "Ao navegar para um projeto no módulo Planejamento (/planejamento/:id), a sidebar exibe dinamicamente a seção 'Abas do Projeto' com todos os 14 itens de navegação (Visão Geral, Cronograma, Gantt, Linha de Balanços, Crono. Financeiro, Curva S, Avanço Semanal, Caminho Crítico, Compras, Prev. Medição, Prog. Semanal, Revisões, REFIS, IA Gestora). Clique em qualquer item da sidebar troca a aba imediatamente usando o padrão navParamsUpdated/sessionStorage já existente. Item ativo na sidebar é destacado corretamente (mesmo mecanismo sidebarActiveParam dos demais módulos). PlanejamentoDetalhe inicializa a aba a partir dos parâmetros de URL/sessionStorage ao montar.",

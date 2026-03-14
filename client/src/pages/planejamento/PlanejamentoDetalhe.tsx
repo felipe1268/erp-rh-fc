@@ -138,6 +138,7 @@ export default function PlanejamentoDetalhe() {
     const t = p.get('tab') as Tab;
     return (t && TAB_IDS.includes(t)) ? t : 'visao-geral';
   });
+  const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
   const [overIdx, setOverIdx]   = useState<number | null>(null);
@@ -490,6 +491,7 @@ export default function PlanejamentoDetalhe() {
             fmt={fmt}
             fPct={fPct}
             onEditarProjeto={abrirEditProjeto}
+            onVerRefisCompleto={(semana: string) => { setRefisInitSemana(semana); setAba("refis"); }}
           />
         )}
         {aba === "cronograma" && (
@@ -544,6 +546,8 @@ export default function PlanejamentoDetalhe() {
             utils={utils}
             fmt={fmt}
             fPct={fPct}
+            initialSemana={refisInitSemana}
+            onInitialSemanaConsumed={() => setRefisInitSemana(null)}
           />
         )}
         {aba === "lob" && (
@@ -883,7 +887,8 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: VISÃO GERAL
 // ═════════════════════════════════════════════════════════════════════════════
-function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, onEditarProjeto }: any) {
+function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, onEditarProjeto, onVerRefisCompleto }: any) {
+  const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const totalAtiv   = atividades.filter((a: any) => !a.isGrupo).length;
   const concluidas  = atividades.filter((a: any) => !a.isGrupo).filter((a: any) => {
     const avMap: Record<number, number> = {};
@@ -1006,7 +1011,12 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
             </thead>
             <tbody>
               {refisLista.slice(0, 8).map((r: any, i: number) => (
-                <tr key={r.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                <tr
+                  key={r.id}
+                  className={`cursor-pointer transition-colors ${i % 2 === 0 ? "bg-white hover:bg-blue-50" : "bg-slate-50 hover:bg-blue-50"}`}
+                  onClick={() => setRefisAberto(r)}
+                  title="Clique para visualizar este REFIS"
+                >
                   <td className="py-1.5 px-3 font-mono text-slate-600">{String(r.numero ?? i+1).padStart(3, "0")}</td>
                   <td className="py-1.5 px-3 text-slate-700">{r.semana}</td>
                   <td className="py-1.5 px-3 text-right text-slate-600">{fPct(n(r.avancoPrevisto))}</td>
@@ -1025,6 +1035,171 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
           </table>
         </div>
       )}
+
+      {/* ── Modal de visualização rápida de REFIS ───────────────────────── */}
+      <Dialog open={!!refisAberto} onOpenChange={(o) => { if (!o) setRefisAberto(null); }}>
+        <DialogContent style={{ background: '#ffffff', color: '#111827', maxWidth: 560, padding: 0, overflow: 'hidden' }}>
+          {refisAberto && (() => {
+            const r = refisAberto;
+            const prev = n(r.avancoPrevisto);
+            const real = n(r.avancoRealizado);
+            const spiV = n(r.spi);
+            const cpiV = n(r.cpi);
+            const cpv  = n(r.custoPrevisto);
+            const crv  = n(r.custoRealizado);
+            const semBR = fmtBR(r.semana);
+            const semFim = (() => {
+              const d = new Date(r.semana + "T12:00:00");
+              d.setDate(d.getDate() + 6);
+              return fmtBR(d.toISOString().split("T")[0]);
+            })();
+            const desvio = real - prev;
+            const numStr = String(r.numero ?? "—").padStart(3, "0");
+            return (
+              <>
+                {/* Header escuro */}
+                <div style={{ background: '#1A3461', color: 'white', padding: '20px 24px 16px' }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)' }}>REFIS</span>
+                        <span style={{ background: '#FFB800', color: '#1A3461', fontSize: 10, fontWeight: 800, padding: '1px 8px', borderRadius: 4, letterSpacing: '0.06em' }}>Nº {numStr}</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${r.status === 'emitido' ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-amber-900'}`}>
+                          {r.status}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.2 }}>Relatório de Evolução Física</div>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>
+                        Semana de {semBR} até {semFim}
+                      </div>
+                    </div>
+                    <button onClick={() => setRefisAberto(null)} style={{ color: 'rgba(255,255,255,0.5)', background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 4 }}>
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Corpo */}
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                  {/* KPIs físicos */}
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: 10 }}>Avanço Físico Acumulado</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Previsto</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#334155' }}>{fPct(prev)}</div>
+                      </div>
+                      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Realizado</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#15803d' }}>{fPct(real)}</div>
+                      </div>
+                      <div style={{ background: desvio >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${desvio >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 10, color: desvio >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Desvio</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: desvio >= 0 ? '#15803d' : '#dc2626' }}>
+                          {desvio >= 0 ? '+' : ''}{fPct(desvio)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Barra de progresso */}
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ height: 8, background: '#e2e8f0', borderRadius: 4, position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(100, prev)}%`, background: '#94a3b8', borderRadius: 4, opacity: 0.6 }} />
+                        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(100, real)}%`, background: desvio >= 0 ? '#22c55e' : '#ef4444', borderRadius: 4 }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Índices de desempenho */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div style={{ background: '#f8fafc', border: `1px solid ${spiV >= 1 ? '#bbf7d0' : (prev === 0 ? '#e2e8f0' : '#fecaca')}`, borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ background: spiV >= 1 ? '#dcfce7' : (prev === 0 ? '#f1f5f9' : '#fee2e2'), borderRadius: 8, padding: 8 }}>
+                        <Activity className={`h-4 w-4 ${spiV >= 1 ? 'text-emerald-600' : (prev === 0 ? 'text-slate-400' : 'text-red-600')}`} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>SPI · Prazo</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: spiV >= 1 ? '#15803d' : (prev === 0 ? '#94a3b8' : '#dc2626'), lineHeight: 1.1 }}>
+                          {prev === 0 ? '—' : spiV.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{spiV >= 1 ? 'No prazo ✓' : (prev === 0 ? 'Sem baseline' : 'Atrasado ⚠')}</div>
+                      </div>
+                    </div>
+                    <div style={{ background: '#f8fafc', border: `1px solid ${cpiV >= 1 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ background: cpiV >= 1 ? '#dcfce7' : '#fee2e2', borderRadius: 8, padding: 8 }}>
+                        <DollarSign className={`h-4 w-4 ${cpiV >= 1 ? 'text-emerald-600' : 'text-red-600'}`} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>CPI · Custo</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: cpiV >= 1 ? '#15803d' : '#dc2626', lineHeight: 1.1 }}>{cpiV.toFixed(2)}</div>
+                        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{cpiV >= 1 ? 'Dentro do orçamento ✓' : 'Acima do orçamento ⚠'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financeiro (só se preenchido) */}
+                  {(cpv > 0 || crv > 0) && (
+                    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 16px' }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#92400e', marginBottom: 8 }}>Custo do Período</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <div style={{ fontSize: 10, color: '#b45309', fontWeight: 600, marginBottom: 2 }}>Previsto</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: '#92400e' }}>{fmt(cpv)}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: '#b45309', fontWeight: 600, marginBottom: 2 }}>Realizado</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: crv > cpv ? '#dc2626' : '#15803d' }}>{fmt(crv)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Avanço semanal */}
+                  {(n(r.avancoSemanalPrevisto) > 0 || n(r.avancoSemanalRealizado) > 0) && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div style={{ background: '#f1f5f9', borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Avanço Semanal Prev.</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#334155' }}>{fPct(n(r.avancoSemanalPrevisto))}</div>
+                      </div>
+                      <div style={{ background: '#f1f5f9', borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Avanço Semanal Real.</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#334155' }}>{fPct(n(r.avancoSemanalRealizado))}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Observações */}
+                  {r.observacoes && (
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px' }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: 6 }}>Observações</p>
+                      <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{r.observacoes}</p>
+                    </div>
+                  )}
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between pt-1">
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                      Emitido em {new Date(r.semana + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setRefisAberto(null)} style={{ fontSize: 12 }}>
+                        Fechar
+                      </Button>
+                      {onVerRefisCompleto && (
+                        <Button size="sm" style={{ background: '#1A3461', color: 'white', fontSize: 12 }}
+                          onClick={() => { setRefisAberto(null); onVerRefisCompleto(r.semana); }}>
+                          <FileText className="h-3.5 w-3.5 mr-1" />
+                          Ver REFIS Completo
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -5627,9 +5802,18 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_ }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_, initialSemana, onInitialSemanaConsumed }: any) {
   const [semana, setSemana] = useState(() => toMonday(new Date()));
   const [obs, setObs] = useState("");
+
+  // Navegação a partir do popup da Visão Geral: pré-selecionar a semana
+  useEffect(() => {
+    if (initialSemana) {
+      setSemana(initialSemana);
+      setObs("");
+      onInitialSemanaConsumed?.();
+    }
+  }, [initialSemana]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [modoMascara, setModoMascara] = useState(false);
   const [analiseDesvio, setAnaliseDesvio] = useState<string | null>(null);
