@@ -7304,37 +7304,53 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 4 — AVANÇO POR GRUPO (Pavimento) — gráfico de barras horizontal
       ══════════════════════════════════════════════════════════════════════ */}
-      {grupos.length > 0 && (
+      {grupos.length > 0 && (() => {
+        const TRUNC4 = 36;
+        const gruposChart = grupos.map((g: any) => ({
+          ...g,
+          nomeChart: g.nome?.length > TRUNC4 ? g.nome.substring(0, TRUNC4 - 1) + "…" : (g.nome ?? ""),
+        }));
+        const maxLenG = Math.max(8, ...gruposChart.map((g: any) => (g.nomeChart || "").length));
+        const yWidthG = Math.min(260, Math.max(140, maxLenG * 6.4));
+        const rowHG = 72;
+        return (
         <div className="refis-block refis-break-before bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-100 border-b border-slate-200 px-5 py-2">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Avanço Físico por Grupo
             </p>
           </div>
-          <div className="px-4 py-3" style={{ height: Math.max(180, grupos.length * 52 + 40) }}>
+          <div className="px-4 py-3" style={{ height: Math.max(200, grupos.length * rowHG + 40) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={grupos}
+                data={gruposChart}
                 layout="vertical"
-                margin={{ top: 4, right: 60, bottom: 4, left: 0 }}
-                barCategoryGap="30%"
-                barGap={2}
+                margin={{ top: 4, right: 64, bottom: 4, left: 4 }}
+                barCategoryGap="28%"
+                barGap={3}
               >
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-                <YAxis type="category" dataKey="nome" tick={{ fontSize: 11 }} width={160} />
-                <Tooltip formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]} />
+                <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="nomeChart" tick={{ fontSize: 10, fill: "#475569" }} width={yWidthG} tickLine={false} axisLine={false} />
+                <Tooltip
+                  formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]}
+                  labelFormatter={(label: string) => {
+                    const g = grupos.find((x: any) => x.nome?.substring(0, TRUNC4 - 1) + "…" === label || x.nome === label);
+                    return g?.nome ?? label;
+                  }}
+                />
                 <Bar dataKey="previsto"  name="previsto"  fill="#FFB800" radius={[0, 3, 3, 0]} maxBarSize={14}>
-                  <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 10, fill: "#CC9000" }} />
+                  <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 10, fill: "#CC9000", fontWeight: 600 }} />
                 </Bar>
                 <Bar dataKey="realizado" name="realizado" fill="#1A3461" radius={[0, 3, 3, 0]} maxBarSize={14}>
-                  <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 10, fill: "#1A3461" }} />
+                  <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 10, fill: "#1A3461", fontWeight: 600 }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 5 — AVANÇO POR ETAPA DENTRO DE CADA GRUPO (pavimento)
@@ -7371,26 +7387,42 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
           {/* Gráfico de barras por etapa */}
           {!isCollapsed && (
+            (() => {
+              const TRUNC5 = 32;
+              const etapasChart = g.etapas.map((e: any) => ({
+                ...e,
+                nomeChart: e.nome?.length > TRUNC5 ? e.nome.substring(0, TRUNC5 - 1) + "…" : (e.nome ?? ""),
+              }));
+              const maxLenE = Math.max(8, ...etapasChart.map((e: any) => (e.nomeChart || "").length));
+              const yWidthE = Math.min(240, Math.max(130, maxLenE * 6.2));
+              const rowHE = 64;
+              return (
             <>
-              <div className="px-4 py-3" style={{ height: Math.max(160, g.etapas.length * 48 + 40) }}>
+              <div className="px-4 py-3" style={{ height: Math.max(160, g.etapas.length * rowHE + 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={g.etapas}
+                    data={etapasChart}
                     layout="vertical"
-                    margin={{ top: 4, right: 60, bottom: 4, left: 0 }}
-                    barCategoryGap="28%"
-                    barGap={2}
+                    margin={{ top: 4, right: 64, bottom: 4, left: 4 }}
+                    barCategoryGap="26%"
+                    barGap={3}
                   >
                     <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f8fafc" />
-                    <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={150} />
-                    <Tooltip formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]} />
+                    <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="nomeChart" tick={{ fontSize: 10, fill: "#475569" }} width={yWidthE} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]}
+                      labelFormatter={(label: string) => {
+                        const e = g.etapas.find((x: any) => x.nome?.substring(0, TRUNC5 - 1) + "…" === label || x.nome === label);
+                        return e?.nome ?? label;
+                      }}
+                    />
                     <Bar dataKey="previsto"  name="previsto"  fill="#6097f8" radius={[0, 3, 3, 0]} maxBarSize={12}>
-                      <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 9, fill: "#3b82f6" }} />
+                      <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 9, fill: "#3b82f6", fontWeight: 600 }} />
                     </Bar>
                     <Bar dataKey="realizado" name="realizado" fill="#34d399" radius={[0, 3, 3, 0]} maxBarSize={12}>
-                      <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${v}%`} style={{ fontSize: 9, fill: "#059669" }} />
-                      {g.etapas.map((e: any) => (
+                      <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 9, fill: "#059669", fontWeight: 600 }} />
+                      {etapasChart.map((e: any) => (
                         <Cell
                           key={e.id}
                           fill={e.realizado >= e.previsto ? "#34d399" : e.previsto - e.realizado > 10 ? "#f87171" : "#fbbf24"}
@@ -7415,7 +7447,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </div>
               )}
             </>
-          )}
+            );
+          })()
+        )}
         </div>
         );
       })}
