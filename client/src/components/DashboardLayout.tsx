@@ -293,7 +293,6 @@ const menuSectionsCompras: MenuSection[] = [
   {
     title: "Cadastros",
     items: [
-      { icon: Truck,           label: "Fornecedores",         path: "/compras/fornecedores"     },
       { icon: Warehouse,       label: "Almoxarifado",         path: "/compras/almoxarifado"     },
     ],
   },
@@ -342,6 +341,7 @@ const menuSectionsCadastro: MenuSection[] = [
       { icon: Scale,         label: "Convenções Coletivas",path: "/convencoes-coletivas" },
       { icon: Wrench,        label: "Habilidades",         path: "/habilidades"          },
       { icon: ClipboardList, label: "Contas Bancárias",    path: "/contas-bancarias"     },
+      { icon: Truck,         label: "Fornecedores",        path: "/compras/fornecedores" },
     ],
   },
 ];
@@ -418,7 +418,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "orcamento":     "/orcamento/painel",
   "planejamento":  "/planejamento",
   "cadastro":      "/empresas",
-  "compras":       "/compras/fornecedores",
+  "compras":       "/compras/solicitacoes",
   "all": "/painel",
 };
 
@@ -813,7 +813,7 @@ function DashboardLayoutContent({
     { id: "orcamento",   label: "Orçamento",      icon: Calculator,  color: "text-cyan-400",    bg: "bg-cyan-500/20",    path: "/orcamento/painel",   canSee: () => isModEnabled("orcamento") },
     { id: "planejamento",label: "Planejamento",   icon: Target,      color: "text-green-400",   bg: "bg-green-500/20",   path: "/planejamento",       canSee: () => isModEnabled("planejamento") },
     { id: "cadastro",    label: "Cadastro",       icon: BookOpen,    color: "text-indigo-400",  bg: "bg-indigo-500/20",  path: "/empresas",           canSee: () => isModEnabled("cadastro") },
-    { id: "compras",     label: "Compras",        icon: ShoppingCart,color: "text-rose-400",    bg: "bg-rose-500/20",    path: "/compras/fornecedores", canSee: () => permIsAdminMaster || isModEnabled("compras") },
+    { id: "compras",     label: "Compras",        icon: ShoppingCart,color: "text-rose-400",    bg: "bg-rose-500/20",    path: "/compras/solicitacoes",  canSee: () => permIsAdminMaster || isModEnabled("compras") },
   ];
   const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
   const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :

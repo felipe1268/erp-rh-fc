@@ -141,9 +141,9 @@ const MODULES: Module[] = [
   },
   {
     id: "cadastro", title: "Cadastro", subtitle: "Gestão de Cadastros",
-    description: "Empresas, colaboradores, obras, setores, funções, relógios de ponto, convenções coletivas e habilidades.",
+    description: "Empresas, colaboradores, obras, setores, funções, relógios de ponto, convenções coletivas, habilidades e fornecedores.",
     icon: BookOpen, accentFrom: "#6366F1", accentTo: "#4F46E5", accentGlow: "rgba(99,102,241,0.35)", iconBg: "rgba(99,102,241,0.12)", path: "/empresas", active: true,
-    features: ["Empresas", "Colaboradores", "Obras", "Setores & Funções", "Relógios de Ponto", "Convenções Coletivas", "Habilidades"],
+    features: ["Empresas", "Colaboradores", "Obras", "Setores & Funções", "Relógios de Ponto", "Convenções Coletivas", "Habilidades", "Fornecedores"],
   },
   {
     id: "financeiro", title: "Financeiro", subtitle: "Gestão Financeira",
@@ -158,9 +158,9 @@ const MODULES: Module[] = [
   },
   {
     id: "compras", title: "Compras", subtitle: "Suprimentos",
-    description: "Fornecedores com CNPJ auto-preenchido, almoxarifado com saldo em tempo real e integração com o Mas Controle ERP.",
-    icon: ShoppingCart, accentFrom: "#F43F5E", accentTo: "#E11D48", accentGlow: "rgba(244,63,94,0.35)", iconBg: "rgba(244,63,94,0.12)", path: "/compras/fornecedores", active: true,
-    features: ["Cadastro de Fornecedores", "Almoxarifado / Estoque", "Importação Mas Controle"],
+    description: "Solicitações de compra com aprovação, cotações comparativas, ordens de compra com totalizadores e almoxarifado com saldo em tempo real.",
+    icon: ShoppingCart, accentFrom: "#F43F5E", accentTo: "#E11D48", accentGlow: "rgba(244,63,94,0.35)", iconBg: "rgba(244,63,94,0.12)", path: "/compras/solicitacoes", active: true,
+    features: ["Solicitações (SC)", "Cotações", "Ordens de Compra (OC)", "Almoxarifado / Estoque"],
   },
   {
     id: "crm", title: "CRM", subtitle: "Gestão de Relacionamento",
