@@ -6599,6 +6599,10 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
   // ── Simulador ────────────────────────────────────────────────────
   const [simMensagem,   setSimMensagem]   = useState("");
   const [simTipo,       setSimTipo]       = useState("acelerar_prazo");
+  const [simContexto,   setSimContexto]   = useState("");
+  const [simParams,     setSimParams]     = useState<Record<string, string>>({});
+  const [simAnalise,    setSimAnalise]    = useState<any>(null);
+  const [simCenSel,     setSimCenSel]     = useState<string | null>(null);
   const [simMonitOpen,  setSimMonitOpen]  = useState<number|null>(null);
   const [simMonitInputs, setSimMonitInputs] = useState({
     avancoReal: "", spiFim: "", custoRealizado: "", observacao: "", status: "no_prazo" as const,
@@ -6611,7 +6615,16 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
 
   const [simError, setSimError] = useState<string | null>(null);
   const simMut = (trpc.iaCronograma as any).simularCenario.useMutation({
-    onSuccess: () => { setSimError(null); refetchSim(); refetchCenarios(); setSimMensagem(""); },
+    onSuccess: (data: any) => {
+      setSimError(null);
+      refetchSim();
+      refetchCenarios();
+      setSimMensagem("");
+      try {
+        const parsed = typeof data?.resposta === "string" ? JSON.parse(data.resposta) : null;
+        if (parsed && parsed.diagnostico) { setSimAnalise(parsed); setSimCenSel(null); }
+      } catch { /* não JSON — análise antiga */ }
+    },
     onError: (e: any) => { setSimError(e?.message ?? "Erro ao conectar com JULINHO. Tente novamente."); },
   });
 
@@ -6683,19 +6696,36 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
     return +(dadosFinanceiros.valorContrato * metricsAtuais.prevAcum / 100).toFixed(0);
   }, [dadosFinanceiros, metricsAtuais]);
 
-  function simularCenario() {
-    if (!simMensagem.trim()) return;
+  function gerarAnalise() {
     const tipoLabel: Record<string, string> = {
-      acelerar_prazo: "Acelerar Prazo", reduzir_custo: "Reduzir Custo",
-      renegociar_escopo: "Renegociar Escopo", contingencia: "Contingência/Risco",
+      acelerar_prazo: "Plano de Recuperação de Prazo",
+      reduzir_custo: "Otimização de Custo e Margem",
+      renegociar_escopo: "Replanejamento de Escopo",
+      contingencia: "Gestão de Contingência e Risco",
     };
+    // Monta descricão estruturada a partir dos parâmetros
+    const linhas: string[] = [];
+    if (simParams.percentRecursos) linhas.push(`Recursos adicionais: ${simParams.percentRecursos}%`);
+    if (simParams.regime) linhas.push(`Regime: ${simParams.regime}`);
+    if (simParams.semanasRecuperar) linhas.push(`Semanas a recuperar: ${simParams.semanasRecuperar}`);
+    if (simParams.atividadesFoco) linhas.push(`Atividades críticas: ${simParams.atividadesFoco}`);
+    if (simParams.percentReducao) linhas.push(`Meta de redução de custo: ${simParams.percentReducao}%`);
+    if (simParams.estrategiaReducao) linhas.push(`Estratégia: ${simParams.estrategiaReducao}`);
+    if (simParams.itensNegociar) linhas.push(`Itens a negociar: ${simParams.itensNegociar}`);
+    if (simParams.valorEstimado) linhas.push(`Valor estimado dos itens: R$ ${simParams.valorEstimado}`);
+    if (simParams.tipoNegociacao) linhas.push(`Tipo: ${simParams.tipoNegociacao}`);
+    if (simParams.eventoContingencia) linhas.push(`Evento: ${simParams.eventoContingencia}`);
+    if (simParams.diasAfetados) linhas.push(`Dias afetados: ${simParams.diasAfetados}`);
+    if (simParams.atividadesImpactadas) linhas.push(`Atividades impactadas: ${simParams.atividadesImpactadas}`);
+    if (simContexto.trim()) linhas.push(`Contexto adicional: ${simContexto.trim()}`);
+    const descricaoFinal = linhas.join(" | ") || "Análise geral sem parâmetros específicos";
     simMut.mutate({
       projetoId,
       sessaoId: simSessaoId,
-      titulo:      tipoLabel[simTipo] ?? "Simulação",
-      descricao:   simMensagem.slice(0, 200),
+      titulo:      tipoLabel[simTipo] ?? "Análise Estratégica",
+      descricao:   descricaoFinal.slice(0, 200),
       tipoCenario: simTipo,
-      mensagem:    simMensagem,
+      mensagem:    descricaoFinal,
       parametros: {
         valorContrato:      dadosFinanceiros.valorContrato,
         custoTotal:         dadosFinanceiros.custoTotal,
@@ -6705,9 +6735,11 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
         spiAtual:           metricsAtuais.spi,
         diasAtrasoAtual:    metricsAtuais.diasAtraso,
         diasRestantesPrazo: metricsAtuais.diasRestantes,
+        ...simParams,
       },
     });
   }
+  function simularCenario() { gerarAnalise(); }
 
   // ── Base de conhecimento ─────────────────────────────────────────
   const { data: conhecimentos = [], refetch: refetchConhecimentos } = (trpc.iaCronograma as any).listarConhecimento.useQuery(
@@ -7027,205 +7059,543 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
       {subTab === "simulador" && (
         <div className="space-y-4">
 
-          {/* ── Situação Atual — compact dark panel ─────────────────── */}
-          <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl p-4 text-white shadow-sm">
-            <p className="text-[10px] uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
-              <Activity className="h-3 w-3 text-amber-400" /> Situação atual da obra
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div>
-                <p className="text-[10px] text-slate-400 mb-0.5">Desvio Físico</p>
-                <p className={`text-2xl font-black ${metricsAtuais.desvio < 0 ? "text-red-400" : "text-emerald-400"}`}>
-                  {metricsAtuais.desvio >= 0 ? "+" : ""}{metricsAtuais.desvio.toFixed(1)}pp
-                </p>
-                <p className="text-[10px] text-slate-400">SPI {metricsAtuais.spi.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400 mb-0.5">Atraso Estimado</p>
-                <p className={`text-2xl font-black ${metricsAtuais.diasAtraso > 0 ? "text-red-400" : "text-emerald-400"}`}>
-                  {metricsAtuais.diasAtraso > 0 ? `~${metricsAtuais.diasAtraso}d` : "No prazo"}
-                </p>
-                <p className="text-[10px] text-slate-400">
-                  {metricsAtuais.diasRestantes !== null ? `${metricsAtuais.diasRestantes}d restantes` : "Prazo não informado"}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400 mb-0.5">Contrato</p>
-                <p className="text-lg font-bold">{dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato) : "—"}</p>
-                <p className="text-[10px] text-slate-400">Custo {dadosFinanceiros.custoTotal > 0 ? fmt(dadosFinanceiros.custoTotal) : "—"}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400 mb-0.5">Margem Bruta</p>
-                <p className={`text-2xl font-black ${dadosFinanceiros.margemPerc < 5 ? "text-red-400" : dadosFinanceiros.margemPerc < 15 ? "text-amber-400" : "text-emerald-400"}`}>
-                  {dadosFinanceiros.valorContrato > 0 ? `${dadosFinanceiros.margemPerc}%` : "—"}
-                </p>
-                <p className="text-[10px] text-slate-400">
-                  {dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato - dadosFinanceiros.custoTotal) : "Orçamento não configurado"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Grid: Formulário + Chat ─────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-            {/* Formulário simplificado */}
-            <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col">
-              <div className="border-b border-slate-100 px-4 py-3">
-                <p className="text-xs font-bold text-slate-700 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-amber-400" /> O que você quer simular?
-                </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">JULINHO analisa prazo e financeiro juntos — escolha um cenário</p>
-              </div>
-              <div className="p-4 space-y-4 flex-1">
-                {/* Tipo do cenário */}
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: "acelerar_prazo",    emoji: "⏱", label: "Acelerar Prazo",      desc: "Horas extras, equipe adicional" },
-                    { id: "reduzir_custo",     emoji: "💰", label: "Reduzir Custo",       desc: "Otimizar recursos e contratos" },
-                    { id: "renegociar_escopo", emoji: "📋", label: "Renegociar Escopo",   desc: "Eliminar ou postergar itens" },
-                    { id: "contingencia",      emoji: "🆘", label: "Contingência/Risco",  desc: "Plano B para imprevistos" },
-                  ].map(op => (
-                    <button key={op.id} onClick={() => setSimTipo(op.id)}
-                      className={`text-left px-3 py-2.5 rounded-xl border-2 transition-all ${simTipo === op.id ? "border-purple-500 bg-purple-50" : "border-slate-200 hover:border-slate-300 bg-white"}`}>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base">{op.emoji}</span>
-                        <span className={`text-[11px] font-bold ${simTipo === op.id ? "text-purple-700" : "text-slate-700"}`}>{op.label}</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5 ml-5">{op.desc}</p>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Textarea */}
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-600">Descreva o que você quer fazer</label>
-                  <textarea value={simMensagem} onChange={e => setSimMensagem(e.target.value)}
-                    placeholder={
-                      simTipo === "acelerar_prazo"    ? "Ex: Adicionar 2ª equipe de armação e fazer horas extras aos sábados para recuperar 3 semanas..." :
-                      simTipo === "reduzir_custo"     ? "Ex: Substituir o fornecedor de aço por outro 12% mais barato sem perder qualidade..." :
-                      simTipo === "renegociar_escopo" ? "Ex: Excluir o paisagismo e postergar o acabamento das áreas externas para adendo futuro..." :
-                      "Ex: Chuva forte paralisou 40% da obra por 2 semanas — qual o impacto e plano de recuperação?"
-                    }
-                    className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    rows={4} />
-                </div>
-
-                <Button className="w-full bg-gradient-to-r from-purple-700 to-slate-800 hover:from-purple-800 hover:to-slate-900 gap-2 text-white"
-                  disabled={simMut.isPending || !simMensagem.trim()}
-                  onClick={simularCenario}>
-                  {simMut.isPending
-                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando prazo · custo · margem...</>
-                    : <><Zap className="h-3.5 w-3.5 text-amber-400" /> Simular com JULINHO</>}
-                </Button>
-              </div>
-            </div>
-
-            {/* Chat JULINHO */}
-            <div className="bg-white border border-slate-100 rounded-xl shadow-sm flex flex-col" style={{ minHeight: 420 }}>
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 text-xs text-slate-500">
-                <Brain className="h-3.5 w-3.5 text-purple-500" />
-                <span className="font-semibold text-purple-700">Análise JULINHO</span>
-                <span className="text-slate-300">·</span>
-                <span>Prazo + Custo + Caixa + Margem</span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {historicoSim.length === 0 && !simMut.isPending && (
-                  <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-8">
-                    <div className="relative">
-                      <img src="/julinho-3d.png" alt="JULINHO" className="h-20 w-20 object-contain drop-shadow-xl" />
-                      <span className="absolute -bottom-1 -right-1 bg-amber-400 rounded-full p-0.5"><Zap className="h-3.5 w-3.5 text-white" /></span>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-600">JULINHO — Simulador Integrado</p>
-                      <p className="text-[11px] text-slate-400 mt-1 max-w-[220px]">
-                        Escolha o tipo de cenário e descreva o que quer fazer. JULINHO analisa prazo e financeiro juntos.
-                      </p>
-                    </div>
-                    <div className="flex flex-col gap-1.5 text-[10px] text-slate-500 w-full max-w-[240px]">
-                      {["⏱ Impacto no prazo — dias ganhos ou perdidos", "💰 Custo do cenário e projeção de margem", "🏦 Impacto no caixa e nas próximas medições", "✅ Após aprovação — monitoramento semanal"].map((h, i) => (
-                        <div key={i} className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-3 py-1.5 text-left">{h}</div>
-                      ))}
-                    </div>
+          {/* ── Painel de Status — barra de situação ───────────────────── */}
+          {(() => {
+            const crit = metricsAtuais.desvio < -5 ? "critico" : metricsAtuais.desvio < -2 ? "alto" : metricsAtuais.desvio < 0 ? "medio" : "baixo";
+            const critCfg: Record<string, { label: string; dot: string; bar: string }> = {
+              baixo:   { label: "SITUAÇÃO CONTROLADA", dot: "bg-emerald-400", bar: "bg-gradient-to-r from-slate-900 to-slate-700" },
+              medio:   { label: "ATENÇÃO — DESVIO LEVE", dot: "bg-amber-400",  bar: "bg-gradient-to-r from-slate-900 to-amber-900" },
+              alto:    { label: "ALERTA — DESVIO RELEVANTE", dot: "bg-orange-400", bar: "bg-gradient-to-r from-slate-900 to-orange-900" },
+              critico: { label: "CRÍTICO — AÇÃO IMEDIATA", dot: "bg-red-500",   bar: "bg-gradient-to-r from-slate-900 to-red-900" },
+            };
+            const cfg = critCfg[crit];
+            return (
+              <div className={`${cfg.bar} rounded-xl px-5 py-4 text-white shadow-lg`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot} animate-pulse`} />
+                    <span className="text-[10px] font-bold tracking-widest text-white/60 uppercase">Motor de Decisão Estratégica</span>
                   </div>
-                )}
-                {historicoSim.map((m: any, i: number) => {
-                  const isLastAssistant = m.role === "assistant" && i === historicoSim.length - 1;
-                  const aprovado = cenarios.find((c: any) => c.status === "aprovado" && c.resultadoIA === m.conteudo);
-                  return (
-                    <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                      {m.role === "assistant" && (
-                        <div className="flex gap-2 max-w-full">
-                          <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain shrink-0 mt-1 drop-shadow" />
-                          <div className="flex-1">
-                            <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3 text-slate-700">
-                              <ReactMarkdownSimple text={m.conteudo} />
-                            </div>
-                            {isLastAssistant && !aprovado && (
-                              <button
-                                onClick={() => {
-                                  const ultimo = [...cenarios].find((c: any) => c.status !== "aprovado" && c.status !== "rejeitado");
-                                  if (ultimo) aprovarMut.mutate({ cenarioId: ultimo.id, planoAcao: m.conteudo });
-                                }}
-                                disabled={aprovarMut.isPending}
-                                className="mt-2 flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-all">
-                                {aprovarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                Aprovar Plano de Ação
-                              </button>
-                            )}
-                            {isLastAssistant && aprovado && (
-                              <div className="mt-2 flex items-center gap-1.5 text-emerald-700 text-[11px] font-semibold bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Plano aprovado · veja o monitoramento abaixo
-                              </div>
-                            )}
+                  <span className={`text-[10px] font-black tracking-wider px-2.5 py-1 rounded-full ${crit === "baixo" ? "bg-emerald-500/20 text-emerald-300" : crit === "medio" ? "bg-amber-500/20 text-amber-300" : crit === "alto" ? "bg-orange-500/20 text-orange-300" : "bg-red-500/20 text-red-300"}`}>
+                    {cfg.label}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+                  <div>
+                    <p className="text-[10px] text-white/50 mb-0.5">Desvio Físico</p>
+                    <p className={`text-3xl font-black tracking-tight ${metricsAtuais.desvio < 0 ? "text-red-400" : "text-emerald-400"}`}>
+                      {metricsAtuais.desvio >= 0 ? "+" : ""}{metricsAtuais.desvio.toFixed(1)}<span className="text-lg">pp</span>
+                    </p>
+                    <p className="text-[10px] text-white/40 mt-0.5">SPI: {metricsAtuais.prevAcum > 0 ? metricsAtuais.spi.toFixed(2) : "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-white/50 mb-0.5">Prazo</p>
+                    <p className={`text-2xl font-black ${metricsAtuais.diasAtraso > 0 ? "text-red-400" : "text-emerald-400"}`}>
+                      {metricsAtuais.diasAtraso > 0 ? `~${metricsAtuais.diasAtraso}d` : "No prazo"}
+                    </p>
+                    <p className="text-[10px] text-white/40 mt-0.5">{metricsAtuais.diasRestantes != null ? `${metricsAtuais.diasRestantes}d restantes` : "Prazo n/d"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-white/50 mb-0.5">Contrato</p>
+                    <p className="text-xl font-bold text-white">{dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato) : "—"}</p>
+                    <p className="text-[10px] text-white/40 mt-0.5">Custo: {dadosFinanceiros.custoTotal > 0 ? fmt(dadosFinanceiros.custoTotal) : "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-white/50 mb-0.5">Margem Bruta</p>
+                    <p className={`text-3xl font-black ${dadosFinanceiros.margemPerc < 5 ? "text-red-400" : dadosFinanceiros.margemPerc < 15 ? "text-amber-400" : "text-emerald-400"}`}>
+                      {dadosFinanceiros.valorContrato > 0 ? `${dadosFinanceiros.margemPerc}%` : "—"}
+                    </p>
+                    <p className="text-[10px] text-white/40 mt-0.5">{dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato - dadosFinanceiros.custoTotal) : "Orçamento n/d"}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Grid Principal: Controle + Relatório ───────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-4">
+
+            {/* ── PAINEL ESQUERDO: Centro de Controle ───────────── */}
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
+              <div className="bg-slate-800 px-4 py-3">
+                <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Centro de Controle</p>
+                <p className="text-sm font-bold text-white mt-0.5">Configurar Análise Estratégica</p>
+              </div>
+              <div className="p-4 space-y-5 flex-1 overflow-y-auto">
+
+                {/* Tipo de decisão */}
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo de Decisão</p>
+                  <div className="space-y-1.5">
+                    {[
+                      { id: "acelerar_prazo",    label: "Plano de Recuperação de Prazo",   sub: "Mobilizar recursos, turnos, horas extras para recuperar cronograma" },
+                      { id: "reduzir_custo",     label: "Otimização de Custo e Margem",    sub: "Renegociar fornecedores, redistribuir equipe, cortar ineficiências" },
+                      { id: "renegociar_escopo", label: "Replanejamento de Escopo",        sub: "Eliminar, postergar ou substituir itens por questão técnica ou comercial" },
+                      { id: "contingencia",      label: "Gestão de Contingência e Risco",  sub: "Avaliar impacto de imprevistos e definir plano B de recuperação" },
+                    ].map(op => (
+                      <button key={op.id}
+                        onClick={() => { setSimTipo(op.id); setSimParams({}); }}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${simTipo === op.id ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:border-slate-300 bg-white"}`}>
+                        <div className="flex items-start gap-2.5">
+                          <span className={`mt-0.5 w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 ${simTipo === op.id ? "border-blue-600 bg-blue-600" : "border-slate-300"}`} />
+                          <div>
+                            <p className={`text-[11px] font-bold leading-tight ${simTipo === op.id ? "text-blue-800" : "text-slate-700"}`}>{op.label}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{op.sub}</p>
                           </div>
                         </div>
-                      )}
-                      {m.role === "user" && (
-                        <div className="bg-slate-700 text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-xs max-w-[80%]">
-                          {m.conteudo}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {simMut.isPending && (
-                  <div className="flex gap-2 items-end">
-                    <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain shrink-0 drop-shadow" />
-                    <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-3 space-y-1">
-                      <div className="flex gap-1">
-                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </div>
-                      <p className="text-[10px] text-purple-600">Analisando prazo · custo · caixa · margem...</p>
-                    </div>
+                      </button>
+                    ))}
                   </div>
-                )}
-                {simError && !simMut.isPending && (
-                  <div className="flex gap-2 justify-start">
-                    <img src="/julinho-3d.png" alt="JULINHO" className="h-9 w-9 object-contain shrink-0 mt-1 drop-shadow" />
-                    <div className="bg-red-50 border border-red-200 rounded-2xl rounded-tl-none px-4 py-3 max-w-xs">
-                      <p className="text-xs text-red-700 font-semibold">⚠️ JULINHO não conseguiu responder</p>
-                      <p className="text-[11px] text-red-500 mt-1">{simError}</p>
+                </div>
+
+                {/* Parâmetros dinâmicos por tipo */}
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Parâmetros</p>
+                  <div className="space-y-3">
+                    {simTipo === "acelerar_prazo" && (<>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-medium">Recursos adicionais (%)</label>
+                          <input type="number" min="5" max="200" placeholder="Ex: 30"
+                            value={simParams.percentRecursos ?? ""}
+                            onChange={e => setSimParams(p => ({ ...p, percentRecursos: e.target.value }))}
+                            className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-medium">Semanas a recuperar</label>
+                          <input type="number" min="1" max="52" placeholder="Ex: 3"
+                            value={simParams.semanasRecuperar ?? ""}
+                            onChange={e => setSimParams(p => ({ ...p, semanasRecuperar: e.target.value }))}
+                            className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-medium">Regime de trabalho</label>
+                        <select value={simParams.regime ?? ""}
+                          onChange={e => setSimParams(p => ({ ...p, regime: e.target.value }))}
+                          className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+                          <option value="">Selecione...</option>
+                          <option>Horas extras diárias (+2h/dia)</option>
+                          <option>Horas extras + trabalho aos sábados</option>
+                          <option>Turno noturno adicional</option>
+                          <option>Segunda equipe completa em paralelo</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-medium">Atividades críticas a focar</label>
+                        <input type="text" placeholder="Ex: Armação, concretagem de laje, fundações"
+                          value={simParams.atividadesFoco ?? ""}
+                          onChange={e => setSimParams(p => ({ ...p, atividadesFoco: e.target.value }))}
+                          className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      </div>
+                    </>)}
+                    {simTipo === "reduzir_custo" && (<>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-medium">Meta de redução (%)</label>
+                          <input type="number" min="1" max="50" placeholder="Ex: 12"
+                            value={simParams.percentReducao ?? ""}
+                            onChange={e => setSimParams(p => ({ ...p, percentReducao: e.target.value }))}
+                            className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-medium">Valor a cortar (R$)</label>
+                          <input type="number" placeholder="Ex: 80000"
+                            value={simParams.valorCorte ?? ""}
+                            onChange={e => setSimParams(p => ({ ...p, valorCorte: e.target.value }))}
+                            className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-medium">Estratégia principal</label>
+                        <select value={simParams.estrategiaReducao ?? ""}
+                          onChange={e => setSimParams(p => ({ ...p, estrategiaReducao: e.target.value }))}
+                          className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+                          <option value="">Selecione...</option>
+                          <option>Renegociar fornecedores e contratos vigentes</option>
+                          <option>Reduzir equipe nas atividades já concluídas</option>
+                          <option>Subcontratar serviços atualmente internos</option>
+                          <option>Eliminar horas extras desnecessárias</option>
+                          <option>Trocar especificações por similares mais baratos</option>
+                        </select>
+                      </div>
+                    </>)}
+                    {simTipo === "renegociar_escopo" && (<>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-medium">Itens/serviços a negociar</label>
+                        <input type="text" placeholder="Ex: Paisagismo, acabamento áreas externas, cob. metálica"
+                          value={simParams.itensNegociar ?? ""}
+                          onChange={e => setSimParams(p => ({ ...p, itensNegociar: e.target.value }))}
+                          className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-medium">Valor estimado (R$)</label>
+                          <input type="number" placeholder="Ex: 150000"
+                            value={simParams.valorEstimado ?? ""}
+                            onChange={e => setSimParams(p => ({ ...p, valorEstimado: e.target.value }))}
+                            className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-medium">Tipo de negociação</label>
+                          <select value={simParams.tipoNegociacao ?? ""}
+                            onChange={e => setSimParams(p => ({ ...p, tipoNegociacao: e.target.value }))}
+                            className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <option value="">Selecione...</option>
+                            <option>Eliminar do contrato</option>
+                            <option>Postergar para adendo futuro</option>
+                            <option>Substituir por alternativa</option>
+                            <option>Transferir para cliente como extra</option>
+                          </select>
+                        </div>
+                      </div>
+                    </>)}
+                    {simTipo === "contingencia" && (<>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-medium">Tipo de imprevisto</label>
+                        <select value={simParams.eventoContingencia ?? ""}
+                          onChange={e => setSimParams(p => ({ ...p, eventoContingencia: e.target.value }))}
+                          className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+                          <option value="">Selecione...</option>
+                          <option>Chuvas / inundação prolongada</option>
+                          <option>Greve de trabalhadores</option>
+                          <option>Falta ou atraso de material crítico</option>
+                          <option>Falência / abandono de fornecedor</option>
+                          <option>Acidente de trabalho com paralisação</option>
+                          <option>Interferência de terceiros / embargo</option>
+                          <option>Projeto incompleto / revisão de engenharia</option>
+                          <option>Variação de preço / inflação de insumos</option>
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-medium">Dias de paralisação</label>
+                          <input type="number" min="1" placeholder="Ex: 14"
+                            value={simParams.diasAfetados ?? ""}
+                            onChange={e => setSimParams(p => ({ ...p, diasAfetados: e.target.value }))}
+                            className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 font-medium">% da obra afetada</label>
+                          <input type="number" min="1" max="100" placeholder="Ex: 40"
+                            value={simParams.pctAfetado ?? ""}
+                            onChange={e => setSimParams(p => ({ ...p, pctAfetado: e.target.value }))}
+                            className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-medium">Atividades impactadas</label>
+                        <input type="text" placeholder="Ex: Concretagem, armação, escavação"
+                          value={simParams.atividadesImpactadas ?? ""}
+                          onChange={e => setSimParams(p => ({ ...p, atividadesImpactadas: e.target.value }))}
+                          className="mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      </div>
+                    </>)}
+                  </div>
+                </div>
+
+                {/* Contexto adicional */}
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Contexto Adicional (opcional)</label>
+                  <textarea
+                    value={simContexto}
+                    onChange={e => setSimContexto(e.target.value)}
+                    placeholder="Qualquer informação relevante: restrições contratuais, condicionantes do cliente, negociações em andamento..."
+                    className="mt-1.5 w-full border border-slate-200 rounded-md px-2.5 py-2 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    rows={3} />
+                </div>
+
+                {simError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-xs text-red-700 flex items-start gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-red-500" />
+                    <div>
+                      <p className="font-semibold">Erro na análise</p>
+                      <p className="text-red-500 mt-0.5">{simError}</p>
                       <button onClick={() => setSimError(null)} className="text-[10px] text-red-400 underline mt-1">Fechar</button>
                     </div>
                   </div>
                 )}
+
+                <Button
+                  className="w-full bg-gradient-to-r from-slate-900 to-blue-900 hover:from-slate-800 hover:to-blue-800 text-white font-bold gap-2 h-11 shadow-md"
+                  disabled={simMut.isPending}
+                  onClick={gerarAnalise}>
+                  {simMut.isPending
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Analisando {simTipo === "acelerar_prazo" ? "prazo" : simTipo === "reduzir_custo" ? "custos" : simTipo === "renegociar_escopo" ? "escopo" : "contingência"}...</>
+                    : <><Brain className="h-4 w-4 text-blue-300" /> Gerar Análise Estratégica</>}
+                </Button>
+                <p className="text-[10px] text-slate-400 text-center -mt-2">JULINHO compara 3 cenários e recomenda o melhor</p>
               </div>
-              {historicoSim.length > 0 && !simMut.isPending && (
-                <div className="border-t border-slate-100 p-3 flex gap-2">
-                  <input value={simMensagem} onChange={e => setSimMensagem(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") simularCenario(); }}
-                    placeholder="Aprofunde: e se reduzir equipe? e se antecipar a medição?"
-                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                  <button onClick={simularCenario} disabled={simMut.isPending || !simMensagem.trim()}
-                    className="bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white rounded-lg px-3 py-2">
-                    <Send className="h-4 w-4" />
-                  </button>
+            </div>
+
+            {/* ── PAINEL DIREITO: Relatório de Decisão ──────────── */}
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden" style={{ minHeight: 540 }}>
+              <div className="bg-slate-800 px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">JULINHO — Motor de Análise</p>
+                  <p className="text-sm font-bold text-white mt-0.5">Relatório de Decisão Estratégica</p>
                 </div>
-              )}
+                {simAnalise && (
+                  <button onClick={() => { setSimAnalise(null); setSimCenSel(null); }}
+                    className="text-[10px] text-slate-400 hover:text-white border border-slate-600 rounded-md px-2.5 py-1 transition-all">
+                    Nova análise
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+
+                {/* ── Estado: Sem análise ── */}
+                {!simAnalise && !simMut.isPending && (
+                  <div className="h-full flex flex-col justify-between p-6">
+                    <div className="text-center py-4">
+                      <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                        <Brain className="h-7 w-7 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-700">Configure e gere a análise</p>
+                      <p className="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
+                        JULINHO irá comparar 3 cenários estratégicos com impactos quantificados em prazo, custo, margem e caixa — e recomendar o melhor para a sua situação.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                      {[
+                        { icon: <TrendingDown className="h-4 w-4 text-blue-500" />, label: "Impacto no Prazo", desc: "Dias ganhos/perdidos com SPI projetado" },
+                        { icon: <DollarSign className="h-4 w-4 text-emerald-500" />, label: "Custo do Cenário", desc: "Custo adicional e projeção de margem bruta" },
+                        { icon: <BarChart3 className="h-4 w-4 text-amber-500" />, label: "Fluxo de Caixa", desc: "Efeito nas próximas medições e faturamento" },
+                        { icon: <CheckCircle2 className="h-4 w-4 text-purple-500" />, label: "Ações Imediatas", desc: "O que fazer esta semana, com responsável" },
+                      ].map((item, i) => (
+                        <div key={i} className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex gap-2.5">
+                          <div className="mt-0.5 shrink-0">{item.icon}</div>
+                          <div>
+                            <p className="text-[11px] font-bold text-slate-700">{item.label}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{item.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {cenarios.filter((c: any) => c.status !== "aprovado").length > 0 && (
+                      <div className="mt-5 border-t border-slate-100 pt-4">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Análises anteriores</p>
+                        <div className="space-y-1.5">
+                          {cenarios.filter((c: any) => c.status !== "aprovado").slice(0, 3).map((c: any) => {
+                            let parsed: any = null;
+                            try { parsed = JSON.parse(c.resultadoIA ?? ""); } catch {}
+                            return (
+                              <div key={c.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-[11px] font-semibold text-slate-700 truncate">{c.titulo}</p>
+                                  <p className="text-[10px] text-slate-400">{new Date(c.criadoEm).toLocaleDateString("pt-BR")} · {c.criadoPor}</p>
+                                </div>
+                                <div className="flex gap-1.5 shrink-0">
+                                  {parsed?.diagnostico && (
+                                    <button onClick={() => { setSimAnalise(parsed); setSimCenSel(null); }}
+                                      className="text-[10px] text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 rounded px-2 py-1 font-semibold">Ver</button>
+                                  )}
+                                  <button onClick={() => aprovarMut.mutate({ cenarioId: c.id, planoAcao: c.resultadoIA ?? "" })}
+                                    disabled={aprovarMut.isPending}
+                                    className="text-[10px] text-emerald-600 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded px-2 py-1 font-semibold">Aprovar</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Estado: Analisando ── */}
+                {simMut.isPending && (
+                  <div className="h-full flex flex-col items-center justify-center p-8 gap-5">
+                    <div className="relative">
+                      <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                      <img src="/julinho-3d.png" alt="JULINHO" className="absolute inset-0 m-auto h-8 w-8 object-contain" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-slate-700">JULINHO Analisando...</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Comparando 3 cenários estratégicos</p>
+                    </div>
+                    <div className="space-y-2 w-full max-w-xs">
+                      {["Avaliando situação atual da obra", "Calculando impactos no prazo e custo", "Comparando alternativas estratégicas", "Formulando recomendação e ações"].map((step, i) => (
+                        <div key={i} className="flex items-center gap-2.5 bg-slate-50 rounded-lg px-3 py-2">
+                          <Loader2 className="h-3 w-3 text-blue-500 animate-spin shrink-0" />
+                          <span className="text-[11px] text-slate-600">{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Estado: Resultado estruturado ── */}
+                {simAnalise && !simMut.isPending && (() => {
+                  const a = simAnalise;
+                  const critMap: Record<string, { label: string; bg: string; text: string; border: string }> = {
+                    baixo:   { label: "Baixa Criticidade", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
+                    medio:   { label: "Criticidade Média", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
+                    alto:    { label: "Alta Criticidade",  bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
+                    critico: { label: "Nível Crítico",     bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
+                  };
+                  const viabMap: Record<string, string> = { alta: "text-emerald-700 bg-emerald-50 border-emerald-200", media: "text-amber-700 bg-amber-50 border-amber-200", baixa: "text-red-700 bg-red-50 border-red-200" };
+                  const cc = critMap[a.diagnostico?.criticidade] ?? critMap.medio;
+                  const ultimoCenario = [...cenarios].find((c: any) => c.status !== "aprovado" && c.status !== "rejeitado");
+                  return (
+                    <div className="p-5 space-y-5">
+
+                      {/* Bloco 1: Diagnóstico */}
+                      <div className={`rounded-xl border ${cc.border} ${cc.bg} p-4`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${cc.text}`}>Diagnóstico da Obra</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cc.border} ${cc.bg} ${cc.text}`}>{cc.label}</span>
+                        </div>
+                        <p className="text-[12px] text-slate-800 font-medium leading-relaxed">{a.diagnostico?.resumo}</p>
+                        {a.diagnostico?.causaRaiz && (
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="bg-white/60 rounded-lg px-3 py-2">
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Causa Raiz</p>
+                              <p className="text-[11px] text-slate-700">{a.diagnostico.causaRaiz}</p>
+                            </div>
+                            <div className="bg-white/60 rounded-lg px-3 py-2">
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Se Não Agir</p>
+                              <p className="text-[11px] text-slate-700">{a.diagnostico.alertaPrincipal}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bloco 2: Comparativo de Cenários */}
+                      {a.cenarios?.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Comparativo de Cenários</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {(a.cenarios as any[]).map((cen: any) => {
+                              const isRec = cen.id === a.recomendado;
+                              const isSel = simCenSel === cen.id;
+                              return (
+                                <div key={cen.id}
+                                  onClick={() => setSimCenSel(isSel ? null : cen.id)}
+                                  className={`relative rounded-xl border-2 p-3 cursor-pointer transition-all ${isRec ? "border-blue-600 bg-blue-50 shadow-md" : isSel ? "border-slate-500 bg-slate-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                                  {isRec && (
+                                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full tracking-wider uppercase whitespace-nowrap">
+                                      Recomendado
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black ${isRec ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"}`}>{cen.id}</span>
+                                    <p className={`text-[11px] font-bold leading-tight ${isRec ? "text-blue-800" : "text-slate-700"}`}>{cen.nome}</p>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 mb-2 leading-relaxed">{cen.abordagem}</p>
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-[9px] text-slate-400 uppercase">Impacto prazo</span>
+                                      <span className={`text-[11px] font-bold ${cen.diasImpacto > 0 ? "text-emerald-600" : cen.diasImpacto < 0 ? "text-red-600" : "text-slate-500"}`}>
+                                        {cen.diasImpacto > 0 ? `+${cen.diasImpacto}d` : cen.diasImpacto < 0 ? `${cen.diasImpacto}d` : "neutro"}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-[9px] text-slate-400 uppercase">Custo adicional</span>
+                                      <span className="text-[11px] font-bold text-slate-700">
+                                        {cen.custoAdicional > 0 ? fmt(cen.custoAdicional) : cen.custoAdicional === 0 ? "—" : fmt(Math.abs(cen.custoAdicional)) + " ↘"}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-[9px] text-slate-400 uppercase">Nova margem</span>
+                                      <span className={`text-[11px] font-bold ${cen.novaMargemPerc < 10 ? "text-red-600" : cen.novaMargemPerc < 20 ? "text-amber-600" : "text-emerald-600"}`}>
+                                        {cen.novaMargemPerc > 0 ? `${cen.novaMargemPerc.toFixed(1)}%` : "—"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {/* Detalhes expandidos */}
+                                  {isSel && (
+                                    <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
+                                      {cen.prazoResultante && <p className="text-[10px] text-slate-600"><strong>Prazo:</strong> {cen.prazoResultante}</p>}
+                                      {cen.impactoCaixa && <p className="text-[10px] text-slate-600"><strong>Caixa:</strong> {cen.impactoCaixa}</p>}
+                                      {cen.riscos && <p className="text-[10px] text-slate-600"><strong>Riscos:</strong> {cen.riscos}</p>}
+                                      <div className="grid grid-cols-2 gap-1.5">
+                                        <div className="bg-emerald-50 border border-emerald-200 rounded px-2 py-1.5">
+                                          <p className="text-[9px] text-emerald-600 font-bold mb-0.5">Pró</p>
+                                          <p className="text-[10px] text-slate-700">{cen.pro}</p>
+                                        </div>
+                                        <div className="bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                                          <p className="text-[9px] text-red-600 font-bold mb-0.5">Contra</p>
+                                          <p className="text-[10px] text-slate-700">{cen.contra}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Viabilidade badge */}
+                                  <div className="mt-2 flex items-center justify-between">
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${viabMap[cen.viabilidade] ?? viabMap.media}`}>
+                                      Viab. {cen.viabilidade}
+                                    </span>
+                                    <span className="text-[9px] text-slate-400">{isSel ? "▲ menos" : "▼ detalhes"}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bloco 3: Justificativa */}
+                      {a.justificativa && (
+                        <div className="bg-blue-900 rounded-xl p-4">
+                          <p className="text-[9px] font-black text-blue-300 uppercase tracking-widest mb-1.5">Recomendação JULINHO — Cenário {a.recomendado}</p>
+                          <p className="text-[12px] text-white leading-relaxed font-medium">{a.justificativa}</p>
+                        </div>
+                      )}
+
+                      {/* Bloco 4: Ações Imediatas */}
+                      {a.acoesImediatas?.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2.5">Ações Esta Semana</p>
+                          <div className="space-y-2">
+                            {(a.acoesImediatas as string[]).map((acao, i) => (
+                              <div key={i} className="flex gap-3 items-start bg-slate-50 border border-slate-100 rounded-lg px-3 py-2.5">
+                                <span className="w-5 h-5 rounded-full bg-slate-800 text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                                <p className="text-[11px] text-slate-700 leading-relaxed">{acao}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bloco 5: Indicadores */}
+                      {a.indicadores?.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2.5">Indicadores de Controle</p>
+                          <div className="grid grid-cols-1 gap-1.5">
+                            {(a.indicadores as string[]).map((kpi, i) => (
+                              <div key={i} className="flex gap-2.5 items-start">
+                                <Activity className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                                <p className="text-[11px] text-slate-600">{kpi}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Botões de aprovação */}
+                      {ultimoCenario && (
+                        <div className="border-t border-slate-100 pt-4">
+                          <p className="text-[10px] text-slate-400 mb-2.5">Selecione o cenário a implementar:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {(a.cenarios as any[]).map((cen: any) => (
+                              <button key={cen.id}
+                                onClick={() => aprovarMut.mutate({ cenarioId: ultimoCenario.id, planoAcao: `Cenário ${cen.id} — ${cen.nome}\n\n${a.justificativa}\n\nAções:\n${(a.acoesImediatas ?? []).join("\n")}` })}
+                                disabled={aprovarMut.isPending}
+                                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${cen.id === a.recomendado ? "bg-blue-700 hover:bg-blue-800 text-white shadow-md" : "bg-slate-100 hover:bg-slate-200 text-slate-700"}`}>
+                                {aprovarMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                                Aprovar Cenário {cen.id}
+                                {cen.id === a.recomendado && <span className="text-[8px] bg-white/20 rounded px-1 ml-0.5">★ REC.</span>}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
 
