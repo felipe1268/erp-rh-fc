@@ -1,1 +1,0 @@
-ALTER TABLE `companies` ADD `numerosProibidos` varchar(500) DEFAULT '13,17,22,24,69,171,666';
