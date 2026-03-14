@@ -256,6 +256,7 @@ export default function Epis() {
     epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0],
     motivo: "", observacoes: "", motivoTroca: "", obraId: "",
     origemEntrega: "central" as "central" | "obra",
+    origemObraId: "", // obra da qual o estoque será retirado (quando origemEntrega === 'obra')
   });
 
   // Transferência form state
@@ -418,7 +419,7 @@ export default function Epis() {
   const TAMANHOS_ROUPA = ['Único', 'PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
   const TAMANHOS_CALCADO = ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
   function resetEntregaForm() {
-    setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "", obraId: "", origemEntrega: "central" });
+    setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "", obraId: "", origemEntrega: "central", origemObraId: "" });
     setFotoEstado({ file: null, preview: "" });
   }
   function resetTransForm() {
@@ -1080,11 +1081,12 @@ export default function Epis() {
                   onValueChange={v => {
                     // Auto-selecionar origem 'obra' se funcionário já selecionado está em obra com estoque
                     let origemEntrega = entregaForm.origemEntrega;
+                    let origemObraId = entregaForm.origemObraId;
                     if (entregaForm.obraId && v) {
                       const temEstoqueObra = estoqueObraList2.some((e: any) => e.epiId === parseInt(v) && e.obraId === parseInt(entregaForm.obraId) && e.quantidade > 0);
-                      if (temEstoqueObra) origemEntrega = 'obra';
+                      if (temEstoqueObra) { origemEntrega = 'obra'; origemObraId = entregaForm.obraId; }
                     }
-                    setEntregaForm(f => ({ ...f, epiId: v, origemEntrega }));
+                    setEntregaForm(f => ({ ...f, epiId: v, origemEntrega, origemObraId }));
                   }}
                   placeholder="Selecione o EPI..."
                   searchPlaceholder="Buscar por nome ou CA..."
@@ -1104,13 +1106,14 @@ export default function Epis() {
                   onValueChange={v => {
                     const emp = employeesList.find((e: any) => String(e.id) === v);
                     const obraId = emp?.obraAtualId ? String(emp.obraAtualId) : "";
-                    // Auto-selecionar origem 'obra' se funcionário está em obra com estoque do EPI
+                    // Auto-selecionar origem 'obra' e origemObraId se funcionário está em obra com estoque do EPI
                     let origemEntrega = entregaForm.origemEntrega;
+                    let origemObraId = entregaForm.origemObraId;
                     if (obraId && entregaForm.epiId) {
                       const temEstoqueObra = estoqueObraList2.some((e: any) => e.epiId === parseInt(entregaForm.epiId) && e.obraId === parseInt(obraId) && e.quantidade > 0);
-                      if (temEstoqueObra) origemEntrega = 'obra';
+                      if (temEstoqueObra) { origemEntrega = 'obra'; origemObraId = obraId; }
                     }
-                    setEntregaForm(f => ({ ...f, employeeId: v, obraId, origemEntrega }));
+                    setEntregaForm(f => ({ ...f, employeeId: v, obraId, origemEntrega, origemObraId }));
                   }}
                   placeholder="Selecione o funcionário..."
                   searchPlaceholder="Buscar por nome, CPF, matrícula, função..."
@@ -1121,35 +1124,99 @@ export default function Epis() {
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <Label className="text-amber-800 font-semibold flex items-center gap-1.5"><Package className="h-4 w-4" /> Origem da Entrega *</Label>
                 <div className="flex gap-3 mt-2">
-                  <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'central' }))}
+                  <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'central', origemObraId: '' }))}
                     className={`flex-1 p-3 rounded-lg border-2 text-center transition-all ${
                       entregaForm.origemEntrega === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm' : 'border-gray-200 hover:border-gray-300'
                     }`}>
                     <Package className={`h-5 w-5 mx-auto mb-1 ${entregaForm.origemEntrega === 'central' ? 'text-[#1B2A4A]' : 'text-gray-400'}`} />
                     <p className={`text-sm font-semibold ${entregaForm.origemEntrega === 'central' ? 'text-[#1B2A4A]' : 'text-gray-500'}`}>Escritório Central</p>
-                    <p className="text-[10px] text-muted-foreground">Entrega na contratação</p>
+                    <p className="text-[10px] text-muted-foreground">Estoque central</p>
                   </button>
-                  <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'obra' }))}
+                  <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'obra', origemObraId: '' }))}
                     className={`flex-1 p-3 rounded-lg border-2 text-center transition-all ${
                       entregaForm.origemEntrega === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm' : 'border-gray-200 hover:border-gray-300'
                     }`}>
                     <HardHat className={`h-5 w-5 mx-auto mb-1 ${entregaForm.origemEntrega === 'obra' ? 'text-[#1B2A4A]' : 'text-gray-400'}`} />
                     <p className={`text-sm font-semibold ${entregaForm.origemEntrega === 'obra' ? 'text-[#1B2A4A]' : 'text-gray-500'}`}>Obra</p>
-                    <p className="text-[10px] text-muted-foreground">Entrega no canteiro</p>
+                    <p className="text-[10px] text-muted-foreground">Estoque do canteiro</p>
                   </button>
                 </div>
+
+                {/* Estoque central */}
                 {entregaForm.origemEntrega === 'central' && entregaForm.epiId && (
-                  <p className="text-xs text-blue-600 mt-2 font-medium">Estoque Central: {episList.find((e: any) => String(e.id) === entregaForm.epiId)?.quantidadeEstoque ?? 0} unid.</p>
+                  <p className="text-xs text-blue-600 mt-2 font-medium">
+                    Estoque Central: {episList.find((e: any) => String(e.id) === entregaForm.epiId)?.quantidadeEstoque ?? 0} unid.
+                  </p>
                 )}
-                {entregaForm.origemEntrega === 'obra' && entregaForm.epiId && entregaForm.obraId && (
-                  <p className="text-xs text-green-600 mt-2 font-medium">Estoque na Obra: {estoqueObraList2.find((e: any) => e.epiId === parseInt(entregaForm.epiId) && e.obraId === parseInt(entregaForm.obraId))?.quantidade ?? 0} unid.</p>
+
+                {/* Seleção de obra de origem */}
+                {entregaForm.origemEntrega === 'obra' && (
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-amber-800 mb-2">
+                      Selecione a obra de origem *
+                      {!entregaForm.epiId && <span className="font-normal text-amber-600 ml-1">(selecione o EPI primeiro)</span>}
+                    </p>
+                    {entregaForm.epiId ? (() => {
+                      const obrasComEstoque = estoqueObraList2.filter(
+                        (e: any) => e.epiId === parseInt(entregaForm.epiId) && e.quantidade > 0
+                      );
+                      if (obrasComEstoque.length === 0) {
+                        return (
+                          <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5 flex items-center gap-2">
+                            <span>⚠️</span>
+                            <span>Nenhuma obra possui estoque deste EPI. Transfira do estoque central primeiro.</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {obrasComEstoque.map((e: any) => {
+                            const obraInfo = obrasList.find((o: any) => o.id === e.obraId);
+                            const isSelected = entregaForm.origemObraId === String(e.obraId);
+                            const empObraId = entregaForm.employeeId
+                              ? (employeesList.find((emp: any) => String(emp.id) === entregaForm.employeeId)?.obraAtualId)
+                              : null;
+                            const isEmpObra = empObraId && empObraId === e.obraId;
+                            return (
+                              <button
+                                key={e.obraId}
+                                type="button"
+                                onClick={() => setEntregaForm(f => ({ ...f, origemObraId: String(e.obraId) }))}
+                                className={`text-left p-2.5 rounded-lg border-2 transition-all ${
+                                  isSelected
+                                    ? 'border-green-600 bg-green-50 shadow-sm'
+                                    : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className={`text-xs font-semibold truncate ${isSelected ? 'text-green-800' : 'text-gray-700'}`}>
+                                      {obraInfo?.nome || e.obraNome || `Obra #${e.obraId}`}
+                                    </p>
+                                    {isEmpObra && (
+                                      <p className="text-[10px] text-blue-600 font-medium mt-0.5">← obra atual do funcionário</p>
+                                    )}
+                                  </div>
+                                  <span className={`shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                                    isSelected ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600'
+                                  }`}>
+                                    {e.quantidade} un
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })() : null}
+                  </div>
                 )}
               </div>
 
-              {/* OBRA - pré-preenchida com obra atual do funcionário */}
-              {entregaForm.employeeId && (
+              {/* OBRA DO FUNCIONÁRIO - informacional */}
+              {entregaForm.employeeId && entregaForm.origemEntrega === 'central' && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <Label className="text-blue-800 font-semibold">Obra / Local de Trabalho {entregaForm.origemEntrega === 'obra' ? '*' : ''}</Label>
+                  <Label className="text-blue-800 font-semibold">Local de Trabalho do Funcionário</Label>
                   <Select value={entregaForm.obraId || "sem_obra"} onValueChange={v => setEntregaForm(f => ({ ...f, obraId: v === "sem_obra" ? "" : v }))}>
                     <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                     <SelectContent>
@@ -1282,7 +1349,7 @@ export default function Epis() {
                     fotoBase64 = btoa(binary);
                     fotoFileName = fotoEstado.file.name;
                   }
-                  if (entregaForm.origemEntrega === 'obra' && !entregaForm.obraId) return toast.error("Selecione a obra para entrega pela obra");
+                  if (entregaForm.origemEntrega === 'obra' && !entregaForm.origemObraId) return toast.error("Selecione a obra de origem do estoque");
                   createDeliveryMut.mutate({
                     companyId: queryCompanyId,
                     epiId: parseInt(entregaForm.epiId),
@@ -1295,7 +1362,10 @@ export default function Epis() {
                     fotoEstadoBase64: fotoBase64,
                     fotoEstadoFileName: fotoFileName,
                     origemEntrega: entregaForm.origemEntrega,
-                    obraId: entregaForm.obraId ? parseInt(entregaForm.obraId) : undefined,
+                    // quando origem=obra, usa a obra selecionada pelo usuário; senão usa a obra do funcionário
+                    obraId: entregaForm.origemEntrega === 'obra'
+                      ? parseInt(entregaForm.origemObraId)
+                      : (entregaForm.obraId ? parseInt(entregaForm.obraId) : undefined),
                   });
                 }} disabled={createDeliveryMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {createDeliveryMut.isPending ? "Salvando..." : "Registrar Entrega"}
