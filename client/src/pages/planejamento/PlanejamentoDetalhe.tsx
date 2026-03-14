@@ -3,6 +3,9 @@ import { useRoute, useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useCompany } from "@/contexts/CompanyContext";
+import PrintHeader from "@/components/PrintHeader";
 import ImportarCronograma from "./ImportarCronograma";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
@@ -142,6 +145,8 @@ export default function PlanejamentoDetalhe() {
     return (t && TAB_IDS.includes(t)) ? t : 'visao-geral';
   });
   const { isAdminMaster } = usePermissions();
+  const { user } = useAuth();
+  const { selectedCompany } = useCompany();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
@@ -968,110 +973,211 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
         ))}
       </div>
 
-      {/* Modal Detalhado de Atividades em Atraso */}
-      <Dialog open={atrasosAberto} onOpenChange={setAtrasosAberto}>
-        <DialogContent style={{ background: '#ffffff', color: '#111827', maxWidth: 760, maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0 }}>
-          <DialogHeader style={{ padding: '20px 24px 16px', borderBottom: '1px solid #f1f5f9' }}>
-            <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
-              <AlertTriangle style={{ color: '#ef4444', width: 18, height: 18 }} />
-              Atividades em Atraso — {proj.nome}
-              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 400, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, padding: '2px 10px' }}>
-                {criticas.length} atividade{criticas.length !== 1 ? 's' : ''}
-              </span>
-            </DialogTitle>
-          </DialogHeader>
-          <div style={{ overflowY: 'auto', flex: 1, padding: '16px 24px 24px' }}>
+      {/* ── Tela Cheia: Atividades em Atraso ─────────────────────────────────── */}
+      {atrasosAberto && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-50 overflow-auto"
+          style={{ fontFamily: "system-ui, sans-serif" }}
+        >
+          {/* ── Barra de ação (sticky, oculta na impressão) ───────────────────── */}
+          <div className="print:hidden sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm px-6 py-3 flex items-center gap-3">
+            <button
+              onClick={() => setAtrasosAberto(false)}
+              className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-50"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Voltar
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-bold text-slate-800 truncate">
+                Atividades em Atraso — {proj.nome}
+              </p>
+              <p className="text-xs text-slate-500">
+                {criticas.length} atividade{criticas.length !== 1 ? 's' : ''} identificada{criticas.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const style = document.createElement("style");
+                  style.id = "__print_override__";
+                  style.textContent = `@media print { body * { visibility: hidden; } #atrasos-print-area, #atrasos-print-area * { visibility: visible; } #atrasos-print-area { position: fixed; inset: 0; padding: 24px; background: white; } }`;
+                  document.head.appendChild(style);
+                  window.print();
+                  setTimeout(() => { document.getElementById("__print_override__")?.remove(); }, 1500);
+                }}
+                className="flex items-center gap-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-50 transition-colors"
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir
+              </button>
+              <button
+                onClick={() => {
+                  const style = document.createElement("style");
+                  style.id = "__pdf_override__";
+                  style.textContent = `@media print { body * { visibility: hidden; } #atrasos-print-area, #atrasos-print-area * { visibility: visible; } #atrasos-print-area { position: fixed; inset: 0; padding: 24px; background: white; } @page { size: A4; margin: 15mm; } }`;
+                  document.head.appendChild(style);
+                  window.print();
+                  setTimeout(() => { document.getElementById("__pdf_override__")?.remove(); }, 1500);
+                }}
+                className="flex items-center gap-2 text-sm font-semibold text-white rounded-lg px-4 py-2 transition-colors"
+                style={{ background: "#1B2A4A" }}
+              >
+                <FileText className="h-4 w-4" />
+                Gerar PDF
+              </button>
+            </div>
+          </div>
+
+          {/* ── Área imprimível ───────────────────────────────────────────────── */}
+          <div id="atrasos-print-area" className="max-w-4xl mx-auto px-6 py-6">
+
+            {/* Cabeçalho de impressão (REGRA DE OURO) */}
+            <PrintHeader
+              title={`Relatório de Atividades em Atraso — ${proj.nome}`}
+              subtitle={`Data de análise: ${new Date().toLocaleDateString("pt-BR")} · Total: ${criticas.length} atividade${criticas.length !== 1 ? "s" : ""}`}
+              userName={user?.name}
+              userRole={user?.role === "admin_master" ? "Admin Master" : user?.role === "admin" ? "Administrador" : "Usuário"}
+              userEmail={user?.email}
+            />
+
+            {/* Título visível apenas na tela (o PrintHeader cuida do print) */}
+            <div className="print:hidden mb-6">
+              <div className="flex items-center gap-3 mb-1">
+                <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
+                <h1 className="text-xl font-bold text-slate-800">Atividades em Atraso</h1>
+                <span className="text-sm bg-red-100 text-red-700 border border-red-200 rounded-full px-3 py-0.5 font-semibold">
+                  {criticas.length} atividade{criticas.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <p className="text-sm text-slate-500 pl-8">{proj.nome} · Análise em {new Date().toLocaleDateString("pt-BR")}</p>
+            </div>
+
+            {/* Conteúdo */}
             {criticas.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: '#16a34a' }}>
-                <CheckCircle2 style={{ width: 32, height: 32, margin: '0 auto 8px' }} />
-                <p style={{ fontWeight: 600 }}>Nenhuma atividade em atraso!</p>
+              <div className="text-center py-16 text-emerald-600">
+                <CheckCircle2 className="h-10 w-10 mx-auto mb-3" />
+                <p className="text-lg font-semibold">Nenhuma atividade em atraso!</p>
+                <p className="text-sm text-slate-500 mt-1">Todas as atividades estão dentro do cronograma.</p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {criticas.map((a: any) => {
+              <div className="grid grid-cols-1 gap-4">
+                {criticas.map((a: any, idx: number) => {
                   const real     = avMap[a.id] ?? 0;
                   const esperado = progressoEsperadoHoje(a);
                   const desvio   = real - esperado;
                   const dias     = diasAtraso(a);
                   const semPrazo = !a.dataFim || a.dataFim >= hoje;
                   return (
-                    <div key={a.id} style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 10, padding: '14px 16px' }}>
-                      {/* Header */}
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      key={a.id}
+                      className="bg-white rounded-xl border border-red-100 shadow-sm overflow-hidden print:break-inside-avoid"
+                      style={{ borderLeft: "4px solid #ef4444" }}
+                    >
+                      {/* Cabeçalho do card */}
+                      <div className="px-5 py-3 bg-red-50 border-b border-red-100 flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                          <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 rounded px-2 py-0.5 shrink-0 mt-0.5">
+                            #{idx + 1}
+                          </span>
                           {a.eapCodigo && (
-                            <span style={{ fontSize: 10, fontFamily: 'monospace', background: '#fee2e2', color: '#b91c1c', borderRadius: 4, padding: '1px 6px', marginRight: 6 }}>
+                            <span className="text-xs font-mono bg-red-100 text-red-700 border border-red-200 rounded px-2 py-0.5 shrink-0 mt-0.5">
                               {a.eapCodigo}
                             </span>
                           )}
-                          <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{a.nome}</span>
+                          <span className="text-sm font-semibold text-slate-800 leading-snug">{a.nome}</span>
                         </div>
-                        <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                        <div className="flex items-center gap-2 shrink-0">
                           {dias > 0 && (
-                            <span style={{ fontSize: 10, background: '#dc2626', color: '#fff', borderRadius: 5, padding: '2px 8px', fontWeight: 700 }}>
+                            <span className="text-[11px] font-bold bg-red-600 text-white rounded-md px-2.5 py-1">
                               {dias}d de atraso
                             </span>
                           )}
-                          {semPrazo && (
-                            <span style={{ fontSize: 10, background: '#f59e0b', color: '#fff', borderRadius: 5, padding: '2px 8px', fontWeight: 700 }}>
+                          {semPrazo && !dias && (
+                            <span className="text-[11px] font-bold bg-amber-500 text-white rounded-md px-2.5 py-1">
                               Em risco
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Datas */}
-                      <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
-                        <span>Início: <strong style={{ color: '#374151' }}>{fmtBR(a.dataInicio) || '—'}</strong></span>
-                        <span>Prazo: <strong style={{ color: a.dataFim && a.dataFim < hoje ? '#dc2626' : '#374151' }}>{fmtBR(a.dataFim) || '—'}</strong></span>
-                      </div>
-
-                      {/* Barras de progresso */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {/* Barra esperado */}
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6b7280', marginBottom: 2 }}>
-                            <span>Deveria estar hoje</span>
-                            <span style={{ fontWeight: 700, color: '#2563eb' }}>{esperado.toFixed(1)}%</span>
+                      {/* Corpo do card */}
+                      <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
+                        {/* Barras */}
+                        <div className="space-y-3">
+                          {/* Datas */}
+                          <div className="flex gap-6 text-xs text-slate-500 mb-1">
+                            <span>Início: <strong className="text-slate-700">{fmtBR(a.dataInicio) || '—'}</strong></span>
+                            <span>Prazo: <strong className={a.dataFim && a.dataFim < hoje ? "text-red-600" : "text-slate-700"}>{fmtBR(a.dataFim) || '—'}</strong></span>
+                            {a.grupo && <span>Grupo: <strong className="text-slate-700">{a.grupo}</strong></span>}
                           </div>
-                          <div style={{ background: '#dbeafe', borderRadius: 99, height: 7, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', borderRadius: 99, background: '#3b82f6', width: `${Math.min(esperado, 100)}%`, transition: 'width 0.4s' }} />
+
+                          {/* Barra: Deveria estar hoje */}
+                          <div>
+                            <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                              <span className="font-medium">Deveria estar hoje</span>
+                              <span className="font-bold text-blue-600">{esperado.toFixed(1)}%</span>
+                            </div>
+                            <div className="relative h-5 rounded-md overflow-hidden" style={{ background: "#dbeafe" }}>
+                              <div
+                                className="h-full rounded-md flex items-center justify-end pr-2"
+                                style={{ width: `${Math.min(esperado, 100)}%`, background: "#3b82f6", minWidth: esperado > 0 ? 4 : 0 }}
+                              >
+                                {esperado > 12 && (
+                                  <span className="text-[10px] font-bold text-white">{esperado.toFixed(1)}%</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Barra: Realizado hoje */}
+                          <div>
+                            <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                              <span className="font-medium">Realizado hoje</span>
+                              <span className={`font-bold ${real === 0 ? "text-slate-400" : desvio >= -5 ? "text-emerald-600" : desvio >= -20 ? "text-amber-600" : "text-red-600"}`}>
+                                {real.toFixed(1)}%
+                              </span>
+                            </div>
+                            <div className="relative h-5 rounded-md overflow-hidden bg-slate-100">
+                              <div
+                                className="h-full rounded-md flex items-center justify-end pr-2"
+                                style={{
+                                  width: `${Math.min(real, 100)}%`,
+                                  background: real === 0 ? "#d1d5db" : desvio >= -5 ? "#22c55e" : desvio >= -20 ? "#f59e0b" : "#ef4444",
+                                  minWidth: real > 0 ? 4 : 0,
+                                }}
+                              >
+                                {real > 12 && (
+                                  <span className="text-[10px] font-bold text-white">{real.toFixed(1)}%</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        {/* Barra real */}
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6b7280', marginBottom: 2 }}>
-                            <span>Realizado hoje</span>
-                            <span style={{ fontWeight: 700, color: real === 0 ? '#9ca3af' : '#16a34a' }}>{real.toFixed(1)}%</span>
-                          </div>
-                          <div style={{ background: '#f3f4f6', borderRadius: 99, height: 7, overflow: 'hidden' }}>
-                            <div style={{
-                              height: '100%', borderRadius: 99,
-                              background: real === 0 ? '#d1d5db' : desvio >= -5 ? '#22c55e' : desvio >= -20 ? '#f59e0b' : '#ef4444',
-                              width: `${Math.min(real, 100)}%`, transition: 'width 0.4s'
-                            }} />
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* Desvio resumido */}
-                      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <TrendingDown style={{ width: 12, height: 12, color: '#ef4444' }} />
-                        <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 600 }}>
-                          Desvio: {desvio.toFixed(1)} pp
-                        </span>
-                        {real === 0 && esperado > 0 && (
-                          <span style={{ fontSize: 10, color: '#9ca3af' }}>— ainda não iniciada</span>
-                        )}
+                        {/* Desvio em destaque */}
+                        <div className="flex flex-col items-center justify-center bg-red-50 border border-red-100 rounded-xl px-5 py-3 min-w-[100px] text-center">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Desvio</p>
+                          <p className="text-2xl font-black text-red-600 leading-none">{desvio.toFixed(1)}</p>
+                          <p className="text-[11px] font-medium text-red-500 mt-0.5">pp</p>
+                          {real === 0 && esperado > 0 && (
+                            <p className="text-[9px] text-slate-400 mt-2 leading-tight">ainda não<br />iniciada</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
             )}
+
+            {/* Rodapé de impressão */}
+            <div className="hidden print:block mt-8 pt-4 border-t border-slate-200 text-[10px] text-slate-400 text-center">
+              {selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || ""} · Relatório gerado pelo sistema ERP FC Engenharia
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4">
         {/* Alerta atividades críticas */}
