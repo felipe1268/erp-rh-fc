@@ -82,6 +82,8 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    // Bootstrap admin user and default company from env vars (Railway / fresh DB)
+    import("./initSetup").then(m => m.initSetup()).catch(e => console.error("[InitSetup] Falha ao iniciar:", e));
     // Sincronizar revisões do changelog com o banco de dados
     import("../syncRevisions").then(m => m.syncRevisions()).catch(e => console.error("[SyncRevisions] Falha ao iniciar:", e));
     // Iniciar job de verificação automática do DataJud

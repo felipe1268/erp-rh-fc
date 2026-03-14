@@ -173,8 +173,8 @@ class SDKServer {
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
-        name: options.name || "",
+        appId: ENV.appId || "erp-fc",
+        name: options.name || openId,
       },
       options
     );
@@ -214,19 +214,15 @@ class SDKServer {
       });
       const { openId, appId, name } = payload as Record<string, unknown>;
 
-      if (
-        !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
-        !isNonEmptyString(name)
-      ) {
+      if (!isNonEmptyString(openId)) {
         console.warn("[Auth] Session payload missing required fields");
         return null;
       }
 
       return {
         openId,
-        appId,
-        name,
+        appId: isNonEmptyString(appId) ? appId : "erp-fc",
+        name: isNonEmptyString(name) ? name : (openId as string),
       };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
