@@ -17,6 +17,25 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 
+function safeParseJson<T = any>(content: string | null | undefined, label: string): T {
+  if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `IA não retornou conteúdo (${label})` });
+  let text = content.trim();
+  // Remove markdown code fences if present
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (fence) text = fence[1].trim();
+  // Try to find first { or [ if there's surrounding text
+  const start = text.search(/[\[{]/);
+  if (start > 0) text = text.slice(start);
+  // Trim trailing garbage after last } or ]
+  const lastBrace = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+  if (lastBrace >= 0 && lastBrace < text.length - 1) text = text.slice(0, lastBrace + 1);
+  try {
+    return JSON.parse(text) as T;
+  } catch (err: any) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao interpretar resposta da IA (${label}): ${err.message}` });
+  }
+}
+
 // ============================================================
 // SEEDS / DEFAULTS
 // ============================================================
@@ -2287,59 +2306,19 @@ Gere kits de EPI para as seguintes funções: ${funcoesAlvo.join(', ')}
 
 Para cada função, liste os EPIs necessários conforme NR-6, NR-18 e boas práticas.
 Use preferencialmente os nomes dos EPIs que já existem no catálogo da empresa.
-Cada item deve ter: nomeEpi, categoria (EPI, Uniforme ou Calcado), quantidade por pessoa e se é obrigatório.`;
+Retorne APENAS JSON com o formato: { "kits": [ { "nome": string, "funcao": string, "descricao": string, "items": [ { "nomeEpi": string, "categoria": "EPI"|"Uniforme"|"Calcado", "quantidade": number, "obrigatorio": boolean } ] } ] }`;
 
       const response = await invokeLLM({
         messages: [
-          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido." },
+          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido, sem texto adicional." },
           { role: "user", content: prompt },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "kits_sugestao",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                kits: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      nome: { type: "string", description: "Nome do kit, ex: Kit Eletricista" },
-                      funcao: { type: "string", description: "Nome da função" },
-                      descricao: { type: "string", description: "Breve descrição do kit" },
-                      items: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            nomeEpi: { type: "string" },
-                            categoria: { type: "string", description: "EPI, Uniforme ou Calcado" },
-                            quantidade: { type: "number" },
-                            obrigatorio: { type: "boolean" },
-                          },
-                          required: ["nomeEpi", "categoria", "quantidade", "obrigatorio"],
-                          additionalProperties: false,
-                        },
-                      },
-                    },
-                    required: ["nome", "funcao", "descricao", "items"],
-                    additionalProperties: false,
-                  },
-                },
-              },
-              required: ["kits"],
-              additionalProperties: false,
-            },
-          },
-        },
+        maxTokens: 8192,
+        response_format: { type: "json_object" },
       });
 
       const content = response.choices?.[0]?.message?.content;
-      if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao gerar sugestões de kits" });
-      return JSON.parse(content);
+      return safeParseJson(content, "kits");
     }),
 
   iaSugerirCoresCapacete: protectedProcedure
@@ -2375,42 +2354,15 @@ Considere as funções reais da empresa e o padrão: Branco (engenheiros/mestres
 
       const response = await invokeLLM({
         messages: [
-          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido." },
+          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido, sem texto adicional." },
           { role: "user", content: prompt },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "cores_sugestao",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                cores: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      cor: { type: "string", description: "Nome da cor" },
-                      hexColor: { type: "string", description: "Código hexadecimal da cor, ex: #FFFFFF" },
-                      funcoes: { type: "string", description: "Funções separadas por vírgula" },
-                      descricao: { type: "string", description: "Breve descrição/justificativa" },
-                    },
-                    required: ["cor", "hexColor", "funcoes", "descricao"],
-                    additionalProperties: false,
-                  },
-                },
-              },
-              required: ["cores"],
-              additionalProperties: false,
-            },
-          },
-        },
+        maxTokens: 4096,
+        response_format: { type: "json_object" },
       });
 
       const content = response.choices?.[0]?.message?.content;
-      if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao gerar sugestões de cores" });
-      return JSON.parse(content);
+      return safeParseJson(content, "cores");
     }),
 
   iaSugerirVidaUtil: protectedProcedure
@@ -2451,42 +2403,15 @@ Inclua: nome do EPI, categoria, vida útil em meses e observações.`;
 
       const response = await invokeLLM({
         messages: [
-          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido." },
+          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido, sem texto adicional." },
           { role: "user", content: prompt },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "vida_util_sugestao",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                items: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      nomeEpi: { type: "string" },
-                      categoriaEpi: { type: "string", description: "EPI, Uniforme ou Calcado" },
-                      vidaUtilMeses: { type: "number", description: "Vida útil em meses" },
-                      observacoes: { type: "string", description: "Observações sobre a vida útil" },
-                    },
-                    required: ["nomeEpi", "categoriaEpi", "vidaUtilMeses", "observacoes"],
-                    additionalProperties: false,
-                  },
-                },
-              },
-              required: ["items"],
-              additionalProperties: false,
-            },
-          },
-        },
+        maxTokens: 4096,
+        response_format: { type: "json_object" },
       });
 
       const content = response.choices?.[0]?.message?.content;
-      if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao gerar sugestões de vida útil" });
-      return JSON.parse(content);
+      return safeParseJson(content, "vida_util");
     }),
 
   iaSugerirTreinamentos: protectedProcedure
@@ -2494,7 +2419,6 @@ Inclua: nome do EPI, categoria, vida útil em meses e observações.`;
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
 
-      // Buscar EPIs do catálogo
       const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
         .from(epis)
         .where(companyFilter(epis.companyId, input));
@@ -2523,50 +2447,22 @@ Funções da empresa: ${funcoes.map(f => f.nome).join(', ') || 'Não cadastradas
 
 Treinamentos já vinculados: ${treinExistentes.map(t => `${t.nomeEpi} → ${t.nomeTreinamento} (${t.normaExigida})`).join(', ') || 'Nenhum'}
 
-Regras de Ouro da empresa:
+Regras de Ouro:
 ${regrasTexto}
 
-Gere uma lista de treinamentos obrigatórios vinculados aos EPIs conforme NR-6, NR-18, NR-35, NR-10, NR-33 e demais normas aplicáveis.
-Para cada item, informe: nome do EPI, norma exigida (NR-XX), nome do treinamento e se é obrigatório.
-Foque nos EPIs que existem no catálogo da empresa e que realmente exigem treinamento para uso seguro.`;
+Gere uma lista de treinamentos obrigatórios vinculados aos EPIs conforme NR-6, NR-18, NR-35, NR-10, NR-33.
+Retorne JSON com: { "items": [ { "nomeEpi": string, "normaExigida": string, "nomeTreinamento": string, "obrigatorio": boolean } ] }`;
 
       const response = await invokeLLM({
         messages: [
-          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido." },
+          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido, sem texto adicional." },
           { role: "user", content: prompt },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "treinamentos_sugestao",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                items: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      nomeEpi: { type: "string" },
-                      normaExigida: { type: "string", description: "Ex: NR-35" },
-                      nomeTreinamento: { type: "string" },
-                      obrigatorio: { type: "boolean" },
-                    },
-                    required: ["nomeEpi", "normaExigida", "nomeTreinamento", "obrigatorio"],
-                    additionalProperties: false,
-                  },
-                },
-              },
-              required: ["items"],
-              additionalProperties: false,
-            },
-          },
-        },
+        maxTokens: 4096,
+        response_format: { type: "json_object" },
       });
 
       const content = response.choices?.[0]?.message?.content;
-      if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao gerar sugestões de treinamentos" });
-      return JSON.parse(content);
+      return safeParseJson(content, "treinamentos");
     }),
 });
