@@ -35,7 +35,7 @@ import {
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
-  Home, Tag, GripVertical,
+  Home, Tag, GripVertical, Network,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -898,6 +898,7 @@ function DashboardLayoutContent({
           { icon: ShoppingCart,  label: "Cronograma de Compras", path: `/planejamento/${planId}?tab=compras` },
           { icon: ClipboardList, label: "Prev. Medição",     path: `/planejamento/${planId}?tab=prev-medicao` },
           { icon: CalendarDays,  label: "Prog. Semanal",     path: `/planejamento/${planId}?tab=prog-semanal` },
+          { icon: Network,       label: "Diagrama de Rede",  path: `/planejamento/${planId}?tab=diagrama-rede` },
           { icon: GitBranch,     label: "Revisões",          path: `/planejamento/${planId}?tab=revisoes` },
           { icon: FileText,      label: "REFIS",             path: `/planejamento/${planId}?tab=refis` },
           { icon: Brain,         label: "IA Gestora",        path: `/planejamento/${planId}?tab=ia-gestora` },

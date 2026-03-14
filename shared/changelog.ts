@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 266,
+    titulo: "REGRA DE OURO — Nova aba SEMPRE vai para a barra lateral; Diagrama de Rede adicionado",
+    descricao: "Estabelecida regra de ouro: toda nova aba criada em qualquer módulo deve ser adicionada simultaneamente à barra de comando lateral (seção 'Abas do Projeto' para Planejamento, ou seção correspondente). Aplicação imediata: 'Diagrama de Rede' (tab=diagrama-rede) adicionado ao planTabItems em DashboardLayout com ícone Network, logo após 'Prog. Semanal'. Ícone Network importado do lucide-react.",
+    tipo: "melhoria",
+    modulos: "Menu Lateral / Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 22:15:00",
+  },
+  {
     version: 265,
     titulo: "Atividades em Atraso — Tela Cheia + Imprimir/PDF com dados do usuário (Regra de Ouro)",
     descricao: "O modal de Atividades em Atraso foi transformado em uma tela cheia profissional. Barra de ação sticky com: botão Voltar, Imprimir e Gerar PDF (A4). NOVA REGRA DE OURO: todo PDF/impressão gerado pelo sistema inclui obrigatoriamente o cabeçalho com logo da empresa, título do relatório, nome completo do usuário, cargo, e-mail e data/hora de geração (horário de Brasília). Layout dos cards redesenhado: borda esquerda vermelha, cabeçalho âmbar, barras de progresso mais espessas com valor interno, card de desvio em destaque. PrintHeader.tsx atualizado para aceitar dados do usuário.",
