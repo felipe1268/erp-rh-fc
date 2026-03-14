@@ -3134,6 +3134,10 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const { data: cruzamento, isLoading: loadCruz } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
     { projetoId }, { enabled: !!projetoId });
 
+  // ── Histórico semanal de avanço (REFIs) — usado na análise de performance ─
+  const { data: refis = [] } = trpc.planejamento.listarRefis.useQuery(
+    { projetoId }, { enabled: !!projetoId });
+
   const dadosMensais = useMemo(() => {
     const itens = cruzamento?.itens ?? [];
     if (itens.length === 0) return [];
@@ -3260,6 +3264,68 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
 
     return rows;
   }, [cfgDiaCorte, cfgSinalPct, cfgRetencaoPct, cfgDataInicioObra, dadosMensais, avancos, atividades, baseV]);
+
+  // ── Análise de Performance Semanal ───────────────────────────────────────
+  const analiseSemanal = useMemo(() => {
+    if (previsoesMensais.length === 0) return null;
+    const hoje     = new Date();
+    const todayStr = hoje.toISOString().substring(0, 10);
+    const mesAtual = todayStr.substring(0, 7);
+    const [ano, m] = mesAtual.split("-").map(Number);
+
+    const rowAtual = previsoesMensais.find((r: any) => r.mes === mesAtual);
+    if (!rowAtual) return null;
+    const alvoMes = rowAtual.medicaoBruta;
+    if (alvoMes <= 0) return null;
+
+    // Mondays within the current calendar month
+    const ultimoDia = new Date(ano, m, 0);
+    const semanasDoMes: string[] = [];
+    let cur = new Date(ano, m - 1, 1);
+    const dow = cur.getDay();
+    if (dow !== 1) cur.setDate(cur.getDate() + (dow === 0 ? 1 : 8 - dow));
+    while (cur <= ultimoDia) {
+      semanasDoMes.push(cur.toISOString().substring(0, 10));
+      cur = new Date(cur.getTime() + 7 * 86400000);
+    }
+    if (semanasDoMes.length === 0) return null;
+
+    const nSemanas    = semanasDoMes.length;
+    const alvoSemanal = alvoMes / nSemanas;
+
+    const semanasAnalise = semanasDoMes.map(semStr => {
+      const r = (refis as any[]).find(rf => String(rf.semana ?? "").substring(0, 10) === semStr);
+      const pctReal  = r ? parseFloat(r.avancoSemanalRealizado ?? "0") : null;
+      const pctPrev  = r ? parseFloat(r.avancoSemanalPrevisto  ?? "0") : null;
+      const valorReal = pctReal !== null ? (pctReal / 100) * baseV : null;
+      const valorPrev = pctPrev !== null ? (pctPrev / 100) * baseV : null;
+      const isFutura  = semStr > todayStr;
+      return { semana: semStr, pctReal, pctPrev, valorReal, valorPrev, isFutura, temDados: r !== undefined };
+    });
+
+    const semanasPassadas  = semanasAnalise.filter(s => !s.isFutura && s.temDados && s.valorReal !== null);
+    const nSemanasPassadas = semanasPassadas.length;
+    const nSemanasFuturas  = semanasAnalise.filter(s => s.isFutura || !s.temDados).length;
+
+    const realizadoTotal      = semanasPassadas.reduce((s, r) => s + (r.valorReal ?? 0), 0);
+    const falta               = Math.max(0, alvoMes - realizadoTotal);
+    const mediaRealizada      = nSemanasPassadas > 0 ? realizadoTotal / nSemanasPassadas : 0;
+    const projecaoTotal       = realizadoTotal + mediaRealizada * nSemanasFuturas;
+    const pctCumprimento      = alvoMes > 0 ? Math.min(100, projecaoTotal / alvoMes * 100) : 100;
+    const necessarioPorSemana = nSemanasFuturas > 0 ? falta / nSemanasFuturas : 0;
+    const estaNoPrazo         = projecaoTotal >= alvoMes * 0.95;
+    const delta               = projecaoTotal - alvoMes;
+    const semSemanas          = nSemanasPassadas === 0;
+
+    return {
+      mesAtual, alvoMes, alvoSemanal,
+      realizadoTotal, falta, delta,
+      nSemanas, nSemanasPassadas, nSemanasFuturas,
+      mediaRealizada, projecaoTotal, pctCumprimento,
+      necessarioPorSemana, estaNoPrazo, semSemanas,
+      semanasAnalise,
+    };
+  }, [previsoesMensais, refis, baseV]);
 
   // ── Fluxo de Caixa (parcelas fixas) ──────────────────────────────────────
   // SELIC anual estimada para sugestão de reajuste pós-obra
@@ -3662,6 +3728,131 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                   </div>
                 );
               })()}
+
+              {/* ── Análise de Performance Semanal ── */}
+              {analiseSemanal && (
+                <div className="px-4 py-3 border-b border-blue-100 bg-gradient-to-r from-slate-50 to-blue-50">
+                  <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5 mb-2.5">
+                    <TrendingUp className="h-3.5 w-3.5 text-blue-500" />
+                    Análise de Performance —{" "}
+                    {new Date(analiseSemanal.mesAtual + "-15").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+                    <span className="text-[8px] font-normal text-slate-400 normal-case ml-1">
+                      ({analiseSemanal.nSemanas} semanas · alvo semanal médio: {fmt(analiseSemanal.alvoSemanal)})
+                    </span>
+                  </p>
+
+                  {/* KPI cards */}
+                  <div className="grid grid-cols-4 gap-2 mb-3">
+                    <div className="bg-white rounded-lg px-2.5 py-2 border border-slate-200 shadow-sm">
+                      <p className="text-[8px] text-slate-500 uppercase tracking-wide">Alvo do Mês</p>
+                      <p className="text-xs font-bold text-slate-700">{fmt(analiseSemanal.alvoMes)}</p>
+                      <p className="text-[8px] text-slate-400 mt-0.5">{fmt(analiseSemanal.alvoSemanal)}/sem média</p>
+                    </div>
+                    <div className={`bg-white rounded-lg px-2.5 py-2 border shadow-sm ${analiseSemanal.semSemanas ? "border-slate-200" : "border-blue-200"}`}>
+                      <p className="text-[8px] text-slate-500 uppercase tracking-wide">Realizado</p>
+                      <p className="text-xs font-bold text-blue-700">{fmt(analiseSemanal.realizadoTotal)}</p>
+                      <p className="text-[8px] text-slate-400 mt-0.5">{analiseSemanal.nSemanasPassadas} sem. com REFI</p>
+                    </div>
+                    <div className={`bg-white rounded-lg px-2.5 py-2 border shadow-sm ${analiseSemanal.estaNoPrazo ? "border-emerald-200" : "border-rose-200"}`}>
+                      <p className="text-[8px] text-slate-500 uppercase tracking-wide">Projeção Mês</p>
+                      <p className={`text-xs font-bold ${analiseSemanal.estaNoPrazo ? "text-emerald-700" : "text-rose-700"}`}>
+                        {fmt(analiseSemanal.projecaoTotal)}
+                      </p>
+                      <p className="text-[8px] text-slate-400 mt-0.5">{analiseSemanal.pctCumprimento.toFixed(0)}% do alvo</p>
+                    </div>
+                    <div className={`bg-white rounded-lg px-2.5 py-2 border shadow-sm ${analiseSemanal.nSemanasFuturas === 0 ? "border-slate-200" : analiseSemanal.necessarioPorSemana <= analiseSemanal.mediaRealizada * 1.05 ? "border-emerald-200" : "border-amber-200"}`}>
+                      <p className="text-[8px] text-slate-500 uppercase tracking-wide">Necessário/Sem.</p>
+                      <p className={`text-xs font-bold ${analiseSemanal.nSemanasFuturas === 0 ? "text-slate-400" : analiseSemanal.necessarioPorSemana <= analiseSemanal.mediaRealizada * 1.05 ? "text-emerald-700" : "text-amber-700"}`}>
+                        {analiseSemanal.nSemanasFuturas > 0 ? fmt(analiseSemanal.necessarioPorSemana) : "—"}
+                      </p>
+                      <p className="text-[8px] text-slate-400 mt-0.5">{analiseSemanal.nSemanasFuturas} sem. restantes</p>
+                    </div>
+                  </div>
+
+                  {/* Mini gráfico de barras semanal */}
+                  <div className="flex gap-1.5 mb-3 items-end">
+                    {analiseSemanal.semanasAnalise.map((s) => {
+                      const realPct  = s.valorReal !== null && analiseSemanal.alvoSemanal > 0 ? Math.min(120, (s.valorReal / analiseSemanal.alvoSemanal) * 100) : 0;
+                      const prevPct  = s.valorPrev !== null && analiseSemanal.alvoSemanal > 0 ? Math.min(120, (s.valorPrev / analiseSemanal.alvoSemanal) * 100) : 0;
+                      const label    = new Date(s.semana + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                      const barColor = realPct >= 95 ? "bg-emerald-500" : realPct >= 70 ? "bg-amber-400" : "bg-rose-500";
+                      return (
+                        <div key={s.semana} className="flex-1 min-w-0">
+                          <div className="relative h-14 bg-slate-100 rounded overflow-hidden flex items-end">
+                            {/* Previsto (azul claro, fundo) */}
+                            {s.valorPrev !== null && prevPct > 0 && (
+                              <div className="absolute inset-x-0 bottom-0 bg-blue-200 rounded opacity-70" style={{ height: `${prevPct}%` }} />
+                            )}
+                            {/* Realizado (colorido, frente) */}
+                            {s.valorReal !== null && !s.isFutura ? (
+                              <div className={`absolute inset-x-0 bottom-0 rounded ${barColor}`} style={{ height: `${realPct}%` }} />
+                            ) : (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-[7px] text-slate-400 leading-tight text-center px-0.5">
+                                  {s.isFutura ? "futura" : "sem\nREFI"}
+                                </span>
+                              </div>
+                            )}
+                            {/* Linha do alvo (100%) */}
+                            <div className="absolute inset-x-0 bg-slate-400 opacity-50" style={{ bottom: "83.3%", height: "1px" }} />
+                          </div>
+                          <p className="text-[7px] text-center text-slate-500 mt-0.5 leading-tight">{label}</p>
+                          {s.valorReal !== null && !s.isFutura && (
+                            <p className="text-[6px] text-center font-semibold mt-0.5 leading-tight" style={{ color: realPct >= 95 ? "#059669" : realPct >= 70 ? "#d97706" : "#dc2626" }}>
+                              {realPct.toFixed(0)}%
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div className="flex-none flex flex-col justify-end pb-4 ml-1">
+                      <p className="text-[7px] text-slate-400 whitespace-nowrap">— alvo</p>
+                    </div>
+                  </div>
+
+                  {/* Alerta / sugestão */}
+                  {analiseSemanal.semSemanas ? (
+                    <div className="flex items-start gap-2 bg-white rounded-lg px-3 py-2 text-[10px] text-slate-600 border border-slate-200">
+                      <Clock className="h-3.5 w-3.5 shrink-0 mt-0.5 text-slate-400" />
+                      <span>
+                        Nenhum REFI registrado para{" "}
+                        <b>{new Date(analiseSemanal.mesAtual + "-15").toLocaleDateString("pt-BR", { month: "long" })}</b>.
+                        Registre o avanço semanal na aba <b>Programação Semanal</b> para ativar a projeção e o alerta de performance.
+                      </span>
+                    </div>
+                  ) : analiseSemanal.estaNoPrazo ? (
+                    <div className="flex items-start gap-2 bg-emerald-50 rounded-lg px-3 py-2 text-[10px] text-emerald-800 border border-emerald-200">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-emerald-500" />
+                      <span>
+                        Ritmo adequado. Média de <b>{fmt(analiseSemanal.mediaRealizada)}/semana</b> → projeção de{" "}
+                        <b>{fmt(analiseSemanal.projecaoTotal)}</b> ({analiseSemanal.pctCumprimento.toFixed(0)}% do alvo de {fmt(analiseSemanal.alvoMes)}).
+                        {analiseSemanal.nSemanasFuturas > 0 && (
+                          <> Mantenha o ritmo nas <b>{analiseSemanal.nSemanasFuturas}</b> semana(s) restante(s).</>
+                        )}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 bg-rose-50 rounded-lg px-3 py-2 text-[10px] text-rose-800 border border-rose-200">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-rose-500" />
+                      <span>
+                        Ritmo insuficiente. Média atual: <b>{fmt(analiseSemanal.mediaRealizada)}/semana</b> → projeção de{" "}
+                        <b>{fmt(analiseSemanal.projecaoTotal)}</b> ({analiseSemanal.pctCumprimento.toFixed(0)}% do alvo de {fmt(analiseSemanal.alvoMes)}).
+                        {analiseSemanal.nSemanasFuturas > 0 ? (
+                          <>
+                            {" "}Para fechar o mês, acelere para <b>{fmt(analiseSemanal.necessarioPorSemana)}/semana</b> nas{" "}
+                            <b>{analiseSemanal.nSemanasFuturas}</b> semana(s) restante(s) — mobilize recursos no caminho crítico ou redistribua atividades.
+                          </>
+                        ) : (
+                          <>
+                            {" "}Mês encerrado com déficit de <b>{fmt(Math.abs(analiseSemanal.delta))}</b>. Analise as causas no REFI e ajuste o planejamento do próximo período.
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
