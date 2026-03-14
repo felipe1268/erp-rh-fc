@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 268,
+    titulo: "Bugfix: ReferenceError user is not defined na Visão Geral",
+    descricao: "Corrigido erro crítico na aba Visão Geral ao clicar em 'Ver detalhes' das Atividades em Atraso. A função VisaoGeral é definida fora do escopo do componente principal e portanto não tinha acesso ao objeto 'user' do useAuth(). Solução: prop 'user' adicionada ao componente VisaoGeral e passada no ponto de chamada, mantendo acesso a user?.name, user?.role e user?.email para o PrintHeader.",
+    tipo: "bugfix",
+    modulos: "Planejamento / Visão Geral",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:15:00",
+  },
+  {
     version: 267,
     titulo: "Diagrama de Rede — Reescrita completa: hierarquia EAP + rede CPM, filtros, setas, painel de detalhes",
     descricao: "DiagramaRede.tsx completamente reescrito. Dois modos: (1) Hierarquia EAP — árvore horizontal baseada nos códigos EAP, sempre disponível, setas pai→filho; (2) Rede de Precedências — diagrama CPM topológico baseado no campo predecessora, com indicador quando sem dependências cadastradas. Filtros: status em pills clicáveis, busca por nome/EAP, filtro de grupo dropdown. Interatividade: clique em nó destaca predecessoras/sucessoras com setas coloridas, dimming dos demais nós, painel lateral com detalhes completos (EAP, status, datas, progresso, desvio, lista de predecessoras/sucessoras clicáveis). Zoom/pan suave, fit-to-view automático, barra de status com contagem por categoria.",

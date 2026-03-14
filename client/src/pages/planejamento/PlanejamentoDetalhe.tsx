@@ -499,6 +499,7 @@ export default function PlanejamentoDetalhe() {
             revisaoAtiva={revisaoAtiva}
             fmt={fmt}
             fPct={fPct}
+            user={user}
             onEditarProjeto={abrirEditProjeto}
             onVerRefisCompleto={(semana: string) => { setRefisInitSemana(semana); setAba("refis"); }}
           />
@@ -902,7 +903,7 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: VISÃO GERAL
 // ═════════════════════════════════════════════════════════════════════════════
-function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, onEditarProjeto, onVerRefisCompleto }: any) {
+function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, user, onEditarProjeto, onVerRefisCompleto }: any) {
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
   const totalAtiv   = atividades.filter((a: any) => !a.isGrupo).length;
