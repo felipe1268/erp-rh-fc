@@ -40,8 +40,8 @@ import {
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
-import { obraSns, employees, blacklistReactivationRequests, companies } from "../drizzle/schema";
-import { eq, and, sql, or, ilike } from "drizzle-orm";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory } from "../drizzle/schema";
+import { eq, and, sql, or, ilike, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
 import { dashboardsRouter } from "./routers/dashboards";
@@ -816,6 +816,7 @@ export const appRouter = router({
       snRelogioPonto: z.string().optional(),
       cliente: z.string().optional(),
       responsavel: z.string().optional(),
+      responsavelId: z.number().nullable().optional(),
       endereco: z.string().optional(),
       cidade: z.string().optional(),
       estado: z.string().optional(),
@@ -829,7 +830,7 @@ export const appRouter = router({
       sns: z.array(z.object({ sn: z.string(), apelido: z.string().optional() })).optional(),
       usarConvencaoMatriz: z.number().optional(),
       convencaoId: z.number().nullable().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ input, ctx }) => {
       const { sns, ...obraData } = input;
       const result = await createObra(obraData as any);
       // Auto-link SNs if provided
@@ -842,6 +843,22 @@ export const appRouter = router({
           }
         }
       }
+      // Registrar na timeline do colaborador responsável
+      if (input.responsavelId && result?.id) {
+        try {
+          const db = await getDb();
+          await db.insert(employeeSiteHistory).values({
+            companyId: input.companyId,
+            employeeId: input.responsavelId,
+            obraId: result.id,
+            tipo: "gestor_obra",
+            dataInicio: input.dataInicio || new Date().toISOString().split('T')[0],
+            observacoes: `Definido como responsável da obra "${input.nome || input.numOrcamento}"`,
+            registradoPor: ctx.user.name ?? "Sistema",
+            registradoPorUserId: ctx.user.id,
+          } as any);
+        } catch (e) { /* não bloquear a criação da obra */ }
+      }
       return result;
     }),
     update: protectedProcedure.input(z.object({
@@ -852,6 +869,7 @@ export const appRouter = router({
       snRelogioPonto: z.string().optional(),
       cliente: z.string().optional(),
       responsavel: z.string().optional(),
+      responsavelId: z.number().nullable().optional(),
       endereco: z.string().optional(),
       cidade: z.string().optional(),
       estado: z.string().optional(),
@@ -866,13 +884,36 @@ export const appRouter = router({
       usarConvencaoMatriz: z.number().optional(),
       convencaoId: z.number().nullable().optional(),
       convencaoDivergencias: z.string().nullable().optional(),
-    })).mutation(async ({ input }) => {
-      const { id, ...data } = input;
+    })).mutation(async ({ input, ctx }) => {
+      const { id, responsavelId, ...data } = input;
       // Se status mudou para Concluída/Paralisada/Cancelada, liberar SNs
       if (data.status && ["Concluida", "Paralisada", "Cancelada"].includes(data.status)) {
         await releaseObraSns(id);
       }
-      return updateObra(id, data as any);
+      const result = await updateObra(id, { ...data, responsavelId } as any);
+      // Registrar na timeline do colaborador responsável se mudou
+      if (responsavelId) {
+        try {
+          const db = await getDb();
+          const obraInfo = await getObraById(id);
+          // Verificar se já existe entrada de gestor_obra para não duplicar
+          const existing = await db.select({ id: employeeSiteHistory.id }).from(employeeSiteHistory)
+            .where(and(eq(employeeSiteHistory.employeeId, responsavelId), eq(employeeSiteHistory.obraId, id), eq(employeeSiteHistory.tipo, 'gestor_obra')));
+          if (existing.length === 0) {
+            await db.insert(employeeSiteHistory).values({
+              companyId: obraInfo?.companyId ?? 0,
+              employeeId: responsavelId,
+              obraId: id,
+              tipo: "gestor_obra",
+              dataInicio: new Date().toISOString().split('T')[0],
+              observacoes: `Definido como responsável da obra "${obraInfo?.nome ?? ''}"`,
+              registradoPor: ctx.user.name ?? "Sistema",
+              registradoPorUserId: ctx.user.id,
+            } as any);
+          }
+        } catch (e) { /* não bloquear o update da obra */ }
+      }
+      return result;
     }),
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
       await deleteObra(input.id, ctx.user.id, ctx.user.name ?? "Sistema");
@@ -888,7 +929,8 @@ export const appRouter = router({
         .from(employees)
         .where(and(
           eq(employees.companyId, input.companyId),
-          eq(employees.isActive, 1),
+          eq((employees as any).status, 'Ativo'),
+          isNull((employees as any).deletedAt),
           or(...LIDERANCA_KEYWORDS.flatMap(kw => [
             ilike(employees.funcao, `%${kw}%`),
             ilike(employees.cargo, `%${kw}%`),

@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 289,
+    titulo: "Obras — busca de colaboradores corrigida + responsavelId + timeline",
+    descricao: "1) Corrigido bug de busca case-sensitive em Colaboradores (LIKE → ILIKE no PostgreSQL). 2) listLiderancas corrigido para usar status='Ativo' em vez de isActive=1 (campo inexistente). 3) Adicionada coluna responsavelId na tabela obras, armazenando o ID do colaborador selecionado. 4) Ao vincular responsável em uma obra, entra entrada 'gestor_obra' na timeline do colaborador (Efetivo nas Obras → histórico). 5) ObraEfetivo.tsx exibe tipo 'Responsável / Gestor' em verde.",
+    tipo: "bugfix",
+    modulos: "Cadastro / Obras / RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:00:00",
+  },
+  {
     version: 288,
     titulo: "Obras — Engenheiro Responsável vinculado a colaboradores RH",
     descricao: "O campo 'Engenheiro / Responsável' no formulário de Obras agora exibe um combobox buscável conectado ao banco de colaboradores. Somente funcionários com cargos/funções de liderança aparecem (Engenheiro, Encarregado, Mestre, Coordenador, Supervisor, Gerente, Diretor, Técnico, Arquiteto, Gestor, Líder). O nome selecionado é salvo no campo 'responsavel' da obra para rastreabilidade.",

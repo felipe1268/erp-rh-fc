@@ -30,6 +30,7 @@ type ObraForm = {
   nome: string; numOrcamento: string;
   cliente: string;
   responsavel: string;
+  responsavelId: number | null;
   status: string; cep: string; endereco: string;
   dataInicio: string; dataPrevisaoFim: string; observacoes: string;
   usarConvencaoMatriz: number; convencaoId: number | null;
@@ -39,6 +40,7 @@ const emptyForm: ObraForm = {
   nome: "", numOrcamento: "",
   cliente: "",
   responsavel: "",
+  responsavelId: null,
   status: "Planejamento", cep: "", endereco: "",
   dataInicio: "", dataPrevisaoFim: "", observacoes: "",
   usarConvencaoMatriz: 1, convencaoId: null,
@@ -179,6 +181,7 @@ export default function Obras() {
       nome: obra.nome || "", numOrcamento: obra.numOrcamento || obra.codigo || "",
       cliente: obra.cliente || "",
       responsavel: obra.responsavel || "",
+      responsavelId: obra.responsavelId ?? null,
       status: obra.status || "Planejamento",
       cep: obra.cep || "", endereco: obra.endereco || "",
       dataInicio: obra.dataInicio || "", dataPrevisaoFim: obra.dataPrevisaoFim || "",
@@ -553,7 +556,7 @@ export default function Obras() {
               <div className="relative mt-1">
                 <Input
                   value={responsavelOpen ? responsavelBusca : form.responsavel}
-                  onChange={e => { setResponsavelBusca(e.target.value); setForm(f => ({ ...f, responsavel: e.target.value })); setResponsavelOpen(true); }}
+                  onChange={e => { setResponsavelBusca(e.target.value); setForm(f => ({ ...f, responsavel: e.target.value, responsavelId: null })); setResponsavelOpen(true); }}
                   onFocus={() => { setResponsavelBusca(form.responsavel); setResponsavelOpen(true); }}
                   placeholder={liderancas.length === 0 ? "Nenhum colaborador de liderança encontrado" : "Selecione ou digite o nome..."}
                   className="pr-8"
@@ -585,7 +588,7 @@ export default function Obras() {
                           key={l.id}
                           type="button"
                           className="w-full text-left px-3 py-2.5 hover:bg-emerald-50 flex items-center gap-2.5 border-b border-slate-50 last:border-0"
-                          onClick={() => { setForm(f => ({ ...f, responsavel: l.nomeCompleto })); setResponsavelOpen(false); }}
+                          onClick={() => { setForm(f => ({ ...f, responsavel: l.nomeCompleto, responsavelId: l.id })); setResponsavelOpen(false); }}
                         >
                           {l.fotoUrl
                             ? <img src={l.fotoUrl} className="h-7 w-7 rounded-full object-cover shrink-0" />
