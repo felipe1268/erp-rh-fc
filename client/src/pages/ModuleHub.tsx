@@ -614,7 +614,7 @@ export default function ModuleHub() {
               </div>
 
               {/* Module Tiles - App grid style */}
-              <div className="grid grid-cols-3 gap-3 mt-6 relative z-10">
+              <div className="grid grid-cols-3 gap-2.5 mt-6 relative z-10">
                 {sortedActiveModules.map((mod, idx) => {
                   const isBeingDragged = dragActive === mod.id;
                   const isDropTarget = dragTarget === mod.id && dragActive !== mod.id;
@@ -627,40 +627,42 @@ export default function ModuleHub() {
                       onDrop={() => handleDrop(mod.id)}
                       onDragEnd={handleDragEnd}
                       onClick={() => { if (!didDrag.current) { setActiveModule(mod.id as ModuleId); navigate(mod.path); } }}
-                      className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-4 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.04] select-none`}
+                      className={`group relative flex flex-col items-center justify-center text-center rounded-xl p-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.04] select-none`}
                       style={{
                         animationDelay: `${0.3 + idx * 0.07}s`,
                         opacity: isBeingDragged ? 0.4 : 1,
-                        minHeight: '110px',
-                        background: `linear-gradient(145deg, ${mod.accentFrom}16, ${mod.accentTo}0a)`,
+                        minHeight: '86px',
+                        background: '#ffffff',
                         border: isDropTarget
                           ? `2px solid ${mod.accentFrom}`
-                          : `1.5px solid ${mod.accentFrom}38`,
-                        boxShadow: `0 4px 20px -6px ${mod.accentGlow || mod.accentFrom + "28"}`,
+                          : `1.5px solid #e5e7eb`,
+                        boxShadow: `0 2px 10px -3px rgba(0,0,0,0.08), 0 0 0 0 transparent`,
                       }}
                     >
-                      {/* Hover glow */}
+                      {/* Hover color wash */}
                       <div
-                        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                        style={{ background: `radial-gradient(ellipse at 50% 60%, ${mod.accentFrom}20 0%, transparent 70%)` }}
+                        className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                        style={{ background: `linear-gradient(145deg, ${mod.accentFrom}10, ${mod.accentTo}07)` }}
                       />
 
                       {/* Icon */}
                       <div
-                        className="h-12 w-12 rounded-2xl flex items-center justify-center mb-2.5 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5"
+                        className="h-9 w-9 rounded-xl flex items-center justify-center mb-2 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5"
                         style={{
-                          background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                          boxShadow: `0 6px 18px -3px ${mod.accentGlow || mod.accentFrom + "55"}`,
+                          background: `linear-gradient(135deg, ${mod.accentFrom}22, ${mod.accentTo}16)`,
                         }}
                       >
-                        <mod.icon className="h-6 w-6 text-white" />
+                        <mod.icon className="h-4.5 w-4.5" style={{ color: mod.accentFrom, width: '18px', height: '18px' }} />
                       </div>
 
                       {/* Title */}
-                      <p className="text-[11px] font-extrabold leading-tight text-[#1B2A4A] tracking-tight w-full truncate">{mod.title}</p>
+                      <p
+                        className="text-[10.5px] font-bold leading-tight w-full truncate"
+                        style={{ color: mod.accentFrom }}
+                      >{mod.title}</p>
 
                       {/* Subtitle */}
-                      <p className="text-[8.5px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitle}</p>
+                      <p className="text-[8px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitle}</p>
                     </div>
                   );
                 })}
