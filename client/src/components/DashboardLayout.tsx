@@ -793,7 +793,7 @@ function DashboardLayoutContent({
           { icon: TrendingUp,    label: "Curva S",           path: `/planejamento/${planId}?tab=curva-s` },
           { icon: BarChart3,     label: "Avanço Semanal",    path: `/planejamento/${planId}?tab=avanco` },
           { icon: AlertTriangle, label: "Caminho Crítico",   path: `/planejamento/${planId}?tab=caminho-critico` },
-          { icon: ShoppingCart,  label: "Compras",           path: `/planejamento/${planId}?tab=compras` },
+          { icon: ShoppingCart,  label: "Cronograma de Compras", path: `/planejamento/${planId}?tab=compras` },
           { icon: ClipboardList, label: "Prev. Medição",     path: `/planejamento/${planId}?tab=prev-medicao` },
           { icon: CalendarDays,  label: "Prog. Semanal",     path: `/planejamento/${planId}?tab=prog-semanal` },
           { icon: GitBranch,     label: "Revisões",          path: `/planejamento/${planId}?tab=revisoes` },
