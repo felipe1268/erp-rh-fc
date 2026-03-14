@@ -319,6 +319,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 14:33:00",
   },
   {
+    version: 234,
+    titulo: "Planejamento — Barra dupla Previsto vs Realizado com Desvio",
+    descricao: "O cabeçalho da tela de detalhe do projeto agora exibe duas barras de avanço físico em vez de uma: Previsto (âmbar) calculado com base no último ponto da curva planejada até hoje, e Realizado (azul/verde). Badge de desvio no canto direito: '+X.X% adiantado' (verde) ou '-X.X% atrasado' (vermelho). Se o desvio for < 0,1 pp exibe 'No prazo'. A barra previsto só aparece quando há dados de curva S disponíveis.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 21:00:00",
+  },
+  {
     version: 233,
     titulo: "Módulo Compras — Fase 2: SC, Cotações e Ordens de Compra",
     descricao: "Implementação do fluxo completo de compras. Solicitações de Compra (SC): criação com itens (descrição/unidade/qtd), filtro por status, detalhamento e cancelamento; numeração automática SC-AAAA-NNNN. Cotações: vinculação opcional a uma SC, seleção de fornecedor, validade, condição de pagamento, prazo de entrega, itens com preço unitário e desconto percentual, cálculo automático do total; botão 'Aprovar e Gerar OC' que cria automaticamente a OC e atualiza status da SC/cotação. Ordens de Compra: criação automática via cotação aprovada ou manual, KPIs no topo (pendentes/aprovadas/entregues/total em R$), fluxo de status (pendente → aprovada → entrega parcial → entregue), detalhamento com itens e quantidade entregue. Tabelas novas: compras_solicitacoes, compras_solicitacoes_itens, compras_cotacoes, compras_cotacoes_itens, compras_ordens, compras_ordens_itens. Menu lateral reorganizado com 3 seções: Fluxo de Compras / Cadastros / Integrações.",
