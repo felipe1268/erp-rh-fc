@@ -7524,6 +7524,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               </BarChart>
             </ResponsiveContainer>
           </div>
+          </>)}
         </div>
         );
       })()}
@@ -7626,7 +7627,6 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             );
           })()
         )}
-        </>)}
         </div>
         );
       })}
