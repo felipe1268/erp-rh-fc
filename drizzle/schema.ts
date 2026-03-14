@@ -4500,6 +4500,7 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   quantidadeAtual:  numeric("quantidade_atual", { precision: 14, scale: 3 }).default("0"),
   quantidadeMinima: numeric("quantidade_minima", { precision: 14, scale: 3 }).default("0"),
   observacoes:      text(),
+  fotoUrl:          text("foto_url"),
   ativo:            boolean().default(true),
   criadoEm:         timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
   atualizadoEm:     timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),

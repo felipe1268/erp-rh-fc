@@ -465,4 +465,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 22:00:00",
   },
+  {
+    version: 246,
+    titulo: "Compras: modal Nova SC redesenhado — tema claro forçado + layout compacto",
+    descricao: "Modal 'Nova Solicitação de Compra' completamente redesenhado: (1) Fundo branco forçado via style inline (bg: #ffffff) em todos os DialogContent de Compras (Solicitações, Cotações, Ordens), eliminando definitivamente o bug de tema escuro; (2) Layout 3 colunas para Setor/Data/Prioridade; (3) Inputs nativos HTML para evitar herança de tema; (4) Área de itens com scroll interno — modal inteiro não precisa rolar; (5) Mesma correção aplicada no modal Detalhe SC.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 22:30:00",
+  },
+  {
+    version: 247,
+    titulo: "Almoxarifado: módulo independente com foto por produto",
+    descricao: "Almoxarifado promovido a módulo autônomo do ERP: (1) Nova rota /almoxarifado independente do módulo Compras; (2) Módulo aparece no seletor de módulos da sidebar e no ModuleHub como ativo; (3) Vista em cards com foto do produto (upload com compressão automática para max 600x600px); (4) Vista em tabela clássica com miniatura da foto; (5) Foto do produto exibida no modal de movimentação; (6) Coluna foto_url adicionada ao banco de dados; (7) Router de Compras atualizado para CRUD de fotoUrl.",
+    tipo: "feature",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:00:00",
+  },
 ];

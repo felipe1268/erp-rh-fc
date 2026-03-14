@@ -244,6 +244,7 @@ export const comprasRouter = router({
       quantidadeAtual:  z.number().optional(),
       quantidadeMinima: z.number().optional(),
       observacoes:      z.string().optional(),
+      fotoUrl:          z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -256,6 +257,7 @@ export const comprasRouter = router({
         quantidadeAtual:  String(input.quantidadeAtual ?? 0),
         quantidadeMinima: String(input.quantidadeMinima ?? 0),
         observacoes:      input.observacoes ?? null,
+        fotoUrl:          input.fotoUrl ?? null,
         ativo:            true,
       }).returning();
       return item;
@@ -270,6 +272,7 @@ export const comprasRouter = router({
       codigoInterno:    z.string().optional(),
       quantidadeMinima: z.number().optional(),
       observacoes:      z.string().optional(),
+      fotoUrl:          z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -281,6 +284,7 @@ export const comprasRouter = router({
       if (data.codigoInterno !== undefined)    updates.codigoInterno = data.codigoInterno;
       if (data.quantidadeMinima !== undefined) updates.quantidadeMinima = String(data.quantidadeMinima);
       if (data.observacoes !== undefined)      updates.observacoes = data.observacoes;
+      if ('fotoUrl' in data)                   updates.fotoUrl = data.fotoUrl;
       await db.update(almoxarifadoItens).set(updates).where(eq(almoxarifadoItens.id, id));
       return { success: true };
     }),

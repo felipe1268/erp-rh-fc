@@ -194,9 +194,10 @@ const MODULES: Module[] = [
   },
 
   {
-    id: "almoxarifado", title: "Almoxarifado", subtitle: "Estoque de Obra",
-    description: "Controle de materiais por obra, requisições e transferências entre obras.",
-    icon: Warehouse, accentFrom: "#78716C", accentTo: "#57534E", accentGlow: "", iconBg: "", path: "", active: false, features: [],
+    id: "almoxarifado", title: "Almoxarifado", subtitle: "Estoque Central",
+    description: "Controle de materiais com foto por produto, entradas e saídas, histórico de movimentações e alertas de estoque mínimo.",
+    icon: Warehouse, accentFrom: "#10B981", accentTo: "#059669", accentGlow: "rgba(16,185,129,0.35)", iconBg: "rgba(16,185,129,0.12)", path: "/almoxarifado", active: true,
+    features: ["Foto por Produto", "Entradas e Saídas", "Histórico de Movimentações", "Alertas de Estoque Mínimo"],
   },
   {
     id: "assistencia-tecnica", title: "Assistência Técnica", subtitle: "Chamados Técnicos",
