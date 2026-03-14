@@ -70,9 +70,16 @@ export default function PlanejamentoLista() {
     new Set((projetos as any[]).map((p: any) => p.obraId).filter(Boolean)),
   [projetos]);
 
+  // Apenas obras que possuem orçamento cadastrado
+  const obraIdsComOrcamento = useMemo(() =>
+    new Set((orcamentos as any[]).map((o: any) => o.obraId).filter(Boolean)),
+  [orcamentos]);
+
   const obrasDisponiveis = useMemo(() =>
-    (obras as any[]).filter((o: any) => !obraIdsComPlanejamento.has(o.id)),
-  [obras, obraIdsComPlanejamento]);
+    (obras as any[]).filter((o: any) =>
+      !obraIdsComPlanejamento.has(o.id) && obraIdsComOrcamento.has(o.id)
+    ),
+  [obras, obraIdsComPlanejamento, obraIdsComOrcamento]);
 
   const obraSelecionada = useMemo(() =>
     (obras as any[]).find((o: any) => String(o.id) === form.obraId) ?? null,
@@ -290,7 +297,7 @@ export default function PlanejamentoLista() {
                 >
                   <option value="">— Selecione uma obra —</option>
                   {obrasDisponiveis.length === 0 && (
-                    <option disabled value="">Todas as obras já possuem planejamento</option>
+                    <option disabled value="">Nenhuma obra com orçamento disponível</option>
                   )}
                   {obrasDisponiveis.map((o: any) => (
                     <option key={o.id} value={o.id}>
