@@ -91,6 +91,15 @@ shared/         # Shared types and constants
   - Histórico REFIS table (BLOCO 7) — shows all previous reports sortable by date
 - **IA Gestora tab** — CRONOS AI assistant with 4 sub-tabs
 
+## Módulo de Compras (Fase 1 — Rev. 230)
+- **Rotas**: `/compras/fornecedores`, `/compras/almoxarifado`
+- **Tabelas DB**: `fornecedores`, `almoxarifado_itens`, `almoxarifado_movimentacoes`
+- **Router server**: `server/routers/compras.ts` → registrado como `compras:` no appRouter
+- **Páginas**: `client/src/pages/compras/Fornecedores.tsx`, `client/src/pages/compras/Almoxarifado.tsx`
+- **Fornecedores**: Cadastro completo com busca automática CNPJ via BrasilAPI (proxy server-side); dados de endereço, contato, bancários/PIX, categorias multi-seleção, situação Receita Federal
+- **Almoxarifado**: Itens com semáforo de estoque (OK/Baixo/Crítico vs. quantidade mínima); movimentações entrada/saida com validação de saldo; histórico completo por item
+- **Fases futuras**: SC (Solicitações de Compra), Cotações, Ordens de Compra, Financeiro de Compras
+
 ## User Preferences
 - After every completed adjustment, remind the user to click **Publish** to deploy. Deployment config: autoscale, build=`pnpm run build`, run=`node dist/index.js`.
 

@@ -318,4 +318,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 14:33:00",
   },
+  {
+    version: 230,
+    titulo: "Módulo de Compras — Fase 1: Fornecedores + Almoxarifado Central",
+    descricao: "Implementação da Fase 1 do Módulo de Compras. Fornecedores: cadastro completo com busca automática de dados pela Receita Federal via CNPJ (BrasilAPI), dados de endereço, contato comercial, dados bancários/PIX, categorias de fornecimento e situação cadastral. Almoxarifado Central: cadastro de itens com unidades, categorias e estoque mínimo; movimentações de entrada/saída com validação de saldo; semáforo visual de estoque (OK/Baixo/Crítico); histórico completo de movimentações por item. Tabelas no banco: fornecedores, almoxarifado_itens, almoxarifado_movimentacoes. Rotas: /compras/fornecedores e /compras/almoxarifado.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 16:00:00",
+  },
 ];

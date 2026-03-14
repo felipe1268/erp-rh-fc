@@ -125,6 +125,10 @@ const OrcamentoDashPage  = lazy(() => import("./pages/orcamento/OrcamentoDashPag
 const PlanejamentoLista   = lazy(() => import("./pages/planejamento/PlanejamentoLista"));
 const PlanejamentoDetalhe = lazy(() => import("./pages/planejamento/PlanejamentoDetalhe"));
 
+// Compras
+const Fornecedores = lazy(() => import("./pages/compras/Fornecedores"));
+const Almoxarifado = lazy(() => import("./pages/compras/Almoxarifado"));
+
 // Sprint 6 - IA
 const ComparativoConvencoes = lazy(() => import("./pages/ComparativoConvencoes"));
 
@@ -265,6 +269,9 @@ function Router() {
         {/* Planejamento */}
         <Route path="/planejamento"              component={PlanejamentoLista} />
         <Route path="/planejamento/:id"          component={PlanejamentoDetalhe} />
+        {/* Compras */}
+        <Route path="/compras/fornecedores"      component={Fornecedores} />
+        <Route path="/compras/almoxarifado"      component={Almoxarifado} />
         {/* Sprint 6 - IA */}
         <Route path="/comparativo-convencoes" component={ComparativoConvencoes} />
         <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
