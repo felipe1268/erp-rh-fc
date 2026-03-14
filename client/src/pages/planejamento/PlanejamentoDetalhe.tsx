@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useRoute, useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import ImportarCronograma from "./ImportarCronograma";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { Button } from "@/components/ui/button";
@@ -138,6 +139,7 @@ export default function PlanejamentoDetalhe() {
     const t = p.get('tab') as Tab;
     return (t && TAB_IDS.includes(t)) ? t : 'visao-geral';
   });
+  const { isAdminMaster } = usePermissions();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
@@ -1025,7 +1027,8 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
                     {n(r.avancoPrevisto) === 0 ? "—" : n(r.spi).toFixed(2)}
                   </td>
                   <td className="py-1.5 px-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${r.status === "emitido" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1 w-fit ${r.status === "consolidado" ? "bg-emerald-600 text-white" : r.status === "emitido" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                      {r.status === "consolidado" && <Lock className="h-2.5 w-2.5" />}
                       {r.status}
                     </span>
                   </td>
@@ -1064,7 +1067,8 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
                       <div className="flex items-center gap-2 mb-1">
                         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)' }}>REFIS</span>
                         <span style={{ background: '#FFB800', color: '#1A3461', fontSize: 10, fontWeight: 800, padding: '1px 8px', borderRadius: 4, letterSpacing: '0.06em' }}>Nº {numStr}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${r.status === 'emitido' ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-amber-900'}`}>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${r.status === 'consolidado' ? 'bg-emerald-600 text-white' : r.status === 'emitido' ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-amber-900'}`}>
+                          {r.status === 'consolidado' && <Lock className="h-2.5 w-2.5" />}
                           {r.status}
                         </span>
                       </div>
@@ -5872,6 +5876,17 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       utils.planejamento.listarRefis.invalidate();
       setConfirmDelete(false);
     },
+    onError: (e) => alert(e.message),
+  });
+
+  const consolidarMutation = trpc.planejamento.consolidarRefis.useMutation({
+    onSuccess: () => utils.planejamento.listarRefis.invalidate(),
+    onError: (e) => alert(e.message),
+  });
+
+  const cancelarConsolidacaoMutation = trpc.planejamento.cancelarConsolidacaoRefis.useMutation({
+    onSuccess: () => utils.planejamento.listarRefis.invalidate(),
+    onError: (e) => alert(e.message),
   });
 
   const analisarDesvioMut = (trpc.iaCronograma as any).analisarDesvio.useMutation({
@@ -6151,7 +6166,39 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <Printer className="h-3.5 w-3.5" />
             Imprimir PDF
           </Button>
-          {existente && !confirmDelete && (
+          {existente && existente.status === "consolidado" && (
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-50 border border-emerald-300 text-emerald-700 text-[11px] font-semibold no-print">
+              <Lock className="h-3.5 w-3.5" />
+              Consolidado{existente.consolidadoPor ? ` · ${existente.consolidadoPor}` : ""}
+            </span>
+          )}
+          {existente && !confirmDelete && existente.status !== "consolidado" && (
+            <Button size="sm" variant="outline"
+              className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50 no-print"
+              onClick={() => setConfirmDelete(true)}>
+              <XCircle className="h-3.5 w-3.5" />
+              Cancelar Emissão
+            </Button>
+          )}
+          {existente && !confirmDelete && existente.status !== "consolidado" && (
+            <Button size="sm" variant="outline"
+              className="gap-1.5 border-emerald-400 text-emerald-700 hover:bg-emerald-50 no-print"
+              disabled={consolidarMutation.isPending}
+              onClick={() => { if (window.confirm(`Confirma a consolidação do REFIS Nº ${String(existente.numero ?? "—").padStart(3, "0")}? Após consolidar, somente o ADM poderá cancelar.`)) consolidarMutation.mutate({ id: existente.id }); }}>
+              {consolidarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
+              Consolidar
+            </Button>
+          )}
+          {existente && !confirmDelete && existente.status === "consolidado" && isAdminMaster && (
+            <Button size="sm" variant="outline"
+              className="gap-1.5 border-amber-400 text-amber-700 hover:bg-amber-50 no-print"
+              disabled={cancelarConsolidacaoMutation.isPending}
+              onClick={() => { if (window.confirm(`Cancelar a consolidação do REFIS Nº ${String(existente.numero ?? "—").padStart(3, "0")}? O REFIS voltará para "emitido".`)) cancelarConsolidacaoMutation.mutate({ id: existente.id }); }}>
+              {cancelarConsolidacaoMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LockOpen className="h-3.5 w-3.5" />}
+              Desfazer Consolidação
+            </Button>
+          )}
+          {existente && !confirmDelete && existente.status === "consolidado" && isAdminMaster && (
             <Button size="sm" variant="outline"
               className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50 no-print"
               onClick={() => setConfirmDelete(true)}>
@@ -6160,7 +6207,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             </Button>
           )}
           <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 no-print"
-            disabled={salvarMutation.isPending}
+            disabled={salvarMutation.isPending || existente?.status === "consolidado"}
             onClick={emitirRefis}>
             {salvarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
             {existente ? "Atualizar REFIS" : "Emitir REFIS"}

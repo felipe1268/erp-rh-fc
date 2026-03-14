@@ -485,9 +485,45 @@ export const planejamentoRouter = router({
 
   deletarRefis: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [refis] = await db.select().from(planejamentoRefis).where(eq(planejamentoRefis.id, input.id));
+      if (!refis) throw new TRPCError({ code: "NOT_FOUND", message: "REFIS não encontrado." });
+      if (refis.status === "consolidado") {
+        const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+        if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem cancelar um REFIS consolidado." });
+      }
       await db.delete(planejamentoRefis).where(eq(planejamentoRefis.id, input.id));
+      return { success: true };
+    }),
+
+  consolidarRefis: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [refis] = await db.select().from(planejamentoRefis).where(eq(planejamentoRefis.id, input.id));
+      if (!refis) throw new TRPCError({ code: "NOT_FOUND", message: "REFIS não encontrado." });
+      await db.update(planejamentoRefis).set({
+        status: "consolidado",
+        consolidadoPor: ctx.user.name || ctx.user.email,
+        consolidadoEm: new Date(),
+      }).where(eq(planejamentoRefis.id, input.id));
+      return { success: true };
+    }),
+
+  cancelarConsolidacaoRefis: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem cancelar a consolidação." });
+      const db = await getDb();
+      await db.update(planejamentoRefis).set({
+        status: "emitido",
+        canceladoPor: ctx.user.name || ctx.user.email,
+        canceladoEm: new Date(),
+        consolidadoPor: null,
+        consolidadoEm: null,
+      }).where(eq(planejamentoRefis.id, input.id));
       return { success: true };
     }),
 

@@ -4263,6 +4263,10 @@ export const planejamentoRefis = pgTable("planejamento_refis", {
   status:                   varchar({ length: 50 }).default("rascunho"),
   criadoEm:                 timestamp("criado_em").defaultNow(),
   criadoPor:                varchar("criado_por", { length: 200 }),
+  consolidadoPor:           varchar("consolidado_por", { length: 200 }),
+  consolidadoEm:            timestamp("consolidado_em"),
+  canceladoPor:             varchar("cancelado_por", { length: 200 }),
+  canceladoEm:              timestamp("cancelado_em"),
 });
 
 export const planejamentoMedicaoConfig = pgTable("planejamento_medicao_config", {

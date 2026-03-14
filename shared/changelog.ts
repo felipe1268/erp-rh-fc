@@ -537,4 +537,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 00:00:00",
   },
+  {
+    version: 254,
+    titulo: "REFIS: bloqueio por consolidação — somente ADM pode cancelar",
+    descricao: "Após emitir um REFIS, o usuário pode clicar em 'Consolidar' para travar o registro. Um REFIS consolidado exibe badge verde com cadeado e nome de quem consolidou. O botão 'Atualizar REFIS' fica desabilitado enquanto consolidado. Usuários comuns não veem o botão 'Cancelar Emissão' de um REFIS consolidado. Apenas administradores (isAdminMaster) visualizam os botões 'Desfazer Consolidação' (retorna ao status 'emitido') e 'Cancelar Emissão'. O servidor valida a permissão via ctx.user.role antes de executar. Colunas consolidado_por, consolidado_em, cancelado_por, cancelado_em adicionadas à tabela planejamento_refis para auditoria.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 10:00:00",
+  },
 ];
