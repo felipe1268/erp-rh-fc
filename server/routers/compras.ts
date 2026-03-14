@@ -8,6 +8,7 @@ import {
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
   comprasOrdens, comprasOrdensItens,
+  obras,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
@@ -858,14 +859,119 @@ export const comprasRouter = router({
 
   atualizarStatusOrdem: protectedProcedure
     .input(z.object({ id: z.number(), status: z.string(), dataEntregaReal: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+
+      // atualiza status da OC
       await db.update(comprasOrdens).set({
         status: input.status,
         dataEntregaReal: input.dataEntregaReal,
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasOrdens.id, input.id));
-      return { ok: true };
+
+      // ── Integração automática: OC entregue → Almoxarifado ───────────
+      if (input.status === "entregue") {
+        const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+        if (!oc) return { ok: true, almoxarifado: false };
+
+        const itensOC = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+
+        // busca nome da obra
+        let obraNome: string | null = null;
+        if (oc.obraId) {
+          const [ob] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, oc.obraId));
+          obraNome = ob?.nome ?? null;
+        }
+
+        const usuarioNome = ctx.user?.name ?? ctx.user?.email ?? null;
+        const usuarioId   = ctx.user?.id ?? null;
+
+        for (const item of itensOC) {
+          const qtd = n(item.quantidade);
+          if (qtd <= 0) continue;
+
+          // busca ou cria item no almoxarifado
+          const existing = await db.select().from(almoxarifadoItens)
+            .where(and(
+              eq(almoxarifadoItens.companyId, oc.companyId),
+              ilike(almoxarifadoItens.nome, item.descricao),
+            )).limit(1);
+
+          let almoItemId: number;
+          if (existing.length > 0) {
+            almoItemId = existing[0].id;
+          } else {
+            const [novo] = await db.insert(almoxarifadoItens).values({
+              companyId: oc.companyId,
+              nome: item.descricao,
+              unidade: item.unidade ?? "un",
+              categoria: "Compras",
+              ativo: true,
+            }).returning();
+            almoItemId = novo.id;
+          }
+
+          // cria movimentação de entrada
+          await db.insert(almoxarifadoMovimentacoes).values({
+            companyId: oc.companyId,
+            itemId: almoItemId,
+            tipo: "entrada",
+            quantidade: String(qtd),
+            obraId: oc.obraId ?? null,
+            obraNome: obraNome ?? null,
+            motivo: `OC ${oc.numeroOc} entregue`,
+            usuarioId,
+            usuarioNome,
+            observacoes: `Entrada automática via Ordem de Compra ${oc.numeroOc}`,
+          });
+
+          // atualiza quantidade no almoxarifado
+          await db.update(almoxarifadoItens).set({
+            quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${qtd}`,
+            atualizadoEm: new Date().toISOString(),
+          }).where(eq(almoxarifadoItens.id, almoItemId));
+
+          // atualiza quantidadeEntregue no item da OC
+          await db.update(comprasOrdensItens).set({
+            quantidadeEntregue: String(qtd),
+          }).where(eq(comprasOrdensItens.id, item.id));
+
+          // atualiza quantidadeAtendida no item da SC se houver vínculo
+          if (item.solicitacaoItemId) {
+            const [scItem] = await db.select().from(comprasSolicitacoesItens)
+              .where(eq(comprasSolicitacoesItens.id, item.solicitacaoItemId));
+            if (scItem) {
+              const novaAtendida = n(scItem.quantidadeAtendida) + qtd;
+              const atendido = novaAtendida >= n(scItem.quantidade);
+              await db.update(comprasSolicitacoesItens).set({
+                quantidadeAtendida: String(novaAtendida),
+                statusItem: atendido ? "atendido" : "parcial",
+              }).where(eq(comprasSolicitacoesItens.id, item.solicitacaoItemId));
+            }
+          }
+        }
+
+        // verifica se todos os itens da SC foram atendidos → marca SC como concluída
+        if (oc.cotacaoId) {
+          const [cot] = await db.select({ solicitacaoId: comprasCotacoes.solicitacaoId })
+            .from(comprasCotacoes).where(eq(comprasCotacoes.id, oc.cotacaoId));
+          if (cot?.solicitacaoId) {
+            const scItens = await db.select().from(comprasSolicitacoesItens)
+              .where(eq(comprasSolicitacoesItens.solicitacaoId, cot.solicitacaoId));
+            const todosAtendidos = scItens.length > 0 && scItens.every(it => it.statusItem === "atendido");
+            if (todosAtendidos) {
+              await db.update(comprasSolicitacoes).set({
+                status: "concluida",
+                atualizadoEm: new Date().toISOString(),
+              }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+            }
+          }
+        }
+
+        return { ok: true, almoxarifado: true, itens: itensOC.length };
+      }
+
+      return { ok: true, almoxarifado: false };
     }),
 
   excluirOrdem: protectedProcedure
@@ -904,12 +1010,16 @@ export const comprasRouter = router({
       const db = await getDb();
       const today = new Date().toISOString().slice(0, 10);
 
-      const [scs, cots, ocs, forn] = await Promise.all([
+      const [scs, cots, ocs, forn, obrasRows] = await Promise.all([
         db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId)).orderBy(desc(comprasSolicitacoes.criadoEm)),
         db.select().from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId)).orderBy(desc(comprasCotacoes.criadoEm)),
         db.select().from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId)).orderBy(desc(comprasOrdens.criadoEm)),
         db.select().from(fornecedores).where(and(eq(fornecedores.companyId, input.companyId), eq(fornecedores.ativo, true))),
+        db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo }).from(obras).where(eq(obras.companyId, input.companyId)),
       ]);
+
+      const obraMap: Record<number, string> = {};
+      obrasRows.forEach(o => { obraMap[o.id] = o.codigo ? `${o.codigo} – ${o.nome}` : o.nome; });
 
       // KPIs
       const kpis = {
@@ -930,20 +1040,26 @@ export const comprasRouter = router({
       ).map(r => ({
         id: r.id, numeroOc: r.numeroOc, dataEntregaPrevista: r.dataEntregaPrevista,
         status: r.status, fornecedorId: r.fornecedorId, total: r.total,
+        obraId: r.obraId,
+        obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null,
         atrasado: r.dataEntregaPrevista! < today,
       }));
 
       // SCs aguardando aprovação
-      const scsPendentesAprov = scs.filter(r => r.aprovacaoStatus === "aguardando" && r.status !== "cancelado").slice(0, 8);
+      const scsPendentesAprov = scs.filter(r => r.aprovacaoStatus === "aguardando" && r.status !== "cancelado").slice(0, 8)
+        .map(r => ({ ...r, obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null }));
 
       // Cotações pendentes (mais antigas primeiro)
-      const cotsPendentes = cots.filter(r => r.status === "pendente").slice(0, 8);
+      const cotsPendentes = cots.filter(r => r.status === "pendente").slice(0, 8)
+        .map(r => ({ ...r, obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null }));
 
       // OCs recentes (últimas 8)
-      const ocsRecentes = ocs.slice(0, 8);
+      const ocsRecentes = ocs.slice(0, 8)
+        .map(r => ({ ...r, obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null }));
 
       // SCs recentes (últimas 8)
-      const scsRecentes = scs.slice(0, 8);
+      const scsRecentes = scs.slice(0, 8)
+        .map(r => ({ ...r, obraNome: r.obraId ? (obraMap[r.obraId] ?? null) : null }));
 
       // Gastos por mês (últimos 6 meses) — baseado na data de criação das OCs aprovadas/entregues
       const seisM: Record<string, number> = {};
@@ -953,6 +1069,6 @@ export const comprasRouter = router({
       });
       const gastosMensais = Object.entries(seisM).sort(([a], [b]) => a.localeCompare(b)).slice(-6).map(([mes, valor]) => ({ mes, valor }));
 
-      return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn };
+      return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn, obraMap };
     }),
 });

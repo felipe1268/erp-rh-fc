@@ -102,14 +102,16 @@ shared/         # Shared types and constants
 - **Idempotente**: nunca duplica dados (verifica por CNPJ para fornecedores, nome para obras e insumos)
 - **Logs**: migration_logs registra total encontrado/importado/duplicado/erros por execução
 
-## Módulo de Compras (Fase 1 — Rev. 230)
-- **Rotas**: `/compras/fornecedores`, `/compras/almoxarifado`
-- **Tabelas DB**: `fornecedores`, `almoxarifado_itens`, `almoxarifado_movimentacoes`
-- **Router server**: `server/routers/compras.ts` → registrado como `compras:` no appRouter
-- **Páginas**: `client/src/pages/compras/Fornecedores.tsx`, `client/src/pages/compras/Almoxarifado.tsx`
-- **Fornecedores**: Cadastro completo com busca automática CNPJ via BrasilAPI (proxy server-side); dados de endereço, contato, bancários/PIX, categorias multi-seleção, situação Receita Federal
-- **Almoxarifado**: Itens com semáforo de estoque (OK/Baixo/Crítico vs. quantidade mínima); movimentações entrada/saida com validação de saldo; histórico completo por item
-- **Fases futuras**: SC (Solicitações de Compra), Cotações, Ordens de Compra, Financeiro de Compras
+## Módulo de Compras (Rev. 245 — Completo)
+- **Rotas**: `/compras/painel`, `/compras/solicitacoes`, `/compras/cotacoes`, `/compras/ordens`, `/compras/fornecedores`, `/compras/almoxarifado`
+- **Tabelas DB**: `fornecedores`, `almoxarifado_itens`, `almoxarifado_movimentacoes`, `compras_solicitacoes`, `compras_solicitacoes_itens`, `compras_cotacoes`, `compras_cotacoes_itens`, `compras_ordens`, `compras_ordens_itens`
+- **Router server**: `server/routers/compras.ts`
+- **Fluxo completo**: SC (Solicitação de Compra) → Cotação → OC (Ordem de Compra) → Almoxarifado
+- **obraId obrigatório** em SC, Cotação e OC — propaga automaticamente SC→Cotação e Cotação→OC
+- **Integração OC→Almoxarifado** (Rev. 245): ao marcar OC como "entregue", itens entram automaticamente no almoxarifado com movimentação de entrada; SC item recebe quantidadeAtendida; SC marcada "concluída" quando todos os itens atendidos
+- **Painel de Compras**: KPIs, alertas de entrega, gastos mensais, SCs e OCs recentes com nome da obra visível
+- **Almoxarifado**: Itens com semáforo de estoque; movimentações entrada/saída vinculadas à obra; entradas automáticas via OC entregue
+- **Fornecedores**: Cadastro completo com busca automática CNPJ via BrasilAPI
 
 ## User Preferences
 - After every completed adjustment, remind the user to click **Publish** to deploy. Deployment config: autoscale, build=`pnpm run build`, run=`node dist/index.js`.
