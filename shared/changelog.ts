@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 282,
+    titulo: "REFIS: eliminada sobreposição de texto nos gráficos de grupo e etapa",
+    descricao: "Corrigida sobreposição de rótulos no eixo Y dos gráficos de barras 'Avanço Físico por Grupo' e 'Avanço por Etapa'. Implementado: (1) truncagem dinâmica dos nomes longos com reticências; (2) largura do eixo Y calculada automaticamente pelo comprimento máximo do label; (3) altura por linha aumentada de 48→64px (etapas) e 52→72px (grupos); (4) tooltip exibe o nome completo ao passar o mouse. Rótulos de percentual com casas decimais (.1) e peso bold.",
+    tipo: "correcao",
+    modulos: "Planejamento / REFIS",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 02:30:00",
+  },
+  {
     version: 281,
     titulo: "JULINHO: corrigido erro de validação em 'Alertas das próximas semanas'",
     descricao: "O JULINHO falhava ao clicar em Analisar no painel de Alertas das próximas 3 semanas com erro 'Invalid input: expected string, received null'. Causa: campos opcionais (recursoPrincipal, eapCodigo, dataInicio, dataFim, avancoPrevisto, avancoReal, atrasada) estavam definidos como z.string().optional() no schema Zod, que aceita undefined mas rejeita null. Corrigido para z.string().nullish() (aceita undefined E null) em todos os campos do array de atividades e insumos da rota alertasSemana.",
