@@ -1065,7 +1065,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {/* Alerta atividades críticas */}
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
           <button
@@ -1137,35 +1137,6 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
           )}
         </div>
 
-        {/* Informações do projeto */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-slate-700">Dados do Projeto</p>
-            <button onClick={onEditarProjeto}
-              className="text-[10px] flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-colors">
-              <Pencil className="h-3 w-3" /> Editar
-            </button>
-          </div>
-          <div className="space-y-2 text-xs">
-            {[
-              ["Obra", proj.nome],
-              ["Cliente", proj.cliente ?? "—"],
-              ["Local", proj.local
-                ? <span className="flex items-center gap-1 text-blue-600"><MapPin className="h-3 w-3" />{proj.local}</span>
-                : <span className="text-amber-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Não definido — clique em Editar</span>],
-              ["Responsável", proj.responsavel ?? "—"],
-              ["Início", fmtBR(proj.dataInicio) || "—"],
-              ["Prazo Contratual", fmtBR(proj.dataTerminoContratual) || "—"],
-              ["Status", proj.status ?? "—"],
-              ["Vinculado ao Orçamento", proj.orcamento ? (proj.orcamento.descricao ?? `#${proj.orcamento.id}`) : "—"],
-            ].map(([k, v]) => (
-              <div key={String(k)} className="flex items-start gap-2">
-                <span className="text-slate-400 w-32 shrink-0">{k}:</span>
-                <span className="text-slate-700 font-medium">{v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Previsão do tempo */}
