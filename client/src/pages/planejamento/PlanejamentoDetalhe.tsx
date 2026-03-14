@@ -6600,18 +6600,17 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
       {/* Print styles */}
       <style>{`
-        /* ─── REFIS · Layout de Impressão Técnico A4 ─────────────────────────── */
+        /* ─── REFIS · Layout de Impressão Profissional A4 ────────────────────── */
         @media print {
-          @page { size: A4 portrait; margin: 14mm 14mm 16mm 14mm; }
+          @page { size: A4 portrait; margin: 12mm 12mm 14mm 12mm; }
 
-          /* Isolação do conteúdo via visibility trick */
-          html, body { background: white !important; }
+          /* Isolação do conteúdo */
+          html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden !important; }
           #refis-print-area {
             visibility: visible !important;
             position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
+            top: 0 !important; left: 0 !important;
             width: 100% !important;
             background: white !important;
             -webkit-print-color-adjust: exact !important;
@@ -6620,7 +6619,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             z-index: 99999 !important;
             overflow: visible !important;
             font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important;
-            font-size: 9pt !important;
+            font-size: 8.5pt !important;
             color: #1e293b !important;
           }
           #refis-print-area * {
@@ -6630,17 +6629,20 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             color-adjust: exact !important;
           }
 
-          /* Elementos apenas de tela: ocultos na impressão */
+          /* Ocultar elementos de tela */
           .refis-no-print { display: none !important; visibility: hidden !important; }
-
-          /* Elementos apenas de impressão: visíveis na impressão */
+          /* Mostrar elementos apenas de impressão */
           .refis-print-only { display: flex !important; }
           .refis-print-only-block { display: block !important; }
 
           /* Espaçamento entre blocos */
-          #refis-print-area .space-y-5 > * + * { margin-top: 6pt !important; }
+          #refis-print-area .space-y-5 > * + * { margin-top: 5pt !important; }
 
-          /* ── Remover decoração web ── */
+          /* Quebras de página forçadas */
+          .refis-break-before { page-break-before: always !important; break-before: always !important; margin-top: 0 !important; }
+          .refis-break-avoid  { page-break-inside: avoid !important; break-inside: avoid !important; }
+
+          /* ── Decoração web removida ── */
           #refis-print-area .rounded-xl,
           #refis-print-area .rounded-lg,
           #refis-print-area .rounded-md { border-radius: 2px !important; }
@@ -6648,128 +6650,99 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           #refis-print-area .shadow-md,
           #refis-print-area .shadow { box-shadow: none !important; }
 
-          /* ── Cabeçalho do documento (FC Engenharia · banner) ── */
-          .refis-doc-header {
-            background: #1A3461 !important;
-            color: white !important;
-            margin-bottom: 6pt !important;
-            page-break-after: avoid !important;
-          }
-          .refis-doc-header-inner {
-            display: flex !important;
-            align-items: stretch !important;
-            min-height: 46pt !important;
-          }
+          /* ── Cabeçalho doc (FC Engenharia · banner) ── */
+          .refis-doc-header { background: #1A3461 !important; color: white !important; margin-bottom: 5pt !important; page-break-after: avoid !important; }
+          .refis-doc-header-inner { display: flex !important; align-items: stretch !important; min-height: 42pt !important; }
           .refis-doc-header-brand {
             border-right: 1pt solid rgba(255,255,255,0.22) !important;
-            padding: 8pt 12pt !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-            min-width: 108pt !important;
+            padding: 7pt 11pt !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 100pt !important;
           }
           .refis-doc-header-center {
-            flex: 1 !important;
-            padding: 8pt 14pt !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
+            flex: 1 !important; padding: 7pt 12pt !important; display: flex !important; flex-direction: column !important; justify-content: center !important;
           }
           .refis-doc-header-ref {
             border-left: 1pt solid rgba(255,255,255,0.22) !important;
-            padding: 8pt 12pt !important;
-            text-align: right !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-            min-width: 82pt !important;
+            padding: 7pt 11pt !important; text-align: right !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 76pt !important;
           }
 
           /* ── Container de cada bloco ── */
           .refis-block {
+            break-inside: avoid !important;
             page-break-inside: avoid !important;
             border: 0.5pt solid #cbd5e1 !important;
             background: white !important;
-            margin-bottom: 6pt !important;
+            margin-bottom: 5pt !important;
             overflow: visible !important;
           }
+          /* Blocos de etapa (bloco 5) podem quebrar internamente */
+          .refis-block-tall { break-inside: auto !important; page-break-inside: auto !important; }
 
           /* ── BLOCO 1: cabeçalho obra ── */
           #refis-print-area .refis-block .bg-slate-800 {
-            background: #1A3461 !important;
-            padding: 6pt 10pt !important;
-            font-size: 8.5pt !important;
+            background: #1A3461 !important; padding: 5pt 9pt !important; font-size: 8pt !important;
           }
           #refis-print-area .refis-block .bg-slate-800 .text-slate-300 { color: rgba(255,255,255,0.65) !important; }
           #refis-print-area .refis-block .bg-slate-800 .text-slate-100 { color: rgba(255,255,255,0.95) !important; }
-          #refis-print-area .refis-block .bg-slate-50 { background: #f8fafc !important; }
+          #refis-print-area .refis-block .bg-slate-50  { background: #f8fafc !important; }
           #refis-print-area .refis-block .bg-slate-100 { background: #f1f5f9 !important; }
           #refis-print-area .refis-block .divide-slate-100 { border-color: #e2e8f0 !important; }
-          #refis-print-area .refis-block .grid { grid-template-columns: repeat(3, 1fr) !important; }
+          /* Grid obra (3 colunas) — NÃO afecta o grid KPI de 4 colunas */
+          #refis-print-area .sm\\:grid-cols-3 { grid-template-columns: repeat(3, 1fr) !important; }
+          /* Grid KPI (4 colunas) — forçado horizontalmente */
+          #refis-print-area .sm\\:grid-cols-4 { grid-template-columns: repeat(4, 1fr) !important; }
 
           /* ── BLOCO 2: barras + KPIs ── */
           #refis-print-area .refis-block .bg-slate-100.border-b { background: #f1f5f9 !important; padding: 4pt 8pt !important; font-size: 7.5pt !important; }
+          /* KPI horizontal strip: padding compacto */
+          #refis-print-area .grid.sm\\:grid-cols-4 > div { padding: 5pt 6pt !important; }
+          #refis-print-area .grid.sm\\:grid-cols-4 .text-3xl { font-size: 17pt !important; }
+          /* Barras de progresso */
           #refis-print-area [style*="background: #FFB800"] { background: #FFB800 !important; }
           #refis-print-area [style*="background: #1A3461"] { background: #1A3461 !important; }
-          #refis-print-area .bg-slate-100.rounded.overflow-hidden { background: #e2e8f0 !important; border: 0.3pt solid #cbd5e1 !important; }
           #refis-print-area .bg-emerald-600 { background: #16a34a !important; }
-          #refis-print-area .bg-red-500 { background: #ef4444 !important; }
+          #refis-print-area .bg-red-500    { background: #ef4444 !important; }
           #refis-print-area .bg-emerald-50 { background: #f0fdf4 !important; }
-          #refis-print-area .bg-red-50 { background: #fef2f2 !important; }
-          #refis-print-area [style*="background: #FFFAEB"] { background: #fffbeb !important; border-color: #fcd34d !important; }
-          #refis-print-area [style*="background: #E8EDF5"] { background: #eff6ff !important; border-color: #93c5fd !important; }
-          #refis-print-area .shrink-0.flex.flex-col { flex-direction: row !important; flex-wrap: wrap !important; width: 100% !important; gap: 5pt !important; padding: 6pt 8pt !important; border-top: 0.5pt solid #e2e8f0 !important; }
-          #refis-print-area .shrink-0.flex.flex-col > * { flex: 1 !important; min-width: 80pt !important; }
-          #refis-print-area .px-5.py-4.flex.gap-4 { flex-direction: column !important; padding: 6pt 8pt !important; gap: 6pt !important; }
-          #refis-print-area .flex-1.space-y-3 { flex: 1 !important; }
+          #refis-print-area .bg-red-50     { background: #fef2f2 !important; }
+          /* Padding interno das seções de barras */
+          #refis-print-area .px-6.py-5.space-y-5 { padding: 8pt 10pt !important; }
+          #refis-print-area .px-6.py-5.space-y-5 .space-y-5 > * + * { margin-top: 8pt !important; }
 
           /* ── BLOCO 2B: alerta IA ── */
-          .refis-alert-block { border: 1.5pt solid #dc2626 !important; page-break-inside: avoid !important; margin-bottom: 6pt !important; background: white !important; }
-          #refis-print-area .bg-red-600 { background: #dc2626 !important; }
+          .refis-alert-block { border: 1.5pt solid #dc2626 !important; break-inside: avoid !important; page-break-inside: avoid !important; margin-bottom: 5pt !important; background: white !important; }
+          #refis-print-area .bg-red-600    { background: #dc2626 !important; }
           #refis-print-area .bg-orange-500 { background: #ea580c !important; }
-          #refis-print-area .bg-red-100\/60 { background: rgba(254,226,226,0.6) !important; }
-          #refis-print-area .bg-orange-100\/60 { background: rgba(255,237,213,0.6) !important; }
-          #refis-print-area .rounded-full { border-radius: 3pt !important; }
+          #refis-print-area .rounded-full  { border-radius: 3pt !important; }
           #refis-print-area .rounded-full.px-3 { font-size: 7pt !important; padding: 2pt 5pt !important; }
 
           /* ── BLOCO 5: grupo header escuro ── */
           #refis-print-area .bg-slate-700 { background: #334155 !important; }
-          #refis-print-area .bg-slate-700 .text-blue-300 { color: #93c5fd !important; }
+          #refis-print-area .bg-slate-700 .text-blue-300    { color: #93c5fd !important; }
           #refis-print-area .bg-slate-700 .text-emerald-300 { color: #6ee7b7 !important; }
-          #refis-print-area .bg-slate-700 .text-red-300 { color: #fca5a5 !important; }
-          #refis-print-area .bg-mono { background: #3b4a60 !important; }
+          #refis-print-area .bg-slate-700 .text-red-300     { color: #fca5a5 !important; }
 
           /* ── Faturamento ── */
-          #refis-print-area .bg-amber-50 { background: #fffbeb !important; }
-          #refis-print-area .bg-blue-50 { background: #eff6ff !important; }
+          #refis-print-area .bg-amber-50   { background: #fffbeb !important; }
+          #refis-print-area .bg-blue-50    { background: #eff6ff !important; }
           #refis-print-area .border-amber-200 { border-color: #fde68a !important; }
-          #refis-print-area .border-blue-200 { border-color: #bfdbfe !important; }
+          #refis-print-area .border-blue-200  { border-color: #bfdbfe !important; }
 
-          /* ── Histórico: tabela ── */
+          /* ── Histórico: tabela compacta ── */
           #refis-print-area .overflow-x-auto { overflow: visible !important; }
-          #refis-print-area table { width: 100% !important; border-collapse: collapse !important; font-size: 7.5pt !important; }
-          #refis-print-area table th { background: #f1f5f9 !important; border: 0.5pt solid #cbd5e1 !important; padding: 3pt 5pt !important; font-size: 6.5pt !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #475569 !important; }
-          #refis-print-area table td { border: 0.5pt solid #e2e8f0 !important; padding: 3pt 5pt !important; }
-          #refis-print-area .bg-slate-800.text-white.px-5.py-2\\.5 { background: #1e293b !important; font-size: 7.5pt !important; padding: 4pt 8pt !important; }
+          #refis-print-area table { width: 100% !important; border-collapse: collapse !important; font-size: 7pt !important; }
+          #refis-print-area table th { background: #f1f5f9 !important; border: 0.5pt solid #cbd5e1 !important; padding: 2.5pt 4pt !important; font-size: 6pt !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #475569 !important; }
+          #refis-print-area table td { border: 0.5pt solid #e2e8f0 !important; padding: 2.5pt 4pt !important; }
 
           /* ── Textarea de observações ── */
-          #refis-print-area textarea { border: 0.5pt solid #cbd5e1 !important; font-size: 8pt !important; padding: 4pt !important; width: 100% !important; resize: none !important; display: block !important; min-height: 38pt !important; box-sizing: border-box !important; }
+          #refis-print-area textarea { border: 0.5pt solid #cbd5e1 !important; font-size: 7.5pt !important; padding: 4pt !important; width: 100% !important; resize: none !important; display: block !important; min-height: 32pt !important; box-sizing: border-box !important; }
 
-          /* ── Recharts SVG: não quebrar ── */
-          #refis-print-area .recharts-wrapper { page-break-inside: avoid !important; }
-          #refis-print-area [style*="height: 240"] { height: 180pt !important; }
-          #refis-print-area [style*="height: 180"] { height: 150pt !important; }
+          /* ── Recharts SVG ── */
+          #refis-print-area .recharts-wrapper { break-inside: avoid !important; page-break-inside: avoid !important; }
 
           /* ── Rodapé do documento ── */
           .refis-doc-footer {
-            border-top: 0.8pt solid #94a3b8 !important;
-            padding-top: 5pt !important;
-            margin-top: 8pt !important;
-            font-size: 6.5pt !important;
-            color: #64748b !important;
-            display: flex !important;
-            justify-content: space-between !important;
-            align-items: center !important;
+            border-top: 0.8pt solid #94a3b8 !important; padding-top: 4pt !important; margin-top: 6pt !important;
+            font-size: 6pt !important; color: #64748b !important;
+            display: flex !important; justify-content: space-between !important; align-items: center !important;
           }
         }
       `}</style>
@@ -7235,7 +7208,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       ══════════════════════════════════════════════════════════════════════ */}
       {/* BLOCO 3A — Curva S Física */}
       {curvaFiltrada.length > 1 && (
-        <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="refis-block refis-break-before bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Curva S Física — Avanço Acumulado (%)
@@ -7332,7 +7305,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           BLOCO 4 — AVANÇO POR GRUPO (Pavimento) — gráfico de barras horizontal
       ══════════════════════════════════════════════════════════════════════ */}
       {grupos.length > 0 && (
-        <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="refis-block refis-break-before bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-100 border-b border-slate-200 px-5 py-2">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Avanço Físico por Grupo
@@ -7369,7 +7342,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {grupos.filter((g: any) => g.etapas?.length > 0).map((g: any) => {
         const isCollapsed = collapsedGrupos.has(g.id);
         return (
-        <div key={g.id} className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div key={g.id} className="refis-block refis-block-tall bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Header do grupo */}
           <div
             className="bg-slate-700 text-white px-5 py-2.5 flex items-center justify-between cursor-pointer select-none"

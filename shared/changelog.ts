@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 277,
+    titulo: "REFIS PDF: layout tipo apresentação profissional",
+    descricao: "Reorganizado o CSS de impressão do REFIS: (1) Corrigido bug que forçava todos os grids a 3 colunas, quebrando os 4 indicadores KPI — agora usam sm:grid-cols-4 corretamente; (2) Adicionadas quebras de página explícitas — Bloco 1+2 na pág 1, Curva S na pág 2, Grupos na pág 3+; (3) Blocos de etapa longos agora podem quebrar internamente (refis-block-tall); (4) Margens e espaçamentos compactados para eliminar páginas em branco ou com meia informação.",
+    tipo: "melhoria",
+    modulos: "Planejamento / REFIS",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:20:00",
+  },
+  {
     version: 276,
     titulo: "Visão Geral: indicadores KPI em faixa horizontal inferior",
     descricao: "Os 4 indicadores do bloco 'Evolução Física Global' (Avanço Semanal Previsto, Avanço Semanal Realizado, SPI e Desvio Físico) foram movidos da coluna lateral direita para uma faixa horizontal na parte inferior do card, exibidos lado a lado (grid 4 colunas). Responsivo: 2 colunas em telas pequenas, 4 colunas em sm+.",
