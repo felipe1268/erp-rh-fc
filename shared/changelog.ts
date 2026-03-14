@@ -583,6 +583,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 21:00:00",
   },
   {
+    version: 273,
+    titulo: "Módulo Clientes: CRUD completo com auto-fetch CNPJ",
+    descricao: "Novo módulo Clientes no cadastro. Tabela 'clientes' criada no banco (PJ/PF, CNPJ, CPF, endereço, contato). Router tRPC completo (list, criar, atualizar, excluir). Página Clientes.tsx com cards visuais, busca, modal de cadastro/edição com auto-preenchimento via Receita Federal (mesmo endpoint buscarCNPJ do módulo Compras). Link na sidebar Cadastro. Rota /clientes registrada.",
+    tipo: "feature",
+    modulos: "Cadastro / Clientes",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-14 23:00:00",
+  },
+  {
     version: 272,
     titulo: "Editar Projeto: campos pré-preenchidos da obra vinculada",
     descricao: "Ao abrir o modal Editar Projeto, os campos Cliente, Responsável, Local e Valor do Contrato agora são preenchidos automaticamente a partir do cadastro da obra vinculada (obraId) quando o projeto não os tem salvos. Garante que o usuário não veja campos em branco que já estão no cadastro.",

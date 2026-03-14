@@ -349,6 +349,7 @@ const menuSectionsCadastro: MenuSection[] = [
     items: [
       { icon: Building2,     label: "Empresas",            path: "/empresas"             },
       { icon: Users,         label: "Colaboradores",       path: "/colaboradores"        },
+      { icon: UserCheck,     label: "Clientes",            path: "/clientes"             },
       { icon: Landmark,      label: "Obras",               path: "/obras"                },
       { icon: HardHat,       label: "Efetivo por Obra",    path: "/obras/efetivo"        },
       { icon: Layers,        label: "Setores",             path: "/setores"              },
@@ -857,7 +858,7 @@ function DashboardLayoutContent({
             // Ajuda/Biblioteca sempre visível
             if (item.path === '/ajuda') return true;
             // Shared features (empresas, obras, setores, funcoes) - visíveis se tem acesso ao módulo
-            const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes'];
+            const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes', '/clientes'];
             if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
             // "Todos os Dashboards" - visível se tem acesso a pelo menos um módulo
             if (item.path === '/dashboards') return accessibleModules.length > 0;
