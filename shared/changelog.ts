@@ -1582,6 +1582,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 378,
+    titulo: "Importação — Correção de células mescladas no cabeçalho + UI de mapeamento melhorada",
+    descricao: "Corrigido bug crítico de detecção de colunas: planilhas com células mescladas no cabeçalho (ex: 'Preço Total' mesclado sobre Material e MO) faziam com que a 2ª coluna do grupo ficasse sem parent, impedindo a detecção de cuTotalMdo. Implementado forward-fill de 1 posição no parentRow (cobre a célula mesclada sem contaminar a próxima). UI do mapeamento melhorada: painel de resumo mostrando X/Y colunas detectadas, badges de status por campo (✓ Auto, ✎ Manual, ⚠ Faltando), highlight de linhas obrigatórias não detectadas em âmbar.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 377,
     titulo: "Orçamento — Corrigido botão Excluir na lista de orçamentos",
     descricao: "Botão Excluir na lista de orçamentos estava chamando a procedure 'delete' (soft-delete) que retornava 'Orçamento não encontrado' por inconsistência interna. Substituído por 'excluir' (hard-delete completo com cascata): deleta orcamento_itens, orcamento_insumos, orcamento_bdi, orcamento_secs (adicionado à cascata), bdi_indiretos e demais tabelas BDI antes de remover o orçamento principal. Agora a exclusão funciona corretamente.",

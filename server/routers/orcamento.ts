@@ -477,9 +477,21 @@ const COL_ALIASES: Record<string, string[]> = {
 function detectarColunas(labelRow: any[], parentRow: any[] | null): Record<string, number> {
   const colMap: Record<string, number> = {};
 
+  // Forward-fill de 1 posição no parentRow para cobrir células mescladas.
+  // Ex: "Preço Total" mesclado sobre colunas W-X → Excel deixa X vazio.
+  // Preenchemos X com o valor de W (apenas 1 posição, não propagamos mais).
+  const filledParent: any[] | null = parentRow
+    ? parentRow.map((cell, idx) => {
+        if (String(cell || '').trim()) return cell;
+        // Só preenche se o original da posição anterior (não o já preenchido) tem valor
+        if (idx > 0 && String(parentRow[idx - 1] || '').trim()) return parentRow[idx - 1];
+        return cell;
+      })
+    : null;
+
   labelRow.forEach((cell: any, idx: number) => {
     const label  = String(cell      || '').trim();
-    const parent = parentRow ? String(parentRow[idx] || '').trim() : '';
+    const parent = filledParent ? String(filledParent[idx] || '').trim() : '';
 
     // Gera candidatos: combined ("P.Unit. Mat"), só label ("Mat"), só parent ("P.Unit.")
     const candidates = [
@@ -1537,12 +1549,22 @@ export const orcamentoRouter = router({
 
       const parentRow = labelRowIdx > 0 ? rows[labelRowIdx - 1] : null;
       const labelRow  = rows[labelRowIdx];
+
+      // Mesmo forward-fill usado em detectarColunas para células mescladas
+      const filledParentPreview: any[] | null = parentRow
+        ? parentRow.map((cell: any, idx: number) => {
+            if (String(cell || '').trim()) return cell;
+            if (idx > 0 && String(parentRow[idx - 1] || '').trim()) return parentRow[idx - 1];
+            return cell;
+          })
+        : null;
+
       const detectedMap = detectarColunas(labelRow, parentRow);
 
       // Todas as colunas com algum conteúdo no cabeçalho (para os dropdowns)
       const allColumns: { idx: number; label: string }[] = [];
       labelRow.forEach((cell: any, idx: number) => {
-        const parent = parentRow ? String(parentRow[idx] || '').trim() : '';
+        const parent = filledParentPreview ? String(filledParentPreview[idx] || '').trim() : '';
         const lbl = [parent, String(cell || '').trim()].filter(Boolean).join(' ');
         if (lbl.trim()) allColumns.push({ idx, label: lbl });
       });

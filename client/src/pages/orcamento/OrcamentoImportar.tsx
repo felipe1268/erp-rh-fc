@@ -390,6 +390,7 @@ export default function OrcamentoImportar() {
   const [previewSample,  setPreviewSample]  = useState<string[][]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [currentMapping, setCurrentMapping] = useState<Record<string, number>>({});
+  const [autoDetectedMap, setAutoDetectedMap] = useState<Record<string, number>>({});
 
   const importarMut    = trpc.orcamento.importar.useMutation();
   const importarBdiMut = trpc.orcamento.importarBdi.useMutation();
@@ -443,6 +444,7 @@ export default function OrcamentoImportar() {
       const res = await previewSheetMut.mutateAsync({ fileBase64: base64, fileName: fileCusto.name });
       setPreviewCols(res.allColumns);
       setPreviewSample(res.sampleRows);
+      setAutoDetectedMap(res.detectedMap as Record<string, number>);
       // Carregar mapeamento salvo anteriormente (por nome de arquivo)
       const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
       const saved = localStorage.getItem(savedKey);
@@ -723,24 +725,71 @@ export default function OrcamentoImportar() {
                 </p>
               </div>
 
+              {/* Resumo de detecção automática */}
+              {(() => {
+                const detected = KEY_FIELDS.filter(f => autoDetectedMap[f.key] !== undefined).length;
+                const total = KEY_FIELDS.length;
+                const reqMissing = KEY_FIELDS.filter(f => f.required && autoDetectedMap[f.key] === undefined);
+                return (
+                  <div className={`flex items-center gap-3 p-3 rounded-lg border text-xs ${reqMissing.length > 0 ? "border-amber-300 bg-amber-50" : "border-green-300 bg-green-50"}`}>
+                    {reqMissing.length > 0
+                      ? <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                      : <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />}
+                    <div className="flex-1">
+                      <span className={`font-semibold ${reqMissing.length > 0 ? "text-amber-800" : "text-green-800"}`}>
+                        {detected}/{total} colunas detectadas automaticamente
+                      </span>
+                      {reqMissing.length > 0 && (
+                        <p className="text-amber-700 mt-0.5">
+                          Corrija manualmente: <strong>{reqMissing.map(f => f.label).join(", ")}</strong>
+                        </p>
+                      )}
+                      {reqMissing.length === 0 && (
+                        <p className="text-green-700 mt-0.5">Todos os campos obrigatórios foram detectados. Verifique e confirme.</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Tabela de mapeamento */}
               <div className="rounded-lg border overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-muted/60 border-b">
-                      <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground w-[40%]">Campo do Sistema</th>
+                      <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground w-[35%]">Campo do Sistema</th>
+                      <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground w-[15%]">Status</th>
                       <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Coluna na Planilha</th>
                     </tr>
                   </thead>
                   <tbody>
                     {KEY_FIELDS.map((field, i) => {
-                      const mappedIdx = currentMapping[field.key];
-                      const mappedLabel = previewCols.find(c => c.idx === mappedIdx)?.label;
+                      const mappedIdx   = currentMapping[field.key];
+                      const wasAuto     = autoDetectedMap[field.key] !== undefined;
+                      const isChanged   = wasAuto && mappedIdx !== autoDetectedMap[field.key];
+                      const isMissing   = mappedIdx === undefined;
                       return (
-                        <tr key={field.key} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
+                        <tr key={field.key} className={`border-b last:border-0 ${
+                          isMissing && field.required ? "bg-amber-50" : i % 2 === 0 ? "" : "bg-muted/20"
+                        }`}>
                           <td className="px-3 py-2">
                             <span className="font-medium text-sm">{field.label}</span>
                             {field.required && <span className="ml-1 text-red-500 text-xs">*</span>}
+                          </td>
+                          <td className="px-3 py-2">
+                            {isMissing ? (
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${field.required ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>
+                                {field.required ? "⚠ Faltando" : "—"}
+                              </span>
+                            ) : wasAuto && !isChanged ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">
+                                ✓ Auto
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                                ✎ Manual
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             <Select
@@ -754,7 +803,7 @@ export default function OrcamentoImportar() {
                                 });
                               }}
                             >
-                              <SelectTrigger className={`h-8 text-xs ${!mappedIdx && field.required ? "border-amber-400 bg-amber-50" : ""}`}>
+                              <SelectTrigger className={`h-8 text-xs ${isMissing && field.required ? "border-amber-400 bg-amber-50" : ""}`}>
                                 <SelectValue placeholder="— não mapear —" />
                               </SelectTrigger>
                               <SelectContent>
@@ -765,9 +814,6 @@ export default function OrcamentoImportar() {
                                   <SelectItem key={col.idx} value={String(col.idx)}>
                                     <span className="font-mono text-xs mr-2 text-muted-foreground">[{col.idx}]</span>
                                     {col.label}
-                                    {mappedLabel === col.label && mappedLabel !== undefined && col.idx !== mappedIdx && (
-                                      <span className="ml-1 text-xs text-blue-500">✓ auto</span>
-                                    )}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
