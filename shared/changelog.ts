@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 322,
+    titulo: "Almoxarifado & Compras — Alerta de locação proporcional ao prazo + integração Compras",
+    descricao: "Campo 'Alertar X dias antes' por item substitui o limiar fixo de 30 dias: para locação diária defina 1, para anual defina 30. A lógica de alerta no header usa o campo por item (diasAlertaLocacao, padrão 7). Módulo Compras/Almoxarifado agora exibe badge LOCADO, contador de vencimento e contador de fornecedor na tabela de itens. Modal de criação/edição de item no Compras também conta com os campos de locação: Próprio/Alugado, Fornecedor, Datas, Valor Mensal, Alertar X dias e Observações do Contrato.",
+    tipo: "funcionalidade",
+    modulos: "Almoxarifado, Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:00:00",
+  },
+  {
     version: 321,
     titulo: "Almoxarifado — Botão Editar e Correção de Estoque nos Cards",
     descricao: "Adicionado botão de lápis (✏) explícito na barra de ações de cada card de item, ao lado dos botões In/Out. No modal de edição, o campo 'Quantidade Inicial' vira 'Corrigir Estoque Atual' com borda âmbar e aviso, permitindo ajustar diretamente o saldo do item. Backend atualizado para aceitar quantidadeAtual no endpoint atualizarItem.",

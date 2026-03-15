@@ -1,0 +1,1 @@
+ALTER TABLE "almoxarifado_itens" ADD COLUMN "dias_alerta_locacao" integer DEFAULT 7;

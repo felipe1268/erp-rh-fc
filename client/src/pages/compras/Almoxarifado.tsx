@@ -20,6 +20,9 @@ const UNIDADES = ["un", "m", "m²", "m³", "kg", "t", "L", "sc", "cx", "pc", "vb
 const EMPTY_ITEM = {
   nome: "", unidade: "un", categoria: "", codigoInterno: "",
   quantidadeAtual: 0, quantidadeMinima: 0, observacoes: "",
+  origem: "proprio" as "proprio" | "alugado",
+  fornecedorLocacao: "", dataInicioLocacao: "", dataVencimentoLocacao: "",
+  valorLocacaoMensal: 0, diasAlertaLocacao: 7, observacoesLocacao: "",
 };
 
 const EMPTY_MOV = {
@@ -103,16 +106,34 @@ export default function Almoxarifado() {
     setModalItem(true);
   }
   function abrirEditarItem(i: any) {
-    setFormItem({ nome: i.nome, unidade: i.unidade, categoria: i.categoria ?? "", codigoInterno: i.codigoInterno ?? "", quantidadeAtual: n(i.quantidadeAtual), quantidadeMinima: n(i.quantidadeMinima), observacoes: i.observacoes ?? "" });
+    setFormItem({
+      nome: i.nome, unidade: i.unidade, categoria: i.categoria ?? "", codigoInterno: i.codigoInterno ?? "",
+      quantidadeAtual: n(i.quantidadeAtual), quantidadeMinima: n(i.quantidadeMinima), observacoes: i.observacoes ?? "",
+      origem: (i.origem === "alugado" ? "alugado" : "proprio") as "proprio" | "alugado",
+      fornecedorLocacao: i.fornecedorLocacao ?? "", dataInicioLocacao: i.dataInicioLocacao ?? "",
+      dataVencimentoLocacao: i.dataVencimentoLocacao ?? "",
+      valorLocacaoMensal: parseFloat(i.valorLocacaoMensal ?? "0") || 0,
+      diasAlertaLocacao: (i.diasAlertaLocacao ?? 7) as number,
+      observacoesLocacao: i.observacoesLocacao ?? "",
+    });
     setEditandoItem(i.id);
     setModalItem(true);
   }
   function salvarItem() {
     if (!formItem.nome.trim()) { toast.error("Nome é obrigatório."); return; }
+    const locacaoPayload = formItem.origem === "alugado" ? {
+      origem: "alugado" as const,
+      fornecedorLocacao: formItem.fornecedorLocacao || undefined,
+      dataInicioLocacao: formItem.dataInicioLocacao || undefined,
+      dataVencimentoLocacao: formItem.dataVencimentoLocacao || undefined,
+      valorLocacaoMensal: formItem.valorLocacaoMensal || undefined,
+      diasAlertaLocacao: formItem.diasAlertaLocacao || 7,
+      observacoesLocacao: formItem.observacoesLocacao || undefined,
+    } : { origem: "proprio" as const, fornecedorLocacao: null, dataInicioLocacao: null, dataVencimentoLocacao: null, valorLocacaoMensal: null, diasAlertaLocacao: null, observacoesLocacao: null };
     if (editandoItem) {
-      atualizarMut.mutate({ id: editandoItem, nome: formItem.nome, unidade: formItem.unidade, categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined, quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined });
+      atualizarMut.mutate({ id: editandoItem, nome: formItem.nome, unidade: formItem.unidade, categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined, quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined, ...locacaoPayload });
     } else {
-      criarMut.mutate({ companyId, ...formItem });
+      criarMut.mutate({ companyId, nome: formItem.nome, unidade: formItem.unidade, categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined, quantidadeAtual: formItem.quantidadeAtual, quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined, ...locacaoPayload });
     }
   }
 
@@ -223,8 +244,19 @@ export default function Almoxarifado() {
                   return (
                     <tr key={item.id} className={`border-b border-slate-50 hover:bg-slate-50/70 ${abaixo ? "bg-red-50/30" : ""}`}>
                       <td className="px-4 py-3">
-                        <p className="font-medium text-slate-800">{item.nome}</p>
-                        <p className="text-xs text-slate-400">{item.unidade}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-slate-800">{item.nome}</p>
+                          {(item as any).origem === "alugado" && (
+                            <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-amber-300">LOCADO</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-slate-400">{item.unidade}</p>
+                          {(item as any).origem === "alugado" && (item as any).dataVencimentoLocacao && (() => {
+                            const dias = Math.ceil((new Date((item as any).dataVencimentoLocacao).getTime() - Date.now()) / 86400000);
+                            return <p className={`text-[10px] font-medium ${dias <= 0 ? "text-red-600" : dias <= 7 ? "text-orange-600" : "text-amber-600"}`}>{dias <= 0 ? "⚠ Vencido" : `Vence em ${dias}d`} — {(item as any).fornecedorLocacao || "Fornecedor"}</p>;
+                          })()}
+                        </div>
                       </td>
                       <td className="px-3 py-3">
                         {item.categoria ? (
@@ -316,6 +348,71 @@ export default function Almoxarifado() {
               <Label className="text-xs">Observações</Label>
               <Textarea value={formItem.observacoes} onChange={e => setFormItem(p => ({ ...p, observacoes: e.target.value }))} className="mt-1" rows={2} />
             </div>
+
+            {/* ── Origem: Próprio / Alugado ── */}
+            <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+              <div>
+                <Label className="text-xs font-semibold text-slate-700 mb-2 block">Origem do Equipamento/Insumo</Label>
+                <div className="flex gap-2">
+                  <button type="button"
+                    onClick={() => setFormItem(p => ({ ...p, origem: "proprio" }))}
+                    className={`flex-1 h-9 text-sm rounded-lg border font-medium transition ${formItem.origem === "proprio" ? "bg-emerald-600 border-emerald-600 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                    🏢 Próprio da Empresa
+                  </button>
+                  <button type="button"
+                    onClick={() => setFormItem(p => ({ ...p, origem: "alugado" }))}
+                    className={`flex-1 h-9 text-sm rounded-lg border font-medium transition ${formItem.origem === "alugado" ? "bg-amber-500 border-amber-500 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                    🔑 Alugado / Locado
+                  </button>
+                </div>
+              </div>
+              {formItem.origem === "alugado" && (
+                <div className="space-y-3 pt-2 border-t border-amber-100">
+                  <div>
+                    <Label className="text-xs">Fornecedor / Locadora</Label>
+                    <Input className="mt-1" placeholder="Ex: Locamig Equipamentos"
+                      value={formItem.fornecedorLocacao}
+                      onChange={e => setFormItem(p => ({ ...p, fornecedorLocacao: e.target.value }))} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Início da Locação</Label>
+                      <Input type="date" className="mt-1"
+                        value={formItem.dataInicioLocacao}
+                        onChange={e => setFormItem(p => ({ ...p, dataInicioLocacao: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-amber-700 font-semibold">⚠ Vencimento</Label>
+                      <Input type="date" className="mt-1 border-amber-300 bg-amber-50"
+                        value={formItem.dataVencimentoLocacao}
+                        onChange={e => setFormItem(p => ({ ...p, dataVencimentoLocacao: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Valor Mensal (R$)</Label>
+                      <Input type="number" step="0.01" min="0" className="mt-1" placeholder="0,00"
+                        value={formItem.valorLocacaoMensal || ""}
+                        onChange={e => setFormItem(p => ({ ...p, valorLocacaoMensal: parseFloat(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-amber-700">Alertar X dias antes</Label>
+                      <p className="text-[10px] text-slate-400">1d = diário · 30d = anual</p>
+                      <Input type="number" min="0" className="mt-0.5 border-amber-200 bg-amber-50" placeholder="7"
+                        value={formItem.diasAlertaLocacao || ""}
+                        onChange={e => setFormItem(p => ({ ...p, diasAlertaLocacao: parseInt(e.target.value) || 7 }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Observações do Contrato</Label>
+                    <Textarea className="mt-1" rows={2} placeholder="Nº do contrato, condições, etc."
+                      value={formItem.observacoesLocacao}
+                      onChange={e => setFormItem(p => ({ ...p, observacoesLocacao: e.target.value }))} />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
               <Button variant="outline" onClick={() => setModalItem(false)}>Cancelar</Button>
               <Button onClick={salvarItem} disabled={criarMut.isPending || atualizarMut.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">

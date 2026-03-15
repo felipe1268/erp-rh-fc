@@ -262,6 +262,7 @@ export const comprasRouter = router({
       dataInicioLocacao:     z.string().optional(),
       dataVencimentoLocacao: z.string().optional(),
       valorLocacaoMensal:    z.number().optional(),
+      diasAlertaLocacao:     z.number().optional(),
       observacoesLocacao:    z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -283,6 +284,7 @@ export const comprasRouter = router({
         dataInicioLocacao:     input.dataInicioLocacao ?? null,
         dataVencimentoLocacao: input.dataVencimentoLocacao ?? null,
         valorLocacaoMensal:    input.valorLocacaoMensal != null ? String(input.valorLocacaoMensal) : null,
+        diasAlertaLocacao:     input.diasAlertaLocacao ?? 7,
         observacoesLocacao:    input.observacoesLocacao ?? null,
       } as any).returning();
       return item;
@@ -303,6 +305,7 @@ export const comprasRouter = router({
       dataInicioLocacao:     z.string().nullable().optional(),
       dataVencimentoLocacao: z.string().nullable().optional(),
       valorLocacaoMensal:    z.number().nullable().optional(),
+      diasAlertaLocacao:     z.number().nullable().optional(),
       observacoesLocacao:    z.string().nullable().optional(),
       quantidadeAtual:       z.number().nullable().optional(),
     }))
@@ -322,6 +325,7 @@ export const comprasRouter = router({
       if ('dataInicioLocacao' in data)             updates.dataInicioLocacao = data.dataInicioLocacao;
       if ('dataVencimentoLocacao' in data)         updates.dataVencimentoLocacao = data.dataVencimentoLocacao;
       if ('valorLocacaoMensal' in data)            updates.valorLocacaoMensal = data.valorLocacaoMensal != null ? String(data.valorLocacaoMensal) : null;
+      if ('diasAlertaLocacao' in data && data.diasAlertaLocacao != null) updates.diasAlertaLocacao = data.diasAlertaLocacao;
       if ('observacoesLocacao' in data)            updates.observacoesLocacao = data.observacoesLocacao;
       if (data.quantidadeAtual !== undefined && data.quantidadeAtual !== null) updates.quantidadeAtual = String(data.quantidadeAtual);
       await db.update(almoxarifadoItens).set(updates).where(eq(almoxarifadoItens.id, id));
@@ -329,7 +333,7 @@ export const comprasRouter = router({
     }),
 
   getItensLocadosVencendo: protectedProcedure
-    .input(z.object({ companyId: z.number(), diasAlerta: z.number().optional() }))
+    .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const rows = await db.select().from(almoxarifadoItens)
@@ -338,16 +342,16 @@ export const comprasRouter = router({
           eq(almoxarifadoItens.ativo, true),
           eq(almoxarifadoItens.origem, "alugado"),
         ));
-      const diasAlerta = input.diasAlerta ?? 30;
       const hoje = new Date();
       return rows
         .filter(i => i.dataVencimentoLocacao)
         .map(i => {
           const venc = new Date(i.dataVencimentoLocacao!);
           const diffDias = Math.ceil((venc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-          return { ...i, diasParaVencimento: diffDias };
+          const alertaDias = (i as any).diasAlertaLocacao ?? 7;
+          return { ...i, diasParaVencimento: diffDias, alertaDias };
         })
-        .filter(i => i.diasParaVencimento <= diasAlerta)
+        .filter(i => i.diasParaVencimento <= i.alertaDias)
         .sort((a, b) => a.diasParaVencimento - b.diasParaVencimento);
     }),
 
