@@ -906,15 +906,19 @@ export default function OrcamentoDetalhe() {
                       <th className="text-right px-2 py-2 w-[68px]">Qtd</th>
                       <th className="text-right px-2 py-2 w-[84px] text-blue-200">
                         P.Unit.<br/>Mat
+                        {versao !== "custo" && <span className="block text-[9px] text-blue-300 font-normal">{cfg.label}</span>}
                       </th>
                       <th className="text-right px-2 py-2 w-[84px] text-orange-200">
                         P.Unit.<br/>MO
+                        {versao !== "custo" && <span className="block text-[9px] text-orange-300 font-normal">{cfg.label}</span>}
                       </th>
                       <th className="text-right px-2 py-2 w-[84px] text-blue-200">
                         P.Total<br/>Mat
+                        {versao !== "custo" && <span className="block text-[9px] text-blue-300 font-normal">{cfg.label}</span>}
                       </th>
                       <th className="text-right px-2 py-2 w-[84px] text-orange-200">
                         P.Total<br/>MO
+                        {versao !== "custo" && <span className="block text-[9px] text-orange-300 font-normal">{cfg.label}</span>}
                       </th>
                       <th className={`text-right px-2 py-2 w-[92px] font-bold ${cfg.thClass}`}>
                         {cfg.label}
@@ -929,21 +933,50 @@ export default function OrcamentoDetalhe() {
                       const indent  = Math.max(0, item.nivel - 1) * 16;
                       const rowBg   = NIVEL_BG[item.nivel] ?? "bg-white";
                       const qty     = n(item.quantidade);
-                      const puMat   = n(item.custoUnitMat);
-                      const puMdo   = n(item.custoUnitMdo);
+
+                      // ── Custo base (sempre da planilha de custo) ──────────────────
+                      const costUnitMat   = n(item.custoUnitMat);
+                      const costUnitMdo   = n(item.custoUnitMdo);
+                      const costUnitTotal = n(item.custoUnitTotal);
 
                       // Para grupos: usar totais calculados (soma filhos) ou armazenados
-                      const agg    = groupTotals[item.eapCodigo];
-                      const ptMat  = agg?.mat   ?? n(item.custoTotalMat);
-                      const ptMdo  = agg?.mdo   ?? n(item.custoTotalMdo);
-                      const ptCusto = agg?.custo ?? n(item.custoTotal);
-                      const ptVenda = agg?.venda ?? n(item.vendaTotal);
+                      const agg      = groupTotals[item.eapCodigo];
+                      const rawMat   = agg?.mat   ?? n(item.custoTotalMat);
+                      const rawMdo   = agg?.mdo   ?? n(item.custoTotalMdo);
+                      const ptCusto  = agg?.custo ?? n(item.custoTotal);
+                      const ptVenda  = agg?.venda ?? n(item.vendaTotal);
 
-                      const totalVal = versao === "venda"
-                        ? ptVenda
-                        : versao === "meta"
-                          ? ptCusto * (1 - localMetaPerc / 100)
-                          : ptCusto;
+                      // ── Fator de escala por visão ─────────────────────────────────
+                      // Meta: redução uniforme sobre o custo
+                      const metaFactor = 1 - localMetaPerc / 100;
+                      // Venda (BDI): fator derivado do próprio item (leaf) ou do total do grupo
+                      const bdiUnitFactor = costUnitTotal > 0
+                        ? n(item.vendaUnitTotal) / costUnitTotal
+                        : (totalCusto > 0 ? totalVenda / totalCusto : 1);
+                      const bdiTotFactor = ptCusto > 0
+                        ? ptVenda / ptCusto
+                        : (totalCusto > 0 ? totalVenda / totalCusto : 1);
+
+                      // ── Preço unitário material/MO na visão selecionada ───────────
+                      const puMat = versao === "venda" ? costUnitMat * bdiUnitFactor
+                                  : versao === "meta"  ? costUnitMat * metaFactor
+                                  :                     costUnitMat;
+                      const puMdo = versao === "venda" ? costUnitMdo * bdiUnitFactor
+                                  : versao === "meta"  ? costUnitMdo * metaFactor
+                                  :                     costUnitMdo;
+
+                      // ── Preço total material/MO na visão selecionada ──────────────
+                      const ptMat = versao === "venda" ? rawMat * bdiTotFactor
+                                  : versao === "meta"  ? rawMat * metaFactor
+                                  :                     rawMat;
+                      const ptMdo = versao === "venda" ? rawMdo * bdiTotFactor
+                                  : versao === "meta"  ? rawMdo * metaFactor
+                                  :                     rawMdo;
+
+                      // ── Coluna final (Total) na visão selecionada ─────────────────
+                      const totalVal = versao === "venda" ? ptVenda
+                                     : versao === "meta"  ? ptCusto * metaFactor
+                                     :                     ptCusto;
 
                       return (
                         <tr key={item.id}

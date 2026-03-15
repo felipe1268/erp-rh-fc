@@ -1510,6 +1510,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 368,
+    titulo: "Orçamento — Visões Custo/Meta/Venda propagadas em todas as colunas",
+    descricao: "Corrigido erro conceitual crítico no módulo Orçamento: ao trocar a visão entre Custo, Meta e Venda, agora TODAS as colunas se atualizam — P.Unit.Mat, P.Unit.MO, P.Total.Mat, P.Total.MO — e não apenas a coluna final. Para a visão Meta aplica o fator (1 − metaPerc/100) uniformemente sobre mat e mdo. Para a visão Venda aplica o fator BDI (vendaTotal/custoTotal) por item em unitários e por grupo em totais. Os cabeçalhos das colunas agora exibem um sublabel indicando a visão ativa. Isso corrige o fluxo de compras (SC → Cotação → OC) que dependia dos preços unitários corretos para as cotações.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 367,
     titulo: "Módulo Terceiros — Contratos, Medições e Previsão de Caixa (T001–T005)",
     descricao: "Criação completa do submódulo de Contratos de Terceiros: (T001) 5 novas tabelas no PostgreSQL — terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos; (T002) router terceiroContratos.ts com CRUD de contratos, itens de contrato, medições (geração automática pelo planejamento de avanço físico) e previsão de caixa; (T003) router registrado em server/routers.ts como 'terceiroContratos'; (T004) 3 páginas React no módulo Terceiros: ContratosList, ContratoNovo e ContratoDetalhe (com gestão de itens, medições e documentos), mais MedicoesTerceiros e PrevisaoCaixa; (T005) rotas registradas no App.tsx e itens de menu adicionados ao sidebar Terceiros.",
