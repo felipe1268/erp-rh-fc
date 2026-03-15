@@ -94,6 +94,8 @@ async function startServer() {
     import("../services/backupService").then(m => m.startBackupJob()).catch(e => console.error("[Backup] Falha ao iniciar job:", e));
     // Iniciar job de sincronização automática de status de funcionários (a cada 1h)
     import("../services/statusSyncJob").then(m => m.startStatusSyncJob()).catch(e => console.error("[StatusSync] Falha ao iniciar job:", e));
+    // Job de inventário semanal do almoxarifado
+    import("../services/warehouseInventoryJob").then(m => m.startInventoryJob()).catch(e => console.error("[InventoryJob] Erro:", e));
   });
 }
 

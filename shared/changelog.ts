@@ -924,4 +924,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 10:00:00",
   },
+  {
+    version: 297,
+    titulo: "Módulo Almoxarifado — Comodato Diário, Inventário Semanal, Ações Rápidas Mobile",
+    descricao: "Implementação completa do Módulo Almoxarifado: (1) 4 botões de ação rápida mobile-first na página principal (ENTRADA / SAÍDA / EMPRESTAR / FECHAR DIA) com confirmação visual verde/vermelha; (2) Comodato diário de ferramentas com busca por código JFCxxxx, exibe nome do funcionário, desconta estoque e registra movimentação; (3) Fechar Dia: lista empréstimos do dia com botão Devolver por item; (4) Nova página Movimentações com histórico completo, filtros por tipo e resumo; (5) Nova página Inventário Semanal com sessão semanal, barra de progresso, botões BATE/DIFERENTE por item, registro de divergências; (6) Novas tabelas warehouse_loans, warehouse_inventory_sessions, warehouse_inventory_session_items no PostgreSQL; (7) Router warehouse.ts com 15+ endpoints; (8) Menu do módulo atualizado com Movimentações e Inventário Semanal; (9) PWA habilitado (manifest.json, metas Apple/Android, banner de instalação); (10) Job de inventário semanal registrado.",
+    tipo: "feature",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 11:00:00",
+  },
 ];

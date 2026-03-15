@@ -29,6 +29,13 @@
       "when": 1773525239957,
       "tag": "0003_flippant_arclight",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773533652879,
+      "tag": "0004_typical_ego",
+      "breakpoints": true
     }
   ]
 }

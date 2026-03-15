@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
+import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -132,6 +133,8 @@ const Fornecedores = lazy(() => import("./pages/compras/Fornecedores"));
 const Almoxarifado = lazy(() => import("./pages/compras/Almoxarifado"));
 const AlmoxarifadoPage = lazy(() => import("./pages/almoxarifado/index"));
 const AlmoxarifadoCategorias = lazy(() => import("./pages/almoxarifado/Categorias"));
+const AlmoxarifadoMovimentacoes = lazy(() => import("./pages/almoxarifado/Movimentacoes"));
+const AlmoxarifadoInventario = lazy(() => import("./pages/almoxarifado/Inventario"));
 const Solicitacoes = lazy(() => import("./pages/compras/Solicitacoes"));
 const Cotacoes = lazy(() => import("./pages/compras/Cotacoes"));
 const Ordens = lazy(() => import("./pages/compras/Ordens"));
@@ -281,7 +284,9 @@ function Router() {
         <Route path="/planejamento"              component={PlanejamentoLista} />
         <Route path="/planejamento/:id"          component={PlanejamentoDetalhe} />
         {/* Compras */}
-        <Route path="/almoxarifado/categorias"   component={AlmoxarifadoCategorias} />
+        <Route path="/almoxarifado/categorias"     component={AlmoxarifadoCategorias} />
+        <Route path="/almoxarifado/movimentacoes" component={AlmoxarifadoMovimentacoes} />
+        <Route path="/almoxarifado/inventario"    component={AlmoxarifadoInventario} />
         <Route path="/almoxarifado"              component={AlmoxarifadoPage} />
         <Route path="/compras/painel"            component={PainelCompras} />
         <Route path="/compras/fornecedores"      component={Fornecedores} />
@@ -326,6 +331,7 @@ function App() {
                   <Suspense fallback={null}>
                     <AssistenteIAFloat />
                   </Suspense>
+                  <PwaInstallBanner />
                 </ModuleProvider>
               </PermissionsProvider>
             </ModuleConfigProvider>
