@@ -4546,6 +4546,7 @@ export const almoxarifadoCategorias = pgTable("almoxarifado_categorias", {
 export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   id:               serial().primaryKey(),
   companyId:        integer("company_id").notNull(),
+  obraId:           integer("obra_id"),
   nome:             varchar({ length: 255 }).notNull(),
   unidade:          varchar({ length: 20 }).notNull().default("un"),
   categoria:        varchar({ length: 100 }),

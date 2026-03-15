@@ -8,6 +8,7 @@ import {
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
   LayoutGrid, List, Camera, Trash2, ImageOff,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight,
+  Building2, HardHat,
 } from "lucide-react";
 
 const UNIDADES = [
@@ -71,9 +72,14 @@ export default function AlmoxarifadoPage() {
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAbaixo, setApenasAbaixo] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [obraContexto, setObraContexto] = useState<number | null>(null);
+
+  const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery(
+    { companyId, companyIds: [companyId] }, { enabled: !!companyId }
+  );
 
   const { data: itens = [], refetch, isLoading } = trpc.compras.listarItens.useQuery(
-    { companyId }, { enabled: !!companyId }
+    { companyId, obraId: obraContexto }, { enabled: !!companyId }
   );
   const { data: categorias = [] } = trpc.compras.listarCategoriasAlmoxarifado.useQuery(
     { companyId }, { enabled: !!companyId }
@@ -141,7 +147,7 @@ export default function AlmoxarifadoPage() {
       });
     } else {
       criarMut.mutate({
-        companyId, ...formItem,
+        companyId, obraId: obraContexto, ...formItem,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
         observacoes: formItem.observacoes || undefined, fotoUrl: formItem.fotoUrl || undefined,
       });
@@ -241,7 +247,9 @@ export default function AlmoxarifadoPage() {
             <div>
               <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                 <Boxes className="h-5 w-5 text-emerald-600" />
-                Almoxarifado Central
+                {obraContexto === null
+                  ? "Almoxarifado Central"
+                  : `Almoxarifado — ${obrasAtivas.find(o => o.id === obraContexto)?.nome ?? "Obra"}`}
               </h1>
               <p className="text-sm text-gray-500 mt-0.5">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} cadastrado{itens.length !== 1 ? "s" : ""}</p>
             </div>
@@ -264,6 +272,37 @@ export default function AlmoxarifadoPage() {
                 <Plus className="h-4 w-4" /> Novo Item
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* ── SELETOR DE CONTEXTO (Central / Obra) ─────────────── */}
+        <div className="bg-white border-b border-gray-100 px-4 py-2">
+          <div className="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => setObraContexto(null)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+                obraContexto === null
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              Central
+            </button>
+            {obrasAtivas.map((obra: any) => (
+              <button
+                key={obra.id}
+                onClick={() => setObraContexto(obra.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+                  obraContexto === obra.id
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                <HardHat className="h-3.5 w-3.5" />
+                {obra.codigo ? `${obra.codigo} – ${obra.nome}` : obra.nome}
+              </button>
+            ))}
           </div>
         </div>
 

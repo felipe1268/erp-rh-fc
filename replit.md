@@ -112,6 +112,7 @@ shared/         # Shared types and constants
 - **Painel de Compras**: KPIs, alertas de entrega, gastos mensais, SCs e OCs recentes com nome da obra visível
 - **Almoxarifado**: Itens com semáforo de estoque; movimentações entrada/saída vinculadas à obra; entradas automáticas via OC entregue
 - **Módulo Almoxarifado independente** (Rev. 297): UI mobile-first com 4 botões de ação rápida (ENTRADA/SAÍDA/EMPRESTAR/FECHAR DIA); comodato diário de ferramentas por código JFCxxxx; inventário semanal com barra de progresso e botões BATE/DIFERENTE; páginas Movimentações e Inventário Semanal; 3 novas tabelas DB (warehouse_loans, warehouse_inventory_sessions, warehouse_inventory_session_items); router warehouse.ts; PWA (manifest.json, metas Apple/Android, banner de instalação)
+- **Almoxarifado Central + por Obra** (Rev. 298): coluna `obra_id` em `almoxarifado_itens` (NULL=Central, número=Obra); seletor de contexto horizontal com pills (verde=Central, azul=Obra); lista de itens recarregada ao trocar contexto; criação de item vinculada ao contexto; título da página dinâmico; backend filtra por obraId (IS NULL / = X)
 - **Fornecedores**: Cadastro completo com busca automática CNPJ via BrasilAPI
 
 ## User Preferences

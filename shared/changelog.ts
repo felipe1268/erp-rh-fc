@@ -933,4 +933,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 11:00:00",
   },
+  {
+    version: 298,
+    titulo: "Almoxarifado Central + por Obra — Estoque separado por contexto",
+    descricao: "Almoxarifado agora suporta estoque separado por contexto: (1) Coluna obra_id adicionada à tabela almoxarifado_itens (NULL = Central, número = Obra específica); (2) Seletor de contexto horizontal na parte superior da página com pills coloridos: 🏢 Central (verde) e uma pill azul por obra ativa; (3) Ao trocar de contexto, a lista de itens é recarregada automaticamente mostrando apenas o estoque daquele almoxarifado; (4) Ao criar novo item, ele é associado ao contexto atual (Central ou Obra); (5) Título da página muda dinamicamente conforme o contexto selecionado; (6) Backend atualizado: listarItens filtra por obraId (IS NULL para Central, = X para Obra), criarItem aceita obraId.",
+    tipo: "feature",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 12:00:00",
+  },
 ];
