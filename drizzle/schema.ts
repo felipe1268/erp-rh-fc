@@ -4740,6 +4740,26 @@ export const warehouseLoans = pgTable("warehouse_loans", {
 });
 
 // Saídas de Insumos/Consumíveis para Funcionários
+export const almoxarifadoTransferencias = pgTable("almoxarifado_transferencias", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  itemIdOrigem:     integer("item_id_origem").notNull(),
+  itemIdDestino:    integer("item_id_destino"),
+  itemNome:         varchar("item_nome", { length: 255 }).notNull(),
+  unidade:          varchar({ length: 30 }),
+  quantidade:       numeric({ precision: 14, scale: 3 }).notNull().default("1"),
+  origemTipo:       varchar("origem_tipo", { length: 20 }).notNull().default("central"),
+  origemObraId:     integer("origem_obra_id"),
+  origemObraNome:   varchar("origem_obra_nome", { length: 255 }),
+  destinoTipo:      varchar("destino_tipo", { length: 20 }).notNull().default("central"),
+  destinoObraId:    integer("destino_obra_id"),
+  destinoObraNome:  varchar("destino_obra_nome", { length: 255 }),
+  motivo:           text(),
+  almoxarifeId:     integer("almoxarife_id"),
+  almoxarifeNome:   varchar("almoxarife_nome", { length: 255 }),
+  createdAt:        timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
 export const almoxarifadoSaidasInsumo = pgTable("almoxarifado_saidas_insumo", {
   id:                serial().primaryKey(),
   companyId:         integer("company_id").notNull(),

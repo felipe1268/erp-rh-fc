@@ -8,7 +8,7 @@ import {
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
   LayoutGrid, List, Camera, Trash2, ImageOff,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
-  Building2, HardHat, Sparkles, ScanLine, ShoppingCart,
+  Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight,
 } from "lucide-react";
 
 
@@ -402,6 +402,39 @@ export default function AlmoxarifadoPage() {
   function resetInsumo() { setInsCodigo(""); setInsSearch(""); setInsSelecionado(null); setInsShowSug(false); setInsItemId(0); setInsQtd("1"); setInsObraId(0); setInsMotivo(""); setInsOk(null); setInsErr(null); }
   function selecionarFuncionarioIns(f: any) { setInsSelecionado(f); setInsCodigo(f.codigoInterno); setInsSearch(f.nomeCompleto); setInsShowSug(false); }
 
+  // Modal Transferência entre Almoxarifados
+  const [modalTransf, setModalTransf] = useState(false);
+  const [transfOrigemTipo, setTransfOrigemTipo] = useState<"central" | "obra">("central");
+  const [transfOrigemObraId, setTransfOrigemObraId] = useState<number>(0);
+  const [transfItemId, setTransfItemId] = useState<number>(0);
+  const [transfQtd, setTransfQtd] = useState("1");
+  const [transfDestinoTipo, setTransfDestinoTipo] = useState<"central" | "obra">("obra");
+  const [transfDestinoObraId, setTransfDestinoObraId] = useState<number>(0);
+  const [transfMotivo, setTransfMotivo] = useState("");
+  const [transfOk, setTransfOk] = useState<null | { item: string; origem: string; destino: string }>(null);
+  const [transfErr, setTransfErr] = useState<string | null>(null);
+
+  // Busca itens do almoxarifado de origem para seleção
+  const { data: itensOrigem = [] } = trpc.compras.listarItens.useQuery(
+    { companyId, obraId: transfOrigemTipo === "central" ? null : transfOrigemObraId > 0 ? transfOrigemObraId : null },
+    { enabled: modalTransf && (transfOrigemTipo === "central" || transfOrigemObraId > 0) }
+  );
+
+  const createTransferencia = trpc.warehouse.createTransferencia.useMutation({
+    onSuccess: (d: any) => {
+      refetch();
+      const origemLabel = transfOrigemTipo === "central" ? "Central" : (obrasAtivas as any[]).find((o: any) => o.id === transfOrigemObraId)?.nome ?? "Obra";
+      const destinoLabel = transfDestinoTipo === "central" ? "Central" : (obrasAtivas as any[]).find((o: any) => o.id === transfDestinoObraId)?.nome ?? "Obra";
+      setTransfOk({ item: d.itemNome, origem: origemLabel, destino: destinoLabel });
+      setTransfErr(null);
+    },
+    onError: (e: any) => { setTransfErr(e.message); setTransfOk(null); },
+  });
+
+  function resetTransf() {
+    setTransfItemId(0); setTransfQtd("1"); setTransfMotivo(""); setTransfOk(null); setTransfErr(null);
+  }
+
   // Modal Fechar Dia (devolução)
   const [modalFecharDia, setModalFecharDia] = useState(false);
   const { data: emprestimosHoje = [], refetch: refetchLoans } = trpc.warehouse.listTodayLoans.useQuery(
@@ -415,7 +448,7 @@ export default function AlmoxarifadoPage() {
 
   // ── Modal Registros ─────────────────────────────────────────────
   const [modalRegistros, setModalRegistros] = useState(false);
-  const [abaRegistros, setAbaRegistros] = useState<"entradas" | "saidas" | "emprestados" | "insumos" | "cadastros">("entradas");
+  const [abaRegistros, setAbaRegistros] = useState<"entradas" | "saidas" | "emprestados" | "insumos" | "transferencias" | "cadastros">("entradas");
   const { data: movEntradas = [], isLoading: loadingEntradas } = trpc.warehouse.listMovements.useQuery(
     { companyId, tipo: "entrada", limit: 300 },
     { enabled: !!companyId && modalRegistros && abaRegistros === "entradas" }
@@ -431,6 +464,10 @@ export default function AlmoxarifadoPage() {
   const { data: insumosRegistros = [], isLoading: loadingInsumos } = trpc.warehouse.listInsumos.useQuery(
     { companyId, limit: 300 },
     { enabled: !!companyId && modalRegistros && abaRegistros === "insumos" }
+  );
+  const { data: transferenciasRegistros = [], isLoading: loadingTransferencias } = trpc.warehouse.listTransferencias.useQuery(
+    { companyId, limit: 300 },
+    { enabled: !!companyId && modalRegistros && abaRegistros === "transferencias" }
   );
 
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
@@ -512,7 +549,7 @@ export default function AlmoxarifadoPage() {
 
         {/* ── AÇÕES RÁPIDAS MOBILE ──────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
             {/* ENTRADA */}
             <button
               onClick={() => { resetEntrada(); setModalEntrada(true); }}
@@ -545,6 +582,21 @@ export default function AlmoxarifadoPage() {
               <ShoppingCart className="w-8 h-8" />
               🛒 INSUMO
             </button>
+            {/* TRANSFERIR */}
+            <button
+              onClick={() => {
+                resetTransf();
+                const ctx = obraContexto;
+                if (ctx === null) { setTransfOrigemTipo("central"); setTransfOrigemObraId(0); }
+                else if (typeof ctx === "number") { setTransfOrigemTipo("obra"); setTransfOrigemObraId(ctx); }
+                else { setTransfOrigemTipo("central"); setTransfOrigemObraId(0); }
+                setModalTransf(true);
+              }}
+              className="flex flex-col items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+            >
+              <ArrowLeftRight className="w-8 h-8" />
+              ↔ TRANSFERIR
+            </button>
             {/* FECHAR DIA */}
             <button
               onClick={() => setModalFecharDia(true)}
@@ -556,13 +608,14 @@ export default function AlmoxarifadoPage() {
           </div>
 
           {/* ── VER REGISTROS (linha secundária) ────────────────── */}
-          <div className="grid grid-cols-5 gap-2 mt-2">
+          <div className="grid grid-cols-6 gap-2 mt-2">
             {[
-              { label: "Entradas",    aba: "entradas"    as const, icon: "↓", color: "text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100" },
-              { label: "Saídas",      aba: "saidas"      as const, icon: "↑", color: "text-orange-700 border-orange-300 bg-orange-50 hover:bg-orange-100" },
-              { label: "Emprestados", aba: "emprestados" as const, icon: "🔧", color: "text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100" },
-              { label: "Insumos",     aba: "insumos"     as const, icon: "🛒", color: "text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100" },
-              { label: "Cadastros",   aba: "cadastros"   as const, icon: "📦", color: "text-gray-700 border-gray-300 bg-gray-50 hover:bg-gray-100" },
+              { label: "Entradas",      aba: "entradas"      as const, icon: "↓",  color: "text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100" },
+              { label: "Saídas",        aba: "saidas"        as const, icon: "↑",  color: "text-orange-700 border-orange-300 bg-orange-50 hover:bg-orange-100" },
+              { label: "Emprestados",   aba: "emprestados"   as const, icon: "🔧", color: "text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100" },
+              { label: "Insumos",       aba: "insumos"       as const, icon: "🛒", color: "text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100" },
+              { label: "Transferênc.", aba: "transferencias" as const, icon: "↔",  color: "text-purple-700 border-purple-300 bg-purple-50 hover:bg-purple-100" },
+              { label: "Cadastros",     aba: "cadastros"     as const, icon: "📦", color: "text-gray-700 border-gray-300 bg-gray-50 hover:bg-gray-100" },
             ].map(({ label, aba, icon, color }) => (
               <button
                 key={aba}
@@ -1621,6 +1674,125 @@ export default function AlmoxarifadoPage() {
         </div>
       )}
 
+      {/* ══ MODAL TRANSFERÊNCIA ══════════════════════════════════════ */}
+      {modalTransf && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{ background: "#ffffff", color: "#111827" }}>
+            {transfOk ? (
+              <>
+                <div className="p-8 text-center space-y-3">
+                  <CheckCircle2 className="w-16 h-16 text-purple-500 mx-auto" />
+                  <p className="text-xl font-bold text-purple-700">Transferência realizada!</p>
+                  <p className="text-gray-600 text-sm">
+                    <strong>{transfOk.item}</strong><br/>
+                    <span className="text-purple-600">{transfOk.origem}</span> → <span className="text-purple-600">{transfOk.destino}</span>
+                  </p>
+                </div>
+                <div className="p-4 flex gap-3">
+                  <button className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl text-base" onClick={() => { resetTransf(); }}>Nova transferência</button>
+                  <button className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl text-base" onClick={() => { setModalTransf(false); resetTransf(); }}>Fechar</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><ArrowLeftRight className="w-5 h-5 text-purple-500" /> Transferir entre Almoxarifados</h2>
+                  <button onClick={() => setModalTransf(false)}><X className="w-6 h-6 text-gray-400" /></button>
+                </div>
+                <div className="p-4 space-y-4">
+                  {/* ORIGEM */}
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-3">
+                    <p className="text-xs font-bold text-purple-700 uppercase tracking-wide">Almoxarifado de Origem</p>
+                    <select className="w-full border-2 border-purple-200 rounded-xl p-3 text-base bg-white"
+                      value={transfOrigemTipo === "central" ? "central" : String(transfOrigemObraId)}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (v === "central") { setTransfOrigemTipo("central"); setTransfOrigemObraId(0); }
+                        else { setTransfOrigemTipo("obra"); setTransfOrigemObraId(Number(v)); }
+                        setTransfItemId(0);
+                      }}
+                    >
+                      <option value="central">🏢 Almoxarifado Central</option>
+                      {(obrasAtivas as any[]).map((o: any) => <option key={o.id} value={o.id}>🏗️ {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>)}
+                    </select>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Item a transferir *</label>
+                      <select className="w-full border-2 rounded-xl p-3 text-base" value={transfItemId} onChange={e => setTransfItemId(Number(e.target.value))}>
+                        <option value={0}>— selecione o item —</option>
+                        {(itensOrigem as any[]).map((i: any) => (
+                          <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(parseFloat(i.quantidadeAtual || "0"))} {i.unidade || "un"}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
+                      <input type="number" inputMode="decimal" min="0.01" step="0.01" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={transfQtd} onChange={e => setTransfQtd(e.target.value)} />
+                    </div>
+                  </div>
+
+                  {/* DESTINO */}
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-3">
+                    <p className="text-xs font-bold text-indigo-700 uppercase tracking-wide">Almoxarifado de Destino</p>
+                    <select className="w-full border-2 border-indigo-200 rounded-xl p-3 text-base bg-white"
+                      value={transfDestinoTipo === "central" ? "central" : String(transfDestinoObraId)}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (v === "central") { setTransfDestinoTipo("central"); setTransfDestinoObraId(0); }
+                        else { setTransfDestinoTipo("obra"); setTransfDestinoObraId(Number(v)); }
+                      }}
+                    >
+                      <option value="central">🏢 Almoxarifado Central</option>
+                      {(obrasAtivas as any[]).map((o: any) => <option key={o.id} value={o.id}>🏗️ {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>)}
+                    </select>
+                    {/* Aviso se origem = destino */}
+                    {transfOrigemTipo === transfDestinoTipo && (transfOrigemTipo === "central" || transfOrigemObraId === transfDestinoObraId) && (
+                      <p className="text-xs text-red-500 font-medium">⚠️ Origem e destino não podem ser iguais</p>
+                    )}
+                  </div>
+
+                  {/* MOTIVO */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Motivo / Observação</label>
+                    <input type="text" className="w-full border-2 rounded-xl p-3 text-base" placeholder="Ex: Material excedente, obra encerrada..." value={transfMotivo} onChange={e => setTransfMotivo(e.target.value)} />
+                  </div>
+
+                  {transfErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{transfErr}</p>}
+
+                  <button
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
+                    disabled={
+                      !transfItemId || !transfQtd || parseFloat(transfQtd) <= 0 ||
+                      (transfDestinoTipo === "obra" && !transfDestinoObraId) ||
+                      (transfOrigemTipo === "central" && transfDestinoTipo === "central") ||
+                      (transfOrigemTipo === "obra" && transfDestinoTipo === "obra" && transfOrigemObraId === transfDestinoObraId) ||
+                      createTransferencia.isPending
+                    }
+                    onClick={() => {
+                      const origemObraSel = (obrasAtivas as any[]).find((o: any) => o.id === transfOrigemObraId);
+                      const destinoObraSel = (obrasAtivas as any[]).find((o: any) => o.id === transfDestinoObraId);
+                      createTransferencia.mutate({
+                        companyId,
+                        itemIdOrigem: transfItemId,
+                        quantidade: parseFloat(transfQtd),
+                        origemTipo: transfOrigemTipo,
+                        origemObraId: transfOrigemTipo === "obra" ? transfOrigemObraId : undefined,
+                        origemObraNome: origemObraSel ? (origemObraSel.codigo ? `${origemObraSel.codigo} – ${origemObraSel.nome}` : origemObraSel.nome) : undefined,
+                        destinoTipo: transfDestinoTipo,
+                        destinoObraId: transfDestinoTipo === "obra" ? transfDestinoObraId : undefined,
+                        destinoObraNome: destinoObraSel ? (destinoObraSel.codigo ? `${destinoObraSel.codigo} – ${destinoObraSel.nome}` : destinoObraSel.nome) : undefined,
+                        motivo: transfMotivo || undefined,
+                      });
+                    }}
+                  >
+                    {createTransferencia.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "↔ CONFIRMAR TRANSFERÊNCIA"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ══ MODAL FECHAR DIA ════════════════════════════════════════ */}
       {modalFecharDia && (
         <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ background: "#ffffff", color: "#111827" }}>
@@ -1862,8 +2034,9 @@ export default function AlmoxarifadoPage() {
               { key: "entradas",    label: "↓ Entradas",    cls: "text-emerald-700 border-emerald-500" },
               { key: "saidas",      label: "↑ Saídas",      cls: "text-orange-700 border-orange-500" },
               { key: "emprestados", label: "🔧 Emprestados", cls: "text-blue-700 border-blue-500" },
-              { key: "insumos",     label: "🛒 Insumos",     cls: "text-amber-700 border-amber-500" },
-              { key: "cadastros",   label: "📦 Cadastros",   cls: "text-gray-700 border-gray-500" },
+              { key: "insumos",        label: "🛒 Insumos",        cls: "text-amber-700 border-amber-500" },
+              { key: "transferencias", label: "↔ Transferências", cls: "text-purple-700 border-purple-500" },
+              { key: "cadastros",      label: "📦 Cadastros",      cls: "text-gray-700 border-gray-500" },
             ] as const).map(({ key, label, cls }) => (
               <button
                 key={key}
@@ -1979,6 +2152,39 @@ export default function AlmoxarifadoPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* TRANSFERÊNCIAS */}
+            {abaRegistros === "transferencias" && (
+              loadingTransferencias ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-purple-500" /></div> :
+              (transferenciasRegistros as any[]).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2">
+                  <ArrowLeftRight className="w-12 h-12 text-purple-300" />
+                  <p className="text-gray-500 font-medium">Nenhuma transferência registrada</p>
+                </div>
+              ) :
+              <div className="space-y-2">
+                {(transferenciasRegistros as any[]).map((t: any) => {
+                  const origemLabel = t.origem_tipo === "central" ? "🏢 Central" : `🏗️ ${t.origem_obra_nome || "Obra"}`;
+                  const destinoLabel = t.destino_tipo === "central" ? "🏢 Central" : `🏗️ ${t.destino_obra_nome || "Obra"}`;
+                  return (
+                    <div key={t.id} className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <ArrowLeftRight className="w-4 h-4 text-purple-500 shrink-0" />
+                        <p className="font-semibold text-gray-900 text-sm truncate">{t.item_nome}</p>
+                        <span className="ml-auto text-sm font-bold text-purple-700 shrink-0">{n(t.quantidade)} {t.unidade || "un"}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <span className="px-2 py-0.5 bg-purple-100 rounded-full font-medium">{origemLabel}</span>
+                        <span className="text-purple-400">→</span>
+                        <span className="px-2 py-0.5 bg-purple-100 rounded-full font-medium">{destinoLabel}</span>
+                      </div>
+                      {t.motivo && <p className="text-[11px] text-gray-400 italic mt-1">{t.motivo}</p>}
+                      <p className="text-[11px] text-gray-400 mt-0.5">{t.created_at ? new Date(t.created_at).toLocaleString("pt-BR") : ""}</p>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
