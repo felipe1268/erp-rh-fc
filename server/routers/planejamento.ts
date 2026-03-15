@@ -1394,10 +1394,10 @@ export const planejamentoRouter = router({
 
       // Buscar maior percentual acumulado por atividade para filtrar as já concluídas (100%)
       const avancosMaxRaw = await db.execute(sql`
-        SELECT "atividadeId" as atividade_id, MAX(CAST("percentualAcumulado" AS numeric)) as max_pct
+        SELECT atividade_id, MAX(CAST(percentual_acumulado AS numeric)) as max_pct
         FROM planejamento_avancos
-        WHERE "projetoId" = ${projeto.id}
-        GROUP BY "atividadeId"
+        WHERE projeto_id = ${projeto.id}
+        GROUP BY atividade_id
       `);
       const avancosMax = (avancosMaxRaw as any)?.rows ?? avancosMaxRaw ?? [];
       const avancoPct: Record<number, number> = {};

@@ -185,11 +185,14 @@ export const heSolicitacoesRouter = router({
 
     // Buscar atividades vinculadas (join table — suporta múltiplas)
     const atividadesVinculadasRaw = await db.execute(sql`
-      SELECT a.id, a.nome, a."eapCodigo", a."dataInicio", a."dataFim"
+      SELECT a.id, a.nome,
+             a.eap_codigo   AS "eapCodigo",
+             a.data_inicio  AS "dataInicio",
+             a.data_fim     AS "dataFim"
       FROM he_solicitacao_atividades hsa
       JOIN planejamento_atividades a ON a.id = hsa.atividade_id
       WHERE hsa.solicitacao_id = ${sol.id}
-      ORDER BY a."eapCodigo"
+      ORDER BY a.eap_codigo
     `);
     const atividadesVinculadas: any[] = (atividadesVinculadasRaw as any)?.rows ?? atividadesVinculadasRaw ?? [];
 
@@ -246,12 +249,12 @@ export const heSolicitacoesRouter = router({
       try {
         // Buscar todas as atividades vinculadas (join table + legada)
         const atvsRaw = await db.execute(sql`
-          SELECT DISTINCT a.id, a."projetoId"
+          SELECT DISTINCT a.id, a.projeto_id AS "projetoId"
           FROM he_solicitacao_atividades hsa
           JOIN planejamento_atividades a ON a.id = hsa.atividade_id
           WHERE hsa.solicitacao_id = ${sol.id}
           UNION
-          SELECT a.id, a."projetoId" FROM planejamento_atividades a
+          SELECT a.id, a.projeto_id AS "projetoId" FROM planejamento_atividades a
           WHERE a.id = ${sol.planejamentoAtividadeId ?? 0}
             AND NOT EXISTS (SELECT 1 FROM he_solicitacao_atividades WHERE solicitacao_id = ${sol.id})
         `);
