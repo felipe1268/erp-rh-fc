@@ -522,7 +522,8 @@ Responda SOMENTE com JSON válido (sem markdown, sem explicações):
               { text: prompt },
             ],
           }],
-          generationConfig: { maxOutputTokens: 250, temperature: 0.1 },
+          generationConfig: { maxOutputTokens: 1024, temperature: 0.1 },
+          thinkingConfig: { thinkingBudget: 0 },
         };
 
         const res = await fetch(
@@ -540,7 +541,8 @@ Responda SOMENTE com JSON válido (sem markdown, sem explicações):
         const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
         console.log("[sugerirCadastroItem] Resposta:", text.slice(0, 300));
 
-        const clean = text.replace(/```json|```/g, "").trim();
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        const clean = jsonMatch ? jsonMatch[0] : text.replace(/```json|```/g, "").trim();
         if (!clean) {
           console.warn("[sugerirCadastroItem] Resposta vazia do Gemini.");
           return { nome: "", categoria: "", unidade: "un", observacoes: "" };

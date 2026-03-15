@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 315,
+    titulo: "Correção — IA de cadastro de item truncando JSON (tokens insuficientes)",
+    descricao: "Corrigido erro 'Unterminated string in JSON' na análise de foto IA do cadastro de item. Causa: maxOutputTokens=250 era insuficiente para o Gemini 2.5 Flash (modelo 'thinking' que consome tokens internos). Solução: aumentado para 1024 e adicionado thinkingBudget=0 para desabilitar o modo de raciocínio desnecessário na tarefa. Extração do JSON agora usa regex /{[\s\S]*}/ para ser mais robusta mesmo se a resposta vier com markdown.",
+    tipo: "correcao",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 19:30:00",
+  },
+  {
     version: 314,
     titulo: "Almoxarifado — Dropdown de obras restrito por perfil do usuário",
     descricao: "Usuários comuns (almoxarifes) só visualizam as obras às quais estão alocados via obra_funcionarios. Admins e Admin Masters continuam vendo todas as obras ativas. Se o almoxarife tiver apenas uma obra vinculada, ela é selecionada automaticamente ao abrir o módulo. Novo endpoint obras.listForAlmoxarifado implementado no backend com verificação de role e lookup por e-mail do usuário.",
