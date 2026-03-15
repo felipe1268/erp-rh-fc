@@ -1015,6 +1015,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 14:00:00",
   },
   {
+    version: 309,
+    titulo: "Upload de foto de funcionário via armazenamento local",
+    descricao: "Substituído o upload de fotos de funcionários do storage proxy externo (BUILT_IN_FORGE_API_URL) por armazenamento local no servidor em server/uploads/photos/. As fotos são salvas em disco e servidas via rota estática /uploads/photos/{arquivo}. Elimina o erro 'Storage proxy credentials missing' que impedia o cadastro de fotos.",
+    tipo: "bugfix",
+    modulos: "Colaboradores",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 17:00:00",
+  },
+  {
     version: 308,
     titulo: "Almoxarifado — Modal Emprestar: tela maior e foto do funcionário ampliada",
     descricao: "Modal 'Emprestar Ferramenta' ampliado para max-w-lg. Card de funcionário selecionado redesenhado: foto circular centralizada de 112px (w-28 h-28) com borda esmeralda e sombra, nome e cargo abaixo. Ícone genérico também em 112px quando não há foto cadastrada.",

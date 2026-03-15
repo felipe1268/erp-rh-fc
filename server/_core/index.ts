@@ -6,6 +6,7 @@ import compression from "compression";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerDownloadSSTRoute } from "../routers/downloadSST";
@@ -58,6 +59,8 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Download de arquivos SST em ZIP
   registerDownloadSSTRoute(app);
+  // Arquivos de upload locais (fotos de funcionários, etc.)
+  app.use("/uploads", express.static(path.join(process.cwd(), "server/uploads")));
   // tRPC API
   app.use(
     "/api/trpc",
