@@ -202,7 +202,7 @@ export default function OrcamentoLista() {
               const bdi = orc.bdiPercentual ? `BDI ${(parseFloat(orc.bdiPercentual) * 100).toFixed(2)}%` : "";
               const meta = orc.metaPercentual ? `Meta −${(parseFloat(orc.metaPercentual) * 100).toFixed(0)}%` : "";
               return (
-                <Card key={orc.id} className="hover:shadow-sm transition-shadow">
+                <Card key={orc.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/orcamento/${orc.id}`)}>
                   <CardContent className="py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -215,6 +215,7 @@ export default function OrcamentoLista() {
                               <button
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium transition-colors ${stCfg.className}`}
                                 title="Clique para alterar o status"
+                                onClick={e => e.stopPropagation()}
                               >
                                 <span className={`h-1.5 w-1.5 rounded-full ${stCfg.dotColor}`} />
                                 {stCfg.label}
@@ -269,14 +270,7 @@ export default function OrcamentoLista() {
                           {formatBRL(parseFloat(orc.totalMeta || "0"))} meta
                         </div>
                       </div>
-                      <div className="flex flex-col gap-1 shrink-0">
-                        <Button
-                          size="sm" variant="ghost" className="h-8 w-8 p-0"
-                          onClick={() => navigate(`/orcamento/${orc.id}`)}
-                          title="Visualizar"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                      <div className="flex flex-col gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                         <Button
                           size="sm" variant="ghost"
                           className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
