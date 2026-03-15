@@ -262,7 +262,7 @@ export default function Funcoes() {
 
   // Buscar funcionários vinculados à função visualizada
   const employeesQ = trpc.employees.list.useQuery(
-    { companyId },
+    { companyId, excludeTerminated: true },
     { enabled: (!!companyId || companyIds?.length > 0) && !!viewingId }
   );
   const funcionariosVinculados = useMemo(() => {

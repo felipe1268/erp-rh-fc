@@ -506,7 +506,7 @@ function AssignSkillDialog({
 
   // Get employees for this company
   const employeesQuery = trpc.employees.list.useQuery(
-    { companyId, companyIds },
+    { companyId, companyIds, excludeTerminated: true },
     { enabled: !!companyId || companyIds.length > 0 }
   );
 

@@ -71,7 +71,7 @@ export default function ObraEfetivo() {
   const funcObra = funcObraQ.data ?? [];
 
   // All employees for multi-select (sem filtro de status — mostra todos os não-deletados)
-  const allEmpsQ = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const allEmpsQ = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId });
   const allEmps = allEmpsQ.data ?? [];
 
   // IDs de todas as obras para drill-down de status

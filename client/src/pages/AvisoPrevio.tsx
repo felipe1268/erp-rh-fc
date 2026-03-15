@@ -79,7 +79,7 @@ export default function AvisoPrevio() {
     { companyId, companyIds },
     { enabled: !!companyId || (companyIds && companyIds.length > 0) }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // tRPC utils for imperative queries & invalidation

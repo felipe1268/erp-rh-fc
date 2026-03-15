@@ -92,7 +92,7 @@ export default function ValeAlimentacao() {
     { companyId, employeeId: histDialogEmployeeId! },
     { enabled: (!!companyId || companyIds?.length > 0) && !!histDialogEmployeeId }
   );
-  const employeesQ = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "historico" });
+  const employeesQ = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "historico" });
 
   // Mutations
   const gerarMut = trpc.valeAlimentacao.gerarMes.useMutation({

@@ -75,7 +75,7 @@ export default function CipaCompleta() {
     { companyId, electionId: selectedEleicaoId || undefined },
     { enabled: !!companyId || companyIds?.length > 0 }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // Mutations
