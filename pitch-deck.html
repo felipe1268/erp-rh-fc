@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ERP Gestão Integrada — Pitch Deck</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --navy:   #0F1E35;
+    --navy2:  #1B2A4A;
+    --gold:   #D4A534;
+    --gold2:  #F0C050;
+    --white:  #FFFFFF;
+    --gray:   #F4F6FA;
+    --text:   #E8EDF5;
+    --muted:  #8FA3BF;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #111;
+  }
+
+  /* ── SLIDE BASE ── */
+  .slide {
+    width: 297mm;
+    height: 210mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    page-break-inside: avoid;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── PRINT ── */
+  @media print {
+    body { background: transparent; margin: 0; }
+    .slide {
+      width: 297mm;
+      height: 210mm;
+      page-break-after: always;
+      page-break-inside: avoid;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+  }
+
+  /* ── SCREEN VIEW ── */
+  @media screen {
+    body { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 32px; }
+    .slide {
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      border-radius: 4px;
+    }
+  }
+
+  /* ── TYPOGRAPHY ── */
+  .font-display { font-family: 'Montserrat', sans-serif; }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 1 — CAPA
+  ────────────────────────────────────────────── */
+  #s1 {
+    background: linear-gradient(135deg, #0A1628 0%, #1B2A4A 60%, #0F1E35 100%);
+  }
+  #s1 .bg-lines {
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(212,165,52,0.04) 0px, rgba(212,165,52,0.04) 1px, transparent 1px, transparent 60px),
+      repeating-linear-gradient(0deg,   rgba(212,165,52,0.04) 0px, rgba(212,165,52,0.04) 1px, transparent 1px, transparent 60px);
+  }
+  #s1 .accent-bar {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 6px;
+    background: linear-gradient(180deg, var(--gold) 0%, var(--gold2) 100%);
+  }
+  #s1 .content {
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column;
+    justify-content: center; height: 100%;
+    padding: 0 22mm 0 18mm;
+  }
+  #s1 .tag {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 9pt; font-weight: 700; letter-spacing: 3px;
+    color: var(--gold); text-transform: uppercase;
+    margin-bottom: 7mm;
+  }
+  #s1 h1 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 38pt; font-weight: 900; line-height: 1.05;
+    color: var(--white);
+    margin-bottom: 4mm;
+  }
+  #s1 h1 span { color: var(--gold2); }
+  #s1 .subtitle {
+    font-size: 13pt; font-weight: 300;
+    color: var(--muted); margin-bottom: 12mm;
+    max-width: 200mm;
+  }
+  #s1 .badges {
+    display: flex; gap: 5mm; flex-wrap: wrap;
+  }
+  #s1 .badge {
+    border: 1px solid rgba(212,165,52,0.4);
+    color: var(--gold2); font-size: 8pt; font-weight: 600;
+    padding: 2mm 4mm; border-radius: 2px;
+    letter-spacing: 0.5px;
+  }
+  #s1 .visual {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 95mm;
+    background: linear-gradient(135deg, #1a3055 0%, #0d1f38 100%);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 5mm;
+    border-left: 1px solid rgba(212,165,52,0.2);
+  }
+  #s1 .stat-box {
+    text-align: center;
+  }
+  #s1 .stat-box .num {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 28pt; font-weight: 900;
+    color: var(--gold2);
+  }
+  #s1 .stat-box .lbl {
+    font-size: 7.5pt; color: var(--muted);
+    font-weight: 500; letter-spacing: 0.5px;
+  }
+  #s1 .divider-h {
+    width: 30mm; height: 1px;
+    background: rgba(212,165,52,0.3);
+  }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 2 — O PROBLEMA
+  ────────────────────────────────────────────── */
+  #s2 {
+    background: var(--gray);
+  }
+  .slide-header {
+    background: linear-gradient(90deg, var(--navy) 0%, var(--navy2) 100%);
+    padding: 7mm 14mm;
+    display: flex; align-items: center; gap: 4mm;
+  }
+  .slide-header .num {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 24pt; font-weight: 900;
+    color: rgba(212,165,52,0.3);
+    line-height: 1;
+  }
+  .slide-header .titles { display: flex; flex-direction: column; gap: 0.5mm; }
+  .slide-header .kicker {
+    font-size: 7pt; font-weight: 700; letter-spacing: 2.5px;
+    color: var(--gold); text-transform: uppercase;
+  }
+  .slide-header h2 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 17pt; font-weight: 800;
+    color: var(--white); line-height: 1;
+  }
+  .slide-header h2 span { color: var(--gold2); }
+  .slide-body {
+    flex: 1; padding: 8mm 14mm;
+    display: flex; flex-direction: column;
+    justify-content: center;
+  }
+
+  /* problem cards */
+  .prob-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm;
+  }
+  .prob-card {
+    background: white; border-radius: 3px;
+    padding: 5mm; border-top: 3px solid #e74c3c;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  }
+  .prob-card .icon { font-size: 18pt; margin-bottom: 2mm; }
+  .prob-card h3 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 9.5pt; font-weight: 700;
+    color: #1B2A4A; margin-bottom: 1.5mm;
+  }
+  .prob-card p {
+    font-size: 8pt; color: #667; line-height: 1.45;
+  }
+  .prob-intro {
+    font-size: 10.5pt; color: #334;
+    margin-bottom: 6mm; font-weight: 500;
+    line-height: 1.4;
+  }
+  .prob-intro span { color: #e74c3c; font-weight: 700; }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 3 — A SOLUÇÃO
+  ────────────────────────────────────────────── */
+  #s3 {
+    background: linear-gradient(160deg, #0F1E35 0%, #1B2A4A 100%);
+  }
+  #s3 .slide-header { background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(212,165,52,0.2); }
+  #s3 .slide-body { padding: 8mm 14mm; }
+  #s3 .sol-split {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8mm;
+    flex: 1; height: 100%;
+  }
+  #s3 .sol-text {
+    display: flex; flex-direction: column; justify-content: center; gap: 4mm;
+  }
+  #s3 .sol-text p {
+    font-size: 10pt; color: var(--text); line-height: 1.6;
+  }
+  #s3 .sol-text .highlight {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13pt; font-weight: 700;
+    color: var(--gold2); line-height: 1.3;
+  }
+  #s3 .sol-visual {
+    display: flex; flex-direction: column; gap: 3mm;
+    justify-content: center;
+  }
+  .check-item {
+    display: flex; align-items: flex-start; gap: 3mm;
+    background: rgba(212,165,52,0.08);
+    border: 1px solid rgba(212,165,52,0.2);
+    border-radius: 3px; padding: 3mm 4mm;
+  }
+  .check-item .ck { font-size: 10pt; color: var(--gold); flex-shrink: 0; }
+  .check-item .tx { font-size: 8.5pt; color: var(--text); line-height: 1.4; }
+  .check-item .tx strong { color: var(--gold2); font-weight: 600; }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 4 — MÓDULOS (VISÃO GERAL)
+  ────────────────────────────────────────────── */
+  #s4 { background: var(--gray); }
+  .mod-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm;
+    margin-top: 1mm;
+  }
+  .mod-card {
+    background: white; border-radius: 3px;
+    padding: 4mm 4.5mm;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    border-top: 3px solid var(--navy);
+    display: flex; flex-direction: column; gap: 1.5mm;
+  }
+  .mod-card.gold { border-top-color: var(--gold); }
+  .mod-card .mod-icon { font-size: 14pt; }
+  .mod-card h3 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 8.5pt; font-weight: 800;
+    color: var(--navy2);
+  }
+  .mod-card .telas {
+    font-size: 7pt; color: var(--gold);
+    font-weight: 700;
+  }
+  .mod-card p { font-size: 7pt; color: #667; line-height: 1.4; }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 5 — MÓDULO RH
+  ────────────────────────────────────────────── */
+  #s5 { background: linear-gradient(160deg, #0F1E35 0%, #1B2A4A 100%); }
+  #s5 .slide-header { background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(212,165,52,0.2); }
+  #s5 .feat-split {
+    display: grid; grid-template-columns: 1fr 1.4fr; gap: 8mm;
+    flex: 1;
+  }
+  #s5 .feat-left {
+    display: flex; flex-direction: column; gap: 3mm;
+    justify-content: center;
+  }
+  #s5 .feat-right {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 3mm;
+    align-content: center;
+  }
+  .feat-kpi {
+    background: rgba(212,165,52,0.1);
+    border: 1px solid rgba(212,165,52,0.25);
+    border-radius: 3px; padding: 3.5mm 4mm;
+    text-align: center;
+  }
+  .feat-kpi .n {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 18pt; font-weight: 900;
+    color: var(--gold2);
+  }
+  .feat-kpi .l { font-size: 7pt; color: var(--muted); font-weight: 500; }
+  #s5 .feat-list { display: flex; flex-direction: column; gap: 2mm; }
+  .feat-li {
+    display: flex; align-items: flex-start; gap: 2mm;
+    font-size: 8.5pt; color: var(--text); line-height: 1.4;
+  }
+  .feat-li::before {
+    content: "▸"; color: var(--gold);
+    flex-shrink: 0; font-size: 8pt;
+    margin-top: 0.5mm;
+  }
+  .feat-li strong { color: var(--gold2); }
+  .feat-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11pt; font-weight: 700;
+    color: var(--gold2); margin-bottom: 2mm;
+  }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 6 — COMPRAS & FINANCEIRO
+  ────────────────────────────────────────────── */
+  #s6 { background: var(--gray); }
+  #s6 .two-col {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6mm;
+    flex: 1;
+  }
+  .module-panel {
+    background: white; border-radius: 3px;
+    padding: 5mm; box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    display: flex; flex-direction: column; gap: 2.5mm;
+  }
+  .module-panel .mp-header {
+    display: flex; align-items: center; gap: 2.5mm;
+    padding-bottom: 3mm;
+    border-bottom: 2px solid var(--navy);
+  }
+  .module-panel.gold-border .mp-header { border-bottom-color: var(--gold); }
+  .module-panel .mp-icon { font-size: 14pt; }
+  .module-panel .mp-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11pt; font-weight: 800; color: var(--navy2);
+  }
+  .module-panel .mp-sub { font-size: 7.5pt; color: #889; }
+  .mp-feat {
+    display: flex; align-items: flex-start; gap: 2mm;
+    font-size: 8pt; color: #445; line-height: 1.4;
+  }
+  .mp-feat::before { content: "✓"; color: var(--gold); font-weight: 700; flex-shrink: 0; }
+  .mp-feat strong { color: var(--navy2); }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 7 — PLANEJAMENTO & ORÇAMENTO
+  ────────────────────────────────────────────── */
+  #s7 { background: linear-gradient(160deg, #0F1E35 0%, #1B2A4A 100%); }
+  #s7 .slide-header { background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(212,165,52,0.2); }
+  #s7 .feat-split {
+    display: grid; grid-template-columns: 1.2fr 1fr; gap: 8mm;
+    flex: 1;
+  }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 8 — NÚMEROS
+  ────────────────────────────────────────────── */
+  #s8 { background: linear-gradient(135deg, #0A1628 0%, #1B2A4A 100%); }
+  #s8 .bg-lines {
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(212,165,52,0.03) 0px, rgba(212,165,52,0.03) 1px, transparent 1px, transparent 60px),
+      repeating-linear-gradient(0deg,   rgba(212,165,52,0.03) 0px, rgba(212,165,52,0.03) 1px, transparent 1px, transparent 60px);
+  }
+  #s8 .slide-header { background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(212,165,52,0.2); }
+  #s8 .nums-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 5mm;
+    margin-top: 4mm;
+  }
+  .num-box {
+    text-align: center;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(212,165,52,0.2);
+    border-radius: 3px; padding: 5mm 3mm;
+  }
+  .num-box .big {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 26pt; font-weight: 900;
+    color: var(--gold2); line-height: 1;
+    margin-bottom: 1.5mm;
+  }
+  .num-box .label {
+    font-size: 7.5pt; color: var(--muted);
+    font-weight: 500; line-height: 1.3;
+  }
+  #s8 .bottom-note {
+    margin-top: 5mm; text-align: center;
+    font-size: 8pt; color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 9 — COMPARATIVO
+  ────────────────────────────────────────────── */
+  #s9 { background: var(--gray); }
+  .comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+    margin-top: 2mm;
+  }
+  .comp-table th {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 8pt; font-weight: 800;
+    padding: 3mm 4mm; text-align: left;
+  }
+  .comp-table th:first-child { color: #555; background: #e8edf5; width: 32%; }
+  .comp-table th.us { background: var(--navy2); color: var(--gold2); text-align: center; }
+  .comp-table th.them { background: #e8edf5; color: #667; text-align: center; }
+  .comp-table td {
+    padding: 2.5mm 4mm;
+    border-bottom: 1px solid #dde4ef;
+  }
+  .comp-table td:first-child { font-size: 7.5pt; color: #334; font-weight: 500; }
+  .comp-table td.center { text-align: center; }
+  .comp-table tr:nth-child(even) td { background: rgba(255,255,255,0.6); }
+  .comp-table tr:nth-child(even) td:first-child { background: #f0f4fa; }
+  .yes { color: #16a34a; font-size: 11pt; }
+  .no  { color: #dc2626; font-size: 11pt; }
+  .part{ color: #d97706; font-size: 9pt; font-weight: 600; }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 10 — PREÇOS
+  ────────────────────────────────────────────── */
+  #s10 { background: linear-gradient(160deg, #0F1E35 0%, #1B2A4A 100%); }
+  #s10 .slide-header { background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(212,165,52,0.2); }
+  #s10 .plans-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm;
+    margin-top: 3mm;
+  }
+  .plan-card {
+    border-radius: 4px; padding: 5mm;
+    display: flex; flex-direction: column; gap: 2.5mm;
+  }
+  .plan-card.starter { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); }
+  .plan-card.pro { background: rgba(212,165,52,0.12); border: 2px solid var(--gold); }
+  .plan-card.enterprise { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); }
+  .plan-card .plan-name {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 9pt; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 1px;
+    color: var(--gold2);
+  }
+  .plan-card .plan-price {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 22pt; font-weight: 900;
+    color: var(--white); line-height: 1;
+  }
+  .plan-card .plan-price span { font-size: 10pt; font-weight: 400; color: var(--muted); }
+  .plan-card .plan-desc { font-size: 7.5pt; color: var(--muted); }
+  .plan-feat {
+    font-size: 7.5pt; color: var(--text);
+    display: flex; align-items: flex-start; gap: 2mm;
+    line-height: 1.4;
+  }
+  .plan-feat::before { content: "✓"; color: var(--gold); font-weight: 700; flex-shrink: 0; }
+  .plan-badge {
+    background: var(--gold); color: var(--navy);
+    font-size: 7pt; font-weight: 800;
+    padding: 1mm 3mm; border-radius: 2px;
+    text-align: center; letter-spacing: 0.5px;
+    align-self: flex-start;
+  }
+
+  /* ──────────────────────────────────────────────
+     SLIDE 11 — PRÓXIMOS PASSOS
+  ────────────────────────────────────────────── */
+  #s11 { background: linear-gradient(135deg, #0A1628 0%, #1B2A4A 100%); }
+  #s11 .bg-lines {
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(212,165,52,0.04) 0px, rgba(212,165,52,0.04) 1px, transparent 1px, transparent 60px),
+      repeating-linear-gradient(0deg,   rgba(212,165,52,0.04) 0px, rgba(212,165,52,0.04) 1px, transparent 1px, transparent 60px);
+  }
+  #s11 .accent-bar {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 6px;
+    background: linear-gradient(180deg, var(--gold) 0%, var(--gold2) 100%);
+  }
+  #s11 .content {
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column;
+    justify-content: center; height: 100%;
+    padding: 12mm 18mm;
+  }
+  #s11 .kicker {
+    font-size: 8pt; font-weight: 700; letter-spacing: 3px;
+    color: var(--gold); text-transform: uppercase;
+    margin-bottom: 4mm;
+  }
+  #s11 h2 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 22pt; font-weight: 900;
+    color: var(--white); margin-bottom: 2mm; line-height: 1.1;
+  }
+  #s11 h2 span { color: var(--gold2); }
+  #s11 .sub { font-size: 10pt; color: var(--muted); margin-bottom: 8mm; }
+  #s11 .steps {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm;
+  }
+  .step-box {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(212,165,52,0.2);
+    border-radius: 3px; padding: 4mm;
+  }
+  .step-box .sn {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 20pt; font-weight: 900;
+    color: rgba(212,165,52,0.25); line-height: 1;
+    margin-bottom: 2mm;
+  }
+  .step-box h4 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 8.5pt; font-weight: 800;
+    color: var(--gold2); margin-bottom: 1.5mm;
+  }
+  .step-box p { font-size: 7.5pt; color: var(--muted); line-height: 1.4; }
+
+  #s11 .contact-row {
+    display: flex; gap: 6mm; margin-top: 7mm; align-items: center;
+  }
+  #s11 .contact-item {
+    display: flex; align-items: center; gap: 2mm;
+    font-size: 8pt; color: var(--text);
+  }
+  #s11 .contact-item .icon { color: var(--gold); }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     SLIDE 1 — CAPA
+════════════════════════════════════════════ -->
+<div class="slide" id="s1">
+  <div class="bg-lines"></div>
+  <div class="accent-bar"></div>
+
+  <div class="content">
+    <div class="tag">Solução SaaS para Construção Civil</div>
+    <h1>ERP<br/><span>Gestão Integrada</span></h1>
+    <p class="subtitle">Plataforma completa de gestão para construtoras — do canteiro de obras ao financeiro</p>
+    <div class="badges">
+      <span class="badge">Módulo RH &amp; Pessoas</span>
+      <span class="badge">Compras Enterprise</span>
+      <span class="badge">Módulo Financeiro</span>
+      <span class="badge">Planejamento &amp; Orçamento</span>
+      <span class="badge">Cloud · Multi-empresa</span>
+    </div>
+  </div>
+
+  <div class="visual">
+    <div class="stat-box"><div class="num">8</div><div class="lbl">Módulos integrados</div></div>
+    <div class="divider-h"></div>
+    <div class="stat-box"><div class="num">159</div><div class="lbl">Telas funcionais</div></div>
+    <div class="divider-h"></div>
+    <div class="stat-box"><div class="num">261</div><div class="lbl">Tabelas no banco de dados</div></div>
+    <div class="divider-h"></div>
+    <div class="stat-box"><div class="num">Rev. 344</div><div class="lbl">Versão atual em produção</div></div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 2 — O PROBLEMA
+════════════════════════════════════════════ -->
+<div class="slide" id="s2">
+  <div class="slide-header">
+    <div class="num">02</div>
+    <div class="titles">
+      <span class="kicker">O Cenário Atual</span>
+      <h2>Construtoras perdem dinheiro<br/><span>por falta de integração</span></h2>
+    </div>
+  </div>
+  <div class="slide-body">
+    <p class="prob-intro">A maioria das construtoras brasileiras opera com <span>5 a 10 sistemas diferentes</span> que não se comunicam — planilhas, sistemas isolados e processos manuais que custam caro.</p>
+    <div class="prob-grid">
+      <div class="prob-card">
+        <div class="icon">📊</div>
+        <h3>Dados fragmentados</h3>
+        <p>RH no Excel, financeiro num software, compras por WhatsApp. Nenhuma visão integrada do negócio.</p>
+      </div>
+      <div class="prob-card">
+        <div class="icon">⏳</div>
+        <h3>Retrabalho operacional</h3>
+        <p>Dados digitados 3x em sistemas diferentes. Folha de ponto importada manualmente todo mês.</p>
+      </div>
+      <div class="prob-card">
+        <div class="icon">💸</div>
+        <h3>Compras sem controle</h3>
+        <p>Compras emergenciais sem aprovação, sem cotação comparativa, sem rastreamento de custo por obra.</p>
+      </div>
+      <div class="prob-card">
+        <div class="icon">📉</div>
+        <h3>Orçamento vs. Realizado</h3>
+        <p>Impossível acompanhar em tempo real o desvio entre orçado e gasto por obra ou atividade.</p>
+      </div>
+      <div class="prob-card">
+        <div class="icon">⚠️</div>
+        <h3>Compliance e documentos</h3>
+        <p>Vencimentos de NR, CNH, exames e contratos perdidos. Multas por descumprimento trabalhista.</p>
+      </div>
+      <div class="prob-card">
+        <div class="icon">🔍</div>
+        <h3>Falta de visibilidade</h3>
+        <p>Diretores tomam decisões sem dados. Sem dashboard, sem KPI, sem histórico auditável.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 3 — A SOLUÇÃO
+════════════════════════════════════════════ -->
+<div class="slide" id="s3">
+  <div class="slide-header">
+    <div class="num">03</div>
+    <div class="titles">
+      <span class="kicker">Nossa Proposta</span>
+      <h2>Uma plataforma. <span>Tudo integrado.</span></h2>
+    </div>
+  </div>
+  <div class="slide-body" style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <div class="sol-split" style="display:grid; grid-template-columns:1fr 1fr; gap:8mm; flex:1; align-items:center;">
+      <div class="sol-text">
+        <p class="highlight">O ERP Gestão Integrada conecta RH, Compras, Financeiro e Planejamento em uma única plataforma cloud, desenvolvida especificamente para construtoras.</p>
+        <p style="font-size:9pt; color:var(--muted); line-height:1.6;">Dados em tempo real, fluxo automático entre módulos e rastreabilidade completa — do contrato do funcionário à nota fiscal do fornecedor.</p>
+        <p style="font-size:9pt; color:var(--muted); line-height:1.6;">Acesso via navegador. Sem instalação. Multi-empresa. Atualizações contínuas sem custo adicional.</p>
+      </div>
+      <div class="sol-visual">
+        <div class="check-item"><span class="ck">✦</span><span class="tx"><strong>Integração automática</strong> — OC aprovada já cria conta a pagar no Financeiro sem digitação manual</span></div>
+        <div class="check-item"><span class="ck">✦</span><span class="tx"><strong>Dados de RH fluem para Financeiro</strong> — folha CLT, PJ e parceiros importados e contabilizados automaticamente</span></div>
+        <div class="check-item"><span class="ck">✦</span><span class="tx"><strong>Compras rastreadas por obra</strong> — cada item vinculado à EAP, com controle de custo em tempo real</span></div>
+        <div class="check-item"><span class="ck">✦</span><span class="tx"><strong>Alertas proativos</strong> — vencimentos de documentos, contratos, cotas e OC notificados automaticamente</span></div>
+        <div class="check-item"><span class="ck">✦</span><span class="tx"><strong>Multi-empresa nativo</strong> — gerencie múltiplas CNPJs na mesma plataforma, dados 100% isolados</span></div>
+        <div class="check-item"><span class="ck">✦</span><span class="tx"><strong>Auditoria completa</strong> — toda ação registrada com usuário, data e hora. Conformidade total com LGPD</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 4 — VISÃO GERAL DOS MÓDULOS
+════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+  <div class="slide-header">
+    <div class="num">04</div>
+    <div class="titles">
+      <span class="kicker">Plataforma Completa</span>
+      <h2>8 módulos. <span>159 telas.</span> Tudo que sua obra precisa.</h2>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="mod-grid">
+      <div class="mod-card gold">
+        <div class="mod-icon">👷</div>
+        <h3>RH &amp; Pessoas</h3>
+        <div class="telas">30+ telas</div>
+        <p>Ficha completa CLT/PJ, documentos, ponto, folha, rescisão, EPI, avaliação de desempenho e CIPA.</p>
+      </div>
+      <div class="mod-card gold">
+        <div class="mod-icon">🛒</div>
+        <h3>Compras Enterprise</h3>
+        <div class="telas">13 telas</div>
+        <p>SC, cotação com portal do fornecedor, OC com retenção fiscal, recebimento, almoxarifado e comissões.</p>
+      </div>
+      <div class="mod-card gold">
+        <div class="mod-icon">💰</div>
+        <h3>Financeiro</h3>
+        <div class="telas">12 telas</div>
+        <p>DRE, fluxo de caixa, contas a pagar/receber, obrigações fiscais, conciliação bancária e plano de contas.</p>
+      </div>
+      <div class="mod-card gold">
+        <div class="mod-icon">📐</div>
+        <h3>Orçamento</h3>
+        <div class="telas">12 telas</div>
+        <p>EAP detalhada, composição SINAPI/TCPO, BDI, versões de orçamento e exportação para Excel.</p>
+      </div>
+      <div class="mod-card">
+        <div class="mod-icon">📅</div>
+        <h3>Planejamento</h3>
+        <div class="telas">5 telas</div>
+        <p>Cronograma físico-financeiro, avanço por obra, linha de base e indicadores de desempenho (IDC/IDP).</p>
+      </div>
+      <div class="mod-card">
+        <div class="mod-icon">🤝</div>
+        <h3>Terceiros &amp; PJ</h3>
+        <div class="telas">10 telas</div>
+        <p>Contratos PJ, medições, pagamentos, documentação obrigatória e conformidade fiscal.</p>
+      </div>
+      <div class="mod-card">
+        <div class="mod-icon">📊</div>
+        <h3>Dashboards</h3>
+        <div class="telas">16 telas</div>
+        <p>BI integrado: KPIs por obra, RH, financeiro, mapa de efetivo e raio-x do funcionário.</p>
+      </div>
+      <div class="mod-card">
+        <div class="mod-icon">⛑️</div>
+        <h3>EPI &amp; Segurança</h3>
+        <div class="telas">8 telas</div>
+        <p>Controle de estoque de EPI, checklist de entrega, alertas de vencimento e relatório de custo.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 5 — MÓDULO RH & PESSOAS
+════════════════════════════════════════════ -->
+<div class="slide" id="s5">
+  <div class="slide-header">
+    <div class="num">05</div>
+    <div class="titles">
+      <span class="kicker">Destaque — Módulo RH</span>
+      <h2>Gestão completa de <span>pessoas e canteiro</span></h2>
+    </div>
+  </div>
+  <div class="slide-body" style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <div class="feat-split" style="display:grid; grid-template-columns:1fr 1.4fr; gap:8mm; align-items:center; flex:1;">
+      <div class="feat-left">
+        <div class="feat-title">Para o RH do dia a dia</div>
+        <div class="feat-list">
+          <div class="feat-li">Ficha completa CLT/PJ com histórico de salários e cargos</div>
+          <div class="feat-li"><strong>Fechamento de ponto</strong> com importação de relógio e ajuste manual</div>
+          <div class="feat-li">Solicitação e aprovação de <strong>Hora Extra</strong> com workflow digital</div>
+          <div class="feat-li">Controle de documentos com alerta de vencimento por email</div>
+          <div class="feat-li">Aviso prévio automático conforme CLT (proporcional e indenizado)</div>
+          <div class="feat-li">CIPA, laudos e <strong>conformidade NR-18</strong> para canteiro de obras</div>
+          <div class="feat-li">Raio-X individual do funcionário — produção, absenteísmo, custo</div>
+        </div>
+      </div>
+      <div class="feat-right">
+        <div class="feat-kpi"><div class="n">100%</div><div class="l">Compliance CLT</div></div>
+        <div class="feat-kpi"><div class="n">Zero</div><div class="l">Digitação de folha</div></div>
+        <div class="feat-kpi"><div class="n">Multi</div><div class="l">Obra e empresa</div></div>
+        <div class="feat-kpi"><div class="n">LGPD</div><div class="l">Dados protegidos</div></div>
+        <div class="feat-kpi" style="grid-column: span 2;"><div class="n">Admissão → Rescisão</div><div class="l">Fluxo completo do colaborador na plataforma</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 6 — COMPRAS & FINANCEIRO
+════════════════════════════════════════════ -->
+<div class="slide" id="s6">
+  <div class="slide-header">
+    <div class="num">06</div>
+    <div class="titles">
+      <span class="kicker">Destaque — Compras &amp; Financeiro</span>
+      <h2>Do pedido à nota fiscal — <span>totalmente integrado</span></h2>
+    </div>
+  </div>
+  <div class="slide-body" style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <div class="two-col" style="display:grid; grid-template-columns:1fr 1fr; gap:6mm;">
+      <div class="module-panel">
+        <div class="mp-header">
+          <div class="mp-icon">🛒</div>
+          <div><div class="mp-title">Compras Enterprise</div><div class="mp-sub">Fluxo SC → Cotação → OC → Recebimento</div></div>
+        </div>
+        <div class="mp-feat"><strong>Portal do fornecedor</strong> — cotação por link exclusivo</div>
+        <div class="mp-feat">Comparativo automático de preços entre fornecedores</div>
+        <div class="mp-feat"><strong>Retenções fiscais</strong> (INSS, IR, ISS) calculadas na OC</div>
+        <div class="mp-feat">Recebimento item a item com liberação de pagamento</div>
+        <div class="mp-feat"><strong>Compras emergenciais</strong> com SLA de 4 horas</div>
+        <div class="mp-feat">Almoxarifado com movimentação e alerta de estoque mínimo</div>
+        <div class="mp-feat">Realocação de verba entre itens da EAP</div>
+      </div>
+      <div class="module-panel gold-border">
+        <div class="mp-header">
+          <div class="mp-icon">💰</div>
+          <div><div class="mp-title">Financeiro Integrado</div><div class="mp-sub">Gerado automaticamente pelas operações</div></div>
+        </div>
+        <div class="mp-feat"><strong>Conta a pagar criada</strong> automaticamente na emissão da OC</div>
+        <div class="mp-feat">Folha CLT e PJ importada e contabilizada sem digitação</div>
+        <div class="mp-feat"><strong>DRE mensal e anual</strong> com visão por obra ou consolidada</div>
+        <div class="mp-feat">Fluxo de caixa projetado vs. realizado</div>
+        <div class="mp-feat"><strong>Obrigações fiscais</strong> — ISS, INSS, FGTS, IRPJ, PIS/COFINS</div>
+        <div class="mp-feat">Conciliação bancária por extrato</div>
+        <div class="mp-feat">Inadimplência e régua de cobrança automática</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 7 — PLANEJAMENTO & ORÇAMENTO
+════════════════════════════════════════════ -->
+<div class="slide" id="s7">
+  <div class="slide-header">
+    <div class="num">07</div>
+    <div class="titles">
+      <span class="kicker">Destaque — Engenharia</span>
+      <h2>Orçamento e planejamento <span>para obra real</span></h2>
+    </div>
+  </div>
+  <div class="slide-body" style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <div style="display:grid; grid-template-columns:1.2fr 1fr; gap:8mm; align-items:center; flex:1;">
+      <div style="display:flex; flex-direction:column; gap:3mm;">
+        <div class="feat-title">Orçamento</div>
+        <div class="feat-list" style="display:flex; flex-direction:column; gap:2mm;">
+          <div class="feat-li" style="font-size:8.5pt; color:var(--text);"><strong>EAP detalhada</strong> com hierarquia ilimitada de itens e subitens</div>
+          <div class="feat-li" style="font-size:8.5pt; color:var(--text);">Composições <strong>SINAPI e TCPO</strong> integradas com atualização de preços</div>
+          <div class="feat-li" style="font-size:8.5pt; color:var(--text);">BDI configurável por tipo de serviço</div>
+          <div class="feat-li" style="font-size:8.5pt; color:var(--text);">Versões de orçamento com comparativo entre revisões</div>
+          <div class="feat-li" style="font-size:8.5pt; color:var(--text);">Exportação para Excel com layout personalizado</div>
+        </div>
+        <div class="feat-title" style="margin-top:3mm;">Planejamento</div>
+        <div class="feat-list" style="display:flex; flex-direction:column; gap:2mm;">
+          <div class="feat-li" style="font-size:8.5pt; color:var(--text);"><strong>Cronograma físico-financeiro</strong> vinculado à EAP do orçamento</div>
+          <div class="feat-li" style="font-size:8.5pt; color:var(--text);">Avanço por período — previsto vs. realizado</div>
+          <div class="feat-li" style="font-size:8.5pt; color:var(--text);"><strong>IDC e IDP</strong> — índices de desempenho de custo e prazo (Earned Value)</div>
+          <div class="feat-li" style="font-size:8.5pt; color:var(--text);">Linha de base bloqueada para comparação histórica</div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:3mm;">
+        <div class="feat-kpi"><div class="n">SINAPI</div><div class="l">Base de preços integrada</div></div>
+        <div class="feat-kpi"><div class="n">EVM</div><div class="l">Earned Value Management</div></div>
+        <div class="feat-kpi"><div class="n">Multi</div><div class="l">Versões de orçamento</div></div>
+        <div class="feat-kpi"><div class="n">100%</div><div class="l">Rastreabilidade obra-a-obra</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 8 — NÚMEROS DO PRODUTO
+════════════════════════════════════════════ -->
+<div class="slide" id="s8">
+  <div class="bg-lines"></div>
+  <div class="slide-header">
+    <div class="num">08</div>
+    <div class="titles">
+      <span class="kicker">Solidez Técnica</span>
+      <h2>Um produto construído para <span>escalar com segurança</span></h2>
+    </div>
+  </div>
+  <div class="slide-body" style="position:relative; z-index:1;">
+    <div class="nums-grid">
+      <div class="num-box"><div class="big">222k</div><div class="label">Linhas de código</div></div>
+      <div class="num-box"><div class="big">261</div><div class="label">Tabelas no banco<br/>de dados</div></div>
+      <div class="num-box"><div class="big">159</div><div class="label">Telas e páginas<br/>funcionais</div></div>
+      <div class="num-box"><div class="big">54</div><div class="label">Routers de API<br/>com 200+ endpoints</div></div>
+      <div class="num-box"><div class="big">Rev. 344</div><div class="label">Revisões de produto<br/>documentadas</div></div>
+      <div class="num-box"><div class="big">PostgreSQL</div><div class="label">Banco cloud<br/>(Neon · serverless)</div></div>
+      <div class="num-box"><div class="big">100%</div><div class="label">TypeScript —<br/>tipagem segura</div></div>
+      <div class="num-box"><div class="big">Multi</div><div class="label">Empresa e CNPJ<br/>isolamento total</div></div>
+    </div>
+    <p class="bottom-note">Stack: React · TypeScript · Node.js · tRPC · Drizzle ORM · PostgreSQL (Neon) · Tailwind CSS</p>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 9 — COMPARATIVO
+════════════════════════════════════════════ -->
+<div class="slide" id="s9">
+  <div class="slide-header">
+    <div class="num">09</div>
+    <div class="titles">
+      <span class="kicker">Mercado</span>
+      <h2>Por que escolher o <span>ERP Gestão Integrada?</span></h2>
+    </div>
+  </div>
+  <div class="slide-body">
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th>Funcionalidade</th>
+          <th class="us">ERP Gestão Integrada</th>
+          <th class="them">Totvs Construção</th>
+          <th class="them">Sienge</th>
+          <th class="them">Planilhas / ERPs genéricos</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>RH + Folha integrados</td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="part">Parcial</span></td>
+          <td class="center"><span class="part">Parcial</span></td>
+          <td class="center"><span class="no">✗</span></td>
+        </tr>
+        <tr>
+          <td>Compras com portal do fornecedor</td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="no">✗</span></td>
+          <td class="center"><span class="no">✗</span></td>
+          <td class="center"><span class="no">✗</span></td>
+        </tr>
+        <tr>
+          <td>Financeiro integrado às operações</td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="no">✗</span></td>
+        </tr>
+        <tr>
+          <td>Orçamento com SINAPI integrado</td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="part">Módulo extra</span></td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="no">✗</span></td>
+        </tr>
+        <tr>
+          <td>Dashboards e BI integrado</td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="part">Módulo extra</span></td>
+          <td class="center"><span class="part">Módulo extra</span></td>
+          <td class="center"><span class="no">✗</span></td>
+        </tr>
+        <tr>
+          <td>Multi-empresa nativo</td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="part">Limitado</span></td>
+          <td class="center"><span class="no">✗</span></td>
+        </tr>
+        <tr>
+          <td>Preço acessível para PME</td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="no">✗</span></td>
+          <td class="center"><span class="part">Médio</span></td>
+          <td class="center"><span class="yes">✓</span></td>
+        </tr>
+        <tr>
+          <td>Suporte e evolução contínua</td>
+          <td class="center"><span class="yes">✓</span></td>
+          <td class="center"><span class="part">Plano pago</span></td>
+          <td class="center"><span class="part">Plano pago</span></td>
+          <td class="center"><span class="no">✗</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 10 — PREÇOS
+════════════════════════════════════════════ -->
+<div class="slide" id="s10">
+  <div class="slide-header">
+    <div class="num">10</div>
+    <div class="titles">
+      <span class="kicker">Investimento</span>
+      <h2>Planos para cada <span>tamanho de construtora</span></h2>
+    </div>
+  </div>
+  <div class="slide-body" style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <div class="plans-grid">
+      <div class="plan-card starter">
+        <div class="plan-name">Essencial</div>
+        <div class="plan-price">R$ 890<span>/mês</span></div>
+        <div class="plan-desc">Até 50 colaboradores · 1 CNPJ</div>
+        <div class="plan-feat">RH completo + Ponto + Folha</div>
+        <div class="plan-feat">Controle de Documentos</div>
+        <div class="plan-feat">EPI e Segurança do Trabalho</div>
+        <div class="plan-feat">Dashboard operacional</div>
+        <div class="plan-feat">Suporte incluso</div>
+      </div>
+      <div class="plan-card pro">
+        <div class="plan-badge">MAIS POPULAR</div>
+        <div class="plan-name">Profissional</div>
+        <div class="plan-price">R$ 1.890<span>/mês</span></div>
+        <div class="plan-desc">Até 200 colaboradores · Multi-obra</div>
+        <div class="plan-feat">Tudo do plano Essencial</div>
+        <div class="plan-feat">Compras Enterprise completo</div>
+        <div class="plan-feat">Módulo Financeiro</div>
+        <div class="plan-feat">Orçamento com SINAPI</div>
+        <div class="plan-feat">Planejamento físico-financeiro</div>
+        <div class="plan-feat">Terceiros &amp; PJ</div>
+      </div>
+      <div class="plan-card enterprise">
+        <div class="plan-name">Enterprise</div>
+        <div class="plan-price">R$ 4.500<span>/mês</span></div>
+        <div class="plan-desc">Colaboradores ilimitados · Multi-CNPJ</div>
+        <div class="plan-feat">Tudo do plano Profissional</div>
+        <div class="plan-feat">CNPJs ilimitados na mesma conta</div>
+        <div class="plan-feat">BI avançado e relatórios personalizados</div>
+        <div class="plan-feat">Integrações sob medida</div>
+        <div class="plan-feat">SLA de suporte prioritário</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     SLIDE 11 — PRÓXIMOS PASSOS
+════════════════════════════════════════════ -->
+<div class="slide" id="s11">
+  <div class="bg-lines"></div>
+  <div class="accent-bar"></div>
+  <div class="content">
+    <div class="kicker">Vamos começar?</div>
+    <h2>Próximos <span>passos simples</span></h2>
+    <p class="sub">Do primeiro contato à operação plena em menos de 2 semanas</p>
+    <div class="steps">
+      <div class="step-box">
+        <div class="sn">01</div>
+        <h4>Reunião de descoberta</h4>
+        <p>Entendemos sua operação, número de obras, colaboradores e processos atuais. Sem compromisso.</p>
+      </div>
+      <div class="step-box">
+        <div class="sn">02</div>
+        <h4>Demo personalizada</h4>
+        <p>Apresentamos o sistema com dados do seu setor. Você vê, na prática, como resolve seus problemas.</p>
+      </div>
+      <div class="step-box">
+        <div class="sn">03</div>
+        <h4>Proposta e contrato</h4>
+        <p>Plano adequado ao seu tamanho. Contrato mensal sem fidelidade mínima.</p>
+      </div>
+      <div class="step-box">
+        <div class="sn">04</div>
+        <h4>Onboarding e go-live</h4>
+        <p>Configuramos sua empresa no sistema e treinamos sua equipe. Operacional em até 5 dias úteis.</p>
+      </div>
+    </div>
+    <div class="contact-row">
+      <div class="contact-item"><span class="icon">📧</span> contato@fcengenhariacivil.com.br</div>
+      <div class="contact-item"><span class="icon">📱</span> (xx) xxxxx-xxxx</div>
+      <div class="contact-item"><span class="icon">🌐</span> www.fcengenhariacivil.com.br</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
