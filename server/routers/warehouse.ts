@@ -6,6 +6,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import {
   almoxarifadoItens,
   almoxarifadoMovimentacoes,
+  almoxarifadoDescontoFolha,
   warehouseLoans,
   warehouseInventorySessions,
   warehouseInventorySessionItems,
@@ -836,6 +837,109 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       await db
         .delete(warehouseInventorySessions)
         .where(eq(warehouseInventorySessions.id, input.sessionId));
+
+      return { success: true };
+    }),
+
+  // ── DESCONTO EM FOLHA — ITEM PERDIDO ─────────────────────────────
+
+  criarDescontoFolha: protectedProcedure
+    .input(z.object({
+      companyId:     z.number(),
+      employeeId:    z.number(),
+      employeeNome:  z.string(),
+      loanId:        z.number().optional(),
+      itemNome:      z.string(),
+      quantidade:    z.number().optional().default(1),
+      valorDesconto: z.number(),
+      descricao:     z.string().optional(),
+      mesDesconto:   z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db.insert(almoxarifadoDescontoFolha).values({
+        companyId:     input.companyId,
+        employeeId:    input.employeeId,
+        employeeNome:  input.employeeNome,
+        loanId:        input.loanId ?? null,
+        itemNome:      input.itemNome,
+        quantidade:    String(input.quantidade ?? 1),
+        valorDesconto: String(input.valorDesconto),
+        descricao:     input.descricao ?? null,
+        mesDesconto:   input.mesDesconto ?? null,
+        status:        "pendente",
+        criadoPor:     ctx.user.name || "Sistema",
+      } as any);
+
+      if (input.loanId) {
+        await db
+          .update(warehouseLoans)
+          .set({ status: "perdido" } as any)
+          .where(eq(warehouseLoans.id, input.loanId));
+      }
+
+      return { success: true };
+    }),
+
+  listarDescontosFolha: protectedProcedure
+    .input(z.object({
+      companyId:  z.number(),
+      status:     z.string().optional(),
+      employeeId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const conds: any[] = [eq(almoxarifadoDescontoFolha.companyId, input.companyId)];
+      if (input.status)     conds.push(eq(almoxarifadoDescontoFolha.status, input.status));
+      if (input.employeeId) conds.push(eq(almoxarifadoDescontoFolha.employeeId, input.employeeId));
+
+      const rows = await db
+        .select()
+        .from(almoxarifadoDescontoFolha)
+        .where(and(...conds))
+        .orderBy(desc(almoxarifadoDescontoFolha.criadoEm));
+
+      return rows;
+    }),
+
+  aprovarDescontoFolha: protectedProcedure
+    .input(z.object({ id: z.number(), mesDesconto: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(almoxarifadoDescontoFolha)
+        .set({
+          status:      "aprovado",
+          aprovadoPor: ctx.user.name || "RH",
+          aprovadoEm:  new Date().toISOString(),
+          mesDesconto: input.mesDesconto ?? null,
+        } as any)
+        .where(eq(almoxarifadoDescontoFolha.id, input.id));
+
+      return { success: true };
+    }),
+
+  reprovarDescontoFolha: protectedProcedure
+    .input(z.object({ id: z.number(), motivoReprovacao: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(almoxarifadoDescontoFolha)
+        .set({
+          status:           "reprovado",
+          aprovadoPor:      ctx.user.name || "RH",
+          aprovadoEm:       new Date().toISOString(),
+          motivoReprovacao: input.motivoReprovacao ?? null,
+        } as any)
+        .where(eq(almoxarifadoDescontoFolha.id, input.id));
 
       return { success: true };
     }),

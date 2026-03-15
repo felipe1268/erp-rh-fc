@@ -1150,6 +1150,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:30:00",
   },
   {
+    version: 324,
+    titulo: "Almoxarifado no Raio-X do Colaborador — Empréstimos + Desconto em Folha",
+    descricao: "Nova aba 'Almoxarifado' no Raio-X do funcionário com dois sub-módulos: (1) Empréstimos — lista todas as ferramentas/equipamentos emprestados ao colaborador com status (Em posse / Devolvido / Perdido) e botão 'Perdido' para iniciar desconto em folha; (2) Desconto Folha — histórico de descontos por item perdido com fluxo de aprovação RH (Aprovar/Reprovar com motivo). Nova tabela no banco: almoxarifado_desconto_folha. Novos endpoints: criarDescontoFolha, listarDescontosFolha, aprovarDescontoFolha, reprovarDescontoFolha.",
+    tipo: "feature",
+    modulos: "Almoxarifado, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 21:00:00",
+  },
+  {
     version: 308,
     titulo: "Almoxarifado — Modal Emprestar: tela maior e foto do funcionário ampliada",
     descricao: "Modal 'Emprestar Ferramenta' ampliado para max-w-lg. Card de funcionário selecionado redesenhado: foto circular centralizada de 112px (w-28 h-28) com borda esmeralda e sombra, nome e cargo abaixo. Ícone genérico também em 112px quando não há foto cadastrada.",

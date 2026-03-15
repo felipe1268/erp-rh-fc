@@ -4698,6 +4698,25 @@ export const comprasOrdensItens = pgTable("compras_ordens_itens", {
 // Novas tabelas: empréstimos e inventário semanal.
 // ============================================================
 
+export const almoxarifadoDescontoFolha = pgTable("almoxarifado_desconto_folha", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  employeeId:       integer("employee_id").notNull(),
+  employeeNome:     varchar("employee_nome", { length: 255 }).notNull(),
+  loanId:           integer("loan_id"),
+  itemNome:         varchar("item_nome", { length: 255 }).notNull(),
+  quantidade:       numeric({ precision: 10, scale: 3 }).default("1"),
+  valorDesconto:    numeric("valor_desconto", { precision: 14, scale: 2 }).notNull(),
+  descricao:        text(),
+  status:           varchar({ length: 20 }).notNull().default("pendente"),
+  aprovadoPor:      varchar("aprovado_por", { length: 255 }),
+  aprovadoEm:       timestamp("aprovado_em", { mode: "string" }),
+  motivoReprovacao: text("motivo_reprovacao"),
+  mesDesconto:      varchar("mes_desconto", { length: 7 }),
+  criadoPor:        varchar("criado_por", { length: 255 }),
+  criadoEm:         timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
 export const warehouseLoans = pgTable("warehouse_loans", {
   id:               serial().primaryKey(),
   companyId:        integer("company_id").notNull(),
