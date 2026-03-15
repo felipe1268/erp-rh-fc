@@ -64,6 +64,13 @@
       "when": 1773550906868,
       "tag": "0008_high_gwen_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773551746314,
+      "tag": "0009_pale_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

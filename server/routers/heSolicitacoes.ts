@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog } from "../db";
 import {
-  heSolicitacoes, heSolicitacaoFuncionarios, employees, obras, terminationNotices,
+  heSolicitacoes, heSolicitacaoFuncionarios, heSolicitacaoAtividades, employees, obras, terminationNotices,
   planejamentoAtividades, planejamentoProjetos, planejamentoRevisoes, planejamentoRefis,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull, asc } from "drizzle-orm";
@@ -20,6 +20,7 @@ export const heSolicitacoesRouter = router({
   // ===================== CRIAR SOLICITAÇÃO =====================
   create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional(),
     planejamentoAtividadeId: z.number().optional(),
+    planejamentoAtividadeIds: z.array(z.number()).optional(),
     dataSolicitacao: z.string().min(10), // YYYY-MM-DD
     horaInicio: z.string().optional(),
     horaFim: z.string().optional(),
@@ -40,11 +41,18 @@ export const heSolicitacoesRouter = router({
       throw new TRPCError({ code: "BAD_REQUEST", message: `Funcionário(s) desligado(s) não podem ser incluídos em HE: ${nomes}` });
     }
 
+    // Resolver lista de IDs de atividades (suporta array ou single)
+    const atividadeIds: number[] = input.planejamentoAtividadeIds?.length
+      ? input.planejamentoAtividadeIds
+      : input.planejamentoAtividadeId
+        ? [input.planejamentoAtividadeId]
+        : [];
+
     // Criar a solicitação
     const [result] = await db.insert(heSolicitacoes).values({
       companyId: input.companyId,
       obraId: input.obraId || null,
-      planejamentoAtividadeId: input.planejamentoAtividadeId || null,
+      planejamentoAtividadeId: atividadeIds[0] || null,
       dataSolicitacao: input.dataSolicitacao,
       horaInicio: input.horaInicio || null,
       horaFim: input.horaFim || null,
@@ -66,6 +74,18 @@ export const heSolicitacoesRouter = router({
           status: "pendente" as const,
         }))
       );
+    }
+
+    // Vincular atividades (join table) — suporta múltiplas
+    if (atividadeIds.length > 0) {
+      const db2 = await getDb();
+      if (db2) {
+        await db2.execute(sql`
+          INSERT INTO he_solicitacao_atividades (solicitacao_id, atividade_id)
+          VALUES ${sql.join(atividadeIds.map(aid => sql`(${solicitacaoId}, ${aid})`), sql`, `)}
+          ON CONFLICT DO NOTHING
+        `);
+      }
     }
 
     await createAuditLog({
@@ -163,9 +183,19 @@ export const heSolicitacoesRouter = router({
       obraNome = obra?.nome || null;
     }
 
-    // Buscar atividade vinculada
-    let atividadeInfo = null;
-    if (sol.planejamentoAtividadeId) {
+    // Buscar atividades vinculadas (join table — suporta múltiplas)
+    const atividadesVinculadasRaw = await db.execute(sql`
+      SELECT a.id, a.nome, a."eapCodigo", a."dataInicio", a."dataFim"
+      FROM he_solicitacao_atividades hsa
+      JOIN planejamento_atividades a ON a.id = hsa.atividade_id
+      WHERE hsa.solicitacao_id = ${sol.id}
+      ORDER BY a."eapCodigo"
+    `);
+    const atividadesVinculadas: any[] = (atividadesVinculadasRaw as any)?.rows ?? atividadesVinculadasRaw ?? [];
+
+    // Backward compat: se join table vazia mas coluna legada preenchida, buscar atividade legada
+    let atividadeInfo = atividadesVinculadas[0] || null;
+    if (atividadesVinculadas.length === 0 && sol.planejamentoAtividadeId) {
       const [atv] = await db.select({
         id: planejamentoAtividades.id,
         nome: planejamentoAtividades.nome,
@@ -173,10 +203,10 @@ export const heSolicitacoesRouter = router({
         dataInicio: planejamentoAtividades.dataInicio,
         dataFim: planejamentoAtividades.dataFim,
       }).from(planejamentoAtividades).where(eq(planejamentoAtividades.id, sol.planejamentoAtividadeId));
-      atividadeInfo = atv || null;
+      if (atv) { atividadeInfo = atv; atividadesVinculadas.push(atv); }
     }
 
-    return { ...sol, obraNome, atividadeInfo, funcionarios: funcs };
+    return { ...sol, obraNome, atividadeInfo, atividadesVinculadas, funcionarios: funcs };
   }),
 
   // ===================== APROVAR SOLICITAÇÃO (Admin Master) =====================
@@ -211,72 +241,84 @@ export const heSolicitacoesRouter = router({
       observacaoAdmin: input.observacaoAdmin || sol.observacaoAdmin || null,
     }).where(eq(heSolicitacoes.id, input.id));
 
-    // === ACUMULAR CUSTO NO REFI quando HE está vinculada a uma atividade ===
-    if (sol.planejamentoAtividadeId && !isReversao) {
+    // === ACUMULAR CUSTO NO REFI quando HE está vinculada a atividades ===
+    if (!isReversao) {
       try {
-        // Buscar atividade → projeto
-        const [atv] = await db.select({ projetoId: planejamentoAtividades.projetoId })
-          .from(planejamentoAtividades).where(eq(planejamentoAtividades.id, sol.planejamentoAtividadeId));
-        if (atv) {
-          // Calcular custo da HE
-          const funcs = await db.select({
-            valorHora: employees.valorHora,
-            salarioBase: employees.salarioBase,
-          }).from(heSolicitacaoFuncionarios)
-            .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
-            .where(eq(heSolicitacaoFuncionarios.solicitacaoId, sol.id));
+        // Buscar todas as atividades vinculadas (join table + legada)
+        const atvsRaw = await db.execute(sql`
+          SELECT DISTINCT a.id, a."projetoId"
+          FROM he_solicitacao_atividades hsa
+          JOIN planejamento_atividades a ON a.id = hsa.atividade_id
+          WHERE hsa.solicitacao_id = ${sol.id}
+          UNION
+          SELECT a.id, a."projetoId" FROM planejamento_atividades a
+          WHERE a.id = ${sol.planejamentoAtividadeId ?? 0}
+            AND NOT EXISTS (SELECT 1 FROM he_solicitacao_atividades WHERE solicitacao_id = ${sol.id})
+        `);
+        const atvsLinked: any[] = ((atvsRaw as any)?.rows ?? atvsRaw ?? []).filter((a: any) => a.id);
 
-          const calcHoras = (ini: string, fim: string) => {
-            const [h1, m1] = ini.split(":").map(Number);
-            const [h2, m2] = fim.split(":").map(Number);
-            const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
-            return mins > 0 ? mins / 60 : 0;
-          };
-          const horas = (sol.horaInicio && sol.horaFim) ? calcHoras(sol.horaInicio, sol.horaFim) : 0;
-          const diaSemana = sol.dataSolicitacao ? new Date(sol.dataSolicitacao + "T12:00:00").getDay() : -1;
-          const percentHE = (diaSemana === 0 || diaSemana === 6) ? 100 : 50;
+        // Calcular custo total da HE
+        const funcsAll = await db.select({
+          valorHora: employees.valorHora,
+          salarioBase: employees.salarioBase,
+        }).from(heSolicitacaoFuncionarios)
+          .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
+          .where(eq(heSolicitacaoFuncionarios.solicitacaoId, sol.id));
 
-          let custoHE = 0;
-          for (const f of funcs) {
-            let vh: number | null = null;
-            if (f.valorHora) { const v = parseFloat(String(f.valorHora).replace(",", ".")); if (!isNaN(v) && v > 0) vh = v; }
-            if (!vh && f.salarioBase) { const s = parseFloat(String(f.salarioBase).replace(",", ".")); if (!isNaN(s) && s > 0) vh = s / 220; }
-            if (vh && horas > 0) custoHE += vh * (1 + percentHE / 100) * horas;
-          }
+        const calcHorasLocal = (ini: string, fim: string) => {
+          const [h1, m1] = ini.split(":").map(Number);
+          const [h2, m2] = fim.split(":").map(Number);
+          const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+          return mins > 0 ? mins / 60 : 0;
+        };
+        const horas = (sol.horaInicio && sol.horaFim) ? calcHorasLocal(sol.horaInicio, sol.horaFim) : 0;
+        const diaSemana = sol.dataSolicitacao ? new Date(sol.dataSolicitacao + "T12:00:00").getDay() : -1;
+        const percentHE = (diaSemana === 0 || diaSemana === 6) ? 100 : 50;
 
-          if (custoHE > 0) {
-            // Determinar semana do REFI (segunda-feira da semana da HE)
-            const dataHE = new Date(sol.dataSolicitacao + "T12:00:00");
-            const diaSem = dataHE.getDay();
-            const diff = diaSem === 0 ? -6 : 1 - diaSem;
-            const segunda = new Date(dataHE);
-            segunda.setDate(dataHE.getDate() + diff);
-            const semanaStr = segunda.toISOString().split("T")[0];
+        let custoHE = 0;
+        for (const f of funcsAll) {
+          let vh: number | null = null;
+          if (f.valorHora) { const v = parseFloat(String(f.valorHora).replace(",", ".")); if (!isNaN(v) && v > 0) vh = v; }
+          if (!vh && f.salarioBase) { const s = parseFloat(String(f.salarioBase).replace(",", ".")); if (!isNaN(s) && s > 0) vh = s / 220; }
+          if (vh && horas > 0) custoHE += vh * (1 + percentHE / 100) * horas;
+        }
 
-            // Buscar ou criar REFI para essa semana
-            const [refExist] = await db.select({ id: planejamentoRefis.id, custoRealizado: planejamentoRefis.custoRealizado })
-              .from(planejamentoRefis)
-              .where(and(
-                eq(planejamentoRefis.projetoId, atv.projetoId),
-                eq(planejamentoRefis.semana, semanaStr),
-              ));
+        // Distribuir custo igualmente entre as atividades vinculadas
+        const custoPerAtv = atvsLinked.length > 0 ? custoHE / atvsLinked.length : 0;
 
-            if (refExist) {
-              const novoRealizado = parseFloat(String(refExist.custoRealizado || "0")) + custoHE;
-              await db.update(planejamentoRefis).set({ custoRealizado: String(novoRealizado.toFixed(2)) })
-                .where(eq(planejamentoRefis.id, refExist.id));
-            } else {
-              await db.insert(planejamentoRefis).values({
-                projetoId: atv.projetoId,
-                semana: semanaStr,
-                custoRealizado: String(custoHE.toFixed(2)),
-                criadoPor: ctx.user.name || "Sistema",
-              });
-            }
+        // Agrupar atividades por projeto para upsert no REFI
+        const projetoMap: Record<number, number> = {};
+        for (const atv of atvsLinked) {
+          if (atv.projetoId) projetoMap[atv.projetoId] = (projetoMap[atv.projetoId] || 0) + custoPerAtv;
+        }
+
+        for (const [projetoIdStr, custoTotal] of Object.entries(projetoMap)) {
+          if (custoTotal <= 0) continue;
+          const projetoId = parseInt(projetoIdStr);
+          const dataHE = new Date(sol.dataSolicitacao + "T12:00:00");
+          const diaSem = dataHE.getDay();
+          const diff = diaSem === 0 ? -6 : 1 - diaSem;
+          const segunda = new Date(dataHE);
+          segunda.setDate(dataHE.getDate() + diff);
+          const semanaStr = segunda.toISOString().split("T")[0];
+
+          const [refExist] = await db.select({ id: planejamentoRefis.id, custoRealizado: planejamentoRefis.custoRealizado })
+            .from(planejamentoRefis)
+            .where(and(eq(planejamentoRefis.projetoId, projetoId), eq(planejamentoRefis.semana, semanaStr)));
+
+          if (refExist) {
+            const novoRealizado = parseFloat(String(refExist.custoRealizado || "0")) + custoTotal;
+            await db.update(planejamentoRefis).set({ custoRealizado: String(novoRealizado.toFixed(2)) })
+              .where(eq(planejamentoRefis.id, refExist.id));
+          } else {
+            await db.insert(planejamentoRefis).values({
+              projetoId, semana: semanaStr,
+              custoRealizado: String(custoTotal.toFixed(2)),
+              criadoPor: ctx.user.name || "Sistema",
+            });
           }
         }
       } catch (e) {
-        // Não bloquear aprovação por erro no REFI
         console.warn("[HE] Erro ao acumular custo no REFI:", e);
       }
     }

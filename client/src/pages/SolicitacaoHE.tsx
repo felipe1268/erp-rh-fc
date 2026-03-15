@@ -57,7 +57,7 @@ export default function SolicitacaoHE() {
   // Form state
   const [formData, setFormData] = useState({
     obraId: "",
-    planejamentoAtividadeId: "" as string,
+    planejamentoAtividadeIds: [] as string[],
     dataSolicitacao: "",
     horaInicio: "",
     horaFim: "",
@@ -214,7 +214,7 @@ export default function SolicitacaoHE() {
     if (formData.funcionarioIds.length === 0) { toast.error("Selecione pelo menos 1 funcionário"); return; }
 
     createMut.mutate({ companyId, companyIds, obraId: formData.obraId ? parseInt(formData.obraId) : undefined,
-      planejamentoAtividadeId: formData.planejamentoAtividadeId ? parseInt(formData.planejamentoAtividadeId) : undefined,
+      planejamentoAtividadeIds: formData.planejamentoAtividadeIds.length > 0 ? formData.planejamentoAtividadeIds.map(Number) : undefined,
       dataSolicitacao: formData.dataSolicitacao,
       horaInicio: formData.horaInicio || undefined,
       horaFim: formData.horaFim || undefined,
@@ -358,7 +358,7 @@ export default function SolicitacaoHE() {
                 {/* Obra */}
                 <div className="space-y-1.5">
                   <Label>Obra (opcional)</Label>
-                  <Select value={formData.obraId} onValueChange={v => setFormData(p => ({ ...p, obraId: v, planejamentoAtividadeId: "", funcionarioIds: [] }))}>
+                  <Select value={formData.obraId} onValueChange={v => setFormData(p => ({ ...p, obraId: v, planejamentoAtividadeIds: [], funcionarioIds: [] }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                     <SelectContent>
                       {(obrasQuery.data || []).map((o: any) => (
@@ -368,11 +368,16 @@ export default function SolicitacaoHE() {
                   </Select>
                 </div>
 
-                {/* Atividade do Cronograma */}
+                {/* Atividade do Cronograma — multi-seleção */}
                 <div className="space-y-1.5 md:col-span-2">
                   <Label className="flex items-center gap-1.5">
                     <TrendingUp className="h-3.5 w-3.5 text-blue-600" />
-                    Atividade do Cronograma (opcional)
+                    Atividades do Cronograma (opcional)
+                    {formData.planejamentoAtividadeIds.length > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 font-semibold">
+                        {formData.planejamentoAtividadeIds.length} selecionada{formData.planejamentoAtividadeIds.length > 1 ? "s" : ""}
+                      </span>
+                    )}
                   </Label>
                   {!formData.obraId ? (
                     <p className="text-xs text-muted-foreground italic py-2">Selecione uma obra para carregar as atividades do cronograma.</p>
@@ -381,25 +386,34 @@ export default function SolicitacaoHE() {
                   ) : !(atividadesQuery.data as any)?.atividades?.length ? (
                     <p className="text-xs text-amber-600 italic py-2">Esta obra não possui cronograma cadastrado no módulo Planejamento.</p>
                   ) : (
-                    <Select value={formData.planejamentoAtividadeId || "none"} onValueChange={v => setFormData(p => ({ ...p, planejamentoAtividadeId: v === "none" ? "" : v }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Vincular a uma atividade do cronograma..." />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        <SelectItem value="none">Nenhuma (sem vínculo)</SelectItem>
-                        {((atividadesQuery.data as any)?.atividades || []).map((a: any) => (
-                          <SelectItem key={a.id} value={String(a.id)}>
-                            <span className="font-mono text-xs text-blue-700 mr-2">{a.eapCodigo}</span>
-                            {a.nome}
-                            {a.isGrupo && <span className="ml-2 text-xs text-muted-foreground">(grupo)</span>}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="rounded-lg border bg-white max-h-52 overflow-y-auto divide-y">
+                      {((atividadesQuery.data as any)?.atividades || []).map((a: any) => {
+                        const sid = String(a.id);
+                        const checked = formData.planejamentoAtividadeIds.includes(sid);
+                        return (
+                          <label key={a.id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-blue-50 transition-colors ${checked ? "bg-blue-50" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => setFormData(p => ({
+                                ...p,
+                                planejamentoAtividadeIds: checked
+                                  ? p.planejamentoAtividadeIds.filter(id => id !== sid)
+                                  : [...p.planejamentoAtividadeIds, sid],
+                              }))}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 accent-blue-600"
+                            />
+                            <span className="font-mono text-xs text-blue-700 shrink-0 w-12">{a.eapCodigo}</span>
+                            <span className={`text-sm flex-1 ${a.isGrupo ? "font-semibold text-slate-700" : "text-slate-600"}`}>{a.nome}</span>
+                            {a.isGrupo && <span className="text-xs text-muted-foreground shrink-0">grupo</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
                   )}
-                  {formData.planejamentoAtividadeId && (
+                  {formData.planejamentoAtividadeIds.length > 0 && (
                     <p className="text-xs text-green-700 flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" /> Custo desta HE será vinculado à atividade e acumulado no REFI ao aprovar.
+                      <CheckCircle className="h-3 w-3" /> Custo será distribuído entre as {formData.planejamentoAtividadeIds.length} atividade{formData.planejamentoAtividadeIds.length > 1 ? "s" : ""} e acumulado no REFI ao aprovar.
                     </p>
                   )}
                 </div>
@@ -999,31 +1013,40 @@ export default function SolicitacaoHE() {
                 Solicitado por: <strong>{sol.solicitadoPor}</strong> em {new Date(sol.createdAt).toLocaleString("pt-BR")}
               </div>
 
-              {/* Atividade Vinculada */}
-              {sol.atividadeInfo && (
-                <div className="rounded-lg border-2 border-indigo-200 bg-indigo-50 p-3 flex items-start gap-3">
-                  <TrendingUp className="h-4 w-4 text-indigo-700 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-xs font-semibold text-indigo-800 mb-0.5">Atividade do Cronograma Vinculada</p>
-                    <p className="text-sm font-bold text-indigo-900">
-                      {sol.atividadeInfo.eapCodigo && <span className="font-mono text-indigo-600 mr-2">{sol.atividadeInfo.eapCodigo}</span>}
-                      {sol.atividadeInfo.nome}
-                    </p>
-                    {(sol.atividadeInfo.dataInicio || sol.atividadeInfo.dataFim) && (
-                      <p className="text-xs text-indigo-700 mt-0.5">
-                        {sol.atividadeInfo.dataInicio && new Date(sol.atividadeInfo.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}
-                        {sol.atividadeInfo.dataInicio && sol.atividadeInfo.dataFim && " → "}
-                        {sol.atividadeInfo.dataFim && new Date(sol.atividadeInfo.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
+              {/* Atividades Vinculadas — suporta múltiplas */}
+              {((sol.atividadesVinculadas as any[])?.length > 0 || sol.atividadeInfo) && (() => {
+                const atvs: any[] = (sol.atividadesVinculadas as any[])?.length > 0
+                  ? (sol.atividadesVinculadas as any[])
+                  : [sol.atividadeInfo];
+                return (
+                  <div className="rounded-lg border-2 border-indigo-200 bg-indigo-50 p-3 space-y-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="h-4 w-4 text-indigo-700 shrink-0" />
+                      <p className="text-xs font-semibold text-indigo-800">
+                        {atvs.length === 1 ? "Atividade do Cronograma Vinculada" : `${atvs.length} Atividades do Cronograma Vinculadas`}
                       </p>
-                    )}
-                    {sol.status === "aprovada" && (
-                      <p className="text-xs text-green-700 mt-1 flex items-center gap-1">
-                        <CheckCircle className="h-3 w-3" /> Custo acumulado no REFI
-                      </p>
-                    )}
+                      {sol.status === "aprovada" && (
+                        <span className="ml-auto text-xs text-green-700 flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" /> Custo acumulado no REFI
+                        </span>
+                      )}
+                    </div>
+                    {atvs.map((atv: any, i: number) => (
+                      <div key={atv.id ?? i} className="flex items-start gap-2 bg-white rounded px-2 py-1.5 border border-indigo-100">
+                        {atv.eapCodigo && <span className="font-mono text-xs text-indigo-600 shrink-0 pt-0.5">{atv.eapCodigo}</span>}
+                        <span className="text-sm font-medium text-indigo-900 flex-1">{atv.nome}</span>
+                        {(atv.dataInicio || atv.dataFim) && (
+                          <span className="text-xs text-indigo-600 shrink-0">
+                            {atv.dataInicio && new Date(atv.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}
+                            {atv.dataInicio && atv.dataFim && " → "}
+                            {atv.dataFim && new Date(atv.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
+                          </span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Funcionários + Custo Previsto */}
               {(() => {
