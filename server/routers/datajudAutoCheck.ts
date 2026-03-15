@@ -47,7 +47,7 @@ async function runAutoCheck() {
       if (processos.length === 0) {
         await db.update(datajudAutoCheckConfig).set({
           ultimaVerificacao: sql`NOW()`,
-          totalVerificacoes: sql`totalVerificacoes + 1`,
+          totalVerificacoes: sql`"totalVerificacoes" + 1`,
         }).where(eq(datajudAutoCheckConfig.id, config.id));
         continue;
       }
@@ -160,8 +160,8 @@ async function runAutoCheck() {
       // Atualizar config
       await db.update(datajudAutoCheckConfig).set({
         ultimaVerificacao: sql`NOW()`,
-        totalVerificacoes: sql`totalVerificacoes + 1`,
-        totalAlertas: sql`totalAlertas + ${alertasGerados}`,
+        totalVerificacoes: sql`"totalVerificacoes" + 1`,
+        totalAlertas: sql`"totalAlertas" + ${alertasGerados}`,
       }).where(eq(datajudAutoCheckConfig.id, config.id));
 
       console.log(`[AutoCheck] Empresa ${config.companyId}: ${processos.length} processos verificados, ${alertasGerados} alertas gerados`);
@@ -327,8 +327,8 @@ export const datajudAutoCheckRouter = router({
       if (cfgNow) {
         await db.update(datajudAutoCheckConfig).set({
           ultimaVerificacao: sql`NOW()`,
-          totalVerificacoes: sql`totalVerificacoes + 1`,
-          totalAlertas: sql`totalAlertas + ${alertasGerados}`,
+          totalVerificacoes: sql`"totalVerificacoes" + 1`,
+          totalAlertas: sql`"totalAlertas" + ${alertasGerados}`,
         }).where(eq(datajudAutoCheckConfig.id, cfgNow.id));
       }
 

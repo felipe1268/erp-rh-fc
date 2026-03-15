@@ -391,26 +391,6 @@ export default function OrcamentoImportar() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [currentMapping, setCurrentMapping] = useState<Record<string, number>>({});
   const [autoDetectedMap, setAutoDetectedMap] = useState<Record<string, number>>({});
-  const [activeField, setActiveField] = useState<string | null>(null);
-
-  const assignCol = useCallback((colIdx: number) => {
-    if (!activeField) return;
-    // Calcula o novo mapeamento de forma síncrona
-    const next = { ...currentMapping };
-    Object.keys(next).forEach(k => { if (next[k] === colIdx) delete next[k]; });
-    delete next[activeField];
-    next[activeField] = colIdx;
-    setCurrentMapping(next);
-    // Avança para o próximo campo não mapeado
-    const currentIdx = KEY_FIELDS.findIndex(f => f.key === activeField);
-    const nextField = KEY_FIELDS.slice(currentIdx + 1).find(f => next[f.key] === undefined);
-    setActiveField(nextField?.key ?? null);
-  }, [activeField, currentMapping]);
-
-  const unassignCol = useCallback((fieldKey: string) => {
-    setCurrentMapping(prev => { const n = { ...prev }; delete n[fieldKey]; return n; });
-  }, []);
-
   const importarMut    = trpc.orcamento.importar.useMutation();
   const importarBdiMut = trpc.orcamento.importarBdi.useMutation();
   const previewSheetMut = trpc.orcamento.previewSheet.useMutation();
@@ -731,161 +711,158 @@ export default function OrcamentoImportar() {
         )}
 
         {/* ════════ STEP 3 — MAPEAMENTO DE COLUNAS ════════ */}
-        {step === "mapping" && (() => {
-          const requiredMissing = KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined);
-          return (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="sm" onClick={() => setStep("custo")}>
-                  <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-                </Button>
-                <div>
-                  <h2 className="font-bold text-base">Mapear Colunas</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {activeField
-                      ? <>Clique na coluna da planilha que corresponde a <strong className="text-primary">{KEY_FIELDS.find(f => f.key === activeField)?.label}</strong></>
-                      : "Clique em um campo abaixo para selecionar qual coluna da planilha corresponde a ele"}
-                  </p>
-                </div>
-              </div>
-
-              {/* ── Campos do sistema ── */}
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Campos do Sistema</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {KEY_FIELDS.map(f => {
-                    const mappedIdx = currentMapping[f.key];
-                    const col = previewCols.find(c => c.idx === mappedIdx);
-                    const isActive = activeField === f.key;
-                    const isMapped = mappedIdx !== undefined;
-                    return (
-                      <button
-                        key={f.key}
-                        onClick={() => setActiveField(isActive ? null : f.key)}
-                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border-2 text-left text-xs transition-all ${
-                          isActive
-                            ? "border-primary bg-primary/10 ring-2 ring-primary/30"
-                            : isMapped
-                              ? f.required
-                                ? "border-green-400 bg-green-50 text-green-800"
-                                : "border-blue-300 bg-blue-50 text-blue-700"
-                              : f.required
-                                ? "border-amber-300 bg-amber-50 text-amber-800 animate-pulse"
-                                : "border-border bg-muted/30 text-muted-foreground"
-                        }`}
-                      >
-                        <span className="font-semibold truncate">
-                          {f.required ? "★ " : ""}{f.label}
-                        </span>
-                        {isMapped ? (
-                          <span className="flex items-center gap-1 shrink-0">
-                            <span className="text-[10px] opacity-70 max-w-[60px] truncate">{col?.label}</span>
-                            <span
-                              role="button"
-                              onClick={e => { e.stopPropagation(); unassignCol(f.key); }}
-                              className="text-muted-foreground hover:text-destructive ml-0.5"
-                              title="Remover"
-                            >×</span>
-                          </span>
-                        ) : (
-                          <span className="text-[10px] opacity-50 shrink-0">{isActive ? "← clique coluna" : "clique"}</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* ── Colunas da planilha ── */}
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Colunas da Planilha{activeField ? <span className="ml-2 text-primary normal-case font-normal">← clique em uma coluna para mapear</span> : ""}
+        {step === "mapping" && (
+          <div className="space-y-3">
+            {/* Cabeçalho */}
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-bold text-base flex items-center gap-2">
+                  <Columns className="h-5 w-5 text-blue-600" />
+                  Identificar Colunas
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Na linha <strong className="text-primary">O que é esta coluna?</strong>, selecione o campo para cada coluna da sua planilha. Colunas sem importância deixe como <em>Ignorar</em>.
                 </p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {previewCols.map((col, colPos) => {
-                    const assignedKey = Object.entries(currentMapping).find(([, idx]) => idx === col.idx)?.[0];
-                    const assignedField = KEY_FIELDS.find(f => f.key === assignedKey);
-                    const samples = previewSample.map(row => row[colPos]).filter(v => v && String(v).trim()).slice(0, 2);
-                    const isSelectable = !!activeField;
-
-                    return (
-                      <button
-                        key={col.idx}
-                        disabled={!isSelectable && !assignedKey}
-                        onClick={() => isSelectable ? assignCol(col.idx) : undefined}
-                        className={`flex flex-col text-left rounded-lg border-2 overflow-hidden transition-all ${
-                          assignedKey
-                            ? assignedField?.required
-                              ? "border-green-400 bg-green-50"
-                              : "border-blue-300 bg-blue-50"
-                            : isSelectable
-                              ? "border-primary/40 bg-primary/5 hover:border-primary hover:bg-primary/10 cursor-pointer"
-                              : "border-border bg-white cursor-default opacity-60"
-                        }`}
-                      >
-                        <div className={`px-2 py-1.5 border-b w-full text-[11px] font-semibold truncate ${
-                          assignedKey
-                            ? assignedField?.required ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-700"
-                            : isSelectable ? "bg-primary/10 text-primary" : "bg-muted/60 text-muted-foreground"
-                        }`} title={col.label}>
-                          {col.label}
-                        </div>
-                        <div className="px-2 py-1.5 space-y-0.5 w-full">
-                          {samples.length > 0
-                            ? samples.map((v, i) => <p key={i} className="text-[10px] text-foreground/60 truncate">{String(v)}</p>)
-                            : <p className="text-[10px] text-muted-foreground/40 italic">vazio</p>}
-                          {assignedKey && (
-                            <span className={`inline-block mt-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                              assignedField?.required ? "bg-green-200 text-green-800" : "bg-blue-200 text-blue-700"
-                            }`}>
-                              {assignedField?.required ? "★ " : ""}{assignedField?.label}
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
+              <div className="flex gap-2 shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setStep("custo")}>
+                  <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Voltar
+                </Button>
+                <Button variant="outline" size="sm"
+                  onClick={() => { if (fileCusto) { const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()}`; localStorage.removeItem(k); handleGoToMapping(); } }}
+                  title="Refazer detecção automática"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
 
-              {/* Aviso obrigatórios faltando */}
-              {requiredMissing.length > 0 && (
+            {/* ── Tabela de planilha ── */}
+            <div className="rounded-lg border overflow-x-auto shadow-sm">
+              <table className="text-xs border-collapse min-w-full">
+                <thead>
+                  {/* Linha 1 — nome da coluna na planilha */}
+                  <tr>
+                    {previewCols.map(col => {
+                      const assignedKey = Object.entries(currentMapping).find(([, idx]) => idx === col.idx)?.[0];
+                      const field = KEY_FIELDS.find(f => f.key === assignedKey);
+                      return (
+                        <th
+                          key={col.idx}
+                          className={`px-2 py-1.5 border font-semibold text-left whitespace-nowrap min-w-[110px] max-w-[160px] ${
+                            assignedKey
+                              ? field?.required ? "bg-green-100 text-green-800" : "bg-blue-50 text-blue-700"
+                              : "bg-muted/70 text-muted-foreground"
+                          }`}
+                          title={col.label}
+                        >
+                          <span className="block truncate max-w-[150px]">{col.label}</span>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                  {/* Linha 2 — dropdown "O que é esta coluna?" */}
+                  <tr className="bg-white border-b-2 border-primary/20">
+                    {previewCols.map(col => {
+                      const assignedKey = Object.entries(currentMapping).find(([, idx]) => idx === col.idx)?.[0];
+                      const field = KEY_FIELDS.find(f => f.key === assignedKey);
+                      return (
+                        <td key={col.idx} className="px-1 py-1 border">
+                          <Select
+                            value={assignedKey ?? "__none__"}
+                            onValueChange={val => {
+                              const next = { ...currentMapping };
+                              Object.keys(next).forEach(k => { if (next[k] === col.idx) delete next[k]; });
+                              if (val !== "__none__") {
+                                Object.keys(next).forEach(k => { if (k === val) delete next[k]; });
+                                next[val] = col.idx;
+                              }
+                              setCurrentMapping(next);
+                            }}
+                          >
+                            <SelectTrigger className={`h-7 text-[11px] w-full min-w-[100px] font-semibold ${
+                              assignedKey
+                                ? field?.required
+                                  ? "border-green-400 bg-green-50 text-green-800"
+                                  : "border-blue-300 bg-blue-50 text-blue-700"
+                                : "text-muted-foreground"
+                            }`}>
+                              <SelectValue placeholder="— Ignorar —" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">
+                                <span className="text-muted-foreground">— Ignorar —</span>
+                              </SelectItem>
+                              {KEY_FIELDS.map(f => {
+                                const usedByOther = currentMapping[f.key] !== undefined && currentMapping[f.key] !== col.idx;
+                                return (
+                                  <SelectItem key={f.key} value={f.key} disabled={usedByOther}>
+                                    <span className={usedByOther ? "text-muted-foreground/50" : ""}>
+                                      {f.required ? "★ " : ""}{f.label}
+                                    </span>
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                {/* Linhas de dados — amostra da planilha */}
+                <tbody>
+                  {previewSample.slice(0, 5).map((row, ri) => (
+                    <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-muted/20"}>
+                      {previewCols.map((col, ci) => (
+                        <td key={col.idx} className="px-2 py-1 border text-[11px] text-foreground/70 whitespace-nowrap max-w-[160px] overflow-hidden text-ellipsis">
+                          {row[ci] || <span className="text-muted-foreground/30">—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Aviso campos obrigatórios */}
+            {(() => {
+              const missing = KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined);
+              return missing.length > 0 ? (
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
-                  <span><strong>Faltam obrigatórios:</strong> {requiredMissing.map(f => `★ ${f.label}`).join(", ")}</span>
+                  <span><strong>Faltam obrigatórios:</strong> {missing.map(f => `★ ${f.label}`).join(", ")}</span>
                 </div>
-              )}
+              ) : (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-xs text-green-800">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <span>Todos os campos obrigatórios estão mapeados. Pode importar.</span>
+                </div>
+              );
+            })()}
 
-              {/* Ações */}
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm"
-                  onClick={() => { if (fileCusto) { const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`; localStorage.removeItem(k); handleGoToMapping(); } }}
-                >
-                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Detectar auto
-                </Button>
-                <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
-                  disabled={requiredMissing.length > 0 || importingCusto}
-                  onClick={async () => {
-                    if (fileCusto) { const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`; localStorage.setItem(k, JSON.stringify(currentMapping)); }
-                    await handleImportarCusto();
-                  }}
-                >
-                  {importingCusto
-                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
-                    : <><FileCheck className="h-4 w-4 mr-2" /> Confirmar e Importar</>}
-                </Button>
-              </div>
+            {/* Botão importar */}
+            <Button className="w-full bg-amber-600 hover:bg-amber-700 h-11 text-sm font-semibold"
+              disabled={KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 || importingCusto}
+              onClick={async () => {
+                if (fileCusto) { const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()}`; localStorage.setItem(k, JSON.stringify(currentMapping)); }
+                await handleImportarCusto();
+              }}
+            >
+              {importingCusto
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
+                : <><FileCheck className="h-4 w-4 mr-2" /> Confirmar e Importar</>}
+            </Button>
 
-              {importingCusto && (
-                <Card><CardContent className="py-4 space-y-2">
-                  <p className="text-sm font-medium flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-amber-600" /> Importando...</p>
-                  <ProgressBar value={importProgCusto} color="bg-amber-500"
-                    label={importProgCusto < 25 ? "Enviando..." : importProgCusto < 60 ? "Processando EAP..." : importProgCusto < 85 ? "Calculando totais..." : "Finalizando..."} />
-                </CardContent></Card>
-              )}
-            </div>
-          );
-        })()}
+            {importingCusto && (
+              <Card><CardContent className="py-4 space-y-2">
+                <p className="text-sm font-medium flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-amber-600" /> Importando planilha...</p>
+                <ProgressBar value={importProgCusto} color="bg-amber-500"
+                  label={importProgCusto < 25 ? "Enviando..." : importProgCusto < 60 ? "Processando EAP..." : importProgCusto < 85 ? "Calculando totais..." : "Finalizando..."} />
+              </CardContent></Card>
+            )}
+          </div>
+        )}
 
         {/* ════════ STEP 4 — PLANILHA BDI ════════ */}
         {step === "bdi" && resultCusto && (

@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 380,
+    titulo: "Import Orçamento — Mapeamento em tabela de planilha",
+    descricao: "Tela de mapeamento de colunas reformulada para exibir os dados da planilha em formato de tabela real (como no Excel): linha 1 = nome das colunas da planilha, linha 2 = dropdown 'O que é esta coluna?' para cada uma, linhas seguintes = 5 linhas de dados reais. Colunas mapeadas ficam com cabeçalho verde (obrigatório) ou azul (opcional). Dropdown só permite mapear cada campo do sistema para uma coluna; campos já usados aparecem desabilitados. Botão de importar na parte inferior.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 379,
     titulo: "Import Orçamento — Nova UI de mapeamento click-to-assign",
     descricao: "Tela de mapeamento de colunas completamente redesenhada: painel superior mostra os campos do sistema como botões clicáveis (obrigatórios com ★, não mapeados pulsando em âmbar); painel inferior exibe todas as colunas da planilha como cards com nome e amostra de dados. Fluxo: usuário clica em um campo → ativa modo de seleção → clica na coluna correspondente → campo é mapeado e cursor avança automaticamente para o próximo campo não mapeado. Botão × remove mapeamento de um campo. Estado `activeField` movido para nível do componente (evitando violação de Rules of Hooks no IIFE anterior). Auto-advance pula campos já mapeados.",
