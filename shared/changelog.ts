@@ -1150,6 +1150,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:30:00",
   },
   {
+    version: 325,
+    titulo: "EPIs — Foto do Produto com Upload, URL e Busca por IA (Gemini)",
+    descricao: "Cada EPI agora pode ter uma foto do produto associada. Na tela de edição do EPI, foi adicionado um bloco 'Foto do EPI' com: (1) preview da foto atual em 128×128px; (2) botão Upload para enviar imagem do computador direto para o Storage; (3) botão URL para colar link de imagem; (4) botão 'Buscar com IA' que aciona o Gemini para sugerir automaticamente uma URL de imagem do produto com base no nome e CA do EPI. Na listagem do catálogo de EPIs, uma nova coluna 'Foto' exibe a miniatura de cada produto. Novos endpoints no backend: sugerirFotoIA, atualizarFoto, uploadFotoEpi.",
+    tipo: "feature",
+    modulos: "EPIs, Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 22:00:00",
+  },
+  {
     version: 324,
     titulo: "Almoxarifado no Raio-X do Colaborador — Empréstimos + Desconto em Folha",
     descricao: "Nova aba 'Almoxarifado' no Raio-X do funcionário com dois sub-módulos: (1) Empréstimos — lista todas as ferramentas/equipamentos emprestados ao colaborador com status (Em posse / Devolvido / Perdido) e botão 'Perdido' para iniciar desconto em folha; (2) Desconto Folha — histórico de descontos por item perdido com fluxo de aprovação RH (Aprovar/Reprovar com motivo). Nova tabela no banco: almoxarifado_desconto_folha. Novos endpoints: criarDescontoFolha, listarDescontosFolha, aprovarDescontoFolha, reprovarDescontoFolha.",

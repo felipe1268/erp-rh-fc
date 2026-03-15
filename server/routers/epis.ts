@@ -89,6 +89,7 @@ export const episRouter = router({
       corCapacete: z.string().nullable().optional(),
       condicao: z.enum(['Novo','Reutilizado']).optional(),
       alteradoPor: z.string().optional(),
+      fotoUrl: z.string().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -112,8 +113,68 @@ export const episRouter = router({
       if (data.tempoMinimoTroca !== undefined) updateData.tempoMinimoTroca = data.tempoMinimoTroca;
       if (data.corCapacete !== undefined) updateData.corCapacete = data.corCapacete;
       if (data.condicao !== undefined) updateData.condicao = data.condicao;
+      if (data.fotoUrl !== undefined) updateData.fotoUrl = data.fotoUrl;
       await db.update(epis).set(updateData).where(eq(epis.id, id));
       return { success: true };
+    }),
+
+  // Atualizar só a foto (ação rápida)
+  atualizarFoto: protectedProcedure
+    .input(z.object({ id: z.number(), fotoUrl: z.string().nullable() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await db.update(epis).set({ fotoUrl: input.fotoUrl, alteradoPor: ctx.user?.name || 'Sistema' } as any).where(eq(epis.id, input.id));
+      return { success: true };
+    }),
+
+  // Upload de foto do EPI
+  uploadFotoEpi: protectedProcedure
+    .input(z.object({ id: z.number(), fileBase64: z.string(), mimeType: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const ext = input.mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+      const key = `epi-fotos/${input.id}_${Date.now()}.${ext}`;
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const { url } = await storagePut(key, buffer, input.mimeType);
+      await db.update(epis).set({ fotoUrl: url, alteradoPor: ctx.user?.name || 'Sistema' } as any).where(eq(epis.id, input.id));
+      return { url };
+    }),
+
+  // Sugerir foto do EPI via IA (Gemini busca imagem do produto)
+  sugerirFotoIA: protectedProcedure
+    .input(z.object({ nomeEpi: z.string(), ca: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      try {
+        const prompt = `Você é um assistente especializado em EPIs (Equipamentos de Proteção Individual) brasileiros.
+Sua tarefa é fornecer a URL de uma imagem de produto real e acessível na internet para o EPI descrito.
+
+EPI: ${input.nomeEpi}${input.ca ? `\nNúmero CA: ${input.ca}` : ''}
+
+Instruções:
+1. Identifique o tipo de EPI (capacete, botina, luva, óculos, protetor auricular, respirador, etc.)
+2. Busque uma URL de imagem de produto real de um site de fabricante ou loja online brasileira (Deltaplus, 3M, Honeywell, MSA, Uvex, Proteplus, KCBRASIL, CA certificado, Amazon.br, Leroy Merlin, etc.)
+3. Retorne APENAS um JSON válido com o formato: {"url": "https://...", "fonte": "nome do site"}
+4. A URL deve terminar em .jpg, .jpeg, .png ou .webp
+5. Prefira imagens de fundo branco do produto isolado
+6. Se não encontrar, retorne: {"url": null, "fonte": null}
+7. NÃO retorne texto fora do JSON
+
+Retorne apenas o JSON:`;
+
+        const response = await invokeLLM({
+          messages: [{ role: "user", content: prompt }],
+          generationConfig: { thinkingBudget: 0, maxOutputTokens: 500 },
+        });
+        const text = response?.candidates?.[0]?.content?.parts?.[0]?.text || response?.text || "";
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return { url: parsed.url || null, fonte: parsed.fonte || null };
+        }
+        return { url: null, fonte: null };
+      } catch (e) {
+        return { url: null, fonte: null };
+      }
     }),
 
   delete: protectedProcedure

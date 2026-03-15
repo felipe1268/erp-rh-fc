@@ -17,7 +17,8 @@ import {
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
   Building2, ArrowLeftRight, Warehouse, TrendingUp,
-  Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool, Users, Ban
+  Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool, Users, Ban,
+  ImagePlus, Camera, Link, X as XIcon
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import FornecedorDialog from "@/components/FornecedorDialog";
@@ -220,7 +221,13 @@ export default function Epis() {
     quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "",
     corCapacete: "",
     condicao: "Novo" as "Novo" | "Reutilizado",
+    fotoUrl: "" as string,
   });
+  // Foto EPI state
+  const [fotoEpiInput, setFotoEpiInput] = useState<"none" | "url" | "upload">("none");
+  const [fotoEpiAiLoading, setFotoEpiAiLoading] = useState(false);
+  const [fotoEpiAiResult, setFotoEpiAiResult] = useState<string | null>(null);
+  const fotoEpiInputRef = useRef<HTMLInputElement>(null);
 
   // CNPJ fornecedor lookup
   const [cnpjLoading, setCnpjLoading] = useState(false);
@@ -281,6 +288,11 @@ export default function Epis() {
   const [aiSuggestion, setAiSuggestion] = useState<{ vidaUtilDias: number; justificativa: string; confianca: string } | null>(null);
   const [aiSuggestionLoading, setAiSuggestionLoading] = useState(false);
   const suggestLifespanMut = trpc.epis.suggestLifespan.useMutation();
+  const sugerirFotoIAMut = trpc.epis.sugerirFotoIA.useMutation();
+  const uploadFotoEpiMut = trpc.epis.uploadFotoEpi.useMutation({
+    onSuccess: (data: any) => { episQ.refetch(); setEpiForm(f => ({ ...f, fotoUrl: data.url || "" })); toast.success("Foto salva!"); },
+    onError: (err) => toast.error("Erro ao fazer upload da foto: " + err.message),
+  });
 
   // Foto do estado do EPI (para troca)
   const [fotoEstado, setFotoEstado] = useState<{ file: File | null; preview: string }>({ file: null, preview: "" });
@@ -394,7 +406,7 @@ export default function Epis() {
   };
 
   function resetEpiForm() {
-    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "", corCapacete: "", condicao: "Novo" as "Novo" | "Reutilizado" }); setCnpjResult(null);
+    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "", corCapacete: "", condicao: "Novo" as "Novo" | "Reutilizado", fotoUrl: "" }); setCnpjResult(null); setFotoEpiInput("none"); setFotoEpiAiResult(null);
     setAiSuggestion(null);
     setAiSuggestionLoading(false);
     setCaLookupResult(null);
@@ -576,10 +588,13 @@ export default function Epis() {
       tempoMinimoTroca: epi.tempoMinimoTroca ? String(epi.tempoMinimoTroca) : "",
       corCapacete: epi.corCapacete || "",
       condicao: (epi.condicao || "Novo") as "Novo" | "Reutilizado",
+      fotoUrl: epi.fotoUrl || "",
     });
     setCaLookupResult(null);
     setCnpjResult(null);
     setAiSuggestion(null);
+    setFotoEpiInput("none");
+    setFotoEpiAiResult(null);
   }
 
   // ============================================================
@@ -599,6 +614,103 @@ export default function Epis() {
 
           <Card>
             <CardContent className="p-6 space-y-4 w-full">
+              {/* ===== FOTO DO EPI ===== */}
+              <div className="border rounded-lg p-4 bg-slate-50 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Camera className="h-4 w-4 text-slate-600" />
+                  <Label className="text-sm font-semibold">Foto do EPI</Label>
+                </div>
+                <div className="flex gap-4 items-start">
+                  <div className="w-32 h-32 rounded-lg border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {epiForm.fotoUrl ? (
+                      <img src={epiForm.fotoUrl} alt="Foto EPI" className="w-full h-full object-contain"
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    ) : (
+                      <div className="text-center text-slate-400 p-2">
+                        <ImagePlus className="h-8 w-8 mx-auto mb-1 opacity-40" />
+                        <p className="text-[10px]">Sem foto</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline"
+                        onClick={() => setFotoEpiInput(fotoEpiInput === "upload" ? "none" : "upload")}
+                        className="text-xs h-7">
+                        <Upload className="h-3 w-3 mr-1" /> Upload
+                      </Button>
+                      <Button type="button" size="sm" variant="outline"
+                        onClick={() => setFotoEpiInput(fotoEpiInput === "url" ? "none" : "url")}
+                        className="text-xs h-7">
+                        <Link className="h-3 w-3 mr-1" /> URL
+                      </Button>
+                      <Button type="button" size="sm" variant="outline"
+                        onClick={async () => {
+                          if (!epiForm.nome) return toast.error("Preencha o nome do EPI primeiro.");
+                          setFotoEpiAiLoading(true);
+                          setFotoEpiAiResult(null);
+                          try {
+                            const res = await sugerirFotoIAMut.mutateAsync({ nomeEpi: epiForm.nome, ca: epiForm.ca || undefined });
+                            if (res.url) {
+                              setFotoEpiAiResult(res.url);
+                              setEpiForm(f => ({ ...f, fotoUrl: res.url! }));
+                              toast.success(`Foto sugerida pela IA${res.fonte ? ` (${res.fonte})` : ""}!`);
+                            } else {
+                              toast.error("IA não encontrou imagem para este EPI. Tente adicionar manualmente.");
+                            }
+                          } catch { toast.error("Erro ao buscar foto com IA."); }
+                          setFotoEpiAiLoading(false);
+                        }}
+                        disabled={fotoEpiAiLoading || !epiForm.nome}
+                        className="text-xs h-7 bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        {fotoEpiAiLoading ? "Buscando..." : "Buscar com IA"}
+                      </Button>
+                      {epiForm.fotoUrl && (
+                        <Button type="button" size="sm" variant="ghost"
+                          onClick={() => setEpiForm(f => ({ ...f, fotoUrl: "" }))}
+                          className="text-xs h-7 text-red-500 hover:text-red-700">
+                          <XIcon className="h-3 w-3 mr-1" /> Remover
+                        </Button>
+                      )}
+                    </div>
+                    {fotoEpiInput === "url" && (
+                      <Input
+                        placeholder="Cole a URL da imagem (https://...)"
+                        className="text-xs h-8"
+                        value={epiForm.fotoUrl}
+                        onChange={e => setEpiForm(f => ({ ...f, fotoUrl: e.target.value }))}
+                      />
+                    )}
+                    {fotoEpiInput === "upload" && (
+                      <div>
+                        <input ref={fotoEpiInputRef} type="file" accept="image/*" className="hidden"
+                          onChange={async e => {
+                            const file = e.target.files?.[0];
+                            if (!file || !editingEpi) return;
+                            const reader = new FileReader();
+                            reader.onload = async (ev) => {
+                              const base64 = (ev.target?.result as string).split(',')[1];
+                              uploadFotoEpiMut.mutate({ id: editingEpi.id, fileBase64: base64, mimeType: file.type });
+                            };
+                            reader.readAsDataURL(file);
+                          }} />
+                        <Button type="button" size="sm" variant="outline"
+                          onClick={() => fotoEpiInputRef.current?.click()}
+                          className="text-xs h-7" disabled={uploadFotoEpiMut.isPending}>
+                          <Upload className="h-3 w-3 mr-1" />
+                          {uploadFotoEpiMut.isPending ? "Enviando..." : "Selecionar arquivo"}
+                        </Button>
+                      </div>
+                    )}
+                    {epiForm.fotoUrl && (
+                      <p className="text-[10px] text-slate-500 truncate max-w-xs">{epiForm.fotoUrl}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* ===== FIM FOTO EPI ===== */}
+
               <div>
                 <Label>Nome do EPI *</Label>
                 <Input value={epiForm.nome} onChange={e => setEpiForm(f => ({ ...f, nome: e.target.value }))}
@@ -787,6 +899,7 @@ export default function Epis() {
                     tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
                     corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
                     condicao: epiForm.condicao,
+                    fotoUrl: epiForm.fotoUrl || null,
                   });
                 }} disabled={updateEpiMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {updateEpiMut.isPending ? "Salvando..." : "Salvar Alterações"}
@@ -1848,6 +1961,7 @@ export default function Epis() {
                           <input type="checkbox" checked={selectedEpis.size === filteredEpis.length && filteredEpis.length > 0}
                             onChange={toggleSelectAllEpis} className="rounded" />
                         </th>
+                        <th className="p-3 text-center font-medium w-14">Foto</th>
                         <th className="p-3 text-left font-medium">EPI</th>
                         <th className="p-3 text-center font-medium">Categoria</th>
                         <th className="p-3 text-center font-medium">Tam.</th>
@@ -1869,6 +1983,16 @@ export default function Epis() {
                             <td className="p-3 text-center">
                               <input type="checkbox" checked={selectedEpis.has(epi.id)}
                                 onChange={() => toggleSelectEpi(epi.id)} className="rounded" />
+                            </td>
+                            <td className="p-3 text-center">
+                              {epi.fotoUrl ? (
+                                <img src={epi.fotoUrl} alt={epi.nome} className="w-10 h-10 object-contain rounded mx-auto border bg-white"
+                                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                              ) : (
+                                <div className="w-10 h-10 rounded border bg-slate-50 flex items-center justify-center mx-auto">
+                                  <ImagePlus className="h-4 w-4 text-slate-300" />
+                                </div>
+                              )}
                             </td>
                             <td className="p-3 cursor-pointer" onClick={() => { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode("editar_epi"); }}>
                               <div className="flex items-center gap-2 hover:text-blue-700 transition-colors">
