@@ -11,14 +11,6 @@ import {
   Building2, HardHat,
 } from "lucide-react";
 
-const UNIDADES = [
-  "un", "pç", "pc", "cx", "sc", "rolo", "barra", "fardo", "pct", "bd",
-  "m", "m²", "m³", "cm", "mm",
-  "kg", "g", "t",
-  "L", "mL", "galão",
-  "vb", "gl", "conjunto", "kit",
-  "par", "dz",
-];
 
 const EMPTY_ITEM = {
   nome: "", unidade: "un", categoria: "", codigoInterno: "",
@@ -84,6 +76,9 @@ export default function AlmoxarifadoPage() {
   const { data: categorias = [] } = trpc.compras.listarCategoriasAlmoxarifado.useQuery(
     { companyId }, { enabled: !!companyId }
   );
+  const { data: unidades = [], refetch: refetchUnidades } = trpc.compras.listarUnidades.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
 
   const lista = useMemo(() => {
     let r = itens;
@@ -100,6 +95,19 @@ export default function AlmoxarifadoPage() {
     itens.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima)).length,
     [itens]
   );
+
+  // ── Modal Unidades ──────────────────────────────────────────────
+  const [modalUnidades, setModalUnidades] = useState(false);
+  const [novaUnidadeSigla, setNovaUnidadeSigla] = useState("");
+  const [novaUnidadeDesc, setNovaUnidadeDesc] = useState("");
+  const criarUnidadeMut = trpc.compras.criarUnidade.useMutation({
+    onSuccess: () => { refetchUnidades(); setNovaUnidadeSigla(""); setNovaUnidadeDesc(""); toast.success("Unidade cadastrada!"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirUnidadeMut = trpc.compras.excluirUnidade.useMutation({
+    onSuccess: () => { refetchUnidades(); toast.success("Unidade removida."); },
+    onError: (e) => toast.error(e.message),
+  });
 
   // ── Modal Item ──────────────────────────────────────────────────
   const [modalItem, setModalItem] = useState(false);
@@ -605,17 +613,27 @@ export default function AlmoxarifadoPage() {
               {/* Unidade + Categoria */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-gray-700">Unidade</label>
-                  <input
-                    list="unidades-list"
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-gray-700">Unidade</label>
+                    <button
+                      type="button"
+                      onClick={() => setModalUnidades(true)}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 underline"
+                    >
+                      Gerenciar
+                    </button>
+                  </div>
+                  <select
                     value={formItem.unidade}
                     onChange={e => setFormItem(p => ({ ...p, unidade: e.target.value }))}
-                    placeholder="un, kg, m²..."
-                    className="mt-1 w-full h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white outline-none focus:border-emerald-400"
-                  />
-                  <datalist id="unidades-list">
-                    {UNIDADES.map(u => <option key={u} value={u} />)}
-                  </datalist>
+                    className="w-full h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white outline-none focus:border-emerald-400 text-gray-900"
+                  >
+                    {unidades.map(u => (
+                      <option key={u.id} value={u.sigla}>
+                        {u.sigla}{u.descricao ? ` — ${u.descricao}` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-700">Categoria</label>
@@ -1014,6 +1032,79 @@ export default function AlmoxarifadoPage() {
             <button className="w-full bg-gray-800 text-white font-bold py-4 rounded-xl text-lg" onClick={() => setModalFecharDia(false)}>
               Fechar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL GERENCIAR UNIDADES ──────────────────────────── */}
+      {modalUnidades && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setModalUnidades(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl p-5 space-y-4" style={{ background: '#ffffff', color: '#111827' }}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Unidades de Medida</h2>
+              <button onClick={() => setModalUnidades(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+
+            {/* Lista de unidades */}
+            <div className="max-h-64 overflow-y-auto space-y-1 border border-gray-100 rounded-xl p-2">
+              {unidades.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">Nenhuma unidade cadastrada</p>
+              ) : (
+                unidades.map(u => (
+                  <div key={u.id} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50 group">
+                    <div>
+                      <span className="font-semibold text-sm text-gray-900">{u.sigla}</span>
+                      {u.descricao && <span className="text-xs text-gray-400 ml-2">{u.descricao}</span>}
+                    </div>
+                    <button
+                      className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition p-1"
+                      onClick={() => {
+                        if (window.confirm(`Excluir a unidade "${u.sigla}"?`)) {
+                          excluirUnidadeMut.mutate({ id: u.id, companyId });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Adicionar nova unidade */}
+            <div className="space-y-2 pt-2 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Nova Unidade</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-500">Sigla *</label>
+                  <input
+                    className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
+                    placeholder="ex: m², t, vb"
+                    value={novaUnidadeSigla}
+                    onChange={e => setNovaUnidadeSigla(e.target.value)}
+                    maxLength={20}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Descrição</label>
+                  <input
+                    className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
+                    placeholder="Metro quadrado"
+                    value={novaUnidadeDesc}
+                    onChange={e => setNovaUnidadeDesc(e.target.value)}
+                    maxLength={100}
+                  />
+                </div>
+              </div>
+              <button
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm py-2.5 rounded-xl disabled:opacity-50 transition"
+                disabled={!novaUnidadeSigla.trim() || criarUnidadeMut.isPending}
+                onClick={() => criarUnidadeMut.mutate({ companyId, sigla: novaUnidadeSigla, descricao: novaUnidadeDesc || undefined })}
+              >
+                {criarUnidadeMut.isPending ? "Salvando..." : "Adicionar Unidade"}
+              </button>
+            </div>
           </div>
         </div>
       )}

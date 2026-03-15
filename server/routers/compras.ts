@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte } from "drizzle-orm";
 import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
-  almoxarifadoCategorias,
+  almoxarifadoCategorias, almoxarifadoUnidades,
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
   comprasOrdens, comprasOrdensItens,
@@ -447,6 +447,89 @@ export const comprasRouter = router({
       const db = await getDb();
       await db.delete(almoxarifadoCategorias)
         .where(and(eq(almoxarifadoCategorias.id, input.id), eq(almoxarifadoCategorias.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // UNIDADES DE MEDIDA DO ALMOXARIFADO (CRUD)
+  // ══════════════════════════════════════════════════════════════
+  listarUnidades: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.select().from(almoxarifadoUnidades)
+        .where(eq(almoxarifadoUnidades.companyId, input.companyId))
+        .orderBy(asc(almoxarifadoUnidades.sigla));
+
+      if (rows.length === 0) {
+        const defaults = [
+          { sigla: "un", descricao: "Unidade" },
+          { sigla: "pç", descricao: "Peça" },
+          { sigla: "cx", descricao: "Caixa" },
+          { sigla: "sc", descricao: "Saco" },
+          { sigla: "rolo", descricao: "Rolo" },
+          { sigla: "barra", descricao: "Barra" },
+          { sigla: "fardo", descricao: "Fardo" },
+          { sigla: "pct", descricao: "Pacote" },
+          { sigla: "m", descricao: "Metro" },
+          { sigla: "m²", descricao: "Metro quadrado" },
+          { sigla: "m³", descricao: "Metro cúbico" },
+          { sigla: "kg", descricao: "Quilograma" },
+          { sigla: "g", descricao: "Grama" },
+          { sigla: "t", descricao: "Tonelada" },
+          { sigla: "L", descricao: "Litro" },
+          { sigla: "mL", descricao: "Mililitro" },
+          { sigla: "galão", descricao: "Galão" },
+          { sigla: "vb", descricao: "Verba" },
+          { sigla: "gl", descricao: "Global" },
+          { sigla: "kit", descricao: "Kit" },
+          { sigla: "par", descricao: "Par" },
+          { sigla: "dz", descricao: "Dúzia" },
+        ];
+        const inserted = await db.insert(almoxarifadoUnidades)
+          .values(defaults.map(d => ({ companyId: input.companyId, sigla: d.sigla, descricao: d.descricao })))
+          .returning();
+        return inserted.sort((a, b) => a.sigla.localeCompare(b.sigla));
+      }
+
+      return rows;
+    }),
+
+  criarUnidade: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      sigla:     z.string().min(1).max(20),
+      descricao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const sigla = input.sigla.trim();
+      const existing = await db.select().from(almoxarifadoUnidades)
+        .where(and(eq(almoxarifadoUnidades.companyId, input.companyId), eq(almoxarifadoUnidades.sigla, sigla)));
+      if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "Unidade já cadastrada" });
+      const [row] = await db.insert(almoxarifadoUnidades).values({
+        companyId: input.companyId,
+        sigla,
+        descricao: input.descricao?.trim() || null,
+      }).returning();
+      return row;
+    }),
+
+  excluirUnidade: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const emUso = await db.select({ id: almoxarifadoItens.id })
+        .from(almoxarifadoItens)
+        .where(and(
+          eq(almoxarifadoItens.companyId, input.companyId),
+          eq(almoxarifadoItens.ativo, true),
+          sql`${almoxarifadoItens.unidade} = (SELECT sigla FROM almoxarifado_unidades WHERE id = ${input.id})`,
+        ))
+        .limit(1);
+      if (emUso.length > 0) throw new TRPCError({ code: "CONFLICT", message: "Esta unidade está em uso por um ou mais itens e não pode ser excluída." });
+      await db.delete(almoxarifadoUnidades)
+        .where(and(eq(almoxarifadoUnidades.id, input.id), eq(almoxarifadoUnidades.companyId, input.companyId)));
       return { success: true };
     }),
 
