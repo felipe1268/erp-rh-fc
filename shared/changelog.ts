@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 316,
+    titulo: "Almoxarifado — Modal Novo Item: remove Código Interno e corrige digitação de quantidade",
+    descricao: "Removido campo 'Código Interno' do modal de cadastro de item (campo desnecessário para almoxarifado). Corrigidos os campos 'Qtd. Mínima (alerta)' e 'Quantidade Inicial em Estoque' que usavam type=number controlado e travavam ao digitar; substituídos por type=text com inputMode=decimal, aceitando vírgula e ponto como separador decimal.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 20:00:00",
+  },
+  {
     version: 315,
     titulo: "Correção — IA de cadastro de item truncando JSON (tokens insuficientes)",
     descricao: "Corrigido erro 'Unterminated string in JSON' na análise de foto IA do cadastro de item. Causa: maxOutputTokens=250 era insuficiente para o Gemini 2.5 Flash (modelo 'thinking' que consome tokens internos). Solução: aumentado para 1024 e adicionado thinkingBudget=0 para desabilitar o modo de raciocínio desnecessário na tarefa. Extração do JSON agora usa regex /{[\s\S]*}/ para ser mais robusta mesmo se a resposta vier com markdown.",
