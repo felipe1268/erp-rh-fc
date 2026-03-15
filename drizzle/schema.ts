@@ -4801,6 +4801,15 @@ export const comprasCotacaoRespostas = pgTable("compras_cotacao_respostas", {
   observacoes:   text(),
 });
 
+export const comprasCondicoesPagamento = pgTable("compras_condicoes_pagamento", {
+  id:        serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  descricao: varchar("descricao", { length: 150 }).notNull(),
+  ativo:     boolean("ativo").default(true),
+  ordem:     integer("ordem").default(0),
+  criadoEm: timestamp("criado_em").defaultNow(),
+});
+
 export const comprasOrdens = pgTable("compras_ordens", {
   id:                 serial().primaryKey(),
   companyId:          integer("company_id").notNull(),
