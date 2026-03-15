@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 386,
+    titulo: "Orçamento — Cards de Material/MO respondem à visão ativa (meta/venda)",
+    descricao: "Cards 'Total Material' e 'Total Mão de Obra' na barra acima da tabela EAP agora exibem valores ajustados pela visão selecionada: na Meta aplicam o fator (1 − metaPerc%), na Venda aplicam o fator BDI global. O percentual de participação também usa o total da visão ativa como denominador (não mais fixo no custo). Os labels dos cards incluem o sufixo '(Meta)' ou '(Venda)' quando fora da visão de custo.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:00:00",
+  },
+  {
     version: 385,
     titulo: "Orçamento — Fix import rounding + impressão por visão (custo/meta/venda)",
     descricao: "1) Normalização de import: totais MO e Material agora usam a coluna Y (custoTotal) como fonte da verdade. Para itens pure-MO, custoTotalMdo recebe o mesmo valor de custoTotal, eliminando diferença de centavos entre colunas X e Y do Excel (fórmulas independentes arredondam de forma diferente). 2) Botão Imprimir passa agora a visão ativa (custo/meta/venda) e o percentual de meta via query params (?v=&mp=). 3) OrcamentoPrint.tsx reescrito: lê a visão da URL, renderiza preços unitários e totais corretos para cada visão, atualiza cabeçalho com badge da visão (CUSTO/META/VENDA), e exibe total geral correto na linha de rodapé da tabela.",

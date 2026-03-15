@@ -363,6 +363,20 @@ export default function OrcamentoDetalhe() {
     ? r2(localMetaVal)
     : r2(totalCusto * (1 - localMetaPerc / 100));
 
+  // ── Valores de Material/MO ajustados pela visão ativa ───────────────────
+  // Para os cards de summary: aplicar o mesmo fator que as linhas da tabela usam
+  const _metaFactor = 1 - localMetaPerc / 100;
+  const _bdiGlobalFactor = totalCusto > 0 && totalVenda > 0 ? totalVenda / totalCusto : 1;
+  const totalMatDisp = versao === "meta"  ? r2(totalMat * _metaFactor)
+                     : versao === "venda" ? r2(totalMat * _bdiGlobalFactor)
+                     :                     totalMat;
+  const totalMdoDisp = versao === "meta"  ? r2(totalMdo * _metaFactor)
+                     : versao === "venda" ? r2(totalMdo * _bdiGlobalFactor)
+                     :                     totalMdo;
+  const totalAtual   = versao === "meta"  ? totalMeta
+                     : versao === "venda" ? (valorNegociado > 0 ? valorNegociado : totalVenda)
+                     :                     totalCusto;
+
   // Margem de lucro do BDI (Taxa de Comercialização / LC)
   // margemLucroBdi vem do servidor como soma dos percentuais da aba "Taxa de Comercialização"
   // Fallback: se a aba ainda não foi importada, calcula a partir do BDI global (venda - custo) / venda
@@ -893,20 +907,24 @@ export default function OrcamentoDetalhe() {
             <div className="grid grid-cols-3 gap-3 mb-3">
               <div className="rounded-lg border bg-blue-50 border-blue-200 px-4 py-2.5 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500">Total Material</p>
-                  <p className="text-sm font-bold text-blue-700 tabular-nums mt-0.5">{formatBRL(totalMat)}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500">
+                    Total Material{versao !== "custo" ? ` (${cfg.label})` : ""}
+                  </p>
+                  <p className="text-sm font-bold text-blue-700 tabular-nums mt-0.5">{formatBRL(totalMatDisp)}</p>
                 </div>
                 <div className="text-[10px] text-blue-400 font-medium">
-                  {totalCusto > 0 ? `${((totalMat / totalCusto) * 100).toFixed(1)}%` : "—"}
+                  {totalAtual > 0 ? `${((totalMatDisp / totalAtual) * 100).toFixed(1)}%` : "—"}
                 </div>
               </div>
               <div className="rounded-lg border bg-orange-50 border-orange-200 px-4 py-2.5 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-orange-500">Total Mão de Obra</p>
-                  <p className="text-sm font-bold text-orange-700 tabular-nums mt-0.5">{formatBRL(totalMdo)}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-orange-500">
+                    Total Mão de Obra{versao !== "custo" ? ` (${cfg.label})` : ""}
+                  </p>
+                  <p className="text-sm font-bold text-orange-700 tabular-nums mt-0.5">{formatBRL(totalMdoDisp)}</p>
                 </div>
                 <div className="text-[10px] text-orange-400 font-medium">
-                  {totalCusto > 0 ? `${((totalMdo / totalCusto) * 100).toFixed(1)}%` : "—"}
+                  {totalAtual > 0 ? `${((totalMdoDisp / totalAtual) * 100).toFixed(1)}%` : "—"}
                 </div>
               </div>
               <div className={`rounded-lg border px-4 py-2.5 flex items-center justify-between ${
