@@ -333,6 +333,22 @@ export default function AlmoxarifadoPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  // ── Modal Registros ─────────────────────────────────────────────
+  const [modalRegistros, setModalRegistros] = useState(false);
+  const [abaRegistros, setAbaRegistros] = useState<"entradas" | "saidas" | "emprestados" | "cadastros">("entradas");
+  const { data: movEntradas = [], isLoading: loadingEntradas } = trpc.warehouse.listMovements.useQuery(
+    { companyId, tipo: "entrada", limit: 300 },
+    { enabled: !!companyId && modalRegistros && abaRegistros === "entradas" }
+  );
+  const { data: movSaidas = [], isLoading: loadingSaidas } = trpc.warehouse.listMovements.useQuery(
+    { companyId, tipo: "saida", limit: 300 },
+    { enabled: !!companyId && modalRegistros && abaRegistros === "saidas" }
+  );
+  const { data: loansAbertos = [], isLoading: loadingLoans } = trpc.warehouse.listOpenLoans.useQuery(
+    { companyId },
+    { enabled: !!companyId && modalRegistros && abaRegistros === "emprestados" }
+  );
+
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
   function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(obraContexto ?? 0); setSaidaOk(null); }
   function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpOk(null); setEmpErr(null); }
@@ -438,6 +454,26 @@ export default function AlmoxarifadoPage() {
               <ClipboardCheck className="w-8 h-8" />
               📋 FECHAR DIA
             </button>
+          </div>
+
+          {/* ── VER REGISTROS (linha secundária) ────────────────── */}
+          <div className="grid grid-cols-4 gap-2 mt-2">
+            {[
+              { label: "Entradas", aba: "entradas" as const, icon: "↓", color: "text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100" },
+              { label: "Saídas",   aba: "saidas"   as const, icon: "↑", color: "text-orange-700 border-orange-300 bg-orange-50 hover:bg-orange-100" },
+              { label: "Emprestados", aba: "emprestados" as const, icon: "🔧", color: "text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100" },
+              { label: "Cadastros",   aba: "cadastros"   as const, icon: "📦", color: "text-gray-700 border-gray-300 bg-gray-50 hover:bg-gray-100" },
+            ].map(({ label, aba, icon, color }) => (
+              <button
+                key={aba}
+                onClick={() => { setAbaRegistros(aba); setModalRegistros(true); }}
+                className={`flex items-center justify-center gap-1.5 border rounded-xl px-2 py-2 text-xs font-semibold transition active:scale-95 ${color}`}
+              >
+                <span>{icon}</span>
+                <span className="hidden sm:inline">{label}</span>
+                <span className="sm:hidden">{label.slice(0, 3)}</span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -1375,6 +1411,138 @@ export default function AlmoxarifadoPage() {
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL REGISTROS ════════════════════════════════════════ */}
+      {modalRegistros && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ background: "#ffffff", color: "#111827" }}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
+            <h2 className="text-base font-bold text-gray-900">Registros do Almoxarifado</h2>
+            <button onClick={() => setModalRegistros(false)}><X className="w-6 h-6 text-gray-400" /></button>
+          </div>
+          {/* Abas */}
+          <div className="flex border-b bg-white overflow-x-auto">
+            {([
+              { key: "entradas",    label: "↓ Entradas",    cls: "text-emerald-700 border-emerald-500" },
+              { key: "saidas",      label: "↑ Saídas",      cls: "text-orange-700 border-orange-500" },
+              { key: "emprestados", label: "🔧 Emprestados", cls: "text-blue-700 border-blue-500" },
+              { key: "cadastros",   label: "📦 Cadastros",   cls: "text-gray-700 border-gray-500" },
+            ] as const).map(({ key, label, cls }) => (
+              <button
+                key={key}
+                onClick={() => setAbaRegistros(key)}
+                className={`px-4 py-3 text-sm font-semibold border-b-2 whitespace-nowrap transition ${abaRegistros === key ? cls + " border-b-2" : "text-gray-400 border-transparent hover:text-gray-600"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* Conteúdo */}
+          <div className="flex-1 overflow-y-auto p-4">
+
+            {/* ENTRADAS */}
+            {abaRegistros === "entradas" && (
+              loadingEntradas ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-500" /></div> :
+              movEntradas.length === 0 ? <p className="text-center text-gray-400 py-12">Nenhuma entrada registrada.</p> :
+              <div className="space-y-2">
+                {movEntradas.map((m: any) => (
+                  <div key={m.id} className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 flex items-start gap-3">
+                    <span className="mt-0.5 text-emerald-600 font-bold text-lg">↓</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm truncate">{m.itemNome ?? "—"}</p>
+                      <p className="text-xs text-gray-500">
+                        +{n(m.quantidade)} {m.unidade ?? "un"}
+                        {m.motivo ? ` · ${m.motivo}` : ""}
+                        {m.usuarioNome ? ` · ${m.usuarioNome}` : ""}
+                      </p>
+                      <p className="text-[11px] text-gray-400">{m.criadoEm ? new Date(m.criadoEm).toLocaleString("pt-BR") : "—"}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* SAÍDAS */}
+            {abaRegistros === "saidas" && (
+              loadingSaidas ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div> :
+              movSaidas.length === 0 ? <p className="text-center text-gray-400 py-12">Nenhuma saída registrada.</p> :
+              <div className="space-y-2">
+                {movSaidas.map((m: any) => (
+                  <div key={m.id} className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 flex items-start gap-3">
+                    <span className="mt-0.5 text-orange-600 font-bold text-lg">↑</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm truncate">{m.itemNome ?? "—"}</p>
+                      <p className="text-xs text-gray-500">
+                        -{n(m.quantidade)} {m.unidade ?? "un"}
+                        {m.obraNome ? ` · ${m.obraNome}` : ""}
+                        {m.usuarioNome ? ` · ${m.usuarioNome}` : ""}
+                      </p>
+                      <p className="text-[11px] text-gray-400">{m.criadoEm ? new Date(m.criadoEm).toLocaleString("pt-BR") : "—"}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* EMPRESTADOS */}
+            {abaRegistros === "emprestados" && (
+              loadingLoans ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div> :
+              loansAbertos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2">
+                  <CheckCircle2 className="w-12 h-12 text-emerald-400" />
+                  <p className="text-gray-500 font-medium">Nenhuma ferramenta emprestada em aberto</p>
+                </div>
+              ) :
+              <div className="space-y-2">
+                {loansAbertos.map((l: any) => (
+                  <div key={l.id} className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-center gap-3">
+                    <Wrench className="w-5 h-5 text-blue-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm truncate">{l.itemNome}</p>
+                      <p className="text-xs text-gray-600">
+                        {n(l.quantidade)} un · <span className="font-medium">{l.funcionarioNome}</span>
+                        {l.funcionarioCodigo ? ` (${l.funcionarioCodigo})` : ""}
+                      </p>
+                      <p className="text-[11px] text-gray-400">Emprestado em {l.dataEmprestimo}{l.horaEmprestimo ? ` às ${l.horaEmprestimo}` : ""}</p>
+                    </div>
+                    <button
+                      onClick={() => returnLoan.mutate({ loanId: l.id })}
+                      disabled={returnLoan.isPending}
+                      className="shrink-0 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 font-semibold transition disabled:opacity-60"
+                    >
+                      Devolver
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* CADASTROS */}
+            {abaRegistros === "cadastros" && (
+              itens.length === 0 ? <p className="text-center text-gray-400 py-12">Nenhum item cadastrado.</p> :
+              <div className="space-y-2">
+                {itens.map((item: any) => (
+                  <div key={item.id} className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3">
+                    {item.fotoUrl
+                      ? <img src={item.fotoUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0" />
+                      : <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center shrink-0"><Package className="w-5 h-5 text-gray-400" /></div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm truncate">{item.nome}</p>
+                      <p className="text-xs text-gray-500">{item.categoria ?? "Sem categoria"} · {item.unidade}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-gray-900">{n(item.quantidadeAtual)}</p>
+                      <p className="text-[11px] text-gray-400">{item.unidade}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
           </div>
         </div>
       )}
