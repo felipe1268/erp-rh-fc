@@ -4739,6 +4739,26 @@ export const warehouseLoans = pgTable("warehouse_loans", {
   createdAt:        timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
+// Saídas de Insumos/Consumíveis para Funcionários
+export const almoxarifadoSaidasInsumo = pgTable("almoxarifado_saidas_insumo", {
+  id:                serial().primaryKey(),
+  companyId:         integer("company_id").notNull(),
+  itemId:            integer("item_id").notNull(),
+  itemNome:          varchar("item_nome", { length: 255 }).notNull(),
+  unidade:           varchar({ length: 30 }),
+  quantidade:        numeric({ precision: 10, scale: 3 }).notNull().default("1"),
+  funcionarioId:     integer("funcionario_id"),
+  funcionarioNome:   varchar("funcionario_nome", { length: 255 }).notNull(),
+  funcionarioCodigo: varchar("funcionario_codigo", { length: 20 }),
+  obraId:            integer("obra_id"),
+  obraNome:          varchar("obra_nome", { length: 255 }),
+  motivo:            text(),
+  observacoes:       text(),
+  almoxarifeId:      integer("almoxarife_id"),
+  almoxarifeNome:    varchar("almoxarife_nome", { length: 255 }),
+  createdAt:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
 export const warehouseInventorySessions = pgTable("warehouse_inventory_sessions", {
   id:               serial().primaryKey(),
   companyId:        integer("company_id").notNull(),

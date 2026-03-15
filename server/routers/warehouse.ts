@@ -7,6 +7,7 @@ import {
   almoxarifadoItens,
   almoxarifadoMovimentacoes,
   almoxarifadoDescontoFolha,
+  almoxarifadoSaidasInsumo,
   warehouseLoans,
   warehouseInventorySessions,
   warehouseInventorySessionItems,
@@ -942,5 +943,114 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         .where(eq(almoxarifadoDescontoFolha.id, input.id));
 
       return { success: true };
+    }),
+
+  // ══════════════════════════════════════════════════════
+  // SAÍDAS DE INSUMOS / CONSUMÍVEIS PARA FUNCIONÁRIOS
+  // ══════════════════════════════════════════════════════
+
+  registerInsumo: protectedProcedure
+    .input(z.object({
+      companyId:         z.number(),
+      itemId:            z.number(),
+      quantidade:        z.number().positive(),
+      funcionarioCodigo: z.string(),
+      obraId:            z.number().optional(),
+      obraNome:          z.string().optional(),
+      motivo:            z.string().optional(),
+      observacoes:       z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Busca funcionário pelo código
+      const [funcionario] = await db
+        .select()
+        .from(employees)
+        .where(and(eq(employees.companyId, input.companyId), eq(employees.codigoInterno, input.funcionarioCodigo)))
+        .limit(1);
+      if (!funcionario) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado pelo código" });
+
+      // Busca item
+      const [item] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.itemId));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
+
+      // Verifica estoque
+      const atual = parseFloat(String(item.quantidadeAtual) || "0");
+      if (atual < input.quantidade) throw new TRPCError({ code: "BAD_REQUEST", message: `Estoque insuficiente. Disponível: ${atual} ${item.unidade || "un"}` });
+
+      // Registra saída de insumo
+      await db.insert(almoxarifadoSaidasInsumo).values({
+        companyId:         input.companyId,
+        itemId:            input.itemId,
+        itemNome:          item.nome,
+        unidade:           item.unidade || "un",
+        quantidade:        String(input.quantidade),
+        funcionarioId:     funcionario.id,
+        funcionarioNome:   funcionario.nomeCompleto,
+        funcionarioCodigo: input.funcionarioCodigo,
+        obraId:            input.obraId || null,
+        obraNome:          input.obraNome || null,
+        motivo:            input.motivo || null,
+        observacoes:       input.observacoes || null,
+        almoxarifeId:      ctx.user.id,
+        almoxarifeNome:    ctx.user.name || "",
+      } as any);
+
+      // Deduz do estoque
+      await db.update(almoxarifadoItens)
+        .set({ quantidadeAtual: sql`GREATEST(${almoxarifadoItens.quantidadeAtual}::numeric - ${input.quantidade}, 0)` } as any)
+        .where(eq(almoxarifadoItens.id, input.itemId));
+
+      // Registra movimentação
+      await db.insert(almoxarifadoMovimentacoes).values({
+        companyId:    input.companyId,
+        itemId:       input.itemId,
+        tipo:         "saida",
+        quantidade:   String(input.quantidade),
+        motivo:       `Insumo para ${funcionario.nomeCompleto}${input.motivo ? ` — ${input.motivo}` : ""}`,
+        obraId:       input.obraId || null,
+        obraNome:     input.obraNome || null,
+        usuarioNome:  ctx.user.name || "Sistema",
+      } as any);
+
+      return { funcionarioNome: funcionario.nomeCompleto, itemNome: item.nome };
+    }),
+
+  listInsumos: protectedProcedure
+    .input(z.object({
+      companyId:      z.number(),
+      limit:          z.number().default(200),
+      funcionarioId:  z.number().optional(),
+      obraId:         z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = await db.execute(
+        sql`SELECT * FROM almoxarifado_saidas_insumo
+            WHERE company_id = ${input.companyId}
+            ${input.funcionarioId ? sql`AND funcionario_id = ${input.funcionarioId}` : sql``}
+            ${input.obraId ? sql`AND obra_id = ${input.obraId}` : sql``}
+            ORDER BY created_at DESC
+            LIMIT ${input.limit}`
+      );
+      return (rows as any)?.rows ?? rows ?? [];
+    }),
+
+  listInsumosHoje: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const hoje = new Date().toISOString().split("T")[0];
+      const rows = await db.execute(
+        sql`SELECT * FROM almoxarifado_saidas_insumo
+            WHERE company_id = ${input.companyId}
+            AND DATE(created_at) = ${hoje}::date
+            ORDER BY created_at DESC`
+      );
+      return (rows as any)?.rows ?? rows ?? [];
     }),
 });
