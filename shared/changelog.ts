@@ -1465,6 +1465,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 364,
+    titulo: "Mapa de Cotação: Condições de Pagamento com cadastro padrão",
+    descricao: "Campo 'Cond. pagamento' no Mapa de Cotação substituído por dropdown com opções pré-cadastradas por empresa (tabela compras_condicoes_pagamento). Painel 'Condições de Pagamento Padrão' no Mapa permite adicionar (Enter ou botão) e remover (×) condições com um clique em 'Gerenciar'. Enquanto não há cadastro no banco, usa lista padrão (À Vista, 7/14/21/28/30/45/60/90 dias, Medição, Parcelado). As mesmas opções alimentam o Select do formulário de nova cotação, garantindo padronização em toda a empresa.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 363,
     titulo: "Módulo Terceiros — Contratos, Medições e Previsão de Caixa ativados + busca de fornecedor no Mapa",
     descricao: "Ativação completa do Módulo de Terceiros/Subcontratados: (1) 5 tabelas DB (terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos) confirmadas em produção; (2) Router terceiroContratos com 20+ procedures: listarContratos, getContrato, criarContrato, adicionarItem, removerItem, gerarMedicao (automática por avanço físico), aprovarMedicao, rejeitarMedicao, registrarPagamento, criarDocumento, atualizarDocumento, previsaoCaixa, dashboardTerceiroContratos, gerarContratoFromCotacao; (3) Página ContratosList com KPIs, filtros e barra de progresso financeiro; (4) ContratoDetalhe com abas Itens/Medições/Documentos, banner orçado vs fechado, dupla barra de progresso (físico + financeiro); (5) ContratoNovo com combobox pesquisável para empresa e importação de atividades do planejamento; (6) Medições com aprovação/rejeição centralizada; (7) PrevisaoCaixa com gráfico de barras semanal e tabela detalhada. Também: busca de fornecedor no Mapa de Cotação substituída por Popover pesquisável (filtra pelo nome digitado).",

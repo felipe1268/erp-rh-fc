@@ -10,6 +10,7 @@ import {
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
   comprasCotacaoFornecedores, comprasCotacaoRespostas,
+  comprasCondicoesPagamento,
   comprasOrdens, comprasOrdensItens,
   obras,
   orcamentos, orcamentoItens,
@@ -1637,5 +1638,41 @@ Responda APENAS com um objeto JSON no formato:
       }));
 
       return { items, orcamentoId: orc.id, projetoId: proj?.id ?? null, semOrcamento: false };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // CONDIÇÕES DE PAGAMENTO (tabela pré-cadastrada por empresa)
+  // ══════════════════════════════════════════════════════════════
+
+  listarCondicoesPagamento: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select()
+        .from(comprasCondicoesPagamento)
+        .where(and(eq(comprasCondicoesPagamento.companyId, input.companyId), eq(comprasCondicoesPagamento.ativo, true)))
+        .orderBy(asc(comprasCondicoesPagamento.ordem), asc(comprasCondicoesPagamento.descricao));
+    }),
+
+  criarCondicaoPagamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), descricao: z.string().min(1).max(150) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const existente = await db.select().from(comprasCondicoesPagamento)
+        .where(and(eq(comprasCondicoesPagamento.companyId, input.companyId), eq(comprasCondicoesPagamento.descricao, input.descricao.trim())));
+      if (existente.length > 0) throw new TRPCError({ code: "CONFLICT", message: "Condição já cadastrada" });
+      const [row] = await db.insert(comprasCondicoesPagamento).values({
+        companyId: input.companyId,
+        descricao: input.descricao.trim(),
+      }).returning();
+      return row;
+    }),
+
+  deletarCondicaoPagamento: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(comprasCondicoesPagamento).where(eq(comprasCondicoesPagamento.id, input.id));
+      return { ok: true };
     }),
 });

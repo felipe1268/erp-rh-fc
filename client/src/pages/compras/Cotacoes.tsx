@@ -22,7 +22,7 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   expirada:  { label: "Expirada",  cls: "bg-gray-100 text-gray-500 border-gray-200" },
 };
 
-const COND_PAG = ["À Vista", "7 dias", "14 dias", "21 dias", "28 dias", "30 dias", "45 dias", "60 dias", "90 dias", "Parcelado"];
+const COND_PAG_PADRAO = ["À Vista", "7 dias", "14 dias", "21 dias", "28 dias", "30 dias", "45 dias", "60 dias", "90 dias", "Medição", "Parcelado"];
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
 
 interface ItemForm { descricao: string; unidade: string; quantidade: string; precoUnitario: string; descontoPct: string; solicitacaoItemId?: number | null; }
@@ -57,6 +57,8 @@ export default function Cotacoes() {
   const [editPrazo, setEditPrazo] = useState<Record<number, string>>({});
   const [editCondPag, setEditCondPag] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
+  const [showGerenciarCond, setShowGerenciarCond] = useState(false);
+  const [novaCondicao, setNovaCondicao] = useState("");
 
   const q = trpc.compras.listarCotacoes.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -67,6 +69,18 @@ export default function Cotacoes() {
   const scsQ = trpc.compras.listarSolicitacoes.useQuery({ companyId }, { enabled: companyId > 0 });
   const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
+  const condPagQ = trpc.compras.listarCondicoesPagamento.useQuery({ companyId }, { enabled: companyId > 0 });
+  const criarCondMut = trpc.compras.criarCondicaoPagamento.useMutation({
+    onSuccess: () => { toast.success("Condição adicionada!"); setNovaCondicao(""); condPagQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deletarCondMut = trpc.compras.deletarCondicaoPagamento.useMutation({
+    onSuccess: () => { condPagQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const condPagOptions = condPagQ.data?.length
+    ? condPagQ.data.map(c => c.descricao)
+    : COND_PAG_PADRAO;
 
   const criar = trpc.compras.criarCotacao.useMutation({
     onSuccess: () => { toast.success("Cotação criada!"); setShowNova(false); resetForm(); q.refetch(); },
@@ -433,6 +447,53 @@ export default function Cotacoes() {
                     )}
                   </div>
 
+                  {/* Condições de Pagamento Padrão */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Condições de Pagamento Padrão</p>
+                      <button onClick={() => setShowGerenciarCond(v => !v)} className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                        <Save className="h-3 w-3" /> {showGerenciarCond ? "Fechar" : "Gerenciar"}
+                      </button>
+                    </div>
+                    {/* Lista de condições */}
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {condPagOptions.map(c => {
+                        const dbItem = condPagQ.data?.find(d => d.descricao === c);
+                        return (
+                          <span key={c} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full border border-gray-200">
+                            {c}
+                            {showGerenciarCond && dbItem && (
+                              <button onClick={() => deletarCondMut.mutate({ id: dbItem.id })} className="hover:text-red-500 transition-colors ml-0.5">
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    {/* Adicionar nova condição */}
+                    {showGerenciarCond && (
+                      <div className="flex gap-2 pt-2 border-t border-gray-100">
+                        <input
+                          type="text"
+                          placeholder="Ex: 30 dias, Medição, 50%+50%..."
+                          value={novaCondicao}
+                          onChange={e => setNovaCondicao(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter" && novaCondicao.trim()) criarCondMut.mutate({ companyId, descricao: novaCondicao }); }}
+                          className="flex-1 h-8 text-sm border border-gray-300 rounded-md px-3 bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <Button size="sm" disabled={!novaCondicao.trim() || criarCondMut.isPending}
+                          onClick={() => criarCondMut.mutate({ companyId, descricao: novaCondicao })}
+                          className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1 text-xs">
+                          <Plus className="h-3 w-3" /> Adicionar
+                        </Button>
+                      </div>
+                    )}
+                    {!showGerenciarCond && (
+                      <p className="text-xs text-gray-400">Clique em "Gerenciar" para adicionar ou remover opções. Essas opções aparecem no campo Cond. pagamento do mapa.</p>
+                    )}
+                  </div>
+
                   {/* Melhor fornecedor banner */}
                   {melhorForn && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-4">
@@ -484,7 +545,14 @@ export default function Cotacoes() {
                                   {editingFornId === p.fornecedorId ? (
                                     <div className="flex flex-col gap-1">
                                       <Input type="number" placeholder="Prazo (dias)" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="h-6 text-xs border-gray-300 bg-white text-gray-900 w-full" />
-                                      <Input placeholder="Cond. pagamento" value={editCondPag[p.fornecedorId] ?? ""} onChange={e => setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="h-6 text-xs border-gray-300 bg-white text-gray-900 w-full" />
+                                      <select
+                                        value={editCondPag[p.fornecedorId] ?? ""}
+                                        onChange={e => setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))}
+                                        className="h-6 text-xs border border-gray-300 bg-white text-gray-900 w-full rounded px-1"
+                                      >
+                                        <option value="">— selecionar —</option>
+                                        {condPagOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                                      </select>
                                     </div>
                                   ) : (
                                     <div className="text-xs text-center text-gray-500">
@@ -744,7 +812,7 @@ export default function Cotacoes() {
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-gray-200">
-                    {COND_PAG.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {condPagOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
