@@ -345,6 +345,13 @@ export default function Cotacoes() {
 
     const metaGrandTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
       acc + (parseFloat(it.metaUnitario ?? "0") * parseFloat(it.quantidade ?? "0")), 0);
+    // Quantidade total: soma quando todos os itens têm a mesma unidade
+    const allItens = mapa?.itens ?? [];
+    const unidadesUnicas = [...new Set(allItens.map((it: any) => (it.unidade || "un").toLowerCase()))];
+    const qtdGrandTotal = unidadesUnicas.length === 1
+      ? allItens.reduce((acc: number, it: any) => acc + parseFloat(it.quantidade ?? "0"), 0)
+      : null;
+    const qtdUnidade = unidadesUnicas.length === 1 ? unidadesUnicas[0] : null;
     const winnerGrandTotal = melhorForn ? parseFloat(melhorForn.totalOrcado ?? "0") : 0;
     const saldoTotal = metaGrandTotal > 0 && melhorForn ? metaGrandTotal - winnerGrandTotal : 0;
 
@@ -811,7 +818,11 @@ export default function Cotacoes() {
                             <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
                               <td colSpan={2} className="px-4 py-3 text-xs text-gray-700 uppercase border-r border-gray-200">Total</td>
                               <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40">—</td>
-                              <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40">—</td>
+                              <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40 font-bold">
+                                {qtdGrandTotal !== null
+                                  ? <span title={`Total de ${qtdUnidade}`}>{qtdGrandTotal.toLocaleString("pt-BR")} <span className="font-normal text-blue-400">{qtdUnidade}</span></span>
+                                  : "—"}
+                              </td>
                               <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40 border-r border-blue-100 font-bold">
                                 {metaGrandTotal > 0 ? metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
                               </td>

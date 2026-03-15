@@ -1510,6 +1510,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 374,
+    titulo: "Mapa de Cotação — Total de QTD na linha TOTAL quando unidade é única",
+    descricao: "Na linha TOTAL do Mapa de Cotação, a coluna QTD agora exibe a soma de todas as quantidades quando todos os itens da cotação têm a mesma unidade (ex: todos em kg). Facilita saber o volume total do insumo sendo cotado. Quando os itens possuem unidades mistas, exibe '—' como antes.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 373,
     titulo: "Mapa de Cotação — Resumo agrupa itens iguais e remove código EAP",
     descricao: "No Resumo Consolidado de Materiais, os itens com o mesmo insumo (mesma descrição, diferente código EAP) agora são agrupados em uma única linha com a quantidade total somada. O prefixo de código EAP [xx.xx.xx.xx] é removido da descrição no resumo, tornando a leitura mais limpa e direta.",
