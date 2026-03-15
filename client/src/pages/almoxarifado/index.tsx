@@ -266,7 +266,8 @@ export default function AlmoxarifadoPage() {
         id: editandoId, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
         quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined,
-        fotoUrl: formItem.fotoUrl || null, ...locacaoPayload,
+        fotoUrl: formItem.fotoUrl || null, quantidadeAtual: formItem.quantidadeAtual,
+        ...locacaoPayload,
       });
     } else {
       criarMut.mutate({
@@ -655,6 +656,9 @@ export default function AlmoxarifadoPage() {
                         <button onClick={() => abrirMovimento(item, "saida")} title="Saída" className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] text-orange-700 hover:bg-orange-50 rounded transition">
                           <ArrowUpCircle className="h-3.5 w-3.5" />Out
                         </button>
+                        <button onClick={() => abrirEditar(item)} title="Editar item" className="px-1.5 py-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                         {(item as any).origem === "alugado" && (
                           <button onClick={() => abrirDevolverLocacao(item)} title="Devolver ao fornecedor" className="px-1.5 py-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded transition">
                             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -875,19 +879,22 @@ export default function AlmoxarifadoPage() {
                 />
               </div>
 
-              {/* Qtd Inicial (só no novo) */}
-              {!editandoId && (
-                <div>
-                  <label className="text-xs font-medium text-gray-700">Quantidade Inicial em Estoque</label>
-                  <input
-                    type="text" inputMode="decimal"
-                    className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
-                    value={formItem.quantidadeAtual === 0 ? "" : formItem.quantidadeAtual}
-                    placeholder="0"
-                    onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
-                  />
-                </div>
-              )}
+              {/* Quantidade: Inicial no cadastro | Corrigir no edit */}
+              <div>
+                <label className="text-xs font-medium text-gray-700">
+                  {editandoId ? "Corrigir Estoque Atual" : "Quantidade Inicial em Estoque"}
+                </label>
+                {editandoId && (
+                  <p className="text-[11px] text-amber-600 mt-0.5">⚠ Altera diretamente o saldo em estoque. Use apenas para correções de inventário.</p>
+                )}
+                <input
+                  type="text" inputMode="decimal"
+                  className={`mt-1 w-full h-9 px-3 text-sm rounded-lg border bg-white text-gray-900 outline-none transition ${editandoId ? "border-amber-300 focus:border-amber-500" : "border-gray-200 focus:border-emerald-400"}`}
+                  value={formItem.quantidadeAtual === 0 ? "" : formItem.quantidadeAtual}
+                  placeholder="0"
+                  onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
+                />
+              </div>
 
               {/* Observações */}
               <div>
