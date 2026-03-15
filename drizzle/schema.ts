@@ -1104,6 +1104,7 @@ export const epis = pgTable("epis", {
         condicao: text().default('Novo').notNull(),
         criadoPor: varchar("criado_por", { length: 255 }),
         alteradoPor: varchar("alterado_por", { length: 255 }),
+        fotoUrl: text("fotoUrl"),
 });
 
 // Estoque de EPI por Obra
