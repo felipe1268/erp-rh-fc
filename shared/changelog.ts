@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 323,
+    titulo: "Almoxarifado — Estoque Consolidado + Valor Unitário + IA de Preço",
+    descricao: "Novo campo 'Valor Unitário' em cada item do almoxarifado. Botão IA (✨) analisa o nome e a foto do item e sugere o preço médio de mercado automaticamente. Visão consolidada 'Todos os Almoxarifados' no dropdown: soma quantidades de Central + Obras, mostra Valor Total do Estoque da empresa (R$), e lista por item com distribuição por local. Cards agora exibem preço unitário e valor total em estoque.",
+    tipo: "funcionalidade",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 322,
     titulo: "Almoxarifado & Compras — Alerta de locação proporcional ao prazo + integração Compras",
     descricao: "Campo 'Alertar X dias antes' por item substitui o limiar fixo de 30 dias: para locação diária defina 1, para anual defina 30. A lógica de alerta no header usa o campo por item (diasAlertaLocacao, padrão 7). Módulo Compras/Almoxarifado agora exibe badge LOCADO, contador de vencimento e contador de fornecedor na tabela de itens. Modal de criação/edição de item no Compras também conta com os campos de locação: Próprio/Alugado, Fornecedor, Datas, Valor Mensal, Alertar X dias e Observações do Contrato.",

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
+import { invokeLLM } from "../_core/llm";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte } from "drizzle-orm";
 import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
@@ -257,6 +258,7 @@ export const comprasRouter = router({
       quantidadeMinima:      z.number().optional(),
       observacoes:           z.string().optional(),
       fotoUrl:               z.string().optional(),
+      valorUnitario:         z.number().nullable().optional(),
       origem:                z.enum(["proprio", "alugado"]).optional(),
       fornecedorLocacao:     z.string().optional(),
       dataInicioLocacao:     z.string().optional(),
@@ -278,6 +280,7 @@ export const comprasRouter = router({
         quantidadeMinima:      String(input.quantidadeMinima ?? 0),
         observacoes:           input.observacoes ?? null,
         fotoUrl:               input.fotoUrl ?? null,
+        valorUnitario:         input.valorUnitario != null ? String(input.valorUnitario) : null,
         ativo:                 true,
         origem:                input.origem ?? "proprio",
         fornecedorLocacao:     input.fornecedorLocacao ?? null,
@@ -300,6 +303,7 @@ export const comprasRouter = router({
       quantidadeMinima:      z.number().optional(),
       observacoes:           z.string().optional(),
       fotoUrl:               z.string().nullable().optional(),
+      valorUnitario:         z.number().nullable().optional(),
       origem:                z.enum(["proprio", "alugado"]).optional(),
       fornecedorLocacao:     z.string().nullable().optional(),
       dataInicioLocacao:     z.string().nullable().optional(),
@@ -320,6 +324,7 @@ export const comprasRouter = router({
       if (data.quantidadeMinima !== undefined)     updates.quantidadeMinima = String(data.quantidadeMinima);
       if (data.observacoes !== undefined)          updates.observacoes = data.observacoes;
       if ('fotoUrl' in data)                       updates.fotoUrl = data.fotoUrl;
+      if ('valorUnitario' in data)                 updates.valorUnitario = data.valorUnitario != null ? String(data.valorUnitario) : null;
       if (data.origem !== undefined)               updates.origem = data.origem;
       if ('fornecedorLocacao' in data)             updates.fornecedorLocacao = data.fornecedorLocacao;
       if ('dataInicioLocacao' in data)             updates.dataInicioLocacao = data.dataInicioLocacao;
@@ -381,6 +386,103 @@ export const comprasRouter = router({
         .set({ ativo: false, atualizadoEm: new Date().toISOString() })
         .where(eq(almoxarifadoItens.id, input.id));
       return { success: true };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // ALMOXARIFADO — ESTOQUE CONSOLIDADO
+  // ══════════════════════════════════════════════════════════════
+
+  listarItensConsolidado: protectedProcedure
+    .input(z.object({ companyId: z.number(), busca: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.select().from(almoxarifadoItens)
+        .where(and(eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)))
+        .orderBy(asc(almoxarifadoItens.nome));
+
+      const busca = input.busca?.toLowerCase();
+      const filtered = busca
+        ? rows.filter(i => i.nome.toLowerCase().includes(busca) || i.categoria?.toLowerCase().includes(busca) || i.codigoInterno?.toLowerCase().includes(busca))
+        : rows;
+
+      // Group by (nome + unidade + categoria) and sum quantities
+      const map = new Map<string, any>();
+      for (const item of filtered) {
+        const key = `${item.nome.toLowerCase()}|${item.unidade}`;
+        if (!map.has(key)) {
+          map.set(key, {
+            nome: item.nome, unidade: item.unidade, categoria: item.categoria,
+            codigoInterno: item.codigoInterno,
+            quantidadeTotal: 0, valorUnitario: null,
+            valorTotalEstoque: 0, almoxarifados: [],
+          });
+        }
+        const entry = map.get(key)!;
+        const qty = n(item.quantidadeAtual);
+        entry.quantidadeTotal += qty;
+        if (!entry.valorUnitario && item.valorUnitario) entry.valorUnitario = item.valorUnitario;
+        const vu = n(entry.valorUnitario);
+        if (item.obraId) {
+          entry.almoxarifados.push({ tipo: "obra", obraId: item.obraId, quantidade: qty, itemId: item.id });
+        } else {
+          entry.almoxarifados.push({ tipo: "central", quantidade: qty, itemId: item.id });
+        }
+      }
+      const result = Array.from(map.values()).map(e => ({
+        ...e,
+        valorTotalEstoque: n(e.valorUnitario) * e.quantidadeTotal,
+      }));
+      const totalGeral = result.reduce((s, r) => s + r.valorTotalEstoque, 0);
+      return { itens: result, totalGeral };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // ALMOXARIFADO — IA: SUGESTÃO DE PREÇO POR FOTO
+  // ══════════════════════════════════════════════════════════════
+
+  sugerirPrecoIA: protectedProcedure
+    .input(z.object({
+      nome: z.string(),
+      unidade: z.string().optional(),
+      categoria: z.string().optional(),
+      fotoUrl: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const content: any[] = [];
+      if (input.fotoUrl) {
+        content.push({ type: "image_url", image_url: { url: input.fotoUrl, detail: "low" } });
+      }
+      content.push({
+        type: "text",
+        text: `Você é um especialista em precificação de materiais e equipamentos de construção civil no Brasil.
+Com base ${input.fotoUrl ? "na imagem e " : ""}no nome do item abaixo, estime o preço médio unitário de mercado (em Reais, R$) para compra/aquisição deste item.
+
+Item: ${input.nome}
+${input.unidade ? `Unidade: ${input.unidade}` : ""}
+${input.categoria ? `Categoria: ${input.categoria}` : ""}
+
+Responda APENAS com um objeto JSON no formato:
+{
+  "precoSugerido": <número em reais, ex: 45.90>,
+  "descricao": "<breve descrição do item identificado>",
+  "justificativa": "<1-2 frases explicando a base da estimativa>",
+  "confianca": "alta" | "media" | "baixa"
+}`,
+      });
+
+      const result = await invokeLLM({
+        messages: [{ role: "user", content }],
+        maxTokens: 300,
+      });
+
+      try {
+        const text = result.content ?? "";
+        const match = text.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error("JSON não encontrado na resposta");
+        return JSON.parse(match[0]);
+      } catch {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não retornou preço válido. Tente novamente." });
+      }
     }),
 
   // ══════════════════════════════════════════════════════════════

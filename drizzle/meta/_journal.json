@@ -50,6 +50,13 @@
       "when": 1773543432524,
       "tag": "0006_early_ricochet",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773543891256,
+      "tag": "0007_broad_mojo",
+      "breakpoints": true
     }
   ]
 }
