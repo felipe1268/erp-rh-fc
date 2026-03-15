@@ -11,6 +11,8 @@ import {
   comprasCotacoes, comprasCotacoesItens,
   comprasOrdens, comprasOrdensItens,
   obras,
+  orcamentos, orcamentoItens,
+  planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
@@ -790,6 +792,8 @@ Responda APENAS com um objeto JSON no formato:
         unidade: z.string().optional(),
         quantidade: z.number(),
         observacoes: z.string().optional(),
+        orcamentoItemId: z.number().optional(),
+        eapCodigo: z.string().optional(),
       })),
     }))
     .mutation(async ({ input }) => {
@@ -820,6 +824,8 @@ Responda APENAS com um objeto JSON no formato:
             quantidade: String(it.quantidade),
             observacoes: it.observacoes,
             statusItem: "pendente",
+            orcamentoItemId: it.orcamentoItemId ?? null,
+            eapCodigo: it.eapCodigo ?? null,
           }))
         );
       }
@@ -1457,5 +1463,89 @@ Responda APENAS com um objeto JSON no formato:
         LIMIT 50
       `);
       return rows as any[];
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // EAP PARA SC — retorna itens do orçamento + prazo do planejamento
+  // SEM custos/metas (blind quotation até equalização)
+  // ══════════════════════════════════════════════════════════════
+  getEapParaObra: protectedProcedure
+    .input(z.object({ obraId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      // Orçamento mais recente da obra
+      const [orc] = await db.select({
+        id: orcamentos.id,
+        codigo: orcamentos.codigo,
+        descricao: orcamentos.descricao,
+      }).from(orcamentos)
+        .where(and(
+          eq(orcamentos.companyId, input.companyId),
+          eq(orcamentos.obraId, input.obraId),
+          isNull(orcamentos.deletedAt),
+        ))
+        .orderBy(desc(orcamentos.createdAt))
+        .limit(1);
+
+      if (!orc) return { items: [], orcamentoId: null, projetoId: null, semOrcamento: true };
+
+      // Itens da EAP — SEM campos de custo/meta
+      const orcItems = await db.select({
+        id: orcamentoItens.id,
+        eapCodigo: orcamentoItens.eapCodigo,
+        nivel: orcamentoItens.nivel,
+        tipo: orcamentoItens.tipo,
+        descricao: orcamentoItens.descricao,
+        unidade: orcamentoItens.unidade,
+        quantidade: orcamentoItens.quantidade,
+        ordem: orcamentoItens.ordem,
+      }).from(orcamentoItens)
+        .where(and(
+          eq(orcamentoItens.orcamentoId, orc.id),
+          eq(orcamentoItens.companyId, input.companyId),
+        ))
+        .orderBy(asc(orcamentoItens.ordem));
+
+      // Projeto de planejamento mais recente da obra
+      const [proj] = await db.select({ id: planejamentoProjetos.id })
+        .from(planejamentoProjetos)
+        .where(and(
+          eq(planejamentoProjetos.companyId, input.companyId),
+          eq(planejamentoProjetos.obraId, input.obraId),
+        ))
+        .orderBy(desc(planejamentoProjetos.criadoEm))
+        .limit(1);
+
+      // Revisão mais recente → atividades com prazo
+      const atividadesMap: Record<string, { dataFim: string | null; duracaoDias: number | null }> = {};
+      if (proj) {
+        const [rev] = await db.select({ id: planejamentoRevisoes.id })
+          .from(planejamentoRevisoes)
+          .where(eq(planejamentoRevisoes.projetoId, proj.id))
+          .orderBy(desc(planejamentoRevisoes.id))
+          .limit(1);
+
+        if (rev) {
+          const atividades = await db.select({
+            eapCodigo: planejamentoAtividades.eapCodigo,
+            dataFim: planejamentoAtividades.dataFim,
+            duracaoDias: planejamentoAtividades.duracaoDias,
+          }).from(planejamentoAtividades)
+            .where(eq(planejamentoAtividades.revisaoId, rev.id));
+
+          atividades.forEach(a => {
+            if (a.eapCodigo) atividadesMap[a.eapCodigo] = { dataFim: a.dataFim, duracaoDias: a.duracaoDias };
+          });
+        }
+      }
+
+      const items = orcItems.map(it => ({
+        ...it,
+        prazoFim: atividadesMap[it.eapCodigo]?.dataFim ?? null,
+        duracaoDias: atividadesMap[it.eapCodigo]?.duracaoDias ?? null,
+      }));
+
+      return { items, orcamentoId: orc.id, projetoId: proj?.id ?? null, semOrcamento: false };
     }),
 });

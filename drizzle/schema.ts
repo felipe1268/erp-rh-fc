@@ -4743,6 +4743,8 @@ export const comprasSolicitacoesItens = pgTable("compras_solicitacoes_itens", {
   quantidadeAtendida: numeric("quantidade_atendida", { precision: 10, scale: 3 }).default("0"),
   statusItem:         varchar("status_item", { length: 30 }).default("pendente"),
   observacoes:        text(),
+  orcamentoItemId:    integer("orcamento_item_id"),
+  eapCodigo:          varchar("eap_codigo", { length: 50 }),
 });
 
 export const comprasCotacoes = pgTable("compras_cotacoes", {

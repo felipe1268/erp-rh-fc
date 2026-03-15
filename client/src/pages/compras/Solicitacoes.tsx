@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, Loader2,
-  CheckCircle2, XCircle, Clock, Building2,
+  CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -38,7 +38,7 @@ const PRIORIDADE_COR: Record<string, string> = {
 };
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
 
-interface ItemForm { descricao: string; unidade: string; quantidade: string; observacoes: string; }
+interface ItemForm { descricao: string; unidade: string; quantidade: string; observacoes: string; orcamentoItemId?: number; eapCodigo?: string; }
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", observacoes: "" });
 
 function StatusBadge({ status }: { status: string }) {
