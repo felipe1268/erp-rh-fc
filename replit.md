@@ -111,6 +111,7 @@ shared/         # Shared types and constants
 - **Integração OC→Almoxarifado** (Rev. 245): ao marcar OC como "entregue", itens entram automaticamente no almoxarifado com movimentação de entrada; SC item recebe quantidadeAtendida; SC marcada "concluída" quando todos os itens atendidos
 - **Painel de Compras**: KPIs, alertas de entrega, gastos mensais, SCs e OCs recentes com nome da obra visível
 - **Almoxarifado**: Itens com semáforo de estoque; movimentações entrada/saída vinculadas à obra; entradas automáticas via OC entregue
+- **Módulo Almoxarifado independente** (Rev. 297): UI mobile-first com 4 botões de ação rápida (ENTRADA/SAÍDA/EMPRESTAR/FECHAR DIA); comodato diário de ferramentas por código JFCxxxx; inventário semanal com barra de progresso e botões BATE/DIFERENTE; páginas Movimentações e Inventário Semanal; 3 novas tabelas DB (warehouse_loans, warehouse_inventory_sessions, warehouse_inventory_session_items); router warehouse.ts; PWA (manifest.json, metas Apple/Android, banner de instalação)
 - **Fornecedores**: Cadastro completo com busca automática CNPJ via BrasilAPI
 
 ## User Preferences

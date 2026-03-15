@@ -7,6 +7,7 @@ import {
   Search, Plus, Pencil, Package, ArrowDownCircle, ArrowUpCircle,
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
   LayoutGrid, List, Camera, Trash2, ImageOff,
+  Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight,
 } from "lucide-react";
 
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "t", "L", "sc", "cx", "pc", "vb", "gl", "barra", "rolo", "pç"];
@@ -168,6 +169,62 @@ export default function AlmoxarifadoPage() {
     { enabled: !!histItem && modalHist }
   );
 
+  // ── AÇÕES RÁPIDAS MOBILE ─────────────────────────────────────────
+  const utils = trpc.useUtils();
+
+  // Modal Entrada Rápida
+  const [modalEntrada, setModalEntrada] = useState(false);
+  const [entradaItemId, setEntradaItemId] = useState<number>(0);
+  const [entradaQtd, setEntradaQtd] = useState("");
+  const [entradaMotivo, setEntradaMotivo] = useState("");
+  const [entradaOk, setEntradaOk] = useState<boolean | null>(null);
+  const registerEntry = trpc.warehouse.registerEntry.useMutation({
+    onSuccess: (d) => { refetch(); setEntradaOk(true); },
+    onError: (e) => { toast.error(e.message); setEntradaOk(false); },
+  });
+
+  // Modal Saída Rápida
+  const [modalSaida, setModalSaida] = useState(false);
+  const [saidaItemId, setSaidaItemId] = useState<number>(0);
+  const [saidaQtd, setSaidaQtd] = useState("");
+  const [saidaObraNome, setSaidaObraNome] = useState("");
+  const [saidaOk, setSaidaOk] = useState<boolean | null>(null);
+  const registerExit = trpc.warehouse.registerExit.useMutation({
+    onSuccess: () => { refetch(); setSaidaOk(true); },
+    onError: (e) => { toast.error(e.message); setSaidaOk(false); },
+  });
+
+  // Modal Empréstimo
+  const [modalEmprestimo, setModalEmprestimo] = useState(false);
+  const [empCodigo, setEmpCodigo] = useState("");
+  const [empItemId, setEmpItemId] = useState<number>(0);
+  const [empQtd, setEmpQtd] = useState("1");
+  const [empOk, setEmpOk] = useState<null | { nome: string }>(null);
+  const [empErr, setEmpErr] = useState<string | null>(null);
+  const { data: empFuncionario } = trpc.warehouse.getFuncionarioByCodigo.useQuery(
+    { companyId, codigo: empCodigo },
+    { enabled: empCodigo.length >= 5 }
+  );
+  const registerLoan = trpc.warehouse.registerLoan.useMutation({
+    onSuccess: (d) => { refetch(); setEmpOk({ nome: d.funcionarioNome }); setEmpErr(null); },
+    onError: (e) => { setEmpErr(e.message); setEmpOk(null); },
+  });
+
+  // Modal Fechar Dia (devolução)
+  const [modalFecharDia, setModalFecharDia] = useState(false);
+  const { data: emprestimosHoje = [], refetch: refetchLoans } = trpc.warehouse.listTodayLoans.useQuery(
+    { companyId },
+    { enabled: modalFecharDia && !!companyId }
+  );
+  const returnLoan = trpc.warehouse.returnLoanById.useMutation({
+    onSuccess: () => { refetchLoans(); refetch(); toast.success("Ferramenta devolvida!"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
+  function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraNome(""); setSaidaOk(null); }
+  function resetEmprestimo() { setEmpCodigo(""); setEmpItemId(0); setEmpQtd("1"); setEmpOk(null); setEmpErr(null); }
+
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50">
@@ -200,6 +257,44 @@ export default function AlmoxarifadoPage() {
                 <Plus className="h-4 w-4" /> Novo Item
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* ── AÇÕES RÁPIDAS MOBILE ──────────────────────────────── */}
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* ENTRADA */}
+            <button
+              onClick={() => { resetEntrada(); setModalEntrada(true); }}
+              className="flex flex-col items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+            >
+              <ArrowDownCircle className="w-8 h-8" />
+              📥 ENTRADA
+            </button>
+            {/* SAÍDA */}
+            <button
+              onClick={() => { resetSaida(); setModalSaida(true); }}
+              className="flex flex-col items-center justify-center gap-2 bg-red-500 hover:bg-red-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+            >
+              <ArrowUpCircle className="w-8 h-8" />
+              📤 SAÍDA
+            </button>
+            {/* EMPRESTAR */}
+            <button
+              onClick={() => { resetEmprestimo(); setModalEmprestimo(true); }}
+              className="flex flex-col items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+            >
+              <Wrench className="w-8 h-8" />
+              🔧 EMPRESTAR
+            </button>
+            {/* FECHAR DIA */}
+            <button
+              onClick={() => setModalFecharDia(true)}
+              className="flex flex-col items-center justify-center gap-2 bg-gray-700 hover:bg-gray-800 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+            >
+              <ClipboardCheck className="w-8 h-8" />
+              📋 FECHAR DIA
+            </button>
           </div>
         </div>
 
@@ -661,6 +756,218 @@ export default function AlmoxarifadoPage() {
           </div>
         </div>
       )}
+
+      {/* ══ MODAL ENTRADA RÁPIDA ══════════════════════════════════════ */}
+      {modalEntrada && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ background: "#ffffff", color: "#111827" }}>
+            {entradaOk === true ? (
+              <div className="p-8 text-center space-y-4">
+                <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
+                <p className="text-xl font-bold text-emerald-700">Entrada registrada!</p>
+                <button className="w-full bg-emerald-500 text-white font-bold py-4 rounded-xl text-lg" onClick={() => { setModalEntrada(false); resetEntrada(); }}>Fechar</button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><ArrowDownCircle className="w-5 h-5 text-emerald-500" /> Registrar Entrada</h2>
+                  <button onClick={() => setModalEntrada(false)}><X className="w-6 h-6 text-gray-400" /></button>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Item *</label>
+                    <select className="w-full border-2 rounded-xl p-3 text-base" value={entradaItemId} onChange={e => setEntradaItemId(Number(e.target.value))}>
+                      <option value={0}>— escolha o item —</option>
+                      {itens.map(i => <option key={i.id} value={i.id}>{i.nome} ({i.unidade})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade *</label>
+                    <input type="number" inputMode="decimal" className="w-full border-2 rounded-xl p-4 text-2xl font-bold text-center" placeholder="0" value={entradaQtd} onChange={e => setEntradaQtd(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Nota Fiscal / Motivo</label>
+                    <input type="text" className="w-full border rounded-xl p-3 text-base" placeholder="Ex: NF 12345" value={entradaMotivo} onChange={e => setEntradaMotivo(e.target.value)} />
+                  </div>
+                  <button
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
+                    disabled={!entradaItemId || !entradaQtd || registerEntry.isPending}
+                    onClick={() => registerEntry.mutate({ companyId, itemId: entradaItemId, quantidade: parseFloat(entradaQtd), notaFiscal: entradaMotivo || undefined })}
+                  >
+                    {registerEntry.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "✅ CONFIRMAR ENTRADA"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL SAÍDA RÁPIDA ════════════════════════════════════════ */}
+      {modalSaida && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ background: "#ffffff", color: "#111827" }}>
+            {saidaOk === true ? (
+              <div className="p-8 text-center space-y-4">
+                <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
+                <p className="text-xl font-bold text-emerald-700">Saída registrada!</p>
+                <button className="w-full bg-emerald-500 text-white font-bold py-4 rounded-xl text-lg" onClick={() => { setModalSaida(false); resetSaida(); }}>Fechar</button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><ArrowUpCircle className="w-5 h-5 text-red-500" /> Registrar Saída</h2>
+                  <button onClick={() => setModalSaida(false)}><X className="w-6 h-6 text-gray-400" /></button>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Item *</label>
+                    <select className="w-full border-2 rounded-xl p-3 text-base" value={saidaItemId} onChange={e => setSaidaItemId(Number(e.target.value))}>
+                      <option value={0}>— escolha o item —</option>
+                      {itens.map(i => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)} {i.unidade}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade *</label>
+                    <input type="number" inputMode="decimal" className="w-full border-2 rounded-xl p-4 text-2xl font-bold text-center" placeholder="0" value={saidaQtd} onChange={e => setSaidaQtd(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Obra (opcional)</label>
+                    <input type="text" className="w-full border rounded-xl p-3 text-base" placeholder="Nome da obra" value={saidaObraNome} onChange={e => setSaidaObraNome(e.target.value)} />
+                  </div>
+                  <button
+                    className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
+                    disabled={!saidaItemId || !saidaQtd || registerExit.isPending}
+                    onClick={() => registerExit.mutate({ companyId, itemId: saidaItemId, quantidade: parseFloat(saidaQtd), obraNome: saidaObraNome || undefined })}
+                  >
+                    {registerExit.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "✅ CONFIRMAR SAÍDA"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL EMPRÉSTIMO ══════════════════════════════════════════ */}
+      {modalEmprestimo && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ background: "#ffffff", color: "#111827" }}>
+            {empOk ? (
+              <div className="p-8 text-center space-y-4">
+                <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
+                <p className="text-xl font-bold text-emerald-700">Empréstimo registrado!</p>
+                <p className="text-gray-600">{empOk.nome}</p>
+                <button className="w-full bg-emerald-500 text-white font-bold py-4 rounded-xl text-lg" onClick={() => { setModalEmprestimo(false); resetEmprestimo(); }}>Fechar</button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Wrench className="w-5 h-5 text-blue-500" /> Emprestar Ferramenta</h2>
+                  <button onClick={() => setModalEmprestimo(false)}><X className="w-6 h-6 text-gray-400" /></button>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Código do Funcionário (JFCxxxx)</label>
+                    <input
+                      type="text"
+                      inputMode="text"
+                      className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center uppercase tracking-widest"
+                      placeholder="JFC0000"
+                      value={empCodigo}
+                      onChange={e => setEmpCodigo(e.target.value.toUpperCase())}
+                    />
+                    {empFuncionario && (
+                      <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
+                        <User className="w-8 h-8 text-emerald-500" />
+                        <div>
+                          <p className="font-bold text-emerald-800">{empFuncionario.nomeCompleto}</p>
+                          {empFuncionario.cargo && <p className="text-xs text-emerald-600">{empFuncionario.cargo}</p>}
+                        </div>
+                      </div>
+                    )}
+                    {empCodigo.length >= 5 && !empFuncionario && (
+                      <p className="text-xs text-red-500 mt-1">Funcionário não encontrado</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Ferramenta *</label>
+                    <select className="w-full border-2 rounded-xl p-3 text-base" value={empItemId} onChange={e => setEmpItemId(Number(e.target.value))}>
+                      <option value={0}>— escolha o item —</option>
+                      {itens.map(i => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
+                    <input type="number" inputMode="numeric" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={empQtd} onChange={e => setEmpQtd(e.target.value)} />
+                  </div>
+                  {empErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{empErr}</p>}
+                  <button
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
+                    disabled={!empFuncionario || !empItemId || !empQtd || registerLoan.isPending}
+                    onClick={() => registerLoan.mutate({ companyId, itemId: empItemId, quantidade: parseFloat(empQtd), funcionarioCodigo: empCodigo })}
+                  >
+                    {registerLoan.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "🔧 CONFIRMAR EMPRÉSTIMO"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL FECHAR DIA ════════════════════════════════════════ */}
+      {modalFecharDia && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ background: "#ffffff", color: "#111827" }}>
+          <div className="flex items-center justify-between p-4 border-b">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><ClipboardCheck className="w-5 h-5 text-gray-700" /> Fechar Dia — Devoluções</h2>
+            <button onClick={() => setModalFecharDia(false)}><X className="w-7 h-7 text-gray-400" /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {emprestimosHoje.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-center">
+                <CheckCircle2 className="w-16 h-16 text-emerald-400 mb-3" />
+                <p className="text-lg font-semibold text-gray-700">Nenhum empréstimo hoje!</p>
+                <p className="text-sm text-gray-500 mt-1">Todos os itens foram devolvidos.</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500">{emprestimosHoje.filter(e => e.status === "emprestado").length} item(s) pendente(s) de devolução</p>
+                {emprestimosHoje.map(loan => (
+                  <div key={loan.id} className="bg-white border-2 rounded-xl p-4 space-y-2" style={{ borderColor: loan.status === "devolvido" ? "#86efac" : "#fca5a5" }}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-gray-900 text-base">{loan.itemNome}</p>
+                        <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5">
+                          <User className="w-3 h-3" /> {loan.funcionarioNome}
+                        </p>
+                        <p className="text-xs text-gray-400">{loan.horaEmprestimo} — Qtd: {n(loan.quantidade)}</p>
+                      </div>
+                      {loan.status === "devolvido" ? (
+                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full flex-shrink-0">✅ Devolvido</span>
+                      ) : (
+                        <button
+                          className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl text-sm flex-shrink-0 active:scale-95 transition disabled:opacity-50"
+                          disabled={returnLoan.isPending}
+                          onClick={() => returnLoan.mutate({ loanId: loan.id })}
+                        >
+                          Devolver
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+          <div className="p-4 border-t">
+            <button className="w-full bg-gray-800 text-white font-bold py-4 rounded-xl text-lg" onClick={() => setModalFecharDia(false)}>
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
     </DashboardLayout>
   );
 }

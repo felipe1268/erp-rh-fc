@@ -79,7 +79,7 @@ export const EMPLOYEE_STATUS_MANUAL = [
 // REGRA: Toda funcionalidade listada na sidebar DEVE ter entrada aqui
 // ============================================================
 
-export type ActiveModuleId = "rh-dp" | "sst" | "juridico" | "terceiros" | "parceiros" | "orcamento";
+export type ActiveModuleId = "rh-dp" | "sst" | "juridico" | "terceiros" | "parceiros" | "orcamento" | "almoxarifado";
 
 export interface ModuleFeature {
   key: string;
@@ -229,6 +229,18 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "orcamento-painel",   label: "Painel Orçamento",  route: "/orcamento/painel",   icon: "LayoutDashboard" },
       { key: "orcamento-lista",    label: "Orçamentos",        route: "/orcamento/lista",    icon: "FolderOpen" },
       { key: "orcamento-importar", label: "Importar Planilha", route: "/orcamento/importar", icon: "Upload" },
+    ],
+  },
+  {
+    id: "almoxarifado",
+    label: "Almoxarifado",
+    description: "Controle de materiais, ferramentas e equipamentos. Empréstimos diários, inventário semanal, movimentações entrada/saída.",
+    color: "orange",
+    icon: "Package",
+    features: [
+      { key: "almoxarifado-painel",       label: "Painel",              route: "/almoxarifado",                   icon: "LayoutDashboard" },
+      { key: "almoxarifado-movimentacoes", label: "Movimentações",       route: "/almoxarifado/movimentacoes",     icon: "ArrowLeftRight" },
+      { key: "almoxarifado-inventario",   label: "Inventário Semanal",  route: "/almoxarifado/inventario",        icon: "ClipboardList" },
     ],
   },
 ];

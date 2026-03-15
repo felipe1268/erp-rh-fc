@@ -4674,3 +4674,58 @@ export const comprasOrdensItens = pgTable("compras_ordens_itens", {
   precoUnitario:    numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
 });
+
+// ============================================================
+// MÓDULO ALMOXARIFADO — WAREHOUSE (adicionado Rev. 297)
+// Usa almoxarifado_itens e almoxarifado_movimentacoes existentes.
+// Novas tabelas: empréstimos e inventário semanal.
+// ============================================================
+
+export const warehouseLoans = pgTable("warehouse_loans", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  obraId:           integer("obra_id"),
+  itemId:           integer("item_id").notNull(),
+  itemNome:         varchar("item_nome", { length: 255 }).notNull(),
+  quantidade:       numeric({ precision: 10, scale: 3 }).notNull().default("1"),
+  funcionarioId:    integer("funcionario_id"),
+  funcionarioCodigo:varchar("funcionario_codigo", { length: 20 }),
+  funcionarioNome:  varchar("funcionario_nome", { length: 255 }).notNull(),
+  dataEmprestimo:   varchar("data_emprestimo", { length: 10 }).notNull(),
+  horaEmprestimo:   varchar("hora_emprestimo", { length: 5 }),
+  dataDevolucao:    varchar("data_devolucao", { length: 10 }),
+  horaDevolucao:    varchar("hora_devolucao", { length: 5 }),
+  status:           varchar({ length: 20 }).notNull().default("emprestado"),
+  observacoes:      text(),
+  almoxarifeId:     integer("almoxarife_id"),
+  almoxarifeNome:   varchar("almoxarife_nome", { length: 255 }),
+  createdAt:        timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const warehouseInventorySessions = pgTable("warehouse_inventory_sessions", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  semanaRef:        varchar("semana_ref", { length: 10 }).notNull(),
+  status:           varchar({ length: 20 }).notNull().default("pendente"),
+  totalItens:       integer("total_itens").notNull().default(0),
+  itensConferidos:  integer("itens_conferidos").notNull().default(0),
+  itensDivergentes: integer("itens_divergentes").notNull().default(0),
+  almoxarifeId:     integer("almoxarife_id"),
+  almoxarifeNome:   varchar("almoxarife_nome", { length: 255 }),
+  iniciadoEm:       timestamp("iniciado_em", { mode: "string" }),
+  concluidoEm:      timestamp("concluido_em", { mode: "string" }),
+  createdAt:        timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const warehouseInventorySessionItems = pgTable("warehouse_inventory_session_items", {
+  id:               serial().primaryKey(),
+  sessionId:        integer("session_id").notNull(),
+  itemId:           integer("item_id").notNull(),
+  itemNome:         varchar("item_nome", { length: 255 }),
+  quantidadeSistema:numeric("quantidade_sistema", { precision: 14, scale: 3 }).notNull(),
+  quantidadeFisica: numeric("quantidade_fisica", { precision: 14, scale: 3 }),
+  diferenca:        numeric({ precision: 14, scale: 3 }),
+  status:           varchar({ length: 20 }).notNull().default("pendente"),
+  observacoes:      text(),
+  conferidoEm:      timestamp("conferido_em", { mode: "string" }),
+});

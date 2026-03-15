@@ -308,9 +308,11 @@ const menuSectionsCompras: MenuSection[] = [
 
 const menuSectionsAlmoxarifado: MenuSection[] = [
   {
-    title: "Estoque",
+    title: "Almoxarifado",
     items: [
-      { icon: Warehouse, label: "Almoxarifado Central", path: "/almoxarifado" },
+      { icon: Warehouse,     label: "Visão Geral",        path: "/almoxarifado" },
+      { icon: ArrowLeftRight, label: "Movimentações",      path: "/almoxarifado/movimentacoes" },
+      { icon: ClipboardList, label: "Inventário Semanal",  path: "/almoxarifado/inventario" },
     ],
   },
   {
