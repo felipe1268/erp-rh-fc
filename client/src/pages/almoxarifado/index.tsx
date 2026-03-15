@@ -771,25 +771,15 @@ export default function AlmoxarifadoPage() {
                 </div>
               </div>
 
-              {/* Código + Mínimo */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-700">Código Interno</label>
-                  <input
-                    className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400"
-                    placeholder="Opcional"
-                    value={formItem.codigoInterno} onChange={e => setFormItem(p => ({ ...p, codigoInterno: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-700">Qtd. Mínima (alerta)</label>
-                  <input
-                    type="number" min={0}
-                    className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
-                    value={formItem.quantidadeMinima}
-                    onChange={e => setFormItem(p => ({ ...p, quantidadeMinima: parseFloat(e.target.value) || 0 }))}
-                  />
-                </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700">Qtd. Mínima (alerta)</label>
+                <input
+                  type="text" inputMode="decimal"
+                  className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
+                  value={formItem.quantidadeMinima === 0 ? "" : formItem.quantidadeMinima}
+                  placeholder="0"
+                  onChange={e => setFormItem(p => ({ ...p, quantidadeMinima: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
+                />
               </div>
 
               {/* Qtd Inicial (só no novo) */}
@@ -797,10 +787,11 @@ export default function AlmoxarifadoPage() {
                 <div>
                   <label className="text-xs font-medium text-gray-700">Quantidade Inicial em Estoque</label>
                   <input
-                    type="number" min={0}
+                    type="text" inputMode="decimal"
                     className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
-                    value={formItem.quantidadeAtual}
-                    onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: parseFloat(e.target.value) || 0 }))}
+                    value={formItem.quantidadeAtual === 0 ? "" : formItem.quantidadeAtual}
+                    placeholder="0"
+                    onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
                   />
                 </div>
               )}
