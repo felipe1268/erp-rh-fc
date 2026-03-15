@@ -381,12 +381,12 @@ export default function SolicitacaoHE() {
                   ) : !(atividadesQuery.data as any)?.atividades?.length ? (
                     <p className="text-xs text-amber-600 italic py-2">Esta obra não possui cronograma cadastrado no módulo Planejamento.</p>
                   ) : (
-                    <Select value={formData.planejamentoAtividadeId} onValueChange={v => setFormData(p => ({ ...p, planejamentoAtividadeId: v }))}>
+                    <Select value={formData.planejamentoAtividadeId || "none"} onValueChange={v => setFormData(p => ({ ...p, planejamentoAtividadeId: v === "none" ? "" : v }))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Vincular a uma atividade do cronograma..." />
                       </SelectTrigger>
                       <SelectContent className="max-h-72">
-                        <SelectItem value="">Nenhuma (sem vínculo)</SelectItem>
+                        <SelectItem value="none">Nenhuma (sem vínculo)</SelectItem>
                         {((atividadesQuery.data as any)?.atividades || []).map((a: any) => (
                           <SelectItem key={a.id} value={String(a.id)}>
                             <span className="font-mono text-xs text-blue-700 mr-2">{a.eapCodigo}</span>
