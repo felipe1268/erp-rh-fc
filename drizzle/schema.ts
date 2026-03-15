@@ -4562,10 +4562,16 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   quantidadeAtual:  numeric("quantidade_atual", { precision: 14, scale: 3 }).default("0"),
   quantidadeMinima: numeric("quantidade_minima", { precision: 14, scale: 3 }).default("0"),
   observacoes:      text(),
-  fotoUrl:          text("foto_url"),
-  ativo:            boolean().default(true),
-  criadoEm:         timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
-  atualizadoEm:     timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
+  fotoUrl:               text("foto_url"),
+  ativo:                 boolean().default(true),
+  origem:                varchar({ length: 20 }).default("proprio"),
+  fornecedorLocacao:     varchar("fornecedor_locacao", { length: 255 }),
+  dataInicioLocacao:     varchar("data_inicio_locacao", { length: 10 }),
+  dataVencimentoLocacao: varchar("data_vencimento_locacao", { length: 10 }),
+  valorLocacaoMensal:    numeric("valor_locacao_mensal", { precision: 14, scale: 2 }),
+  observacoesLocacao:    text("observacoes_locacao"),
+  criadoEm:             timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+  atualizadoEm:         timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const almoxarifadoMovimentacoes = pgTable("almoxarifado_movimentacoes", {

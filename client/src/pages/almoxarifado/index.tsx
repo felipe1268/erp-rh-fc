@@ -15,6 +15,9 @@ import {
 const EMPTY_ITEM = {
   nome: "", unidade: "un", categoria: "", codigoInterno: "",
   quantidadeAtual: 0, quantidadeMinima: 0, observacoes: "", fotoUrl: "",
+  origem: "proprio" as "proprio" | "alugado",
+  fornecedorLocacao: "", dataInicioLocacao: "", dataVencimentoLocacao: "",
+  valorLocacaoMensal: 0, observacoesLocacao: "",
 };
 const EMPTY_MOV = {
   tipo: "entrada" as "entrada" | "saida" | "ajuste",
@@ -163,7 +166,16 @@ export default function AlmoxarifadoPage() {
 
   function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setCamposPreenchidosIA(false); setModalItem(true); }
   function abrirEditar(i: any) {
-    setFormItem({ nome: i.nome, unidade: i.unidade, categoria: i.categoria ?? "", codigoInterno: i.codigoInterno ?? "", quantidadeAtual: n(i.quantidadeAtual), quantidadeMinima: n(i.quantidadeMinima), observacoes: i.observacoes ?? "", fotoUrl: i.fotoUrl ?? "" });
+    setFormItem({
+      nome: i.nome, unidade: i.unidade, categoria: i.categoria ?? "", codigoInterno: i.codigoInterno ?? "",
+      quantidadeAtual: n(i.quantidadeAtual), quantidadeMinima: n(i.quantidadeMinima),
+      observacoes: i.observacoes ?? "", fotoUrl: i.fotoUrl ?? "",
+      origem: (i.origem === "alugado" ? "alugado" : "proprio") as "proprio" | "alugado",
+      fornecedorLocacao: i.fornecedorLocacao ?? "", dataInicioLocacao: i.dataInicioLocacao ?? "",
+      dataVencimentoLocacao: i.dataVencimentoLocacao ?? "",
+      valorLocacaoMensal: parseFloat(i.valorLocacaoMensal ?? "0") || 0,
+      observacoesLocacao: i.observacoesLocacao ?? "",
+    });
     setEditandoId(i.id);
     setCamposPreenchidosIA(false);
     setModalItem(true);
@@ -216,6 +228,14 @@ export default function AlmoxarifadoPage() {
     finally { setUploadingFoto(false); e.target.value = ""; }
   }
 
+  const { data: itensLocadosVencendo = [] } = trpc.compras.getItensLocadosVencendo.useQuery(
+    { companyId, diasAlerta: 30 }, { enabled: !!companyId }
+  );
+
+  const [modalDevolverLocacao, setModalDevolverLocacao] = useState(false);
+  const [itemDevolverLocacao, setItemDevolverLocacao] = useState<any>(null);
+  const [obsDevolucaoLocacao, setObsDevolucaoLocacao] = useState("");
+
   const criarMut = trpc.compras.criarItem.useMutation({
     onSuccess: () => { refetch(); setModalItem(false); toast.success("Item criado!"); },
   });
@@ -225,21 +245,36 @@ export default function AlmoxarifadoPage() {
   const excluirMut = trpc.compras.excluirItem.useMutation({
     onSuccess: () => { refetch(); toast.success("Item removido."); },
   });
+  const devolverLocacaoMut = trpc.compras.devolverLocacaoItem.useMutation({
+    onSuccess: () => { refetch(); setModalDevolverLocacao(false); setItemDevolverLocacao(null); setObsDevolucaoLocacao(""); toast.success("Equipamento devolvido ao fornecedor. Item desativado."); },
+  });
+
+  function abrirDevolverLocacao(item: any) { setItemDevolverLocacao(item); setObsDevolucaoLocacao(""); setModalDevolverLocacao(true); }
 
   function salvarItem() {
     if (!formItem.nome.trim()) { toast.error("Nome é obrigatório."); return; }
+    const locacaoPayload = formItem.origem === "alugado" ? {
+      origem: "alugado" as const,
+      fornecedorLocacao: formItem.fornecedorLocacao || undefined,
+      dataInicioLocacao: formItem.dataInicioLocacao || undefined,
+      dataVencimentoLocacao: formItem.dataVencimentoLocacao || undefined,
+      valorLocacaoMensal: formItem.valorLocacaoMensal || undefined,
+      observacoesLocacao: formItem.observacoesLocacao || undefined,
+    } : { origem: "proprio" as const, fornecedorLocacao: null, dataInicioLocacao: null, dataVencimentoLocacao: null, valorLocacaoMensal: null, observacoesLocacao: null };
     if (editandoId) {
       atualizarMut.mutate({
         id: editandoId, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
         quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined,
-        fotoUrl: formItem.fotoUrl || null,
+        fotoUrl: formItem.fotoUrl || null, ...locacaoPayload,
       });
     } else {
       criarMut.mutate({
-        companyId, obraId: obraContexto, ...formItem,
+        companyId, obraId: obraContexto, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
+        quantidadeAtual: formItem.quantidadeAtual, quantidadeMinima: formItem.quantidadeMinima,
         observacoes: formItem.observacoes || undefined, fotoUrl: formItem.fotoUrl || undefined,
+        ...locacaoPayload,
       });
     }
   }
@@ -370,6 +405,12 @@ export default function AlmoxarifadoPage() {
               <p className="text-sm text-gray-500 mt-0.5">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} cadastrado{itens.length !== 1 ? "s" : ""}</p>
             </div>
             <div className="flex items-center gap-3">
+              {itensLocadosVencendo.length > 0 && (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5" title={itensLocadosVencendo.map((i: any) => `${i.nome} — vence em ${i.diasParaVencimento <= 0 ? "VENCIDO" : `${i.diasParaVencimento}d`}`).join("\n")}>
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <span className="text-xs font-semibold text-amber-700">{itensLocadosVencendo.length} locação{itensLocadosVencendo.length > 1 ? "ões" : ""} a vencer</span>
+                </div>
+              )}
               {totalCriticos > 0 && (
                 <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
                   <AlertTriangle className="h-4 w-4 text-red-500" />
@@ -579,6 +620,9 @@ export default function AlmoxarifadoPage() {
                       {abaixo && (
                         <div className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">!</div>
                       )}
+                      {(item as any).origem === "alugado" && (
+                        <div className="absolute top-1.5 left-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">LOCADO</div>
+                      )}
                     </div>
 
                     {/* Info */}
@@ -595,6 +639,14 @@ export default function AlmoxarifadoPage() {
                         </p>
                         <StatusBadge atual={atual} minimo={minimo} />
                       </div>
+                      {(item as any).origem === "alugado" && (item as any).dataVencimentoLocacao && (() => {
+                        const dias = Math.ceil((new Date((item as any).dataVencimentoLocacao).getTime() - Date.now()) / 86400000);
+                        return (
+                          <div className={`text-[10px] font-medium px-2 py-0.5 rounded-full text-center ${dias <= 0 ? "bg-red-100 text-red-700" : dias <= 7 ? "bg-orange-100 text-orange-700" : "bg-amber-50 text-amber-700"}`}>
+                            {dias <= 0 ? "⚠ VENCIDO" : `Vence em ${dias}d`} — {(item as any).fornecedorLocacao || "Fornecedor"}
+                          </div>
+                        );
+                      })()}
                       {/* Actions */}
                       <div className="flex gap-1 pt-1 border-t border-gray-50">
                         <button onClick={() => abrirMovimento(item, "entrada")} title="Entrada" className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] text-emerald-700 hover:bg-emerald-50 rounded transition">
@@ -603,6 +655,11 @@ export default function AlmoxarifadoPage() {
                         <button onClick={() => abrirMovimento(item, "saida")} title="Saída" className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] text-orange-700 hover:bg-orange-50 rounded transition">
                           <ArrowUpCircle className="h-3.5 w-3.5" />Out
                         </button>
+                        {(item as any).origem === "alugado" && (
+                          <button onClick={() => abrirDevolverLocacao(item)} title="Devolver ao fornecedor" className="px-1.5 py-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded transition">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <button onClick={() => { setHistItem(item); setModalHist(true); }} title="Histórico" className="px-1.5 py-1 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded transition">
                           <History className="h-3.5 w-3.5" />
                         </button>
@@ -840,6 +897,66 @@ export default function AlmoxarifadoPage() {
                   rows={2} value={formItem.observacoes}
                   onChange={e => setFormItem(p => ({ ...p, observacoes: e.target.value }))}
                 />
+              </div>
+
+              {/* Origem (Próprio / Alugado) */}
+              <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 mb-2 block">Origem do Equipamento</label>
+                  <div className="flex gap-2">
+                    <button type="button"
+                      onClick={() => setFormItem(p => ({ ...p, origem: "proprio" }))}
+                      className={`flex-1 h-9 text-sm rounded-lg border font-medium transition ${formItem.origem === "proprio" ? "bg-emerald-600 border-emerald-600 text-white" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                      🏢 Próprio da Empresa
+                    </button>
+                    <button type="button"
+                      onClick={() => setFormItem(p => ({ ...p, origem: "alugado" }))}
+                      className={`flex-1 h-9 text-sm rounded-lg border font-medium transition ${formItem.origem === "alugado" ? "bg-amber-500 border-amber-500 text-white" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                      🔑 Alugado / Locado
+                    </button>
+                  </div>
+                </div>
+                {formItem.origem === "alugado" && (
+                  <div className="space-y-3 pt-2 border-t border-amber-100">
+                    <div>
+                      <label className="text-xs font-medium text-gray-700">Fornecedor / Locadora</label>
+                      <input type="text" placeholder="Ex: Locamig Equipamentos"
+                        className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
+                        value={formItem.fornecedorLocacao}
+                        onChange={e => setFormItem(p => ({ ...p, fornecedorLocacao: e.target.value }))} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-gray-700">Início da Locação</label>
+                        <input type="date"
+                          className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
+                          value={formItem.dataInicioLocacao}
+                          onChange={e => setFormItem(p => ({ ...p, dataInicioLocacao: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-amber-700 font-semibold">⚠ Vencimento</label>
+                        <input type="date"
+                          className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-amber-300 bg-amber-50 text-gray-900 outline-none focus:border-amber-500"
+                          value={formItem.dataVencimentoLocacao}
+                          onChange={e => setFormItem(p => ({ ...p, dataVencimentoLocacao: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-700">Valor Mensal da Locação (R$)</label>
+                      <input type="text" inputMode="decimal" placeholder="0,00"
+                        className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
+                        value={formItem.valorLocacaoMensal === 0 ? "" : formItem.valorLocacaoMensal}
+                        onChange={e => setFormItem(p => ({ ...p, valorLocacaoMensal: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-700">Observações da Locação</label>
+                      <textarea rows={2} placeholder="Nº do contrato, condições, etc."
+                        className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 resize-none"
+                        value={formItem.observacoesLocacao}
+                        onChange={e => setFormItem(p => ({ ...p, observacoesLocacao: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 pt-1 border-t border-gray-100">
@@ -1543,6 +1660,52 @@ export default function AlmoxarifadoPage() {
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Devolução de Locação ─────────────────────────────── */}
+      {modalDevolverLocacao && itemDevolverLocacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setModalDevolverLocacao(false)} />
+          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-amber-500" /> Devolver Equipamento Locado
+              </h2>
+              <button onClick={() => setModalDevolverLocacao(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm font-semibold text-amber-800">{itemDevolverLocacao.nome}</p>
+                {itemDevolverLocacao.fornecedorLocacao && (
+                  <p className="text-xs text-amber-600 mt-0.5">Fornecedor: {itemDevolverLocacao.fornecedorLocacao}</p>
+                )}
+                {itemDevolverLocacao.dataVencimentoLocacao && (
+                  <p className="text-xs text-amber-600">Vencimento: {new Date(itemDevolverLocacao.dataVencimentoLocacao + "T00:00:00").toLocaleDateString("pt-BR")}</p>
+                )}
+              </div>
+              <p className="text-sm text-gray-600">
+                Ao confirmar, o equipamento será marcado como devolvido ao fornecedor e o item será <strong>desativado</strong> do almoxarifado.
+              </p>
+              <div>
+                <label className="text-xs font-medium text-gray-700">Observação (opcional)</label>
+                <textarea rows={2} placeholder="Ex: Devolvido conforme contrato, sem avarias"
+                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 resize-none"
+                  value={obsDevolucaoLocacao}
+                  onChange={e => setObsDevolucaoLocacao(e.target.value)} />
+              </div>
+              <div className="flex gap-3 pt-1 border-t border-gray-100">
+                <button onClick={() => setModalDevolverLocacao(false)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Cancelar</button>
+                <button
+                  onClick={() => devolverLocacaoMut.mutate({ id: itemDevolverLocacao.id, observacao: obsDevolucaoLocacao || undefined })}
+                  disabled={devolverLocacaoMut.isPending}
+                  className="flex-1 h-9 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2">
+                  {devolverLocacaoMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Confirmar Devolução
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

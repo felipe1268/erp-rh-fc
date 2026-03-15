@@ -247,58 +247,123 @@ export const comprasRouter = router({
 
   criarItem: protectedProcedure
     .input(z.object({
-      companyId:        z.number(),
-      obraId:           z.number().nullable().optional(),
-      nome:             z.string().min(1),
-      unidade:          z.string().default("un"),
-      categoria:        z.string().optional(),
-      codigoInterno:    z.string().optional(),
-      quantidadeAtual:  z.number().optional(),
-      quantidadeMinima: z.number().optional(),
-      observacoes:      z.string().optional(),
-      fotoUrl:          z.string().optional(),
+      companyId:             z.number(),
+      obraId:                z.number().nullable().optional(),
+      nome:                  z.string().min(1),
+      unidade:               z.string().default("un"),
+      categoria:             z.string().optional(),
+      codigoInterno:         z.string().optional(),
+      quantidadeAtual:       z.number().optional(),
+      quantidadeMinima:      z.number().optional(),
+      observacoes:           z.string().optional(),
+      fotoUrl:               z.string().optional(),
+      origem:                z.enum(["proprio", "alugado"]).optional(),
+      fornecedorLocacao:     z.string().optional(),
+      dataInicioLocacao:     z.string().optional(),
+      dataVencimentoLocacao: z.string().optional(),
+      valorLocacaoMensal:    z.number().optional(),
+      observacoesLocacao:    z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       const [item] = await db.insert(almoxarifadoItens).values({
-        companyId:        input.companyId,
-        obraId:           input.obraId ?? null,
-        nome:             input.nome,
-        unidade:          input.unidade,
-        categoria:        input.categoria ?? null,
-        codigoInterno:    input.codigoInterno ?? null,
-        quantidadeAtual:  String(input.quantidadeAtual ?? 0),
-        quantidadeMinima: String(input.quantidadeMinima ?? 0),
-        observacoes:      input.observacoes ?? null,
-        fotoUrl:          input.fotoUrl ?? null,
-        ativo:            true,
-      }).returning();
+        companyId:             input.companyId,
+        obraId:                input.obraId ?? null,
+        nome:                  input.nome,
+        unidade:               input.unidade,
+        categoria:             input.categoria ?? null,
+        codigoInterno:         input.codigoInterno ?? null,
+        quantidadeAtual:       String(input.quantidadeAtual ?? 0),
+        quantidadeMinima:      String(input.quantidadeMinima ?? 0),
+        observacoes:           input.observacoes ?? null,
+        fotoUrl:               input.fotoUrl ?? null,
+        ativo:                 true,
+        origem:                input.origem ?? "proprio",
+        fornecedorLocacao:     input.fornecedorLocacao ?? null,
+        dataInicioLocacao:     input.dataInicioLocacao ?? null,
+        dataVencimentoLocacao: input.dataVencimentoLocacao ?? null,
+        valorLocacaoMensal:    input.valorLocacaoMensal != null ? String(input.valorLocacaoMensal) : null,
+        observacoesLocacao:    input.observacoesLocacao ?? null,
+      } as any).returning();
       return item;
     }),
 
   atualizarItem: protectedProcedure
     .input(z.object({
-      id:               z.number(),
-      nome:             z.string().optional(),
-      unidade:          z.string().optional(),
-      categoria:        z.string().optional(),
-      codigoInterno:    z.string().optional(),
-      quantidadeMinima: z.number().optional(),
-      observacoes:      z.string().optional(),
-      fotoUrl:          z.string().nullable().optional(),
+      id:                    z.number(),
+      nome:                  z.string().optional(),
+      unidade:               z.string().optional(),
+      categoria:             z.string().optional(),
+      codigoInterno:         z.string().optional(),
+      quantidadeMinima:      z.number().optional(),
+      observacoes:           z.string().optional(),
+      fotoUrl:               z.string().nullable().optional(),
+      origem:                z.enum(["proprio", "alugado"]).optional(),
+      fornecedorLocacao:     z.string().nullable().optional(),
+      dataInicioLocacao:     z.string().nullable().optional(),
+      dataVencimentoLocacao: z.string().nullable().optional(),
+      valorLocacaoMensal:    z.number().nullable().optional(),
+      observacoesLocacao:    z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       const { id, ...data } = input;
       const updates: any = { atualizadoEm: new Date().toISOString() };
-      if (data.nome !== undefined)             updates.nome = data.nome;
-      if (data.unidade !== undefined)          updates.unidade = data.unidade;
-      if (data.categoria !== undefined)        updates.categoria = data.categoria;
-      if (data.codigoInterno !== undefined)    updates.codigoInterno = data.codigoInterno;
-      if (data.quantidadeMinima !== undefined) updates.quantidadeMinima = String(data.quantidadeMinima);
-      if (data.observacoes !== undefined)      updates.observacoes = data.observacoes;
-      if ('fotoUrl' in data)                   updates.fotoUrl = data.fotoUrl;
+      if (data.nome !== undefined)                 updates.nome = data.nome;
+      if (data.unidade !== undefined)              updates.unidade = data.unidade;
+      if (data.categoria !== undefined)            updates.categoria = data.categoria;
+      if (data.codigoInterno !== undefined)        updates.codigoInterno = data.codigoInterno;
+      if (data.quantidadeMinima !== undefined)     updates.quantidadeMinima = String(data.quantidadeMinima);
+      if (data.observacoes !== undefined)          updates.observacoes = data.observacoes;
+      if ('fotoUrl' in data)                       updates.fotoUrl = data.fotoUrl;
+      if (data.origem !== undefined)               updates.origem = data.origem;
+      if ('fornecedorLocacao' in data)             updates.fornecedorLocacao = data.fornecedorLocacao;
+      if ('dataInicioLocacao' in data)             updates.dataInicioLocacao = data.dataInicioLocacao;
+      if ('dataVencimentoLocacao' in data)         updates.dataVencimentoLocacao = data.dataVencimentoLocacao;
+      if ('valorLocacaoMensal' in data)            updates.valorLocacaoMensal = data.valorLocacaoMensal != null ? String(data.valorLocacaoMensal) : null;
+      if ('observacoesLocacao' in data)            updates.observacoesLocacao = data.observacoesLocacao;
       await db.update(almoxarifadoItens).set(updates).where(eq(almoxarifadoItens.id, id));
+      return { success: true };
+    }),
+
+  getItensLocadosVencendo: protectedProcedure
+    .input(z.object({ companyId: z.number(), diasAlerta: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.select().from(almoxarifadoItens)
+        .where(and(
+          eq(almoxarifadoItens.companyId, input.companyId),
+          eq(almoxarifadoItens.ativo, true),
+          eq(almoxarifadoItens.origem, "alugado"),
+        ));
+      const diasAlerta = input.diasAlerta ?? 30;
+      const hoje = new Date();
+      return rows
+        .filter(i => i.dataVencimentoLocacao)
+        .map(i => {
+          const venc = new Date(i.dataVencimentoLocacao!);
+          const diffDias = Math.ceil((venc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+          return { ...i, diasParaVencimento: diffDias };
+        })
+        .filter(i => i.diasParaVencimento <= diasAlerta)
+        .sort((a, b) => a.diasParaVencimento - b.diasParaVencimento);
+    }),
+
+  devolverLocacaoItem: protectedProcedure
+    .input(z.object({ id: z.number(), observacao: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const obs = input.observacao ? `\nDevolução em ${new Date().toLocaleDateString("pt-BR")}: ${input.observacao}` : `\nDevolução em ${new Date().toLocaleDateString("pt-BR")}`;
+      await db.update(almoxarifadoItens).set({
+        origem: "proprio",
+        fornecedorLocacao: null,
+        dataInicioLocacao: null,
+        dataVencimentoLocacao: null,
+        valorLocacaoMensal: null,
+        observacoesLocacao: sql`COALESCE(observacoes_locacao, '') || ${obs}`,
+        ativo: false,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(almoxarifadoItens.id, input.id));
       return { success: true };
     }),
 

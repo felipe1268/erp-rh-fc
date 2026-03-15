@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 320,
+    titulo: "Almoxarifado — Controle de Equipamentos Locados (Alugado/Próprio)",
+    descricao: "Novo campo 'Origem' no cadastro de itens: 'Próprio da Empresa' ou 'Alugado / Locado'. Quando alugado, exibe campos extras: Fornecedor/Locadora, Data Início, Data de Vencimento, Valor Mensal e Observações do Contrato. Badge 'LOCADO' (laranja) aparece nos cards. Contador de vencimento direto no card (verde > 7d, laranja ≤ 7d, vermelho vencido). Alerta no header do módulo quando há locações a vencer em até 30 dias. Botão de devolução (✓) por card para registrar a devolução ao fornecedor e desativar o item. Modal de confirmação de devolução com campo de observação.",
+    tipo: "funcionalidade",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 22:00:00",
+  },
+  {
     version: 319,
     titulo: "Timeline — Empréstimos e Devoluções de ferramentas aparecem no Raio-X",
     descricao: "A timeline cronológica do funcionário agora exibe eventos de 'Empréstimo' (azul) quando o colaborador retira uma ferramenta/equipamento do almoxarifado, e 'Devolução' (cinza) quando devolve. Dados exibidos: item, quantidade, almoxarife responsável e data. Implementado via query em warehouseLoans.funcionarioId no endpoint raioX de controleDocumentos. Cor 'violet' adicionada ao mapa de cores da timeline no frontend.",
