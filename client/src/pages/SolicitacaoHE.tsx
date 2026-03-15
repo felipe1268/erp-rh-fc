@@ -18,7 +18,7 @@ import { fmtNum } from "@/lib/formatters";
 import {
   Clock, Plus, CheckCircle, XCircle, AlertTriangle, Send,
   Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2, History, Ban,
-  TrendingUp, DollarSign, HardHat,
+  TrendingUp, DollarSign, HardHat, Search, X,
 } from "lucide-react";
 
 type TabType = "solicitar" | "aprovacoes" | "historico";
@@ -53,6 +53,7 @@ export default function SolicitacaoHE() {
   const [adminObs, setAdminObs] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [buscaAtividade, setBuscaAtividade] = useState("");
 
   // Form state
   const [formData, setFormData] = useState({
@@ -358,7 +359,7 @@ export default function SolicitacaoHE() {
                 {/* Obra */}
                 <div className="space-y-1.5">
                   <Label>Obra (opcional)</Label>
-                  <Select value={formData.obraId} onValueChange={v => setFormData(p => ({ ...p, obraId: v, planejamentoAtividadeIds: [], funcionarioIds: [] }))}>
+                  <Select value={formData.obraId} onValueChange={v => { setFormData(p => ({ ...p, obraId: v, planejamentoAtividadeIds: [], funcionarioIds: [] })); setBuscaAtividade(""); }}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                     <SelectContent>
                       {(obrasQuery.data || []).map((o: any) => (
@@ -385,32 +386,80 @@ export default function SolicitacaoHE() {
                     <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando atividades...</div>
                   ) : !(atividadesQuery.data as any)?.atividades?.length ? (
                     <p className="text-xs text-amber-600 italic py-2">Esta obra não possui cronograma cadastrado no módulo Planejamento.</p>
-                  ) : (
-                    <div className="rounded-lg border bg-white max-h-52 overflow-y-auto divide-y">
-                      {((atividadesQuery.data as any)?.atividades || []).map((a: any) => {
-                        const sid = String(a.id);
-                        const checked = formData.planejamentoAtividadeIds.includes(sid);
-                        return (
-                          <label key={a.id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-blue-50 transition-colors ${checked ? "bg-blue-50" : ""}`}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => setFormData(p => ({
-                                ...p,
-                                planejamentoAtividadeIds: checked
-                                  ? p.planejamentoAtividadeIds.filter(id => id !== sid)
-                                  : [...p.planejamentoAtividadeIds, sid],
-                              }))}
-                              className="h-4 w-4 rounded border-gray-300 text-blue-600 accent-blue-600"
-                            />
-                            <span className="font-mono text-xs text-blue-700 shrink-0 w-12">{a.eapCodigo}</span>
-                            <span className={`text-sm flex-1 ${a.isGrupo ? "font-semibold text-slate-700" : "text-slate-600"}`}>{a.nome}</span>
-                            {a.isGrupo && <span className="text-xs text-muted-foreground shrink-0">grupo</span>}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
+                  ) : (() => {
+                    const todasAtvs: any[] = (atividadesQuery.data as any)?.atividades || [];
+                    const termo = buscaAtividade.toLowerCase().trim();
+                    const atvsVisiveis = termo
+                      ? todasAtvs.filter((a: any) =>
+                          a.nome?.toLowerCase().includes(termo) ||
+                          a.eapCodigo?.toLowerCase().includes(termo)
+                        )
+                      : todasAtvs;
+                    return (
+                      <div className="rounded-lg border bg-white overflow-hidden">
+                        {/* Campo de busca */}
+                        <div className="flex items-center gap-2 px-3 py-2 border-b bg-slate-50 sticky top-0">
+                          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <input
+                            type="text"
+                            value={buscaAtividade}
+                            onChange={e => setBuscaAtividade(e.target.value)}
+                            placeholder="Buscar atividade pelo nome ou código EAP..."
+                            className="flex-1 text-xs bg-transparent outline-none placeholder:text-muted-foreground"
+                          />
+                          {buscaAtividade && (
+                            <button onClick={() => setBuscaAtividade("")} className="text-muted-foreground hover:text-slate-700">
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                        {/* Lista com scroll */}
+                        <div className="max-h-48 overflow-y-auto divide-y">
+                          {atvsVisiveis.length === 0 ? (
+                            <p className="text-xs text-muted-foreground italic px-3 py-3">Nenhuma atividade encontrada.</p>
+                          ) : atvsVisiveis.map((a: any) => {
+                            const sid = String(a.id);
+                            const checked = formData.planejamentoAtividadeIds.includes(sid);
+                            return (
+                              <label key={a.id} className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors ${checked ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => setFormData(p => ({
+                                    ...p,
+                                    planejamentoAtividadeIds: checked
+                                      ? p.planejamentoAtividadeIds.filter(id => id !== sid)
+                                      : [...p.planejamentoAtividadeIds, sid],
+                                  }))}
+                                  className="h-4 w-4 rounded border-gray-300 text-blue-600 accent-blue-600 shrink-0"
+                                />
+                                <span className="font-mono text-xs text-blue-700 shrink-0 w-12">{a.eapCodigo}</span>
+                                <span className="text-sm flex-1 text-slate-700 leading-tight">{a.nome}</span>
+                                {a.avancoPct > 0 && (
+                                  <span className="text-xs text-slate-400 shrink-0">{a.avancoPct.toFixed(0)}%</span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {/* Rodapé com contagem */}
+                        <div className="px-3 py-1.5 bg-slate-50 border-t flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">
+                            {atvsVisiveis.length === todasAtvs.length
+                              ? `${todasAtvs.length} atividade${todasAtvs.length !== 1 ? "s" : ""} disponível${todasAtvs.length !== 1 ? "s" : ""}`
+                              : `${atvsVisiveis.length} de ${todasAtvs.length} encontrada${atvsVisiveis.length !== 1 ? "s" : ""}`
+                            }
+                            <span className="ml-1 text-amber-600 text-xs">(100% concluídas já ocultadas)</span>
+                          </span>
+                          {formData.planejamentoAtividadeIds.length > 0 && (
+                            <button onClick={() => setFormData(p => ({ ...p, planejamentoAtividadeIds: [] }))} className="text-xs text-red-500 hover:text-red-700">
+                              Limpar seleção
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {formData.planejamentoAtividadeIds.length > 0 && (
                     <p className="text-xs text-green-700 flex items-center gap-1">
                       <CheckCircle className="h-3 w-3" /> Custo será distribuído entre as {formData.planejamentoAtividadeIds.length} atividade{formData.planejamentoAtividadeIds.length > 1 ? "s" : ""} e acumulado no REFI ao aprovar.
