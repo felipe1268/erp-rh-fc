@@ -100,6 +100,8 @@ export const heSolicitacoesRouter = router({
         employeeName: employees.nomeCompleto,
         employeeCpf: employees.cpf,
         employeeFuncao: employees.funcao,
+        employeeSalarioBase: employees.salarioBase,
+        employeeValorHora: employees.valorHora,
       }).from(heSolicitacaoFuncionarios)
         .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
         .where(eq(heSolicitacaoFuncionarios.solicitacaoId, sol.id));
@@ -136,6 +138,8 @@ export const heSolicitacoesRouter = router({
       employeeName: employees.nomeCompleto,
       employeeCpf: employees.cpf,
       employeeFuncao: employees.funcao,
+      employeeSalarioBase: employees.salarioBase,
+      employeeValorHora: employees.valorHora,
     }).from(heSolicitacaoFuncionarios)
       .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
       .where(eq(heSolicitacaoFuncionarios.solicitacaoId, sol.id));
