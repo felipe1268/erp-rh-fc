@@ -724,7 +724,12 @@ export default function Cotacoes() {
                               const { saldo, hasMeta } = getItemSaldo(it);
                               return (
                                 <tr key={it.id} className="border-b border-gray-100 hover:bg-gray-50/60">
-                                  <td className="px-4 py-2 text-gray-900 text-xs border-r border-gray-100">{it.descricao}</td>
+                                  <td className="px-4 py-2 border-r border-gray-100">
+                                    <span className="text-gray-900 text-xs font-medium">{it.descricao}</span>
+                                    {it.eapPath && (
+                                      <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">{it.eapPath}</div>
+                                    )}
+                                  </td>
                                   <td className="px-3 py-2 text-gray-500 text-xs text-center border-r border-gray-100">{it.unidade || "un"}</td>
                                   {/* Meta cols */}
                                   <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-medium">

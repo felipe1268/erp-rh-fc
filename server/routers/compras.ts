@@ -1042,6 +1042,7 @@ Responda APENAS com um objeto JSON no formato:
           orcamentoId: orcamentoItens.orcamentoId,
           custoUnitTotal: orcamentoItens.custoUnitTotal,
           quantidade: orcamentoItens.quantidade,
+          eapCodigo: orcamentoItens.eapCodigo,
         }).from(orcamentoItens).where(inArray(orcamentoItens.id, orcItemIds));
       }
       // Buscar metaPercentual de cada orçamento vinculado
@@ -1054,21 +1055,58 @@ Responda APENAS com um objeto JSON no formato:
       const orcToMetaPerc: Record<number, number> = {};
       for (const o of orcData) orcToMetaPerc[o.id] = n(o.metaPercentual);
 
+      // Buscar descrições dos ancestrais para montar breadcrumb (EAP path)
+      // Ex: "02.02.01.92.93" → ancestrais: ["02", "02.02", "02.02.01", "02.02.01.92"]
+      const ancestorCodeSet = new Set<string>();
+      for (const o of orcItensData) {
+        if (!o.eapCodigo) continue;
+        const parts = String(o.eapCodigo).split(".");
+        for (let k = 1; k < parts.length; k++) {
+          ancestorCodeSet.add(parts.slice(0, k).join("."));
+        }
+      }
+      const ancestorCodes = [...ancestorCodeSet];
+      let ancestorItens: any[] = [];
+      if (ancestorCodes.length > 0 && orcIds.length > 0) {
+        ancestorItens = await db.select({
+          orcamentoId: orcamentoItens.orcamentoId,
+          eapCodigo: orcamentoItens.eapCodigo,
+          descricao: orcamentoItens.descricao,
+          nivel: orcamentoItens.nivel,
+        }).from(orcamentoItens)
+          .where(and(inArray(orcamentoItens.orcamentoId, orcIds), inArray(orcamentoItens.eapCodigo, ancestorCodes)));
+      }
+      // Mapa: `${orcamentoId}:${eapCodigo}` → descricao
+      const ancestorMap: Record<string, string> = {};
+      for (const a of ancestorItens) ancestorMap[`${a.orcamentoId}:${a.eapCodigo}`] = a.descricao;
+
       const scItemToOrcItem: Record<number, number> = {};
       for (const s of scItens) if (s.orcamentoItemId) scItemToOrcItem[s.id] = s.orcamentoItemId;
 
-      // Mapa: orcamentoItemId → metaUnitario calculado ao vivo
+      // Mapa: orcamentoItemId → { metaUnitario, eapPath }
       const orcItemToMeta: Record<number, number> = {};
+      const orcItemToPath: Record<number, string> = {};
       for (const o of orcItensData) {
         const metaPerc = orcToMetaPerc[o.orcamentoId] ?? 0;
-        const custoUnit = n(o.custoUnitTotal);
-        orcItemToMeta[o.id] = custoUnit * (1 - metaPerc);
+        orcItemToMeta[o.id] = n(o.custoUnitTotal) * (1 - metaPerc);
+        // Montar breadcrumb com até 3 níveis intermediários
+        if (o.eapCodigo) {
+          const parts = String(o.eapCodigo).split(".");
+          const labels: string[] = [];
+          for (let k = 1; k < parts.length; k++) {
+            const code = parts.slice(0, k).join(".");
+            const desc = ancestorMap[`${o.orcamentoId}:${code}`];
+            if (desc) labels.push(desc);
+          }
+          orcItemToPath[o.id] = labels.slice(0, 3).join(" › ");
+        }
       }
 
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
         const metaUnitario = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
-        return { ...it, metaUnitario };
+        const eapPath = orcId ? (orcItemToPath[orcId] ?? "") : "";
+        return { ...it, metaUnitario, eapPath };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};

@@ -1510,6 +1510,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 371,
+    titulo: "Mapa de Cotação — Contexto EAP (Tópico/Item) exibido abaixo da descrição",
+    descricao: "No Mapa de Cotação, cada item agora exibe abaixo da sua descrição o caminho hierárquico do orçamento (EAP path), por exemplo 'Estrutura › Vigas › Pilares', facilitando a análise do comprador que pode identificar de qual tópico e subitem cada material pertence sem precisar consultar o orçamento separadamente.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 370,
     titulo: "Mapa de Cotação — Meta calculada ao vivo pelo metaPercentual do Orçamento",
     descricao: "Corrigido valor incorreto na coluna Meta (Orçamento) do Mapa de Cotação. O sistema exibia o valor armazenado em metaUnitTotal, que podia estar desatualizado (ex: aprovado com metaPercentual=0, resultando no preço de custo). Agora busca custoUnitTotal do item de orçamento e o metaPercentual atual do orçamento, e calcula ao vivo: metaUnitario = custoUnitTotal × (1 − metaPercentual). Comportamento idêntico ao da visão Meta na tabela EAP do orçamento.",
