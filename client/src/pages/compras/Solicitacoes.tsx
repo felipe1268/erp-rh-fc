@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -64,6 +64,9 @@ export default function Solicitacoes() {
   const [form, setForm] = useState({
     titulo: "", departamento: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: ""
   });
+  const [obraSearch, setObraSearch] = useState("");
+  const [obraOpen, setObraOpen] = useState(false);
+  const obraRef = useRef<HTMLDivElement>(null);
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
   const [recebQtd, setRecebQtd] = useState<Record<number, string>>({});
 
@@ -97,6 +100,7 @@ export default function Solicitacoes() {
 
   function resetForm() {
     setForm({ titulo: "", departamento: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
+    setObraSearch(""); setObraOpen(false);
     setItens([newItem()]);
   }
 
@@ -121,6 +125,17 @@ export default function Solicitacoes() {
   const lista = q.data ?? [];
   const detalhe = detalheQ.data;
   const obras = obrasQ.data ?? [];
+  const obrasFiltradas = obras.filter((o: any) =>
+    `${o.codigo ?? ""} ${o.nome}`.toLowerCase().includes(obraSearch.toLowerCase())
+  );
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (obraRef.current && !obraRef.current.contains(e.target as Node)) setObraOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const kpis = useMemo(() => ({
     pendente: lista.filter(r => r.status === "pendente").length,
@@ -266,27 +281,47 @@ export default function Solicitacoes() {
               />
             </div>
 
-            {/* Linha 2: Obra */}
+            {/* Linha 2: Obra — combobox com busca */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
                 <Building2 className="h-3 w-3 text-amber-600" /> Obra / Centro de Custo *
               </label>
-              <Select value={form.obraId} onValueChange={v => setForm(p => ({ ...p, obraId: v }))}>
-                <SelectTrigger className="h-8 text-sm border-gray-300 bg-white text-gray-900">
-                  <SelectValue placeholder="Selecione a obra..." />
-                </SelectTrigger>
-                <SelectContent className="bg-white border-gray-200">
-                  {obrasQ.isLoading ? (
-                    <SelectItem value="none" disabled>Carregando...</SelectItem>
-                  ) : obras.length === 0 ? (
-                    <SelectItem value="none" disabled>Nenhuma obra ativa</SelectItem>
-                  ) : obras.map((o: any) => (
-                    <SelectItem key={o.id} value={String(o.id)}>
-                      {o.codigo ? `[${o.codigo}] ` : ""}{o.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative" ref={obraRef}>
+                <input
+                  className="w-full h-8 px-3 text-sm border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={obrasQ.isLoading ? "Carregando obras..." : "Digite para buscar a obra..."}
+                  value={obraOpen
+                    ? obraSearch
+                    : form.obraId
+                      ? (obras.find((o: any) => String(o.id) === form.obraId) as any)
+                          ? `${(obras.find((o: any) => String(o.id) === form.obraId) as any)?.codigo ? `[${(obras.find((o: any) => String(o.id) === form.obraId) as any).codigo}] ` : ""}${(obras.find((o: any) => String(o.id) === form.obraId) as any)?.nome}`
+                          : ""
+                      : ""
+                  }
+                  onFocus={() => { setObraOpen(true); setObraSearch(""); }}
+                  onChange={e => { setObraSearch(e.target.value); setObraOpen(true); }}
+                />
+                {obraOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
+                    {obrasFiltradas.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-gray-400">Nenhuma obra encontrada</div>
+                    ) : obrasFiltradas.map((o: any) => (
+                      <div
+                        key={o.id}
+                        className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-blue-50 hover:text-blue-700 ${String(o.id) === form.obraId ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-900"}`}
+                        onMouseDown={e => {
+                          e.preventDefault();
+                          setForm(p => ({ ...p, obraId: String(o.id) }));
+                          setObraSearch("");
+                          setObraOpen(false);
+                        }}
+                      >
+                        {o.codigo ? <span className="text-gray-400 mr-1">[{o.codigo}]</span> : null}{o.nome}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Linha 3: Setor | Data | Prioridade */}
