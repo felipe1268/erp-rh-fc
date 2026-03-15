@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -976,6 +976,10 @@ export const controleDocumentosRouter = router({
         .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
         .where(and(eq(epiDeliveries.employeeId, input.employeeId), isNull(epiDeliveries.deletedAt)))
         .orderBy(desc(epiDeliveries.dataEntrega));
+      // Empréstimos de ferramentas/equipamentos (Almoxarifado)
+      const empEmprestimos = await db.select().from(warehouseLoans)
+        .where(eq(warehouseLoans.funcionarioId, input.employeeId))
+        .orderBy(desc(warehouseLoans.dataEmprestimo));
       // VR - TODOS
       const empVR = await db.select().from(vrBenefits).where(eq(vrBenefits.employeeId, input.employeeId)).orderBy(desc(vrBenefits.mesReferencia));
       // Adiantamentos - TODOS
@@ -1055,6 +1059,11 @@ export const controleDocumentosRouter = router({
       empAcidentes.forEach(a => timeline.push({ data: a.dataAcidente, tipo: "Acidente", descricao: `${a.tipoAcidente} (${a.gravidade})${a.diasAfastamento ? ` — ${a.diasAfastamento} dias afastado` : ""}`, cor: "red", icone: "alert-circle" }));
       // EPIs
       empEpis.forEach(e => { if (e.dataEntrega) timeline.push({ data: e.dataEntrega, tipo: "EPI", descricao: `Entrega: ${e.nomeEpi || "EPI"}${e.ca ? ` (CA: ${e.ca})` : ""} — Qtd: ${e.quantidade || 1}`, cor: "teal", icone: "hard-hat" }); });
+      // Empréstimos de ferramentas/equipamentos
+      empEmprestimos.forEach(l => {
+        timeline.push({ data: l.dataEmprestimo, tipo: "Empréstimo", descricao: `Retirou: ${l.itemNome} — Qtd: ${parseFloat(l.quantidade as any) || 1} un${l.almoxarifeNome ? ` (Almoxarife: ${l.almoxarifeNome})` : ""}`, cor: "blue", icone: "wrench" });
+        if (l.dataDevolucao) timeline.push({ data: l.dataDevolucao, tipo: "Devolução", descricao: `Devolveu: ${l.itemNome}`, cor: "gray", icone: "check-circle" });
+      });
 
       // Ordenar timeline por data (mais recente primeiro)
       timeline.sort((a, b) => (b.data || "").localeCompare(a.data || ""));

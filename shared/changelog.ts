@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 319,
+    titulo: "Timeline — Empréstimos e Devoluções de ferramentas aparecem no Raio-X",
+    descricao: "A timeline cronológica do funcionário agora exibe eventos de 'Empréstimo' (azul) quando o colaborador retira uma ferramenta/equipamento do almoxarifado, e 'Devolução' (cinza) quando devolve. Dados exibidos: item, quantidade, almoxarife responsável e data. Implementado via query em warehouseLoans.funcionarioId no endpoint raioX de controleDocumentos. Cor 'violet' adicionada ao mapa de cores da timeline no frontend.",
+    tipo: "funcionalidade",
+    modulos: "Almoxarifado, Colaboradores",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 21:30:00",
+  },
+  {
     version: 318,
     titulo: "Almoxarifado — Acesso rápido a Registros (Entradas, Saídas, Emprestados, Cadastros)",
     descricao: "Adicionada linha secundária de botões abaixo das ações principais (ENTRADA, SAÍDA, EMPRESTAR, FECHAR DIA) com acesso rápido a: ↓ Entradas, ↑ Saídas, 🔧 Emprestados, 📦 Cadastros. Cada botão abre um modal de tela cheia 'Registros do Almoxarifado' com 4 abas: Entradas mostra todas as movimentações de entrada com item, quantidade, responsável e data; Saídas mostra saídas com obra de destino; Emprestados lista empréstimos em aberto com botão de devolução direta; Cadastros lista todos os itens cadastrados com foto e estoque atual.",
