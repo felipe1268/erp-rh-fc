@@ -1127,10 +1127,6 @@ export const planejamentoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const [existing] = await db.select({ id: planejamentoMedicaoConfig.id, bloqueado: planejamentoMedicaoConfig.bloqueado })
-        .from(planejamentoMedicaoConfig)
-        .where(eq(planejamentoMedicaoConfig.projetoId, input.projetoId))
-        .limit(1);
 
       const data = {
         projetoId:         input.projetoId,
@@ -1146,12 +1142,26 @@ export const planejamentoRouter = router({
         atualizadoEm:      new Date(),
       };
 
-      if (existing) {
-        await db.update(planejamentoMedicaoConfig).set(data)
-          .where(eq(planejamentoMedicaoConfig.id, existing.id));
-      } else {
-        await db.insert(planejamentoMedicaoConfig).values(data);
-      }
+      const updateData = {
+        tipoMedicao:       data.tipoMedicao,
+        diaCorte:          data.diaCorte,
+        entrada:           data.entrada,
+        numeroParcelas:    data.numeroParcelas,
+        inicioFaturamento: data.inicioFaturamento,
+        sinalPct:          data.sinalPct,
+        retencaoPct:       data.retencaoPct,
+        dataInicioObra:    data.dataInicioObra,
+        bloqueado:         false,
+        atualizadoEm:      data.atualizadoEm,
+      };
+
+      await db.insert(planejamentoMedicaoConfig)
+        .values(data)
+        .onConflictDoUpdate({
+          target: planejamentoMedicaoConfig.projetoId,
+          set: updateData,
+        });
+
       return { success: true };
     }),
 

@@ -1,0 +1,1157 @@
+# 🏗️ SCRIPT DEFINITIVO — MÓDULO ALMOXARIFADO + PWA
+# ERP Gestão Integrada — FC Engenharia
+# 
+# ⚠️ LEIA ANTES DE COMEÇAR:
+# - Este script NÃO altera nenhum módulo existente, exceto onde explicitamente indicado
+# - Cada passo tem validação antes de prosseguir
+# - Se algo falhar, pare e reporte o erro antes de continuar
+# - Execute EXATAMENTE na ordem indicada
+
+---
+
+## CONTEXTO DO PROJETO
+
+**Stack:** React 19, TypeScript, tRPC v11, Drizzle ORM, MySQL, shadcn/ui, Tailwind, Wouter (roteamento)
+**Arquitetura:**
+- Routers tRPC → `server/routers/[nome].ts` + registrado em `server/routers.ts`
+- Páginas → `client/src/pages/[Nome].tsx`
+- Rotas → `client/src/App.tsx` (usa Wouter `<Route>`)
+- Menu lateral → `client/src/components/DashboardLayout.tsx` (objeto `MODULE_SECTIONS`)
+- Schema banco → `drizzle/schema.ts`
+- Jobs automáticos → `server/services/[nome].ts` + chamado em `server/_core/index.ts`
+- index.html → `client/index.html`
+- vite.config → `vite.config.ts` (tem plugin customizado da Manus — NÃO remover)
+
+**O módulo almoxarifado já existe como placeholder no ModuleHub:**
+```typescript
+// client/src/pages/ModuleHub.tsx — linha ~188
+{ id: "almoxarifado", title: "Almoxarifado", subtitle: "Estoque de Obra", active: false, path: "" }
+```
+Vamos ativar este módulo e criar todas as páginas.
+
+---
+
+## PASSO 1 — SCHEMA DO BANCO (drizzle/schema.ts)
+
+Adicionar as seguintes tabelas NO FINAL do arquivo `drizzle/schema.ts`, antes do último `export`:
+
+```typescript
+// ============================================================
+// MÓDULO ALMOXARIFADO — Adicionado em [data]
+// ============================================================
+
+// 1. Depósitos (ex: "Insumos", "Ferramentas", "EPIs")
+export const warehouseDepots = mysqlTable("warehouse_depots", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  descricao: text(),
+  ativo: tinyint().default(1).notNull(),
+  criadoPorId: int("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_wd_company").on(t.companyId)]);
+
+// 2. Itens do almoxarifado
+export const warehouseItems = mysqlTable("warehouse_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  depotId: int("depot_id").notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  codigo: varchar({ length: 100 }),
+  unidade: varchar({ length: 20 }).notNull().default("un"),
+  categoria: varchar({ length: 100 }),
+  quantidadeAtual: decimal("quantidade_atual", { precision: 10, scale: 3 }).default("0").notNull(),
+  quantidadeMinima: decimal("quantidade_minima", { precision: 10, scale: 3 }).default("0").notNull(),
+  valorUnitario: decimal("valor_unitario", { precision: 10, scale: 2 }),
+  fotoUrl: text("foto_url"),
+  observacoes: text(),
+  ativo: tinyint().default(1).notNull(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_wi_company").on(t.companyId),
+  index("idx_wi_depot").on(t.depotId),
+]);
+
+// 3. Itens patrimoniais (com número de série individual)
+export const warehouseAssetItems = mysqlTable("warehouse_asset_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  depotId: int("depot_id").notNull(),
+  numeroSerie: varchar("numero_serie", { length: 100 }),
+  numeroPatrimonio: varchar("numero_patrimonio", { length: 50 }),
+  qrCodeUrl: text("qr_code_url"),
+  status: mysqlEnum(['disponivel','emprestado','manutencao','perdido','baixado']).default('disponivel').notNull(),
+  observacoes: text(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_wai_company").on(t.companyId),
+  index("idx_wai_item").on(t.itemId),
+]);
+
+// 4. Movimentações (toda entrada e saída)
+export const warehouseMovements = mysqlTable("warehouse_movements", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  depotId: int("depot_id").notNull(),
+  tipo: mysqlEnum(['entrada','saida','ajuste','transferencia_saida','transferencia_entrada']).notNull(),
+  quantidade: decimal({ precision: 10, scale: 3 }).notNull(),
+  quantidadeAntes: decimal("quantidade_antes", { precision: 10, scale: 3 }).notNull(),
+  quantidadeDepois: decimal("quantidade_depois", { precision: 10, scale: 3 }).notNull(),
+  origemTipo: mysqlEnum("origem_tipo", ['recebimento_oc','requisicao_obra','ajuste_inventario','entrada_manual','transferencia','emprestimo','devolucao']),
+  ordemCompraId: int("ordem_compra_id"),
+  recebimentoId: int("recebimento_id"),
+  obraId: int("obra_id"),
+  transferId: int("transfer_id"),
+  loanId: int("loan_id"),
+  motivo: text(),
+  notaFiscal: varchar("nota_fiscal", { length: 100 }),
+  notaFiscalUrl: text("nota_fiscal_url"),
+  usuarioId: int("usuario_id"),
+  usuarioNome: varchar("usuario_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [
+  index("idx_wm_company").on(t.companyId),
+  index("idx_wm_item").on(t.itemId),
+  index("idx_wm_obra").on(t.obraId),
+  index("idx_wm_created").on(t.createdAt),
+]);
+
+// 5. Estoque por obra
+export const warehouseObraStock = mysqlTable("warehouse_obra_stock", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  depotId: int("depot_id").notNull(),
+  obraId: int("obra_id").notNull(),
+  quantidadeAtual: decimal("quantidade_atual", { precision: 10, scale: 3 }).default("0").notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_wos_company").on(t.companyId),
+  index("idx_wos_item_obra").on(t.itemId, t.obraId),
+]);
+
+// 6. Transferências entre central e obras
+export const warehouseTransfers = mysqlTable("warehouse_transfers", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  depotId: int("depot_id").notNull(),
+  quantidade: decimal({ precision: 10, scale: 3 }).notNull(),
+  origemTipo: mysqlEnum("origem_tipo", ['central','obra']).notNull(),
+  origemObraId: int("origem_obra_id"),
+  destinoTipo: mysqlEnum("destino_tipo", ['central','obra']).notNull(),
+  destinoObraId: int("destino_obra_id"),
+  motivo: text(),
+  status: mysqlEnum(['confirmada','cancelada']).default('confirmada').notNull(),
+  solicitanteId: int("solicitante_id"),
+  solicitanteNome: varchar("solicitante_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_wt_company").on(t.companyId)]);
+
+// 7. Empréstimos (comodato diário de ferramentas)
+export const warehouseLoans = mysqlTable("warehouse_loans", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  obraId: int("obra_id"),
+  itemId: int("item_id").notNull(),
+  itemNome: varchar("item_nome", { length: 255 }).notNull(),
+  assetItemId: int("asset_item_id"),
+  numeroPatrimonio: varchar("numero_patrimonio", { length: 50 }),
+  quantidade: decimal({ precision: 10, scale: 3 }).default("1").notNull(),
+  funcionarioId: int("funcionario_id"),
+  funcionarioCodigo: varchar("funcionario_codigo", { length: 20 }),
+  funcionarioNome: varchar("funcionario_nome", { length: 255 }).notNull(),
+  dataEmprestimo: date("data_emprestimo", { mode: 'string' }).notNull(),
+  horaEmprestimo: varchar("hora_emprestimo", { length: 5 }),
+  dataDevolucao: date("data_devolucao", { mode: 'string' }),
+  horaDevolucao: varchar("hora_devolucao", { length: 5 }),
+  status: mysqlEnum(['emprestado','devolvido','pendente','perdido']).default('emprestado').notNull(),
+  observacoes: text(),
+  almoxarifeId: int("almoxarife_id"),
+  almoxarifeNome: varchar("almoxarife_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [
+  index("idx_wl_company").on(t.companyId),
+  index("idx_wl_funcionario").on(t.funcionarioId),
+  index("idx_wl_data").on(t.dataEmprestimo),
+  index("idx_wl_status").on(t.status),
+]);
+
+// 8. Manutenção preventiva
+export const warehouseMaintenance = mysqlTable("warehouse_maintenance", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  assetItemId: int("asset_item_id"),
+  tipo: mysqlEnum(['preventiva','corretiva']).default('preventiva').notNull(),
+  intervaloMeses: int("intervalo_meses").default(3).notNull(),
+  ultimaManutencao: date("ultima_manutencao", { mode: 'string' }),
+  proximaManutencao: date("proxima_manutencao", { mode: 'string' }),
+  status: mysqlEnum(['ok','vencendo','vencida','em_manutencao']).default('ok').notNull(),
+  responsavel: varchar({ length: 255 }),
+  observacoes: text(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_wmaint_company").on(t.companyId)]);
+
+// 9. Solicitações de ajuste de inventário (aprovação dupla)
+export const warehouseAdjustmentRequests = mysqlTable("warehouse_adjustment_requests", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  quantidadeAtual: decimal("quantidade_atual", { precision: 10, scale: 3 }).notNull(),
+  quantidadeSolicitada: decimal("quantidade_solicitada", { precision: 10, scale: 3 }).notNull(),
+  diferenca: decimal({ precision: 10, scale: 3 }).notNull(),
+  motivo: text().notNull(),
+  status: mysqlEnum(['pendente','aprovado','recusado']).default('pendente').notNull(),
+  solicitanteId: int("solicitante_id"),
+  solicitanteNome: varchar("solicitante_nome", { length: 255 }),
+  aprovadorId: int("aprovador_id"),
+  aprovadorNome: varchar("aprovador_nome", { length: 255 }),
+  motivoRecusa: text("motivo_recusa"),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  resolvidoEm: timestamp("resolvido_em", { mode: 'string' }),
+}, (t) => [index("idx_war_company").on(t.companyId)]);
+
+// 10. Configuração do inventário semanal
+export const warehouseInventoryConfig = mysqlTable("warehouse_inventory_config", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  depotId: int("depot_id").notNull(),
+  diaSemana: mysqlEnum("dia_semana", ['segunda','terca','quarta','quinta','sexta','sabado','domingo']).default('segunda').notNull(),
+  horarioAlerta: varchar("horario_alerta", { length: 5 }).default('07:00').notNull(),
+  prazoHoras: int("prazo_horas").default(24).notNull(),
+  ativo: tinyint().default(1).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_wic_company").on(t.companyId)]);
+
+// 11. Sessões de inventário semanal
+export const warehouseInventorySessions = mysqlTable("warehouse_inventory_sessions", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  depotId: int("depot_id").notNull(),
+  semanaRef: varchar("semana_ref", { length: 10 }).notNull(), // ex: "2026-W11"
+  status: mysqlEnum(['pendente','em_andamento','concluido','expirado']).default('pendente').notNull(),
+  totalItens: int("total_itens").default(0).notNull(),
+  itensConferidos: int("itens_conferidos").default(0).notNull(),
+  itensDivergentes: int("itens_divergentes").default(0).notNull(),
+  almoxarifeId: int("almoxarife_id"),
+  almoxarifeNome: varchar("almoxarife_nome", { length: 255 }),
+  iniciadoEm: timestamp("iniciado_em", { mode: 'string' }),
+  concluidoEm: timestamp("concluido_em", { mode: 'string' }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_wis_company").on(t.companyId)]);
+
+// 12. Itens de cada sessão de inventário
+export const warehouseInventorySessionItems = mysqlTable("warehouse_inventory_session_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  sessionId: int("session_id").notNull(),
+  itemId: int("item_id").notNull(),
+  quantidadeSistema: decimal("quantidade_sistema", { precision: 10, scale: 3 }).notNull(),
+  quantidadeFisica: decimal("quantidade_fisica", { precision: 10, scale: 3 }),
+  diferenca: decimal({ precision: 10, scale: 3 }),
+  status: mysqlEnum(['pendente','conferido','divergente']).default('pendente').notNull(),
+  observacoes: text(),
+  conferidoEm: timestamp("conferido_em", { mode: 'string' }),
+}, (t) => [index("idx_wisi_session").on(t.sessionId)]);
+```
+
+**Após adicionar as tabelas, rodar:**
+```bash
+pnpm db:push
+```
+✅ Verificar se rodou sem erros antes de continuar.
+
+---
+
+## PASSO 2 — ROUTER BACKEND (server/routers/warehouse.ts)
+
+Criar o arquivo `server/routers/warehouse.ts` com os seguintes endpoints:
+
+```typescript
+// server/routers/warehouse.ts
+import { z } from "zod";
+import { router, protectedProcedure } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
+import { getDb } from "../db";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import {
+  warehouseDepots, warehouseItems, warehouseAssetItems,
+  warehouseMovements, warehouseObraStock, warehouseTransfers,
+  warehouseLoans, warehouseMaintenance, warehouseAdjustmentRequests,
+  warehouseInventoryConfig, warehouseInventorySessions, warehouseInventorySessionItems,
+  employees, obras, warnings,
+} from "../../drizzle/schema";
+
+const isAdmin = (ctx: any) =>
+  ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
+
+export const warehouseRouter = router({
+
+  // ── DEPÓSITOS ──────────────────────────────────────────
+  listDepots: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(warehouseDepots)
+        .where(and(eq(warehouseDepots.companyId, input.companyId), eq(warehouseDepots.ativo, 1)));
+    }),
+
+  createDepot: protectedProcedure
+    .input(z.object({ companyId: z.number(), nome: z.string().min(1), descricao: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!isAdmin(ctx)) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.insert(warehouseDepots).values({
+        companyId: input.companyId, nome: input.nome,
+        descricao: input.descricao || null,
+        criadoPorId: ctx.user.id, criadoPorNome: ctx.user.name || '',
+      });
+      return { success: true };
+    }),
+
+  // ── ITENS ──────────────────────────────────────────────
+  listItems: protectedProcedure
+    .input(z.object({ companyId: z.number(), depotId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const conditions = [eq(warehouseItems.companyId, input.companyId), eq(warehouseItems.ativo, 1)];
+      if (input.depotId) conditions.push(eq(warehouseItems.depotId, input.depotId));
+      return db.select().from(warehouseItems).where(and(...conditions)).orderBy(warehouseItems.nome);
+    }),
+
+  createItem: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), depotId: z.number(),
+      nome: z.string().min(1), codigo: z.string().optional(),
+      unidade: z.string().default("un"), categoria: z.string().optional(),
+      quantidadeAtual: z.number().default(0),
+      quantidadeMinima: z.number().default(0),
+      valorUnitario: z.number().optional(),
+      fotoUrl: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!isAdmin(ctx)) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.insert(warehouseItems).values({ ...input } as any);
+      return { success: true };
+    }),
+
+  updateItem: protectedProcedure
+    .input(z.object({
+      id: z.number(), nome: z.string().optional(), unidade: z.string().optional(),
+      categoria: z.string().optional(), quantidadeMinima: z.number().optional(),
+      valorUnitario: z.number().optional(), fotoUrl: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!isAdmin(ctx)) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { id, ...data } = input;
+      await db.update(warehouseItems).set(data as any).where(eq(warehouseItems.id, id));
+      return { success: true };
+    }),
+
+  // ── VERIFICAR ESTOQUE (para módulo de Compras) ─────────
+  checkStock: protectedProcedure
+    .input(z.object({ companyId: z.number(), itemNome: z.string(), quantidade: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { disponivel: 0, status: 'sem_estoque' as const };
+      const items = await db.select().from(warehouseItems)
+        .where(and(
+          eq(warehouseItems.companyId, input.companyId),
+          sql`LOWER(${warehouseItems.nome}) LIKE LOWER(${`%${input.itemNome}%`})`,
+          eq(warehouseItems.ativo, 1)
+        ));
+      const total = items.reduce((s, i) => s + parseFloat(String(i.quantidadeAtual) || '0'), 0);
+      if (total >= input.quantidade) return { disponivel: total, status: 'bloqueado' as const };
+      if (total > 0) return { disponivel: total, status: 'parcial' as const };
+      return { disponivel: 0, status: 'sem_estoque' as const };
+    }),
+
+  // ── ENTRADA DE MATERIAL ────────────────────────────────
+  registerEntry: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), itemId: z.number(),
+      quantidade: z.number().positive(),
+      motivo: z.string().optional(),
+      notaFiscal: z.string().optional(),
+      notaFiscalUrl: z.string().optional(),
+      ordemCompraId: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [item] = await db.select().from(warehouseItems).where(eq(warehouseItems.id, input.itemId));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
+      const antes = parseFloat(String(item.quantidadeAtual) || '0');
+      const depois = antes + input.quantidade;
+      await db.update(warehouseItems)
+        .set({ quantidadeAtual: String(depois) } as any)
+        .where(eq(warehouseItems.id, input.itemId));
+      await db.insert(warehouseMovements).values({
+        companyId: input.companyId, itemId: input.itemId, depotId: item.depotId,
+        tipo: 'entrada', quantidade: String(input.quantidade),
+        quantidadeAntes: String(antes), quantidadeDepois: String(depois),
+        origemTipo: input.ordemCompraId ? 'recebimento_oc' : 'entrada_manual',
+        ordemCompraId: input.ordemCompraId || null,
+        motivo: input.motivo || null,
+        notaFiscal: input.notaFiscal || null,
+        notaFiscalUrl: input.notaFiscalUrl || null,
+        usuarioId: ctx.user.id, usuarioNome: ctx.user.name || '',
+      } as any);
+      return { success: true, quantidadeAtual: depois };
+    }),
+
+  // ── SAÍDA DE MATERIAL ──────────────────────────────────
+  registerExit: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), itemId: z.number(),
+      quantidade: z.number().positive(),
+      obraId: z.number().optional(),
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [item] = await db.select().from(warehouseItems).where(eq(warehouseItems.id, input.itemId));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      const antes = parseFloat(String(item.quantidadeAtual) || '0');
+      if (antes < input.quantidade) throw new TRPCError({ code: "BAD_REQUEST", message: "Estoque insuficiente" });
+      const depois = antes - input.quantidade;
+      await db.update(warehouseItems)
+        .set({ quantidadeAtual: String(depois) } as any)
+        .where(eq(warehouseItems.id, input.itemId));
+      await db.insert(warehouseMovements).values({
+        companyId: input.companyId, itemId: input.itemId, depotId: item.depotId,
+        tipo: 'saida', quantidade: String(input.quantidade),
+        quantidadeAntes: String(antes), quantidadeDepois: String(depois),
+        origemTipo: input.obraId ? 'requisicao_obra' : 'entrada_manual',
+        obraId: input.obraId || null,
+        motivo: input.motivo || null,
+        usuarioId: ctx.user.id, usuarioNome: ctx.user.name || '',
+      } as any);
+      return { success: true, quantidadeAtual: depois };
+    }),
+
+  // ── HISTÓRICO DE MOVIMENTAÇÕES ─────────────────────────
+  listMovements: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      itemId: z.number().optional(),
+      depotId: z.number().optional(),
+      limit: z.number().default(100),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const conditions = [eq(warehouseMovements.companyId, input.companyId)];
+      if (input.itemId) conditions.push(eq(warehouseMovements.itemId, input.itemId));
+      if (input.depotId) conditions.push(eq(warehouseMovements.depotId, input.depotId));
+      return db.select().from(warehouseMovements)
+        .where(and(...conditions))
+        .orderBy(desc(warehouseMovements.createdAt))
+        .limit(input.limit);
+    }),
+
+  // ── EMPRÉSTIMO (COMODATO DIÁRIO) ───────────────────────
+  registerLoan: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), itemId: z.number(), obraId: z.number().optional(),
+      quantidade: z.number().positive().default(1),
+      funcionarioCodigo: z.string(),
+      assetItemId: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Buscar funcionário pelo código JFCxxxx
+      const [funcionario] = await db.select().from(employees)
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          eq(employees.codigoInterno, input.funcionarioCodigo)
+        )).limit(1);
+      if (!funcionario) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+      const [item] = await db.select().from(warehouseItems).where(eq(warehouseItems.id, input.itemId));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
+      const hoje = new Date().toISOString().split('T')[0];
+      const hora = new Date().toTimeString().slice(0, 5);
+      await db.insert(warehouseLoans).values({
+        companyId: input.companyId, obraId: input.obraId || null,
+        itemId: input.itemId, itemNome: item.nome,
+        assetItemId: input.assetItemId || null,
+        quantidade: String(input.quantidade),
+        funcionarioId: funcionario.id,
+        funcionarioCodigo: input.funcionarioCodigo,
+        funcionarioNome: funcionario.nomeCompleto || funcionario.nome || '',
+        dataEmprestimo: hoje, horaEmprestimo: hora,
+        almoxarifeId: ctx.user.id, almoxarifeNome: ctx.user.name || '',
+      } as any);
+      // Descontar do estoque
+      await db.update(warehouseItems)
+        .set({ quantidadeAtual: sql`GREATEST(${warehouseItems.quantidadeAtual} - ${input.quantidade}, 0)` } as any)
+        .where(eq(warehouseItems.id, input.itemId));
+      return { success: true, funcionarioNome: funcionario.nomeCompleto || funcionario.nome };
+    }),
+
+  // Listar empréstimos do dia
+  listTodayLoans: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const hoje = new Date().toISOString().split('T')[0];
+      const conditions = [
+        eq(warehouseLoans.companyId, input.companyId),
+        eq(warehouseLoans.dataEmprestimo, hoje),
+      ];
+      if (input.obraId) conditions.push(eq(warehouseLoans.obraId, input.obraId));
+      return db.select().from(warehouseLoans).where(and(...conditions))
+        .orderBy(desc(warehouseLoans.createdAt));
+    }),
+
+  // Devolver item
+  returnLoan: protectedProcedure
+    .input(z.object({ loanId: z.number() }))
+    .mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const hoje = new Date().toISOString().split('T')[0];
+      const hora = new Date().toTimeString().slice(0, 5);
+      // Buscar empréstimo
+      const [loan] = await db.select().from(warehouseLoans).where(eq(warehouseLoans.id, ctx.user.id));
+      // Marcar como devolvido
+      await db.update(warehouseLoans).set({
+        status: 'devolvido', dataDevolucao: hoje, horaDevolucao: hora,
+      } as any).where(eq(warehouseLoans.id, ctx.user.id));
+      return { success: true };
+    }),
+
+  returnLoanById: protectedProcedure
+    .input(z.object({ loanId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const hoje = new Date().toISOString().split('T')[0];
+      const hora = new Date().toTimeString().slice(0, 5);
+      const [loan] = await db.select().from(warehouseLoans)
+        .where(eq(warehouseLoans.id, input.loanId));
+      if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
+      await db.update(warehouseLoans).set({
+        status: 'devolvido', dataDevolucao: hoje, horaDevolucao: hora,
+      } as any).where(eq(warehouseLoans.id, input.loanId));
+      // Devolver ao estoque
+      await db.update(warehouseItems)
+        .set({ quantidadeAtual: sql`${warehouseItems.quantidadeAtual} + ${loan.quantidade}` } as any)
+        .where(eq(warehouseItems.id, loan.itemId));
+      return { success: true };
+    }),
+
+  // Marcar como perdido
+  markLoanLost: protectedProcedure
+    .input(z.object({ loanId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!isAdmin(ctx)) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [loan] = await db.select().from(warehouseLoans)
+        .where(eq(warehouseLoans.id, input.loanId));
+      if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
+      await db.update(warehouseLoans)
+        .set({ status: 'perdido' } as any)
+        .where(eq(warehouseLoans.id, input.loanId));
+      // Criar advertência automática se funcionário vinculado
+      if (loan.funcionarioId) {
+        await db.insert(warnings).values({
+          companyId: loan.companyId,
+          employeeId: loan.funcionarioId,
+          tipoAdvertencia: 'Advertencia',
+          motivo: `Ferramenta não devolvida: ${loan.itemNome}${loan.numeroPatrimonio ? ` (${loan.numeroPatrimonio})` : ''} — emprestada em ${loan.dataEmprestimo}`,
+          dataOcorrencia: new Date().toISOString().split('T')[0],
+          aplicadoPor: ctx.user.name || 'Sistema',
+          sequencia: 1,
+        } as any);
+      }
+      return { success: true };
+    }),
+
+  // ── TRANSFERÊNCIAS ─────────────────────────────────────
+  registerTransfer: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), itemId: z.number(),
+      quantidade: z.number().positive(),
+      origemTipo: z.enum(['central','obra']),
+      origemObraId: z.number().optional(),
+      destinoTipo: z.enum(['central','obra']),
+      destinoObraId: z.number().optional(),
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [item] = await db.select().from(warehouseItems).where(eq(warehouseItems.id, input.itemId));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      const antes = parseFloat(String(item.quantidadeAtual) || '0');
+      if (input.origemTipo === 'central' && antes < input.quantidade)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Estoque central insuficiente" });
+      const depois = input.origemTipo === 'central' ? antes - input.quantidade : antes + input.quantidade;
+      await db.update(warehouseItems)
+        .set({ quantidadeAtual: String(depois) } as any)
+        .where(eq(warehouseItems.id, input.itemId));
+      await db.insert(warehouseTransfers).values({
+        ...input, quantidade: String(input.quantidade),
+        solicitanteId: ctx.user.id, solicitanteNome: ctx.user.name || '',
+      } as any);
+      return { success: true };
+    }),
+
+  // ── INVENTÁRIO SEMANAL ─────────────────────────────────
+  getInventorySession: protectedProcedure
+    .input(z.object({ companyId: z.number(), depotId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Semana atual
+      const now = new Date();
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      const weekNum = Math.ceil(((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
+      const semanaRef = `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+      const [session] = await db.select().from(warehouseInventorySessions)
+        .where(and(
+          eq(warehouseInventorySessions.companyId, input.companyId),
+          eq(warehouseInventorySessions.depotId, input.depotId),
+          eq(warehouseInventorySessions.semanaRef, semanaRef),
+        )).limit(1);
+      return session || null;
+    }),
+
+  startInventorySession: protectedProcedure
+    .input(z.object({ companyId: z.number(), depotId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const now = new Date();
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      const weekNum = Math.ceil(((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
+      const semanaRef = `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+      const items = await db.select().from(warehouseItems)
+        .where(and(eq(warehouseItems.companyId, input.companyId), eq(warehouseItems.depotId, input.depotId), eq(warehouseItems.ativo, 1)));
+      const [result] = await db.insert(warehouseInventorySessions).values({
+        companyId: input.companyId, depotId: input.depotId,
+        semanaRef, status: 'em_andamento',
+        totalItens: items.length, iniciadoEm: new Date().toISOString(),
+        almoxarifeId: ctx.user.id, almoxarifeNome: ctx.user.name || '',
+      } as any);
+      const sessionId = Number(result.insertId);
+      // Criar itens da sessão
+      for (const item of items) {
+        await db.insert(warehouseInventorySessionItems).values({
+          sessionId, itemId: item.id,
+          quantidadeSistema: item.quantidadeAtual, status: 'pendente',
+        } as any);
+      }
+      return { sessionId };
+    }),
+
+  confirmInventoryItem: protectedProcedure
+    .input(z.object({
+      sessionItemId: z.number(),
+      quantidadeFisica: z.number(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [sessionItem] = await db.select().from(warehouseInventorySessionItems)
+        .where(eq(warehouseInventorySessionItems.id, input.sessionItemId));
+      if (!sessionItem) throw new TRPCError({ code: "NOT_FOUND" });
+      const sistemaQtd = parseFloat(String(sessionItem.quantidadeSistema) || '0');
+      const diferenca = input.quantidadeFisica - sistemaQtd;
+      const status = Math.abs(diferenca) < 0.001 ? 'conferido' : 'divergente';
+      await db.update(warehouseInventorySessionItems).set({
+        quantidadeFisica: String(input.quantidadeFisica),
+        diferenca: String(diferenca),
+        status, conferidoEm: new Date().toISOString(),
+        observacoes: input.observacoes || null,
+      } as any).where(eq(warehouseInventorySessionItems.id, input.sessionItemId));
+      return { status, diferenca };
+    }),
+
+  // ── DASHBOARD ─────────────────────────────────────────
+  getDashboard: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const items = await db.select().from(warehouseItems)
+        .where(and(eq(warehouseItems.companyId, input.companyId), eq(warehouseItems.ativo, 1)));
+      const criticos = items.filter(i =>
+        parseFloat(String(i.quantidadeAtual) || '0') <= parseFloat(String(i.quantidadeMinima) || '0') &&
+        parseFloat(String(i.quantidadeMinima) || '0') > 0
+      );
+      const valorTotal = items.reduce((s, i) =>
+        s + parseFloat(String(i.quantidadeAtual) || '0') * parseFloat(String(i.valorUnitario) || '0'), 0);
+      const hoje = new Date().toISOString().split('T')[0];
+      const emprestimosHoje = await db.select().from(warehouseLoans)
+        .where(and(eq(warehouseLoans.companyId, input.companyId), eq(warehouseLoans.dataEmprestimo, hoje)));
+      const pendentes = emprestimosHoje.filter(e => e.status === 'emprestado' || e.status === 'pendente');
+      return {
+        totalItens: items.length,
+        itensCriticos: criticos.length,
+        valorTotalEstoque: valorTotal,
+        emprestimosHoje: emprestimosHoje.length,
+        pendentesDevolucao: pendentes.length,
+        itensCriticosList: criticos.slice(0, 5).map(i => ({
+          id: i.id, nome: i.nome,
+          quantidadeAtual: parseFloat(String(i.quantidadeAtual) || '0'),
+          quantidadeMinima: parseFloat(String(i.quantidadeMinima) || '0'),
+        })),
+      };
+    }),
+});
+```
+
+---
+
+## PASSO 3 — REGISTRAR O ROUTER (server/routers.ts)
+
+Adicionar no arquivo `server/routers.ts`:
+
+**No bloco de imports (junto com os outros imports de routers):**
+```typescript
+import { warehouseRouter } from "./routers/warehouse";
+```
+
+**No objeto `appRouter` (junto com os outros routers):**
+```typescript
+warehouse: warehouseRouter,
+```
+
+---
+
+## PASSO 4 — JOB DO INVENTÁRIO SEMANAL (server/services/warehouseInventoryJob.ts)
+
+Criar o arquivo `server/services/warehouseInventoryJob.ts`:
+
+```typescript
+import { getDb } from "../db";
+import { warehouseInventoryConfig, warehouseInventorySessions, warehouseItems } from "../../drizzle/schema";
+import { eq, and } from "drizzle-orm";
+
+export async function startInventoryJob() {
+  // Verificar a cada 1 hora se é hora de criar sessão de inventário
+  setInterval(async () => {
+    try {
+      await checkAndCreateInventorySessions();
+    } catch (e) {
+      console.error('[InventoryJob] Erro:', e);
+    }
+  }, 60 * 60 * 1000); // 1 hora
+
+  console.log('[InventoryJob] Job de inventário semanal iniciado');
+}
+
+async function checkAndCreateInventorySessions() {
+  const db = await getDb();
+  if (!db) return;
+
+  const now = new Date();
+  const diaSemanaAtual = ['domingo','segunda','terca','quarta','quinta','sexta','sabado'][now.getDay()];
+  const horaAtual = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  const configs = await db.select().from(warehouseInventoryConfig)
+    .where(and(
+      eq(warehouseInventoryConfig.ativo, 1),
+      eq(warehouseInventoryConfig.diaSemana, diaSemanaAtual as any),
+    ));
+
+  for (const config of configs) {
+    if (horaAtual < config.horarioAlerta) continue;
+
+    // Verificar se já existe sessão para esta semana
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const weekNum = Math.ceil(((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
+    const semanaRef = `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+
+    const existing = await db.select().from(warehouseInventorySessions)
+      .where(and(
+        eq(warehouseInventorySessions.companyId, config.companyId),
+        eq(warehouseInventorySessions.depotId, config.depotId),
+        eq(warehouseInventorySessions.semanaRef, semanaRef),
+      )).limit(1);
+
+    if (existing.length > 0) continue; // já criada esta semana
+
+    // Criar sessão pendente
+    const items = await db.select().from(warehouseItems)
+      .where(and(
+        eq(warehouseItems.companyId, config.companyId),
+        eq(warehouseItems.depotId, config.depotId),
+        eq(warehouseItems.ativo, 1)
+      ));
+
+    await db.insert(warehouseInventorySessions).values({
+      companyId: config.companyId, depotId: config.depotId,
+      semanaRef, status: 'pendente', totalItens: items.length,
+    } as any);
+
+    console.log(`[InventoryJob] Sessão de inventário criada: empresa ${config.companyId}, depósito ${config.depotId}`);
+  }
+}
+```
+
+**Adicionar chamada no `server/_core/index.ts`**, junto com os outros jobs (após o `server.listen`):
+```typescript
+// Job de inventário semanal do almoxarifado
+import("../services/warehouseInventoryJob").then(m => m.startInventoryJob()).catch(e => console.error("[InventoryJob] Erro:", e));
+```
+
+---
+
+## PASSO 5 — INTEGRAÇÃO COM RAIO X (server/routers/controleDocumentos.ts)
+
+Localizar a procedure `raioX` e encontrar a linha:
+```typescript
+// Ordenar timeline por data (mais recente primeiro)
+timeline.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+```
+
+Adicionar o seguinte código **ANTES** dessa linha:
+```typescript
+// Empréstimos de ferramentas/equipamentos do almoxarifado
+try {
+  const { warehouseLoans } = await import("../../drizzle/schema");
+  const empLoans = await db.select().from(warehouseLoans)
+    .where(and(eq(warehouseLoans.funcionarioId, employeeId)));
+  empLoans.forEach(loan => {
+    timeline.push({
+      data: loan.dataEmprestimo,
+      tipo: loan.status === 'perdido' ? '⚠️ Ferramenta Perdida' : '🔧 Ferramenta Emprestada',
+      descricao: `${loan.itemNome}${loan.numeroPatrimonio ? ` (${loan.numeroPatrimonio})` : ''} — Qtd: ${loan.quantidade}`,
+      cor: loan.status === 'perdido' ? 'red' : loan.status === 'pendente' ? 'orange' : 'blue',
+      icone: loan.status === 'perdido' ? 'alert-triangle' : 'tool',
+    });
+    if (loan.status === 'devolvido' && loan.dataDevolucao) {
+      timeline.push({
+        data: loan.dataDevolucao,
+        tipo: '✅ Ferramenta Devolvida',
+        descricao: `${loan.itemNome} devolvida ao almoxarifado`,
+        cor: 'green', icone: 'check-circle',
+      });
+    }
+  });
+} catch (e) {
+  console.warn('[RaioX] Erro ao buscar empréstimos:', e);
+}
+```
+
+---
+
+## PASSO 6 — PÁGINAS REACT
+
+Criar os seguintes arquivos em `client/src/pages/`:
+
+### 6.1 — `Almoxarifado.tsx`
+Página principal com 4 botões gigantes mobile-first:
+- **📥 ENTRADA** → modal de entrada de material
+- **📤 SAÍDA** → modal de saída para obra
+- **🔧 EMPRESTAR** → modal de comodato com campo JFCxxxx
+- **📋 FECHAR DIA** → tela de devolução do dia
+
+**Comportamentos obrigatórios:**
+- Dashboard no topo: 🔴 X itens críticos | 💰 Valor total em estoque
+- Semáforo por item: 🔴 crítico / 🟡 baixo / 🟢 ok
+- Após qualquer ação: tela de confirmação verde ✅ ou vermelha ❌ com mensagem clara
+- Botões com mínimo 60px de altura
+- Fonte mínima 16px
+- Campo de código do funcionário com teclado numérico (inputMode="numeric")
+- Ao digitar JFCxxxx → busca automática → mostra nome + foto se tiver
+
+### 6.2 — `AlmoxarifadoMovimentacoes.tsx`
+Histórico completo de movimentações com filtros por depósito, tipo, período.
+
+### 6.3 — `AlmoxarifadoInventario.tsx`
+Tela de inventário semanal:
+- Lista sessão ativa se houver
+- Botão para iniciar nova sessão
+- Para cada item: foto + nome + "Sistema diz: X" + botões [✅ BATE] [⚠️ DIFERENTE]
+- Barra de progresso no topo
+- Ao finalizar: resumo com divergências
+
+---
+
+## PASSO 7 — ROTAS (client/src/App.tsx)
+
+Adicionar as importações:
+```typescript
+import Almoxarifado from "@/pages/Almoxarifado";
+import AlmoxarifadoMovimentacoes from "@/pages/AlmoxarifadoMovimentacoes";
+import AlmoxarifadoInventario from "@/pages/AlmoxarifadoInventario";
+```
+
+Adicionar as rotas dentro do `<Switch>`:
+```typescript
+<Route path="/almoxarifado" component={Almoxarifado} />
+<Route path="/almoxarifado/movimentacoes" component={AlmoxarifadoMovimentacoes} />
+<Route path="/almoxarifado/inventario" component={AlmoxarifadoInventario} />
+```
+
+---
+
+## PASSO 8 — MENU LATERAL (client/src/components/DashboardLayout.tsx)
+
+**8.1 — Adicionar tipo de módulo:**
+Localizar o objeto `MODULE_SECTIONS` e adicionar o módulo almoxarifado.
+Primeiro, definir as seções do menu almoxarifado antes do `MODULE_SECTIONS`:
+
+```typescript
+const menuSectionsAlmoxarifado: MenuSection[] = [
+  {
+    title: "Almoxarifado",
+    items: [
+      { label: "Visão Geral", path: "/almoxarifado", icon: Warehouse },
+      { label: "Movimentações", path: "/almoxarifado/movimentacoes", icon: ArrowLeftRight },
+      { label: "Inventário Semanal", path: "/almoxarifado/inventario", icon: ClipboardList },
+    ]
+  }
+];
+```
+
+**8.2 — Adicionar no MODULE_SECTIONS:**
+```typescript
+"almoxarifado": menuSectionsAlmoxarifado,
+```
+
+**8.3 — Adicionar no MODULE_HOME_ROUTES:**
+```typescript
+"almoxarifado": "/almoxarifado",
+```
+
+**8.4 — Adicionar no MODULE_THEME:**
+```typescript
+"almoxarifado": { icon: Warehouse, color: "#78716C", bg: "#57534E" },
+```
+
+**8.5 — Adicionar nos imports de ícones do Lucide** (se não existir):
+```typescript
+import { ..., Warehouse, ArrowLeftRight, ClipboardList } from "lucide-react";
+```
+
+---
+
+## PASSO 9 — ATIVAR NO MODULEHUB (client/src/pages/ModuleHub.tsx)
+
+Localizar o item `almoxarifado` e atualizar:
+```typescript
+{
+  id: "almoxarifado",
+  title: "Almoxarifado",
+  subtitle: "Estoque Central",
+  description: "Controle de materiais, ferramentas e equipamentos. Comodato diário com rastreio por funcionário.",
+  icon: Warehouse,
+  accentFrom: "#78716C",
+  accentTo: "#57534E",
+  accentGlow: "#78716C33",
+  iconBg: "#57534E",
+  path: "/almoxarifado",
+  active: true,  // ← mudar de false para true
+  features: ["Entrada/Saída", "Comodato Diário", "Inventário Semanal", "Transferências"],
+}
+```
+
+---
+
+## PASSO 10 — PWA (Progressive Web App)
+
+### 10.1 — Criar `/client/public/manifest.json`
+```json
+{
+  "name": "ERP Gestão Integrada",
+  "short_name": "ERP FC",
+  "description": "Sistema de Gestão FC Engenharia",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A192F",
+  "theme_color": "#0A192F",
+  "orientation": "portrait-primary",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Almoxarifado",
+      "url": "/almoxarifado",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
+```
+
+### 10.2 — Gerar ícones PNG a partir do SVG
+```bash
+pnpm add -D sharp
+node -e "
+const sharp = require('sharp');
+const fs = require('fs');
+const svg = fs.readFileSync('client/public/fc-logo.svg');
+sharp(Buffer.from(svg)).resize(192,192).png().toFile('client/public/icon-192.png', (err) => { if(err) console.error(err); else console.log('icon-192.png criado'); });
+sharp(Buffer.from(svg)).resize(512,512).png().toFile('client/public/icon-512.png', (err) => { if(err) console.error(err); else console.log('icon-512.png criado'); });
+"
+```
+
+### 10.3 — Atualizar `client/index.html`
+Adicionar dentro do `<head>`, após a tag `<title>`:
+```html
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0A192F" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ERP FC" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+```
+
+### 10.4 — Instalar e configurar vite-plugin-pwa
+```bash
+pnpm add -D vite-plugin-pwa
+```
+
+Em `vite.config.ts`, adicionar o import:
+```typescript
+import { VitePWA } from 'vite-plugin-pwa';
+```
+
+Adicionar `VitePWA({...})` no array `plugins` (APÓS os plugins existentes, NÃO remover nenhum):
+```typescript
+const plugins = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  vitePluginManusDebugCollector(), // ← MANTER — não remover
+  VitePWA({
+    registerType: 'autoUpdate',
+    manifest: false,
+    workbox: {
+      globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+      navigateFallback: '/index.html',
+      navigateFallbackDenylist: [/^\/api/],
+    }
+  })
+];
+```
+
+### 10.5 — Criar `client/src/components/PwaInstallBanner.tsx`
+```tsx
+import { useState, useEffect } from 'react';
+import { Download, X } from 'lucide-react';
+
+export function PwaInstallBanner() {
+  const [prompt, setPrompt] = useState<any>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: any) => { e.preventDefault(); setPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  if (!prompt || dismissed) return null;
+
+  const handleInstall = async () => {
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    if (outcome === 'accepted') setDismissed(true);
+  };
+
+  return (
+    <div className="fixed bottom-4 left-4 right-4 z-50 bg-[#0A192F] text-white rounded-xl p-4 shadow-2xl flex items-center gap-3 md:max-w-sm md:left-auto md:right-4">
+      <div className="flex-1">
+        <p className="font-bold text-sm">📱 Instalar no celular</p>
+        <p className="text-xs text-gray-300 mt-0.5">Acesse mais rápido pela tela inicial</p>
+      </div>
+      <button onClick={handleInstall} className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-lg flex items-center gap-1">
+        <Download size={14} /> Instalar
+      </button>
+      <button onClick={() => setDismissed(true)} className="text-gray-400 hover:text-white p-1">
+        <X size={18} />
+      </button>
+    </div>
+  );
+}
+```
+
+### 10.6 — Adicionar banner no App.tsx
+```typescript
+// Import
+import { PwaInstallBanner } from "@/components/PwaInstallBanner";
+
+// Dentro do JSX, antes do fechamento do componente principal:
+<PwaInstallBanner />
+```
+
+---
+
+## PASSO 11 — SHARED/MODULES.TS
+
+Adicionar o módulo almoxarifado nos `ERP_MODULES`:
+```typescript
+almoxarifado: { key: "almoxarifado", label: "Almoxarifado", icon: "Warehouse" },
+```
+
+---
+
+## ✅ CHECKLIST FINAL DE VALIDAÇÃO
+
+Após cada passo, verificar:
+- [ ] Passo 1: `pnpm db:push` sem erros — 12 tabelas novas criadas
+- [ ] Passo 2: Arquivo `server/routers/warehouse.ts` criado sem erros de TypeScript
+- [ ] Passo 3: `warehouseRouter` aparece no `appRouter`
+- [ ] Passo 4: Job de inventário criado e chamado no index.ts
+- [ ] Passo 5: Código do Raio X adicionado sem quebrar a procedure
+- [ ] Passo 6: 3 páginas criadas sem erros
+- [ ] Passo 7: 3 rotas adicionadas no App.tsx
+- [ ] Passo 8: Menu lateral mostra "Almoxarifado" ao selecionar o módulo
+- [ ] Passo 9: ModuleHub mostra card do Almoxarifado ativo
+- [ ] Passo 10: PWA configurado — manifest.json criado, ícones gerados
+- [ ] Passo 11: shared/modules.ts atualizado
+
+---
+
+## ⚠️ O QUE NÃO MEXER
+
+- NÃO remover o plugin `vitePluginManusDebugCollector()` do vite.config.ts
+- NÃO alterar tabelas existentes (apenas adicionar novas)
+- NÃO alterar routers existentes (exceto adicionar código no raioX)
+- NÃO alterar o sistema de autenticação
+- NÃO alterar rotas existentes no App.tsx (apenas adicionar)
+
+---
+
+## MENSAGEM PARA O REPLIT
+
+```
+Implemente o Módulo Almoxarifado seguindo EXATAMENTE este script, passo a passo na ordem indicada.
+
+REGRAS IMPORTANTES:
+1. Execute um passo por vez e confirme que funcionou antes de avançar
+2. Não altere nada que já existe — apenas adicione código novo
+3. O plugin vitePluginManusDebugCollector no vite.config.ts deve ser mantido
+4. O usuário final tem baixa escolaridade e usa celular — botões grandes (min 60px), máximo 4 toques por ação, confirmação visual clara após cada ação
+5. Mobile-first em todas as telas do almoxarifado
+6. Após o Passo 1, rode pnpm db:push e me mostre o resultado antes de continuar
+
+Comece pelo Passo 1 agora.
+```
