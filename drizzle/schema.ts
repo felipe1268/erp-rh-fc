@@ -4543,6 +4543,14 @@ export const almoxarifadoCategorias = pgTable("almoxarifado_categorias", {
   index("alm_cat_company").on(table.companyId),
 ]);
 
+export const almoxarifadoUnidades = pgTable("almoxarifado_unidades", {
+  id:        serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  sigla:     varchar({ length: 20 }).notNull(),
+  descricao: varchar({ length: 100 }),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   id:               serial().primaryKey(),
   companyId:        integer("company_id").notNull(),

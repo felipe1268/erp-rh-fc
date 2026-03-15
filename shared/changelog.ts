@@ -951,4 +951,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 13:00:00",
   },
+  {
+    version: 300,
+    titulo: "Almoxarifado — Cadastro de Unidades de Medida",
+    descricao: "Campo de unidade do item do almoxarifado agora usa um cadastro controlado: (1) Nova tabela almoxarifado_unidades no banco; (2) 22 unidades padrão pré-cadastradas automaticamente (un, kg, m, m², m³, L, cx, sc, rolo, barra, etc.); (3) Campo livre substituído por select controlado; (4) Modal 'Gerenciar Unidades' acessível pelo link 'Gerenciar' no formulário de item: exibe lista de unidades com botão excluir e formulário para adicionar nova unidade com sigla + descrição; (5) Proteção contra exclusão de unidade em uso por algum item.",
+    tipo: "feature",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 14:00:00",
+  },
 ];
