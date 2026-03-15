@@ -91,8 +91,8 @@ export default function EmpresasTerceiras() {
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
   );
-  const createMut = trpc.terceiros.empresas.create.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Empresa cadastrada!"); } });
-  const updateMut = trpc.terceiros.empresas.update.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Empresa atualizada!"); } });
+  const createMut = trpc.terceiros.empresas.create.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Empresa cadastrada!"); }, onError: (e) => toast.error(e.message) });
+  const updateMut = trpc.terceiros.empresas.update.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Empresa atualizada!"); }, onError: (e) => toast.error(e.message) });
   const deleteMut = trpc.terceiros.empresas.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa excluída!"); } });
   const uploadMut = trpc.terceiros.empresas.uploadDoc.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
 
@@ -123,10 +123,11 @@ export default function EmpresasTerceiras() {
 
   const handleSave = () => {
     if (!form.razaoSocial || !form.cnpj) { toast.error("Razão Social e CNPJ são obrigatórios"); return; }
+    const payload = { ...form, cnpj: form.cnpj.replace(/\D/g, "") };
     if (editingId) {
-      updateMut.mutate({ id: editingId, ...form });
+      updateMut.mutate({ id: editingId, ...payload });
     } else {
-      createMut.mutate(form);
+      createMut.mutate(payload);
     }
   };
 

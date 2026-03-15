@@ -73,8 +73,8 @@ export const terceirosRouter = router({
         const [result] = await db.insert(empresasTerceiras).values({
           ...input,
           createdBy: ctx.user?.name || "Sistema",
-        });
-        return { id: result[0].id };
+        }).returning({ id: empresasTerceiras.id });
+        return { id: result.id };
       }),
 
     update: protectedProcedure
