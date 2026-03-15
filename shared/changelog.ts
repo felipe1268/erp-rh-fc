@@ -952,6 +952,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 13:00:00",
   },
   {
+    version: 305,
+    titulo: "Colaboradores — Corrigido erro '(intermediate value) is not iterable' ao salvar",
+    descricao: "db.execute() do Drizzle ORM retorna { rows: [...] } e não um array direto. Desestruturação const [x] = await db.execute() substituída pelo padrão correto exec.rows ?? exec. Corrigidas todas as ocorrências na função createEmployee e updateEmployee.",
+    tipo: "fix",
+    modulos: "Colaboradores, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 18:00:00",
+  },
+  {
     version: 304,
     titulo: "Colaboradores — Corrigido erro ao salvar novo colaborador (código interno)",
     descricao: "Query SQL bruta que incrementa nextCodigoInterno da empresa não usava aspas nos nomes de coluna camelCase, causando erro no PostgreSQL. Corrigidas todas as referências a nextCodigoInterno, prefixoCodigo e numerosProibidos nas queries raw de geração de código JFCxxx.",
