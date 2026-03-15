@@ -952,6 +952,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 13:00:00",
   },
   {
+    version: 303,
+    titulo: "Colaboradores — Corrigido bloqueio de CPF de registro excluído",
+    descricao: "A verificação de CPF duplicado agora ignora registros com deletedAt preenchido (excluídos). Antes, ao excluir um colaborador e tentar recadastrá-lo, o sistema bloqueava com erro 'CPF já cadastrado'. Registros fisicamente excluídos também são limpos do banco. Fix em checkDuplicateCpf: adicionado isNull(employees.deletedAt) às condições da query.",
+    tipo: "fix",
+    modulos: "Colaboradores, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 17:00:00",
+  },
+  {
     version: 302,
     titulo: "Almoxarifado — Obra obrigatória na saída",
     descricao: "Campo 'Obra' nos modais de Registrar Saída (rápido) e Movimentação passou de campo de texto livre/opcional para select obrigatório com lista de obras ativas. Validação bloqueia confirmação sem obra selecionada. obraId e obraNome são gravados no histórico de movimentações.",
