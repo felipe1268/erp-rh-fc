@@ -435,21 +435,12 @@ const COL_ALIASES: Record<string, string[]> = {
   composicaoTipo: ['composicaotipo', 'tipocomposicao', 'composicao', 'comp'],
   servicoCodigo:  ['codigoservico', 'codservico', 'cods'],
   tipo:           ['tipo'],
-  // Custo unitário — col "Custo Preço" (FC/Sinapi) ou "P.Unit.Mat" (padrão clássico)
-  // NOTA: a normalização remove acentos/cedilha, então "Preço"→"preo", "ç"→removido.
-  // Aliases com "c" (sem cedilha) E sem "c" são necessários para cobrir ambos os casos.
-  cuUnitMat:      ['punitmat', 'pumat', 'cunitmat', 'custounitmat', 'precounitmat',
-                   'valorunitmat', 'valorunitariomaterial', 'custounitariomaterial',
-                   'custopreco',          // "Custo Preço" (1ª ocorrência — sem cedilha)
-                   'custoprecounitmaterial',  // com c (cedilha mantida em alguns encodings)
-                   'custopreounitmaterial',   // sem c (cedilha removida pela normalização) ← FC CUSTO
-                   'custoprecomaterial'],
-  cuUnitMdo:      ['punitmo', 'pumo', 'cunitmo', 'custounitmo', 'precounitmo',
-                   'valorunitmo', 'valorunitariomo', 'custounitariomo',
-                   'custopreco',          // "Custo Preço" (2ª ocorrência — Mat já foi pego)
-                   'custoprecounitmo',    // com c
-                   'custopreounitmdo',    // sem c ← FC CUSTO ("Custo Preço Unit. MDO")
-                   'custoprecomo'],
+  // Custo unitário — "Preço Unit. Material" / "Preço Unit. MO" (FC Engenharia)
+  // NÃO incluir "custopreco*" — planilha FC tem colunas separadas "Custo Preço Unit." que NÃO devem ser importadas
+  cuUnitMat:      ['precounitmat', 'punitmat', 'pumat', 'cunitmat', 'custounitmat',
+                   'valorunitmat', 'valorunitariomaterial', 'custounitariomaterial'],
+  cuUnitMdo:      ['precounitmo', 'punitmo', 'pumo', 'cunitmo', 'custounitmo',
+                   'valorunitmo', 'valorunitariomo', 'custounitariomo'],
   // Custo total por item — "Preço Total" (FC/Sinapi) ou "P.Total Mat" (padrão clássico)
   // ATENÇÃO: aliases genéricos como "precototal/preototal" casam via startsWith em ambas as colunas.
   // Usar apenas aliases suficientemente específicos para evitar falso-positivo.
