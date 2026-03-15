@@ -141,6 +141,8 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+
   if (!open || !employeeId) return null;
 
   const emp = raioX?.funcionario;
@@ -413,8 +415,6 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 600);
   };
-
-  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
   const handleDownloadZip = async () => {
     if (!employeeId) return;
