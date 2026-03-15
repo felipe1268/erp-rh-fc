@@ -915,4 +915,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-14 21:30:00",
   },
+  {
+    version: 296,
+    titulo: "Programação Semanal — Mão de Obra, Materiais e EQUIPAMENTOS com disponibilidade no almoxarifado",
+    descricao: "Seção de recursos da Prog. Semanal completamente remodelada: (1) Mão de Obra exibe apenas pessoas/ofícios detectados por palavras-chave (pedreiro, servente, armador etc.) em tabela clara com qtd e unidade; (2) Materiais listados em tabela com descrição, quantidade e unidade; (3) Nova seção EQUIPAMENTOS que separa automaticamente os equipamentos do orçamento (vibrador, betoneira, bomba, andaime etc.) da mão de obra pura, e cruza com o módulo Almoxarifado + Patrimônio para indicar disponibilidade em tempo real (verde = disponível / vermelho = indisponível / cinza = não cadastrado). Melhorias espelhadas também no Relatório de N Semanas (modo impressão).",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 10:00:00",
+  },
 ];
