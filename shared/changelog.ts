@@ -1294,6 +1294,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:00:00",
   },
   {
+    version: 346,
+    titulo: "Bugfix: Painel de Compras exibe fornecedores corretamente",
+    descricao: "Corrigido bug que mostrava '0 fornecedores ativos' mesmo com 1.173 fornecedores no banco. Causa: getDashboardCompras aceitava um único companyId — quando o usuário estava em modo CONSTRUTORAS, o companyId virava NaN e a query ficava desabilitada. Solução: endpoint alterado para aceitar companyIds: number[] (inArray), useCompany.ts corrigido para exportar getCompanyIdsForQuery corretamente, e Painel.tsx atualizado para usar getCompanyIds() passando o array de IDs.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 345,
     titulo: "Bugfix: hook useCompany criado para Módulo Financeiro",
     descricao: "Criados dois hooks ausentes que bloqueavam todas as 12 páginas do Módulo Financeiro: (1) client/src/hooks/useCompany.ts — wrapper do CompanyContext expondo companyId numérico; (2) client/src/hooks/use-toast.ts — adapter de useToast() sobre o sonner, compatível com o padrão { title, description, variant } usado por todas as páginas. Corrige erros '[plugin:vite:import-analysis] Failed to resolve import @/hooks/useCompany' e '@/hooks/use-toast' que impediam o carregamento do módulo inteiro.",

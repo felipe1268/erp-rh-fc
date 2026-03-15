@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCompany } from "@/hooks/useCompany";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
@@ -96,13 +96,13 @@ function EmptyRow({ msg }: { msg: string }) {
 }
 
 export default function PainelCompras() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = parseInt(selectedCompanyId || "0");
+  const { getCompanyIds } = useCompany();
+  const companyIds = getCompanyIds();
   const [, navigate] = useLocation();
 
   const { data, isLoading, refetch, isFetching } = trpc.compras.getDashboardCompras.useQuery(
-    { companyId },
-    { enabled: companyId > 0, refetchInterval: 60_000 }
+    { companyIds },
+    { enabled: companyIds.length > 0, refetchInterval: 60_000 }
   );
 
   const fornMap = useMemo(() => {
