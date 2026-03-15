@@ -1294,6 +1294,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:00:00",
   },
   {
+    version: 348,
+    titulo: "Módulo Terceiros — Contratos, Medições e Previsão de Caixa",
+    descricao: "Implementação completa da gestão de contratos de terceiros por avanço físico: (1) 5 tabelas novas no banco (terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos); (2) Router terceiroContratos com 18 endpoints (CRUD contratos, itens, gerarMedicao automático via planejamento, aprovarMedicao, rejeitarMedicao, registrarPagamento, documentos, previsaoCaixa, dashboard); (3) 5 páginas React: ContratosList, ContratoNovo, ContratoDetalhe (tabs itens/medições/documentos), Medicoes (aprovação centralizada), PrevisaoCaixa (gráfico semanal por cronograma); (4) Menu 'Contratos e Medições' no módulo Terceiros; (5) Trava de pagamento: percentual pago nunca supera avanço físico medido.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 347,
     titulo: "ModuleHub: removidos módulos Assistência Técnica e Documentação de Obra",
     descricao: "Removidos os cards 'Assistência Técnica' e 'Documentação de Obra' da seção Em Desenvolvimento do ModuleHub. Imports não utilizados (Wrench, FolderOpen) também removidos.",

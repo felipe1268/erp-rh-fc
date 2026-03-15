@@ -237,6 +237,14 @@ const menuSectionsTerceiros: MenuSection[] = [
     ],
   },
   {
+    title: "Contratos e Medições",
+    items: [
+      { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
+      { icon: Receipt, label: "Medições", path: "/terceiros/medicoes" },
+      { icon: TrendingUp, label: "Previsão de Caixa", path: "/terceiros/previsao-caixa" },
+    ],
+  },
+  {
     title: "Conformidade",
     items: [
       { icon: ClipboardCheck, label: "Obrigações Mensais", path: "/terceiros/obrigacoes" },

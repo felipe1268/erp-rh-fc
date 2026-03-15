@@ -80,6 +80,7 @@ import { orcamentistaRouter } from "./routers/orcamentista";
 import { sprint1Router } from "./routers/sprint1Foundation";
 import { medicosClinicasRouter } from "./routers/medicosClinicas";
 import { terceirosRouter } from "./routers/terceiros";
+import { terceiroContratosRouter } from "./routers/terceiroContratos";
 import { parceirosRouter } from "./routers/parceiros";
 import { portalExternoRouter } from "./routers/portalExterno";
 import { payrollEngineRouter } from "./routers/payrollEngine";
@@ -131,6 +132,7 @@ export const appRouter = router({
   sprint1: sprint1Router,
   medicosClinicas: medicosClinicasRouter,
   terceiros: terceirosRouter,
+  terceiroContratos: terceiroContratosRouter,
   parceiros: parceirosRouter,
   orcamento: orcamentoRouter,
   planejamento: planejamentoRouter,

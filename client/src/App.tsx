@@ -116,6 +116,11 @@ const PortalTerceiro = lazy(() => import("./pages/terceiros/PortalTerceiro"));
 const Crachas = lazy(() => import("./pages/terceiros/Crachas"));
 const AprovacaoPortal = lazy(() => import("./pages/terceiros/AprovacaoPortal"));
 const ValidacaoIA = lazy(() => import("./pages/terceiros/ValidacaoIA"));
+const ContratosList = lazy(() => import("./pages/terceiros/contratos/ContratosList"));
+const ContratoNovo = lazy(() => import("./pages/terceiros/contratos/ContratoNovo"));
+const ContratoDetalhe = lazy(() => import("./pages/terceiros/contratos/ContratoDetalhe"));
+const MedicoesTerceiros = lazy(() => import("./pages/terceiros/Medicoes"));
+const PrevisaoCaixaTerceiros = lazy(() => import("./pages/terceiros/PrevisaoCaixa"));
 
 // Parceiros
 const PainelParceiros = lazy(() => import("./pages/parceiros/PainelParceiros"));
@@ -290,6 +295,11 @@ function Router() {
         <Route path="/terceiros/crachas" component={Crachas} />
         <Route path="/crachas" component={Crachas} />
         <Route path="/terceiros/validacao-ia" component={ValidacaoIA} />
+        <Route path="/terceiros/contratos" component={ContratosList} />
+        <Route path="/terceiros/contratos/novo" component={ContratoNovo} />
+        <Route path="/terceiros/contratos/:id" component={ContratoDetalhe} />
+        <Route path="/terceiros/medicoes" component={MedicoesTerceiros} />
+        <Route path="/terceiros/previsao-caixa" component={PrevisaoCaixaTerceiros} />
         <Route path="/terceiros/painel" component={PainelTerceiros} />
         {/* Parceiros */}
         <Route path="/parceiros" component={PainelParceiros} />
