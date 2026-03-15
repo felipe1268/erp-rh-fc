@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { invokeLLM } from "../_core/llm";
-import { eq, and, desc, asc, ilike, or, sql, gte, lte } from "drizzle-orm";
+import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray } from "drizzle-orm";
 import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
   almoxarifadoCategorias, almoxarifadoUnidades,
@@ -1325,17 +1325,18 @@ Responda APENAS com um objeto JSON no formato:
     }),
 
   getDashboardCompras: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyIds: z.array(z.number()).min(1) }))
     .query(async ({ input }) => {
       const db = await getDb();
       const today = new Date().toISOString().slice(0, 10);
+      const ids = input.companyIds;
 
       const [scs, cots, ocs, forn, obrasRows] = await Promise.all([
-        db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId)).orderBy(desc(comprasSolicitacoes.criadoEm)),
-        db.select().from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId)).orderBy(desc(comprasCotacoes.criadoEm)),
-        db.select().from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId)).orderBy(desc(comprasOrdens.criadoEm)),
-        db.select().from(fornecedores).where(and(eq(fornecedores.companyId, input.companyId), eq(fornecedores.ativo, true))),
-        db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo }).from(obras).where(eq(obras.companyId, input.companyId)),
+        db.select().from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.companyId, ids)).orderBy(desc(comprasSolicitacoes.criadoEm)),
+        db.select().from(comprasCotacoes).where(inArray(comprasCotacoes.companyId, ids)).orderBy(desc(comprasCotacoes.criadoEm)),
+        db.select().from(comprasOrdens).where(inArray(comprasOrdens.companyId, ids)).orderBy(desc(comprasOrdens.criadoEm)),
+        db.select().from(fornecedores).where(and(inArray(fornecedores.companyId, ids), eq(fornecedores.ativo, true))),
+        db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo }).from(obras).where(inArray(obras.companyId, ids)),
       ]);
 
       const obraMap: Record<number, string> = {};

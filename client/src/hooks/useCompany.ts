@@ -1,11 +1,16 @@
 import { useCompany as useCompanyContext } from "@/contexts/CompanyContext";
 
 /**
- * Hook de conveniência para obter companyId numérico.
- * Usado pelas páginas do Módulo Financeiro.
+ * Hook de conveniência para obter companyId numérico e lista de IDs.
+ * Suporta modo "CONSTRUTORAS" (todas as empresas) via getCompanyIds().
  */
 export function useCompany() {
-  const { selectedCompanyId, selectedCompany, getCompanyIds } = useCompanyContext();
+  const { selectedCompanyId, selectedCompany, getCompanyIdsForQuery } = useCompanyContext();
   const companyId = parseInt(selectedCompanyId || "0") || 0;
-  return { companyId, selectedCompanyId, selectedCompany, getCompanyIds };
+  return {
+    companyId,
+    selectedCompanyId,
+    selectedCompany,
+    getCompanyIds: getCompanyIdsForQuery,
+  };
 }
