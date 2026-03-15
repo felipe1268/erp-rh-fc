@@ -11,8 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, Building2, Trophy, UserPlus, Save, BarChart3 } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown } from "lucide-react";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pendente:  { label: "Pendente",  cls: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -50,6 +51,8 @@ export default function Cotacoes() {
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
 
   const [mapaFornSelectId, setMapaFornSelectId] = useState("");
+  const [mapaFornSearch, setMapaFornSearch] = useState("");
+  const [mapaFornOpen, setMapaFornOpen] = useState(false);
   const [editPrecos, setEditPrecos] = useState<Record<string, string>>({});
   const [editPrazo, setEditPrazo] = useState<Record<number, string>>({});
   const [editCondPag, setEditCondPag] = useState<Record<number, string>>({});
@@ -362,17 +365,49 @@ export default function Cotacoes() {
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Fornecedores Participantes</p>
                     <div className="flex gap-2 mb-4">
-                      <Select value={mapaFornSelectId} onValueChange={setMapaFornSelectId}>
-                        <SelectTrigger className="flex-1 bg-white border-gray-300 text-gray-900 text-sm">
-                          <SelectValue placeholder="Selecionar fornecedor..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {fornDisponiveis.map((f: any) => (
-                            <SelectItem key={f.id} value={String(f.id)}>{f.nomeFantasia || f.razaoSocial}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button onClick={() => { if (mapaFornSelectId && showDetalhe) adicionarForn.mutate({ cotacaoId: showDetalhe, fornecedorId: parseInt(mapaFornSelectId) }); }}
+                      <Popover open={mapaFornOpen} onOpenChange={setMapaFornOpen}>
+                        <PopoverTrigger asChild>
+                          <button className="flex-1 flex items-center justify-between h-9 px-3 rounded-md border border-gray-300 bg-white text-sm text-gray-900 hover:border-gray-400 transition-colors">
+                            <span className={mapaFornSelectId ? "text-gray-900" : "text-gray-400"}>
+                              {mapaFornSelectId
+                                ? (fornDisponiveis.find((f: any) => String(f.id) === mapaFornSelectId)?.nomeFantasia || fornDisponiveis.find((f: any) => String(f.id) === mapaFornSelectId)?.razaoSocial || "Selecionar fornecedor...")
+                                : "Selecionar fornecedor..."}
+                            </span>
+                            <ChevronsUpDown className="h-4 w-4 text-gray-400 shrink-0" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-0 w-[400px] bg-white border border-gray-200 shadow-lg rounded-lg" align="start">
+                          <div className="p-2 border-b border-gray-100">
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                              <input
+                                autoFocus
+                                placeholder="Pesquisar fornecedor..."
+                                value={mapaFornSearch}
+                                onChange={e => setMapaFornSearch(e.target.value)}
+                                className="w-full pl-8 pr-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-60 overflow-y-auto py-1">
+                            {fornDisponiveis
+                              .filter((f: any) => {
+                                const nome = (f.nomeFantasia || f.razaoSocial || "").toLowerCase();
+                                return !mapaFornSearch || nome.includes(mapaFornSearch.toLowerCase());
+                              })
+                              .map((f: any) => (
+                                <button key={f.id} onClick={() => { setMapaFornSelectId(String(f.id)); setMapaFornOpen(false); setMapaFornSearch(""); }}
+                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors ${mapaFornSelectId === String(f.id) ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-800"}`}>
+                                  {f.nomeFantasia || f.razaoSocial}
+                                </button>
+                              ))}
+                            {fornDisponiveis.filter((f: any) => !mapaFornSearch || (f.nomeFantasia || f.razaoSocial || "").toLowerCase().includes(mapaFornSearch.toLowerCase())).length === 0 && (
+                              <p className="px-4 py-3 text-sm text-gray-400 text-center">Nenhum fornecedor encontrado</p>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                      <Button onClick={() => { if (mapaFornSelectId && showDetalhe) { adicionarForn.mutate({ cotacaoId: showDetalhe, fornecedorId: parseInt(mapaFornSelectId) }); setMapaFornSelectId(""); } }}
                         disabled={!mapaFornSelectId || adicionarForn.isPending}
                         className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
                         <UserPlus className="h-4 w-4" /> Adicionar
