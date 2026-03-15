@@ -149,7 +149,17 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+// vitePluginManusRuntime injects a Manus-specific inline script that only works
+// inside the Replit/Manus iframe environment. On Railway (and any external host)
+// that script blocks React from mounting, causing a blank white screen.
+// Exclude it when RAILWAY_ENVIRONMENT is set (Railway always sets this var).
+const isRailwayBuild = !!process.env.RAILWAY_ENVIRONMENT;
+const plugins = [
+  react(),
+  tailwindcss(),
+  ...(isRailwayBuild ? [] : [vitePluginManusRuntime()]),
+  vitePluginManusDebugCollector(),
+];
 
 export default defineConfig({
   plugins,
