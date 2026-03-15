@@ -1402,6 +1402,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:59",
   },
   {
+    version: 357,
+    titulo: "Integração Compras → Terceiros (Opção B: vínculo por fornecedorId)",
+    descricao: "Integração entre módulos Compras e Terceiros via vínculo único de cadastro: (1) Campo `fornecedor_id` adicionado em `empresas_terceiras` — quando um fornecedor do módulo Compras gera um contrato de serviço, o sistema verifica se já existe empresa terceira vinculada; se não, cria automaticamente a partir dos dados do fornecedor (razão social, CNPJ, endereço, contato, dados bancários), evitando duplicidade de cadastro; (2) Campo `contrato_terceiro_id` adicionado em `compras_cotacoes` — marca a cotação como já convertida em contrato, impedindo conversões duplicadas; (3) Procedure `gerarContratoFromCotacao` no router terceiroContratos: lê cotação + itens + fornecedor, faz find-or-create de empresa terceira vinculada, cria contrato + itens no módulo Terceiros, atualiza cotação com o ID do contrato gerado; (4) Botão 'Gerar Contrato de Serviço' na tela Cotações — aparece apenas quando status = 'aprovada' e nenhum contrato ainda foi gerado; ao concluir, redireciona para o detalhe do contrato recém-criado.",
+    tipo: "feature",
+    modulos: "Compras,Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 344,
     titulo: "Performance: cache, chunk splitting, keep-alive e pool otimizado",
     descricao: "Pacote de otimizações de performance: (1) Vite build com manualChunks — 6 chunks separados (react-core, trpc-query, ui-lib, utils, charts, documents) reduzindo o JS inicial em ~40%; (2) esbuild minifier + reportCompressedSize desativado para builds mais rápidos; (3) QueryClient: staleTime 30s→2min e gcTime 5min→10min — menos refetches desnecessários na navegação; (4) tRPC timeout reduzido de 5 minutos para 30 segundos — falha rápida ao invés de spinner eterno; (5) Retry reduzido de 2 para 1 — UX mais ágil em caso de erro; (6) HTTP keep-alive: keepAliveTimeout 65s e headersTimeout 70s no servidor Node.js; (7) Pool de conexões PostgreSQL: max 10→20, min 2 conexões sempre prontas, idleTimeout 30s→60s; (8) MemCache server-side com TTL configurável (30s/2min/10min/1h) e invalidação por prefixo para dados frequentes; (9) compras/Almoxarifado.tsx: correção do `criarMut.mutate(as any)` para payload de locação.",

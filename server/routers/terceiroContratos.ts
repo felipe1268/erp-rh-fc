@@ -13,6 +13,9 @@ import {
   planejamentoAvancos,
   planejamentoProjetos,
   obras,
+  comprasCotacoes,
+  comprasCotacoesItens,
+  fornecedores,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
@@ -610,6 +613,120 @@ export const terceiroContratosRouter = router({
         valorMedicoesAprovadas,
         percentualMedioExecucao: valorTotalContratado > 0 ? (valorTotalPago / valorTotalContratado) * 100 : 0,
       };
+    }),
+
+  // ──────────────────────────────────────────────────────────────
+  // INTEGRAÇÃO COMPRAS → TERCEIROS
+  // Gera contrato de serviço a partir de uma cotação aprovada,
+  // vinculando (ou criando) a empresa terceira a partir do fornecedor.
+  // ──────────────────────────────────────────────────────────────
+  gerarContratoFromCotacao: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      // 1. Carregar cotação
+      const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot) throw new Error("Cotação não encontrada");
+      if ((cot as any).contratoTerceiroId) throw new Error("Esta cotação já gerou um contrato de serviço");
+
+      // 2. Carregar itens
+      const itens = await db.select().from(comprasCotacoesItens)
+        .where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+
+      // 3. Carregar fornecedor
+      if (!cot.fornecedorId) throw new Error("A cotação não possui fornecedor vinculado");
+      const [forn] = await db.select().from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId));
+      if (!forn) throw new Error("Fornecedor da cotação não encontrado");
+
+      // 4. Find-or-create empresa terceira vinculada ao fornecedor
+      const existing = await db.select().from(empresasTerceiras)
+        .where(and(
+          eq(empresasTerceiras.companyId, input.companyId),
+          eq((empresasTerceiras as any).fornecedorId, forn.id),
+        ));
+
+      let empresaTerceiraId: number;
+      let isNova = false;
+
+      if (existing.length > 0) {
+        empresaTerceiraId = existing[0].id;
+      } else {
+        const [nova] = await db.insert(empresasTerceiras).values({
+          companyId: input.companyId,
+          fornecedorId: forn.id,
+          razaoSocial: forn.razaoSocial,
+          nomeFantasia: forn.nomeFantasia || null,
+          cnpj: forn.cnpj || "",
+          cep: forn.cep || null,
+          logradouro: forn.endereco || null,
+          numero: forn.numero || null,
+          complemento: forn.complemento || null,
+          bairro: forn.bairro || null,
+          cidade: forn.cidade || null,
+          estado: forn.estado || null,
+          telefone: forn.telefone || null,
+          email: forn.email || null,
+          responsavelNome: forn.contatoNome || null,
+          banco: forn.banco || null,
+          agencia: forn.agencia || null,
+          conta: forn.conta || null,
+          pixChave: forn.pix || null,
+          status: "ativa",
+        } as any).returning();
+        empresaTerceiraId = nova.id;
+        isNova = true;
+      }
+
+      // 5. Gerar número de contrato CT-AAAA-NNN
+      const year = new Date().getFullYear();
+      const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)` })
+        .from(terceiroContratos)
+        .where(and(
+          eq(terceiroContratos.companyId, input.companyId),
+          sql`EXTRACT(YEAR FROM criado_em) = ${year}`,
+        ));
+      const seq = (Number(cnt) + 1).toString().padStart(3, "0");
+      const numeroContrato = `CT-${year}-${seq}`;
+
+      // 6. Criar contrato
+      const valorTotal = parseFloat(String(cot.total || "0"));
+      const [contrato] = await db.insert(terceiroContratos).values({
+        companyId: input.companyId,
+        empresaTerceiraId,
+        obraId: cot.obraId || null,
+        numeroContrato,
+        descricao: cot.descricao || `Contrato gerado da cotação ${cot.numeroCotacao}`,
+        tipoContrato: "empreitada_global",
+        valorTotal: String(valorTotal),
+        valorPago: "0",
+        dataInicio: new Date().toISOString().slice(0, 10),
+        status: "ativo",
+        observacoes: `Gerado automaticamente da cotação ${cot.numeroCotacao}.${cot.condicaoPagamento ? ` Cond. pagamento: ${cot.condicaoPagamento}.` : ""}`,
+      }).returning();
+
+      // 7. Criar itens do contrato a partir dos itens da cotação
+      if (itens.length > 0) {
+        await db.insert(terceiroContratoItens).values(
+          itens.map((it, idx) => ({
+            contratoId: contrato.id,
+            companyId: input.companyId,
+            descricao: it.descricao,
+            unidade: it.unidade || "vb",
+            quantidade: String(it.quantidade || "1"),
+            valorUnitario: String(it.precoUnitario || "0"),
+            valorTotal: String(it.total || "0"),
+            ordem: idx,
+          }))
+        );
+      }
+
+      // 8. Marcar cotação como convertida
+      await db.update(comprasCotacoes)
+        .set({ contratoTerceiroId: contrato.id } as any)
+        .where(eq(comprasCotacoes.id, input.cotacaoId));
+
+      return { contratoId: contrato.id, numeroContrato, empresaTerceiraId, isNova };
     }),
 });
 
