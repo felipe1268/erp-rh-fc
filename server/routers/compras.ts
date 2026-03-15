@@ -203,18 +203,28 @@ export const comprasRouter = router({
 
   listarItens: protectedProcedure
     .input(z.object({
-      companyId: z.number(),
-      busca:     z.string().optional(),
-      categoria: z.string().optional(),
+      companyId:          z.number(),
+      obraId:             z.number().nullable().optional(),
+      busca:              z.string().optional(),
+      categoria:          z.string().optional(),
       apenasAbaixoMinimo: z.boolean().optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
+
+      const conditions: any[] = [
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.ativo, true),
+      ];
+
+      if (input.obraId === null) {
+        conditions.push(sql`${almoxarifadoItens.obraId} IS NULL`);
+      } else if (input.obraId !== undefined) {
+        conditions.push(eq(almoxarifadoItens.obraId, input.obraId));
+      }
+
       const rows = await db.select().from(almoxarifadoItens)
-        .where(and(
-          eq(almoxarifadoItens.companyId, input.companyId),
-          eq(almoxarifadoItens.ativo, true),
-        ))
+        .where(and(...conditions))
         .orderBy(asc(almoxarifadoItens.nome));
 
       let result = rows;
@@ -238,6 +248,7 @@ export const comprasRouter = router({
   criarItem: protectedProcedure
     .input(z.object({
       companyId:        z.number(),
+      obraId:           z.number().nullable().optional(),
       nome:             z.string().min(1),
       unidade:          z.string().default("un"),
       categoria:        z.string().optional(),
@@ -251,6 +262,7 @@ export const comprasRouter = router({
       const db = await getDb();
       const [item] = await db.insert(almoxarifadoItens).values({
         companyId:        input.companyId,
+        obraId:           input.obraId ?? null,
         nome:             input.nome,
         unidade:          input.unidade,
         categoria:        input.categoria ?? null,
