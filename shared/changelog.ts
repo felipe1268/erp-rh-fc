@@ -952,6 +952,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 13:00:00",
   },
   {
+    version: 301,
+    titulo: "Almoxarifado — Seletor de contexto como dropdown",
+    descricao: "Substituição da barra de pills horizontais (que ficava apertada com muitas obras) por um select dropdown estilizado nas páginas de Almoxarifado e Inventário Semanal: ícone dinâmico (🏢 verde = Central, 🏗️ azul = Obra), opção 'Almoxarifado Central' no topo, obras agrupadas em optgroup, seleção nativa mobile-friendly.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 15:00:00",
+  },
+  {
     version: 300,
     titulo: "Almoxarifado — Cadastro de Unidades de Medida",
     descricao: "Campo de unidade do item do almoxarifado agora usa um cadastro controlado: (1) Nova tabela almoxarifado_unidades no banco; (2) 22 unidades padrão pré-cadastradas automaticamente (un, kg, m, m², m³, L, cx, sc, rolo, barra, etc.); (3) Campo livre substituído por select controlado; (4) Modal 'Gerenciar Unidades' acessível pelo link 'Gerenciar' no formulário de item: exibe lista de unidades com botão excluir e formulário para adicionar nova unidade com sigla + descrição; (5) Proteção contra exclusão de unidade em uso por algum item.",
