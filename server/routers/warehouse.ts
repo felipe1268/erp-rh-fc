@@ -462,24 +462,29 @@ export const warehouseRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
-      const { sql: drizzleSql, isNull, or } = await import("drizzle-orm");
+      const { sql: drizzleSql } = await import("drizzle-orm");
       const q = input.q.trim();
       if (q.length < 2) return [];
-      // Busca insensível a acento e maiúsculas/minúsculas via unaccent()
       const pattern = `%${q}%`;
       const rows = await db.execute(drizzleSql`
-        SELECT id, nome_completo AS "nomeCompleto", codigo_interno AS "codigoInterno",
-               cargo, funcao, foto_url AS "fotoUrl"
+        SELECT id,
+               "nomeCompleto",
+               "codigoInterno",
+               cargo,
+               funcao,
+               "fotoUrl"
         FROM employees
-        WHERE company_id = ${input.companyId}
-          AND deleted_at IS NULL
+        WHERE "companyId" = ${input.companyId}
+          AND "deletedAt" IS NULL
+          AND status != 'Demitido'
           AND (
-            unaccent(lower(nome_completo)) LIKE unaccent(lower(${pattern}))
-            OR lower(codigo_interno) LIKE lower(${pattern})
+            unaccent(lower("nomeCompleto")) LIKE unaccent(lower(${pattern}))
+            OR lower(COALESCE("codigoInterno", '')) LIKE lower(${pattern})
+            OR lower(COALESCE(matricula, '')) LIKE lower(${pattern})
             OR unaccent(lower(COALESCE(cargo, ''))) LIKE unaccent(lower(${pattern}))
             OR unaccent(lower(COALESCE(funcao, ''))) LIKE unaccent(lower(${pattern}))
           )
-        ORDER BY nome_completo
+        ORDER BY "nomeCompleto"
         LIMIT 8
       `);
       return (rows?.rows ?? rows ?? []) as any[];
