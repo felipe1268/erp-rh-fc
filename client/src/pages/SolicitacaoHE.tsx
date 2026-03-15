@@ -18,6 +18,7 @@ import { fmtNum } from "@/lib/formatters";
 import {
   Clock, Plus, CheckCircle, XCircle, AlertTriangle, Send,
   Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2, History, Ban,
+  TrendingUp, DollarSign, HardHat,
 } from "lucide-react";
 
 type TabType = "solicitar" | "aprovacoes" | "historico";
@@ -956,40 +957,138 @@ export default function SolicitacaoHE() {
                 Solicitado por: <strong>{sol.solicitadoPor}</strong> em {new Date(sol.createdAt).toLocaleString("pt-BR")}
               </div>
 
-              {/* Funcionários */}
-              <div>
-                <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Funcionários ({(sol.funcionarios || []).length})
-                </h3>
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="p-2 text-left">#</th>
-                          <th className="p-2 text-left">Nome</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(sol.funcionarios || []).map((f: any, i: number) => (
-                          <tr key={f.employeeId} className="border-t hover:bg-blue-50">
-                            <td className="p-2 text-muted-foreground">{i + 1}</td>
-                            <td className="p-2">
-                              <span
-                                className="text-blue-700 font-medium cursor-pointer hover:underline"
-                                onClick={() => setRaioXEmployeeId(f.employeeId)}
-                              >
-                                {f.employeeName || `ID ${f.employeeId}`}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              {/* Funcionários + Custo Previsto */}
+              {(() => {
+                const funcs = sol.funcionarios || [];
+                // --- calcula horas da HE ---
+                function calcHoras(ini: string, fim: string): number {
+                  if (!ini || !fim) return 0;
+                  const [h1, m1] = ini.split(":").map(Number);
+                  const [h2, m2] = fim.split(":").map(Number);
+                  const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+                  return mins > 0 ? mins / 60 : 0;
+                }
+                const horasHE = calcHoras(sol.horaInicio || "", sol.horaFim || "");
+                // dia da semana → percentual CLT
+                const diaSemana = sol.dataSolicitacao
+                  ? new Date(sol.dataSolicitacao + "T12:00:00").getDay()  // 0=dom, 6=sab
+                  : -1;
+                const isWeekend = diaSemana === 0 || diaSemana === 6;
+                const percentHE = isWeekend ? 100 : 50;
+                // valor/hora por funcionário
+                function getValorHora(f: any): number | null {
+                  if (f.employeeValorHora) {
+                    const v = parseFloat(String(f.employeeValorHora).replace(",", "."));
+                    if (!isNaN(v) && v > 0) return v;
+                  }
+                  if (f.employeeSalarioBase) {
+                    const s = parseFloat(String(f.employeeSalarioBase).replace(",", "."));
+                    if (!isNaN(s) && s > 0) return s / 220;
+                  }
+                  return null;
+                }
+                const custoTotal = funcs.reduce((acc: number, f: any) => {
+                  const vh = getValorHora(f);
+                  if (!vh || horasHE === 0) return acc;
+                  return acc + vh * (1 + percentHE / 100) * horasHE;
+                }, 0);
+                const semSalario = funcs.filter((f: any) => getValorHora(f) === null);
+
+                return (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Funcionários ({funcs.length})
+                    </h3>
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="p-2 text-left">#</th>
+                              <th className="p-2 text-left">Nome</th>
+                              <th className="p-2 text-left">
+                                <span className="flex items-center gap-1"><HardHat className="h-3 w-3" /> Função</span>
+                              </th>
+                              {horasHE > 0 && (
+                                <th className="p-2 text-right">
+                                  <span className="flex items-center justify-end gap-1"><DollarSign className="h-3 w-3" /> Custo HE</span>
+                                </th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {funcs.map((f: any, i: number) => {
+                              const vh = getValorHora(f);
+                              const custoFunc = vh && horasHE > 0 ? vh * (1 + percentHE / 100) * horasHE : null;
+                              return (
+                                <tr key={f.employeeId} className="border-t hover:bg-blue-50">
+                                  <td className="p-2 text-muted-foreground">{i + 1}</td>
+                                  <td className="p-2">
+                                    <span
+                                      className="text-blue-700 font-medium cursor-pointer hover:underline"
+                                      onClick={() => setRaioXEmployeeId(f.employeeId)}
+                                    >
+                                      {f.employeeName || `ID ${f.employeeId}`}
+                                    </span>
+                                  </td>
+                                  <td className="p-2 text-muted-foreground">
+                                    {f.employeeFuncao || <span className="italic text-slate-400">—</span>}
+                                  </td>
+                                  {horasHE > 0 && (
+                                    <td className="p-2 text-right font-mono">
+                                      {custoFunc != null
+                                        ? <span className="text-green-700 font-semibold">R$ {fmtNum(custoFunc)}</span>
+                                        : <span className="text-xs text-slate-400 italic">sem salário</span>}
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Painel de Custo Previsto */}
+                    {horasHE > 0 && (
+                      <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4 space-y-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <TrendingUp className="h-4 w-4 text-blue-700" />
+                          <span className="font-bold text-blue-800 text-sm">Custo Previsto da HE</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                          <div className="bg-white rounded p-2 border border-blue-100">
+                            <p className="text-muted-foreground">Duração</p>
+                            <p className="font-bold text-base">{horasHE.toFixed(1)}h</p>
+                          </div>
+                          <div className="bg-white rounded p-2 border border-blue-100">
+                            <p className="text-muted-foreground">Adicional CLT</p>
+                            <p className="font-bold text-base text-orange-600">{percentHE}%</p>
+                            <p className="text-[10px] text-muted-foreground">{isWeekend ? "Fim de semana" : "Dia útil"}</p>
+                          </div>
+                          <div className="bg-white rounded p-2 border border-blue-100">
+                            <p className="text-muted-foreground">Funcionários</p>
+                            <p className="font-bold text-base">{funcs.length}</p>
+                            {semSalario.length > 0 && <p className="text-[10px] text-red-500">{semSalario.length} sem salário</p>}
+                          </div>
+                          <div className="bg-white rounded p-2 border-2 border-blue-300">
+                            <p className="text-muted-foreground">Total Previsto</p>
+                            <p className="font-bold text-lg text-blue-800">
+                              {custoTotal > 0 ? `R$ ${fmtNum(custoTotal)}` : <span className="text-slate-400 text-sm">—</span>}
+                            </p>
+                          </div>
+                        </div>
+                        {semSalario.length > 0 && (
+                          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                            ⚠ {semSalario.length} funcionário(s) sem salário/valor-hora cadastrado — não incluídos no total.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Histórico de decisão (se já teve) */}
               {sol.aprovadoPor && (
