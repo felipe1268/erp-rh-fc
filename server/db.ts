@@ -1252,12 +1252,12 @@ export async function checkDuplicateCpf(cpf: string, excludeEmployeeId?: number)
   if (!db) return [];
   const cleanCpf = cpf.replace(/\D/g, "");
   if (cleanCpf.length < 11) return [];
-  const conditions = [or(eq(employees.cpf, cpf), eq(employees.cpf, cleanCpf))];
+  const conditions = [or(eq(employees.cpf, cpf), eq(employees.cpf, cleanCpf)), isNull(employees.deletedAt)];
   if (excludeEmployeeId) {
     const { ne } = await import("drizzle-orm");
     conditions.push(ne(employees.id, excludeEmployeeId) as any);
   }
-  // Retorna dados completos para auto-preenchimento
+  // Retorna dados completos para auto-preenchimento (ignora registros excluídos)
   const results = await db.select().from(employees).where(and(...conditions));
   if (results.length > 0) {
     const companyIds = Array.from(new Set(results.map(r => r.companyId)));
