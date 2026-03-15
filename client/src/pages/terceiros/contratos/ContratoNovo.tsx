@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Save, Building2, RefreshCw, TrendingDown, TrendingUp, Minus } from "lucide-react";
+import { formatCNPJ } from "@/lib/formatters";
 import { toast } from "sonner";
 
 const parseVal = (s: string) => parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
@@ -121,7 +122,7 @@ export default function ContratoNovo() {
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a empresa..." /></SelectTrigger>
                 <SelectContent>
                   {empresas.map((e: any) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.nomeFantasia || e.razaoSocial} — {e.cnpj}</SelectItem>
+                    <SelectItem key={e.id} value={String(e.id)}>{e.nomeFantasia || e.razaoSocial} — {formatCNPJ(e.cnpj)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

@@ -1294,6 +1294,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:00:00",
   },
   {
+    version: 350,
+    titulo: "Empresas Terceiras: máscara de CNPJ (XX.XXX.XXX/XXXX-XX)",
+    descricao: "Campo CNPJ no cadastro de empresas terceiras passa a exibir e aceitar entrada com máscara progressiva (formato XX.XXX.XXX/XXXX-XX). Exibição formatada na listagem e no diálogo de geração de acesso. Dropdown de seleção de empresa no formulário de Novo Contrato também exibe CNPJ formatado.",
+    tipo: "melhoria",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 349,
     titulo: "Contratos Terceiros: número automático + orçamento vs fechado",
     descricao: "Número do contrato gerado automaticamente (CT-AAAA-SEQ) com sequencial único por empresa/ano — campo editável com botão de restaurar numeração automática. Dois campos de valor: Valor do Orçamento (budget interno FC) e Valor Fechado com Fornecedor. Indicador visual de variação (acima/abaixo/dentro do orçamento) com percentual em ContratoNovo, ContratoDetalhe e ContratosList. Nova coluna valor_orcamento no banco + procedure proximoNumeroContrato no backend.",
