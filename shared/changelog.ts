@@ -1510,6 +1510,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 370,
+    titulo: "Mapa de Cotação — Meta calculada ao vivo pelo metaPercentual do Orçamento",
+    descricao: "Corrigido valor incorreto na coluna Meta (Orçamento) do Mapa de Cotação. O sistema exibia o valor armazenado em metaUnitTotal, que podia estar desatualizado (ex: aprovado com metaPercentual=0, resultando no preço de custo). Agora busca custoUnitTotal do item de orçamento e o metaPercentual atual do orçamento, e calcula ao vivo: metaUnitario = custoUnitTotal × (1 − metaPercentual). Comportamento idêntico ao da visão Meta na tabela EAP do orçamento.",
+    tipo: "correcao",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 369,
     titulo: "Orçamento — Filtro de busca por descrição na tabela EAP",
     descricao: "Adicionado campo de busca textual na barra de controle da tabela EAP do orçamento. Ao digitar, filtra itens por descrição ou código EAP, exibindo os resultados juntamente com todos os ancestrais para manter o contexto hierárquico. O contador de itens mostra 'X de Y itens' durante a busca. Um botão X limpa o filtro instantaneamente. Em modo de busca o colapso é ignorado — todos os itens relevantes aparecem expandidos.",

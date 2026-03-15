@@ -1024,7 +1024,8 @@ Responda APENAS com um objeto JSON no formato:
       const fornIds = participantes.map(p => p.fornecedorId);
       const forns = fornIds.length > 0 ? await db.select().from(fornecedores).where(inArray(fornecedores.id, fornIds)) : [];
 
-      // Buscar metaUnitario via SC item → orcamento item
+      // Buscar metaUnitario via SC item → orcamento item → orcamento.metaPercentual
+      // Calcula ao vivo: custoUnitTotal × (1 − metaPercentual), igual ao EAP faz
       const scItemIds = itens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
       let scItens: any[] = [];
       if (scItemIds.length > 0) {
@@ -1038,13 +1039,31 @@ Responda APENAS com um objeto JSON no formato:
       if (orcItemIds.length > 0) {
         orcItensData = await db.select({
           id: orcamentoItens.id,
-          metaUnitTotal: orcamentoItens.metaUnitTotal,
+          orcamentoId: orcamentoItens.orcamentoId,
+          custoUnitTotal: orcamentoItens.custoUnitTotal,
+          quantidade: orcamentoItens.quantidade,
         }).from(orcamentoItens).where(inArray(orcamentoItens.id, orcItemIds));
       }
+      // Buscar metaPercentual de cada orçamento vinculado
+      const orcIds = [...new Set(orcItensData.map((o: any) => o.orcamentoId).filter(Boolean))] as number[];
+      let orcData: any[] = [];
+      if (orcIds.length > 0) {
+        orcData = await db.select({ id: orcamentos.id, metaPercentual: orcamentos.metaPercentual })
+          .from(orcamentos).where(inArray(orcamentos.id, orcIds));
+      }
+      const orcToMetaPerc: Record<number, number> = {};
+      for (const o of orcData) orcToMetaPerc[o.id] = n(o.metaPercentual);
+
       const scItemToOrcItem: Record<number, number> = {};
       for (const s of scItens) if (s.orcamentoItemId) scItemToOrcItem[s.id] = s.orcamentoItemId;
+
+      // Mapa: orcamentoItemId → metaUnitario calculado ao vivo
       const orcItemToMeta: Record<number, number> = {};
-      for (const o of orcItensData) orcItemToMeta[o.id] = n(o.metaUnitTotal);
+      for (const o of orcItensData) {
+        const metaPerc = orcToMetaPerc[o.orcamentoId] ?? 0;
+        const custoUnit = n(o.custoUnitTotal);
+        orcItemToMeta[o.id] = custoUnit * (1 - metaPerc);
+      }
 
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
