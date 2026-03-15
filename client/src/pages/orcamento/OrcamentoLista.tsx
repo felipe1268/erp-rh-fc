@@ -81,7 +81,7 @@ export default function OrcamentoLista() {
     { enabled: !!companyId }
   );
 
-  const deleteMutation = trpc.orcamento.delete.useMutation({
+  const deleteMutation = trpc.orcamento.excluir.useMutation({
     onSuccess: () => { toast.success("Orçamento excluído."); refetch(); },
     onError: (e) => toast.error(e.message || "Erro ao excluir"),
   });
@@ -308,7 +308,7 @@ export default function OrcamentoLista() {
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction
                                 className="bg-destructive hover:bg-destructive/90"
-                                onClick={() => deleteMutation.mutate({ id: orc.id })}
+                                onClick={() => deleteMutation.mutate({ id: orc.id, companyId: companyId ?? 0 })}
                               >
                                 Excluir
                               </AlertDialogAction>

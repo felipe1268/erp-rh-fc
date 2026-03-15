@@ -2067,6 +2067,7 @@ export const orcamentoRouter = router({
       await db.delete(orcamentoItens)            .where(eq(orcamentoItens.orcamentoId,            oid));
       await db.delete(orcamentoInsumos)          .where(eq(orcamentoInsumos.orcamentoId,          oid));
       await db.delete(orcamentoBdi)              .where(eq(orcamentoBdi.orcamentoId,              oid));
+      await db.delete(orcamentoSecs)             .where(eq(orcamentoSecs.orcamentoId,             oid));
       await db.delete(bdiIndiretos)              .where(eq(bdiIndiretos.orcamentoId,              oid));
       await db.delete(bdiFd)                     .where(eq(bdiFd.orcamentoId,                     oid));
       await db.delete(bdiAdmCentral)             .where(eq(bdiAdmCentral.orcamentoId,             oid));
