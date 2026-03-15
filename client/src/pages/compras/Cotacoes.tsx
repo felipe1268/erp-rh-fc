@@ -15,6 +15,58 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package } from "lucide-react";
 
+function SaldosRealocacaoPanel({ companyId, obraId, deficit }: { companyId: number; obraId?: number; deficit: number }) {
+  const q = trpc.compras.buscarSaldosRealocacao.useQuery(
+    { companyId, obraId, deficit },
+    { enabled: companyId > 0 && deficit > 0 }
+  );
+  if (q.isLoading) return <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-red-400" /></div>;
+  if (!q.data || q.data.sobras.length === 0) return <p className="text-xs text-red-500 italic">Nenhuma atividade comprada/contratada com sobra encontrada para realocação.</p>;
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-red-700">Sobras disponíveis em atividades já compradas (apenas estas podem ser realocadas):</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-red-200">
+              <th className="text-left py-1 pr-3 text-red-600 font-semibold">OC / Atividade</th>
+              <th className="text-left py-1 pr-3 text-red-600 font-semibold">Descrição</th>
+              <th className="text-right py-1 pr-3 text-red-600 font-semibold">Meta</th>
+              <th className="text-right py-1 pr-3 text-red-600 font-semibold">Comprado</th>
+              <th className="text-right py-1 text-red-600 font-semibold">Sobra</th>
+            </tr>
+          </thead>
+          <tbody>
+            {q.data.sobras.map((s, i) => (
+              <tr key={i} className="border-b border-red-100">
+                <td className="py-1.5 pr-3 font-mono text-red-700">{s.ocNumero}</td>
+                <td className="py-1.5 pr-3 text-gray-700">{s.descricao} <span className="text-gray-400">{s.unidade}</span></td>
+                <td className="py-1.5 pr-3 text-right text-gray-600">{s.vlrMeta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                <td className="py-1.5 pr-3 text-right text-gray-600">{s.vlrComprado.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                <td className="py-1.5 text-right font-bold text-emerald-700">{s.sobra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-red-200 bg-red-50/50">
+              <td colSpan={4} className="py-2 pr-3 font-semibold text-red-700">Total de sobras disponíveis</td>
+              <td className="py-2 text-right font-bold text-emerald-700">{q.data.totalSobras.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+            </tr>
+            <tr>
+              <td colSpan={5} className="py-2 text-xs italic">
+                {q.data.cobreDeficit
+                  ? <span className="text-emerald-700 font-semibold">✓ As sobras são suficientes para cobrir o déficit de {deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.</span>
+                  : <span className="text-red-700 font-semibold">⚠ As sobras disponíveis ({q.data.totalSobras.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) não cobrem o déficit de {deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Diferença de {(deficit - q.data.totalSobras).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} sem cobertura.</span>
+                }
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pendente:  { label: "Pendente",  cls: "bg-amber-50 text-amber-700 border-amber-200" },
   aprovada:  { label: "Aprovada",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -572,132 +624,287 @@ export default function Cotacoes() {
                   {mapaQ.isLoading ? (
                     <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
                   ) : (mapa?.participantes ?? []).length === 0 ? null : (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200 bg-gray-50">
-                            <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3 min-w-64">Item</th>
-                            <th className="text-center text-xs font-semibold text-gray-500 uppercase px-3 py-3 w-16">Un.</th>
-                            <th className="text-right text-xs font-semibold text-gray-500 uppercase px-3 py-3 w-20">Qtd</th>
-                            {(mapa?.participantes ?? []).map((p: any) => {
-                              const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;
-                              const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
-                              return (
-                                <th key={p.fornecedorId} className={`text-center text-xs font-semibold uppercase px-3 py-3 min-w-36 ${isMelhor ? "text-emerald-600" : "text-gray-500"}`}>
-                                  <div className="flex flex-col items-center gap-0.5">
-                                    {isMelhor && <Trophy className="h-3 w-3 text-emerald-500" />}
-                                    <span>{nome}</span>
-                                  </div>
-                                </th>
-                              );
-                            })}
-                          </tr>
-                          {/* Prazo + Cond. pag. por fornecedor */}
-                          {(mapa?.participantes ?? []).length > 0 && (
-                            <tr className="border-b border-gray-100 bg-blue-50/30">
-                              <td colSpan={3} className="px-4 py-2 text-xs text-gray-400 italic">Prazo / Cond. pagamento</td>
-                              {(mapa?.participantes ?? []).map((p: any) => (
-                                <td key={p.fornecedorId} className="px-2 py-2">
-                                  {editingFornId === p.fornecedorId ? (
-                                    <div className="flex flex-col gap-1">
-                                      <Input type="number" placeholder="Prazo (dias)" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="h-6 text-xs border-gray-300 bg-white text-gray-900 w-full" />
-                                      <select
-                                        value={editCondPag[p.fornecedorId] ?? ""}
-                                        onChange={e => setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))}
-                                        className="h-6 text-xs border border-gray-300 bg-white text-gray-900 w-full rounded px-1"
-                                      >
-                                        <option value="">— selecionar —</option>
-                                        {condPagOptions.map(c => <option key={c} value={c}>{c}</option>)}
-                                      </select>
+                    <div className="space-y-4">
+                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+                        <table className="text-sm border-collapse" style={{ minWidth: "max-content" }}>
+                          <thead>
+                            {/* Linha 1: nomes dos grupos de colunas */}
+                            <tr className="border-b border-gray-200 bg-gray-50">
+                              <th rowSpan={2} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3 min-w-56 border-r border-gray-200">Item</th>
+                              <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-3 py-3 w-14 border-r border-gray-200">Un.</th>
+                              <th colSpan={3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">Meta (Orçamento)</th>
+                              {(mapa?.participantes ?? []).map((p: any) => {
+                                const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;
+                                const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+                                return (
+                                  <th key={p.fornecedorId} colSpan={3} className={`text-center text-xs font-semibold uppercase px-2 py-2 border-r border-gray-200 ${isMelhor ? "text-emerald-700 bg-emerald-50/60" : "text-gray-500"}`}>
+                                    <div className="flex flex-col items-center gap-1">
+                                      <div className="flex items-center gap-1">
+                                        {isMelhor && <Trophy className="h-3 w-3 text-emerald-500" />}
+                                        <span>{nome}</span>
+                                        {(p as any).arquivoUrl ? (
+                                          <a href={(p as any).arquivoUrl} target="_blank" rel="noreferrer" className="ml-1 text-blue-500 hover:text-blue-700" title="Ver cotação anexada">
+                                            <ExternalLink className="h-3 w-3" />
+                                          </a>
+                                        ) : null}
+                                      </div>
+                                      {/* Botão de anexo */}
+                                      <div className="flex items-center gap-1">
+                                        {showAnexoInput === p.fornecedorId ? (
+                                          <div className="flex items-center gap-1">
+                                            <input
+                                              type="url" placeholder="URL do arquivo..."
+                                              value={anexoUrl[p.fornecedorId] ?? ""}
+                                              onChange={e => setAnexoUrl(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))}
+                                              className="h-6 w-40 text-xs border border-gray-300 rounded px-2 bg-white text-gray-900 font-normal"
+                                              onClick={e => e.stopPropagation()}
+                                            />
+                                            <button onClick={() => {
+                                              const url = anexoUrl[p.fornecedorId] ?? "";
+                                              if (!url) return;
+                                              salvarAnexo.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, arquivoUrl: url, arquivoNome: url.split("/").pop() || "arquivo" });
+                                            }} className="text-emerald-600 hover:text-emerald-800" title="Salvar"><Save className="h-3 w-3" /></button>
+                                            <button onClick={() => setShowAnexoInput(null)} className="text-gray-400 hover:text-gray-600"><X className="h-3 w-3" /></button>
+                                          </div>
+                                        ) : (
+                                          <button onClick={() => setShowAnexoInput(p.fornecedorId)} className="flex items-center gap-0.5 text-xs text-gray-400 hover:text-blue-600 font-normal normal-case" title="Anexar cotação do fornecedor">
+                                            <Paperclip className="h-3 w-3" /> {(p as any).arquivoNome ? (p as any).arquivoNome.slice(0, 12) + "…" : "Anexar"}
+                                          </button>
+                                        )}
+                                      </div>
                                     </div>
-                                  ) : (
-                                    <div className="text-xs text-center text-gray-500">
-                                      {p.prazoEntregaDias ? `${p.prazoEntregaDias}d` : "—"} / {p.condicaoPagamento || "—"}
-                                    </div>
-                                  )}
-                                </td>
-                              ))}
+                                  </th>
+                                );
+                              })}
+                              <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-3 py-3 min-w-24">Saldo</th>
                             </tr>
-                          )}
-                        </thead>
-                        <tbody>
-                          {(mapa?.itens ?? []).map((it: any) => {
-                            const melhorPreco = getMelhorPrecoItem(it.id);
-                            return (
-                              <tr key={it.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                <td className="px-4 py-2.5 text-gray-900 text-xs">{it.descricao}</td>
-                                <td className="px-3 py-2.5 text-gray-500 text-xs text-center">{it.unidade || "un"}</td>
-                                <td className="px-3 py-2.5 text-gray-700 text-xs text-right">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</td>
-                                {(mapa?.participantes ?? []).map((p: any) => {
-                                  const key = `${it.id}_${p.fornecedorId}`;
-                                  const precoAtual = editingFornId === p.fornecedorId ? parseFloat(editPrecos[key] ?? "0") : parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
-                                  const isBest = melhorPreco !== null && precoAtual > 0 && precoAtual === melhorPreco;
-                                  return (
-                                    <td key={p.fornecedorId} className={`px-2 py-2 text-center ${isBest ? "bg-emerald-50" : ""}`}>
-                                      {editingFornId === p.fornecedorId ? (
-                                        <Input
-                                          type="number" step="0.01" min="0"
-                                          value={editPrecos[key] ?? ""}
-                                          onChange={e => setEditPrecos(prev => ({ ...prev, [key]: e.target.value }))}
-                                          className={`h-7 text-xs text-right border-gray-300 bg-white text-gray-900 w-28 mx-auto ${isBest ? "border-emerald-400" : ""}`}
-                                          placeholder="0,00"
-                                        />
-                                      ) : (
-                                        <span className={`text-xs font-medium ${isBest ? "text-emerald-700 font-bold" : "text-gray-700"}`}>
-                                          {precoAtual > 0 ? precoAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
-                                        </span>
-                                      )}
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr className="border-t-2 border-gray-300 bg-gray-50">
-                            <td colSpan={3} className="px-4 py-3 text-xs font-bold text-gray-700 uppercase">Total por Fornecedor</td>
-                            {(mapa?.participantes ?? []).map((p: any) => {
-                              const totalForn = editingFornId === p.fornecedorId
-                                ? (mapa?.itens ?? []).reduce((acc: number, it: any) => {
-                                    const preco = parseFloat(editPrecos[`${it.id}_${p.fornecedorId}`] ?? "0") || 0;
-                                    return acc + preco * parseFloat(it.quantidade);
-                                  }, 0)
-                                : parseFloat(p.totalOrcado ?? "0");
-                              const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+                            {/* Linha 2: sub-headers */}
+                            <tr className="border-b border-gray-300 bg-gray-50">
+                              <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28">Preço Unit.</th>
+                              <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-20">QTD</th>
+                              <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28 border-r border-blue-100">Total Meta</th>
+                              {(mapa?.participantes ?? []).map((p: any) => {
+                                const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+                                const baseCls = isMelhor ? "text-emerald-600 bg-emerald-50/40" : "text-gray-500";
+                                return (
+                                  <th key={p.fornecedorId} colSpan={3} className="p-0">
+                                    {/* Prazo/cond sub-row inside header */}
+                                    <div className={`flex border-r border-gray-200 ${isMelhor ? "bg-emerald-50/40" : ""}`}>
+                                      <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>QTD</div>
+                                      <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>Preço Unit.</div>
+                                      <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls}`}>Total</div>
+                                    </div>
+                                    {/* Prazo/cond row */}
+                                    <div className={`flex border-t border-gray-100 border-r border-gray-200 text-xs text-gray-400 bg-blue-50/20 ${isMelhor ? "bg-emerald-50/20" : ""}`}>
+                                      <div className="flex-1 px-1 py-1 text-center col-span-3 truncate" style={{ minWidth: 0 }}>
+                                        {editingFornId === p.fornecedorId ? (
+                                          <div className="flex gap-1 px-1">
+                                            <input type="number" placeholder="Prazo" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-14 h-5 text-xs border border-gray-300 rounded px-1 bg-white text-gray-900" />
+                                            <select value={editCondPag[p.fornecedorId] ?? ""} onChange={e => setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="flex-1 h-5 text-xs border border-gray-300 rounded px-1 bg-white text-gray-900">
+                                              <option value="">— cond. —</option>
+                                              {condPagOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                          </div>
+                                        ) : (
+                                          <span className="text-xs text-gray-400">{p.prazoEntregaDias ? `${p.prazoEntregaDias}d` : "—"} / {p.condicaoPagamento || "—"}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </th>
+                                );
+                              })}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(mapa?.itens ?? []).map((it: any) => {
+                              const melhorPreco = getMelhorPrecoItem(it.id);
+                              const metaUnit = parseFloat(it.metaUnitario ?? "0");
+                              const metaQtd = parseFloat(it.quantidade ?? "0");
+                              const metaTot = metaUnit * metaQtd;
+                              const { saldo, hasMeta } = getItemSaldo(it);
                               return (
-                                <td key={p.fornecedorId} className={`px-3 py-3 text-center text-sm font-bold ${isMelhor ? "text-emerald-700 bg-emerald-50" : "text-gray-900"}`}>
-                                  {totalForn > 0 ? totalForn.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
-                                </td>
+                                <tr key={it.id} className="border-b border-gray-100 hover:bg-gray-50/60">
+                                  <td className="px-4 py-2 text-gray-900 text-xs border-r border-gray-100">{it.descricao}</td>
+                                  <td className="px-3 py-2 text-gray-500 text-xs text-center border-r border-gray-100">{it.unidade || "un"}</td>
+                                  {/* Meta cols */}
+                                  <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-medium">
+                                    {metaUnit > 0 ? metaUnit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
+                                    {metaQtd > 0 ? metaQtd.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
+                                    {metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                  </td>
+                                  {/* Colunas por fornecedor */}
+                                  {(mapa?.participantes ?? []).map((p: any) => {
+                                    const key = `${it.id}_${p.fornecedorId}`;
+                                    const isEditing = editingFornId === p.fornecedorId;
+                                    const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+                                    const savedPreco = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
+                                    const savedQty = parseFloat(mapa?.respostaMap?.[key]?.quantidade ?? it.quantidade ?? "1");
+                                    const displayPreco = isEditing ? parseFloat(editPrecos[key] ?? "0") : savedPreco;
+                                    const displayQty = isEditing
+                                      ? (parseFloat(editQtds[key] ?? "0") || savedQty)
+                                      : savedQty;
+                                    const displayTotal = displayPreco * displayQty;
+                                    const isBest = melhorPreco !== null && displayPreco > 0 && displayPreco === melhorPreco;
+                                    const rowCls = isMelhor ? "bg-emerald-50/30" : "";
+                                    return (
+                                      <>
+                                        {/* QTD (editável) */}
+                                        <td key={`qty_${p.fornecedorId}`} className={`px-1 py-1 text-right border-r border-gray-100 ${rowCls}`}>
+                                          {isEditing ? (
+                                            <Input type="number" step="0.001" min="0"
+                                              value={editQtds[key] ?? String(savedQty)}
+                                              onChange={e => setEditQtds(prev => ({ ...prev, [key]: e.target.value }))}
+                                              className="h-6 text-xs text-right border-gray-300 bg-white text-gray-900 w-20 ml-auto" />
+                                          ) : (
+                                            <span className="text-xs text-gray-600">{savedQty > 0 ? savedQty.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}</span>
+                                          )}
+                                        </td>
+                                        {/* Preço unit (editável) */}
+                                        <td key={`preco_${p.fornecedorId}`} className={`px-1 py-1 text-right border-r border-gray-100 ${rowCls} ${isBest ? "bg-emerald-50" : ""}`}>
+                                          {isEditing ? (
+                                            <Input type="number" step="0.01" min="0"
+                                              value={editPrecos[key] ?? ""}
+                                              onChange={e => setEditPrecos(prev => ({ ...prev, [key]: e.target.value }))}
+                                              className={`h-6 text-xs text-right border-gray-300 bg-white text-gray-900 w-24 ml-auto ${isBest ? "border-emerald-400" : ""}`}
+                                              placeholder="0,00" />
+                                          ) : (
+                                            <span className={`text-xs font-medium ${isBest ? "text-emerald-700 font-bold" : "text-gray-700"}`}>
+                                              {displayPreco > 0 ? displayPreco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                            </span>
+                                          )}
+                                        </td>
+                                        {/* Total */}
+                                        <td key={`tot_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-200 ${rowCls} ${isBest ? "bg-emerald-50" : ""}`}>
+                                          <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-700" : "text-gray-700"}`}>
+                                            {displayTotal > 0 ? displayTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                          </span>
+                                        </td>
+                                      </>
+                                    );
+                                  })}
+                                  {/* Saldo */}
+                                  <td className="px-3 py-2 text-center">
+                                    {hasMeta && melhorForn && metaTot > 0 ? (
+                                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${saldo >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                                        {saldo >= 0 ? "+" : ""}{saldo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                      </span>
+                                    ) : <span className="text-gray-300 text-xs">—</span>}
+                                  </td>
+                                </tr>
                               );
                             })}
-                          </tr>
-                          {/* Botões de edição por fornecedor */}
-                          <tr className="bg-white border-t border-gray-100">
-                            <td colSpan={3} className="px-4 py-2"></td>
-                            {(mapa?.participantes ?? []).map((p: any) => (
-                              <td key={p.fornecedorId} className="px-2 py-2 text-center">
-                                {editingFornId === p.fornecedorId ? (
-                                  <div className="flex gap-1 justify-center">
-                                    <Button size="sm" onClick={() => handleSalvarPrecos(p.fornecedorId)} disabled={salvarRespostas.isPending}
-                                      className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1">
-                                      <Save className="h-3 w-3" /> Salvar
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => setEditingFornId(null)} className="h-7 text-xs border-gray-300 text-gray-600">
-                                      Cancelar
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <Button size="sm" variant="outline" onClick={() => setEditingFornId(p.fornecedorId)}
-                                    className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50">
-                                    Editar preços
-                                  </Button>
-                                )}
+                          </tbody>
+                          <tfoot>
+                            {/* Totais */}
+                            <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+                              <td colSpan={2} className="px-4 py-3 text-xs text-gray-700 uppercase border-r border-gray-200">Total</td>
+                              <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40">—</td>
+                              <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40">—</td>
+                              <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40 border-r border-blue-100 font-bold">
+                                {metaGrandTotal > 0 ? metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
                               </td>
+                              {(mapa?.participantes ?? []).map((p: any) => {
+                                const totalForn = getFornTotal(p);
+                                const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+                                return (
+                                  <>
+                                    <td key={`tfqty_${p.fornecedorId}`} className="px-2 py-3 border-r border-gray-100"></td>
+                                    <td key={`tfpreco_${p.fornecedorId}`} className="px-2 py-3 border-r border-gray-100"></td>
+                                    <td key={`tftot_${p.fornecedorId}`} className={`px-3 py-3 text-right text-sm border-r border-gray-200 ${isMelhor ? "text-emerald-700 bg-emerald-50" : "text-gray-900"}`}>
+                                      {totalForn > 0 ? totalForn.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
+                                    </td>
+                                  </>
+                                );
+                              })}
+                              {/* Saldo total */}
+                              <td className="px-3 py-3 text-center">
+                                {metaGrandTotal > 0 && melhorForn ? (
+                                  <span className={`text-sm font-bold px-2 py-1 rounded-full ${saldoTotal >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                                    {saldoTotal >= 0 ? "+" : ""}{saldoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                  </span>
+                                ) : "—"}
+                              </td>
+                            </tr>
+                            {/* Botões de edição */}
+                            <tr className="bg-white border-t border-gray-100">
+                              <td colSpan={5} className="px-4 py-2"></td>
+                              {(mapa?.participantes ?? []).map((p: any) => (
+                                <>
+                                  <td key={`bqty_${p.fornecedorId}`}></td>
+                                  <td key={`bpreco_${p.fornecedorId}`}></td>
+                                  <td key={`btot_${p.fornecedorId}`} className="px-2 py-2 text-center border-r border-gray-100">
+                                    {editingFornId === p.fornecedorId ? (
+                                      <div className="flex gap-1 justify-center">
+                                        <Button size="sm" onClick={() => handleSalvarPrecos(p.fornecedorId)} disabled={salvarRespostas.isPending}
+                                          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1">
+                                          <Save className="h-3 w-3" /> Salvar
+                                        </Button>
+                                        <Button size="sm" variant="outline" onClick={() => setEditingFornId(null)} className="h-7 text-xs border-gray-300 text-gray-600">
+                                          Cancelar
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Button size="sm" variant="outline" onClick={() => setEditingFornId(p.fornecedorId)}
+                                        className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50">
+                                        Editar
+                                      </Button>
+                                    )}
+                                  </td>
+                                </>
+                              ))}
+                              <td></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+
+                      {/* Alerta de saldo negativo + Realocação */}
+                      {metaGrandTotal > 0 && melhorForn && saldoTotal < 0 && (
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                              <div>
+                                <p className="text-red-800 font-semibold text-sm">Acima da meta orçamentária</p>
+                                <p className="text-red-600 text-xs">Déficit de {Math.abs(saldoTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} em relação ao orçamento. Apenas atividades já compradas/contratadas com sobra podem ser usadas para realocação.</p>
+                              </div>
+                            </div>
+                            <Button size="sm" variant="outline" onClick={() => setShowRealocacao(v => !v)} className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-100 flex-shrink-0">
+                              <TrendingDown className="h-3 w-3 mr-1" /> {showRealocacao ? "Fechar" : "Ver Realocação"}
+                            </Button>
+                          </div>
+                          {showRealocacao && (
+                            <SaldosRealocacaoPanel
+                              companyId={companyId}
+                              obraId={(mapa?.cotacao as any)?.obraId}
+                              deficit={Math.abs(saldoTotal)}
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Agrupamento final por material */}
+                      {gruposAgrupados.length > 0 && (
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Package className="h-4 w-4 text-gray-500" />
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Resumo Consolidado de Materiais</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {gruposAgrupados.map(g => (
+                              <div key={`${g.descricao}_${g.unidade}`} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700">
+                                <span className="font-bold text-gray-900">{g.qtdTotal.toLocaleString("pt-BR")}</span>
+                                {" "}<span className="text-gray-500">{g.unidade}</span>
+                                {" "}<span>{g.descricao}</span>
+                              </div>
                             ))}
-                          </tr>
-                        </tfoot>
-                      </table>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -1135,13 +1135,9 @@ Responda APENAS com um objeto JSON no formato:
     .input(z.object({ companyId: z.number(), obraId: z.number().optional(), deficit: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      // Busca OCs aprovadas/recebidas e contratos de terceiros ativos
-      // e compara com o meta do orçamento para achar sobras
       const ocs = await db.select({
         id: comprasOrdens.id,
         numeroOc: comprasOrdens.numeroOc,
-        total: comprasOrdens.total,
-        status: comprasOrdens.status,
         obraId: comprasOrdens.obraId,
       }).from(comprasOrdens).where(and(
         eq(comprasOrdens.companyId, input.companyId),
@@ -1149,29 +1145,49 @@ Responda APENAS com um objeto JSON no formato:
         input.obraId ? eq(comprasOrdens.obraId, input.obraId) : undefined,
       ));
 
-      const ocItens = ocs.length > 0
-        ? await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)))
-        : [];
+      if (ocs.length === 0) return { sobras: [], totalSobras: 0, deficit: input.deficit, cobreDeficit: false };
 
-      // Agrupa itens por descricao+unidade e compara com meta
-      type Sobra = { descricao: string; unidade: string; ocNumero: string; qtdOrcada: number; qtdComprada: number; vlrMeta: number; vlrComprado: number; sobra: number };
+      const ocItens = await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)));
+
+      // Para itens com solicitacaoItemId, buscar metaUnitTotal via SC → orcamento
+      const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+      let scItensOc: any[] = [];
+      if (scItemIds.length > 0) {
+        scItensOc = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId })
+          .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+      }
+      const orcIdsOc = scItensOc.map(s => s.orcamentoItemId).filter(Boolean) as number[];
+      let orcMetasOc: any[] = [];
+      if (orcIdsOc.length > 0) {
+        orcMetasOc = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
+          .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIdsOc));
+      }
+      const scToOrc: Record<number, number> = {};
+      for (const s of scItensOc) if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+      const orcToMeta: Record<number, number> = {};
+      for (const o of orcMetasOc) orcToMeta[o.id] = n(o.metaUnitTotal);
+
+      type Sobra = { descricao: string; unidade: string; ocNumero: string; vlrMeta: number; vlrComprado: number; sobra: number };
       const sobras: Sobra[] = [];
       for (const it of ocItens) {
-        const oc = ocs.find(o => o.id === it.ordemId);
-        if (!oc) continue;
-        const vlrOrcado = n(it.precoOrcado) * n(it.quantidade);
-        const vlrComprado = n(it.precoUnitario) * n(it.quantidade);
-        const diff = vlrOrcado - vlrComprado;
-        if (diff > 0.01 && vlrOrcado > 0) {
+        if (!it.solicitacaoItemId) continue;
+        const orcId = scToOrc[it.solicitacaoItemId];
+        if (!orcId) continue;
+        const metaUnit = orcToMeta[orcId] ?? 0;
+        if (metaUnit === 0) continue;
+        const qty = n(it.quantidade);
+        const vlrMeta = metaUnit * qty;
+        const vlrComprado = n(it.precoUnitario) * qty;
+        const sobra = vlrMeta - vlrComprado;
+        if (sobra > 0.01) {
+          const oc = ocs.find(o => o.id === it.ordemId);
           sobras.push({
             descricao: it.descricao || "—",
             unidade: it.unidade || "",
-            ocNumero: oc.numeroOc || String(oc.id),
-            qtdOrcada: n(it.quantidade),
-            qtdComprada: n(it.quantidade),
-            vlrMeta: vlrOrcado,
+            ocNumero: oc?.numeroOc || String(it.ordemId),
+            vlrMeta,
             vlrComprado,
-            sobra: diff,
+            sobra,
           });
         }
       }

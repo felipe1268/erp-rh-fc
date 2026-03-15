@@ -1491,4 +1491,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 23:59:00",
   },
+  {
+    version: 365,
+    titulo: "Mapa de Cotação — Meta, QTD editável, Saldo, Realocação e Agrupamento",
+    descricao: "Mapa de Cotação completamente reformulado: (1) colunas fixas Meta Orçamento (Preço Unit., QTD, Total Meta) por item, buscadas via SC→Orcamento join; (2) 3 sub-colunas por fornecedor: QTD (editável, padrão = qtd do item), Preço Unit., Total; (3) coluna Saldo por item (Meta − Vencedor) verde se dentro da meta, vermelho se acima; (4) painel de realocação: quando acima da meta mostra OCs aprovadas/recebidas com sobra de orçamento (apenas atividades já compradas podem ser fonte de realocação), verificando se as sobras cobrem o déficit; (5) resumo consolidado de materiais agrupados por descrição+unidade no final; (6) campo de anexo de cotação por fornecedor (URL) com link direto para visualização. Backend: adicionado quantidade à compras_cotacao_respostas, arquivo_url/arquivo_nome à compras_cotacao_fornecedores, novas procedures salvarAnexoFornecedor e buscarSaldosRealocacao.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
 ];
