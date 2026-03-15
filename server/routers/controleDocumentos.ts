@@ -976,10 +976,34 @@ export const controleDocumentosRouter = router({
         .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
         .where(and(eq(epiDeliveries.employeeId, input.employeeId), isNull(epiDeliveries.deletedAt)))
         .orderBy(desc(epiDeliveries.dataEntrega));
-      // Empréstimos de ferramentas/equipamentos (Almoxarifado)
-      const empEmprestimos = await db.select().from(warehouseLoans)
+      // Empréstimos de ferramentas/equipamentos (Almoxarifado) — com nome da obra
+      const empEmprestimosRaw = await db
+        .select({
+          id:               warehouseLoans.id,
+          companyId:        warehouseLoans.companyId,
+          obraId:           warehouseLoans.obraId,
+          obraNome:         obras.nome,
+          itemId:           warehouseLoans.itemId,
+          itemNome:         warehouseLoans.itemNome,
+          quantidade:       warehouseLoans.quantidade,
+          funcionarioId:    warehouseLoans.funcionarioId,
+          funcionarioCodigo:warehouseLoans.funcionarioCodigo,
+          funcionarioNome:  warehouseLoans.funcionarioNome,
+          dataEmprestimo:   warehouseLoans.dataEmprestimo,
+          horaEmprestimo:   warehouseLoans.horaEmprestimo,
+          dataDevolucao:    warehouseLoans.dataDevolucao,
+          horaDevolucao:    warehouseLoans.horaDevolucao,
+          status:           warehouseLoans.status,
+          observacoes:      warehouseLoans.observacoes,
+          almoxarifeId:     warehouseLoans.almoxarifeId,
+          almoxarifeNome:   warehouseLoans.almoxarifeNome,
+          createdAt:        warehouseLoans.createdAt,
+        })
+        .from(warehouseLoans)
+        .leftJoin(obras, eq(warehouseLoans.obraId, obras.id))
         .where(eq(warehouseLoans.funcionarioId, input.employeeId))
         .orderBy(desc(warehouseLoans.dataEmprestimo));
+      const empEmprestimos = empEmprestimosRaw;
       // VR - TODOS
       const empVR = await db.select().from(vrBenefits).where(eq(vrBenefits.employeeId, input.employeeId)).orderBy(desc(vrBenefits.mesReferencia));
       // Adiantamentos - TODOS
@@ -1061,8 +1085,9 @@ export const controleDocumentosRouter = router({
       empEpis.forEach(e => { if (e.dataEntrega) timeline.push({ data: e.dataEntrega, tipo: "EPI", descricao: `Entrega: ${e.nomeEpi || "EPI"}${e.ca ? ` (CA: ${e.ca})` : ""} — Qtd: ${e.quantidade || 1}`, cor: "teal", icone: "hard-hat" }); });
       // Empréstimos de ferramentas/equipamentos
       empEmprestimos.forEach(l => {
-        timeline.push({ data: l.dataEmprestimo, tipo: "Empréstimo", descricao: `Retirou: ${l.itemNome} — Qtd: ${parseFloat(l.quantidade as any) || 1} un${l.almoxarifeNome ? ` (Almoxarife: ${l.almoxarifeNome})` : ""}`, cor: "blue", icone: "wrench" });
-        if (l.dataDevolucao) timeline.push({ data: l.dataDevolucao, tipo: "Devolução", descricao: `Devolveu: ${l.itemNome}`, cor: "gray", icone: "check-circle" });
+        const obraInfo = (l as any).obraNome ? ` — Obra: ${(l as any).obraNome}` : "";
+        timeline.push({ data: l.dataEmprestimo, tipo: "Empréstimo", descricao: `Retirou: ${l.itemNome} — Qtd: ${parseFloat(l.quantidade as any) || 1} un${obraInfo}${l.almoxarifeNome ? ` (Almoxarife: ${l.almoxarifeNome})` : ""}`, cor: "blue", icone: "wrench" });
+        if (l.dataDevolucao) timeline.push({ data: l.dataDevolucao, tipo: "Devolução", descricao: `Devolveu: ${l.itemNome}${obraInfo}`, cor: "gray", icone: "check-circle" });
       });
 
       // Ordenar timeline por data (mais recente primeiro)

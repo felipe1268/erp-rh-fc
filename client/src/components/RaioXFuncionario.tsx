@@ -2148,7 +2148,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           <tr className="bg-orange-50 text-orange-800">
                             <th className="text-left px-3 py-2 font-semibold">Item</th>
                             <th className="text-center px-3 py-2 font-semibold">Qtd</th>
-                            <th className="text-left px-3 py-2 font-semibold">Almoxarifado</th>
+                            <th className="text-left px-3 py-2 font-semibold">Obra</th>
                             <th className="text-center px-3 py-2 font-semibold">Data Emprést.</th>
                             <th className="text-center px-3 py-2 font-semibold">Devolução</th>
                             <th className="text-center px-3 py-2 font-semibold">Status</th>
@@ -2156,7 +2156,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           </tr>
                         </thead>
                         <tbody>
-                          {emprestimosAlmox.map((loan: any) => {
+                          {[...emprestimosAlmox].sort((a: any, b: any) => (b.dataEmprestimo || "").localeCompare(a.dataEmprestimo || "")).map((loan: any) => {
                             const statusColors: Record<string, string> = {
                               emprestado: "bg-blue-100 text-blue-800",
                               devolvido: "bg-green-100 text-green-800",
@@ -2166,7 +2166,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                               <tr key={loan.id} className="border-b border-gray-100 hover:bg-gray-50">
                                 <td className="px-3 py-2 font-medium">{loan.itemNome}</td>
                                 <td className="px-3 py-2 text-center">{loan.quantidade || 1}</td>
-                                <td className="px-3 py-2 text-gray-600">{loan.almoxarifadoNome || "Central"}</td>
+                                <td className="px-3 py-2 text-gray-600 text-xs">{loan.obraNome || "—"}</td>
                                 <td className="px-3 py-2 text-center">{formatDate(loan.dataEmprestimo)}</td>
                                 <td className="px-3 py-2 text-center">{formatDate(loan.dataDevolucao) || "-"}</td>
                                 <td className="px-3 py-2 text-center">
