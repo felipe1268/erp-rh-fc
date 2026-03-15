@@ -629,17 +629,33 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     if (custoTotal === 0 && quantidade > 0 && custoUnitTotal > 0)
       custoTotal = quantidade * custoUnitTotal;
 
+    // Fallback para custoUnitTotal: se unitário=0 mas total e qty conhecidos
+    // Cobre casos onde colunas de unit cost não foram detectadas mas total foi
+    let custoUnitMatFinal = custoUnitMat;
+    let custoUnitMdoFinal = custoUnitMdo;
+    let custoUnitTotalFinal = custoUnitTotal;
+    if (custoUnitTotalFinal === 0 && quantidade > 0 && custoTotal > 0) {
+      custoUnitTotalFinal = custoTotal / quantidade;
+      // Distribuir entre mat e mdo proporcional ao total, ou tudo em mdo se mat=0
+      if (custoTotalMat > 0 && custoTotalMdo >= 0) {
+        custoUnitMatFinal = custoTotal > 0 ? (custoTotalMat / custoTotal) * custoUnitTotalFinal : 0;
+        custoUnitMdoFinal = custoUnitTotalFinal - custoUnitMatFinal;
+      } else {
+        custoUnitMdoFinal = custoUnitTotalFinal;
+      }
+    }
+
     // Fórmula ABNT/TCU: PV = CD ÷ (1 − BDI%)
     const bdiDiv = bdiPercentual > 0 ? (1 - bdiPercentual) : 1;
-    const vendaTotal     = bdiDiv < 1 ? custoTotal     / bdiDiv : custoTotal;
-    const vendaUnitTotal = bdiDiv < 1 ? custoUnitTotal / bdiDiv : custoUnitTotal;
-    const metaTotal      = custoTotal     * (1 - metaPerc);
-    const metaUnitTotal  = custoUnitTotal * (1 - metaPerc);
+    const vendaTotal     = bdiDiv < 1 ? custoTotal          / bdiDiv : custoTotal;
+    const vendaUnitTotal = bdiDiv < 1 ? custoUnitTotalFinal / bdiDiv : custoUnitTotalFinal;
+    const metaTotal      = custoTotal          * (1 - metaPerc);
+    const metaUnitTotal  = custoUnitTotalFinal * (1 - metaPerc);
     const abcServico     = String(col(row, 'abc') ?? '').trim().substring(0, 5);
 
     // Log do primeiro item para diagnóstico
     if (ordem === 0) {
-      console.log('[Orcamento] 1º item:', { eapCodigo, descricao: descricao.substring(0,30), unidade, quantidade, custoUnitMat, custoUnitMdo, custoTotalMat, custoTotalMdo, custoTotal });
+      console.log('[Orcamento] 1º item:', { eapCodigo, descricao: descricao.substring(0,30), unidade, quantidade, custoUnitMatFinal, custoUnitMdoFinal, custoUnitTotalFinal, custoTotalMat, custoTotalMdo, custoTotal });
     }
     ordem++;
     itens.push({
@@ -651,9 +667,9 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
       descricao:      descricao.substring(0, 1000),
       unidade:        unidade.substring(0, 30),
       quantidade:     fix4(quantidade),
-      custoUnitMat:   fix4(custoUnitMat),
-      custoUnitMdo:   fix4(custoUnitMdo),
-      custoUnitTotal: fix4(custoUnitTotal),
+      custoUnitMat:   fix4(custoUnitMatFinal),
+      custoUnitMdo:   fix4(custoUnitMdoFinal),
+      custoUnitTotal: fix4(custoUnitTotalFinal),
       vendaUnitTotal: fix4(vendaUnitTotal),
       metaUnitTotal:  fix4(metaUnitTotal),
       custoTotalMat:  fix2(custoTotalMat),

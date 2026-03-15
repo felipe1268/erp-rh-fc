@@ -1582,6 +1582,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 376,
+    titulo: "Orçamento — Fallback de custo unitário + patch do DB para orçamento importado antes do Rev.375",
+    descricao: "Import: adicionadas variáveis custoUnitMatFinal/MdoFinal/TotalFinal como fallback inteligente: se unidade=0 mas total>0 e qty>0, deriva custoUnitTotal=total/qty e distribui mat/mdo proporcionalmente (ou tudo em mdo quando mat=0). O itens.push() agora usa as variáveis Final garantindo que importações futuras nunca gravem zero para itens que têm custo apenas em MO. Patch SQL aplicado diretamente no DB: 439 itens do orçamento 15 (CUSTO_783_01_2026_R02, importado antes do fix) tiveram custoUnitMat/Mdo/Total corrigidos a partir dos valores corretos da planilha. Os 129 itens restantes sem custo unitário são Etapas/Subetapas (grupos), comportamento correto.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 367,
     titulo: "Módulo Terceiros — Contratos, Medições e Previsão de Caixa (T001–T005)",
     descricao: "Criação completa do submódulo de Contratos de Terceiros: (T001) 5 novas tabelas no PostgreSQL — terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos; (T002) router terceiroContratos.ts com CRUD de contratos, itens de contrato, medições (geração automática pelo planejamento de avanço físico) e previsão de caixa; (T003) router registrado em server/routers.ts como 'terceiroContratos'; (T004) 3 páginas React no módulo Terceiros: ContratosList, ContratoNovo e ContratoDetalhe (com gestão de itens, medições e documentos), mais MedicoesTerceiros e PrevisaoCaixa; (T005) rotas registradas no App.tsx e itens de menu adicionados ao sidebar Terceiros.",
