@@ -1015,6 +1015,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 14:00:00",
   },
   {
+    version: 308,
+    titulo: "Almoxarifado — Modal Emprestar: tela maior e foto do funcionário ampliada",
+    descricao: "Modal 'Emprestar Ferramenta' ampliado para max-w-lg. Card de funcionário selecionado redesenhado: foto circular centralizada de 112px (w-28 h-28) com borda esmeralda e sombra, nome e cargo abaixo. Ícone genérico também em 112px quando não há foto cadastrada.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 16:30:00",
+  },
+  {
     version: 307,
     titulo: "Almoxarifado — Busca de funcionário por nome no modal Emprestar Ferramenta",
     descricao: "Modal 'Emprestar Ferramenta' agora conta com busca inteligente por código (JFCxxxx) ou nome: campo único de texto dispara autocomplete com até 6 sugestões exibindo foto + nome + cargo; ao selecionar o funcionário, um card de confirmação (com foto circular ou ícone) aparece com botão de limpar; foto real do funcionário exibida quando disponível. Novo endpoint searchFuncionarios no backend com busca por nome, código ou cargo via ilike.",

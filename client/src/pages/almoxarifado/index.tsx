@@ -952,7 +952,7 @@ export default function AlmoxarifadoPage() {
       {/* ══ MODAL EMPRÉSTIMO ══════════════════════════════════════════ */}
       {modalEmprestimo && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ background: "#ffffff", color: "#111827" }}>
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ background: "#ffffff", color: "#111827" }}>
             {empOk ? (
               <div className="p-8 text-center space-y-4">
                 <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
@@ -1008,18 +1008,20 @@ export default function AlmoxarifadoPage() {
                     )}
                     {/* Card do funcionário selecionado */}
                     {empSelecionado && (
-                      <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
-                        {empSelecionado.fotoUrl
-                          ? <img src={empSelecionado.fotoUrl} alt={empSelecionado.nomeCompleto} className="w-12 h-12 rounded-full object-cover border-2 border-emerald-300 flex-shrink-0" />
-                          : <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><User className="w-6 h-6 text-emerald-500" /></div>
-                        }
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-emerald-800 truncate">{empSelecionado.nomeCompleto}</p>
-                          <p className="text-xs text-emerald-600">{empSelecionado.codigoInterno}{empSelecionado.cargo ? ` — ${empSelecionado.cargo}` : empSelecionado.funcao ? ` — ${empSelecionado.funcao}` : ""}</p>
-                        </div>
-                        <button type="button" onClick={() => { setEmpSelecionado(null); setEmpSearch(""); setEmpCodigo(""); }} className="text-gray-400 hover:text-red-500 transition flex-shrink-0">
+                      <div className="mt-3 bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4 flex flex-col items-center gap-2 relative">
+                        <button
+                          type="button"
+                          onClick={() => { setEmpSelecionado(null); setEmpSearch(""); setEmpCodigo(""); }}
+                          className="absolute top-2 right-2 text-gray-400 hover:text-red-500 transition"
+                        >
                           <X className="w-4 h-4" />
                         </button>
+                        {empSelecionado.fotoUrl
+                          ? <img src={empSelecionado.fotoUrl} alt={empSelecionado.nomeCompleto} className="w-28 h-28 rounded-full object-cover border-4 border-emerald-400 shadow-md" />
+                          : <div className="w-28 h-28 rounded-full bg-emerald-100 border-4 border-emerald-300 flex items-center justify-center shadow-md"><User className="w-14 h-14 text-emerald-400" /></div>
+                        }
+                        <p className="font-bold text-emerald-800 text-center text-base leading-tight">{empSelecionado.nomeCompleto}</p>
+                        <p className="text-sm text-emerald-600 text-center">{empSelecionado.codigoInterno}{empSelecionado.cargo ? ` — ${empSelecionado.cargo}` : empSelecionado.funcao ? ` — ${empSelecionado.funcao}` : ""}</p>
                       </div>
                     )}
                     {empSearch.length >= 2 && !empSelecionado && empSugestoes.length === 0 && (
