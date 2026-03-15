@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { buscarFotoParaItem } from "../_core/autoFoto";
 import {
   almoxarifadoItens,
   almoxarifadoMovimentacoes,
@@ -1155,5 +1156,51 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
             LIMIT ${input.limit ?? 200}`
       );
       return (rows as any)?.rows ?? rows ?? [];
+    }),
+
+  // ── BUSCAR FOTO IA (individual) ──────────────────────────────
+  buscarFotoItemIA: protectedProcedure
+    .input(z.object({ itemId: z.number(), nomeItem: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { success: false, url: null };
+      const url = await buscarFotoParaItem(input.nomeItem);
+      if (url) {
+        await db.execute(sql`UPDATE almoxarifado_itens SET foto_url = ${url} WHERE id = ${input.itemId}`);
+      }
+      return { success: !!url, url };
+    }),
+
+  // ── AUTO-FOTO BULK (todos sem foto) ─────────────────────────
+  autoFotoBulkAlmox: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { total: 0, atualizados: 0, semResultado: [] };
+      const semFoto = await db.execute(sql`
+        SELECT id, nome, categoria FROM almoxarifado_itens
+        WHERE company_id = ${input.companyId}
+          AND (foto_url IS NULL OR foto_url = '')
+          AND lower(coalesce(nome,'')) NOT LIKE '%uniforme%'
+          AND lower(coalesce(categoria,'')) NOT LIKE '%uniforme%'
+        ORDER BY nome
+      `);
+      const itens = ((semFoto as any)?.rows ?? semFoto ?? []) as { id: number; nome: string; categoria: string }[];
+      let atualizados = 0;
+      const erros: string[] = [];
+      for (const item of itens) {
+        try {
+          const url = await buscarFotoParaItem(item.nome);
+          if (url) {
+            await db.execute(sql`UPDATE almoxarifado_itens SET foto_url = ${url} WHERE id = ${item.id}`);
+            atualizados++;
+          } else {
+            erros.push(item.nome);
+          }
+        } catch (e) {
+          erros.push(item.nome);
+        }
+      }
+      return { total: itens.length, atualizados, semResultado: erros };
     }),
 });
