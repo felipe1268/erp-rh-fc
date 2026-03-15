@@ -527,11 +527,16 @@ export const appRouter = router({
       mimeType: z.string(),
       fileName: z.string(),
     })).mutation(async ({ input, ctx }) => {
+      const fs = await import("fs/promises");
+      const path = await import("path");
       const buffer = Buffer.from(input.base64, "base64");
       const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      const ext = input.fileName.split(".").pop() || "jpg";
-      const key = `employee-photos/${input.companyId}/${input.employeeId}-${suffix}.${ext}`;
-      const { url } = await storagePut(key, buffer, input.mimeType);
+      const ext = input.fileName.split(".").pop()?.toLowerCase() || "jpg";
+      const dirPath = path.join(process.cwd(), "server/uploads/photos");
+      await fs.mkdir(dirPath, { recursive: true });
+      const fname = `${input.companyId}-${input.employeeId}-${suffix}.${ext}`;
+      await fs.writeFile(path.join(dirPath, fname), buffer);
+      const url = `/uploads/photos/${fname}`;
       await updateEmployee(input.employeeId, input.companyId, { fotoUrl: url } as any);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.employeeId, details: `Foto 3x4 atualizada` });
       return { url };
