@@ -1186,6 +1186,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 16:00:00",
   },
   {
+    version: 327,
+    titulo: "Almoxarifado — Transferência entre Almoxarifados (Obra ↔ Central ↔ Obra)",
+    descricao: "Nova funcionalidade de transferência de estoque entre almoxarifados. Botão roxo '↔ TRANSFERIR' na tela principal. Modal com seleção de Origem (Central ou Obra) e Destino (Central ou Obra), item, quantidade e motivo. Backend debita origem e credita destino automaticamente; se o item não existir no destino é criado com as mesmas propriedades. Aba '↔ Transferências' no modal Registros. Nova tabela almoxarifado_transferencias com rastreio completo. Busca de funcionário com unaccent (acento insensível) e limite 8.",
+    tipo: "feature",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 18:00:00",
+  },
+  {
     version: 326,
     titulo: "Almoxarifado — Rastreio de Insumos/Consumíveis (sem devolução)",
     descricao: "Nova tabela almoxarifado_saidas_insumo para registrar saídas de consumíveis por funcionário sem retorno. Botão 'DAR INSUMO' (âmbar) na tela principal. Modal completo com busca de funcionário (autocomplete + foto), seleção de item/quantidade, obra de destino e motivo. Aba '🛒 Insumos' no modal Registros. Aba 'Insumos' no RaioX do funcionário com histórico completo. Backend: endpoints registerInsumo, listInsumos, listInsumosHoje; raioX inclui insumosAlmox.",

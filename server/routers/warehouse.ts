@@ -8,6 +8,7 @@ import {
   almoxarifadoMovimentacoes,
   almoxarifadoDescontoFolha,
   almoxarifadoSaidasInsumo,
+  almoxarifadoTransferencias,
   warehouseLoans,
   warehouseInventorySessions,
   warehouseInventorySessionItems,
@@ -1044,6 +1045,114 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
             WHERE company_id = ${input.companyId}
             AND DATE(created_at) = ${hoje}::date
             ORDER BY created_at DESC`
+      );
+      return (rows as any)?.rows ?? rows ?? [];
+    }),
+
+  // ── CRIAR TRANSFERÊNCIA ENTRE ALMOXARIFADOS ─────────────────
+  createTransferencia: protectedProcedure
+    .input(z.object({
+      companyId:      z.number(),
+      itemIdOrigem:   z.number(),
+      quantidade:     z.number().positive(),
+      origemTipo:     z.enum(["central", "obra"]),
+      origemObraId:   z.number().optional(),
+      origemObraNome: z.string().optional(),
+      destinoTipo:    z.enum(["central", "obra"]),
+      destinoObraId:  z.number().optional(),
+      destinoObraNome: z.string().optional(),
+      motivo:         z.string().optional(),
+      almoxarifeId:   z.number().optional(),
+      almoxarifeNome: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // 1. Busca item de origem
+      const [itemOrigem] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.itemIdOrigem));
+      if (!itemOrigem) throw new TRPCError({ code: "NOT_FOUND", message: "Item de origem não encontrado." });
+
+      const estoqueAtual = parseFloat(String(itemOrigem.quantidadeAtual) || "0");
+      if (estoqueAtual < input.quantidade) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Estoque insuficiente. Disponível: ${estoqueAtual} ${itemOrigem.unidade}.` });
+      }
+
+      // 2. Débita da origem
+      await db.update(almoxarifadoItens)
+        .set({ quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric - ${input.quantidade}` } as any)
+        .where(eq(almoxarifadoItens.id, input.itemIdOrigem));
+
+      // 3. Localiza ou cria item no destino
+      const destinoObraId = input.destinoTipo === "obra" ? (input.destinoObraId ?? null) : null;
+      const destinoConditions = [
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.nome, itemOrigem.nome),
+      ];
+      if (destinoObraId !== null) {
+        destinoConditions.push(eq(almoxarifadoItens.obraId, destinoObraId));
+      } else {
+        destinoConditions.push(sql`${almoxarifadoItens.obraId} IS NULL`);
+      }
+
+      const existingDestino = await db.select().from(almoxarifadoItens).where(and(...destinoConditions));
+      let itemIdDestino: number;
+
+      if (existingDestino.length > 0) {
+        itemIdDestino = existingDestino[0].id;
+        await db.update(almoxarifadoItens)
+          .set({ quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${input.quantidade}` } as any)
+          .where(eq(almoxarifadoItens.id, itemIdDestino));
+      } else {
+        // Cria novo item no destino com as mesmas propriedades
+        const [novoItem] = await db.insert(almoxarifadoItens).values({
+          companyId: input.companyId,
+          obraId: destinoObraId,
+          nome: itemOrigem.nome,
+          unidade: itemOrigem.unidade,
+          categoria: itemOrigem.categoria,
+          codigoInterno: itemOrigem.codigoInterno,
+          quantidadeAtual: String(input.quantidade),
+          quantidadeMinima: "0",
+          fotoUrl: (itemOrigem as any).fotoUrl,
+          ativo: true,
+        } as any).returning({ id: almoxarifadoItens.id });
+        itemIdDestino = novoItem.id;
+      }
+
+      // 4. Registra a transferência
+      await db.insert(almoxarifadoTransferencias).values({
+        companyId:      input.companyId,
+        itemIdOrigem:   input.itemIdOrigem,
+        itemIdDestino,
+        itemNome:       itemOrigem.nome,
+        unidade:        itemOrigem.unidade,
+        quantidade:     String(input.quantidade),
+        origemTipo:     input.origemTipo,
+        origemObraId:   input.origemObraId ?? null,
+        origemObraNome: input.origemObraNome ?? null,
+        destinoTipo:    input.destinoTipo,
+        destinoObraId:  destinoObraId,
+        destinoObraNome: input.destinoObraNome ?? null,
+        motivo:         input.motivo ?? null,
+        almoxarifeId:   input.almoxarifeId ?? null,
+        almoxarifeNome: input.almoxarifeNome ?? null,
+      } as any);
+
+      return { success: true, itemNome: itemOrigem.nome, novoEstoque: estoqueAtual - input.quantidade };
+    }),
+
+  // ── LISTAR TRANSFERÊNCIAS ───────────────────────────────────
+  listTransferencias: protectedProcedure
+    .input(z.object({ companyId: z.number(), limit: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db.execute(
+        sql`SELECT * FROM almoxarifado_transferencias
+            WHERE company_id = ${input.companyId}
+            ORDER BY created_at DESC
+            LIMIT ${input.limit ?? 200}`
       );
       return (rows as any)?.rows ?? rows ?? [];
     }),
