@@ -135,6 +135,11 @@ export const heSolicitacoesRouter = router({
         employeeFuncao: employees.funcao,
         employeeSalarioBase: employees.salarioBase,
         employeeValorHora: employees.valorHora,
+        employeeHeNormal50: employees.heNormal50,
+        employeeHe100: employees.he100,
+        employeeHeFeriado: employees.heFeriado,
+        employeeHeNoturna: employees.heNoturna,
+        employeeAcordoHE: employees.acordoHoraExtra,
       }).from(heSolicitacaoFuncionarios)
         .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
         .where(eq(heSolicitacaoFuncionarios.solicitacaoId, sol.id));
@@ -173,6 +178,11 @@ export const heSolicitacoesRouter = router({
       employeeFuncao: employees.funcao,
       employeeSalarioBase: employees.salarioBase,
       employeeValorHora: employees.valorHora,
+      employeeHeNormal50: employees.heNormal50,
+      employeeHe100: employees.he100,
+      employeeHeFeriado: employees.heFeriado,
+      employeeHeNoturna: employees.heNoturna,
+      employeeAcordoHE: employees.acordoHoraExtra,
     }).from(heSolicitacaoFuncionarios)
       .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
       .where(eq(heSolicitacaoFuncionarios.solicitacaoId, sol.id));
@@ -264,6 +274,9 @@ export const heSolicitacoesRouter = router({
         const funcsAll = await db.select({
           valorHora: employees.valorHora,
           salarioBase: employees.salarioBase,
+          heNormal50: employees.heNormal50,
+          he100: employees.he100,
+          heFeriado: employees.heFeriado,
         }).from(heSolicitacaoFuncionarios)
           .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
           .where(eq(heSolicitacaoFuncionarios.solicitacaoId, sol.id));
@@ -276,14 +289,19 @@ export const heSolicitacoesRouter = router({
         };
         const horas = (sol.horaInicio && sol.horaFim) ? calcHorasLocal(sol.horaInicio, sol.horaFim) : 0;
         const diaSemana = sol.dataSolicitacao ? new Date(sol.dataSolicitacao + "T12:00:00").getDay() : -1;
-        const percentHE = (diaSemana === 0 || diaSemana === 6) ? 100 : 50;
+        const isWeekendApprove = diaSemana === 0 || diaSemana === 6;
 
         let custoHE = 0;
         for (const f of funcsAll) {
           let vh: number | null = null;
           if (f.valorHora) { const v = parseFloat(String(f.valorHora).replace(",", ".")); if (!isNaN(v) && v > 0) vh = v; }
           if (!vh && f.salarioBase) { const s = parseFloat(String(f.salarioBase).replace(",", ".")); if (!isNaN(s) && s > 0) vh = s / 220; }
-          if (vh && horas > 0) custoHE += vh * (1 + percentHE / 100) * horas;
+          // Usar percentual cadastrado no funcionário, com fallback para 50%/100%
+          const pctStr = isWeekendApprove
+            ? (f.he100 ?? f.heFeriado ?? "100")
+            : (f.heNormal50 ?? "50");
+          const pct = parseFloat(String(pctStr).replace(",", ".")) || (isWeekendApprove ? 100 : 50);
+          if (vh && horas > 0) custoHE += vh * (1 + pct / 100) * horas;
         }
 
         // Distribuir custo igualmente entre as atividades vinculadas
