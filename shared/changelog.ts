@@ -952,6 +952,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 13:00:00",
   },
   {
+    version: 306,
+    titulo: "Colaboradores — Busca por CPF/RG sem formatação",
+    descricao: "A busca de colaboradores agora funciona com CPF/RG sem formatação (ex: '36250688854' encontra '362.506.888-54'). Usa regexp_replace no banco para comparar apenas os dígitos dos campos CPF e RG. Busca por nome, função, cargo, setor e código interno continuam funcionando normalmente.",
+    tipo: "fix",
+    modulos: "Colaboradores, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 18:30:00",
+  },
+  {
     version: 305,
     titulo: "Colaboradores — Corrigido erro '(intermediate value) is not iterable' ao salvar",
     descricao: "db.execute() do Drizzle ORM retorna { rows: [...] } e não um array direto. Desestruturação const [x] = await db.execute() substituída pelo padrão correto exec.rows ?? exec. Corrigidas todas as ocorrências na função createEmployee e updateEmployee.",
