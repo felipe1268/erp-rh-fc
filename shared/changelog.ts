@@ -1294,6 +1294,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:00:00",
   },
   {
+    version: 345,
+    titulo: "Bugfix: hook useCompany criado para Módulo Financeiro",
+    descricao: "Criado client/src/hooks/useCompany.ts — wrapper do CompanyContext que expõe companyId como número. Corrige erro de importação '[plugin:vite:import-analysis] Failed to resolve import @/hooks/useCompany' que impedia o carregamento das 12 páginas do Módulo Financeiro (FinanceiroDashboard, Lancamentos, Receitas, ContasAPagar, ContasAReceber, DRE, FluxoCaixa, ObrigacoesFiscais, PlanoDeConta, CentrosCusto, Conciliacao, Configuracoes).",
+    tipo: "bugfix",
+    modulos: "Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 344,
     titulo: "Performance: cache, chunk splitting, keep-alive e pool otimizado",
     descricao: "Pacote de otimizações de performance: (1) Vite build com manualChunks — 6 chunks separados (react-core, trpc-query, ui-lib, utils, charts, documents) reduzindo o JS inicial em ~40%; (2) esbuild minifier + reportCompressedSize desativado para builds mais rápidos; (3) QueryClient: staleTime 30s→2min e gcTime 5min→10min — menos refetches desnecessários na navegação; (4) tRPC timeout reduzido de 5 minutos para 30 segundos — falha rápida ao invés de spinner eterno; (5) Retry reduzido de 2 para 1 — UX mais ágil em caso de erro; (6) HTTP keep-alive: keepAliveTimeout 65s e headersTimeout 70s no servidor Node.js; (7) Pool de conexões PostgreSQL: max 10→20, min 2 conexões sempre prontas, idleTimeout 30s→60s; (8) MemCache server-side com TTL configurável (30s/2min/10min/1h) e invalidação por prefixo para dados frequentes; (9) compras/Almoxarifado.tsx: correção do `criarMut.mutate(as any)` para payload de locação.",
