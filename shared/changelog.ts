@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 383,
+    titulo: "Import Orçamento — Eliminado cache localStorage de mapeamento",
+    descricao: "Causa raiz identificada via logs do servidor: o localStorage salvava o mapeamento antigo (sem cuTotalMdo) e tinha prioridade máxima, sobrescrevendo sempre a detecção correta do servidor. Solução: localStorage removido completamente do fluxo de mapeamento. Agora a lógica é: 1) Preset FC Engenharia (colunas fixas K/P/Q/R/T/V/W/X/Y) → 2) detecção automática por nomes. Nenhum cache persiste entre sessões.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 382,
     titulo: "Import Orçamento — Fix detecção 'Preço total MO' + forward-fill células mescladas",
     descricao: "1) Adicionados aliases para cuTotalMdo: 'precototalmaodeobra', 'maodeobra', 'mdo', 'preototalmdo', 'valortotalmaodeobra' — cobre variações de 'Mão de Obra' como sub-label. 2) Forward-fill do parentRow agora propaga por TODAS as células vazias consecutivas (era só 1 posição), cobrindo células mescladas de 3+ colunas. 3) Mesmo fix aplicado no previewSheet. 4) Logs de diagnóstico adicionados ao previewSheet para rastrear falhas futuras.",

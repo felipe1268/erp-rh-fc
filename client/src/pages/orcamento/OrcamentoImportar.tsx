@@ -470,29 +470,22 @@ export default function OrcamentoImportar() {
       const res = await previewSheetMut.mutateAsync({ fileBase64: base64, fileName: fileCusto.name });
       setPreviewCols(res.allColumns);
       setPreviewSample(res.sampleRows);
-      setAutoDetectedMap(res.detectedMap as Record<string, number>);
 
-      // 1) Mapeamento salvo manualmente pelo usuário — máxima prioridade
-      const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
-      const saved = localStorage.getItem(savedKey);
-      if (saved) {
-        setCurrentMapping(JSON.parse(saved));
-        setStep("mapping");
-        return;
-      }
+      const detectedMap = res.detectedMap as Record<string, number>;
+      setAutoDetectedMap(detectedMap);
 
-      // 2) Preset FC Engenharia — se o arquivo tem as colunas nas posições certas,
-      //    aplica diretamente e PULA a tela de mapeamento (vai direto para a confirmação)
+      // 1) Preset FC Engenharia — colunas fixas confirmadas pelo cliente.
+      //    Tem prioridade sobre qualquer outra coisa: se o arquivo bater com o layout FC, aplica direto.
       const cols = res.allColumns as { idx: number; label: string }[];
       if (isFCPresetValid(cols)) {
         setCurrentMapping(FC_PRESET);
         setFcPresetApplied(true);
-        setStep("mapping"); // entra no mapping mas já mostra banner "pronto para importar"
+        setStep("mapping");
         return;
       }
 
-      // 3) Fallback: detecção automática por nomes de coluna
-      setCurrentMapping(res.detectedMap as Record<string, number>);
+      // 2) Fallback: mapeamento detectado automaticamente pelo servidor (por nomes de coluna)
+      setCurrentMapping(detectedMap);
       setStep("mapping");
     } catch (err: any) {
       toast.error(err.message || "Erro ao analisar colunas da planilha");
@@ -774,7 +767,7 @@ export default function OrcamentoImportar() {
                   <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Voltar
                 </Button>
                 <Button variant="outline" size="sm"
-                  onClick={() => { if (fileCusto) { const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()}`; localStorage.removeItem(k); handleGoToMapping(); } }}
+                  onClick={() => handleGoToMapping()}
                   title="Refazer detecção automática"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -796,13 +789,7 @@ export default function OrcamentoImportar() {
                 </div>
                 <Button
                   className="bg-green-600 hover:bg-green-700 shrink-0 h-10 px-5 font-semibold"
-                  onClick={async () => {
-                    if (fileCusto) {
-                      const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()}`;
-                      localStorage.setItem(k, JSON.stringify(currentMapping));
-                    }
-                    await handleImportarCusto();
-                  }}
+                  onClick={() => handleImportarCusto()}
                   disabled={importingCusto}
                 >
                   {importingCusto
@@ -919,10 +906,7 @@ export default function OrcamentoImportar() {
             {/* Botão importar */}
             <Button className="w-full bg-amber-600 hover:bg-amber-700 h-11 text-sm font-semibold"
               disabled={KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 || importingCusto}
-              onClick={async () => {
-                if (fileCusto) { const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()}`; localStorage.setItem(k, JSON.stringify(currentMapping)); }
-                await handleImportarCusto();
-              }}
+              onClick={() => handleImportarCusto()}
             >
               {importingCusto
                 ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
