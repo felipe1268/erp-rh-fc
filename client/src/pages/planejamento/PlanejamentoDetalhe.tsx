@@ -6378,6 +6378,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [modoMascara, setModoMascara] = useState(false);
   const [analiseDesvio, setAnaliseDesvio] = useState<string | null>(null);
   const [analiseExpanded, setAnaliseExpanded] = useState(true);
+  const [orientacaoPdf, setOrientacaoPdf] = useState<"portrait" | "landscape">("landscape");
   const [colBloco2, setColBloco2] = useState(false);
   const [colBloco3A, setColBloco3A] = useState(false);
   const [colBloco3B, setColBloco3B] = useState(false);
@@ -6722,6 +6723,27 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             {modoMascara ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
             {modoMascara ? "Mostrar Valores" : "Modo Campo"}
           </Button>
+          <div className="flex items-center rounded-md border border-slate-200 overflow-hidden no-print">
+            <button
+              type="button"
+              title="Retrato (vertical)"
+              onClick={() => setOrientacaoPdf("portrait")}
+              className={`px-2 py-1.5 text-xs flex items-center gap-1 transition-colors ${orientacaoPdf === "portrait" ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+            >
+              <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><rect x="1" y="1" width="8" height="12" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5"/></svg>
+              Retrato
+            </button>
+            <div className="w-px h-5 bg-slate-200" />
+            <button
+              type="button"
+              title="Paisagem (horizontal)"
+              onClick={() => setOrientacaoPdf("landscape")}
+              className={`px-2 py-1.5 text-xs flex items-center gap-1 transition-colors ${orientacaoPdf === "landscape" ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+            >
+              <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><rect x="1" y="1" width="12" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5"/></svg>
+              Paisagem
+            </button>
+          </div>
           <Button size="sm" variant="outline"
             className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50 no-print"
             onClick={() => window.print()}>
@@ -6781,7 +6803,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       <style>{`
         /* ─── REFIS · Layout de Impressão Profissional A4 ────────────────────── */
         @media print {
-          @page { size: A4 portrait; margin: 12mm 12mm 14mm 12mm; }
+          @page { size: A4 ${orientacaoPdf}; margin: 12mm 12mm 14mm 12mm; }
 
           /* Isolação do conteúdo */
           html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
