@@ -4778,6 +4778,29 @@ export const comprasCotacoesItens = pgTable("compras_cotacoes_itens", {
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
 });
 
+export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores", {
+  id:               serial().primaryKey(),
+  cotacaoId:        integer("cotacao_id").notNull(),
+  fornecedorId:     integer("fornecedor_id").notNull(),
+  prazoEntregaDias: integer("prazo_entrega_dias"),
+  condicaoPagamento:varchar("condicao_pagamento", { length: 100 }),
+  observacoes:      text(),
+  totalOrcado:      numeric("total_orcado", { precision: 14, scale: 2 }).default("0"),
+  selecionado:      boolean().default(false),
+  criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const comprasCotacaoRespostas = pgTable("compras_cotacao_respostas", {
+  id:            serial().primaryKey(),
+  cotacaoId:     integer("cotacao_id").notNull(),
+  fornecedorId:  integer("fornecedor_id").notNull(),
+  itemId:        integer("item_id").notNull(),
+  precoUnitario: numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
+  descontoPct:   numeric("desconto_pct", { precision: 5, scale: 2 }).default("0"),
+  total:         numeric({ precision: 14, scale: 2 }).default("0"),
+  observacoes:   text(),
+});
+
 export const comprasOrdens = pgTable("compras_ordens", {
   id:                 serial().primaryKey(),
   companyId:          integer("company_id").notNull(),
