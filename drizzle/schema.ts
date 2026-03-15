@@ -2986,8 +2986,10 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   planejamentoProjetoId: integer("planejamento_projeto_id"),
   orcamentoId:       integer("orcamento_id"),
   numeroContrato:    varchar("numero_contrato", { length: 50 }),
+  numeroSequencia:   integer("numero_sequencia"),
   descricao:         varchar({ length: 500 }).notNull(),
   tipoContrato:      varchar("tipo_contrato", { length: 50 }).default("empreitada_global"), // empreitada_global | preco_unitario | misto
+  valorOrcamento:    numeric("valor_orcamento", { precision: 18, scale: 2 }).default("0"),
   valorTotal:        numeric("valor_total", { precision: 18, scale: 2 }).default("0"),
   valorPago:         numeric("valor_pago", { precision: 18, scale: 2 }).default("0"),
   dataInicio:        date("data_inicio"),

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeft, Plus, FileCheck, AlertTriangle, CheckCircle,
   ChevronRight, Building2, Calendar, DollarSign, FileText,
-  Zap, ClipboardCheck, X
+  Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -86,6 +86,11 @@ export default function ContratoDetalhe() {
 
   const pct = contrato.percentualMedidoGlobal || 0;
   const pctPago = Number(contrato.valorTotal) > 0 ? (Number(contrato.valorPago) / Number(contrato.valorTotal)) * 100 : 0;
+  const valOrc = Number(contrato.valorOrcamento ?? 0);
+  const valFec = Number(contrato.valorTotal ?? 0);
+  const variacao = valFec - valOrc;
+  const variacaoPct = valOrc > 0 ? (variacao / valOrc) * 100 : 0;
+  const showVariacao = valOrc > 0;
 
   return (
     <DashboardLayout>
@@ -120,17 +125,45 @@ export default function ContratoDetalhe() {
         {/* Resumo financeiro */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: "Valor Contratado", value: BRL(contrato.valorTotal), color: "text-gray-900" },
-            { label: "Medido Acumulado", value: BRL(contrato.valorMedidoAcumulado), color: "text-blue-700" },
-            { label: "Total Pago", value: BRL(contrato.valorPago), color: "text-green-700" },
-            { label: "Saldo a Liberar", value: BRL(contrato.saldoALiberar), color: contrato.saldoALiberar > 0 ? "text-yellow-700" : "text-gray-400" },
+            { label: "Valor Fechado (Contrato)", value: BRL(contrato.valorTotal), color: "text-gray-900", sub: null },
+            { label: "Medido Acumulado", value: BRL(contrato.valorMedidoAcumulado), color: "text-blue-700", sub: `${(contrato.percentualMedidoGlobal || 0).toFixed(1)}%` },
+            { label: "Total Pago", value: BRL(contrato.valorPago), color: "text-green-700", sub: `${pctPago.toFixed(1)}%` },
+            { label: "Saldo a Liberar", value: BRL(contrato.saldoALiberar), color: contrato.saldoALiberar > 0 ? "text-yellow-700" : "text-gray-400", sub: null },
           ].map((k, i) => (
             <div key={i} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
               <p className="text-xs text-gray-500">{k.label}</p>
               <p className={`text-base font-bold ${k.color}`}>{k.value}</p>
+              {k.sub && <p className="text-xs text-gray-400">{k.sub}</p>}
             </div>
           ))}
         </div>
+
+        {/* Orçamento vs Fechado */}
+        {showVariacao && (
+          <div className={`rounded-xl border p-4 flex items-center gap-4 ${
+            variacao > 0 ? "bg-red-50 border-red-200" :
+            variacao < 0 ? "bg-green-50 border-green-200" :
+            "bg-gray-50 border-gray-200"
+          }`}>
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+              variacao > 0 ? "bg-red-500" : variacao < 0 ? "bg-green-500" : "bg-gray-300"
+            }`}>
+              {variacao > 0 ? <TrendingUp className="w-5 h-5 text-white" /> :
+               variacao < 0 ? <TrendingDown className="w-5 h-5 text-white" /> :
+               <Minus className="w-5 h-5 text-white" />}
+            </div>
+            <div className="flex-1">
+              <p className={`font-semibold text-sm ${variacao > 0 ? "text-red-700" : variacao < 0 ? "text-green-700" : "text-gray-600"}`}>
+                {variacao > 0 ? `Acima do orçamento — ${BRL(variacao)} (+${Math.abs(variacaoPct).toFixed(1)}%)` :
+                 variacao < 0 ? `Economia vs orçamento — ${BRL(Math.abs(variacao))} (${Math.abs(variacaoPct).toFixed(1)}% abaixo)` :
+                 "Dentro do orçamento"}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Valor Orçado: <strong>{BRL(valOrc)}</strong> → Valor Fechado: <strong>{BRL(valFec)}</strong>
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Barras de progresso */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
