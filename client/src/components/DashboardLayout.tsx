@@ -511,6 +511,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "cadastro":       "/empresas",
   "compras":        "/compras/painel",
   "almoxarifado":   "/almoxarifado",
+  "financeiro":     "/financeiro",
   "all": "/painel",
 };
 
@@ -527,6 +528,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "cadastro":      { icon: BookOpen,      color: "text-indigo-400",  bg: "bg-indigo-500/20"  },
   "compras":       { icon: ShoppingCart,  color: "text-rose-400",    bg: "bg-rose-500/20"    },
   "almoxarifado":  { icon: Warehouse,     color: "text-emerald-400", bg: "bg-emerald-500/20" },
+  "financeiro":    { icon: DollarSign,    color: "text-green-400",   bg: "bg-green-500/20"   },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
 

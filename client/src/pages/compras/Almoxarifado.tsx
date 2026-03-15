@@ -133,7 +133,7 @@ export default function Almoxarifado() {
     if (editandoItem) {
       atualizarMut.mutate({ id: editandoItem, nome: formItem.nome, unidade: formItem.unidade, categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined, quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined, ...locacaoPayload });
     } else {
-      criarMut.mutate({ companyId, nome: formItem.nome, unidade: formItem.unidade, categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined, quantidadeAtual: formItem.quantidadeAtual, quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined, ...locacaoPayload });
+      criarMut.mutate({ companyId, nome: formItem.nome, unidade: formItem.unidade, categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined, quantidadeAtual: formItem.quantidadeAtual, quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined, ...locacaoPayload } as any);
     }
   }
 

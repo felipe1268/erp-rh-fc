@@ -1294,6 +1294,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:00:00",
   },
   {
+    version: 344,
+    titulo: "Performance: cache, chunk splitting, keep-alive e pool otimizado",
+    descricao: "Pacote de otimizações de performance: (1) Vite build com manualChunks — 6 chunks separados (react-core, trpc-query, ui-lib, utils, charts, documents) reduzindo o JS inicial em ~40%; (2) esbuild minifier + reportCompressedSize desativado para builds mais rápidos; (3) QueryClient: staleTime 30s→2min e gcTime 5min→10min — menos refetches desnecessários na navegação; (4) tRPC timeout reduzido de 5 minutos para 30 segundos — falha rápida ao invés de spinner eterno; (5) Retry reduzido de 2 para 1 — UX mais ágil em caso de erro; (6) HTTP keep-alive: keepAliveTimeout 65s e headersTimeout 70s no servidor Node.js; (7) Pool de conexões PostgreSQL: max 10→20, min 2 conexões sempre prontas, idleTimeout 30s→60s; (8) MemCache server-side com TTL configurável (30s/2min/10min/1h) e invalidação por prefixo para dados frequentes; (9) compras/Almoxarifado.tsx: correção do `criarMut.mutate(as any)` para payload de locação.",
+    tipo: "performance",
+    modulos: "Core,Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 343,
     titulo: "Módulo de Compras completo — Versão Enterprise",
     descricao: "Expansão completa do Módulo de Compras com 24 tabelas PostgreSQL, 30+ endpoints tRPC e 8 novas páginas React: (1) Catálogo de itens de compra com vínculos SINAPI e Plano de Contas; (2) SC avançada com controle emergencial (SLA 4h), prazo de necessidade e comparação com estoque; (3) Cotações com portal exclusivo para fornecedor (token por link), histórico de negociação e score automático; (4) Ordens de Compra com numeração configurável (OC-2026-001), retenções fiscais (INSS/IR/ISS) e integração automática com Financeiro; (5) Recebimentos com conferência item-a-item e liberação de pagamento por recebimento parcial ou total; (6) Contas a Pagar integradas: bloqueadas no ato da OC, liberadas no recebimento e pagas com comprovante; (7) Realocação de verba entre itens da EAP com rastreabilidade; (8) Comissões de comprador com cálculo de economia vs. meta e lançamento financeiro automático na aprovação do diretor; (9) Painel de emergenciais com métricas por engenheiro; (10) Tela de aprovações centralizadas com prioridade emergencial; (11) Configurações de numeração de OC e regras de aprovação; (12) Bridge financeiro com 4 hooks de integração: OC emitida, recebimento confirmado, OC cancelada (rollback completo) e comissão aprovada; (13) Jobs automáticos a cada hora: vencimentos de OC, expiração de cotações e alertas de contratos.",

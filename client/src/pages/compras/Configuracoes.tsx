@@ -12,8 +12,8 @@ import { Settings, Save, Hash, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ComprasConfiguracoes() {
-  const { company } = useCompany();
-  const companyId = company?.id ?? 0;
+  const { selectedCompany } = useCompany();
+  const companyId = selectedCompany?.id ?? 0;
 
   const [prefixo, setPrefixo] = useState("OC");
   const [separador, setSeparador] = useState("-");
@@ -43,7 +43,7 @@ export default function ComprasConfiguracoes() {
 
   if (isLoading) {
     return (
-      <DashboardLayout module="compras">
+      <DashboardLayout>
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
         </div>
@@ -52,7 +52,7 @@ export default function ComprasConfiguracoes() {
   }
 
   return (
-    <DashboardLayout module="compras">
+    <DashboardLayout>
       <div className="p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-gray-100 rounded-lg">

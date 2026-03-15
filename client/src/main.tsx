@@ -15,17 +15,18 @@ import "./index.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30 * 1000,        // 30s — avoids refetch on every navigation
-      gcTime: 5 * 60 * 1000,       // 5min cache retention
+      staleTime: 2 * 60 * 1000,    // 2min — dados ficam frescos sem refetch desnecessário
+      gcTime: 10 * 60 * 1000,      // 10min de retenção no cache (navegação mais rápida)
       retry: (failureCount, error) => {
         if (error instanceof TRPCClientError) {
           const code = error.data?.code;
           if (code === 'UNAUTHORIZED' || code === 'FORBIDDEN' || code === 'NOT_FOUND') return false;
         }
-        return failureCount < 2;
+        return failureCount < 1;   // apenas 1 retry para falhar rápido
       },
-      retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
-      refetchOnWindowFocus: false,  // prevent refetch when switching tabs
+      retryDelay: 1000,            // retry fixo em 1s
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: "always",
     },
     mutations: {
       retry: false,
@@ -81,7 +82,7 @@ const trpcClient = trpc.createClient({
       maxURLLength: 2048,
       fetch(input, init) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",

@@ -22,8 +22,8 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 };
 
 export default function ComprasFinanceiro() {
-  const { company } = useCompany();
-  const companyId = company?.id ?? 0;
+  const { selectedCompany } = useCompany();
+  const companyId = selectedCompany?.id ?? 0;
   const [pagandoId, setPagandoId] = useState<number | null>(null);
   const [dataPag, setDataPag] = useState(new Date().toISOString().split("T")[0]);
   const [valorPago, setValorPago] = useState("");
@@ -49,7 +49,7 @@ export default function ComprasFinanceiro() {
   const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
-    <DashboardLayout module="compras">
+    <DashboardLayout>
       <div className="p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-100 rounded-lg">

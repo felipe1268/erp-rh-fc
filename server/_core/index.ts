@@ -83,6 +83,10 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
+  // Keep-alive otimizado para reduzir latência de conexão
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 70000;
+
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     // Bootstrap admin user and default company from env vars (Railway / fresh DB)

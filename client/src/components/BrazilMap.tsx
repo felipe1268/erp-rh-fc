@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+// @ts-ignore — react-simple-maps has no bundled types
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
 
 const GEO_URL = "/brazil-states.json";

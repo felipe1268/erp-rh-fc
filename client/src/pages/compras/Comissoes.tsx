@@ -23,9 +23,9 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 };
 
 export default function ComprasComissoes() {
-  const { company } = useCompany();
+  const { selectedCompany } = useCompany();
   const { user } = useAuth();
-  const companyId = company?.id ?? 0;
+  const companyId = selectedCompany?.id ?? 0;
   const [showCalc, setShowCalc] = useState(false);
   const [obraId, setObraId] = useState("");
   const [compradorId, setCompradorId] = useState("");
@@ -54,7 +54,7 @@ export default function ComprasComissoes() {
   const obraMap = Object.fromEntries((obras ?? []).map((o: any) => [String(o.id), o.nome]));
 
   return (
-    <DashboardLayout module="compras">
+    <DashboardLayout>
       <div className="p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-yellow-100 rounded-lg">
