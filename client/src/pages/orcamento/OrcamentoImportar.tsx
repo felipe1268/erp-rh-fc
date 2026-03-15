@@ -47,8 +47,6 @@ const KEY_FIELDS: { key: string; label: string; required: boolean }[] = [
   { key: "descricao",  label: "Descrição",                 required: true  },
   { key: "unidade",    label: "Unidade (Un)",              required: false },
   { key: "quantidade", label: "Quantidade",                required: false },
-  { key: "cuUnitMat",  label: "Preço Unit. Material",      required: false },
-  { key: "cuUnitMdo",  label: "Preço Unit. Mão de Obra",   required: false },
   { key: "cuTotalMat", label: "Total Material",            required: false },
   { key: "cuTotalMdo", label: "Total Mão de Obra",         required: false },
   { key: "custoTotal", label: "Custo Total",               required: true  },
