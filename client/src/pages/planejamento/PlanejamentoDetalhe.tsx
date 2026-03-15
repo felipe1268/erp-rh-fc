@@ -29,6 +29,7 @@ import {
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer,
   TrendingDown, ArrowUpRight, ArrowDownRight, Circle, CalendarClock, Network,
+  Users, HardHat, CheckCircle,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -40,7 +41,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora" | "prog-semanal" | "diagrama-rede";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora" | "prog-semanal" | "diagrama-rede" | "custo-rh";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -115,6 +116,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "prev-medicao",         label: "Prev. Medição",      Icon: ClipboardList },
   { id: "prog-semanal",         label: "Prog. Semanal",      Icon: CalendarClock },
   { id: "diagrama-rede",        label: "Diagrama de Rede",   Icon: Network },
+  { id: "custo-rh",             label: "Custo RH",           Icon: Users },
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
   { id: "ia-gestora",           label: "IA Gestora",         Icon: Bot },
@@ -264,6 +266,10 @@ export default function PlanejamentoDetalhe() {
 
   const { data: refisLista = [] } = trpc.planejamento.listarRefis.useQuery(
     { projetoId }, { enabled: !!projetoId }
+  );
+
+  const { data: heCustosData, isLoading: heCustosLoading } = trpc.planejamento.getHECustosByProjeto.useQuery(
+    { projetoId }, { enabled: !!projetoId && aba === "custo-rh" }
   );
 
   const { data: curvaData, isLoading: curvaLoading } = trpc.planejamento.getCurvaS.useQuery(
@@ -637,6 +643,146 @@ export default function PlanejamentoDetalhe() {
             atividades={atividades}
             avancosMap={avancosMap}
           />
+        )}
+
+        {/* ── Custo RH (HE vinculadas ao projeto) ── */}
+        {aba === "custo-rh" && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-100">
+                <Users className="h-5 w-5 text-indigo-700" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Custo RH — Horas Extras</h2>
+                <p className="text-xs text-muted-foreground">Custos de horas extras aprovadas, agrupados por atividade do cronograma</p>
+              </div>
+            </div>
+
+            {heCustosLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
+                <Loader2 className="h-5 w-5 animate-spin" /> Carregando custos de HE...
+              </div>
+            ) : !(heCustosData as any)?.hes?.length ? (
+              <div className="text-center py-12 rounded-xl border border-dashed border-indigo-200 bg-indigo-50">
+                <HardHat className="h-10 w-10 mx-auto mb-3 text-indigo-300" />
+                <p className="text-sm font-medium text-indigo-600">Nenhuma HE vinculada a este projeto</p>
+                <p className="text-xs text-muted-foreground mt-1">Ao criar uma solicitação de HE vinculada a uma atividade, os custos aparecerão aqui.</p>
+              </div>
+            ) : (() => {
+              const allHes: any[] = (heCustosData as any)?.hes ?? [];
+              const atividadesLookup: any[] = (heCustosData as any)?.atividades ?? [];
+              const aprovadas = allHes.filter(h => h.status === "aprovada");
+
+              /* resumo cards */
+              const totalCusto = (heCustosData as any)?.totalCustoPrevisto ?? 0;
+              const totalCustoAprov = (heCustosData as any)?.totalCustoRealizado ?? 0;
+              const totalHE = allHes.reduce((s: number, h: any) => s + (h.horas || 0), 0);
+
+              /* lookup atividade por id */
+              const atividadeById: Record<number, any> = {};
+              for (const a of atividadesLookup) atividadeById[a.id] = a;
+
+              /* agrupar por atividade */
+              const byAtiv: Record<string, { atividadeNome: string; eapCodigo: string; hes: any[]; totalCusto: number }> = {};
+              for (const h of allHes) {
+                const key = h.planejamentoAtividadeId ? String(h.planejamentoAtividadeId) : "__sem_atividade__";
+                const atv = h.planejamentoAtividadeId ? atividadeById[h.planejamentoAtividadeId] : null;
+                if (!byAtiv[key]) byAtiv[key] = {
+                  atividadeNome: atv?.nome || "Sem atividade vinculada",
+                  eapCodigo: atv?.eapCodigo || "",
+                  hes: [], totalCusto: 0
+                };
+                byAtiv[key].hes.push(h);
+                byAtiv[key].totalCusto += h.custoPrevisto || 0;
+              }
+
+              return (
+                <div className="space-y-5">
+                  {/* Cards resumo */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="rounded-xl bg-indigo-600 text-white p-4">
+                      <p className="text-xs opacity-80 mb-1">Custo Total (HE aprovadas)</p>
+                      <p className="text-xl font-bold">{totalCustoAprov.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                    </div>
+                    <div className="rounded-xl bg-white border p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Total Solicitações</p>
+                      <p className="text-xl font-bold text-slate-800">{allHes.length}</p>
+                    </div>
+                    <div className="rounded-xl bg-white border p-4">
+                      <p className="text-xs text-muted-foreground mb-1">HEs Aprovadas</p>
+                      <p className="text-xl font-bold text-green-700">{aprovadas.length}</p>
+                    </div>
+                    <div className="rounded-xl bg-white border p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Total de Horas</p>
+                      <p className="text-xl font-bold text-slate-800">{totalHE.toFixed(1)}h</p>
+                    </div>
+                  </div>
+
+                  {/* Por atividade */}
+                  {Object.entries(byAtiv).map(([key, group]) => (
+                    <div key={key} className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                      <div className="flex items-center gap-3 px-4 py-3 bg-indigo-50 border-b border-indigo-100">
+                        <TrendingUp className="h-4 w-4 text-indigo-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          {group.eapCodigo && <span className="font-mono text-xs text-indigo-700 mr-2">{group.eapCodigo}</span>}
+                          <span className="font-semibold text-sm text-indigo-900">{group.atividadeNome}</span>
+                        </div>
+                        <span className="text-sm font-bold text-indigo-800 shrink-0">
+                          {group.totalCusto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-slate-50 border-b text-left text-muted-foreground">
+                              <th className="px-3 py-2 font-medium">Data HE</th>
+                              <th className="px-3 py-2 font-medium">Horário</th>
+                              <th className="px-3 py-2 font-medium">Horas</th>
+                              <th className="px-3 py-2 font-medium">Func.</th>
+                              <th className="px-3 py-2 font-medium">Custo Previsto</th>
+                              <th className="px-3 py-2 font-medium">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.hes.map((h: any) => (
+                              <tr key={h.id} className="border-b last:border-0 hover:bg-slate-50">
+                                <td className="px-3 py-2 font-medium">
+                                  {h.dataSolicitacao ? new Date(h.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground">
+                                  {h.horaInicio && h.horaFim ? `${h.horaInicio} – ${h.horaFim}` : "—"}
+                                </td>
+                                <td className="px-3 py-2">{(h.horas || 0).toFixed(1)}h</td>
+                                <td className="px-3 py-2">{h.numFuncionarios ?? "—"}</td>
+                                <td className="px-3 py-2 font-semibold text-indigo-700">
+                                  {(h.custoPrevisto || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {h.status === "aprovada" ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                                      <CheckCircle className="h-3 w-3" /> Aprovada
+                                    </span>
+                                  ) : h.status === "pendente" ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">
+                                      Pendente
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium capitalize">
+                                      {h.status}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
         )}
 
       </div>

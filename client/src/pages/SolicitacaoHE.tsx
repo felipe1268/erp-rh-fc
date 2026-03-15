@@ -57,6 +57,7 @@ export default function SolicitacaoHE() {
   // Form state
   const [formData, setFormData] = useState({
     obraId: "",
+    planejamentoAtividadeId: "" as string,
     dataSolicitacao: "",
     horaInicio: "",
     horaFim: "",
@@ -72,6 +73,10 @@ export default function SolicitacaoHE() {
   const obrasQuery = trpc.obras.listActive.useQuery(
     { companyId },
     { enabled: companyId > 0 || companyIds.length > 0 }
+  );
+  const atividadesQuery = trpc.planejamento.getAtividadesForObra.useQuery(
+    { obraId: formData.obraId ? parseInt(formData.obraId) : 0 },
+    { enabled: !!formData.obraId }
   );
   const employeesQuery = trpc.employees.list.useQuery(
     { companyId, excludeTerminated: true },
@@ -209,6 +214,7 @@ export default function SolicitacaoHE() {
     if (formData.funcionarioIds.length === 0) { toast.error("Selecione pelo menos 1 funcionário"); return; }
 
     createMut.mutate({ companyId, companyIds, obraId: formData.obraId ? parseInt(formData.obraId) : undefined,
+      planejamentoAtividadeId: formData.planejamentoAtividadeId ? parseInt(formData.planejamentoAtividadeId) : undefined,
       dataSolicitacao: formData.dataSolicitacao,
       horaInicio: formData.horaInicio || undefined,
       horaFim: formData.horaFim || undefined,
@@ -352,7 +358,7 @@ export default function SolicitacaoHE() {
                 {/* Obra */}
                 <div className="space-y-1.5">
                   <Label>Obra (opcional)</Label>
-                  <Select value={formData.obraId} onValueChange={v => setFormData(p => ({ ...p, obraId: v, funcionarioIds: [] }))}>
+                  <Select value={formData.obraId} onValueChange={v => setFormData(p => ({ ...p, obraId: v, planejamentoAtividadeId: "", funcionarioIds: [] }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                     <SelectContent>
                       {(obrasQuery.data || []).map((o: any) => (
@@ -360,6 +366,42 @@ export default function SolicitacaoHE() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Atividade do Cronograma */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label className="flex items-center gap-1.5">
+                    <TrendingUp className="h-3.5 w-3.5 text-blue-600" />
+                    Atividade do Cronograma (opcional)
+                  </Label>
+                  {!formData.obraId ? (
+                    <p className="text-xs text-muted-foreground italic py-2">Selecione uma obra para carregar as atividades do cronograma.</p>
+                  ) : atividadesQuery.isLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando atividades...</div>
+                  ) : !(atividadesQuery.data as any)?.atividades?.length ? (
+                    <p className="text-xs text-amber-600 italic py-2">Esta obra não possui cronograma cadastrado no módulo Planejamento.</p>
+                  ) : (
+                    <Select value={formData.planejamentoAtividadeId} onValueChange={v => setFormData(p => ({ ...p, planejamentoAtividadeId: v }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Vincular a uma atividade do cronograma..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        <SelectItem value="">Nenhuma (sem vínculo)</SelectItem>
+                        {((atividadesQuery.data as any)?.atividades || []).map((a: any) => (
+                          <SelectItem key={a.id} value={String(a.id)}>
+                            <span className="font-mono text-xs text-blue-700 mr-2">{a.eapCodigo}</span>
+                            {a.nome}
+                            {a.isGrupo && <span className="ml-2 text-xs text-muted-foreground">(grupo)</span>}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {formData.planejamentoAtividadeId && (
+                    <p className="text-xs text-green-700 flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" /> Custo desta HE será vinculado à atividade e acumulado no REFI ao aprovar.
+                    </p>
+                  )}
                 </div>
 
                 {/* Data */}
@@ -956,6 +998,32 @@ export default function SolicitacaoHE() {
               <div className="text-xs text-muted-foreground">
                 Solicitado por: <strong>{sol.solicitadoPor}</strong> em {new Date(sol.createdAt).toLocaleString("pt-BR")}
               </div>
+
+              {/* Atividade Vinculada */}
+              {sol.atividadeInfo && (
+                <div className="rounded-lg border-2 border-indigo-200 bg-indigo-50 p-3 flex items-start gap-3">
+                  <TrendingUp className="h-4 w-4 text-indigo-700 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-indigo-800 mb-0.5">Atividade do Cronograma Vinculada</p>
+                    <p className="text-sm font-bold text-indigo-900">
+                      {sol.atividadeInfo.eapCodigo && <span className="font-mono text-indigo-600 mr-2">{sol.atividadeInfo.eapCodigo}</span>}
+                      {sol.atividadeInfo.nome}
+                    </p>
+                    {(sol.atividadeInfo.dataInicio || sol.atividadeInfo.dataFim) && (
+                      <p className="text-xs text-indigo-700 mt-0.5">
+                        {sol.atividadeInfo.dataInicio && new Date(sol.atividadeInfo.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}
+                        {sol.atividadeInfo.dataInicio && sol.atividadeInfo.dataFim && " → "}
+                        {sol.atividadeInfo.dataFim && new Date(sol.atividadeInfo.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
+                      </p>
+                    )}
+                    {sol.status === "aprovada" && (
+                      <p className="text-xs text-green-700 mt-1 flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" /> Custo acumulado no REFI
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Funcionários + Custo Previsto */}
               {(() => {

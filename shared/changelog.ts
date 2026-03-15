@@ -1248,4 +1248,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 18:00:00",
   },
+  {
+    version: 336,
+    titulo: "HE-Planejamento: Integração completa com Cronograma",
+    descricao: "Integração total entre Solicitações de HE e Módulo Planejamento. (1) Seletor de atividade do cronograma no formulário de nova HE: após selecionar uma Obra, lista automaticamente as atividades do projeto vinculado (com código EAP e nome). (2) Detalhe da HE exibe bloco 'Atividade do Cronograma Vinculada' com código EAP, nome, período e indicação de custo acumulado no REFI. (3) Nova aba 'Custo RH' em PlanejamentoDetalhe: cards resumo (custo total HEs aprovadas, qtd solicitações, qtd aprovadas, total horas) + tabela por atividade com todas as solicitações da obra, status e custo previsto. (4) Ao aprovar uma HE vinculada, custo é acumulado no planejamentoRefis via upsert semanal (REFI).",
+    tipo: "feature",
+    modulos: "SolicitacaoHE, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 20:00:00",
+  },
 ];

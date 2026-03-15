@@ -2,8 +2,9 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog } from "../db";
 import {
   heSolicitacoes, heSolicitacaoFuncionarios, employees, obras, terminationNotices,
+  planejamentoAtividades, planejamentoProjetos, planejamentoRevisoes, planejamentoRefis,
 } from "../../drizzle/schema";
-import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, isNull, asc } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -18,6 +19,7 @@ export const heSolicitacoesRouter = router({
 
   // ===================== CRIAR SOLICITAÇÃO =====================
   create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional(),
+    planejamentoAtividadeId: z.number().optional(),
     dataSolicitacao: z.string().min(10), // YYYY-MM-DD
     horaInicio: z.string().optional(),
     horaFim: z.string().optional(),
@@ -42,6 +44,7 @@ export const heSolicitacoesRouter = router({
     const [result] = await db.insert(heSolicitacoes).values({
       companyId: input.companyId,
       obraId: input.obraId || null,
+      planejamentoAtividadeId: input.planejamentoAtividadeId || null,
       dataSolicitacao: input.dataSolicitacao,
       horaInicio: input.horaInicio || null,
       horaFim: input.horaFim || null,
@@ -160,7 +163,20 @@ export const heSolicitacoesRouter = router({
       obraNome = obra?.nome || null;
     }
 
-    return { ...sol, obraNome, funcionarios: funcs };
+    // Buscar atividade vinculada
+    let atividadeInfo = null;
+    if (sol.planejamentoAtividadeId) {
+      const [atv] = await db.select({
+        id: planejamentoAtividades.id,
+        nome: planejamentoAtividades.nome,
+        eapCodigo: planejamentoAtividades.eapCodigo,
+        dataInicio: planejamentoAtividades.dataInicio,
+        dataFim: planejamentoAtividades.dataFim,
+      }).from(planejamentoAtividades).where(eq(planejamentoAtividades.id, sol.planejamentoAtividadeId));
+      atividadeInfo = atv || null;
+    }
+
+    return { ...sol, obraNome, atividadeInfo, funcionarios: funcs };
   }),
 
   // ===================== APROVAR SOLICITAÇÃO (Admin Master) =====================
@@ -195,6 +211,76 @@ export const heSolicitacoesRouter = router({
       observacaoAdmin: input.observacaoAdmin || sol.observacaoAdmin || null,
     }).where(eq(heSolicitacoes.id, input.id));
 
+    // === ACUMULAR CUSTO NO REFI quando HE está vinculada a uma atividade ===
+    if (sol.planejamentoAtividadeId && !isReversao) {
+      try {
+        // Buscar atividade → projeto
+        const [atv] = await db.select({ projetoId: planejamentoAtividades.projetoId })
+          .from(planejamentoAtividades).where(eq(planejamentoAtividades.id, sol.planejamentoAtividadeId));
+        if (atv) {
+          // Calcular custo da HE
+          const funcs = await db.select({
+            valorHora: employees.valorHora,
+            salarioBase: employees.salarioBase,
+          }).from(heSolicitacaoFuncionarios)
+            .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
+            .where(eq(heSolicitacaoFuncionarios.solicitacaoId, sol.id));
+
+          const calcHoras = (ini: string, fim: string) => {
+            const [h1, m1] = ini.split(":").map(Number);
+            const [h2, m2] = fim.split(":").map(Number);
+            const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+            return mins > 0 ? mins / 60 : 0;
+          };
+          const horas = (sol.horaInicio && sol.horaFim) ? calcHoras(sol.horaInicio, sol.horaFim) : 0;
+          const diaSemana = sol.dataSolicitacao ? new Date(sol.dataSolicitacao + "T12:00:00").getDay() : -1;
+          const percentHE = (diaSemana === 0 || diaSemana === 6) ? 100 : 50;
+
+          let custoHE = 0;
+          for (const f of funcs) {
+            let vh: number | null = null;
+            if (f.valorHora) { const v = parseFloat(String(f.valorHora).replace(",", ".")); if (!isNaN(v) && v > 0) vh = v; }
+            if (!vh && f.salarioBase) { const s = parseFloat(String(f.salarioBase).replace(",", ".")); if (!isNaN(s) && s > 0) vh = s / 220; }
+            if (vh && horas > 0) custoHE += vh * (1 + percentHE / 100) * horas;
+          }
+
+          if (custoHE > 0) {
+            // Determinar semana do REFI (segunda-feira da semana da HE)
+            const dataHE = new Date(sol.dataSolicitacao + "T12:00:00");
+            const diaSem = dataHE.getDay();
+            const diff = diaSem === 0 ? -6 : 1 - diaSem;
+            const segunda = new Date(dataHE);
+            segunda.setDate(dataHE.getDate() + diff);
+            const semanaStr = segunda.toISOString().split("T")[0];
+
+            // Buscar ou criar REFI para essa semana
+            const [refExist] = await db.select({ id: planejamentoRefis.id, custoRealizado: planejamentoRefis.custoRealizado })
+              .from(planejamentoRefis)
+              .where(and(
+                eq(planejamentoRefis.projetoId, atv.projetoId),
+                eq(planejamentoRefis.semana, semanaStr),
+              ));
+
+            if (refExist) {
+              const novoRealizado = parseFloat(String(refExist.custoRealizado || "0")) + custoHE;
+              await db.update(planejamentoRefis).set({ custoRealizado: String(novoRealizado.toFixed(2)) })
+                .where(eq(planejamentoRefis.id, refExist.id));
+            } else {
+              await db.insert(planejamentoRefis).values({
+                projetoId: atv.projetoId,
+                semana: semanaStr,
+                custoRealizado: String(custoHE.toFixed(2)),
+                criadoPor: ctx.user.name || "Sistema",
+              });
+            }
+          }
+        }
+      } catch (e) {
+        // Não bloquear aprovação por erro no REFI
+        console.warn("[HE] Erro ao acumular custo no REFI:", e);
+      }
+    }
+
     await createAuditLog({
       userId: ctx.user.id,
       userName: ctx.user.name || "Sistema",
@@ -205,7 +291,7 @@ export const heSolicitacoesRouter = router({
       entityId: input.id,
       details: isReversao
         ? `Solicitação de HE #${input.id} REVERTIDA de rejeitada → aprovada para ${sol.dataSolicitacao}`
-        : `Solicitação de HE #${input.id} aprovada para ${sol.dataSolicitacao}`,
+        : `Solicitação de HE #${input.id} aprovada para ${sol.dataSolicitacao}${sol.planejamentoAtividadeId ? ` (atividade #${sol.planejamentoAtividadeId})` : ""}`,
     });
 
     return { success: true, reversao: isReversao };
