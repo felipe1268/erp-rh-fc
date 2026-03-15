@@ -1195,6 +1195,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 18:00:00",
   },
   {
+    version: 329,
+    titulo: "Almoxarifado — UX simplificada: botão SAÍDA removido, EMPRESTAR renomeado para FERRAMENTAS",
+    descricao: "Simplificação da interface do almoxarifado para usuários operacionais. Botão SAÍDA removido (coberto pelo INSUMO + TRANSFERIR). Botão EMPRESTAR renomeado para FERRAMENTAS. Modal renomeado para 'Ferramentas — Empréstimo'. Grid de botões ajustado de 6 para 5 colunas. Aba 'Emprestados' renomeada para 'Ferramentas' em todos os painéis. Histórico de saídas preservado internamente.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 20:00:00",
+  },
+  {
     version: 328,
     titulo: "Auto-foto IA — Busca automática de imagens para EPIs e Almoxarifado via Openverse",
     descricao: "Nova funcionalidade de busca automática de fotos para todos os itens sem imagem. Usa Gemini para gerar termos de busca em inglês e a API Openverse (600M+ imagens Creative Commons, gratuita) para encontrar fotos reais verificadas por HEAD request. Botão '🤖 Auto-foto EPIs' na página de EPIs e '🤖 Auto-foto' no Almoxarifado. Endpoint sugerirFotoIA individual atualizado para usar mesma engine. Endpoint autoFotoBulk (EPIs) e autoFotoBulkAlmox (Almoxarifado) para processamento em massa. Exclui automaticamente uniformes.",

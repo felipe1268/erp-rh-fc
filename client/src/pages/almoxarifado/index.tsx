@@ -575,7 +575,7 @@ export default function AlmoxarifadoPage() {
 
         {/* ── AÇÕES RÁPIDAS MOBILE ──────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
             {/* ENTRADA */}
             <button
               onClick={() => { resetEntrada(); setModalEntrada(true); }}
@@ -584,21 +584,13 @@ export default function AlmoxarifadoPage() {
               <ArrowDownCircle className="w-8 h-8" />
               📥 ENTRADA
             </button>
-            {/* SAÍDA */}
-            <button
-              onClick={() => { resetSaida(); setModalSaida(true); }}
-              className="flex flex-col items-center justify-center gap-2 bg-red-500 hover:bg-red-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
-            >
-              <ArrowUpCircle className="w-8 h-8" />
-              📤 SAÍDA
-            </button>
-            {/* EMPRESTAR */}
+            {/* FERRAMENTAS (empréstimo) */}
             <button
               onClick={() => { resetEmprestimo(); setModalEmprestimo(true); }}
               className="flex flex-col items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
             >
               <Wrench className="w-8 h-8" />
-              🔧 EMPRESTAR
+              🔧 FERRAMENTAS
             </button>
             {/* DAR INSUMO */}
             <button
@@ -634,11 +626,10 @@ export default function AlmoxarifadoPage() {
           </div>
 
           {/* ── VER REGISTROS (linha secundária) ────────────────── */}
-          <div className="grid grid-cols-6 gap-2 mt-2">
+          <div className="grid grid-cols-5 gap-2 mt-2">
             {[
               { label: "Entradas",      aba: "entradas"      as const, icon: "↓",  color: "text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100" },
-              { label: "Saídas",        aba: "saidas"        as const, icon: "↑",  color: "text-orange-700 border-orange-300 bg-orange-50 hover:bg-orange-100" },
-              { label: "Emprestados",   aba: "emprestados"   as const, icon: "🔧", color: "text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100" },
+              { label: "Ferramentas",   aba: "emprestados"   as const, icon: "🔧", color: "text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100" },
               { label: "Insumos",       aba: "insumos"       as const, icon: "🛒", color: "text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100" },
               { label: "Transferênc.", aba: "transferencias" as const, icon: "↔",  color: "text-purple-700 border-purple-300 bg-purple-50 hover:bg-purple-100" },
               { label: "Cadastros",     aba: "cadastros"     as const, icon: "📦", color: "text-gray-700 border-gray-300 bg-gray-50 hover:bg-gray-100" },
@@ -1499,7 +1490,7 @@ export default function AlmoxarifadoPage() {
             ) : (
               <>
                 <div className="flex items-center justify-between p-4 border-b">
-                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Wrench className="w-5 h-5 text-blue-500" /> Emprestar Ferramenta</h2>
+                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Wrench className="w-5 h-5 text-blue-500" /> 🔧 Ferramentas — Empréstimo</h2>
                   <button onClick={() => setModalEmprestimo(false)}><X className="w-6 h-6 text-gray-400" /></button>
                 </div>
                 <div className="p-4 space-y-4">
@@ -2058,8 +2049,7 @@ export default function AlmoxarifadoPage() {
           <div className="flex border-b bg-white overflow-x-auto">
             {([
               { key: "entradas",    label: "↓ Entradas",    cls: "text-emerald-700 border-emerald-500" },
-              { key: "saidas",      label: "↑ Saídas",      cls: "text-orange-700 border-orange-500" },
-              { key: "emprestados", label: "🔧 Emprestados", cls: "text-blue-700 border-blue-500" },
+              { key: "emprestados", label: "🔧 Ferramentas", cls: "text-blue-700 border-blue-500" },
               { key: "insumos",        label: "🛒 Insumos",        cls: "text-amber-700 border-amber-500" },
               { key: "transferencias", label: "↔ Transferências", cls: "text-purple-700 border-purple-500" },
               { key: "cadastros",      label: "📦 Cadastros",      cls: "text-gray-700 border-gray-500" },
