@@ -629,8 +629,8 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     const custoUnitMdo   = toNum(col(row, 'cuUnitMdo'));
     const custoUnitTotal = custoUnitMat + custoUnitMdo;
 
-    const custoTotalMat  = toNum(col(row, 'cuTotalMat'));
-    const custoTotalMdo  = toNum(col(row, 'cuTotalMdo'));
+    let custoTotalMat  = toNum(col(row, 'cuTotalMat'));
+    let custoTotalMdo  = toNum(col(row, 'cuTotalMdo'));
     let   custoTotal     = toNum(col(row, 'custoTotal'));
 
     // Fallbacks para custoTotal: soma das partes → qty × custo unitário
@@ -638,6 +638,20 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
       custoTotal = custoTotalMat + custoTotalMdo;
     if (custoTotal === 0 && quantidade > 0 && custoUnitTotal > 0)
       custoTotal = quantidade * custoUnitTotal;
+
+    // ── Normalizar totais parciais: Mat + MO deve = Total (elimina diferença de
+    // arredondamento entre colunas do Excel quando computadas por fórmulas distintas).
+    // Usa custoTotal (col Y) como fonte da verdade e ajusta MO para fechar o total.
+    if (custoTotal > 0) {
+      if (custoTotalMat === 0 && custoTotalMdo > 0) {
+        custoTotalMdo = custoTotal; // item puro-MO: MO = Total
+      } else if (custoTotalMdo === 0 && custoTotalMat > 0) {
+        custoTotalMat = custoTotal; // item puro-Mat: Mat = Total
+      } else if (custoTotalMat > 0 && custoTotalMdo > 0) {
+        const adjMdo = custoTotal - custoTotalMat;
+        if (adjMdo >= 0) custoTotalMdo = adjMdo; // item misto: ajusta MO
+      }
+    }
 
     // Fallback para custoUnitTotal: se unitário=0 mas total e qty conhecidos
     // Cobre casos onde colunas de unit cost não foram detectadas mas total foi

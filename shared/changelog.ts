@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 385,
+    titulo: "Orçamento — Fix import rounding + impressão por visão (custo/meta/venda)",
+    descricao: "1) Normalização de import: totais MO e Material agora usam a coluna Y (custoTotal) como fonte da verdade. Para itens pure-MO, custoTotalMdo recebe o mesmo valor de custoTotal, eliminando diferença de centavos entre colunas X e Y do Excel (fórmulas independentes arredondam de forma diferente). 2) Botão Imprimir passa agora a visão ativa (custo/meta/venda) e o percentual de meta via query params (?v=&mp=). 3) OrcamentoPrint.tsx reescrito: lê a visão da URL, renderiza preços unitários e totais corretos para cada visão, atualiza cabeçalho com badge da visão (CUSTO/META/VENDA), e exibe total geral correto na linha de rodapé da tabela.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:00:00",
+  },
+  {
     version: 384,
     titulo: "Orçamento — Fix Margem de Lucro (L-01 BDI) + precisão da Meta %",
     descricao: "1) Margem de Lucro: corrigido cálculo que usava bdiTaxaComercializacao (tabela vazia) em vez de orcamentoBdi. Agora usa L-01 (Lucro Bruto) diretamente da aba BDI importada; fallback B-01 → L-02 se L-01 ausente. Para CUSTO_783_01_2026_R02: exibe 18.19% (Lucro Bruto BDI) em vez do BDI total 35.13%. Label do banner atualizado para 'Lucro Bruto (L-01) da planilha BDI', e fallback indica ao usuário importar a aba BDI. 2) Badge de Meta: alterado de toFixed(0) para toFixed(2) — elimina arredondamento enganoso (ex: '−22%' sendo na realidade '−22.44%').",

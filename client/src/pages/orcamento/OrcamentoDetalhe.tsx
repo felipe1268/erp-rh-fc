@@ -492,7 +492,7 @@ export default function OrcamentoDetalhe() {
           {/* Botões de ação */}
           <div className="flex gap-2 shrink-0">
             <Button size="sm" variant="outline" className="gap-2"
-              onClick={() => window.open(`/orcamento/${id}/print`, "_blank")}>
+              onClick={() => window.open(`/orcamento/${id}/print?v=${versao}&mp=${localMetaPerc.toFixed(4)}`, "_blank")}>
               <Printer className="h-4 w-4" /> Imprimir / PDF
             </Button>
             <Button size="sm" variant="outline" className="gap-2"
