@@ -9,6 +9,7 @@ import {
   almoxarifadoCategorias, almoxarifadoUnidades,
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
+  comprasCotacaoFornecedores, comprasCotacaoRespostas,
   comprasOrdens, comprasOrdensItens,
   obras,
   orcamentos, orcamentoItens,
@@ -1003,6 +1004,95 @@ Responda APENAS com um objeto JSON no formato:
       const db = await getDb();
       await db.delete(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
       await db.delete(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
+      return { ok: true };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // MAPA DE COTAÇÃO (comparativo multi-fornecedor)
+  // ══════════════════════════════════════════════════════════════
+
+  getMapaCotacao: protectedProcedure
+    .input(z.object({ cotacaoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+      const participantes = await db.select().from(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
+      const respostas = await db.select().from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId));
+      const fornIds = participantes.map(p => p.fornecedorId);
+      const forns = fornIds.length > 0 ? await db.select().from(fornecedores).where(inArray(fornecedores.id, fornIds)) : [];
+      const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string }> = {};
+      for (const r of respostas) respostaMap[`${r.itemId}_${r.fornecedorId}`] = { precoUnitario: r.precoUnitario ?? "0", descontoPct: r.descontoPct ?? "0", total: r.total ?? "0" };
+      const totaisPorFornecedor: Record<number, number> = {};
+      for (const p of participantes) {
+        totaisPorFornecedor[p.fornecedorId] = itens.reduce((acc, it) => {
+          const r = respostaMap[`${it.id}_${p.fornecedorId}`];
+          return acc + n(r?.total ?? 0);
+        }, 0);
+      }
+      return { cotacao: cot, itens, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor };
+    }),
+
+  adicionarFornecedorMapa: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.insert(comprasCotacaoFornecedores).values({ cotacaoId: input.cotacaoId, fornecedorId: input.fornecedorId }).onConflictDoNothing();
+      return { ok: true };
+    }),
+
+  removerFornecedorMapa: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(comprasCotacaoRespostas).where(and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, input.fornecedorId)));
+      await db.delete(comprasCotacaoFornecedores).where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      return { ok: true };
+    }),
+
+  salvarRespostasLote: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      fornecedorId: z.number(),
+      prazoEntregaDias: z.number().nullable().optional(),
+      condicaoPagamento: z.string().optional(),
+      respostas: z.array(z.object({ itemId: z.number(), precoUnitario: z.number(), descontoPct: z.number().optional() })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      let totalForn = 0;
+      for (const r of input.respostas) {
+        const desc = r.descontoPct ?? 0;
+        const itRow = await db.select({ quantidade: comprasCotacoesItens.quantidade }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, r.itemId));
+        const qty = n(itRow[0]?.quantidade ?? 1);
+        const total = qty * r.precoUnitario * (1 - desc / 100);
+        totalForn += total;
+        await db.insert(comprasCotacaoRespostas).values({
+          cotacaoId: input.cotacaoId, fornecedorId: input.fornecedorId, itemId: r.itemId,
+          precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
+        }).onConflictDoUpdate({ target: [comprasCotacaoRespostas.cotacaoId, comprasCotacaoRespostas.fornecedorId, comprasCotacaoRespostas.itemId], set: {
+          precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
+        }});
+      }
+      await db.update(comprasCotacaoFornecedores).set({ totalOrcado: String(totalForn.toFixed(2)), prazoEntregaDias: input.prazoEntregaDias ?? null, condicaoPagamento: input.condicaoPagamento ?? null })
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      return { ok: true, total: totalForn };
+    }),
+
+  selecionarVencedorMapa: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(comprasCotacaoFornecedores).set({ selecionado: false }).where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
+      await db.update(comprasCotacaoFornecedores).set({ selecionado: true }).where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      const [p] = await db.select().from(comprasCotacaoFornecedores).where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      await db.update(comprasCotacoes).set({
+        fornecedorId: input.fornecedorId,
+        total: p.totalOrcado ?? "0",
+        prazoEntregaDias: p.prazoEntregaDias ?? null,
+        condicaoPagamento: p.condicaoPagamento ?? null,
+      }).where(eq(comprasCotacoes.id, input.cotacaoId));
       return { ok: true };
     }),
 

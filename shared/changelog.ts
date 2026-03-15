@@ -1456,6 +1456,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 362,
+    titulo: "Mapa de Cotação: comparativo multi-fornecedor com destaque automático",
+    descricao: "Implementado Mapa de Cotação completo: (1) Aba 'Mapa de Cotação' na tela cheia da cotação; (2) Seleção de múltiplos fornecedores participantes; (3) Matriz de preços editável (item × fornecedor) com campos inline; (4) Destaque automático do menor preço por item em verde; (5) Prazo de entrega e condição de pagamento por fornecedor; (6) Totalização automática por fornecedor; (7) Banner 'Melhor Proposta' com nome, total e prazo do fornecedor vencedor; (8) Botão 'Selecionar como Vencedor' que atualiza fornecedor, total, prazo e cond. pagamento na cotação principal. Tabelas DB criadas: compras_cotacao_fornecedores e compras_cotacao_respostas.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 361,
     titulo: "SC → Cotação: botão 'Enviar para Cotação' no detalhe da SC",
     descricao: "Adicionado botão 'Enviar para Cotação' (azul) no painel de detalhe de cada SC. Ao clicar, a cotação é criada automaticamente com todos os itens da SC copiados (preço unitário = 0 para preenchimento posterior), o status da SC é atualizado para 'Em Cotação' e o usuário é redirecionado para a tela de Cotações. O botão só aparece para SCs que ainda não foram para cotação ou concluídas, e fica desabilitado se a SC não tiver itens. Corrigido também o import incorreto de react-router-dom em Cotacoes.tsx (substituído por wouter).",
