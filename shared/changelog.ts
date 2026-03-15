@@ -1015,6 +1015,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 14:00:00",
   },
   {
+    version: 311,
+    titulo: "Almoxarifado — Busca de item por foto com IA (Gemini Vision)",
+    descricao: "Novo botão 'Foto IA' na barra de busca do almoxarifado: o usuário tira uma foto (câmera ou arquivo) do produto/ferramenta; o Gemini Vision analisa a imagem e retorna até 5 itens do catálogo mais prováveis em ordem de similaridade com porcentagem de match e justificativa; ao clicar no item identificado, a busca é preenchida automaticamente. Funciona no contexto atual (Almoxarifado Central ou por Obra).",
+    tipo: "feature",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 18:00:00",
+  },
+  {
     version: 310,
     titulo: "Correção: campos booleanos como smallint ao salvar colaborador",
     descricao: "updateEmployee convertia campos booleanos (listaNegra, recebeComplemento, acordoHoraExtra, pensaoAlimenticia, licencaMaternidade, ddsParticipacao) para true/false JavaScript, mas as colunas no PostgreSQL são smallint (0/1). Agora a conversão usa 1/0, eliminando o erro 'Failed query' ao clicar em Salvar no cadastro de colaborador.",
