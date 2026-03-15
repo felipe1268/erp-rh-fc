@@ -377,7 +377,7 @@ export function ProgramacaoSemanal({
                     ${i === idx
                       ? "bg-blue-600 text-white border-blue-600"
                       : isCurrent
-                        ? "bg-blue-100 text-blue-700 border-blue-300"
+                        ? "bg-red-500 text-white border-red-600"
                         : temAtrasada
                           ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
                           : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"

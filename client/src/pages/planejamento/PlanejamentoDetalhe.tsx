@@ -94,6 +94,12 @@ function labelSemana(s: string, idx: number) {
   const br  = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
   return `${idx + 1}ª Semana — ${br(ini)} até ${br(fim)}`;
 }
+function isCurrentWeek(s: string): boolean {
+  const today = new Date().toISOString().split("T")[0];
+  const ini = s;
+  const fim = new Date(new Date(s + "T12:00:00").getTime() + 6 * 86400000).toISOString().split("T")[0];
+  return today >= ini && today <= fim;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
@@ -3246,23 +3252,27 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
             {pickerOpen && (
               <div className="absolute top-full mt-1 left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-xl max-h-80 overflow-y-auto min-w-[320px]">
                 {semanas.map((s, i) => {
-                  const pct    = semanasComDados[s];
+                  const pct      = semanasComDados[s];
                   const temDados = pct !== undefined;
                   const isAtual  = s === semanaAtual;
+                  const isCurrent = isCurrentWeek(s);
                   return (
                     <button
                       key={s}
                       type="button"
                       onClick={() => { setSemanaAtual(s); setAvancoLocal({}); setImportStatus(null); setPickerOpen(false); }}
                       className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left transition-colors
-                        ${isAtual ? "bg-blue-50" : "hover:bg-slate-50"}
-                        ${temDados ? "text-emerald-800" : "text-slate-700"}`}
+                        ${isAtual ? "bg-blue-50" : isCurrent ? "bg-red-50" : "hover:bg-slate-50"}
+                        ${temDados ? "text-emerald-800" : isCurrent ? "text-red-700" : "text-slate-700"}`}
                     >
                       <span className="flex items-center gap-2">
                         {temDados
                           ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                          : <span className="w-3.5 h-3.5 shrink-0 border border-slate-200 rounded-full" />}
-                        <span className={isAtual ? "font-semibold" : ""}>{labelSemana(s, i)}</span>
+                          : isCurrent
+                            ? <span className="w-3.5 h-3.5 shrink-0 rounded-full bg-red-500 flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-white" /></span>
+                            : <span className="w-3.5 h-3.5 shrink-0 border border-slate-200 rounded-full" />}
+                        <span className={`${isAtual ? "font-semibold" : ""} ${isCurrent ? "font-bold" : ""}`}>{labelSemana(s, i)}</span>
+                        {isCurrent && <span className="ml-1 text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-full leading-none">ATUAL</span>}
                       </span>
                       {temDados && (
                         <span className="ml-3 font-bold text-emerald-600 shrink-0 bg-emerald-50 px-1.5 py-0.5 rounded">
@@ -6701,7 +6711,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             className="border border-input rounded-md px-3 py-1.5 text-xs bg-background"
           >
             {semanas.map((s, i) => (
-              <option key={s} value={s}>{labelSemana(s, i)}{refisLista.find((r: any) => r.semana === s) ? " ✓" : ""}</option>
+              <option key={s} value={s} style={isCurrentWeek(s) ? { fontWeight: "bold", color: "#dc2626" } : {}}>{isCurrentWeek(s) ? "★ " : ""}{labelSemana(s, i)}{refisLista.find((r: any) => r.semana === s) ? " ✓" : ""}</option>
             ))}
           </select>
         </div>
