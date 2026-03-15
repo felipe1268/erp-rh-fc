@@ -13,8 +13,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Building2, Plus, Search, Edit, Trash2, Eye, Upload, FileText, CheckCircle, XCircle, Clock, Phone, Mail, MapPin, Loader2, KeyRound, Copy } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { formatCNPJ } from "@/lib/formatters";
 
 const ESTADOS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
+
+// Máscara progressiva para o campo CNPJ: XX.XXX.XXX/XXXX-XX
+function cnpjMask(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 14);
+  if (d.length <= 2)  return d;
+  if (d.length <= 5)  return `${d.slice(0,2)}.${d.slice(2)}`;
+  if (d.length <= 8)  return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5)}`;
+  if (d.length <= 12) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`;
+  return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
+}
 
 // Use inferred types from tRPC
 
@@ -104,7 +115,7 @@ export default function EmpresasTerceiras() {
   };
 
   const openEdit = (emp: any) => {
-    setForm({ ...emp });
+    setForm({ ...emp, cnpj: cnpjMask(emp.cnpj || "") });
     setEditingId(emp.id);
     setActiveTab("dados");
     setShowForm(true);
@@ -195,7 +206,7 @@ export default function EmpresasTerceiras() {
                     </div>
                     {emp.nomeFantasia && <p className="text-sm text-muted-foreground">{emp.nomeFantasia}</p>}
                     <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
-                      <span>CNPJ: {emp.cnpj}</span>
+                      <span className="font-mono">CNPJ: {formatCNPJ(emp.cnpj)}</span>
                       {emp.tipoServico && <span>| {emp.tipoServico}</span>}
                       {emp.cidade && <span className="flex items-center gap-0.5"><MapPin className="h-3 w-3" />{emp.cidade}/{emp.estado}</span>}
                       {emp.telefone && <span className="flex items-center gap-0.5"><Phone className="h-3 w-3" />{emp.telefone}</span>}
@@ -248,7 +259,7 @@ export default function EmpresasTerceiras() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><Label>Razão Social *</Label><Input value={form.razaoSocial || ""} onChange={(e) => setForm({ ...form, razaoSocial: e.target.value })} /></div>
                   <div><Label>Nome Fantasia</Label><Input value={form.nomeFantasia || ""} onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })} /></div>
-                  <div><Label>CNPJ *</Label><div className="flex gap-2"><Input value={form.cnpj || ""} onChange={(e) => { setForm({ ...form, cnpj: e.target.value }); }} onBlur={(e) => buscarCNPJ(e.target.value)} className="flex-1" />{cnpjLoading && <Loader2 className="h-5 w-5 animate-spin text-blue-500 self-center" />}</div></div>
+                  <div><Label>CNPJ *</Label><div className="flex gap-2"><Input placeholder="00.000.000/0000-00" value={form.cnpj || ""} onChange={(e) => { setForm({ ...form, cnpj: cnpjMask(e.target.value) }); }} onBlur={(e) => buscarCNPJ(e.target.value)} className="flex-1 font-mono" />{cnpjLoading && <Loader2 className="h-5 w-5 animate-spin text-blue-500 self-center" />}</div></div>
                   <div><Label>Tipo de Serviço</Label><Input placeholder="Ex: Elétrica, Hidráulica, Gesso..." value={form.tipoServico || ""} onChange={(e) => setForm({ ...form, tipoServico: e.target.value })} /></div>
                   <div><Label>Inscrição Estadual</Label><Input value={form.inscricaoEstadual || ""} onChange={(e) => setForm({ ...form, inscricaoEstadual: e.target.value })} /></div>
                   <div><Label>Inscrição Municipal</Label><Input value={form.inscricaoMunicipal || ""} onChange={(e) => setForm({ ...form, inscricaoMunicipal: e.target.value })} /></div>
@@ -416,7 +427,7 @@ export default function EmpresasTerceiras() {
             <div className="space-y-4">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <p className="text-sm text-amber-800 font-bold">{acessoEmpresa?.razaoSocial}</p>
-                <p className="text-xs text-amber-600">CNPJ: {acessoEmpresa?.cnpj}</p>
+                <p className="text-xs text-amber-600">CNPJ: {formatCNPJ(acessoEmpresa?.cnpj)}</p>
               </div>
               <div><Label>Nome do Responsável</Label><Input value={nomeResp} onChange={(e) => setNomeResp(e.target.value)} placeholder="Nome" /></div>
               <div><Label>E-mail do Responsável</Label><Input value={emailResp} onChange={(e) => setEmailResp(e.target.value)} placeholder="email@empresa.com" /></div>
