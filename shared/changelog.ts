@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 388,
+    titulo: "Importar Orçamento — Corrige race condition no guard de conflito de obra",
+    descricao: "Fix adicional ao bug de race condition: o guard anterior verificava obraIdsComOrcamento enquanto orcamentosQ ainda estava carregando, resultando num Set vazio que deixava o usuário passar para a etapa de mapeamento. Agora o botão 'Mapear Colunas' é desabilitado enquanto orcamentosQ.isLoading=true, e as funções handleGoToMapping/handleImportarCusto também retornam precocemente nessa condição. Orçamento CUSTO_783_01_2026_R02 (id=15) removido via soft-delete para liberar obra HOTEL DO PAPA (id=7).",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:00:00",
+  },
+  {
     version: 387,
     titulo: "Importar Orçamento — Corrige bug de conflito de obra (race condition)",
     descricao: "Corrigido bug onde o usuário conseguia avançar para a etapa de mapeamento de colunas com uma obra que já possuía orçamento vinculado (race condition no carregamento da lista). Agora: (1) banner vermelho aparece no step 2 alertando sobre o conflito, (2) botão 'Mapear Colunas' é desabilitado automaticamente, (3) guards em handleGoToMapping e handleImportarCusto redirecionam de volta ao step 1 com mensagem clara antes de atingir o backend.",

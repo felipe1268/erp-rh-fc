@@ -463,6 +463,10 @@ export default function OrcamentoImportar() {
   /* ── ir para mapeamento de colunas ── */
   const handleGoToMapping = async () => {
     if (!fileCusto) return;
+    if (orcamentosQ.isLoading) {
+      toast.info("Aguarde... verificando obras disponíveis.");
+      return;
+    }
     if (selectedObra && obraIdsComOrcamento.has(selectedObra.id)) {
       toast.error(`A obra "${selectedObra.nome}" já possui um orçamento vinculado. Selecione outra obra ou continue sem vincular.`);
       setSelectedObra(null);
@@ -503,6 +507,10 @@ export default function OrcamentoImportar() {
   /* ── importar planilha de custo ── */
   const handleImportarCusto = async () => {
     if (!fileCusto || !companyId) return;
+    if (orcamentosQ.isLoading) {
+      toast.info("Aguarde... verificando obras disponíveis.");
+      return;
+    }
     if (selectedObra && obraIdsComOrcamento.has(selectedObra.id)) {
       toast.error(`A obra "${selectedObra.nome}" já possui um orçamento vinculado. Selecione outra obra ou continue sem vincular.`);
       setSelectedObra(null);
@@ -745,7 +753,7 @@ export default function OrcamentoImportar() {
                   <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
                 </Button>
                 <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
-                  disabled={!analyzeResCusto?.ok || analyzingCusto || loadingPreview || !!(selectedObra && obraIdsComOrcamento.has(selectedObra.id))}
+                  disabled={!analyzeResCusto?.ok || analyzingCusto || loadingPreview || orcamentosQ.isLoading || !!(selectedObra && obraIdsComOrcamento.has(selectedObra.id))}
                   onClick={handleGoToMapping}
                 >
                   {loadingPreview
