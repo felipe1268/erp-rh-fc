@@ -12,7 +12,8 @@ import {
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
   Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer,
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
-  Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench
+  Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
+  Package, PackageX, CheckCircle, XCircle
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -143,6 +144,35 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
 
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
+  // Almoxarifado — desconto em folha
+  const [descontoModal, setDescontoModal] = useState<{ loan: any } | null>(null);
+  const [descontoValor, setDescontoValor] = useState("");
+  const [descontoDescricao, setDescontoDescricao] = useState("");
+  const [descontoMes, setDescontoMes] = useState("");
+  const [reprovarModal, setReprovarModal] = useState<{ id: number } | null>(null);
+  const [reprovarMotivo, setReprovarMotivo] = useState("");
+
+  const utils = trpc.useContext();
+  const criarDescontoMut = trpc.warehouse.criarDescontoFolha.useMutation({
+    onSuccess: () => {
+      utils.docs.raioX.invalidate({ employeeId: employeeId! });
+      setDescontoModal(null);
+      setDescontoValor("");
+      setDescontoDescricao("");
+      setDescontoMes("");
+    },
+  });
+  const aprovarDescontoMut = trpc.warehouse.aprovarDescontoFolha.useMutation({
+    onSuccess: () => utils.docs.raioX.invalidate({ employeeId: employeeId! }),
+  });
+  const reprovarDescontoMut = trpc.warehouse.reprovarDescontoFolha.useMutation({
+    onSuccess: () => {
+      utils.docs.raioX.invalidate({ employeeId: employeeId! });
+      setReprovarModal(null);
+      setReprovarMotivo("");
+    },
+  });
+
   if (!open || !employeeId) return null;
 
   const emp = raioX?.funcionario;
@@ -169,6 +199,8 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const cipa = (raioX as any)?.cipa || [];
   const pjContratos = (raioX as any)?.pjContratos || [];
   const pjPagamentos = (raioX as any)?.pjPagamentos || [];
+  const emprestimosAlmox = (raioX as any)?.emprestimosAlmox || [];
+  const descontosAlmox = (raioX as any)?.descontosAlmox || [];
 
   const asosVencidos = asos.filter((a: any) => a.status === "VENCIDO").length;
   const asosAVencer = asos.filter((a: any) => a.status?.includes("DIAS PARA VENCER")).length;
@@ -819,6 +851,14 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       { value: "ferias", label: "Férias", icon: Palmtree, count: ferias.length },
                     ],
                   },
+                  {
+                    label: "Almoxarifado",
+                    color: "orange",
+                    tabs: [
+                      { value: "emprestimos_alm", label: "Empréstimos", icon: Package, count: emprestimosAlmox.length },
+                      { value: "desconto_folha_alm", label: "Desconto Folha", icon: PackageX, count: descontosAlmox.filter((d: any) => d.status === "pendente").length },
+                    ],
+                  },
                 ];
 
                 const activeColorMap: Record<string, string> = {
@@ -829,6 +869,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   amber: "bg-amber-600 text-white shadow-sm",
                   cyan: "bg-cyan-600 text-white shadow-sm",
                   purple: "bg-purple-600 text-white shadow-sm",
+                  orange: "bg-orange-600 text-white shadow-sm",
                 };
                 const labelColorMap: Record<string, string> = {
                   indigo: "text-indigo-700 border-indigo-300",
@@ -838,6 +879,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   amber: "text-amber-700 border-amber-300",
                   cyan: "text-cyan-700 border-cyan-300",
                   purple: "text-purple-700 border-purple-300",
+                  orange: "text-orange-700 border-orange-300",
                 };
 
                 return (
@@ -2086,10 +2128,264 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               <TabsContent value="contratos_clt" className="mt-4">
                 <ContratosTab employeeId={employeeId!} companyId={selectedCompany?.id || 0} empNome={emp?.nomeCompleto || ""} />
               </TabsContent>
+
+              {/* ============ ALMOXARIFADO — EMPRÉSTIMOS ============ */}
+              <TabsContent value="emprestimos_alm" className="mt-4">
+                <div className="space-y-4">
+                  <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                    <Package className="w-5 h-5 text-orange-600" />
+                    Empréstimos de Ferramentas/Equipamentos ({emprestimosAlmox.length})
+                  </h3>
+                  {emprestimosAlmox.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      <Package className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                      <p className="text-sm">Nenhum empréstimo registrado</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-orange-50 text-orange-800">
+                            <th className="text-left px-3 py-2 font-semibold">Item</th>
+                            <th className="text-center px-3 py-2 font-semibold">Qtd</th>
+                            <th className="text-left px-3 py-2 font-semibold">Almoxarifado</th>
+                            <th className="text-center px-3 py-2 font-semibold">Data Emprést.</th>
+                            <th className="text-center px-3 py-2 font-semibold">Devolução</th>
+                            <th className="text-center px-3 py-2 font-semibold">Status</th>
+                            <th className="text-center px-3 py-2 font-semibold">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {emprestimosAlmox.map((loan: any) => {
+                            const statusColors: Record<string, string> = {
+                              emprestado: "bg-blue-100 text-blue-800",
+                              devolvido: "bg-green-100 text-green-800",
+                              perdido: "bg-red-100 text-red-800",
+                            };
+                            return (
+                              <tr key={loan.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                <td className="px-3 py-2 font-medium">{loan.itemNome}</td>
+                                <td className="px-3 py-2 text-center">{loan.quantidade || 1}</td>
+                                <td className="px-3 py-2 text-gray-600">{loan.almoxarifadoNome || "Central"}</td>
+                                <td className="px-3 py-2 text-center">{formatDate(loan.dataEmprestimo)}</td>
+                                <td className="px-3 py-2 text-center">{formatDate(loan.dataDevolucao) || "-"}</td>
+                                <td className="px-3 py-2 text-center">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[loan.status] || "bg-gray-100 text-gray-700"}`}>
+                                    {loan.status === "emprestado" ? "Em posse" : loan.status === "devolvido" ? "Devolvido" : loan.status === "perdido" ? "Perdido" : loan.status}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  {loan.status === "emprestado" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-xs text-red-600 border-red-300 hover:bg-red-50"
+                                      onClick={() => {
+                                        setDescontoModal({ loan });
+                                        setDescontoValor("");
+                                        setDescontoDescricao(`Item não devolvido: ${loan.itemNome}`);
+                                        setDescontoMes(new Date().toISOString().slice(0, 7));
+                                      }}
+                                    >
+                                      <PackageX className="w-3 h-3 mr-1" />
+                                      Perdido
+                                    </Button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* ============ ALMOXARIFADO — DESCONTO FOLHA ============ */}
+              <TabsContent value="desconto_folha_alm" className="mt-4">
+                <div className="space-y-4">
+                  <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                    <PackageX className="w-5 h-5 text-red-600" />
+                    Descontos em Folha — Itens Perdidos ({descontosAlmox.length})
+                  </h3>
+                  {descontosAlmox.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      <PackageX className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                      <p className="text-sm">Nenhum desconto registrado</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-red-50 text-red-800">
+                            <th className="text-left px-3 py-2 font-semibold">Item</th>
+                            <th className="text-center px-3 py-2 font-semibold">Qtd</th>
+                            <th className="text-right px-3 py-2 font-semibold">Valor</th>
+                            <th className="text-center px-3 py-2 font-semibold">Mês Desconto</th>
+                            <th className="text-center px-3 py-2 font-semibold">Status</th>
+                            <th className="text-left px-3 py-2 font-semibold">Aprovado/Rejeitado por</th>
+                            <th className="text-center px-3 py-2 font-semibold">Ações RH</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {descontosAlmox.map((d: any) => {
+                            const statusColors: Record<string, string> = {
+                              pendente: "bg-amber-100 text-amber-800",
+                              aprovado: "bg-green-100 text-green-800",
+                              reprovado: "bg-red-100 text-red-800",
+                            };
+                            return (
+                              <tr key={d.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                <td className="px-3 py-2 font-medium">{d.itemNome}</td>
+                                <td className="px-3 py-2 text-center">{d.quantidade || 1}</td>
+                                <td className="px-3 py-2 text-right font-semibold">{formatMoeda(parseFloat(d.valorDesconto || "0"))}</td>
+                                <td className="px-3 py-2 text-center">{d.mesDesconto || "-"}</td>
+                                <td className="px-3 py-2 text-center">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[d.status] || "bg-gray-100 text-gray-700"}`}>
+                                    {d.status === "pendente" ? "Pendente" : d.status === "aprovado" ? "Aprovado" : "Reprovado"}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-gray-600 text-xs">
+                                  {d.aprovadoPor ? `${d.aprovadoPor}${d.aprovadoEm ? " em " + formatDate(d.aprovadoEm.split("T")[0]) : ""}` : "-"}
+                                  {d.motivoReprovacao && <div className="text-red-600">{d.motivoReprovacao}</div>}
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  {d.status === "pendente" && (
+                                    <div className="flex gap-1 justify-center">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-xs text-green-700 border-green-300 hover:bg-green-50"
+                                        onClick={() => aprovarDescontoMut.mutate({ id: d.id, mesDesconto: d.mesDesconto || undefined })}
+                                        disabled={aprovarDescontoMut.isLoading}
+                                      >
+                                        <CheckCircle className="w-3 h-3 mr-1" />
+                                        Aprovar
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-xs text-red-700 border-red-300 hover:bg-red-50"
+                                        onClick={() => { setReprovarModal({ id: d.id }); setReprovarMotivo(""); }}
+                                      >
+                                        <XCircle className="w-3 h-3 mr-1" />
+                                        Reprovar
+                                      </Button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
             </Tabs>
           </div>
         )}
       </div>
+
+      {/* ============ MODAL — MARCAR COMO PERDIDO ============ */}
+      {descontoModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-base font-bold text-red-700 mb-4 flex items-center gap-2">
+              <PackageX className="w-5 h-5" />
+              Marcar Item como Perdido — Desconto em Folha
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Item: <strong>{descontoModal.loan.itemNome}</strong> | Qtd: {descontoModal.loan.quantidade || 1}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 block mb-1">Valor do Desconto (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                  placeholder="0,00"
+                  value={descontoValor}
+                  onChange={(e) => setDescontoValor(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 block mb-1">Descrição / Motivo</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                  value={descontoDescricao}
+                  onChange={(e) => setDescontoDescricao(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 block mb-1">Mês de Aplicação do Desconto</label>
+                <input
+                  type="month"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                  value={descontoMes}
+                  onChange={(e) => setDescontoMes(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5 justify-end">
+              <Button variant="outline" onClick={() => setDescontoModal(null)}>Cancelar</Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={!descontoValor || parseFloat(descontoValor) <= 0 || criarDescontoMut.isLoading}
+                onClick={() => criarDescontoMut.mutate({
+                  companyId: descontoModal.loan.companyId,
+                  employeeId: descontoModal.loan.funcionarioId,
+                  employeeNome: descontoModal.loan.funcionarioNome || emp?.nomeCompleto || "",
+                  loanId: descontoModal.loan.id,
+                  itemNome: descontoModal.loan.itemNome,
+                  quantidade: parseFloat(String(descontoModal.loan.quantidade || 1)),
+                  valorDesconto: parseFloat(descontoValor),
+                  descricao: descontoDescricao || undefined,
+                  mesDesconto: descontoMes || undefined,
+                })}
+              >
+                {criarDescontoMut.isLoading ? "Salvando..." : "Confirmar Desconto"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============ MODAL — REPROVAR DESCONTO ============ */}
+      {reprovarModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-base font-bold text-red-700 mb-4 flex items-center gap-2">
+              <XCircle className="w-5 h-5" />
+              Reprovar Desconto em Folha
+            </h3>
+            <div>
+              <label className="text-xs font-semibold text-gray-700 block mb-1">Motivo da Reprovação (opcional)</label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                placeholder="Descreva o motivo..."
+                value={reprovarMotivo}
+                onChange={(e) => setReprovarMotivo(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 mt-5 justify-end">
+              <Button variant="outline" onClick={() => setReprovarModal(null)}>Cancelar</Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={reprovarDescontoMut.isLoading}
+                onClick={() => reprovarDescontoMut.mutate({ id: reprovarModal.id, motivoReprovacao: reprovarMotivo || undefined })}
+              >
+                {reprovarDescontoMut.isLoading ? "Salvando..." : "Confirmar Reprovação"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
