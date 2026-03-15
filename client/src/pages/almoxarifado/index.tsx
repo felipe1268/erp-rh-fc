@@ -10,7 +10,14 @@ import {
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight,
 } from "lucide-react";
 
-const UNIDADES = ["un", "m", "m²", "m³", "kg", "t", "L", "sc", "cx", "pc", "vb", "gl", "barra", "rolo", "pç"];
+const UNIDADES = [
+  "un", "pç", "pc", "cx", "sc", "rolo", "barra", "fardo", "pct", "bd",
+  "m", "m²", "m³", "cm", "mm",
+  "kg", "g", "t",
+  "L", "mL", "galão",
+  "vb", "gl", "conjunto", "kit",
+  "par", "dz",
+];
 
 const EMPTY_ITEM = {
   nome: "", unidade: "un", categoria: "", codigoInterno: "",
@@ -560,12 +567,16 @@ export default function AlmoxarifadoPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-700">Unidade</label>
-                  <select
-                    value={formItem.unidade} onChange={e => setFormItem(p => ({ ...p, unidade: e.target.value }))}
+                  <input
+                    list="unidades-list"
+                    value={formItem.unidade}
+                    onChange={e => setFormItem(p => ({ ...p, unidade: e.target.value }))}
+                    placeholder="un, kg, m²..."
                     className="mt-1 w-full h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white outline-none focus:border-emerald-400"
-                  >
-                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
+                  />
+                  <datalist id="unidades-list">
+                    {UNIDADES.map(u => <option key={u} value={u} />)}
+                  </datalist>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-700">Categoria</label>
