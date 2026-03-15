@@ -1348,6 +1348,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:59",
   },
   {
+    version: 356,
+    titulo: "Bugfix: Obras não apareciam no seletor de ContratoNovo",
+    descricao: "ContratoNovo.tsx usava trpc.obras.list (retorna TODAS as obras) e filtrava por status === 'ativa' ou 'em andamento'. Porém os status reais no banco são 'Em_Andamento', 'Planejamento', 'Concluida', 'Paralisada', 'Cancelada' — nenhum deles corresponde a 'ativa'. O resultado era 'Nenhum resultado' sempre. Correção: trocado para trpc.obras.listActive que filtra corretamente por isActive=1 no servidor, sem necessidade de filtro adicional no cliente.",
+    tipo: "bugfix",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 355,
     titulo: "Bugfix: PrevisaoCaixa usava trpc.rh.listarObras (inexistente)",
     descricao: "PrevisaoCaixa.tsx chamava trpc.rh.listarObras.useQuery que não existe no backend, causando erro silencioso no selector de obras. Corrigido para trpc.obras.list.useQuery({ companyId }) — endpoint correto. O módulo Terceiros (Contratos, Medições, Previsão de Caixa) estava 100% construído de sessões anteriores: 5 tabelas no banco, router completo, 5 páginas React, rotas App.tsx e menu DashboardLayout. Apenas este bug estava pendente.",

@@ -192,7 +192,7 @@ export default function ContratoNovo() {
     { enabled: (companyId ?? 0) > 0 }
   );
 
-  const { data: obrasAll = [] } = trpc.obras.list.useQuery(
+  const { data: obrasAll = [] } = trpc.obras.listActive.useQuery(
     { companyId: companyId ?? 0 },
     { enabled: (companyId ?? 0) > 0 }
   );
@@ -207,9 +207,8 @@ export default function ContratoNovo() {
     { enabled: !!selectedProjetoId }
   );
 
-  const obrasAtivas = (obrasAll as any[]).filter(
-    o => !o.status || o.status.toLowerCase() === "ativa" || o.status.toLowerCase() === "em andamento"
-  );
+  // listActive já retorna apenas obras ativas (isActive=1) — sem filtro adicional
+  const obrasAtivas = obrasAll as any[];
 
   // Auto-detecta projeto quando obra muda
   useEffect(() => {
@@ -341,8 +340,8 @@ export default function ContratoNovo() {
                 labelKey={o => `${o.codigo ? o.codigo + " — " : ""}${o.nome}`}
                 searchPlaceholder="Digite código ou nome da obra..."
               />
-              {(obrasAll as any[]).length > 0 && obrasAtivas.length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">Nenhuma obra ativa encontrada.</p>
+              {obrasAtivas.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">Nenhuma obra ativa encontrada no sistema.</p>
               )}
             </div>
 
