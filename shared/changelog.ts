@@ -1257,4 +1257,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 20:00:00",
   },
+  {
+    version: 337,
+    titulo: "HE-Planejamento: Filtro de concluídas + busca de atividades",
+    descricao: "Melhorias no seletor de atividades do cronograma no formulário de HE: (1) Atividades com 100% de avanço acumulado são automaticamente ocultadas da lista (não faz sentido abrir HE para atividade já concluída). (2) Campo de busca por nome ou código EAP posicionado acima da lista de checkboxes — filtra em tempo real ao digitar, com botão X para limpar. (3) Rodapé da lista mostra contagem de atividades disponíveis vs encontradas na busca, com aviso permanente de que 100% concluídas estão ocultas. (4) Seleção destacada com borda azul lateral; percentual de avanço exibido à direita de cada item. (5) Botão 'Limpar seleção' no rodapé para deselecionar todos de uma vez. (6) Campo de busca é limpo automaticamente ao trocar de Obra.",
+    tipo: "melhoria",
+    modulos: "SolicitacaoHE",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 21:00:00",
+  },
 ];

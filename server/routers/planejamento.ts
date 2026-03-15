@@ -1373,7 +1373,7 @@ export const planejamentoRouter = router({
 
       const revisao = revisoes.find(r => r.isBaseline) || revisoes[0];
 
-      // Buscar atividades da revisão (excluindo grupos)
+      // Buscar atividades da revisão
       const atividades = await db.select({
         id: planejamentoAtividades.id,
         eapCodigo: planejamentoAtividades.eapCodigo,
@@ -1392,7 +1392,26 @@ export const planejamentoRouter = router({
         ))
         .orderBy(asc(planejamentoAtividades.ordem));
 
-      return { projeto, revisao, atividades };
+      // Buscar maior percentual acumulado por atividade para filtrar as já concluídas (100%)
+      const avancosMaxRaw = await db.execute(sql`
+        SELECT "atividadeId" as atividade_id, MAX(CAST("percentualAcumulado" AS numeric)) as max_pct
+        FROM planejamento_avancos
+        WHERE "projetoId" = ${projeto.id}
+        GROUP BY "atividadeId"
+      `);
+      const avancosMax = (avancosMaxRaw as any)?.rows ?? avancosMaxRaw ?? [];
+      const avancoPct: Record<number, number> = {};
+      for (const row of avancosMax) {
+        avancoPct[row.atividade_id] = parseFloat(row.max_pct || "0");
+      }
+
+      // Filtrar: remover atividades com 100% de avanço (concluídas) e grupos
+      const atividadesFiltradas = atividades
+        .filter((a: any) => !a.isGrupo)
+        .filter((a: any) => (avancoPct[a.id] ?? 0) < 100)
+        .map((a: any) => ({ ...a, avancoPct: avancoPct[a.id] ?? 0 }));
+
+      return { projeto, revisao, atividades: atividadesFiltradas };
     }),
 
   // ── Custo RH por projeto (HEs vinculadas às atividades) ────────────────────
