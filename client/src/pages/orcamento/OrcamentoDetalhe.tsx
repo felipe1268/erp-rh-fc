@@ -486,7 +486,7 @@ export default function OrcamentoDetalhe() {
               {orc.cliente && <span>Cliente: {orc.cliente}</span>}
               {orc.local   && <span>Local: {orc.local}</span>}
               {bdiPct > 0  && <span className="text-amber-600 font-medium">BDI {bdiPct.toFixed(2)}%</span>}
-              <span className="text-purple-600 font-medium">Meta −{metaPct.toFixed(0)}% do custo</span>
+              <span className="text-purple-600 font-medium">Meta −{metaPct.toFixed(2)}% do custo</span>
             </div>
           </div>
           {/* Botões de ação */}
@@ -774,8 +774,8 @@ export default function OrcamentoDetalhe() {
           const labelDescricao =
             versao === "venda" && valorNegociado > 0 ? "Lucro sobre valor negociado"
             : versao === "meta"  ? "Lucro potencial (venda − meta de compras)"
-            : n(orc.margemLucroBdi) > 0 ? "Taxa de Comercialização (LC) do BDI"
-            : "Margem BDI (venda − custo)";
+            : n(orc.margemLucroBdi) > 0 ? "Lucro Bruto (L-01) da planilha BDI"
+            : "Margem BDI (venda − custo) — importe a aba BDI para precisão";
 
           const cor =
             versao === "venda" ? "border-green-200 bg-green-50/60 text-green-800"

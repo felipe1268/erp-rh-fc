@@ -1489,10 +1489,14 @@ export const orcamentoRouter = router({
         db.select().from(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.id)).orderBy(orcamentoBdi.ordem),
         db.select().from(bdiTaxaComercializacao).where(eq(bdiTaxaComercializacao.orcamentoId, input.id)),
       ]);
-      // Soma dos percentuais de Lucro (L-0x) da taxa de comercialização → margem de lucro do BDI
-      const margemLucroBdi = tcLinhas
-        .filter(l => !l.isHeader)
-        .reduce((s, l) => s + parseFloat(l.percentual || '0'), 0);
+      // Margem de lucro do BDI — usa L-01 (Lucro Bruto) da aba orcamentoBdi
+      // L-01 = percentual de lucro bruto explícito na planilha BDI do orçamento
+      // Fallback: B-01 (Lucro Bruto Arbitrário) → depois L-02 (Lucro Líquido) → 0
+      const lucroLine =
+        bdiLinhas.find((l: any) => l.codigo === 'L-01') ??
+        bdiLinhas.find((l: any) => l.codigo === 'B-01') ??
+        bdiLinhas.find((l: any) => l.codigo === 'L-02');
+      const margemLucroBdi = lucroLine ? parseFloat(lucroLine.percentual || '0') : 0;
       // Buscar obra e empresa em paralelo
       const [obraRes, empresaRes] = await Promise.all([
         orc.obraId

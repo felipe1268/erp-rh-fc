@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 384,
+    titulo: "Orçamento — Fix Margem de Lucro (L-01 BDI) + precisão da Meta %",
+    descricao: "1) Margem de Lucro: corrigido cálculo que usava bdiTaxaComercializacao (tabela vazia) em vez de orcamentoBdi. Agora usa L-01 (Lucro Bruto) diretamente da aba BDI importada; fallback B-01 → L-02 se L-01 ausente. Para CUSTO_783_01_2026_R02: exibe 18.19% (Lucro Bruto BDI) em vez do BDI total 35.13%. Label do banner atualizado para 'Lucro Bruto (L-01) da planilha BDI', e fallback indica ao usuário importar a aba BDI. 2) Badge de Meta: alterado de toFixed(0) para toFixed(2) — elimina arredondamento enganoso (ex: '−22%' sendo na realidade '−22.44%').",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:00:00",
+  },
+  {
     version: 383,
     titulo: "Import Orçamento — Eliminado cache localStorage de mapeamento",
     descricao: "Causa raiz identificada via logs do servidor: o localStorage salvava o mapeamento antigo (sem cuTotalMdo) e tinha prioridade máxima, sobrescrevendo sempre a detecção correta do servidor. Solução: localStorage removido completamente do fluxo de mapeamento. Agora a lógica é: 1) Preset FC Engenharia (colunas fixas K/P/Q/R/T/V/W/X/Y) → 2) detecção automática por nomes. Nenhum cache persiste entre sessões.",
