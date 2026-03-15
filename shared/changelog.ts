@@ -1348,6 +1348,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:59",
   },
   {
+    version: 352,
+    titulo: "Bugfix CRÍTICO: Tela branca no Railway (vitePluginManusRuntime)",
+    descricao: "O plugin vitePluginManusRuntime() injetava um script inline de 368KB exclusivo do ambiente Replit/Manus em TODOS os builds, inclusive o de produção do Railway. Fora do iframe do Manus, esse script interceptava o carregamento de módulos e impedia o React de montar — resultando em tela branca com #root vazio, mesmo com todos os arquivos JS carregando 200 OK. Correção: o plugin agora é incluído APENAS quando RAILWAY_ENVIRONMENT não está definido (i.e., apenas no Replit). No Railway, o Vite gera um index.html limpo de 1.8KB com o script React padrão via <script type=module>, resolvendo completamente o problema. O vite.config.ts usa const isRailwayBuild = !!process.env.RAILWAY_ENVIRONMENT para controlar a inclusão do plugin.",
+    tipo: "bugfix",
+    modulos: "Core,Deploy",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 351,
     titulo: "Bugfix: Cadastro de Empresa Terceira não salvava",
     descricao: "Corrigidos três problemas no cadastro de empresas terceiras: (1) Backend usava db.insert() sem .returning(), causando erro 500 silencioso ao tentar acessar result[0].id — corrigido com .returning({ id }); (2) createMut e updateMut não tinham onError, engolindo o erro sem feedback ao usuário — adicionados handlers que exibem toast com a mensagem de erro; (3) handleSave agora limpa a máscara do CNPJ antes de enviar ao backend (form.cnpj.replace(/\\D/g, '')), garantindo que apenas dígitos sejam persistidos no banco — consistente com o padrão do restante do sistema.",
