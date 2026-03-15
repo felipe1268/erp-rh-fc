@@ -1296,7 +1296,7 @@ export const CHANGELOG: RevisionEntry[] = [
   {
     version: 345,
     titulo: "Bugfix: hook useCompany criado para Módulo Financeiro",
-    descricao: "Criado client/src/hooks/useCompany.ts — wrapper do CompanyContext que expõe companyId como número. Corrige erro de importação '[plugin:vite:import-analysis] Failed to resolve import @/hooks/useCompany' que impedia o carregamento das 12 páginas do Módulo Financeiro (FinanceiroDashboard, Lancamentos, Receitas, ContasAPagar, ContasAReceber, DRE, FluxoCaixa, ObrigacoesFiscais, PlanoDeConta, CentrosCusto, Conciliacao, Configuracoes).",
+    descricao: "Criados dois hooks ausentes que bloqueavam todas as 12 páginas do Módulo Financeiro: (1) client/src/hooks/useCompany.ts — wrapper do CompanyContext expondo companyId numérico; (2) client/src/hooks/use-toast.ts — adapter de useToast() sobre o sonner, compatível com o padrão { title, description, variant } usado por todas as páginas. Corrige erros '[plugin:vite:import-analysis] Failed to resolve import @/hooks/useCompany' e '@/hooks/use-toast' que impediam o carregamento do módulo inteiro.",
     tipo: "bugfix",
     modulos: "Financeiro",
     criadoPor: "Sistema",
