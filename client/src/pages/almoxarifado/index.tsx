@@ -17,7 +17,7 @@ const EMPTY_ITEM = {
   quantidadeAtual: 0, quantidadeMinima: 0, observacoes: "", fotoUrl: "",
   origem: "proprio" as "proprio" | "alugado",
   fornecedorLocacao: "", dataInicioLocacao: "", dataVencimentoLocacao: "",
-  valorLocacaoMensal: 0, observacoesLocacao: "",
+  valorLocacaoMensal: 0, diasAlertaLocacao: 7, observacoesLocacao: "",
 };
 const EMPTY_MOV = {
   tipo: "entrada" as "entrada" | "saida" | "ajuste",
@@ -174,6 +174,7 @@ export default function AlmoxarifadoPage() {
       fornecedorLocacao: i.fornecedorLocacao ?? "", dataInicioLocacao: i.dataInicioLocacao ?? "",
       dataVencimentoLocacao: i.dataVencimentoLocacao ?? "",
       valorLocacaoMensal: parseFloat(i.valorLocacaoMensal ?? "0") || 0,
+      diasAlertaLocacao: (i.diasAlertaLocacao ?? 7) as number,
       observacoesLocacao: i.observacoesLocacao ?? "",
     });
     setEditandoId(i.id);
@@ -229,7 +230,7 @@ export default function AlmoxarifadoPage() {
   }
 
   const { data: itensLocadosVencendo = [] } = trpc.compras.getItensLocadosVencendo.useQuery(
-    { companyId, diasAlerta: 30 }, { enabled: !!companyId }
+    { companyId }, { enabled: !!companyId }
   );
 
   const [modalDevolverLocacao, setModalDevolverLocacao] = useState(false);
@@ -259,8 +260,9 @@ export default function AlmoxarifadoPage() {
       dataInicioLocacao: formItem.dataInicioLocacao || undefined,
       dataVencimentoLocacao: formItem.dataVencimentoLocacao || undefined,
       valorLocacaoMensal: formItem.valorLocacaoMensal || undefined,
+      diasAlertaLocacao: formItem.diasAlertaLocacao || 7,
       observacoesLocacao: formItem.observacoesLocacao || undefined,
-    } : { origem: "proprio" as const, fornecedorLocacao: null, dataInicioLocacao: null, dataVencimentoLocacao: null, valorLocacaoMensal: null, observacoesLocacao: null };
+    } : { origem: "proprio" as const, fornecedorLocacao: null, dataInicioLocacao: null, dataVencimentoLocacao: null, valorLocacaoMensal: null, diasAlertaLocacao: null, observacoesLocacao: null };
     if (editandoId) {
       atualizarMut.mutate({
         id: editandoId, nome: formItem.nome, unidade: formItem.unidade,
@@ -948,12 +950,22 @@ export default function AlmoxarifadoPage() {
                           onChange={e => setFormItem(p => ({ ...p, dataVencimentoLocacao: e.target.value }))} />
                       </div>
                     </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-700">Valor Mensal da Locação (R$)</label>
-                      <input type="text" inputMode="decimal" placeholder="0,00"
-                        className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
-                        value={formItem.valorLocacaoMensal === 0 ? "" : formItem.valorLocacaoMensal}
-                        onChange={e => setFormItem(p => ({ ...p, valorLocacaoMensal: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-gray-700">Valor Mensal da Locação (R$)</label>
+                        <input type="text" inputMode="decimal" placeholder="0,00"
+                          className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
+                          value={formItem.valorLocacaoMensal === 0 ? "" : formItem.valorLocacaoMensal}
+                          onChange={e => setFormItem(p => ({ ...p, valorLocacaoMensal: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-amber-700">Alertar X dias antes</label>
+                        <p className="text-[10px] text-gray-400">Ex: 1d para diário, 30d para anual</p>
+                        <input type="text" inputMode="numeric" placeholder="7"
+                          className="mt-0.5 w-full h-9 px-3 text-sm rounded-lg border border-amber-200 bg-amber-50 text-gray-900 outline-none focus:border-amber-500"
+                          value={formItem.diasAlertaLocacao === 7 && !formItem.dataVencimentoLocacao ? "" : formItem.diasAlertaLocacao}
+                          onChange={e => setFormItem(p => ({ ...p, diasAlertaLocacao: parseInt(e.target.value) || 7 }))} />
+                      </div>
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-700">Observações da Locação</label>

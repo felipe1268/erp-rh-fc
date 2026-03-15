@@ -4569,6 +4569,7 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   dataInicioLocacao:     varchar("data_inicio_locacao", { length: 10 }),
   dataVencimentoLocacao: varchar("data_vencimento_locacao", { length: 10 }),
   valorLocacaoMensal:    numeric("valor_locacao_mensal", { precision: 14, scale: 2 }),
+  diasAlertaLocacao:     integer("dias_alerta_locacao").default(7),
   observacoesLocacao:    text("observacoes_locacao"),
   criadoEm:             timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
   atualizadoEm:         timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
