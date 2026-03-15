@@ -173,9 +173,13 @@ export default function AlmoxarifadoPage() {
         observacoes: p.observacoes.trim() === "" ? sug.observacoes : p.observacoes,
       }));
       if (sug.nome) setCamposPreenchidosIA(true);
+      else toast.error("IA não conseguiu identificar o produto. Preencha manualmente.");
       setAnalisandoFotoIA(false);
     },
-    onError: () => { setAnalisandoFotoIA(false); },
+    onError: (e) => {
+      setAnalisandoFotoIA(false);
+      toast.error("Erro na análise IA: " + e.message);
+    },
   });
 
   async function handleFotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -189,8 +193,11 @@ export default function AlmoxarifadoPage() {
       if (editandoId === null) {
         setAnalisandoFotoIA(true);
         setCamposPreenchidosIA(false);
-        const base64 = compressed.split(",")[1];
-        const mimeType = file.type || "image/jpeg";
+        // compressImage always outputs image/jpeg regardless of input — extract from data URL
+        const commaIdx = compressed.indexOf(",");
+        const header = compressed.slice(0, commaIdx); // "data:image/jpeg;base64"
+        const mimeType = header.split(":")[1]?.split(";")[0] || "image/jpeg";
+        const base64 = compressed.slice(commaIdx + 1);
         sugerirCadastroMut.mutate({
           companyId,
           base64,

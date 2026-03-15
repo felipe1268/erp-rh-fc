@@ -497,41 +497,54 @@ export const warehouseRouter = router({
       unidades: z.array(z.string()).optional(),
     }))
     .mutation(async ({ input }) => {
-      const { invokeLLM: invoke } = await import("../_core/llm");
-      const dataUrl = `data:${input.mimeType};base64,${input.base64}`;
-      const catList = (input.categorias ?? []).join(", ") || "Ferramentas, Materiais de construção, EPIs, Elétrico, Hidráulico, Outros";
-      const unidList = (input.unidades ?? []).join(", ") || "un, kg, m, m², L, cx, sc, rolo, barra, pç";
+      try {
+        const apiKey = process.env.GOOGLE_API_KEY;
+        if (!apiKey) throw new Error("GOOGLE_API_KEY não configurada");
 
-      const result = await invoke({
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image_url", image_url: { url: dataUrl, detail: "high" } },
-            {
-              type: "text",
-              text: `Você é um especialista em materiais de construção civil e ferramentas industriais. Analise a imagem e sugira os dados de cadastro deste produto para um sistema de almoxarifado.
+        const catList = (input.categorias ?? []).join(", ") || "Ferramentas, Materiais de construção, EPIs, Elétrico, Hidráulico, Outros";
+        const unidList = (input.unidades ?? []).join(", ") || "un, kg, m, m², L, cx, sc, rolo, barra, pç";
+
+        console.log("[sugerirCadastroItem] Iniciando. base64 length:", input.base64.length, "mimeType:", input.mimeType);
+
+        const prompt = `Analise esta imagem de um produto de construção civil ou ferramenta industrial. Sugira os dados de cadastro para um sistema de almoxarifado.
 
 Categorias disponíveis: ${catList}
 Unidades disponíveis: ${unidList}
 
-Responda SOMENTE em JSON válido, sem markdown:
-{
-  "nome": "nome técnico completo e preciso do produto (inclua marca, modelo, dimensão/peso se visível)",
-  "categoria": "uma das categorias disponíveis que melhor se encaixa",
-  "unidade": "uma das unidades disponíveis que mais faz sentido para este produto",
-  "observacoes": "especificações técnicas relevantes: material, norma, capacidade, etc. Máximo 100 caracteres. Deixe vazio se não houver nada relevante."
-}`,
-            },
-          ],
-        }],
-        maxTokens: 300,
-      });
+Responda SOMENTE com JSON válido (sem markdown, sem explicações):
+{"nome":"nome técnico do produto","categoria":"categoria das disponíveis","unidade":"unidade das disponíveis","observacoes":"especificações breves ou vazio"}`;
 
-      const text = typeof result.choices[0].message.content === "string"
-        ? result.choices[0].message.content : "";
+        // Use Gemini native API — suporta inline base64 com garantia
+        const body = {
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: input.mimeType, data: input.base64 } },
+              { text: prompt },
+            ],
+          }],
+          generationConfig: { maxOutputTokens: 250, temperature: 0.1 },
+        };
 
-      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+        );
+
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error("[sugerirCadastroItem] Gemini error:", errText.slice(0, 400));
+          throw new Error(`Gemini ${res.status}: ${errText.slice(0, 200)}`);
+        }
+
+        const data: any = await res.json();
+        const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        console.log("[sugerirCadastroItem] Resposta:", text.slice(0, 300));
+
         const clean = text.replace(/```json|```/g, "").trim();
+        if (!clean) {
+          console.warn("[sugerirCadastroItem] Resposta vazia do Gemini.");
+          return { nome: "", categoria: "", unidade: "un", observacoes: "" };
+        }
         const parsed = JSON.parse(clean);
         return {
           nome: String(parsed.nome ?? "").slice(0, 120),
@@ -539,8 +552,9 @@ Responda SOMENTE em JSON válido, sem markdown:
           unidade: String(parsed.unidade ?? "un"),
           observacoes: String(parsed.observacoes ?? "").slice(0, 100),
         };
-      } catch {
-        return { nome: "", categoria: "", unidade: "un", observacoes: "" };
+      } catch (err: any) {
+        console.error("[sugerirCadastroItem] Erro:", err?.message ?? err);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: String(err?.message ?? "Erro ao analisar imagem") });
       }
     }),
 
