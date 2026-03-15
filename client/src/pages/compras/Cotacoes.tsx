@@ -348,10 +348,13 @@ export default function Cotacoes() {
     const winnerGrandTotal = melhorForn ? parseFloat(melhorForn.totalOrcado ?? "0") : 0;
     const saldoTotal = metaGrandTotal > 0 && melhorForn ? metaGrandTotal - winnerGrandTotal : 0;
 
+    // Remove prefixo de código EAP "[xx.xx.xx.xx] " da descrição para agrupar itens iguais
+    const stripEapPrefix = (desc: string) => desc.replace(/^\[[\d.]+\]\s*/, "").trim();
     const agrupados: Record<string, { descricao: string; unidade: string; qtdTotal: number }> = {};
     for (const it of (mapa?.itens ?? [])) {
-      const chave = `${it.descricao}__${it.unidade || "un"}`;
-      if (!agrupados[chave]) agrupados[chave] = { descricao: it.descricao, unidade: it.unidade || "un", qtdTotal: 0 };
+      const descLimpa = stripEapPrefix(it.descricao);
+      const chave = `${descLimpa}__${it.unidade || "un"}`;
+      if (!agrupados[chave]) agrupados[chave] = { descricao: descLimpa, unidade: it.unidade || "un", qtdTotal: 0 };
       agrupados[chave].qtdTotal += parseFloat(it.quantidade ?? "0");
     }
     const gruposAgrupados = Object.values(agrupados).filter(g => g.qtdTotal > 0);

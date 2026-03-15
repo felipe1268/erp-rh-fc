@@ -1510,6 +1510,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 373,
+    titulo: "Mapa de Cotação — Resumo agrupa itens iguais e remove código EAP",
+    descricao: "No Resumo Consolidado de Materiais, os itens com o mesmo insumo (mesma descrição, diferente código EAP) agora são agrupados em uma única linha com a quantidade total somada. O prefixo de código EAP [xx.xx.xx.xx] é removido da descrição no resumo, tornando a leitura mais limpa e direta.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 372,
     titulo: "Mapa de Cotação — Meta calculada sobre custoUnitMat (igual ao EAP visão Meta)",
     descricao: "Corrigida a fórmula da Meta no Mapa de Cotação: o valor correto é custoUnitMat × (1 − metaPercentual), não custoUnitTotal. O campo custoUnitTotal inclui mão de obra (MO), que não é comprada de fornecedor. O Mapa de Cotação é um instrumento de compra de materiais, portanto usa apenas o custo de material. Comportamento agora idêntico ao EAP na visão Meta (coluna Preço Unit. Mat.).",
