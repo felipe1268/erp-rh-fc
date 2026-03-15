@@ -1,0 +1,779 @@
+# PROMPT PARA REPLIT — MÓDULO DE COMPRAS ERP GESTÃO INTEGRADA
+
+---
+
+Preciso que você construa um **Módulo de Compras completo** no meu ERP (React + Express + tRPC + Drizzle ORM + MySQL). Leia todo este documento antes de começar. Não pule nenhum item.
+
+---
+
+## CONTEXTO DO SISTEMA
+
+- Stack: React 19, TypeScript, tRPC v11, Drizzle ORM, MySQL, shadcn/ui, Tailwind
+- Já existem módulos: RH, SST, Jurídico, Obras, Orçamento
+- O módulo de Orçamento já tem a **planilha meta** com campos: `venda`, `custo` e `meta` por item da EAP, vinculada a cada obra
+- Cada obra tem uma EAP (Estrutura Analítica do Projeto) com insumos orçados
+- Usuários têm login individual e papel (role): `admin_master`, `admin`, `user`
+- Cada usuário (engenheiro/aux_adm) é vinculado a uma ou mais obras
+
+---
+
+## O QUE CONSTRUIR
+
+### 1. MÓDULO ALMOXARIFADO CENTRAL
+Criar antes de compras, pois compras depende dele.
+
+**Tabelas:**
+```sql
+almoxarifado_items (
+  id, nome, unidade, quantidade_atual, quantidade_minima,
+  categoria, codigo_interno, observacoes,
+  created_at, updated_at
+)
+
+almoxarifado_movements (
+  id, item_id, tipo ENUM('entrada','saida','reserva','cancelamento'),
+  quantidade, obra_id, solicitacao_id,
+  motivo, usuario_id, usuario_nome,
+  created_at
+)
+```
+
+**Funcionalidades:**
+- CRUD de itens do estoque
+- Entrada e saída de materiais com histórico
+- Alerta visual quando quantidade abaixo do mínimo
+- Ao criar uma Solicitação de Compra: **o sistema consulta o almoxarifado automaticamente**
+  - Se tiver estoque suficiente → bloqueia compra e obriga retirada do almoxarifado
+  - Se tiver estoque parcial → permite pedir apenas a diferença
+  - Se não tiver → libera a solicitação normalmente
+
+---
+
+### 2. CADASTRO DE FORNECEDORES
+
+**Tabela:**
+```sql
+suppliers (
+  id, cnpj, razao_social, nome_fantasia, situacao_receita,
+  endereco, bairro, cidade, estado, cep,
+  telefone, email,
+  contato_nome, contato_celular, contato_email,
+  banco, agencia, conta, pix,
+  categorias JSON,  -- ex: ["Cimento","Aço","Elétrico"]
+  ativo BOOLEAN DEFAULT true,
+  historico_precos JSON,  -- calculado automaticamente
+  created_at, updated_at
+)
+```
+
+**Funcionalidades:**
+- Ao digitar o CNPJ → busca automática na **BrasilAPI** (`https://brasilapi.com.br/api/cnpj/v1/{cnpj}`)
+- Preenche automaticamente: razão social, nome fantasia, endereço, telefone, e-mail, CNAE
+- Se situação da Receita for INAPTA/BAIXADA/SUSPENSA → bloqueia o cadastro com aviso
+- Campos manuais obrigatórios após busca: contato comercial, dados bancários, categorias de produtos
+- Histórico de preços por insumo (alimentado automaticamente pelas cotações)
+
+---
+
+### 3. MÓDULO DE COMPRAS — FLUXO PRINCIPAL
+
+#### 3.1 Solicitação de Compra (SC)
+
+**Tabela:**
+```sql
+purchase_requests (
+  id, obra_id, eap_item_id, solicitante_id, solicitante_nome,
+  status ENUM('rascunho','aguardando_aprovacao','aprovada','recusada','em_cotacao','concluida','cancelada'),
+  emergencial BOOLEAN DEFAULT false,
+  justificativa_emergencial TEXT,
+  prazo_necessidade DATE,
+  justificativa_recusa TEXT,
+  aprovador_id, aprovador_nome, aprovado_em,
+  created_at, updated_at
+)
+
+purchase_request_items (
+  id, solicitacao_id, insumo_nome, unidade, quantidade,
+  quantidade_estoque_disponivel,
+  quantidade_retirada_estoque,
+  quantidade_a_comprar,
+  valor_meta_unitario DECIMAL,  -- vem da planilha meta do orçamento
+  observacoes
+)
+```
+
+**Regras:**
+- O solicitante **só vê as obras vinculadas ao seu usuário**
+- Ao selecionar o insumo: sistema mostra o valor meta da planilha do orçamento
+- Ao selecionar o insumo: sistema cruza com almoxarifado e informa disponibilidade
+- Toggle **"⚡ COMPRA EMERGENCIAL"** bem visível — se marcado, campo de justificativa obrigatório
+- SC emergencial vai para o **topo da fila de aprovação e do comprador**
+
+#### 3.2 Aprovação
+
+**Regras:**
+- Aprovador é o engenheiro responsável da obra (configurável)
+- Compara o valor solicitado com o **valor meta da planilha do orçamento**:
+  - Dentro da meta → pode aprovar normalmente
+  - Acima da meta (mesmo R$ 0,01) → alerta visual de estouro, aprovação com confirmação explícita, escala para superior
+- Aprovador pode: Aprovar ✅ ou Recusar ❌ com justificativa obrigatória
+- SC emergencial: badge vermelho ⚡, notificação imediata, prazo de resposta menor
+
+#### 3.3 Mapa de Cotação
+
+**Tabelas:**
+```sql
+quotations (
+  id, solicitacao_id, status ENUM('aberta','encerrada','cancelada'),
+  minimo_fornecedores INT DEFAULT 3,
+  fornecedor_vencedor_id,
+  comprador_id, comprador_nome,
+  created_at, updated_at
+)
+
+quotation_suppliers (
+  id, cotacao_id, supplier_id, supplier_nome,
+  status ENUM('aguardando','respondida','recusada'),
+  valor_unitario DECIMAL, valor_total DECIMAL,
+  prazo_entrega INT,  -- dias
+  condicao_pagamento VARCHAR,
+  observacoes,
+  respondido_em
+)
+```
+
+**Funcionalidades:**
+- Compras abre cotação com mínimo 3 fornecedores do cadastro
+- Sistema exibe **histórico de preços** daquele insumo nos fornecedores
+- Após preencher: **ranking automático** por menor preço total
+- Comprador define o vencedor (pode não ser o mais barato — pode ter justificativa)
+
+#### 3.4 Ordem de Compra (OC)
+
+**Tabelas:**
+```sql
+purchase_orders (
+  id, solicitacao_id, cotacao_id, supplier_id, supplier_nome,
+  obra_id, comprador_id, comprador_nome,
+  status ENUM('emitida','aprovada','entregue_parcial','entregue_total','cancelada'),
+  valor_total DECIMAL,
+  forma_pagamento VARCHAR,
+  prazo_entrega DATE,
+  condicao_entrega TEXT,
+  observacoes,
+  emitida_em, created_at, updated_at
+)
+
+purchase_order_items (
+  id, ordem_id, insumo_nome, unidade,
+  quantidade_pedida, quantidade_recebida DEFAULT 0,
+  valor_unitario, valor_total,
+  valor_meta_unitario  -- referência da planilha meta
+)
+```
+
+**Funcionalidades:**
+- Gerada a partir do vencedor da cotação
+- Ao emitir OC → **gera automaticamente um compromisso financeiro** (contas a pagar)
+- Alerta automático se `prazo_entrega` vencer sem recebimento total
+- PDF da OC para envio ao fornecedor
+
+#### 3.5 Recebimento na Obra
+
+**Tabelas:**
+```sql
+receipts (
+  id, ordem_id, obra_id, recebedor_id, recebedor_nome,
+  status ENUM('parcial','total'),
+  nota_fiscal_numero VARCHAR,
+  nota_fiscal_url TEXT,  -- upload do arquivo
+  observacoes,
+  recebido_em, created_at
+)
+
+receipt_items (
+  id, recebimento_id, ordem_item_id,
+  insumo_nome, unidade,
+  quantidade_pedida, quantidade_recebida,
+  quantidade_pendente
+)
+```
+
+**Regras:**
+- Recebimento parcial:
+  - OC atualizada automaticamente com quantidades recebidas
+  - Alerta para: solicitante, aprovador, comprador, gestor
+  - Pagamento liberado **apenas proporcional ao que chegou**
+  - OC permanece aberta aguardando saldo
+- Recebimento total: OC encerrada, pagamento liberado integralmente
+- Obrigatório anexar nota fiscal
+
+---
+
+### 4. REALOCAÇÃO DE SALDO
+
+**Tabela:**
+```sql
+budget_reallocations (
+  id, obra_id,
+  origem_eap_item_id, origem_eap_item_nome,
+  destino_eap_item_id, destino_eap_item_nome,
+  valor_realocado DECIMAL,
+  motivo TEXT,
+  usuario_id, usuario_nome,
+  created_at
+)
+```
+
+**Regras:**
+- Disponível apenas para itens com **economia confirmada** (OC recebida totalmente, valor abaixo da meta)
+- Saldo = meta do item - valor total das OCs daquele item
+- Um saldo só pode ser usado **uma vez** — sistema bloqueia reutilização
+- Realocação fica registrada com rastreabilidade total
+- Saldo realocado aparece como "comprometido" no item de origem imediatamente
+
+---
+
+### 5. MÓDULO FINANCEIRO — CONTAS A PAGAR (criar junto com compras)
+
+**Tabela:**
+```sql
+accounts_payable (
+  id, ordem_id, supplier_id, supplier_nome,
+  obra_id, descricao,
+  valor_total DECIMAL, valor_pago DECIMAL DEFAULT 0,
+  status ENUM('pendente','pago_parcial','pago_total','cancelado'),
+  forma_pagamento VARCHAR,
+  data_vencimento DATE, data_pagamento DATE,
+  bloqueado_recebimento BOOLEAN DEFAULT true,
+  -- bloqueado até confirmação de recebimento
+  comprovante_url TEXT,
+  created_at, updated_at
+)
+```
+
+**Regras:**
+- Criado automaticamente quando OC é emitida
+- `bloqueado_recebimento = true` até o recebimento ser confirmado
+- Recebimento parcial → libera pagamento proporcional
+- Recebimento total → libera pagamento integral
+
+---
+
+### 6. COMISSÃO DO COMPRADOR
+
+**Tabela:**
+```sql
+buyer_commissions (
+  id, obra_id, obra_nome,
+  comprador_id, comprador_nome,
+  valor_meta_total DECIMAL,
+  valor_comprado_total DECIMAL,
+  economia_total DECIMAL,
+  percentual_participacao DECIMAL,  -- % das OCs que esse comprador atendeu
+  valor_comissao DECIMAL,  -- economia × participação × 20%
+  status ENUM('em_aberto','calculada','aprovada_diretor','paga','cancelada'),
+  aprovado_por VARCHAR, aprovado_em DATETIME,
+  observacoes TEXT,
+  calculado_em DATETIME, created_at
+)
+```
+
+**Regras:**
+- Calculada **somente no encerramento da obra**
+- Fórmula: `Comissão = (Meta Total - Gasto Total) × 20%`
+- Se obra estoura a meta → comissão zero (empresa teve prejuízo)
+- Mais de 1 comprador → divide proporcional ao **valor das OCs que cada um atendeu dentro da meta**
+  ```
+  Comprador A: atendeu R$ 90k em OCs → 90/(90+10) = 90% da comissão
+  Comprador B: atendeu R$ 10k em OCs → 10/(90+10) = 10% da comissão
+  ```
+- Apenas o **Diretor** pode aprovar e liberar o pagamento
+- Quando aprovada → gera lançamento no financeiro (contas a pagar para o comprador)
+
+---
+
+### 7. INDICADORES DE EMERGÊNCIA POR ENGENHEIRO
+
+**Tabela:**
+```sql
+emergency_metrics (
+  id, engenheiro_id, engenheiro_nome, obra_id, obra_nome,
+  mes INT, ano INT,
+  total_solicitacoes INT,
+  total_emergenciais INT,
+  percentual_emergencial DECIMAL,
+  created_at, updated_at
+)
+```
+
+**Regras:**
+- Atualizado automaticamente a cada SC criada
+- Percentual = (emergenciais / total) × 100
+- Semáforo: 🟢 até 5% / 🟡 até 15% / 🔴 acima de 15%
+- Visível para o gestor/diretor com ranking de engenheiros
+- O próprio engenheiro vê seu indicador no dashboard dele
+
+---
+
+## TELAS A CRIAR
+
+### 1. `/almoxarifado` — Almoxarifado Central
+- Lista de itens com estoque atual e alertas de mínimo
+- Modal de entrada/saída
+- Histórico de movimentações
+
+### 2. `/fornecedores` — Fornecedores
+- Lista com busca e filtro por categoria/estado
+- Modal de cadastro com busca automática por CNPJ (BrasilAPI)
+- Detalhe do fornecedor com histórico de cotações e preços médios
+
+### 3. `/compras/solicitacoes` — Solicitações de Compra
+- Lista filtrada por status, obra, emergencial
+- SCs emergenciais sempre no topo com badge vermelho ⚡
+- Modal de nova SC com: seleção de obra, item da EAP, verificação de estoque automática
+- Toggle emergencial bem visível
+
+### 4. `/compras/aprovacoes` — Aprovações (para o aprovador)
+- Fila de SCs aguardando aprovação
+- Emergenciais fixas no topo com timer "há X horas aguardando"
+- Comparativo visual: valor solicitado vs. valor meta
+- Alerta visual se valor estourar a meta
+
+### 5. `/compras/cotacoes` — Cotações (para o comprador)
+- Fila de SCs aprovadas aguardando cotação
+- Emergenciais no topo com badge vermelho e timer SLA
+- Modal de mapa de cotação com múltiplos fornecedores
+- Histórico de preços de cada fornecedor para aquele insumo
+- Ranking automático após preencher cotações
+
+### 6. `/compras/ordens` — Ordens de Compra
+- Lista de OCs com status
+- Alertas de prazo vencendo
+- Detalhe com rastreabilidade completa: SC → Cotação → OC → Recebimento
+
+### 7. `/compras/recebimentos` — Recebimentos
+- OCs aguardando recebimento
+- Modal de recebimento com campos por item (quantidade recebida)
+- Upload de nota fiscal
+- Alerta ao registrar recebimento parcial
+
+### 8. `/financeiro/contas-pagar` — Contas a Pagar
+- Lista de compromissos gerados pelas OCs
+- Status de bloqueio (aguardando recebimento)
+- Filtros por obra, fornecedor, vencimento
+- Baixa de pagamento com upload de comprovante
+
+### 9. `/compras/realocacao` — Realocação de Saldo
+- Lista de saldos disponíveis por obra
+- Formulário de realocação com seleção de origem e destino
+- Histórico de realocações com rastreabilidade
+
+### 10. `/compras/comissoes` — Comissões de Compradores
+- Lista de obras encerradas com cálculo de comissão
+- Detalhe por comprador com participação proporcional
+- Botão "Aprovar e Liberar" visível apenas para Diretor
+- Gera lançamento no financeiro ao aprovar
+
+---
+
+## DASHBOARDS
+
+### Dashboard do Comprador (aparece na tela principal dele)
+```
+┌─────────────────────────────────────────────────┐
+│  Bom dia, [Nome]! 💰                            │
+├─────────────────────────────────────────────────┤
+│  OBRAS ATIVAS — Comissão Estimada               │
+│  Obra Alpha: Meta R$127k | Gasto R$104k         │
+│  Economia: R$22.500 | 💰 Sua parte: R$4.500    │
+│  ▓▓▓▓▓▓▓▓░░ 78% das compras realizadas         │
+├─────────────────────────────────────────────────┤
+│  ⚡ Emergenciais aguardando ação: 2             │
+│  📋 Cotações em aberto: 5                       │
+│  ⏰ OCs com prazo vencendo hoje: 1              │
+├─────────────────────────────────────────────────┤
+│  Comissões pagas este ano: R$10.000 ✅           │
+└─────────────────────────────────────────────────┘
+```
+
+### Dashboard do Gestor/Diretor
+- Total de SCs por status em tempo real
+- Ranking de engenheiros por % de emergenciais (semáforo)
+- Obras com orçamento em risco (próximo de estourar)
+- Compras do dia: quantas SC → aprovações → OCs → recebimentos
+
+---
+
+## REGRAS GERAIS DE NEGÓCIO
+
+1. Solicitante só vê obras vinculadas ao seu usuário
+2. Comprador vê todas as obras, mas filtra por responsabilidade
+3. SC emergencial sempre no topo de qualquer fila
+4. Sistema bloqueia pagamento se recebimento não confirmado
+5. Realocação de saldo: rastreada, irreversível, sem reuso
+6. Comissão zero se obra estourar a meta global
+7. Busca de CNPJ: bloqueia fornecedor com situação irregular na Receita
+8. Recebimento parcial: ajusta OC, alerta todos, libera pagamento proporcional
+
+---
+
+## INTEGRAÇÃO COM MÓDULOS EXISTENTES
+
+- **Orçamento**: ler planilha meta (campos `meta`, `custo`, `venda`) por item da EAP de cada obra
+- **Obras**: usar tabela `obras` existente para vincular SCs e OCs
+- **Usuários**: usar tabela `users` e vínculos `user_company_links` para controle de acesso por obra
+- **Notificações**: usar o sistema de notificações existente (`notifications` router) para alertas
+
+---
+
+## ORDEM DE IMPLEMENTAÇÃO SUGERIDA
+
+1. Schema do banco (todas as tabelas acima com Drizzle)
+2. Migração do banco (`pnpm db:push`)
+3. Almoxarifado Central (tabelas + router tRPC + tela)
+4. Fornecedores (tabelas + router + tela com busca CNPJ)
+5. Solicitações de Compra (router + tela)
+6. Aprovações (router + tela)
+7. Cotações / Mapa de Compras (router + tela)
+8. Ordens de Compra (router + tela + geração de contas a pagar)
+9. Recebimentos (router + tela + upload NF + liberação pagamento)
+10. Financeiro — Contas a Pagar (router + tela)
+11. Realocação de Saldo (router + tela)
+12. Comissões (cálculo automático + tela + aprovação Diretor)
+13. Dashboard do Comprador (widget na home)
+14. Dashboard do Gestor (indicadores de emergência + ranking)
+15. Adicionar links no menu lateral do ERP
+
+---
+
+**Importante:** Siga o padrão já existente no projeto:
+- Routers tRPC em `server/routers/`
+- Páginas React em `client/src/pages/`
+- Schema Drizzle em `drizzle/schema.ts`
+- Componentes shadcn/ui já instalados
+- Notificações via router existente `notifications`
+- Autenticação via `ctx.user` no tRPC context
+
+
+---
+
+# ⚠️ CORREÇÕES CRÍTICAS — APLICAR ANTES DE QUALQUER COISA
+
+## CORREÇÃO 1 — CATÁLOGO CENTRALIZADO DE INSUMOS
+
+**Problema:** Sem catálogo padrão, o engenheiro digita "cimento" e o comprador digita "Cimento CP-II 50kg" — são registros diferentes. Histórico de preços não funciona, almoxarifado não cruza, relatórios ficam inconsistentes.
+
+**Solução:** Criar catálogo de insumos antes de tudo. Todo item da SC, cotação e OC deve ser selecionado do catálogo — nunca digitado livremente.
+
+```sql
+purchase_catalog_items (
+  id, companyId,
+  nome VARCHAR(255),           -- "Cimento CP-II 50kg"
+  nomeAbreviado VARCHAR(100),  -- "Cimento CP-II"
+  codigo VARCHAR(50),          -- código interno
+  unidade VARCHAR(20),         -- "sc", "kg", "m³", "m²", "un", "l"
+  categoria VARCHAR(100),      -- "Argamassa", "Estrutural", "Elétrico"
+  ncm VARCHAR(10),             -- código fiscal (para OC)
+  descricao TEXT,
+  fotoUrl TEXT,
+  ativo BOOLEAN DEFAULT true,
+  createdAt, updatedAt
+)
+```
+
+**Tabela de histórico de preços separada (não JSON):**
+```sql
+supplier_price_history (
+  id, companyId,
+  catalogItemId INT,           -- item do catálogo
+  supplierId INT,              -- fornecedor
+  supplierNome VARCHAR(255),
+  valorUnitario DECIMAL(10,2),
+  unidade VARCHAR(20),
+  dataReferencia DATE,         -- data da cotação
+  cotacaoId INT,               -- origem do preço
+  ordemCompraId INT,
+  createdAt TIMESTAMP
+)
+```
+
+**Regras:**
+- ADM cadastra e mantém o catálogo
+- Na SC: engenheiro busca do catálogo (autocomplete por nome)
+- Na cotação: comprador vê automaticamente o último preço de cada fornecedor para aquele item
+- Ao fechar OC: preço é salvo em `supplier_price_history` automaticamente
+- Campo de busca com foto do item para facilitar seleção
+
+---
+
+## CORREÇÃO 2 — UNIFICAR FORNECEDORES (não criar tabela nova)
+
+**Problema:** O sistema já tem a tabela `fornecedores_epi`. Se criarmos `suppliers` separada, o mesmo CNPJ vai aparecer duas vezes no sistema — uma para EPI, outra para materiais.
+
+**Solução:** Expandir a tabela `fornecedores_epi` existente para ser o fornecedor universal do sistema. Renomear conceitualmente para "fornecedores" e adicionar os campos faltantes.
+
+**Migration a rodar:**
+```sql
+ALTER TABLE fornecedores_epi
+  ADD COLUMN cnpj VARCHAR(20),
+  ADD COLUMN razao_social VARCHAR(255),
+  ADD COLUMN nome_fantasia VARCHAR(255),
+  ADD COLUMN situacao_receita VARCHAR(50),
+  ADD COLUMN cep VARCHAR(10),
+  ADD COLUMN bairro VARCHAR(100),
+  ADD COLUMN cidade VARCHAR(100),
+  ADD COLUMN estado VARCHAR(2),
+  ADD COLUMN contato_nome VARCHAR(255),
+  ADD COLUMN contato_celular VARCHAR(30),
+  ADD COLUMN contato_email VARCHAR(255),
+  ADD COLUMN banco VARCHAR(100),
+  ADD COLUMN agencia VARCHAR(20),
+  ADD COLUMN conta VARCHAR(30),
+  ADD COLUMN pix VARCHAR(255),
+  ADD COLUMN categorias JSON,
+  ADD COLUMN tipo ENUM('material','epi','servico','todos') DEFAULT 'todos',
+  ADD COLUMN avaliacao_media DECIMAL(3,2) DEFAULT 0,
+  ADD COLUMN total_avaliacoes INT DEFAULT 0;
+```
+
+**No código:** Usar `fornecedoresEpi` (tabela existente) em todos os lugares onde o prompt menciona `suppliers`. Não criar tabela nova.
+
+**Avaliação de fornecedor pós-entrega:**
+```sql
+supplier_evaluations (
+  id, companyId,
+  supplierId INT,              -- id da fornecedores_epi
+  ordemCompraId INT,
+  recebimentoId INT,
+  notaPrazo INT,               -- 1 a 5 (entregou no prazo?)
+  notaQualidade INT,           -- 1 a 5 (qualidade do material)
+  notaAtendimento INT,         -- 1 a 5 (atendimento comercial)
+  mediaGeral DECIMAL(3,2),     -- calculado automaticamente
+  observacoes TEXT,
+  avaliadorId INT,
+  avaliadorNome VARCHAR(255),
+  createdAt TIMESTAMP
+)
+```
+
+**Regra:** Ao marcar recebimento como total → sistema pede avaliação do fornecedor (opcional mas incentivado). Média geral aparece no cadastro do fornecedor e no mapa de cotação.
+
+---
+
+## CORREÇÃO 3 — CONFIGURAÇÃO DE APROVAÇÃO HIERÁRQUICA
+
+**Problema:** "Acima da meta escala para o superior" foi definido mas não existe onde configurar quem é o superior, quais são os limites por valor, quem aprova o quê.
+
+**Solução:** Tabela de configuração de alçadas de aprovação.
+
+```sql
+purchase_approval_rules (
+  id, companyId,
+  nome VARCHAR(255),           -- "Regra padrão obras"
+  obraId INT,                  -- null = vale para todas as obras
+  
+  -- Nível 1: aprovação normal (dentro da meta)
+  nivel1AprovadorTipo ENUM('engenheiro_obra','cargo','usuario_especifico'),
+  nivel1AprovadorId INT,       -- userId se tipo = usuario_especifico
+  nivel1Cargo VARCHAR(100),    -- se tipo = cargo
+  nivel1PrazoHoras INT DEFAULT 24,
+  
+  -- Nível 2: acima da meta ou valor alto
+  nivel2Ativo BOOLEAN DEFAULT true,
+  nivel2AprovadorTipo ENUM('gerente','diretor','usuario_especifico'),
+  nivel2AprovadorId INT,
+  nivel2PrazoHoras INT DEFAULT 8,
+  
+  -- Compra direta (sem cotação abaixo deste valor)
+  limiteCompraDireta DECIMAL(10,2) DEFAULT 500,
+  
+  -- SLA emergencial (horas para resolver)
+  slaEmergencialHoras INT DEFAULT 4,
+  
+  ativo BOOLEAN DEFAULT true,
+  createdAt, updatedAt
+)
+```
+
+**Como funciona:**
+- ADM configura as regras por obra ou geral
+- SC criada → sistema consulta a regra da obra → define quem aprova
+- Dentro da meta + valor abaixo do limite → aprovação nível 1
+- Acima da meta OU valor alto → escala para nível 2
+- Abaixo do `limiteCompraDireta` → compra direta sem cotação obrigatória
+- SLA emergencial configurável (não hardcoded)
+
+**Tela de configuração (apenas ADM):**
+```
+/compras/configuracoes → Regras de Aprovação
+→ Criar/editar regras por obra
+→ Definir limites e aprovadores
+→ Configurar SLAs
+```
+
+---
+
+## CORREÇÃO 4 — CANCELAMENTO COM RASTREABILIDADE E ROLLBACK
+
+**Problema:** Não definimos o que acontece quando uma SC ou OC é cancelada. O saldo da meta fica comprometido, o estoque reservado não volta, o financeiro não cancela.
+
+**Solução:** Todo cancelamento deve desfazer todos os efeitos colaterais automaticamente.
+
+**Tabela de log de cancelamentos:**
+```sql
+purchase_cancellations (
+  id, companyId,
+  tipo ENUM('sc','oc','cotacao','recebimento'),
+  referenciaId INT,            -- id da SC, OC, etc.
+  motivo TEXT NOT NULL,
+  efeitos JSON,                -- quais rollbacks foram executados
+  canceladoPorId INT,
+  canceladoPorNome VARCHAR(255),
+  canceladoEm TIMESTAMP
+)
+```
+
+**Rollback automático por tipo:**
+
+```typescript
+// Ao cancelar SC:
+async function cancelarSC(scId: number, motivo: string, userId: number) {
+  const sc = await getSC(scId);
+  
+  // 1. Liberar reserva no almoxarifado (se havia reserva)
+  if (sc.quantidadeRetiradaEstoque > 0) {
+    await liberarReservaAlmoxarifado(sc.itemId, sc.quantidadeRetiradaEstoque);
+  }
+  
+  // 2. Atualizar status
+  await updateSC(scId, { status: 'cancelada' });
+  
+  // 3. Notificar solicitante, aprovador e comprador
+  await notificarCancelamento(sc, motivo);
+  
+  // 4. Registrar log
+  await registrarCancelamento({ tipo: 'sc', referenciaId: scId, motivo, efeitos: ['liberou_estoque'] });
+}
+
+// Ao cancelar OC:
+async function cancelarOC(ocId: number, motivo: string, userId: number) {
+  const oc = await getOC(ocId);
+  
+  // 1. Cancelar compromisso financeiro (contas a pagar)
+  await cancelarContasPagar(oc.id);
+  
+  // 2. Liberar saldo comprometido na meta da EAP
+  await liberarSaldoMeta(oc.obraId, oc.eapItemId, oc.valorTotal);
+  
+  // 3. Voltar SC para status 'aprovada' (pode abrir nova cotação)
+  await updateSC(oc.solicitacaoId, { status: 'aprovada' });
+  
+  // 4. Notificar todos os envolvidos
+  await notificarCancelamento(oc, motivo);
+  
+  // 5. Registrar log
+  await registrarCancelamento({ tipo: 'oc', referenciaId: ocId, motivo,
+    efeitos: ['cancelou_financeiro', 'liberou_saldo_meta', 'reabriu_sc'] });
+}
+```
+
+**Regras de cancelamento:**
+- SC `aguardando_aprovacao` → qualquer um pode cancelar (o próprio solicitante ou ADM)
+- SC `aprovada` → só ADM cancela, com motivo obrigatório
+- SC `em_cotacao` → só ADM cancela + cancela a cotação vinculada
+- OC `emitida` → só ADM + Diretor, com motivo + cancela financeiro
+- OC `entregue_parcial` → não pode cancelar (já recebeu material)
+- Recebimento → não pode cancelar (apenas ajustar)
+
+---
+
+## CORREÇÃO 5 — FRETE NA COTAÇÃO E OC
+
+**Problema:** O comprador cotou cimento por R$42/sc mas o frete é R$800 extra. A OC fica com valor errado e o financeiro lança errado.
+
+**Adicionar campos na cotação e OC:**
+
+```sql
+-- Adicionar em quotation_suppliers:
+  valor_frete DECIMAL(10,2) DEFAULT 0,
+  frete_tipo ENUM('cif','fob') DEFAULT 'cif',
+  -- CIF = fornecedor paga frete, FOB = comprador paga frete
+  valor_total_com_frete DECIMAL(10,2),  -- calculado automaticamente
+
+-- Adicionar em purchase_orders:
+  valor_frete DECIMAL(10,2) DEFAULT 0,
+  frete_tipo ENUM('cif','fob') DEFAULT 'cif',
+  valor_itens DECIMAL(10,2),
+  valor_total DECIMAL(10,2),   -- valor_itens + valor_frete
+```
+
+**No ranking automático de cotações:** ordenar por `valor_total_com_frete` (não só pelo item).
+
+---
+
+## CORREÇÃO 6 — CAMPOS FISCAIS NA OC
+
+**Problema:** A OC para construtora precisa de dados fiscais completos. Sem eles, a NF que o fornecedor emite vem errada.
+
+```sql
+-- Adicionar em purchase_orders:
+  cnpj_comprador VARCHAR(20),
+  inscricao_estadual VARCHAR(30),
+  endereco_entrega TEXT,
+  cidade_entrega VARCHAR(100),
+  estado_entrega VARCHAR(2),
+  cep_entrega VARCHAR(10),
+  observacoes_fiscais TEXT,    -- ex: "CFOP 1.102 — Compra para uso e consumo"
+```
+
+**Preencher automaticamente** a partir dos dados da empresa (já existem em `companies`) ao gerar a OC.
+
+---
+
+## CORREÇÃO 7 — DADOS BANCÁRIOS NO CONTAS A PAGAR
+
+**Problema:** O financeiro não tem como pagar sem saber o banco/PIX do fornecedor.
+
+```sql
+-- Adicionar em accounts_payable:
+  supplier_banco VARCHAR(100),
+  supplier_agencia VARCHAR(20),
+  supplier_conta VARCHAR(30),
+  supplier_pix VARCHAR(255),
+  supplier_cnpj VARCHAR(20),
+```
+
+**Preencher automaticamente** a partir dos dados do fornecedor ao gerar o `accounts_payable`.
+
+---
+
+## RESUMO DAS TABELAS NOVAS/ALTERADAS
+
+**Tabelas NOVAS a criar:**
+1. `purchase_catalog_items` — catálogo de insumos
+2. `supplier_price_history` — histórico de preços (substituindo JSON)
+3. `supplier_evaluations` — avaliação pós-entrega
+4. `purchase_approval_rules` — configuração de alçadas
+5. `purchase_cancellations` — log de cancelamentos
+
+**Tabelas ALTERADAS:**
+1. `fornecedores_epi` — expandir com campos de fornecedor universal (não criar suppliers)
+2. `quotation_suppliers` — adicionar valor_frete, frete_tipo, valor_total_com_frete
+3. `purchase_orders` — adicionar frete + campos fiscais
+4. `accounts_payable` — adicionar dados bancários do fornecedor
+
+**Tabela REMOVIDA do prompt original:**
+- ~~`suppliers`~~ → usar `fornecedores_epi` expandida
+
+---
+
+## ORDEM DE IMPLEMENTAÇÃO REVISADA
+
+1. Expandir `fornecedores_epi` com `ALTER TABLE` (não criar tabela nova)
+2. Criar `purchase_catalog_items` e `supplier_price_history`
+3. Criar `purchase_approval_rules` + tela de configuração
+4. Criar demais tabelas do fluxo principal
+5. Implementar cancelamento com rollback em todas as etapas
+6. Implementar avaliação de fornecedor no recebimento
+7. Continuar com as fases originais (SC → Aprovação → Cotação → OC → Recebimento)
