@@ -440,7 +440,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "dissidioData", "dissidioPercentual", "convencaoColetiva", "convencaoVigencia",
     "ddsParticipacao",
   ]);
-  // Campos booleanos (tinyint no schema)
+  // Campos booleanos armazenados como smallint (0/1) no banco
   const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao"]);
   // Campos inteiros
   const intFields = new Set(["contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId"]);
@@ -454,7 +454,8 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     if (value === "" || value === undefined) {
       sanitized[key] = null;
     } else if (booleanFields.has(key)) {
-      sanitized[key] = value === true || value === "true" || value === 1 || value === "1";
+      // smallint no banco: usar 1/0 (não true/false)
+      sanitized[key] = (value === true || value === "true" || value === 1 || value === "1") ? 1 : 0;
     } else if (intFields.has(key)) {
       const num = parseInt(String(value));
       sanitized[key] = isNaN(num) ? null : num;
