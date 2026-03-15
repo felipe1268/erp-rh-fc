@@ -483,10 +483,20 @@ export const heSolicitacoesRouter = router({
     const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
 
-    // Excluir funcionários vinculados primeiro
+    // Excluir funcionários vinculados e atividades vinculadas primeiro
     await db.delete(heSolicitacaoFuncionarios).where(eq(heSolicitacaoFuncionarios.solicitacaoId, input.id));
+    await db.execute(sql`DELETE FROM he_solicitacao_atividades WHERE solicitacao_id = ${input.id}`);
     // Excluir a solicitação
     await db.delete(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
+
+    // Resetar a sequência para o maior ID existente (ou 0 se vazia)
+    // Assim o próximo registro criado continua do ponto certo após a exclusão
+    await db.execute(sql`
+      SELECT setval(
+        pg_get_serial_sequence('he_solicitacoes', 'id'),
+        COALESCE((SELECT MAX(id) FROM he_solicitacoes), 0)
+      )
+    `);
 
     await createAuditLog({
       userId: ctx.user.id,
