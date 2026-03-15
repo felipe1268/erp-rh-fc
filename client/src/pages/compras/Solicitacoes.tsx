@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -14,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, Loader2,
-  CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays,
+  CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -55,6 +56,7 @@ export default function Solicitacoes() {
   const { user } = useAuth();
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0");
+  const [, navigate] = useLocation();
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
@@ -103,6 +105,34 @@ export default function Solicitacoes() {
     onSuccess: () => { toast.success("SC cancelada!"); q.refetch(); detalheQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const criarCotacao = trpc.compras.criarCotacao.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Cotação ${data.numeroCotacao} criada! Redirecionando...`);
+      q.refetch();
+      setShowDetalhe(null);
+      setTimeout(() => navigate("/compras/cotacoes"), 800);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function handleEnviarParaCotacao() {
+    if (!detalhe) return;
+    const itens = (detalhe.itens as any[]).map((it: any) => ({
+      solicitacaoItemId: it.id,
+      descricao: it.descricao,
+      unidade: it.unidade || "un",
+      quantidade: parseFloat(it.quantidade) || 1,
+      precoUnitario: 0,
+    }));
+    criarCotacao.mutate({
+      companyId,
+      descricao: detalhe.titulo || detalhe.numeroSc,
+      prioridade: detalhe.prioridade || "normal",
+      obraId: detalhe.obraId ?? null,
+      solicitacaoId: detalhe.id,
+      itens,
+    });
+  }
 
   function resetForm() {
     setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
@@ -656,6 +686,16 @@ export default function Solicitacoes() {
 
               {/* Ações */}
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && (
+                  <Button size="sm"
+                    onClick={handleEnviarParaCotacao}
+                    disabled={criarCotacao.isPending || (detalhe.itens as any[]).length === 0}
+                    className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1.5">
+                    {criarCotacao.isPending
+                      ? <><Loader2 className="h-3 w-3 animate-spin" /> Criando cotação...</>
+                      : <><ShoppingCart className="h-3 w-3" /> Enviar para Cotação</>}
+                  </Button>
+                )}
                 {!["cancelado", "aprovado"].includes(detalhe.status) && (
                   <Button size="sm" variant="outline"
                     onClick={() => cancelar.mutate({ id: detalhe.id, status: "cancelado" })}
