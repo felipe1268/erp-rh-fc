@@ -1455,4 +1455,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 23:59:00",
   },
+  {
+    version: 361,
+    titulo: "SC → Cotação: botão 'Enviar para Cotação' no detalhe da SC",
+    descricao: "Adicionado botão 'Enviar para Cotação' (azul) no painel de detalhe de cada SC. Ao clicar, a cotação é criada automaticamente com todos os itens da SC copiados (preço unitário = 0 para preenchimento posterior), o status da SC é atualizado para 'Em Cotação' e o usuário é redirecionado para a tela de Cotações. O botão só aparece para SCs que ainda não foram para cotação ou concluídas, e fica desabilitado se a SC não tiver itens. Corrigido também o import incorreto de react-router-dom em Cotacoes.tsx (substituído por wouter).",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
 ];
