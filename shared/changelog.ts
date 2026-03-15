@@ -1258,6 +1258,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 20:00:00",
   },
   {
+    version: 338,
+    titulo: "HE: Detalhamento completo do custo previsto por funcionário",
+    descricao: "Análise de HE agora exibe custo com máximo detalhamento: (1) Fórmula usada no cabeçalho (Valor/h × (1+%) × horas) com badge de tipo (FDS 100% / Dia útil 50%). (2) Tabela de funcionários ganha colunas Valor/hora, Adicional e Custo HE — cada célula mostra a fonte do salário (Valor/hora direto ou Salário ÷ 220h com valor bruto), o adicional em R$ calculado, e a fórmula aplicada por extenso em cada linha. (3) Rodapé da tabela exibe soma dos adicionais e total geral. (4) Painel de resumo: 5 cards — Duração, Adicional CLT, Funcionários com/sem salário, Base de cálculo (quantos usam valor/hora direto vs salário) e Total Previsto com fator multiplicador exibido.",
+    tipo: "melhoria",
+    modulos: "SolicitacaoHE",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 22:00:00",
+  },
+  {
     version: 337,
     titulo: "HE-Planejamento: Filtro de concluídas + busca de atividades",
     descricao: "Melhorias no seletor de atividades do cronograma no formulário de HE: (1) Atividades com 100% de avanço acumulado são automaticamente ocultadas da lista (não faz sentido abrir HE para atividade já concluída). (2) Campo de busca por nome ou código EAP posicionado acima da lista de checkboxes — filtra em tempo real ao digitar, com botão X para limpar. (3) Rodapé da lista mostra contagem de atividades disponíveis vs encontradas na busca, com aviso permanente de que 100% concluídas estão ocultas. (4) Seleção destacada com borda azul lateral; percentual de avanço exibido à direita de cada item. (5) Botão 'Limpar seleção' no rodapé para deselecionar todos de uma vez. (6) Campo de busca é limpo automaticamente ao trocar de Obra.",
