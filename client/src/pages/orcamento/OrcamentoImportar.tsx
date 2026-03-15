@@ -391,6 +391,25 @@ export default function OrcamentoImportar() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [currentMapping, setCurrentMapping] = useState<Record<string, number>>({});
   const [autoDetectedMap, setAutoDetectedMap] = useState<Record<string, number>>({});
+  const [activeField, setActiveField] = useState<string | null>(null);
+
+  const assignCol = useCallback((colIdx: number) => {
+    if (!activeField) return;
+    // Calcula o novo mapeamento de forma síncrona
+    const next = { ...currentMapping };
+    Object.keys(next).forEach(k => { if (next[k] === colIdx) delete next[k]; });
+    delete next[activeField];
+    next[activeField] = colIdx;
+    setCurrentMapping(next);
+    // Avança para o próximo campo não mapeado
+    const currentIdx = KEY_FIELDS.findIndex(f => f.key === activeField);
+    const nextField = KEY_FIELDS.slice(currentIdx + 1).find(f => next[f.key] === undefined);
+    setActiveField(nextField?.key ?? null);
+  }, [activeField, currentMapping]);
+
+  const unassignCol = useCallback((fieldKey: string) => {
+    setCurrentMapping(prev => { const n = { ...prev }; delete n[fieldKey]; return n; });
+  }, []);
 
   const importarMut    = trpc.orcamento.importar.useMutation();
   const importarBdiMut = trpc.orcamento.importarBdi.useMutation();
@@ -712,202 +731,161 @@ export default function OrcamentoImportar() {
         )}
 
         {/* ════════ STEP 3 — MAPEAMENTO DE COLUNAS ════════ */}
-        {step === "mapping" && (
-          <div className="space-y-4">
-            {/* Cabeçalho */}
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="sm" onClick={() => setStep("custo")}>
-                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-              </Button>
-              <div>
-                <h2 className="font-bold text-base flex items-center gap-2">
-                  <Columns className="h-5 w-5 text-blue-600" />
-                  Identificar Colunas
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Para cada coluna da planilha, selecione o que ela representa. Colunas que não precisam ser importadas deixe como <strong>Ignorar</strong>.
-                </p>
+        {step === "mapping" && (() => {
+          const requiredMissing = KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined);
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" size="sm" onClick={() => setStep("custo")}>
+                  <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+                </Button>
+                <div>
+                  <h2 className="font-bold text-base">Mapear Colunas</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {activeField
+                      ? <>Clique na coluna da planilha que corresponde a <strong className="text-primary">{KEY_FIELDS.find(f => f.key === activeField)?.label}</strong></>
+                      : "Clique em um campo abaixo para selecionar qual coluna da planilha corresponde a ele"}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {/* Cards de colunas — scroll horizontal */}
-            <div className="overflow-x-auto pb-2">
-              <div className="flex gap-3 min-w-max">
-                {previewCols.map((col, colPos) => {
-                  // Campo atualmente mapeado para esta coluna
-                  const assignedKey = Object.entries(currentMapping).find(([, idx]) => idx === col.idx)?.[0];
-                  const assignedField = KEY_FIELDS.find(f => f.key === assignedKey);
-                  const isRequired = assignedField?.required;
-                  const samples = previewSample.map(row => row[colPos]).filter(v => v && String(v).trim());
-
-                  return (
-                    <div
-                      key={col.idx}
-                      className={`w-44 shrink-0 rounded-xl border-2 flex flex-col overflow-hidden transition-all ${
-                        assignedKey
-                          ? isRequired
-                            ? "border-green-400 bg-green-50"
-                            : "border-blue-300 bg-blue-50"
-                          : "border-border bg-white"
-                      }`}
-                    >
-                      {/* Header da coluna */}
-                      <div className={`px-3 py-2 border-b text-xs font-semibold truncate ${
-                        assignedKey ? (isRequired ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800") : "bg-muted/60 text-muted-foreground"
-                      }`} title={col.label}>
-                        {col.label}
-                      </div>
-
-                      {/* Amostra de dados */}
-                      <div className="px-3 py-2 flex-1 space-y-0.5 min-h-[72px]">
-                        {samples.slice(0, 3).map((v, i) => (
-                          <p key={i} className="text-xs text-foreground/70 truncate">{String(v)}</p>
-                        ))}
-                        {samples.length === 0 && (
-                          <p className="text-xs text-muted-foreground/40 italic">vazio</p>
-                        )}
-                      </div>
-
-                      {/* Dropdown de atribuição */}
-                      <div className="px-2 pb-2">
-                        <Select
-                          value={assignedKey ?? "__none__"}
-                          onValueChange={(val) => {
-                            setCurrentMapping(prev => {
-                              const next = { ...prev };
-                              // Remove mapeamento anterior desta coluna
-                              Object.keys(next).forEach(k => { if (next[k] === col.idx) delete next[k]; });
-                              // Remove mapeamento anterior deste campo (se outro col já tinha)
-                              if (val !== "__none__") {
-                                Object.keys(next).forEach(k => { if (k === val) delete next[k]; });
-                                next[val] = col.idx;
-                              }
-                              return next;
-                            });
-                          }}
-                        >
-                          <SelectTrigger className={`h-7 text-[11px] w-full ${
-                            assignedKey
-                              ? isRequired ? "border-green-400 text-green-800 font-semibold" : "border-blue-300 text-blue-700"
-                              : "text-muted-foreground"
-                          }`}>
-                            <SelectValue placeholder="— Ignorar —" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">
-                              <span className="text-muted-foreground text-xs">— Ignorar esta coluna —</span>
-                            </SelectItem>
-                            {KEY_FIELDS.map(f => {
-                              const alreadyUsed = currentMapping[f.key] !== undefined && currentMapping[f.key] !== col.idx;
-                              return (
-                                <SelectItem key={f.key} value={f.key} disabled={alreadyUsed}>
-                                  <span className={`text-xs ${alreadyUsed ? "text-muted-foreground/50" : ""}`}>
-                                    {f.required ? "★ " : ""}{f.label}
-                                    {alreadyUsed ? " (já usado)" : ""}
-                                  </span>
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Legenda */}
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border-2 border-green-400 bg-green-50 inline-block" /> Campo obrigatório (★)</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border-2 border-blue-300 bg-blue-50 inline-block" /> Campo opcional</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border-2 border-border bg-white inline-block" /> Ignorado</span>
-            </div>
-
-            {/* Resumo do mapeamento */}
-            <Card>
-              <CardContent className="py-3">
-                <div className="flex flex-wrap gap-2">
+              {/* ── Campos do sistema ── */}
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Campos do Sistema</p>
+                <div className="grid grid-cols-2 gap-2">
                   {KEY_FIELDS.map(f => {
                     const mappedIdx = currentMapping[f.key];
                     const col = previewCols.find(c => c.idx === mappedIdx);
+                    const isActive = activeField === f.key;
+                    const isMapped = mappedIdx !== undefined;
                     return (
-                      <div key={f.key} className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${
-                        mappedIdx !== undefined
-                          ? f.required ? "bg-green-100 border-green-300 text-green-800" : "bg-blue-50 border-blue-200 text-blue-700"
-                          : f.required ? "bg-red-50 border-red-200 text-red-700" : "bg-muted border-border text-muted-foreground"
-                      }`}>
-                        {mappedIdx !== undefined ? "✓" : f.required ? "⚠" : "—"}
-                        <span className="font-medium">{f.label}</span>
-                        {col && <span className="opacity-70 max-w-[80px] truncate">← {col.label}</span>}
-                      </div>
+                      <button
+                        key={f.key}
+                        onClick={() => setActiveField(isActive ? null : f.key)}
+                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border-2 text-left text-xs transition-all ${
+                          isActive
+                            ? "border-primary bg-primary/10 ring-2 ring-primary/30"
+                            : isMapped
+                              ? f.required
+                                ? "border-green-400 bg-green-50 text-green-800"
+                                : "border-blue-300 bg-blue-50 text-blue-700"
+                              : f.required
+                                ? "border-amber-300 bg-amber-50 text-amber-800 animate-pulse"
+                                : "border-border bg-muted/30 text-muted-foreground"
+                        }`}
+                      >
+                        <span className="font-semibold truncate">
+                          {f.required ? "★ " : ""}{f.label}
+                        </span>
+                        {isMapped ? (
+                          <span className="flex items-center gap-1 shrink-0">
+                            <span className="text-[10px] opacity-70 max-w-[60px] truncate">{col?.label}</span>
+                            <span
+                              role="button"
+                              onClick={e => { e.stopPropagation(); unassignCol(f.key); }}
+                              className="text-muted-foreground hover:text-destructive ml-0.5"
+                              title="Remover"
+                            >×</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] opacity-50 shrink-0">{isActive ? "← clique coluna" : "clique"}</span>
+                        )}
+                      </button>
                     );
                   })}
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Avisos campos obrigatórios */}
-            {KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
-                <span>
-                  <strong>Falta mapear obrigatórios:</strong>{" "}
-                  {KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).map(f => `★ ${f.label}`).join(", ")}
-                </span>
               </div>
-            )}
 
-            {/* Ações */}
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm"
-                onClick={() => {
-                  if (fileCusto) {
-                    const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
-                    localStorage.removeItem(savedKey);
-                    handleGoToMapping();
-                  }
-                }}
-                title="Refazer detecção automática"
-              >
-                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Detectar novamente
-              </Button>
-              <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
-                disabled={KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 || importingCusto}
-                onClick={async () => {
-                  if (fileCusto) {
-                    const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
-                    localStorage.setItem(savedKey, JSON.stringify(currentMapping));
-                  }
-                  await handleImportarCusto();
-                }}
-              >
-                {importingCusto
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
-                  : <><FileCheck className="h-4 w-4 mr-2" /> Confirmar e Importar</>}
-              </Button>
-            </div>
+              {/* ── Colunas da planilha ── */}
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Colunas da Planilha{activeField ? <span className="ml-2 text-primary normal-case font-normal">← clique em uma coluna para mapear</span> : ""}
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {previewCols.map((col, colPos) => {
+                    const assignedKey = Object.entries(currentMapping).find(([, idx]) => idx === col.idx)?.[0];
+                    const assignedField = KEY_FIELDS.find(f => f.key === assignedKey);
+                    const samples = previewSample.map(row => row[colPos]).filter(v => v && String(v).trim()).slice(0, 2);
+                    const isSelectable = !!activeField;
 
-            {importingCusto && (
-              <Card>
-                <CardContent className="py-4 space-y-2">
-                  <p className="text-sm font-medium flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
-                    Importando planilha de custo...
-                  </p>
+                    return (
+                      <button
+                        key={col.idx}
+                        disabled={!isSelectable && !assignedKey}
+                        onClick={() => isSelectable ? assignCol(col.idx) : undefined}
+                        className={`flex flex-col text-left rounded-lg border-2 overflow-hidden transition-all ${
+                          assignedKey
+                            ? assignedField?.required
+                              ? "border-green-400 bg-green-50"
+                              : "border-blue-300 bg-blue-50"
+                            : isSelectable
+                              ? "border-primary/40 bg-primary/5 hover:border-primary hover:bg-primary/10 cursor-pointer"
+                              : "border-border bg-white cursor-default opacity-60"
+                        }`}
+                      >
+                        <div className={`px-2 py-1.5 border-b w-full text-[11px] font-semibold truncate ${
+                          assignedKey
+                            ? assignedField?.required ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-700"
+                            : isSelectable ? "bg-primary/10 text-primary" : "bg-muted/60 text-muted-foreground"
+                        }`} title={col.label}>
+                          {col.label}
+                        </div>
+                        <div className="px-2 py-1.5 space-y-0.5 w-full">
+                          {samples.length > 0
+                            ? samples.map((v, i) => <p key={i} className="text-[10px] text-foreground/60 truncate">{String(v)}</p>)
+                            : <p className="text-[10px] text-muted-foreground/40 italic">vazio</p>}
+                          {assignedKey && (
+                            <span className={`inline-block mt-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                              assignedField?.required ? "bg-green-200 text-green-800" : "bg-blue-200 text-blue-700"
+                            }`}>
+                              {assignedField?.required ? "★ " : ""}{assignedField?.label}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Aviso obrigatórios faltando */}
+              {requiredMissing.length > 0 && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                  <span><strong>Faltam obrigatórios:</strong> {requiredMissing.map(f => `★ ${f.label}`).join(", ")}</span>
+                </div>
+              )}
+
+              {/* Ações */}
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm"
+                  onClick={() => { if (fileCusto) { const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`; localStorage.removeItem(k); handleGoToMapping(); } }}
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Detectar auto
+                </Button>
+                <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
+                  disabled={requiredMissing.length > 0 || importingCusto}
+                  onClick={async () => {
+                    if (fileCusto) { const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`; localStorage.setItem(k, JSON.stringify(currentMapping)); }
+                    await handleImportarCusto();
+                  }}
+                >
+                  {importingCusto
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
+                    : <><FileCheck className="h-4 w-4 mr-2" /> Confirmar e Importar</>}
+                </Button>
+              </div>
+
+              {importingCusto && (
+                <Card><CardContent className="py-4 space-y-2">
+                  <p className="text-sm font-medium flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-amber-600" /> Importando...</p>
                   <ProgressBar value={importProgCusto} color="bg-amber-500"
-                    label={importProgCusto < 25 ? "Enviando arquivo..." : importProgCusto < 60 ? "Processando EAP..." : importProgCusto < 85 ? "Calculando totais..." : "Finalizando..."} />
-                </CardContent>
-              </Card>
-            )}
-
-            {importProgCusto === 100 && !importingCusto && (
-              <div className="flex items-center gap-2 text-green-600 font-medium text-sm p-3 rounded-lg bg-green-50 border border-green-200">
-                <CheckCircle2 className="h-5 w-5" /> Planilha de custo importada com sucesso!
-              </div>
-            )}
-          </div>
-        )}
+                    label={importProgCusto < 25 ? "Enviando..." : importProgCusto < 60 ? "Processando EAP..." : importProgCusto < 85 ? "Calculando totais..." : "Finalizando..."} />
+                </CardContent></Card>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ════════ STEP 4 — PLANILHA BDI ════════ */}
         {step === "bdi" && resultCusto && (

@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 379,
+    titulo: "Import Orçamento — Nova UI de mapeamento click-to-assign",
+    descricao: "Tela de mapeamento de colunas completamente redesenhada: painel superior mostra os campos do sistema como botões clicáveis (obrigatórios com ★, não mapeados pulsando em âmbar); painel inferior exibe todas as colunas da planilha como cards com nome e amostra de dados. Fluxo: usuário clica em um campo → ativa modo de seleção → clica na coluna correspondente → campo é mapeado e cursor avança automaticamente para o próximo campo não mapeado. Botão × remove mapeamento de um campo. Estado `activeField` movido para nível do componente (evitando violação de Rules of Hooks no IIFE anterior). Auto-advance pula campos já mapeados.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 367,
     titulo: "Módulo Terceiros — Contratos, Medições e Previsão de Caixa (T001–T005)",
     descricao: "Criação completa do submódulo de Contratos de Terceiros: (T001) 5 novas tabelas no PostgreSQL — terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos; (T002) router terceiroContratos.ts com CRUD de contratos, itens de contrato, medições (geração automática pelo planejamento de avanço físico) e previsão de caixa; (T003) router registrado em server/routers.ts como 'terceiroContratos'; (T004) 3 páginas React no módulo Terceiros: ContratosList, ContratoNovo e ContratoDetalhe (com gestão de itens, medições e documentos), mais MedicoesTerceiros e PrevisaoCaixa; (T005) rotas registradas no App.tsx e itens de menu adicionados ao sidebar Terceiros.",
