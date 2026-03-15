@@ -882,7 +882,7 @@ export default function ControleDocumentos() {
   const { data: treinList = [], refetch: refetchTrein } = trpc.docs.treinamentos.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const { data: atestList = [], refetch: refetchAtest } = trpc.docs.atestados.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const { data: advList = [], refetch: refetchAdv } = trpc.docs.advertencias.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
-  const { data: allEmployees = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
+  const { data: allEmployees = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
 
   // Filtrar APENAS funcionários ativos para os selects
   const activeEmployees = useMemo(() => {

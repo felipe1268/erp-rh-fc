@@ -529,7 +529,7 @@ export default function FechamentoPonto() {
     { enabled: (companyId > 0 || companyIds.length > 0) && selectedEmployeeId !== null }
   );
   const obrasList = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: companyId > 0 || companyIds.length > 0 });
-  const employeesList = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const employeesList = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: companyId > 0 || companyIds.length > 0 });
   const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 || companyIds.length > 0 });
   const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });

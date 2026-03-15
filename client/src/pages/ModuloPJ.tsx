@@ -84,7 +84,7 @@ export default function ModuloPJ() {
     { companyId, mesReferencia: mesRef },
     { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   const pjEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.tipoContrato === "PJ" && e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // Mutations

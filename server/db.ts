@@ -485,13 +485,16 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   await db.update(employees).set(sanitized).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
 }
 
-export async function getEmployees(companyId: number, search?: string, status?: string, companyIds?: number[]) {
+export async function getEmployees(companyId: number, search?: string, status?: string, companyIds?: number[], excludeTerminated?: boolean) {
   const db = await getDb();
   if (!db) return [];
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   const conditions = [inArray(employees.companyId, ids), isNull(employees.deletedAt)];
   if (status && status !== "Todos") {
     conditions.push(eq(employees.status, status as any));
+  } else if (excludeTerminated) {
+    // Em contextos de seleção operacional, excluir desligados e lista negra
+    conditions.push(sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`);
   }
   if (search) {
     const s = search.toLowerCase();

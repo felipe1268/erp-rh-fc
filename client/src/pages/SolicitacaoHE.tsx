@@ -74,7 +74,7 @@ export default function SolicitacaoHE() {
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const employeesQuery = trpc.employees.list.useQuery(
-    { companyId },
+    { companyId, excludeTerminated: true },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const listQuery = trpc.heSolicitacoes.list.useQuery(

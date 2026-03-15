@@ -28,6 +28,16 @@ export const heSolicitacoesRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
+    // === VALIDAÇÃO: bloquear funcionários desligados/inativos ===
+    const empsCheck = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, status: employees.status })
+      .from(employees)
+      .where(inArray(employees.id, input.funcionarioIds));
+    const bloqueados = empsCheck.filter(e => ['Desligado', 'Lista_Negra', 'Inativo'].includes(e.status || ''));
+    if (bloqueados.length > 0) {
+      const nomes = bloqueados.map(e => e.nomeCompleto).join(", ");
+      throw new TRPCError({ code: "BAD_REQUEST", message: `Funcionário(s) desligado(s) não podem ser incluídos em HE: ${nomes}` });
+    }
+
     // Criar a solicitação
     const [result] = await db.insert(heSolicitacoes).values({
       companyId: input.companyId,

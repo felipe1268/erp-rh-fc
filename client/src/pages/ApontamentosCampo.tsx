@@ -100,7 +100,7 @@ export default function ApontamentosCampo() {
   );
 
   const empQ = trpc.employees.list.useQuery(
-    { companyId: companyId! },
+    { companyId: companyId!, excludeTerminated: true },
     { enabled: !!companyId }
   );
 
