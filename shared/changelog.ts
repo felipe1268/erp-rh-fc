@@ -1348,6 +1348,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:59",
   },
   {
+    version: 351,
+    titulo: "Bugfix: Cadastro de Empresa Terceira não salvava",
+    descricao: "Corrigidos três problemas no cadastro de empresas terceiras: (1) Backend usava db.insert() sem .returning(), causando erro 500 silencioso ao tentar acessar result[0].id — corrigido com .returning({ id }); (2) createMut e updateMut não tinham onError, engolindo o erro sem feedback ao usuário — adicionados handlers que exibem toast com a mensagem de erro; (3) handleSave agora limpa a máscara do CNPJ antes de enviar ao backend (form.cnpj.replace(/\\D/g, '')), garantindo que apenas dígitos sejam persistidos no banco — consistente com o padrão do restante do sistema.",
+    tipo: "bugfix",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 344,
     titulo: "Performance: cache, chunk splitting, keep-alive e pool otimizado",
     descricao: "Pacote de otimizações de performance: (1) Vite build com manualChunks — 6 chunks separados (react-core, trpc-query, ui-lib, utils, charts, documents) reduzindo o JS inicial em ~40%; (2) esbuild minifier + reportCompressedSize desativado para builds mais rápidos; (3) QueryClient: staleTime 30s→2min e gcTime 5min→10min — menos refetches desnecessários na navegação; (4) tRPC timeout reduzido de 5 minutos para 30 segundos — falha rápida ao invés de spinner eterno; (5) Retry reduzido de 2 para 1 — UX mais ágil em caso de erro; (6) HTTP keep-alive: keepAliveTimeout 65s e headersTimeout 70s no servidor Node.js; (7) Pool de conexões PostgreSQL: max 10→20, min 2 conexões sempre prontas, idleTimeout 30s→60s; (8) MemCache server-side com TTL configurável (30s/2min/10min/1h) e invalidação por prefixo para dados frequentes; (9) compras/Almoxarifado.tsx: correção do `criarMut.mutate(as any)` para payload de locação.",
