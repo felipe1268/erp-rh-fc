@@ -1402,6 +1402,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:59",
   },
   {
+    version: 358,
+    titulo: "Compras — SC: campo Obra com busca por digitação",
+    descricao: "Campo 'Obra / Centro de Custo' na modal Nova SC substituído de Select simples para combobox com busca por digitação: filtra obras em tempo real pelo nome ou código conforme o usuário digita, exibe lista suspensa com scroll, destaca a obra selecionada e fecha automaticamente ao clicar fora.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 357,
     titulo: "Integração Compras → Terceiros (Opção B: vínculo por fornecedorId)",
     descricao: "Integração entre módulos Compras e Terceiros via vínculo único de cadastro: (1) Campo `fornecedor_id` adicionado em `empresas_terceiras` — quando um fornecedor do módulo Compras gera um contrato de serviço, o sistema verifica se já existe empresa terceira vinculada; se não, cria automaticamente a partir dos dados do fornecedor (razão social, CNPJ, endereço, contato, dados bancários), evitando duplicidade de cadastro; (2) Campo `contrato_terceiro_id` adicionado em `compras_cotacoes` — marca a cotação como já convertida em contrato, impedindo conversões duplicadas; (3) Procedure `gerarContratoFromCotacao` no router terceiroContratos: lê cotação + itens + fornecedor, faz find-or-create de empresa terceira vinculada, cria contrato + itens no módulo Terceiros, atualiza cotação com o ID do contrato gerado; (4) Botão 'Gerar Contrato de Serviço' na tela Cotações — aparece apenas quando status = 'aprovada' e nenhum contrato ainda foi gerado; ao concluir, redireciona para o detalhe do contrato recém-criado.",
