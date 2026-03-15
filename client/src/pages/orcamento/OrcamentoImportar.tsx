@@ -713,222 +713,200 @@ export default function OrcamentoImportar() {
 
         {/* ════════ STEP 3 — MAPEAMENTO DE COLUNAS ════════ */}
         {step === "mapping" && (
-          <Card>
-            <CardContent className="pt-5 space-y-5">
+          <div className="space-y-4">
+            {/* Cabeçalho */}
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setStep("custo")}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
               <div>
-                <h2 className="font-semibold text-base flex items-center gap-2">
+                <h2 className="font-bold text-base flex items-center gap-2">
                   <Columns className="h-5 w-5 text-blue-600" />
-                  Mapear Colunas da Planilha
+                  Identificar Colunas
                 </h2>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Confirme que cada campo do sistema está ligado à coluna correta. O mapeamento será salvo para próximas importações com esta planilha.
+                <p className="text-xs text-muted-foreground">
+                  Para cada coluna da planilha, selecione o que ela representa. Colunas que não precisam ser importadas deixe como <strong>Ignorar</strong>.
                 </p>
               </div>
+            </div>
 
-              {/* Resumo de detecção automática */}
-              {(() => {
-                const detected = KEY_FIELDS.filter(f => autoDetectedMap[f.key] !== undefined).length;
-                const total = KEY_FIELDS.length;
-                const reqMissing = KEY_FIELDS.filter(f => f.required && autoDetectedMap[f.key] === undefined);
-                return (
-                  <div className={`flex items-center gap-3 p-3 rounded-lg border text-xs ${reqMissing.length > 0 ? "border-amber-300 bg-amber-50" : "border-green-300 bg-green-50"}`}>
-                    {reqMissing.length > 0
-                      ? <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-                      : <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />}
-                    <div className="flex-1">
-                      <span className={`font-semibold ${reqMissing.length > 0 ? "text-amber-800" : "text-green-800"}`}>
-                        {detected}/{total} colunas detectadas automaticamente
-                      </span>
-                      {reqMissing.length > 0 && (
-                        <p className="text-amber-700 mt-0.5">
-                          Corrija manualmente: <strong>{reqMissing.map(f => f.label).join(", ")}</strong>
-                        </p>
-                      )}
-                      {reqMissing.length === 0 && (
-                        <p className="text-green-700 mt-0.5">Todos os campos obrigatórios foram detectados. Verifique e confirme.</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
+            {/* Cards de colunas — scroll horizontal */}
+            <div className="overflow-x-auto pb-2">
+              <div className="flex gap-3 min-w-max">
+                {previewCols.map((col, colPos) => {
+                  // Campo atualmente mapeado para esta coluna
+                  const assignedKey = Object.entries(currentMapping).find(([, idx]) => idx === col.idx)?.[0];
+                  const assignedField = KEY_FIELDS.find(f => f.key === assignedKey);
+                  const isRequired = assignedField?.required;
+                  const samples = previewSample.map(row => row[colPos]).filter(v => v && String(v).trim());
 
-              {/* Tabela de mapeamento */}
-              <div className="rounded-lg border overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted/60 border-b">
-                      <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground w-[35%]">Campo do Sistema</th>
-                      <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground w-[15%]">Status</th>
-                      <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Coluna na Planilha</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {KEY_FIELDS.map((field, i) => {
-                      const mappedIdx   = currentMapping[field.key];
-                      const wasAuto     = autoDetectedMap[field.key] !== undefined;
-                      const isChanged   = wasAuto && mappedIdx !== autoDetectedMap[field.key];
-                      const isMissing   = mappedIdx === undefined;
-                      return (
-                        <tr key={field.key} className={`border-b last:border-0 ${
-                          isMissing && field.required ? "bg-amber-50" : i % 2 === 0 ? "" : "bg-muted/20"
-                        }`}>
-                          <td className="px-3 py-2">
-                            <span className="font-medium text-sm">{field.label}</span>
-                            {field.required && <span className="ml-1 text-red-500 text-xs">*</span>}
-                          </td>
-                          <td className="px-3 py-2">
-                            {isMissing ? (
-                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${field.required ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>
-                                {field.required ? "⚠ Faltando" : "—"}
-                              </span>
-                            ) : wasAuto && !isChanged ? (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">
-                                ✓ Auto
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
-                                ✎ Manual
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            <Select
-                              value={mappedIdx !== undefined ? String(mappedIdx) : "__none__"}
-                              onValueChange={(val) => {
-                                setCurrentMapping(prev => {
-                                  const next = { ...prev };
-                                  if (val === "__none__") { delete next[field.key]; }
-                                  else { next[field.key] = parseInt(val); }
-                                  return next;
-                                });
-                              }}
-                            >
-                              <SelectTrigger className={`h-8 text-xs ${isMissing && field.required ? "border-amber-400 bg-amber-50" : ""}`}>
-                                <SelectValue placeholder="— não mapear —" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">
-                                  <span className="text-muted-foreground">— não mapear —</span>
-                                </SelectItem>
-                                {previewCols.map(col => (
-                                  <SelectItem key={col.idx} value={String(col.idx)}>
-                                    <span className="font-mono text-xs mr-2 text-muted-foreground">[{col.idx}]</span>
-                                    {col.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                  return (
+                    <div
+                      key={col.idx}
+                      className={`w-44 shrink-0 rounded-xl border-2 flex flex-col overflow-hidden transition-all ${
+                        assignedKey
+                          ? isRequired
+                            ? "border-green-400 bg-green-50"
+                            : "border-blue-300 bg-blue-50"
+                          : "border-border bg-white"
+                      }`}
+                    >
+                      {/* Header da coluna */}
+                      <div className={`px-3 py-2 border-b text-xs font-semibold truncate ${
+                        assignedKey ? (isRequired ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800") : "bg-muted/60 text-muted-foreground"
+                      }`} title={col.label}>
+                        {col.label}
+                      </div>
 
-              {/* Pré-visualização de dados */}
-              {previewSample.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pré-visualização (5 primeiras linhas)</p>
-                  <div className="rounded-lg border overflow-x-auto">
-                    <table className="text-xs min-w-full">
-                      <thead>
-                        <tr className="bg-muted/60 border-b">
-                          {KEY_FIELDS.map(f => {
-                            const idx = currentMapping[f.key];
-                            const col = previewCols.find(c => c.idx === idx);
-                            return (
-                              <th key={f.key} className="px-2 py-1.5 text-left font-medium whitespace-nowrap text-muted-foreground">
-                                <span className={f.required ? "text-foreground" : ""}>{f.label}</span>
-                                {col && <span className="block font-normal text-blue-500 text-[10px]">{col.label}</span>}
-                              </th>
-                            );
-                          })}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {previewSample.map((row, ri) => (
-                          <tr key={ri} className={`border-b last:border-0 ${ri % 2 === 0 ? "" : "bg-muted/10"}`}>
+                      {/* Amostra de dados */}
+                      <div className="px-3 py-2 flex-1 space-y-0.5 min-h-[72px]">
+                        {samples.slice(0, 3).map((v, i) => (
+                          <p key={i} className="text-xs text-foreground/70 truncate">{String(v)}</p>
+                        ))}
+                        {samples.length === 0 && (
+                          <p className="text-xs text-muted-foreground/40 italic">vazio</p>
+                        )}
+                      </div>
+
+                      {/* Dropdown de atribuição */}
+                      <div className="px-2 pb-2">
+                        <Select
+                          value={assignedKey ?? "__none__"}
+                          onValueChange={(val) => {
+                            setCurrentMapping(prev => {
+                              const next = { ...prev };
+                              // Remove mapeamento anterior desta coluna
+                              Object.keys(next).forEach(k => { if (next[k] === col.idx) delete next[k]; });
+                              // Remove mapeamento anterior deste campo (se outro col já tinha)
+                              if (val !== "__none__") {
+                                Object.keys(next).forEach(k => { if (k === val) delete next[k]; });
+                                next[val] = col.idx;
+                              }
+                              return next;
+                            });
+                          }}
+                        >
+                          <SelectTrigger className={`h-7 text-[11px] w-full ${
+                            assignedKey
+                              ? isRequired ? "border-green-400 text-green-800 font-semibold" : "border-blue-300 text-blue-700"
+                              : "text-muted-foreground"
+                          }`}>
+                            <SelectValue placeholder="— Ignorar —" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">
+                              <span className="text-muted-foreground text-xs">— Ignorar esta coluna —</span>
+                            </SelectItem>
                             {KEY_FIELDS.map(f => {
-                              const colIdx = currentMapping[f.key];
-                              const previewColIdx = previewCols.findIndex(c => c.idx === colIdx);
-                              const val = previewColIdx >= 0 ? row[previewColIdx] : "";
+                              const alreadyUsed = currentMapping[f.key] !== undefined && currentMapping[f.key] !== col.idx;
                               return (
-                                <td key={f.key} className="px-2 py-1.5 whitespace-nowrap max-w-[140px] overflow-hidden text-ellipsis">
-                                  {val || <span className="text-muted-foreground/40">—</span>}
-                                </td>
+                                <SelectItem key={f.key} value={f.key} disabled={alreadyUsed}>
+                                  <span className={`text-xs ${alreadyUsed ? "text-muted-foreground/50" : ""}`}>
+                                    {f.required ? "★ " : ""}{f.label}
+                                    {alreadyUsed ? " (já usado)" : ""}
+                                  </span>
+                                </SelectItem>
                               );
                             })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Avisos sobre campos obrigatórios não mapeados */}
-              {KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 && (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
-                  <span>
-                    <strong>Campos obrigatórios sem mapeamento:</strong>{" "}
-                    {KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).map(f => f.label).join(", ")}
-                  </span>
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <Button variant="outline" onClick={() => setStep("custo")}>
-                  <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-                </Button>
-                <Button variant="outline" size="sm"
-                  onClick={() => {
-                    if (fileCusto) {
-                      const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
-                      localStorage.removeItem(savedKey);
-                      toast.info("Mapeamento salvo removido — usando detecção automática");
-                      handleGoToMapping();
-                    }
-                  }}
-                  title="Redefinir para detecção automática"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </Button>
-                <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
-                  disabled={KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 || importingCusto}
-                  onClick={async () => {
-                    if (fileCusto) {
-                      const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
-                      localStorage.setItem(savedKey, JSON.stringify(currentMapping));
-                    }
-                    await handleImportarCusto();
-                  }}
-                >
-                  {importingCusto
-                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
-                    : <><FileCheck className="h-4 w-4 mr-2" /> Confirmar e Importar</>}
-                </Button>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+            </div>
 
-              {importingCusto && (
-                <div className="space-y-2">
+            {/* Legenda */}
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border-2 border-green-400 bg-green-50 inline-block" /> Campo obrigatório (★)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border-2 border-blue-300 bg-blue-50 inline-block" /> Campo opcional</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border-2 border-border bg-white inline-block" /> Ignorado</span>
+            </div>
+
+            {/* Resumo do mapeamento */}
+            <Card>
+              <CardContent className="py-3">
+                <div className="flex flex-wrap gap-2">
+                  {KEY_FIELDS.map(f => {
+                    const mappedIdx = currentMapping[f.key];
+                    const col = previewCols.find(c => c.idx === mappedIdx);
+                    return (
+                      <div key={f.key} className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${
+                        mappedIdx !== undefined
+                          ? f.required ? "bg-green-100 border-green-300 text-green-800" : "bg-blue-50 border-blue-200 text-blue-700"
+                          : f.required ? "bg-red-50 border-red-200 text-red-700" : "bg-muted border-border text-muted-foreground"
+                      }`}>
+                        {mappedIdx !== undefined ? "✓" : f.required ? "⚠" : "—"}
+                        <span className="font-medium">{f.label}</span>
+                        {col && <span className="opacity-70 max-w-[80px] truncate">← {col.label}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Avisos campos obrigatórios */}
+            {KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                <span>
+                  <strong>Falta mapear obrigatórios:</strong>{" "}
+                  {KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).map(f => `★ ${f.label}`).join(", ")}
+                </span>
+              </div>
+            )}
+
+            {/* Ações */}
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm"
+                onClick={() => {
+                  if (fileCusto) {
+                    const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+                    localStorage.removeItem(savedKey);
+                    handleGoToMapping();
+                  }
+                }}
+                title="Refazer detecção automática"
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Detectar novamente
+              </Button>
+              <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
+                disabled={KEY_FIELDS.filter(f => f.required && currentMapping[f.key] === undefined).length > 0 || importingCusto}
+                onClick={async () => {
+                  if (fileCusto) {
+                    const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+                    localStorage.setItem(savedKey, JSON.stringify(currentMapping));
+                  }
+                  await handleImportarCusto();
+                }}
+              >
+                {importingCusto
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
+                  : <><FileCheck className="h-4 w-4 mr-2" /> Confirmar e Importar</>}
+              </Button>
+            </div>
+
+            {importingCusto && (
+              <Card>
+                <CardContent className="py-4 space-y-2">
                   <p className="text-sm font-medium flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
                     Importando planilha de custo...
                   </p>
                   <ProgressBar value={importProgCusto} color="bg-amber-500"
                     label={importProgCusto < 25 ? "Enviando arquivo..." : importProgCusto < 60 ? "Processando EAP..." : importProgCusto < 85 ? "Calculando totais..." : "Finalizando..."} />
-                </div>
-              )}
+                </CardContent>
+              </Card>
+            )}
 
-              {importProgCusto === 100 && !importingCusto && (
-                <div className="flex items-center gap-2 text-green-600 font-medium text-sm">
-                  <CheckCircle2 className="h-5 w-5" /> Planilha de custo importada com sucesso!
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            {importProgCusto === 100 && !importingCusto && (
+              <div className="flex items-center gap-2 text-green-600 font-medium text-sm p-3 rounded-lg bg-green-50 border border-green-200">
+                <CheckCircle2 className="h-5 w-5" /> Planilha de custo importada com sucesso!
+              </div>
+            )}
+          </div>
         )}
 
         {/* ════════ STEP 4 — PLANILHA BDI ════════ */}
