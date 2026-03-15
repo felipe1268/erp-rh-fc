@@ -436,23 +436,33 @@ const COL_ALIASES: Record<string, string[]> = {
   servicoCodigo:  ['codigoservico', 'codservico', 'cods'],
   tipo:           ['tipo'],
   // Custo unitário — col "Custo Preço" (FC/Sinapi) ou "P.Unit.Mat" (padrão clássico)
-  // "custopreco" aparece 2× → 1ª vez = Mat, 2ª vez = MO (pela lógica de duplicatas)
+  // NOTA: a normalização remove acentos/cedilha, então "Preço"→"preo", "ç"→removido.
+  // Aliases com "c" (sem cedilha) E sem "c" são necessários para cobrir ambos os casos.
   cuUnitMat:      ['punitmat', 'pumat', 'cunitmat', 'custounitmat', 'precounitmat',
                    'valorunitmat', 'valorunitariomaterial', 'custounitariomaterial',
-                   'custopreco',        // "Custo Preço" (1ª ocorrência)
-                   'custoprecomaterial','custoprecounitmaterial'],
+                   'custopreco',          // "Custo Preço" (1ª ocorrência — sem cedilha)
+                   'custoprecounitmaterial',  // com c (cedilha mantida em alguns encodings)
+                   'custopreounitmaterial',   // sem c (cedilha removida pela normalização) ← FC CUSTO
+                   'custoprecomaterial'],
   cuUnitMdo:      ['punitmo', 'pumo', 'cunitmo', 'custounitmo', 'precounitmo',
                    'valorunitmo', 'valorunitariomo', 'custounitariomo',
-                   'custopreco',        // "Custo Preço" (2ª ocorrência — Mat já foi pego)
-                   'custoprecomo', 'custoprecounitmo'],
+                   'custopreco',          // "Custo Preço" (2ª ocorrência — Mat já foi pego)
+                   'custoprecounitmo',    // com c
+                   'custopreounitmdo',    // sem c ← FC CUSTO ("Custo Preço Unit. MDO")
+                   'custoprecomo'],
   // Custo total por item — "Preço Total" (FC/Sinapi) ou "P.Total Mat" (padrão clássico)
-  // "precototal" aparece 2× → 1ª = Mat, 2ª = MO
+  // ATENÇÃO: aliases genéricos como "precototal/preototal" casam via startsWith em ambas as colunas.
+  // Usar apenas aliases suficientemente específicos para evitar falso-positivo.
   cuTotalMat:     ['ptotalmat', 'pttotalmat', 'ctmat', 'custototalmat', 'totalmat', 'totalmaterial',
-                   'precototal',         // "Preço Total" (1ª ocorrência)
-                   'precototalmaterial', 'valortotalmat', 'precototalmat'],
+                   'precototal',          // "Preço Total" (1ª ocorrência, com c — padrão clássico)
+                   'precototalmaterial',  // com c (cedilha mantida)
+                   'preototalmaterial',   // sem c ← FC CUSTO ("Preço Total Material")
+                   'valortotalmat', 'precototalmat'],
   cuTotalMdo:     ['ptotalmo', 'pttotalmo', 'ctmo', 'custototalmo', 'totalmo', 'totalmaodeobra',
-                   'precototal',         // "Preço Total" (2ª ocorrência — Mat já foi pego)
-                   'precototalmo', 'valortotalmo'],
+                   'precototalmo',        // com c (cedilha mantida)
+                   'preototalmo',         // sem c ← FC CUSTO ("Preço total MO")
+                   // NÃO usar 'precototal'/'preototal' aqui: são prefixo de "...material" → falso-positivo
+                   'valortotalmo'],
   // Custo total do serviço — "Custo" sozinho (col final de totais)
   // IMPORTANTE: "custo" e "total" são aliases CURTOS → só casam por igualdade exata
   custoTotal:     ['custototal', 'totalcusto', 'custogeral', 'totalgeral', 'custo', 'total', 'ct'],

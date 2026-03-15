@@ -1510,6 +1510,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 375,
+    titulo: "Importação de Orçamento — Correção de mapeamento de colunas com cedilha (ç)",
+    descricao: "Corrigido bug grave na importação de planilhas de orçamento no formato FC Engenharia. A normalização de texto remove acentos e cedilha (ç→removido), fazendo com que 'Preço' vire 'preo' ao invés de 'preco'. Os aliases de coluna estavam escritos com 'c' (ex: 'custoprecounitmaterial'), não casando com 'custopreounitmaterial' (o que a normalização produz). Resultado: 4 colunas críticas (cuUnitMat, cuUnitMdo, cuTotalMat, cuTotalMdo) não eram detectadas → todos os valores de custo Mat/MO importavam como zero. Adicionados aliases ç-stripped para todas as colunas críticas. Validado com simulação: todas as 5 colunas de custo agora detectadas corretamente nos índices 18, 20, 22, 23 e 24.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 374,
     titulo: "Mapa de Cotação — Total de QTD na linha TOTAL quando unidade é única",
     descricao: "Na linha TOTAL do Mapa de Cotação, a coluna QTD agora exibe a soma de todas as quantidades quando todos os itens da cotação têm a mesma unidade (ex: todos em kg). Facilita saber o volume total do insumo sendo cotado. Quando os itens possuem unidades mistas, exibe '—' como antes.",
