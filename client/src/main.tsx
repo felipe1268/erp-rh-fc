@@ -82,7 +82,8 @@ const trpcClient = trpc.createClient({
       maxURLLength: 2048,
       fetch(input, init) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        // 5 minutos para suportar importações pesadas (orçamentos, planilhas grandes)
+        const timeoutId = setTimeout(() => controller.abort(new DOMException("Tempo limite de 5 minutos excedido. Tente novamente.", "TimeoutError")), 300000);
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",

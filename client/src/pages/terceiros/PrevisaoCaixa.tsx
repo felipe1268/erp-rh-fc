@@ -16,7 +16,7 @@ export default function PrevisaoCaixa() {
   const { companyId } = useCompany();
   const [obraId, setObraId] = useState<string>("todos");
 
-  const { data: obrasData = [] } = trpc.rh.listarObras.useQuery({ companyId }, { enabled: companyId > 0 });
+  const { data: obrasData = [] } = trpc.obras.list.useQuery({ companyId }, { enabled: companyId > 0 });
 
   const { data, isLoading } = trpc.terceiroContratos.previsaoCaixa.useQuery(
     { companyId, obraId: obraId !== "todos" ? parseInt(obraId) : undefined },
