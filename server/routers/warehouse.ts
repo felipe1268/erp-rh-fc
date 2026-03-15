@@ -460,33 +460,27 @@ export const warehouseRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
-      const { ilike, or, isNull } = await import("drizzle-orm");
+      const { sql: drizzleSql, isNull, or } = await import("drizzle-orm");
       const q = input.q.trim();
       if (q.length < 2) return [];
-
-      return db
-        .select({
-          id: employees.id,
-          nomeCompleto: employees.nomeCompleto,
-          codigoInterno: employees.codigoInterno,
-          cargo: (employees as any).cargo,
-          funcao: (employees as any).funcao,
-          fotoUrl: (employees as any).fotoUrl,
-        })
-        .from(employees)
-        .where(
-          and(
-            eq(employees.companyId, input.companyId),
-            isNull(employees.deletedAt),
-            or(
-              ilike(employees.nomeCompleto, `%${q}%`),
-              ilike(employees.codigoInterno, `%${q}%`),
-              ilike((employees as any).cargo, `%${q}%`),
-            )
+      // Busca insensível a acento e maiúsculas/minúsculas via unaccent()
+      const pattern = `%${q}%`;
+      const rows = await db.execute(drizzleSql`
+        SELECT id, nome_completo AS "nomeCompleto", codigo_interno AS "codigoInterno",
+               cargo, funcao, foto_url AS "fotoUrl"
+        FROM employees
+        WHERE company_id = ${input.companyId}
+          AND deleted_at IS NULL
+          AND (
+            unaccent(lower(nome_completo)) LIKE unaccent(lower(${pattern}))
+            OR lower(codigo_interno) LIKE lower(${pattern})
+            OR unaccent(lower(COALESCE(cargo, ''))) LIKE unaccent(lower(${pattern}))
+            OR unaccent(lower(COALESCE(funcao, ''))) LIKE unaccent(lower(${pattern}))
           )
-        )
-        .orderBy(employees.nomeCompleto)
-        .limit(6);
+        ORDER BY nome_completo
+        LIMIT 8
+      `);
+      return (rows?.rows ?? rows ?? []) as any[];
     }),
 
   // ── SUGERIR CADASTRO DE ITEM POR FOTO (IA) ────────────────────
