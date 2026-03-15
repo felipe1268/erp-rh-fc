@@ -16,6 +16,8 @@ import {
   orcamentos,
   orcamentoItens,
   composicaoInsumos,
+  almoxarifadoItens,
+  equipment,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -1255,6 +1257,65 @@ export const planejamentoRouter = router({
       }
 
       return { itens, insumos, matchedByNome };
+    }),
+
+  // ── Equipamentos disponíveis no almoxarifado / patrimônio ────────────────
+  buscarEquipamentosDisponiveis: protectedProcedure
+    .input(z.object({
+      companyId:  z.number(),
+      termos:     z.array(z.string()).optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      // Busca itens do almoxarifado ativos
+      const almoxRows = await db.select({
+        id:               almoxarifadoItens.id,
+        nome:             almoxarifadoItens.nome,
+        categoria:        almoxarifadoItens.categoria,
+        quantidadeAtual:  almoxarifadoItens.quantidadeAtual,
+        quantidadeMinima: almoxarifadoItens.quantidadeMinima,
+        unidade:          almoxarifadoItens.unidade,
+        codigoInterno:    almoxarifadoItens.codigoInterno,
+      })
+      .from(almoxarifadoItens)
+      .where(and(
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.ativo, true),
+      ));
+
+      // Busca cadastro de equipamentos (patrimônio)
+      const equipRows = await db.select({
+        id:                equipment.id,
+        nome:              equipment.nome,
+        tipoEquipamento:   equipment.tipoEquipamento,
+        statusEquipamento: equipment.statusEquipamento,
+        localizacao:       equipment.localizacao,
+        responsavel:       equipment.responsavel,
+      })
+      .from(equipment)
+      .where(eq(equipment.companyId, input.companyId));
+
+      return {
+        almoxarifado: almoxRows.map(r => ({
+          id:            r.id,
+          nome:          r.nome,
+          categoria:     r.categoria ?? null,
+          qtdDisponivel: parseFloat(r.quantidadeAtual ?? "0"),
+          qtdMinima:     parseFloat(r.quantidadeMinima ?? "0"),
+          unidade:       r.unidade,
+          codigo:        r.codigoInterno ?? null,
+          disponivel:    parseFloat(r.quantidadeAtual ?? "0") > 0,
+        })),
+        patrimonio: equipRows.map(r => ({
+          id:        r.id,
+          nome:      r.nome,
+          tipo:      r.tipoEquipamento ?? null,
+          status:    r.statusEquipamento,
+          local:     r.localizacao ?? null,
+          disponivel: r.statusEquipamento === "Ativo" || r.statusEquipamento === "Disponível",
+        })),
+      };
     }),
 
   // ── Validação EAP cronograma × orçamento ─────────────────────────────────

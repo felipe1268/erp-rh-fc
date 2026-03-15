@@ -4,9 +4,40 @@ import {
   ChevronLeft, ChevronRight, Calendar, Printer, Loader2,
   Brain, AlertTriangle, Wrench, Users, Package, Clock,
   CheckCircle2, ArrowRight, TrendingDown, Zap, RefreshCcw,
-  Home, CalendarRange,
+  Home, CalendarRange, HardHat, Truck, CheckCircle, XCircle,
+  Info, Hammer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+// ── Classificação de insumos ──────────────────────────────────────────────────
+
+const PALAVRAS_PESSOA = [
+  "servente","pedreiro","mestre","carpinteiro","ferreiro","armador","eletricista",
+  "encanador","pintor","operador","ajudante","oficial","encarregado","técnico",
+  "topógrafo","instalador","montador","soldador","motorista","almoxarife",
+  "auxiliar","trabalhador","operário","vigia","porteiro","gestor","coordenador",
+  "engenheiro","arquiteto","fiscal","supervisor","contínuo","faxineiro",
+  "serralheiro","rebocador","azulejista","impermeabilizador","jardineiro",
+];
+
+const PALAVRAS_EQUIP = [
+  "vibrador","compactador","betoneira","bomba","guincho","andaime","escavadeira",
+  "retroescavadeira","trator","compressor","furadeira","esmerilhadeira",
+  "guindaste","grua","balancim","patrol","motoniveladora","caçamba","caminhão",
+  "veículo","carro","equipamento","ferramenta","aparelho","dispositivo",
+  "roçadeira","gerador","motosserra","martelete","perfurador","perfuratriz",
+  "cortadora","britadeira","mangote","gabarito","forma metálica",
+];
+
+function isPessoa(desc: string): boolean {
+  const d = desc.toLowerCase();
+  return PALAVRAS_PESSOA.some(p => d.includes(p));
+}
+
+function isEquipOrcamento(desc: string): boolean {
+  const d = desc.toLowerCase();
+  return PALAVRAS_EQUIP.some(p => d.includes(p));
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -173,6 +204,12 @@ export function ProgramacaoSemanal({
   );
 
   const recursos = recursosQuery.data;
+
+  // ── Equipamentos do almoxarifado / patrimônio ─────────────────────────────
+  const equipQuery = trpc.planejamento.buscarEquipamentosDisponiveis.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
 
   // ── AI alerts mutation ────────────────────────────────────────────────────
   const [iaErro, setIaErro] = useState<string | null>(null);
@@ -420,6 +457,7 @@ export function ProgramacaoSemanal({
                 <RecursosDaSemana
                   recursos={recursosQuery.data}
                   eapsAtivas={eapsDaSemana}
+                  equipDisponiveis={equipQuery.data}
                 />
               )}
               {!recursosQuery.data && !recursosQuery.isLoading && (
@@ -480,6 +518,7 @@ export function ProgramacaoSemanal({
           nomeProjeto={nomeProjeto}
           nomeCliente={nomeCliente}
           recursos={recursos}
+          equipDisponiveis={equipQuery.data}
           alertas={alertas}
           loadIA={loadIA}
           iaErro={iaErro}
@@ -492,61 +531,226 @@ export function ProgramacaoSemanal({
 
 // ── Sub-componentes ───────────────────────────────────────────────────────────
 
-function RecursosDaSemana({ recursos, eapsAtivas }: { recursos: any; eapsAtivas: string[] }) {
+function cruzarComAlmox(nomeEquip: string, disponíveis: any): { almox: any | null; patrim: any | null } {
+  const d = nomeEquip.toLowerCase();
+  const almox = (disponíveis?.almoxarifado ?? []).find((a: any) =>
+    d.split(" ").some((w: string) => w.length > 3 && a.nome.toLowerCase().includes(w))
+  ) ?? null;
+  const patrim = (disponíveis?.patrimonio ?? []).find((p: any) =>
+    d.split(" ").some((w: string) => w.length > 3 && p.nome.toLowerCase().includes(w))
+  ) ?? null;
+  return { almox, patrim };
+}
+
+function RecursosDaSemana({
+  recursos, eapsAtivas, equipDisponiveis,
+}: {
+  recursos: any;
+  eapsAtivas: string[];
+  equipDisponiveis?: any;
+}) {
   const matchedByNome = !!recursos.matchedByNome;
-  // Quando matched por nome, mostra todos os itens; quando por EAP, filtra pela semana atual
   const itensAtivos = matchedByNome
     ? (recursos.itens ?? [])
     : (recursos.itens ?? []).filter((it: any) => eapsAtivas.includes(it.eapCodigo));
   const servCodes   = new Set(itensAtivos.map((it: any) => it.servicoCodigo).filter(Boolean));
   const insumos     = (recursos.insumos ?? []).filter((ins: any) => servCodes.has(ins.composicaoCodigo));
 
-  const mat = insumos.filter((i: any) => parseFloat(i.alocacaoMat ?? "0") > 0 && parseFloat(i.alocacaoMdo ?? "0") === 0);
-  const mo  = insumos.filter((i: any) => parseFloat(i.alocacaoMdo ?? "0") > 0);
+  // ── Classificação tripartida ──────────────────────────────────────────────
+  // MO: itens com alocacaoMdo > 0 E descricao é ofício/pessoa
+  // EQUIP: itens com alocacaoMdo > 0 MAS a descricao parece equipamento
+  // MAT: itens com alocacaoMat > 0 e alocacaoMdo = 0
+  const pessoaMO: any[] = [];
+  const equipOrc: any[] = [];
+  insumos
+    .filter((i: any) => parseFloat(i.alocacaoMdo ?? "0") > 0)
+    .forEach((i: any) => {
+      const desc = i.insumoDescricao ?? "";
+      if (isEquipOrcamento(desc)) equipOrc.push(i);
+      else if (isPessoa(desc))    pessoaMO.push(i);
+      else                        pessoaMO.push(i); // dúvida → vai p/ MO
+    });
+
+  const mat = insumos.filter(
+    (i: any) => parseFloat(i.alocacaoMat ?? "0") > 0 && parseFloat(i.alocacaoMdo ?? "0") === 0
+  );
 
   if (!itensAtivos.length) {
     return <p className="text-xs text-slate-400 p-4">Sem recursos de orçamento vinculados a estas atividades.</p>;
   }
 
+  const temAlmoxCadastrado = (equipDisponiveis?.almoxarifado?.length ?? 0) + (equipDisponiveis?.patrimonio?.length ?? 0) > 0;
+
   return (
-    <div className="p-4 space-y-3">
+    <div className="p-4 space-y-4">
       {matchedByNome && (
         <div className="flex items-center gap-1.5 text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           <span>EAPs do cronograma e orçamento não coincidem — recursos buscados por nome da atividade.</span>
         </div>
       )}
-      {mo.length > 0 && (
+
+      {/* ── MÃO DE OBRA ─ pessoas / equipe ─────────────────────────────────── */}
+      {pessoaMO.length > 0 && (
         <div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Users className="h-3 w-3 text-blue-600" />
-            <span className="text-[11px] font-semibold text-slate-600">Mão de obra</span>
+          <div className="flex items-center gap-1.5 mb-2">
+            <HardHat className="h-3.5 w-3.5 text-blue-600" />
+            <span className="text-xs font-semibold text-blue-700">Mão de Obra</span>
+            <span className="text-[10px] text-slate-400">(equipe necessária)</span>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {mo.map((i: any, idx: number) => (
-              <span key={idx} className="text-[11px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full">
-                {i.insumoDescricao}{i.quantidade ? ` — ${parseFloat(i.quantidade).toFixed(0)} ${i.unidade ?? ""}` : ""}
-              </span>
-            ))}
-          </div>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="text-left text-[10px] text-slate-500 border-b border-slate-100">
+                <th className="pb-1 font-semibold">Ofício / Função</th>
+                <th className="pb-1 font-semibold text-right w-20">Qtd</th>
+                <th className="pb-1 font-semibold w-16">Un</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pessoaMO.map((i: any, idx: number) => (
+                <tr key={idx} className={`border-b border-slate-50 ${idx % 2 === 0 ? "" : "bg-blue-50/20"}`}>
+                  <td className="py-1 text-slate-700 font-medium">{i.insumoDescricao}</td>
+                  <td className="py-1 text-right text-slate-600 font-mono">
+                    {i.quantidade ? parseFloat(i.quantidade).toFixed(2) : "—"}
+                  </td>
+                  <td className="py-1 text-slate-400 pl-2">{i.unidade ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
+
+      {/* ── MATERIAIS ──────────────────────────────────────────────────────── */}
       {mat.length > 0 && (
         <div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Package className="h-3 w-3 text-amber-600" />
-            <span className="text-[11px] font-semibold text-slate-600">Materiais</span>
+          <div className="flex items-center gap-1.5 mb-2">
+            <Package className="h-3.5 w-3.5 text-amber-600" />
+            <span className="text-xs font-semibold text-amber-700">Materiais</span>
+            <span className="text-[10px] text-slate-400">({mat.length} item{mat.length !== 1 ? "s" : ""})</span>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {mat.slice(0, 15).map((i: any, idx: number) => (
-              <span key={idx} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full">
-                {i.insumoDescricao}{i.quantidade ? ` — ${parseFloat(i.quantidade).toFixed(0)} ${i.unidade ?? ""}` : ""}
-              </span>
-            ))}
-          </div>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="text-left text-[10px] text-slate-500 border-b border-slate-100">
+                <th className="pb-1 font-semibold">Descrição</th>
+                <th className="pb-1 font-semibold text-right w-24">Quantidade</th>
+                <th className="pb-1 font-semibold w-16">Un</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mat.map((i: any, idx: number) => (
+                <tr key={idx} className={`border-b border-slate-50 ${idx % 2 === 0 ? "" : "bg-amber-50/20"}`}>
+                  <td className="py-1 text-slate-700">{i.insumoDescricao}</td>
+                  <td className="py-1 text-right text-slate-600 font-mono">
+                    {i.quantidade ? parseFloat(i.quantidade).toFixed(2) : "—"}
+                  </td>
+                  <td className="py-1 text-slate-400 pl-2">{i.unidade ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-      {itensAtivos.length > 0 && !mo.length && !mat.length && (
+
+      {/* ── EQUIPAMENTOS ───────────────────────────────────────────────────── */}
+      {(equipOrc.length > 0 || !temAlmoxCadastrado) && (
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <Truck className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="text-xs font-semibold text-emerald-700">Equipamentos</span>
+            {!temAlmoxCadastrado && (
+              <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                <Info className="h-2.5 w-2.5" /> Cadastre equipamentos no Almoxarifado para ver disponibilidade
+              </span>
+            )}
+          </div>
+          {equipOrc.length > 0 ? (
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="text-left text-[10px] text-slate-500 border-b border-slate-100">
+                  <th className="pb-1 font-semibold">Equipamento</th>
+                  <th className="pb-1 font-semibold text-right w-24">Qtd</th>
+                  <th className="pb-1 font-semibold w-16">Un</th>
+                  <th className="pb-1 font-semibold w-28 text-center">Disponível</th>
+                </tr>
+              </thead>
+              <tbody>
+                {equipOrc.map((i: any, idx: number) => {
+                  const { almox, patrim } = cruzarComAlmox(i.insumoDescricao ?? "", equipDisponiveis);
+                  const dispAlmox  = almox ? almox.disponivel : null;
+                  const dispPatrim = patrim ? patrim.disponivel : null;
+                  const temCadastro = almox !== null || patrim !== null;
+                  return (
+                    <tr key={idx} className={`border-b border-slate-50 ${idx % 2 === 0 ? "" : "bg-emerald-50/20"}`}>
+                      <td className="py-1 text-slate-700 font-medium">{i.insumoDescricao}</td>
+                      <td className="py-1 text-right text-slate-600 font-mono">
+                        {i.quantidade ? parseFloat(i.quantidade).toFixed(2) : "—"}
+                      </td>
+                      <td className="py-1 text-slate-400 pl-2">{i.unidade ?? "—"}</td>
+                      <td className="py-1 text-center">
+                        {!temCadastro ? (
+                          <span className="text-[10px] text-slate-400 italic">não cadastrado</span>
+                        ) : (dispAlmox || dispPatrim) ? (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                            <CheckCircle className="h-2.5 w-2.5" />
+                            {almox ? `${almox.qtdDisponivel} ${almox.unidade}` : patrim?.local || "Sim"}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
+                            <XCircle className="h-2.5 w-2.5" /> Indisponível
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-[11px] text-slate-400 italic">
+              Nenhum equipamento identificado no orçamento para estas atividades. Caso haja concretagem, andaimes ou máquinas — cadastre-os no Almoxarifado para rastrear disponibilidade.
+            </p>
+          )}
+          {/* Patrimônio disponível na empresa */}
+          {temAlmoxCadastrado && (
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                <Hammer className="h-2.5 w-2.5" /> Patrimônio cadastrado na empresa
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(equipDisponiveis?.patrimonio ?? []).map((p: any, i: number) => (
+                  <span
+                    key={i}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                      p.disponivel
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-100 text-slate-500 border-slate-200"
+                    }`}
+                  >
+                    {p.nome}{p.local ? ` · ${p.local}` : ""}
+                    {p.disponivel ? " ✓" : " (indisponível)"}
+                  </span>
+                ))}
+                {(equipDisponiveis?.almoxarifado ?? []).map((a: any, i: number) => (
+                  <span
+                    key={`alm-${i}`}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                      a.disponivel
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                        : "bg-slate-100 text-slate-500 border-slate-200"
+                    }`}
+                  >
+                    {a.nome} — {a.qtdDisponivel} {a.unidade}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fallback: sem MO, MAT nem EQUIP → mostra composições */}
+      {itensAtivos.length > 0 && !pessoaMO.length && !mat.length && !equipOrc.length && (
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <Wrench className="h-3 w-3 text-slate-500" />
@@ -621,7 +825,7 @@ function AlertasBlock({ alertas, semanas }: { alertas: any; semanas: Week[] }) {
 
 function RelatorioTresSemanas({
   proximas3, avancosMap, today, nomeProjeto, nomeCliente,
-  recursos, alertas, loadIA, iaErro, onGerarAlertas,
+  recursos, equipDisponiveis, alertas, loadIA, iaErro, onGerarAlertas,
 }: {
   proximas3: { semana: Week; atividades: any[] }[];
   avancosMap: Record<number, number>;
@@ -629,6 +833,7 @@ function RelatorioTresSemanas({
   nomeProjeto: string;
   nomeCliente: string;
   recursos: any;
+  equipDisponiveis?: any;
   alertas: any;
   loadIA: boolean;
   iaErro: string | null;
@@ -700,7 +905,12 @@ function RelatorioTresSemanas({
             const itensEap = (recursos?.itens ?? []).filter((it: any) => at.some((a: any) => a.eapCodigo === it.eapCodigo));
             const servs    = new Set(itensEap.map((it: any) => it.servicoCodigo).filter(Boolean));
             const insEap   = (recursos?.insumos ?? []).filter((ins: any) => servs.has(ins.composicaoCodigo));
-            const moEap    = insEap.filter((i: any) => parseFloat(i.alocacaoMdo ?? "0") > 0);
+            const pessoasEap: any[] = [];
+            const equipEap:   any[] = [];
+            insEap.filter((i: any) => parseFloat(i.alocacaoMdo ?? "0") > 0).forEach((i: any) => {
+              if (isEquipOrcamento(i.insumoDescricao ?? "")) equipEap.push(i);
+              else pessoasEap.push(i);
+            });
             const matEap   = insEap.filter((i: any) => parseFloat(i.alocacaoMat ?? "0") > 0 && parseFloat(i.alocacaoMdo ?? "0") === 0);
             const atrasadas = at.filter((a: any) => a.dataFim && a.dataFim < today && (avancosMap[a.id] ?? 0) < 100).length;
 
@@ -754,15 +964,15 @@ function RelatorioTresSemanas({
                 </div>
 
                 {/* Recursos da semana */}
-                {(moEap.length > 0 || matEap.length > 0 || itensEap.length > 0) && (
+                {(pessoasEap.length > 0 || matEap.length > 0 || equipEap.length > 0 || itensEap.length > 0) && (
                   <div className="px-3 pb-3 pt-2 border-t border-slate-100 space-y-1.5">
                     <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
                       <Package className="h-2.5 w-2.5" /> Recursos necessários
                     </p>
-                    {moEap.length > 0 && (
+                    {pessoasEap.length > 0 && (
                       <div>
-                        <p className="text-[10px] text-blue-600 font-medium flex items-center gap-0.5"><Users className="h-2.5 w-2.5" /> Mão de obra</p>
-                        {moEap.slice(0, 4).map((i: any, idx: number) => (
+                        <p className="text-[10px] text-blue-600 font-medium flex items-center gap-0.5"><HardHat className="h-2.5 w-2.5" /> Mão de obra</p>
+                        {pessoasEap.slice(0, 4).map((i: any, idx: number) => (
                           <p key={idx} className="text-[10px] text-slate-600 pl-3">• {i.insumoDescricao}</p>
                         ))}
                       </div>
@@ -775,7 +985,26 @@ function RelatorioTresSemanas({
                         ))}
                       </div>
                     )}
-                    {!moEap.length && !matEap.length && itensEap.length > 0 && (
+                    {equipEap.length > 0 && (
+                      <div>
+                        <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-0.5"><Truck className="h-2.5 w-2.5" /> Equipamentos</p>
+                        {equipEap.slice(0, 4).map((i: any, idx: number) => {
+                          const { almox, patrim } = cruzarComAlmox(i.insumoDescricao ?? "", equipDisponiveis);
+                          const disp = almox?.disponivel || patrim?.disponivel;
+                          return (
+                            <p key={idx} className="text-[10px] text-slate-600 pl-3 flex items-center gap-1">
+                              • {i.insumoDescricao}
+                              {(almox || patrim) && (
+                                <span className={`text-[9px] font-bold ${disp ? "text-emerald-600" : "text-red-500"}`}>
+                                  {disp ? "✓" : "✗"}
+                                </span>
+                              )}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {!pessoasEap.length && !matEap.length && !equipEap.length && itensEap.length > 0 && (
                       <div>
                         {itensEap.slice(0, 4).map((it: any, idx: number) => (
                           <p key={idx} className="text-[10px] text-slate-600">• {it.descricao}</p>
