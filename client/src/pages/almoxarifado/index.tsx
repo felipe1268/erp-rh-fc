@@ -1479,7 +1479,10 @@ export default function AlmoxarifadoPage() {
       {modalFecharDia && (
         <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ background: "#ffffff", color: "#111827" }}>
           <div className="flex items-center justify-between p-4 border-b">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><ClipboardCheck className="w-5 h-5 text-gray-700" /> Fechar Dia — Devoluções</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setModalFecharDia(false)} className="p-1 rounded hover:bg-gray-100"><ChevronLeft className="w-6 h-6 text-gray-500" /></button>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><ClipboardCheck className="w-5 h-5 text-gray-700" /> Fechar Dia — Devoluções</h2>
+            </div>
             <button onClick={() => setModalFecharDia(false)}><X className="w-7 h-7 text-gray-400" /></button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
