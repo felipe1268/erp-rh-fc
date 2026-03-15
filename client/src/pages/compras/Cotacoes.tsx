@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ const calcTotal = (it: ItemForm) => {
 export default function Cotacoes() {
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0");
+  const navigate = useNavigate();
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
@@ -69,6 +71,14 @@ export default function Cotacoes() {
   });
   const excluir = trpc.compras.excluirCotacao.useMutation({
     onSuccess: () => { toast.success("Cotação excluída!"); q.refetch(); setShowDetalhe(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const gerarContrato = trpc.terceiroContratos.gerarContratoFromCotacao.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Contrato ${data.numeroContrato} criado!${data.isNova ? " Empresa terceira cadastrada automaticamente." : ""}`);
+      setShowDetalhe(null);
+      navigate(`/terceiros/contratos/${data.contratoId}`);
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -416,6 +426,20 @@ export default function Cotacoes() {
                         <X className="h-3 w-3" /> Recusar
                       </Button>
                     </>
+                  )}
+                  {detalhe.status === "aprovada" && !(detalhe as any).contratoTerceiroId && (
+                    <Button size="sm" onClick={() => gerarContrato.mutate({ cotacaoId: detalhe.id, companyId })}
+                      disabled={gerarContrato.isPending}
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1">
+                      {gerarContrato.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+                      Gerar Contrato de Serviço
+                    </Button>
+                  )}
+                  {detalhe.status === "aprovada" && (detalhe as any).contratoTerceiroId && (
+                    <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalhe as any).contratoTerceiroId}`); }}
+                      className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1">
+                      <FileText className="h-3 w-3" /> Ver Contrato de Serviço
+                    </Button>
                   )}
                   <Button size="sm" variant="outline" onClick={() => excluir.mutate({ id: detalhe.id })}
                     className="border-gray-200 text-gray-500 hover:bg-gray-50 text-xs ml-auto gap-1">

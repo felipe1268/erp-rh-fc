@@ -2871,6 +2871,8 @@ export const empresasTerceiras = pgTable("empresas_terceiras", {
   formaPagamento: text(),
   pixChave: varchar("pix_chave", { length: 255 }),
   pixTipoChave: text(),
+  // Vínculo com cadastro de fornecedor (Compras)
+  fornecedorId: integer("fornecedor_id"),
   // Status
   status: text().default("ativa").notNull(),
   observacoes: text(),
@@ -4758,6 +4760,7 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   status:           varchar({ length: 30 }).notNull().default("pendente"),
   observacoes:      text(),
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
+  contratoTerceiroId: integer("contrato_terceiro_id"),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
