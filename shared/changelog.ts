@@ -1294,6 +1294,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:00:00",
   },
   {
+    version: 347,
+    titulo: "ModuleHub: removidos módulos Assistência Técnica e Documentação de Obra",
+    descricao: "Removidos os cards 'Assistência Técnica' e 'Documentação de Obra' da seção Em Desenvolvimento do ModuleHub. Imports não utilizados (Wrench, FolderOpen) também removidos.",
+    tipo: "melhoria",
+    modulos: "ModuleHub",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 346,
     titulo: "Bugfix: Painel de Compras exibe fornecedores corretamente",
     descricao: "Corrigido bug que mostrava '0 fornecedores ativos' mesmo com 1.173 fornecedores no banco. Causa: getDashboardCompras aceitava um único companyId — quando o usuário estava em modo CONSTRUTORAS, o companyId virava NaN e a query ficava desabilitada. Solução: endpoint alterado para aceitar companyIds: number[] (inArray), useCompany.ts corrigido para exportar getCompanyIdsForQuery corretamente, e Painel.tsx atualizado para usar getCompanyIds() passando o array de IDs.",
