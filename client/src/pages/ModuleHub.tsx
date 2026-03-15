@@ -10,7 +10,7 @@ import {
   ArrowRight, Lock, Building2, LogOut, ChevronDown, LayoutGrid,
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
   Handshake, TrendingUp, Home, Ruler, BookOpen, FileSignature,
-  HardHat, Warehouse, Wrench, FolderOpen, BarChart3,
+  HardHat, Warehouse, BarChart3,
   Settings, FileText, Trash2, GitBranch,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -198,16 +198,6 @@ const MODULES: Module[] = [
     description: "Controle de materiais com foto por produto, entradas e saídas, histórico de movimentações e alertas de estoque mínimo.",
     icon: Warehouse, accentFrom: "#10B981", accentTo: "#059669", accentGlow: "rgba(16,185,129,0.35)", iconBg: "rgba(16,185,129,0.12)", path: "/almoxarifado", active: true,
     features: ["Foto por Produto", "Entradas e Saídas", "Histórico de Movimentações", "Alertas de Estoque Mínimo"],
-  },
-  {
-    id: "assistencia-tecnica", title: "Assistência Técnica", subtitle: "Chamados Técnicos",
-    description: "Chamados técnicos de clientes, vícios construtivos e controle de garantias.",
-    icon: Wrench, accentFrom: "#DC2626", accentTo: "#B91C1C", accentGlow: "", iconBg: "", path: "", active: false, features: [],
-  },
-  {
-    id: "documentacao-obra", title: "Documentação de Obra", subtitle: "GED - Gestão de Documentos",
-    description: "Projetos, ARTs, licenças, alvarás e documentos organizados por obra.",
-    icon: FolderOpen, accentFrom: "#A855F7", accentTo: "#9333EA", accentGlow: "", iconBg: "", path: "", active: false, features: [],
   },
   {
     id: "indicadores-bi", title: "Indicadores / BI", subtitle: "Business Intelligence",
