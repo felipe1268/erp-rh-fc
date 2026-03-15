@@ -53,6 +53,18 @@ const ModuloPJ = lazy(() => import("./pages/ModuloPJ"));
 const ContratoPJView = lazy(() => import("./pages/ContratoPJView"));
 const Revisoes = lazy(() => import("./pages/Revisoes"));
 const SolicitacaoHE = lazy(() => import("./pages/SolicitacaoHE"));
+const FinanceiroDashboard     = lazy(() => import("./pages/financeiro/FinanceiroDashboard"));
+const FinanceiroLancamentos   = lazy(() => import("./pages/financeiro/FinanceiroLancamentos"));
+const FinanceiroReceitas      = lazy(() => import("./pages/financeiro/FinanceiroReceitas"));
+const FinanceiroContasAPagar  = lazy(() => import("./pages/financeiro/FinanceiroContasAPagar"));
+const FinanceiroContasAReceber= lazy(() => import("./pages/financeiro/FinanceiroContasAReceber"));
+const FinanceiroDRE           = lazy(() => import("./pages/financeiro/FinanceiroDRE"));
+const FinanceiroFluxoCaixa    = lazy(() => import("./pages/financeiro/FinanceiroFluxoCaixa"));
+const FinanceiroObrigacoesFiscais = lazy(() => import("./pages/financeiro/FinanceiroObrigacoesFiscais"));
+const FinanceiroPlanoDeConta  = lazy(() => import("./pages/financeiro/FinanceiroPlanoDeConta"));
+const FinanceiroCentrosCusto  = lazy(() => import("./pages/financeiro/FinanceiroCentrosCusto"));
+const FinanceiroConfiguracoes = lazy(() => import("./pages/financeiro/FinanceiroConfiguracoes"));
+const FinanceiroConciliacao   = lazy(() => import("./pages/financeiro/FinanceiroConciliacao"));
 const ApontamentosCampo = lazy(() => import("./pages/ApontamentosCampo"));
 const Feriados = lazy(() => import("./pages/Feriados"));
 const Dissidio = lazy(() => import("./pages/Dissidio"));
@@ -211,6 +223,18 @@ function Router() {
         <Route path={"/contrato-pj/:id"} component={ContratoPJView} />
         <Route path={"/revisoes"} component={Revisoes} />
         <Route path={"/solicitacao-he"} component={SolicitacaoHE} />
+        <Route path="/financeiro" component={FinanceiroDashboard} />
+        <Route path="/financeiro/lancamentos" component={FinanceiroLancamentos} />
+        <Route path="/financeiro/receitas" component={FinanceiroReceitas} />
+        <Route path="/financeiro/contas-a-pagar" component={FinanceiroContasAPagar} />
+        <Route path="/financeiro/contas-a-receber" component={FinanceiroContasAReceber} />
+        <Route path="/financeiro/dre" component={FinanceiroDRE} />
+        <Route path="/financeiro/fluxo-de-caixa" component={FinanceiroFluxoCaixa} />
+        <Route path="/financeiro/obrigacoes-fiscais" component={FinanceiroObrigacoesFiscais} />
+        <Route path="/financeiro/plano-de-contas" component={FinanceiroPlanoDeConta} />
+        <Route path="/financeiro/centros-de-custo" component={FinanceiroCentrosCusto} />
+        <Route path="/financeiro/configuracoes" component={FinanceiroConfiguracoes} />
+        <Route path="/financeiro/conciliacao" component={FinanceiroConciliacao} />
         <Route path={"/apontamentos-campo"} component={ApontamentosCampo} />
         <Route path={"/feriados"} component={Feriados} />
         <Route path={"/dissidio"} component={Dissidio} />

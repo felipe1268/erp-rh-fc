@@ -1,0 +1,330 @@
+import { Pool } from "pg";
+
+const pool = new Pool({
+  connectionString: process.env.NEON_DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+async function run() {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const tables = [
+      `CREATE TABLE IF NOT EXISTS financial_accounts (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        codigo VARCHAR(20) NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        tipo TEXT NOT NULL,
+        natureza TEXT NOT NULL,
+        nivel INTEGER DEFAULT 1 NOT NULL,
+        conta_pai_id INTEGER,
+        classificacao_dre VARCHAR(50),
+        ativo SMALLINT DEFAULT 1 NOT NULL,
+        ordem INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS financial_entries (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        obra_id INTEGER,
+        obra_nome VARCHAR(255),
+        conta_id INTEGER,
+        conta_nome VARCHAR(255),
+        tipo TEXT NOT NULL,
+        natureza TEXT NOT NULL,
+        valor_previsto NUMERIC(15,2) NOT NULL,
+        valor_realizado NUMERIC(15,2),
+        data_competencia DATE NOT NULL,
+        data_vencimento DATE,
+        data_pagamento DATE,
+        status TEXT DEFAULT 'previsto' NOT NULL,
+        conta_bancaria_id INTEGER,
+        origem_modulo VARCHAR(50),
+        origem_id INTEGER,
+        origem_descricao TEXT,
+        parcela_numero INTEGER,
+        parcela_total INTEGER,
+        parcela_grupo_id VARCHAR(36),
+        forma_pagamento TEXT,
+        comprovante_url TEXT,
+        codigo_barras VARCHAR(100),
+        cheque_numero VARCHAR(20),
+        cheque_banco VARCHAR(100),
+        cheque_agencia VARCHAR(20),
+        cheque_conta VARCHAR(30),
+        cheque_titular VARCHAR(255),
+        cheque_data_emissao DATE,
+        cheque_data_bom_para DATE,
+        cheque_status TEXT,
+        cheque_url TEXT,
+        conciliado SMALLINT DEFAULT 0,
+        data_conciliacao DATE,
+        extrato_banco_descricao TEXT,
+        descricao TEXT,
+        observacoes TEXT,
+        motivo_cancelamento TEXT,
+        criado_por_id INTEGER,
+        criado_por_nome VARCHAR(255),
+        aprovado_por_id INTEGER,
+        aprovado_por_nome VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS financial_revenue (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        obra_id INTEGER NOT NULL,
+        obra_nome VARCHAR(255),
+        cliente_nome VARCHAR(255),
+        cliente_cnpj VARCHAR(20),
+        valor_contrato NUMERIC(15,2),
+        valor_aditivos NUMERIC(15,2) DEFAULT 0,
+        valor_contrato_total NUMERIC(15,2),
+        medicao_id INTEGER,
+        medicao_numero INTEGER,
+        percentual_medicao NUMERIC(5,2),
+        valor_medicao NUMERIC(15,2),
+        nf_numero VARCHAR(50),
+        nf_url TEXT,
+        nf_emitida_em DATE,
+        data_vencimento DATE,
+        data_recebimento DATE,
+        valor_recebido NUMERIC(15,2),
+        status TEXT DEFAULT 'a_faturar',
+        forma_pagamento VARCHAR(50),
+        comprovante_url TEXT,
+        retencao_iss NUMERIC(10,2) DEFAULT 0,
+        retencao_inss NUMERIC(10,2) DEFAULT 0,
+        retencao_ir NUMERIC(10,2) DEFAULT 0,
+        retencao_total NUMERIC(10,2) DEFAULT 0,
+        valor_liquido_receber NUMERIC(15,2),
+        observacoes TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS financial_tax_config (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        regime_tributario TEXT NOT NULL,
+        anexo_simples TEXT,
+        aliquota_simples NUMERIC(5,2),
+        aliquota_iss NUMERIC(5,2) DEFAULT 3.00,
+        aliquota_pis NUMERIC(5,2) DEFAULT 0.65,
+        aliquota_cofins NUMERIC(5,2) DEFAULT 3.00,
+        aliquota_irpj NUMERIC(5,2) DEFAULT 15.00,
+        aliquota_csll NUMERIC(5,2) DEFAULT 9.00,
+        aliquota_inss_empresa NUMERIC(5,2) DEFAULT 20.00,
+        aliquota_fgts NUMERIC(5,2) DEFAULT 8.00,
+        aliquota_rat NUMERIC(5,2) DEFAULT 3.00,
+        aliquota_sistema NUMERIC(5,2) DEFAULT 5.80,
+        dia_pagamento_iss INTEGER DEFAULT 10,
+        dia_pagamento_pis INTEGER DEFAULT 25,
+        dia_pagamento_cofins INTEGER DEFAULT 25,
+        dia_pagamento_darf INTEGER DEFAULT 20,
+        dia_pagamento_gps INTEGER DEFAULT 20,
+        dia_pagamento_fgts INTEGER DEFAULT 7,
+        ativo SMALLINT DEFAULT 1 NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS financial_tax_obligations (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        tipo TEXT NOT NULL,
+        mes_competencia VARCHAR(7) NOT NULL,
+        base_calculo NUMERIC(15,2),
+        aliquota NUMERIC(5,2),
+        valor_principal NUMERIC(15,2) NOT NULL,
+        valor_multa NUMERIC(10,2) DEFAULT 0,
+        valor_juros NUMERIC(10,2) DEFAULT 0,
+        valor_total NUMERIC(15,2) NOT NULL,
+        data_vencimento DATE NOT NULL,
+        data_pagamento DATE,
+        codigo_receita VARCHAR(20),
+        codigo_barras VARCHAR(100),
+        guia_url TEXT,
+        status TEXT DEFAULT 'a_pagar',
+        gerada_automaticamente SMALLINT DEFAULT 1,
+        entry_id INTEGER,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS financial_cost_centers (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        codigo VARCHAR(20) NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        tipo TEXT NOT NULL,
+        obra_id INTEGER,
+        responsavel_id INTEGER,
+        responsavel_nome VARCHAR(255),
+        orcamento_mensal NUMERIC(15,2),
+        ativo SMALLINT DEFAULT 1 NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS bank_statement_lines (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        conta_bancaria_id INTEGER NOT NULL,
+        data DATE NOT NULL,
+        descricao TEXT NOT NULL,
+        valor NUMERIC(15,2) NOT NULL,
+        tipo TEXT NOT NULL,
+        saldo_apos NUMERIC(15,2),
+        conciliado SMALLINT DEFAULT 0,
+        entry_id INTEGER,
+        importado_em TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS bank_daily_balance (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        conta_bancaria_id INTEGER NOT NULL,
+        data DATE NOT NULL,
+        saldo NUMERIC(15,2) NOT NULL,
+        fonte TEXT DEFAULT 'manual',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS obra_medicoes (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        obra_id INTEGER NOT NULL,
+        numero INTEGER NOT NULL,
+        data_referencia DATE NOT NULL,
+        percentual_acumulado NUMERIC(5,2),
+        percentual_periodo NUMERIC(5,2),
+        valor_contrato NUMERIC(15,2),
+        valor_medicao NUMERIC(15,2),
+        valor_acumulado NUMERIC(15,2),
+        status TEXT DEFAULT 'rascunho',
+        aprovado_por_id INTEGER,
+        aprovado_em TIMESTAMP,
+        revenue_id INTEGER,
+        observacoes TEXT,
+        itens TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS cash_flow_forecast (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        data DATE NOT NULL,
+        tipo TEXT NOT NULL,
+        categoria VARCHAR(100),
+        descricao TEXT,
+        valor NUMERIC(15,2) NOT NULL,
+        origem_tipo VARCHAR(50),
+        origem_id INTEGER,
+        obra_id INTEGER,
+        saldo_acumulado NUMERIC(15,2),
+        gerado_em TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS dre_cache (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        obra_id INTEGER,
+        periodo VARCHAR(7) NOT NULL,
+        tipo_periodo TEXT NOT NULL,
+        dados TEXT NOT NULL,
+        calculado_em TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS financial_approvals (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        entry_id INTEGER NOT NULL,
+        valor NUMERIC(15,2) NOT NULL,
+        status TEXT DEFAULT 'pendente',
+        aprovador_id INTEGER,
+        aprovador_nome VARCHAR(255),
+        motivo_recusa TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        resolvido_em TIMESTAMP
+      )`,
+      `CREATE TABLE IF NOT EXISTS financial_opening_balances (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        conta_bancaria_id INTEGER,
+        conta_nome VARCHAR(255),
+        data_abertura DATE NOT NULL,
+        valor NUMERIC(15,2) NOT NULL,
+        confirmed_by_user_id INTEGER,
+        confirmed_by_name VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS company_partners (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        cpf VARCHAR(14),
+        cargo VARCHAR(100),
+        percentual_sociedade NUMERIC(5,2),
+        valor_pro_labore NUMERIC(10,2),
+        dia_vencimento INTEGER DEFAULT 5,
+        conta_bancaria_destino_id INTEGER,
+        pix_chave VARCHAR(255),
+        ativo SMALLINT DEFAULT 1 NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS collection_rules (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        nome VARCHAR(255),
+        dias_atraso_1 INTEGER DEFAULT 3,
+        mensagem_1 TEXT,
+        dias_atraso_2 INTEGER DEFAULT 10,
+        mensagem_2 TEXT,
+        dias_atraso_3 INTEGER DEFAULT 30,
+        mensagem_3 TEXT,
+        dias_atraso_4 INTEGER DEFAULT 60,
+        mensagem_4 TEXT,
+        enviar_email SMALLINT DEFAULT 1,
+        ativo SMALLINT DEFAULT 1 NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS collection_log (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        revenue_id INTEGER,
+        obra_id INTEGER,
+        cliente_nome VARCHAR(255),
+        valor_devido NUMERIC(15,2),
+        dias_atraso INTEGER,
+        etapa INTEGER,
+        mensagem_enviada TEXT,
+        canais_enviados VARCHAR(100),
+        enviado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+        status TEXT DEFAULT 'enviado'
+      )`,
+      `CREATE TABLE IF NOT EXISTS financial_budget (
+        id SERIAL NOT NULL,
+        company_id INTEGER NOT NULL,
+        ano INTEGER NOT NULL,
+        mes INTEGER NOT NULL,
+        conta_id INTEGER,
+        obra_id INTEGER,
+        valor_orcado NUMERIC(15,2) NOT NULL,
+        observacoes TEXT,
+        criado_por_id INTEGER,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )`,
+    ];
+
+    for (const sql of tables) {
+      await client.query(sql);
+      const match = sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/);
+      if (match) console.log(`✓ ${match[1]}`);
+    }
+
+    await client.query("COMMIT");
+    console.log("\n✅ 17 tabelas financeiras criadas com sucesso!");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("❌ Erro:", e);
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+run();

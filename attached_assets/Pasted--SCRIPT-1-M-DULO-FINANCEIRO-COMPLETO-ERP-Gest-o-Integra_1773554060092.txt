@@ -1,0 +1,1100 @@
+# 💰 SCRIPT 1 — MÓDULO FINANCEIRO COMPLETO
+# ERP Gestão Integrada — FC Engenharia
+# Execute ESTE script PRIMEIRO, antes do módulo de Compras
+
+---
+
+## ⚠️ REGRAS GERAIS — NUNCA VIOLAR
+
+1. Nunca apagar lançamento — apenas CANCELAR com motivo
+2. Valores SEMPRE como DECIMAL(15,2) — nunca VARCHAR
+3. Usar `createAuditLog` em TODA ação financeira
+4. Não alterar tabelas existentes — apenas adicionar novas
+5. Confirmar cada passo antes de avançar
+6. Rodar `pnpm db:push` após cada grupo de tabelas
+
+---
+
+## PASSO 1 — BANCO DE DADOS
+
+Adicionar NO FINAL de `drizzle/schema.ts` (antes do último export):
+
+```typescript
+// ============================================================
+// MÓDULO FINANCEIRO COMPLETO — FC Engenharia
+// ============================================================
+
+// 1. Plano de Contas
+export const financialAccounts = mysqlTable("financial_accounts", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  codigo: varchar({ length: 20 }).notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  tipo: mysqlEnum([
+    'receita_bruta','deducao_receita','custo_obra',
+    'despesa_fixa','despesa_variavel','despesa_financeira',
+    'receita_financeira','imposto_resultado'
+  ]).notNull(),
+  natureza: mysqlEnum(['devedora','credora']).notNull(),
+  nivel: int().default(1).notNull(),
+  contaPaiId: int("conta_pai_id"),
+  classificacaoDRE: varchar("classificacao_dre", { length: 50 }),
+  ativo: tinyint().default(1).notNull(),
+  ordem: int().default(0),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_fa_company").on(t.companyId)]);
+
+// 2. Lançamentos (coração do sistema)
+export const financialEntries = mysqlTable("financial_entries", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  obraId: int("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  contaId: int("conta_id").notNull(),
+  contaNome: varchar("conta_nome", { length: 255 }),
+  tipo: mysqlEnum(['receita','despesa','transferencia','imposto','provisao']).notNull(),
+  natureza: mysqlEnum(['fixo','variavel']).notNull(),
+  valorPrevisto: decimal("valor_previsto", { precision: 15, scale: 2 }).notNull(),
+  valorRealizado: decimal("valor_realizado", { precision: 15, scale: 2 }),
+  dataCompetencia: date("data_competencia", { mode: 'string' }).notNull(),
+  dataVencimento: date("data_vencimento", { mode: 'string' }),
+  dataPagamento: date("data_pagamento", { mode: 'string' }),
+  status: mysqlEnum([
+    'previsto','a_pagar','a_receber','pago','recebido','cancelado','provisionado'
+  ]).default('previsto').notNull(),
+  contaBancariaId: int("conta_bancaria_id"),
+  origemModulo: varchar("origem_modulo", { length: 50 }),
+  origemId: int("origem_id"),
+  origemDescricao: text("origem_descricao"),
+  parcelaNumero: int("parcela_numero"),
+  parcelaTotal: int("parcela_total"),
+  parcelaGrupoId: varchar("parcela_grupo_id", { length: 36 }),
+  formaPagamento: mysqlEnum("forma_pagamento", [
+    'pix','ted','boleto','cheque','dinheiro','cartao_credito','cartao_debito','debito_automatico'
+  ]),
+  comprovanteUrl: text("comprovante_url"),
+  codigoBarras: varchar("codigo_barras", { length: 100 }),
+  // Cheque
+  chequeNumero: varchar("cheque_numero", { length: 20 }),
+  chequeBanco: varchar("cheque_banco", { length: 100 }),
+  chequeAgencia: varchar("cheque_agencia", { length: 20 }),
+  chequeConta: varchar("cheque_conta", { length: 30 }),
+  chequeTitular: varchar("cheque_titular", { length: 255 }),
+  chequeDataEmissao: date("cheque_data_emissao", { mode: 'string' }),
+  chequeDataBomPara: date("cheque_data_bom_para", { mode: 'string' }),
+  chequeStatus: mysqlEnum("cheque_status", ['emitido','compensado','devolvido','cancelado']),
+  chequeUrl: text("cheque_url"),
+  // Conciliação
+  conciliado: tinyint().default(0),
+  dataConciliacao: date("data_conciliacao", { mode: 'string' }),
+  extratoBancoDescricao: text("extrato_banco_descricao"),
+  descricao: text(),
+  observacoes: text(),
+  criadoPorId: int("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  aprovadoPorId: int("aprovado_por_id"),
+  aprovadoPorNome: varchar("aprovado_por_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_fe_company").on(t.companyId),
+  index("idx_fe_obra").on(t.obraId),
+  index("idx_fe_competencia").on(t.dataCompetencia),
+  index("idx_fe_vencimento").on(t.dataVencimento),
+  index("idx_fe_status").on(t.status),
+  index("idx_fe_origem").on(t.origemModulo, t.origemId),
+]);
+
+// 3. Receitas de obras (medições → faturamento)
+export const financialRevenue = mysqlTable("financial_revenue", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  obraId: int("obra_id").notNull(),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  clienteNome: varchar("cliente_nome", { length: 255 }),
+  clienteCnpj: varchar("cliente_cnpj", { length: 20 }),
+  valorContrato: decimal("valor_contrato", { precision: 15, scale: 2 }),
+  valorAditivos: decimal("valor_aditivos", { precision: 15, scale: 2 }).default("0"),
+  valorContratoTotal: decimal("valor_contrato_total", { precision: 15, scale: 2 }),
+  medicaoId: int("medicao_id"),
+  medicaoNumero: int("medicao_numero"),
+  percentualMedicao: decimal("percentual_medicao", { precision: 5, scale: 2 }),
+  valorMedicao: decimal("valor_medicao", { precision: 15, scale: 2 }),
+  nfNumero: varchar("nf_numero", { length: 50 }),
+  nfUrl: text("nf_url"),
+  nfEmitidaEm: date("nf_emitida_em", { mode: 'string' }),
+  dataVencimento: date("data_vencimento", { mode: 'string' }),
+  dataRecebimento: date("data_recebimento", { mode: 'string' }),
+  valorRecebido: decimal("valor_recebido", { precision: 15, scale: 2 }),
+  status: mysqlEnum([
+    'a_faturar','faturado','a_receber','recebido_parcial','recebido_total','cancelado'
+  ]).default('a_faturar'),
+  formaPagamento: varchar("forma_pagamento", { length: 50 }),
+  comprovanteUrl: text("comprovante_url"),
+  retencaoISS: decimal("retencao_iss", { precision: 10, scale: 2 }).default("0"),
+  retencaoINSS: decimal("retencao_inss", { precision: 10, scale: 2 }).default("0"),
+  retencaoIR: decimal("retencao_ir", { precision: 10, scale: 2 }).default("0"),
+  retencaoTotal: decimal("retencao_total", { precision: 10, scale: 2 }).default("0"),
+  valorLiquidoReceber: decimal("valor_liquido_receber", { precision: 15, scale: 2 }),
+  observacoes: text(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_fr_company").on(t.companyId),
+  index("idx_fr_obra").on(t.obraId),
+  index("idx_fr_status").on(t.status),
+]);
+
+// 4. Configuração tributária
+export const financialTaxConfig = mysqlTable("financial_tax_config", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  regimeTributario: mysqlEnum(['simples_nacional','lucro_presumido','lucro_real','mei']).notNull(),
+  anexoSimples: mysqlEnum(['I','II','III','IV','V']),
+  aliquotaSimples: decimal("aliquota_simples", { precision: 5, scale: 2 }),
+  aliquotaISS: decimal("aliquota_iss", { precision: 5, scale: 2 }).default("3.00"),
+  aliquotaPIS: decimal("aliquota_pis", { precision: 5, scale: 2 }).default("0.65"),
+  aliquotaCOFINS: decimal("aliquota_cofins", { precision: 5, scale: 2 }).default("3.00"),
+  aliquotaIRPJ: decimal("aliquota_irpj", { precision: 5, scale: 2 }).default("15.00"),
+  aliquotaCSLL: decimal("aliquota_csll", { precision: 5, scale: 2 }).default("9.00"),
+  aliquotaINSSEmpresa: decimal("aliquota_inss_empresa", { precision: 5, scale: 2 }).default("20.00"),
+  aliquotaFGTS: decimal("aliquota_fgts", { precision: 5, scale: 2 }).default("8.00"),
+  aliquotaRAT: decimal("aliquota_rat", { precision: 5, scale: 2 }).default("3.00"),
+  aliquotaSistema: decimal("aliquota_sistema", { precision: 5, scale: 2 }).default("5.80"),
+  diaPagamentoISS: int("dia_pagamento_iss").default(10),
+  diaPagamentoPIS: int("dia_pagamento_pis").default(25),
+  diaPagamentoCOFINS: int("dia_pagamento_cofins").default(25),
+  diaPagamentoDARF: int("dia_pagamento_darf").default(20),
+  diaPagamentoGPS: int("dia_pagamento_gps").default(20),
+  diaPagamentoFGTS: int("dia_pagamento_fgts").default(7),
+  ativo: tinyint().default(1).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_ftc_company").on(t.companyId)]);
+
+// 5. Obrigações fiscais (guias)
+export const financialTaxObligations = mysqlTable("financial_tax_obligations", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  tipo: mysqlEnum([
+    'das_simples','darf_irpj','darf_csll','darf_pis','darf_cofins',
+    'gps_inss','guia_fgts','iss','icms'
+  ]).notNull(),
+  mesCompetencia: varchar("mes_competencia", { length: 7 }).notNull(),
+  baseCalculo: decimal("base_calculo", { precision: 15, scale: 2 }),
+  aliquota: decimal({ precision: 5, scale: 2 }),
+  valorPrincipal: decimal("valor_principal", { precision: 15, scale: 2 }).notNull(),
+  valorMulta: decimal("valor_multa", { precision: 10, scale: 2 }).default("0"),
+  valorJuros: decimal("valor_juros", { precision: 10, scale: 2 }).default("0"),
+  valorTotal: decimal("valor_total", { precision: 15, scale: 2 }).notNull(),
+  dataVencimento: date("data_vencimento", { mode: 'string' }).notNull(),
+  dataPagamento: date("data_pagamento", { mode: 'string' }),
+  codigoReceita: varchar("codigo_receita", { length: 20 }),
+  codigoBarras: varchar("codigo_barras", { length: 100 }),
+  guiaUrl: text("guia_url"),
+  status: mysqlEnum(['a_pagar','pago','atrasado','cancelado']).default('a_pagar'),
+  geradaAutomaticamente: tinyint("gerada_automaticamente").default(1),
+  entryId: int("entry_id"),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [
+  index("idx_fto_company").on(t.companyId),
+  index("idx_fto_competencia").on(t.mesCompetencia),
+  index("idx_fto_vencimento").on(t.dataVencimento),
+]);
+
+// 6. Centros de custo
+export const financialCostCenters = mysqlTable("financial_cost_centers", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  codigo: varchar({ length: 20 }).notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  tipo: mysqlEnum(['obra','administrativo','comercial','financeiro']).notNull(),
+  obraId: int("obra_id"),
+  responsavelId: int("responsavel_id"),
+  responsavelNome: varchar("responsavel_nome", { length: 255 }),
+  orcamentoMensal: decimal("orcamento_mensal", { precision: 15, scale: 2 }),
+  ativo: tinyint().default(1).notNull(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_fcc_company").on(t.companyId)]);
+
+// 7. Extrato bancário (conciliação)
+export const bankStatementLines = mysqlTable("bank_statement_lines", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  contaBancariaId: int("conta_bancaria_id").notNull(),
+  data: date({ mode: 'string' }).notNull(),
+  descricao: text().notNull(),
+  valor: decimal({ precision: 15, scale: 2 }).notNull(),
+  tipo: mysqlEnum(['credito','debito']).notNull(),
+  saldoApos: decimal("saldo_apos", { precision: 15, scale: 2 }),
+  conciliado: tinyint().default(0),
+  entryId: int("entry_id"),
+  importadoEm: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [
+  index("idx_bsl_company").on(t.companyId),
+  index("idx_bsl_conta").on(t.contaBancariaId),
+  index("idx_bsl_data").on(t.data),
+]);
+
+// 8. Saldo bancário diário
+export const bankDailyBalance = mysqlTable("bank_daily_balance", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  contaBancariaId: int("conta_bancaria_id").notNull(),
+  data: date({ mode: 'string' }).notNull(),
+  saldo: decimal({ precision: 15, scale: 2 }).notNull(),
+  fonte: mysqlEnum(['manual','ofx','api_banco']).default('manual'),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_bdb_company_data").on(t.companyId, t.data)]);
+
+// 9. Medições de obra
+export const obraMedicoes = mysqlTable("obra_medicoes", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  obraId: int("obra_id").notNull(),
+  numero: int().notNull(),
+  dataReferencia: date("data_referencia", { mode: 'string' }).notNull(),
+  percentualAcumulado: decimal("percentual_acumulado", { precision: 5, scale: 2 }),
+  percentualPeriodo: decimal("percentual_periodo", { precision: 5, scale: 2 }),
+  valorContrato: decimal("valor_contrato", { precision: 15, scale: 2 }),
+  valorMedicao: decimal("valor_medicao", { precision: 15, scale: 2 }),
+  valorAcumulado: decimal("valor_acumulado", { precision: 15, scale: 2 }),
+  status: mysqlEnum(['rascunho','submetida','aprovada','faturada']).default('rascunho'),
+  aprovadoPorId: int("aprovado_por_id"),
+  aprovadoEm: timestamp({ mode: 'string' }),
+  revenueId: int("revenue_id"),
+  observacoes: text(),
+  itens: text(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_om_company").on(t.companyId),
+  index("idx_om_obra").on(t.obraId),
+]);
+
+// 10. Previsão de caixa
+export const cashFlowForecast = mysqlTable("cash_flow_forecast", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  data: date({ mode: 'string' }).notNull(),
+  tipo: mysqlEnum(['entrada_prevista','saida_prevista','entrada_realizada','saida_realizada']).notNull(),
+  categoria: varchar({ length: 100 }),
+  descricao: text(),
+  valor: decimal({ precision: 15, scale: 2 }).notNull(),
+  origemTipo: varchar("origem_tipo", { length: 50 }),
+  origemId: int("origem_id"),
+  obraId: int("obra_id"),
+  saldoAcumulado: decimal("saldo_acumulado", { precision: 15, scale: 2 }),
+  geradoEm: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_cff_company_data").on(t.companyId, t.data)]);
+
+// 11. DRE cache
+export const dreCache = mysqlTable("dre_cache", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  obraId: int("obra_id"),
+  periodo: varchar({ length: 7 }).notNull(),
+  tipoPeriodo: mysqlEnum(['mensal','trimestral','anual']).notNull(),
+  dados: text().notNull(),
+  calculadoEm: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_dc_company_periodo").on(t.companyId, t.periodo)]);
+
+// 12. Aprovações financeiras (anti-fraude)
+export const financialApprovals = mysqlTable("financial_approvals", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  entryId: int("entry_id").notNull(),
+  valor: decimal({ precision: 15, scale: 2 }).notNull(),
+  status: mysqlEnum(['pendente','aprovado','recusado']).default('pendente'),
+  aprovadorId: int("aprovador_id"),
+  aprovadorNome: varchar("aprovador_nome", { length: 255 }),
+  motivoRecusa: text("motivo_recusa"),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  resolvidoEm: timestamp({ mode: 'string' }),
+}, (t) => [index("idx_fap_company").on(t.companyId)]);
+
+// 13. Saldo de abertura dos bancos (configuração inicial)
+export const financialOpeningBalances = mysqlTable("financial_opening_balances", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  contaBancariaId: int("conta_bancaria_id"),
+  contaNome: varchar("conta_nome", { length: 255 }),
+  dataAbertura: date("data_abertura", { mode: 'string' }).notNull(),
+  valor: decimal({ precision: 15, scale: 2 }).notNull(),
+  confirmedByUserId: int("confirmed_by_user_id"),
+  confirmedByName: varchar("confirmed_by_name", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_fob_company").on(t.companyId)]);
+
+// 14. Sócios e pró-labore
+export const companyPartners = mysqlTable("company_partners", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  cpf: varchar({ length: 14 }),
+  cargo: varchar({ length: 100 }),
+  percentualSociedade: decimal("percentual_sociedade", { precision: 5, scale: 2 }),
+  valorProLabore: decimal("valor_pro_labore", { precision: 10, scale: 2 }),
+  diaVencimento: int("dia_vencimento").default(5),
+  contaBancariaDestinoId: int("conta_bancaria_destino_id"),
+  pixChave: varchar("pix_chave", { length: 255 }),
+  ativo: tinyint().default(1).notNull(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_cp_company").on(t.companyId)]);
+
+// 15. Régua de cobrança
+export const collectionRules = mysqlTable("collection_rules", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  nome: varchar({ length: 255 }),
+  diasAtraso1: int("dias_atraso_1").default(3),
+  mensagem1: text("mensagem_1"),
+  diasAtraso2: int("dias_atraso_2").default(10),
+  mensagem2: text("mensagem_2"),
+  diasAtraso3: int("dias_atraso_3").default(30),
+  mensagem3: text("mensagem_3"),
+  diasAtraso4: int("dias_atraso_4").default(60),
+  mensagem4: text("mensagem_4"),
+  enviarEmail: tinyint("enviar_email").default(1),
+  ativo: tinyint().default(1).notNull(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_cr_company").on(t.companyId)]);
+
+// 16. Log de cobranças enviadas
+export const collectionLog = mysqlTable("collection_log", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  revenueId: int("revenue_id"),
+  obraId: int("obra_id"),
+  clienteNome: varchar("cliente_nome", { length: 255 }),
+  valorDevido: decimal("valor_devido", { precision: 15, scale: 2 }),
+  diasAtraso: int("dias_atraso"),
+  etapa: int(),
+  mensagemEnviada: text("mensagem_enviada"),
+  canaisEnviados: varchar("canais_enviados", { length: 100 }),
+  enviadoEm: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  status: mysqlEnum(['enviado','erro','ignorado']).default('enviado'),
+}, (t) => [index("idx_cl_company").on(t.companyId)]);
+
+// 17. Budget anual
+export const financialBudget = mysqlTable("financial_budget", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  ano: int().notNull(),
+  mes: int().notNull(),
+  contaId: int("conta_id"),
+  obraId: int("obra_id"),
+  valorOrcado: decimal("valor_orcado", { precision: 15, scale: 2 }).notNull(),
+  observacoes: text(),
+  criadoPorId: int("criado_por_id"),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_fb_company_ano").on(t.companyId, t.ano)]);
+```
+
+**Rodar agora:** `pnpm db:push` — confirmar sucesso antes de continuar.
+
+---
+
+## PASSO 2 — PLANO DE CONTAS PADRÃO (seed automático)
+
+Criar `server/services/financialSeedAccounts.ts`:
+
+```typescript
+import { getDb } from "../db";
+import { financialAccounts } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
+
+export const PLANO_CONTAS_PADRAO = [
+  // RECEITAS
+  { codigo: "1", nome: "RECEITAS", tipo: "receita_bruta", natureza: "credora", nivel: 1, ordem: 1 },
+  { codigo: "1.1", nome: "Receita de Obras (Medições)", tipo: "receita_bruta", natureza: "credora", nivel: 2, ordem: 2 },
+  { codigo: "1.2", nome: "Receita de Serviços", tipo: "receita_bruta", natureza: "credora", nivel: 2, ordem: 3 },
+  { codigo: "1.3", nome: "Outras Receitas", tipo: "receita_bruta", natureza: "credora", nivel: 2, ordem: 4 },
+  // DEDUÇÕES
+  { codigo: "2", nome: "DEDUÇÕES DA RECEITA", tipo: "deducao_receita", natureza: "devedora", nivel: 1, ordem: 10 },
+  { codigo: "2.1", nome: "ISS", tipo: "deducao_receita", natureza: "devedora", nivel: 2, ordem: 11 },
+  { codigo: "2.2", nome: "PIS", tipo: "deducao_receita", natureza: "devedora", nivel: 2, ordem: 12 },
+  { codigo: "2.3", nome: "COFINS", tipo: "deducao_receita", natureza: "devedora", nivel: 2, ordem: 13 },
+  { codigo: "2.4", nome: "Retenções de Clientes (INSS/IR)", tipo: "deducao_receita", natureza: "devedora", nivel: 2, ordem: 14 },
+  { codigo: "2.5", nome: "DAS Simples Nacional", tipo: "deducao_receita", natureza: "devedora", nivel: 2, ordem: 15 },
+  // CUSTOS DE OBRA
+  { codigo: "3", nome: "CUSTOS DE OBRA (CPV)", tipo: "custo_obra", natureza: "devedora", nivel: 1, ordem: 20 },
+  { codigo: "3.1", nome: "Mão de Obra CLT", tipo: "custo_obra", natureza: "devedora", nivel: 2, ordem: 21 },
+  { codigo: "3.1.1", nome: "Salários CLT", tipo: "custo_obra", natureza: "devedora", nivel: 3, ordem: 22 },
+  { codigo: "3.1.2", nome: "FGTS", tipo: "custo_obra", natureza: "devedora", nivel: 3, ordem: 23 },
+  { codigo: "3.1.3", nome: "INSS Empresa (20%)", tipo: "custo_obra", natureza: "devedora", nivel: 3, ordem: 24 },
+  { codigo: "3.1.4", nome: "Sistema S (Sesi/Senai/etc)", tipo: "custo_obra", natureza: "devedora", nivel: 3, ordem: 25 },
+  { codigo: "3.1.5", nome: "Benefícios (VR/VT/VA)", tipo: "custo_obra", natureza: "devedora", nivel: 3, ordem: 26 },
+  { codigo: "3.2", nome: "Mão de Obra PJ / Subempreiteiros", tipo: "custo_obra", natureza: "devedora", nivel: 2, ordem: 27 },
+  { codigo: "3.3", nome: "Materiais e Insumos", tipo: "custo_obra", natureza: "devedora", nivel: 2, ordem: 28 },
+  { codigo: "3.3.1", nome: "Materiais de Construção", tipo: "custo_obra", natureza: "devedora", nivel: 3, ordem: 29 },
+  { codigo: "3.3.2", nome: "EPIs e Uniformes", tipo: "custo_obra", natureza: "devedora", nivel: 3, ordem: 30 },
+  { codigo: "3.4", nome: "Equipamentos Alugados", tipo: "custo_obra", natureza: "devedora", nivel: 2, ordem: 31 },
+  { codigo: "3.5", nome: "Transporte de Materiais", tipo: "custo_obra", natureza: "devedora", nivel: 2, ordem: 32 },
+  { codigo: "3.6", nome: "Outros Custos Diretos de Obra", tipo: "custo_obra", natureza: "devedora", nivel: 2, ordem: 33 },
+  // DESPESAS FIXAS
+  { codigo: "4", nome: "DESPESAS FIXAS", tipo: "despesa_fixa", natureza: "devedora", nivel: 1, ordem: 40 },
+  { codigo: "4.1", nome: "Salários Administrativos + Pró-labore", tipo: "despesa_fixa", natureza: "devedora", nivel: 2, ordem: 41 },
+  { codigo: "4.2", nome: "Aluguel de Escritório", tipo: "despesa_fixa", natureza: "devedora", nivel: 2, ordem: 42 },
+  { codigo: "4.3", nome: "Seguros", tipo: "despesa_fixa", natureza: "devedora", nivel: 2, ordem: 43 },
+  { codigo: "4.4", nome: "Software e Assinaturas", tipo: "despesa_fixa", natureza: "devedora", nivel: 2, ordem: 44 },
+  { codigo: "4.5", nome: "Telefone e Internet", tipo: "despesa_fixa", natureza: "devedora", nivel: 2, ordem: 45 },
+  { codigo: "4.6", nome: "Contador / Assessoria Jurídica", tipo: "despesa_fixa", natureza: "devedora", nivel: 2, ordem: 46 },
+  // DESPESAS VARIÁVEIS
+  { codigo: "5", nome: "DESPESAS VARIÁVEIS", tipo: "despesa_variavel", natureza: "devedora", nivel: 1, ordem: 50 },
+  { codigo: "5.1", nome: "Combustível e Transporte", tipo: "despesa_variavel", natureza: "devedora", nivel: 2, ordem: 51 },
+  { codigo: "5.2", nome: "Alimentação e Hospedagem", tipo: "despesa_variavel", natureza: "devedora", nivel: 2, ordem: 52 },
+  { codigo: "5.3", nome: "Comissões e Bonificações", tipo: "despesa_variavel", natureza: "devedora", nivel: 2, ordem: 53 },
+  { codigo: "5.4", nome: "Manutenção de Equipamentos", tipo: "despesa_variavel", natureza: "devedora", nivel: 2, ordem: 54 },
+  { codigo: "5.5", nome: "Convênios (Farmácia/Posto)", tipo: "despesa_variavel", natureza: "devedora", nivel: 2, ordem: 55 },
+  { codigo: "5.6", nome: "Outros Variáveis", tipo: "despesa_variavel", natureza: "devedora", nivel: 2, ordem: 56 },
+  // FINANCEIRO
+  { codigo: "6", nome: "DESPESAS FINANCEIRAS", tipo: "despesa_financeira", natureza: "devedora", nivel: 1, ordem: 60 },
+  { codigo: "6.1", nome: "Juros Bancários", tipo: "despesa_financeira", natureza: "devedora", nivel: 2, ordem: 61 },
+  { codigo: "6.2", nome: "Tarifas Bancárias", tipo: "despesa_financeira", natureza: "devedora", nivel: 2, ordem: 62 },
+  { codigo: "6.3", nome: "IOF", tipo: "despesa_financeira", natureza: "devedora", nivel: 2, ordem: 63 },
+  { codigo: "7", nome: "RECEITAS FINANCEIRAS", tipo: "receita_financeira", natureza: "credora", nivel: 1, ordem: 70 },
+  { codigo: "7.1", nome: "Rendimentos de Aplicação", tipo: "receita_financeira", natureza: "credora", nivel: 2, ordem: 71 },
+  { codigo: "7.2", nome: "Juros Recebidos", tipo: "receita_financeira", natureza: "credora", nivel: 2, ordem: 72 },
+  // IMPOSTOS RESULTADO
+  { codigo: "8", nome: "IMPOSTOS SOBRE RESULTADO", tipo: "imposto_resultado", natureza: "devedora", nivel: 1, ordem: 80 },
+  { codigo: "8.1", nome: "IRPJ", tipo: "imposto_resultado", natureza: "devedora", nivel: 2, ordem: 81 },
+  { codigo: "8.2", nome: "CSLL", tipo: "imposto_resultado", natureza: "devedora", nivel: 2, ordem: 82 },
+];
+
+export async function seedDefaultAccounts(companyId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const existing = await db.select({ id: financialAccounts.id })
+    .from(financialAccounts)
+    .where(eq(financialAccounts.companyId, companyId))
+    .limit(1);
+
+  if (existing.length > 0) {
+    console.log(`[FinancialSeed] Plano de contas já existe para empresa ${companyId}`);
+    return;
+  }
+
+  for (const conta of PLANO_CONTAS_PADRAO) {
+    await db.insert(financialAccounts).values({
+      companyId,
+      ...conta,
+    } as any);
+  }
+  console.log(`[FinancialSeed] Plano de contas criado: ${PLANO_CONTAS_PADRAO.length} contas`);
+}
+```
+
+---
+
+## PASSO 3 — SERVIÇO DE IMPORTAÇÃO AUTOMÁTICA
+
+Criar `server/services/financialAutoImport.ts`:
+
+```typescript
+import { getDb } from "../db";
+import {
+  financialEntries, financialAccounts, financialTaxConfig,
+  financialTaxObligations, payroll, advances, pjPayments,
+  warehouseRentals, lancamentosParceiros, companyPartners,
+} from "../../drizzle/schema";
+import { eq, and, isNull } from "drizzle-orm";
+
+// ── Verificar se lançamento já foi importado
+async function jaImportado(db: any, companyId: number, origemModulo: string, origemId: number): Promise<boolean> {
+  const existing = await db.select({ id: financialEntries.id })
+    .from(financialEntries)
+    .where(and(
+      eq(financialEntries.companyId, companyId),
+      eq(financialEntries.origemModulo, origemModulo),
+      eq(financialEntries.origemId, origemId),
+    )).limit(1);
+  return existing.length > 0;
+}
+
+// ── Buscar ID da conta pelo código
+async function getContaId(db: any, companyId: number, codigo: string): Promise<number | null> {
+  const [conta] = await db.select({ id: financialAccounts.id })
+    .from(financialAccounts)
+    .where(and(eq(financialAccounts.companyId, companyId), eq(financialAccounts.codigo, codigo)))
+    .limit(1);
+  return conta?.id || null;
+}
+
+// ── IMPORTAR FOLHA DE PAGAMENTO
+export async function importFolhaPagamento(companyId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const folhas = await db.select().from(payroll)
+    .where(and(eq(payroll.companyId, companyId)));
+
+  for (const folha of folhas) {
+    if (await jaImportado(db, companyId, 'folha', folha.id)) continue;
+
+    const contaId = await getContaId(db, companyId, '3.1.1');
+    const mesRef = folha.mesReferencia; // YYYY-MM
+    const [ano, mes] = mesRef.split('-');
+    const diaVenc = String(5).padStart(2, '0');
+    const dataVenc = `${ano}-${mes}-${diaVenc}`;
+
+    // Salário líquido
+    await db.insert(financialEntries).values({
+      companyId, obraId: folha.obraId || null,
+      contaId: contaId || null,
+      contaNome: 'Salários CLT',
+      tipo: 'despesa', natureza: 'fixo',
+      valorPrevisto: folha.salarioLiquido || folha.salarioBruto || '0',
+      dataCompetencia: `${mesRef}-01`,
+      dataVencimento: dataVenc,
+      status: 'a_pagar',
+      origemModulo: 'folha', origemId: folha.id,
+      origemDescricao: `Folha ${folha.tipoFolha} — ${mesRef}`,
+    } as any);
+
+    // FGTS (8%)
+    const salBruto = parseFloat(String(folha.salarioBruto) || '0');
+    if (salBruto > 0) {
+      const contaFGTSId = await getContaId(db, companyId, '3.1.2');
+      await db.insert(financialEntries).values({
+        companyId, contaId: contaFGTSId,
+        contaNome: 'FGTS',
+        tipo: 'despesa', natureza: 'fixo',
+        valorPrevisto: String((salBruto * 0.08).toFixed(2)),
+        dataCompetencia: `${mesRef}-01`,
+        dataVencimento: `${ano}-${mes}-07`,
+        status: 'a_pagar',
+        origemModulo: 'folha_fgts', origemId: folha.id,
+        origemDescricao: `FGTS — ${mesRef}`,
+      } as any);
+
+      // INSS empresa (20%)
+      const contaINSSId = await getContaId(db, companyId, '3.1.3');
+      await db.insert(financialEntries).values({
+        companyId, contaId: contaINSSId,
+        contaNome: 'INSS Empresa',
+        tipo: 'despesa', natureza: 'fixo',
+        valorPrevisto: String((salBruto * 0.20).toFixed(2)),
+        dataCompetencia: `${mesRef}-01`,
+        dataVencimento: `${ano}-${mes}-20`,
+        status: 'a_pagar',
+        origemModulo: 'folha_inss', origemId: folha.id,
+        origemDescricao: `INSS Empresa — ${mesRef}`,
+      } as any);
+    }
+  }
+}
+
+// ── IMPORTAR PRÓ-LABORE (mensal automático)
+export async function gerarProLaboreMensal(companyId: number, mesCompetencia: string) {
+  const db = await getDb();
+  if (!db) return;
+
+  const socios = await db.select().from(companyPartners)
+    .where(and(eq(companyPartners.companyId, companyId), eq(companyPartners.ativo, 1)));
+
+  for (const socio of socios) {
+    if (!socio.valorProLabore) continue;
+    if (await jaImportado(db, companyId, 'pro_labore', socio.id)) continue;
+
+    const [ano, mes] = mesCompetencia.split('-');
+    const contaId = await getContaId(db, companyId, '4.1');
+
+    await db.insert(financialEntries).values({
+      companyId, contaId,
+      contaNome: 'Salários Administrativos + Pró-labore',
+      tipo: 'despesa', natureza: 'fixo',
+      valorPrevisto: String(socio.valorProLabore),
+      dataCompetencia: `${mesCompetencia}-01`,
+      dataVencimento: `${ano}-${mes}-${String(socio.diaVencimento || 5).padStart(2,'0')}`,
+      status: 'a_pagar',
+      origemModulo: 'pro_labore', origemId: socio.id,
+      origemDescricao: `Pró-labore — ${socio.nome} — ${mesCompetencia}`,
+    } as any);
+
+    // INSS sobre pró-labore (11% até teto R$7.786,02)
+    const teto = 7786.02;
+    const base = Math.min(parseFloat(String(socio.valorProLabore)), teto);
+    const inss = base * 0.11;
+    const contaINSSId = await getContaId(db, companyId, '3.1.3');
+    await db.insert(financialEntries).values({
+      companyId, contaId: contaINSSId,
+      tipo: 'despesa', natureza: 'fixo',
+      valorPrevisto: String(inss.toFixed(2)),
+      dataCompetencia: `${mesCompetencia}-01`,
+      dataVencimento: `${ano}-${mes}-20`,
+      status: 'a_pagar',
+      origemModulo: 'pro_labore_inss', origemId: socio.id,
+      origemDescricao: `INSS pró-labore — ${socio.nome} — ${mesCompetencia}`,
+    } as any);
+  }
+}
+
+// ── IMPORTAR PAGAMENTOS PJ
+export async function importPagamentosPJ(companyId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const pagamentos = await db.select().from(pjPayments)
+    .where(eq(pjPayments.companyId, companyId));
+
+  for (const pag of pagamentos) {
+    if (await jaImportado(db, companyId, 'pj_payment', pag.id)) continue;
+    const contaId = await getContaId(db, companyId, '3.2');
+
+    await db.insert(financialEntries).values({
+      companyId, contaId,
+      contaNome: 'Mão de Obra PJ / Subempreiteiros',
+      tipo: 'despesa', natureza: 'variavel',
+      valorPrevisto: pag.valor,
+      dataCompetencia: `${pag.mesReferencia}-01`,
+      dataVencimento: pag.dataPagamento || null,
+      status: pag.status === 'pago' ? 'pago' : 'a_pagar',
+      origemModulo: 'pj_payment', origemId: pag.id,
+      origemDescricao: `Pagamento PJ — ${pag.tipo} — ${pag.mesReferencia}`,
+    } as any);
+  }
+}
+
+// ── IMPORTAR ALUGUÉIS DE EQUIPAMENTOS
+export async function importAluguelEquipamentos(companyId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const rentals = await db.select().from(warehouseRentals)
+    .where(and(eq(warehouseRentals.companyId, companyId)));
+
+  for (const rental of rentals) {
+    if (await jaImportado(db, companyId, 'aluguel', rental.id)) continue;
+    if (!rental.valorDiario) continue;
+
+    const contaId = await getContaId(db, companyId, '3.4');
+    const diasNoMes = 30;
+    const custoMensal = parseFloat(String(rental.valorDiario)) * diasNoMes;
+
+    await db.insert(financialEntries).values({
+      companyId, obraId: rental.obraId || null,
+      contaId, contaNome: 'Equipamentos Alugados',
+      tipo: 'despesa', natureza: 'variavel',
+      valorPrevisto: String(custoMensal.toFixed(2)),
+      dataCompetencia: rental.dataInicio,
+      dataVencimento: rental.dataFim,
+      status: 'a_pagar',
+      origemModulo: 'aluguel', origemId: rental.id,
+      origemDescricao: `Aluguel — ${rental.supplierNome} — ${rental.numeroContrato || ''}`,
+    } as any);
+  }
+}
+
+// ── GERAR OBRIGAÇÕES FISCAIS DO MÊS
+export async function generateMonthlyTaxObligations(companyId: number, mesCompetencia: string) {
+  const db = await getDb();
+  if (!db) return;
+
+  const [taxConfig] = await db.select().from(financialTaxConfig)
+    .where(and(eq(financialTaxConfig.companyId, companyId), eq(financialTaxConfig.ativo, 1)))
+    .limit(1);
+
+  if (!taxConfig) return;
+
+  // Calcular receita bruta do mês
+  const receitas = await db.select().from(financialRevenue)
+    .where(and(
+      eq(financialRevenue.companyId, companyId),
+      eq(financialRevenue.status, 'recebido_total'),
+    ));
+
+  const receitaBruta = receitas
+    .filter(r => r.dataRecebimento?.startsWith(mesCompetencia))
+    .reduce((s, r) => s + parseFloat(String(r.valorMedicao) || '0'), 0);
+
+  if (receitaBruta <= 0) return;
+
+  const [ano, mes] = mesCompetencia.split('-');
+
+  const obrigacoes = [];
+
+  if (taxConfig.regimeTributario === 'simples_nacional' && taxConfig.aliquotaSimples) {
+    const aliq = parseFloat(String(taxConfig.aliquotaSimples));
+    obrigacoes.push({
+      tipo: 'das_simples',
+      valor: receitaBruta * (aliq / 100),
+      dataVenc: `${ano}-${mes}-20`,
+    });
+  } else {
+    if (taxConfig.aliquotaPIS) obrigacoes.push({ tipo: 'darf_pis', valor: receitaBruta * (parseFloat(String(taxConfig.aliquotaPIS)) / 100), dataVenc: `${ano}-${mes}-${String(taxConfig.diaPagamentoPIS || 25).padStart(2,'0')}` });
+    if (taxConfig.aliquotaCOFINS) obrigacoes.push({ tipo: 'darf_cofins', valor: receitaBruta * (parseFloat(String(taxConfig.aliquotaCOFINS)) / 100), dataVenc: `${ano}-${mes}-${String(taxConfig.diaPagamentoCOFINS || 25).padStart(2,'0')}` });
+    if (taxConfig.aliquotaISS) obrigacoes.push({ tipo: 'iss', valor: receitaBruta * (parseFloat(String(taxConfig.aliquotaISS)) / 100), dataVenc: `${ano}-${mes}-${String(taxConfig.diaPagamentoISS || 10).padStart(2,'0')}` });
+  }
+
+  for (const ob of obrigacoes) {
+    const existing = await db.select({ id: financialTaxObligations.id })
+      .from(financialTaxObligations)
+      .where(and(
+        eq(financialTaxObligations.companyId, companyId),
+        eq(financialTaxObligations.tipo, ob.tipo as any),
+        eq(financialTaxObligations.mesCompetencia, mesCompetencia),
+      )).limit(1);
+    if (existing.length > 0) continue;
+
+    await db.insert(financialTaxObligations).values({
+      companyId,
+      tipo: ob.tipo as any,
+      mesCompetencia,
+      baseCalculo: String(receitaBruta.toFixed(2)),
+      valorPrincipal: String(ob.valor.toFixed(2)),
+      valorTotal: String(ob.valor.toFixed(2)),
+      dataVencimento: ob.dataVenc,
+      status: 'a_pagar',
+      geradaAutomaticamente: 1,
+    } as any);
+  }
+}
+
+// ── RUNNER PRINCIPAL
+export async function runFinancialAutoImport(companyId: number) {
+  await importFolhaPagamento(companyId);
+  await importPagamentosPJ(companyId);
+  await importAluguelEquipamentos(companyId);
+}
+```
+
+---
+
+## PASSO 4 — JOB AUTOMÁTICO
+
+Criar `server/services/financialAutoImportJob.ts`:
+
+```typescript
+import { getDb } from "../db";
+import { companies } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
+import {
+  runFinancialAutoImport,
+  gerarProLaboreMensal,
+  generateMonthlyTaxObligations,
+} from "./financialAutoImport";
+import { sendEmail } from "./smtpService";
+
+export function startFinancialJobs() {
+
+  // A cada hora: importar lançamentos dos módulos
+  setInterval(async () => {
+    try {
+      const db = await getDb();
+      if (!db) return;
+      const empresas = await db.select({ id: companies.id }).from(companies).where(eq(companies.isActive, 1));
+      for (const emp of empresas) {
+        await runFinancialAutoImport(emp.id);
+      }
+    } catch(e) { console.error('[FinancialJobs] Erro importação:', e); }
+  }, 60 * 60 * 1000);
+
+  // Todo dia às 07:00: checar vencimentos e pró-labore
+  setInterval(async () => {
+    try {
+      const agora = new Date();
+      if (agora.getHours() !== 7) return;
+
+      const db = await getDb();
+      if (!db) return;
+      const empresas = await db.select({ id: companies.id }).from(companies).where(eq(companies.isActive, 1));
+      const mesAtual = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
+
+      // Dia 1: gerar pró-labore e impostos do mês
+      if (agora.getDate() === 1) {
+        for (const emp of empresas) {
+          await gerarProLaboreMensal(emp.id, mesAtual);
+          await generateMonthlyTaxObligations(emp.id, mesAtual);
+        }
+      }
+
+      // Verificar cobrança automática
+      await runCollectionRules();
+
+    } catch(e) { console.error('[FinancialJobs] Erro job diário:', e); }
+  }, 60 * 60 * 1000);
+
+  console.log('[FinancialJobs] Jobs financeiros iniciados');
+}
+
+async function runCollectionRules() {
+  // Implementar: buscar contas a receber vencidas e enviar e-mails conforme régua configurada
+  // Ver detalhamento completo no arquivo PROMPT_REPLIT_FINANCEIRO.md — seção MELHORIA 3
+}
+```
+
+Adicionar em `server/_core/index.ts` (após o `server.listen`):
+```typescript
+import("../services/financialAutoImportJob").then(m => m.startFinancialJobs()).catch(e => console.error("[FinancialJobs] Erro:", e));
+```
+
+---
+
+## PASSO 5 — ROUTER `server/routers/financial.ts`
+
+Criar com os seguintes grupos de endpoints:
+
+### Plano de Contas:
+- `getAccounts(companyId)` → listar hierarquicamente
+- `createAccount(input)` → só ADM
+- `seedDefaultAccounts(companyId)` → popular plano padrão
+
+### Lançamentos:
+- `createEntry(input)` → criar com validação de origem
+- `listEntries(filters)` → com paginação e filtros
+- `payEntry(entryId, data)` → baixar pagamento + comprovante
+- `receiveEntry(entryId, data)` → baixar recebimento
+- `cancelEntry(entryId, motivo)` → nunca apaga, apenas cancela
+- `approveEntry(entryId)` → aprovação dupla anti-fraude
+
+### Saldo de Abertura:
+- `saveOpeningBalance(input)` → salvar saldo inicial dos bancos
+- `getOpeningBalance(companyId)` → verificar se já foi configurado
+- `checkFirstAccess(companyId)` → redirecionar para configuração se necessário
+
+### Sócios e Pró-labore:
+- `listPartners(companyId)`
+- `createPartner(input)` / `updatePartner(input)`
+- `generateProLabore(companyId, mes)` → gerar manualmente se necessário
+
+### Receitas / Medições:
+- `listRevenue(companyId, filters)`
+- `createMedicao(input)`
+- `approveMedicao(medicaoId)` → gera `financialRevenue`
+- `billRevenue(revenueId, nfData)` → emitir NF
+- `receiveRevenue(revenueId, data)` → baixar recebimento
+
+### Impostos:
+- `getTaxConfig(companyId)`
+- `saveTaxConfig(input)` → salvar regime e alíquotas
+- `generateTaxObligations(companyId, mes)` → gerar guias
+- `listTaxObligations(companyId, filters)`
+- `payTaxObligation(id, data)` → baixar pagamento
+
+### Conciliação Bancária:
+- `importBankStatement(companyId, linhas)` → importar OFX/CSV
+- `listUnreconciled(companyId)` → lançamentos sem extrato
+- `reconcileEntry(entryId, statementLineId)` → vincular
+
+### Relatórios:
+- `getFluxoCaixa(companyId, periodo)` → realizado + previsto
+- `getCashFlowForecast(companyId, dias)` → próximos 90 dias
+- `getDRE(companyId, periodo, obraId?)` → DRE completo
+- `getContasReceber(companyId)` → aging
+- `getContasPagar(companyId)` → aging
+- `getBreakEven(companyId, mes)` → ponto de equilíbrio
+- `getPMRPMP(companyId)` → prazos médios
+- `exportForContador(companyId, mes)` → pacote Excel
+
+### Cobrança:
+- `getCollectionRule(companyId)` / `saveCollectionRule(input)`
+- `listPendingCollections(companyId)` → contas em atraso com etapa
+- `sendCollectionManual(revenueId)` → enviar cobrança manualmente
+
+### Budget:
+- `saveBudget(input)` → salvar orçamento por conta/mês
+- `getBudgetVsRealizado(companyId, periodo)` → comparativo
+
+---
+
+## PASSO 6 — REGISTRAR ROUTER
+
+Em `server/routers.ts`:
+```typescript
+import { financialRouter } from "./routers/financial";
+// No appRouter:
+financial: financialRouter,
+```
+
+---
+
+## PASSO 7 — INICIALIZAÇÃO: seed do plano de contas
+
+Em `server/services/initSetup.ts` (já existe), adicionar após criar o admin:
+```typescript
+import { seedDefaultAccounts } from "./financialSeedAccounts";
+
+// Após criar o primeiro usuário admin, criar plano de contas para cada empresa
+const empresas = await db.select({ id: companies.id }).from(companies);
+for (const emp of empresas) {
+  await seedDefaultAccounts(emp.id);
+}
+```
+
+---
+
+## PASSO 8 — PÁGINAS REACT
+
+Criar em `client/src/pages/`:
+
+| Arquivo | Rota | Descrição |
+|---------|------|-----------|
+| `Financeiro.tsx` | `/financeiro` | Dashboard principal com saldo, alertas, resultado do mês |
+| `FinanceiroAbertura.tsx` | `/financeiro/abertura` | Configuração de saldo inicial (1ª vez) |
+| `FinanceiroLancamentos.tsx` | `/financeiro/lancamentos` | Lista completa com filtros e baixa |
+| `FinanceiroContasReceber.tsx` | `/financeiro/contas-receber` | Aging + botão cobrar |
+| `FinanceiroContasPagar.tsx` | `/financeiro/contas-pagar` | Aging + calendário de vencimentos |
+| `FinanceiroFluxoCaixa.tsx` | `/financeiro/fluxo-caixa` | Gráfico realizado + previsto 90 dias |
+| `FinanceiroDRE.tsx` | `/financeiro/dre` | DRE empresa + por obra + budget |
+| `FinanceiroImpostos.tsx` | `/financeiro/impostos` | Guias + status + baixa |
+| `FinanceiroConciliacao.tsx` | `/financeiro/conciliacao` | Upload extrato + vinculação |
+| `FinanceiroMedicoes.tsx` | `/financeiro/medicoes` | Medições por obra → faturamento |
+| `FinanceiroCobranca.tsx` | `/financeiro/cobranca` | Régua de cobrança + histórico |
+| `FinanceiroConfiguracoes.tsx` | `/financeiro/configuracoes` | Regime tributário + alíquotas + sócios + budget |
+
+### Layout do Dashboard `/financeiro`:
+```
+┌──────────────────────────────────────────────────────────────┐
+│  💰 FINANCEIRO — FC Engenharia          Hoje: DD/MM/AAAA    │
+├────────────────┬─────────────────────────────────────────────┤
+│ SALDO BANCOS   │ PREVISÃO 30 DIAS                            │
+│ Itaú: R$87.420 │ Entradas: R$145.000                        │
+│ Bradesco: R$34k │ Saídas:  (R$98.300)                       │
+│ TOTAL: R$121.6k │ Resultado: R$46.700                       │
+├────────────────┴─────────────────────────────────────────────┤
+│ ⚡ URGENTE                                                    │
+│ 🔴 ISS março — vence amanhã — R$3.240                       │
+│ 🔴 Fornecedor ABC — 5 dias atraso — R$12.500                │
+│ 🟡 Medição #4 Hotel Qiu — a faturar — R$89.000              │
+├──────────────────────────────────────────────────────────────┤
+│ ESTE MÊS                          BREAK-EVEN                 │
+│ Receita: R$234k ████████████░ 78% Mín: R$81.143             │
+│ Despesa: R$187k ██████████░░░ 65% Atual: R$234k ✅ 2.9x     │
+│ Resultado: +R$46.600 🟢        PMR: 45d | PMP: 28d          │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## PASSO 9 — ROTAS (client/src/App.tsx)
+
+```typescript
+import Financeiro from "@/pages/Financeiro";
+import FinanceiroAbertura from "@/pages/FinanceiroAbertura";
+import FinanceiroLancamentos from "@/pages/FinanceiroLancamentos";
+import FinanceiroContasReceber from "@/pages/FinanceiroContasReceber";
+import FinanceiroContasPagar from "@/pages/FinanceiroContasPagar";
+import FinanceiroFluxoCaixa from "@/pages/FinanceiroFluxoCaixa";
+import FinanceiroDRE from "@/pages/FinanceiroDRE";
+import FinanceiroImpostos from "@/pages/FinanceiroImpostos";
+import FinanceiroConciliacao from "@/pages/FinanceiroConciliacao";
+import FinanceiroMedicoes from "@/pages/FinanceiroMedicoes";
+import FinanceiroCobranca from "@/pages/FinanceiroCobranca";
+import FinanceiroConfiguracoes from "@/pages/FinanceiroConfiguracoes";
+
+// No Switch:
+<Route path="/financeiro" component={Financeiro} />
+<Route path="/financeiro/abertura" component={FinanceiroAbertura} />
+<Route path="/financeiro/lancamentos" component={FinanceiroLancamentos} />
+<Route path="/financeiro/contas-receber" component={FinanceiroContasReceber} />
+<Route path="/financeiro/contas-pagar" component={FinanceiroContasPagar} />
+<Route path="/financeiro/fluxo-caixa" component={FinanceiroFluxoCaixa} />
+<Route path="/financeiro/dre" component={FinanceiroDRE} />
+<Route path="/financeiro/impostos" component={FinanceiroImpostos} />
+<Route path="/financeiro/conciliacao" component={FinanceiroConciliacao} />
+<Route path="/financeiro/medicoes" component={FinanceiroMedicoes} />
+<Route path="/financeiro/cobranca" component={FinanceiroCobranca} />
+<Route path="/financeiro/configuracoes" component={FinanceiroConfiguracoes} />
+```
+
+---
+
+## PASSO 10 — MENU LATERAL
+
+Em `client/src/components/DashboardLayout.tsx`:
+
+```typescript
+const menuSectionsFinanceiro: MenuSection[] = [
+  {
+    title: "Visão Geral",
+    items: [
+      { label: "Dashboard", path: "/financeiro", icon: LayoutDashboard },
+      { label: "Fluxo de Caixa", path: "/financeiro/fluxo-caixa", icon: TrendingUp },
+      { label: "DRE", path: "/financeiro/dre", icon: BarChart3 },
+    ]
+  },
+  {
+    title: "Movimentações",
+    items: [
+      { label: "Lançamentos", path: "/financeiro/lancamentos", icon: List },
+      { label: "Contas a Receber", path: "/financeiro/contas-receber", icon: ArrowUpCircle },
+      { label: "Contas a Pagar", path: "/financeiro/contas-pagar", icon: ArrowDownCircle },
+      { label: "Medições de Obra", path: "/financeiro/medicoes", icon: Ruler },
+    ]
+  },
+  {
+    title: "Controle",
+    items: [
+      { label: "Impostos e Guias", path: "/financeiro/impostos", icon: FileText },
+      { label: "Conciliação Bancária", path: "/financeiro/conciliacao", icon: Landmark },
+      { label: "Régua de Cobrança", path: "/financeiro/cobranca", icon: Bell },
+      { label: "Configurações", path: "/financeiro/configuracoes", icon: Settings },
+    ]
+  }
+];
+
+// Adicionar no MODULE_SECTIONS:
+"financeiro": menuSectionsFinanceiro,
+
+// No MODULE_HOME_ROUTES:
+"financeiro": "/financeiro",
+
+// No MODULE_THEME:
+"financeiro": { icon: DollarSign, color: "#F59E0B", bg: "#D97706" },
+```
+
+---
+
+## PASSO 11 — ATIVAR NO MODULEHUB
+
+Em `ModuleHub.tsx`, localizar `id: "financeiro"`:
+```typescript
+{
+  id: "financeiro",
+  title: "Financeiro",
+  subtitle: "Gestão Financeira",
+  path: "/financeiro",
+  active: true,  // ← mudar para true
+  features: ["DRE por Obra", "Fluxo de Caixa 90 dias", "Impostos Automáticos", "Anti-Fraude"],
+}
+```
+
+---
+
+## ✅ CHECKLIST FINANCEIRO
+
+- [ ] `pnpm db:push` — 17 tabelas novas criadas sem erro
+- [ ] Plano de contas seed executado automaticamente no primeiro acesso
+- [ ] Dashboard mostra saldo dos bancos
+- [ ] Tela de abertura aparece na primeira vez (saldo inicial)
+- [ ] Folha fechada → lançamento aparece em `a_pagar`
+- [ ] DRE gera corretamente com dados da folha
+- [ ] Imposto gerado automaticamente no dia 1 do mês
+- [ ] Cobrança automática configurada e funcionando
+- [ ] Conciliação: importar OFX e vincular lançamentos
+- [ ] Exportar para contador gera Excel completo
+- [ ] Break-even aparece no dashboard
+- [ ] PMR e PMP calculados corretamente
+
+---
+
+## 💬 MENSAGEM PARA O REPLIT
+
+```
+Implemente o Módulo Financeiro seguindo este script passo a passo.
+
+REGRAS OBRIGATÓRIAS:
+- Nunca apagar lançamento — apenas CANCELAR com motivo
+- Valores sempre DECIMAL(15,2), nunca VARCHAR
+- Usar createAuditLog em TODA ação financeira
+- Confirmar cada passo antes de avançar
+- Rodar pnpm db:push após o Passo 1 e mostrar resultado
+
+PONTO MAIS CRÍTICO: o arquivo financialAutoImport.ts (Passo 3).
+Ele garante que folha, PJ, aluguel e impostos entram automaticamente.
+
+Comece pelo Passo 1 agora.
+```

@@ -1284,4 +1284,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 21:00:00",
   },
+  {
+    version: 342,
+    titulo: "Módulo Financeiro completo",
+    descricao: "Lançamento do Módulo Financeiro com 17 tabelas PostgreSQL, 25+ endpoints tRPC e 12 páginas React: (1) Dashboard financeiro com KPIs de receita, despesa, resultado e inadimplência; (2) Lançamentos com CRUD completo, cancelamento auditado e filtros avançados; (3) Receitas por obra com medições vinculadas; (4) Contas a Pagar com agendamento, vencimento e baixa; (5) Contas a Receber com controle de inadimplência e régua de cobrança; (6) DRE (Demonstração de Resultado) mensal e anual; (7) Fluxo de Caixa projetado vs realizado; (8) Obrigações Fiscais (ISS, INSS, FGTS, IRPJ, CSLL, PIS/COFINS); (9) Plano de Contas com hierarquia e seed automático; (10) Centros de Custo por obra, setor ou projeto; (11) Conciliação Bancária de extratos com lançamentos; (12) Configurações tributárias e cadastro de sócios com pró-labore. Auto-importação mensal de folha CLT, PJ e parceiros. Menu lateral completo e módulo ativo no ModuleHub.",
+    tipo: "feature",
+    modulos: "Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:00:00",
+  },
 ];

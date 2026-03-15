@@ -71,6 +71,13 @@
       "when": 1773551746314,
       "tag": "0009_pale_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1773554245908,
+      "tag": "0010_fat_ogun",
+      "breakpoints": true
     }
   ]
 }

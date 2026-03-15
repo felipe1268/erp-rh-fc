@@ -4819,3 +4819,359 @@ export const warehouseInventorySessionItems = pgTable("warehouse_inventory_sessi
   observacoes:      text(),
   conferidoEm:      timestamp("conferido_em", { mode: "string" }),
 });
+
+// ============================================================
+// MÓDULO FINANCEIRO COMPLETO — FC Engenharia (Rev. 341)
+// ============================================================
+
+// 1. Plano de Contas
+export const financialAccounts = pgTable("financial_accounts", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  codigo: varchar({ length: 20 }).notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  tipo: text().notNull(), // receita_bruta | deducao_receita | custo_obra | despesa_fixa | despesa_variavel | despesa_financeira | receita_financeira | imposto_resultado
+  natureza: text().notNull(), // devedora | credora
+  nivel: integer().default(1).notNull(),
+  contaPaiId: integer("conta_pai_id"),
+  classificacaoDRE: varchar("classificacao_dre", { length: 50 }),
+  ativo: smallint().default(1).notNull(),
+  ordem: integer().default(0),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_fa_company").on(t.companyId)]);
+
+// 2. Lançamentos (coração do sistema)
+export const financialEntries = pgTable("financial_entries", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  contaId: integer("conta_id"),
+  contaNome: varchar("conta_nome", { length: 255 }),
+  tipo: text().notNull(), // receita | despesa | transferencia | imposto | provisao
+  natureza: text().notNull(), // fixo | variavel
+  valorPrevisto: numeric("valor_previsto", { precision: 15, scale: 2 }).notNull(),
+  valorRealizado: numeric("valor_realizado", { precision: 15, scale: 2 }),
+  dataCompetencia: date("data_competencia", { mode: "string" }).notNull(),
+  dataVencimento: date("data_vencimento", { mode: "string" }),
+  dataPagamento: date("data_pagamento", { mode: "string" }),
+  status: text().default("previsto").notNull(), // previsto | a_pagar | a_receber | pago | recebido | cancelado | provisionado
+  contaBancariaId: integer("conta_bancaria_id"),
+  origemModulo: varchar("origem_modulo", { length: 50 }),
+  origemId: integer("origem_id"),
+  origemDescricao: text("origem_descricao"),
+  parcelaNumero: integer("parcela_numero"),
+  parcelaTotal: integer("parcela_total"),
+  parcelaGrupoId: varchar("parcela_grupo_id", { length: 36 }),
+  formaPagamento: text("forma_pagamento"), // pix | ted | boleto | cheque | dinheiro | cartao_credito | cartao_debito | debito_automatico
+  comprovanteUrl: text("comprovante_url"),
+  codigoBarras: varchar("codigo_barras", { length: 100 }),
+  chequeNumero: varchar("cheque_numero", { length: 20 }),
+  chequeBanco: varchar("cheque_banco", { length: 100 }),
+  chequeAgencia: varchar("cheque_agencia", { length: 20 }),
+  chequeConta: varchar("cheque_conta", { length: 30 }),
+  chequeTitular: varchar("cheque_titular", { length: 255 }),
+  chequeDataEmissao: date("cheque_data_emissao", { mode: "string" }),
+  chequeDataBomPara: date("cheque_data_bom_para", { mode: "string" }),
+  chequeStatus: text("cheque_status"), // emitido | compensado | devolvido | cancelado
+  chequeUrl: text("cheque_url"),
+  conciliado: smallint().default(0),
+  dataConciliacao: date("data_conciliacao", { mode: "string" }),
+  extratoBancoDescricao: text("extrato_banco_descricao"),
+  descricao: text(),
+  observacoes: text(),
+  motivoCancelamento: text("motivo_cancelamento"),
+  criadoPorId: integer("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  aprovadoPorId: integer("aprovado_por_id"),
+  aprovadoPorNome: varchar("aprovado_por_nome", { length: 255 }),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_fe_company").on(t.companyId),
+  index("idx_fe_obra").on(t.obraId),
+  index("idx_fe_competencia").on(t.dataCompetencia),
+  index("idx_fe_vencimento").on(t.dataVencimento),
+  index("idx_fe_status").on(t.status),
+]);
+
+// 3. Receitas de obras (medições → faturamento)
+export const financialRevenue = pgTable("financial_revenue", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  obraId: integer("obra_id").notNull(),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  clienteNome: varchar("cliente_nome", { length: 255 }),
+  clienteCnpj: varchar("cliente_cnpj", { length: 20 }),
+  valorContrato: numeric("valor_contrato", { precision: 15, scale: 2 }),
+  valorAditivos: numeric("valor_aditivos", { precision: 15, scale: 2 }).default("0"),
+  valorContratoTotal: numeric("valor_contrato_total", { precision: 15, scale: 2 }),
+  medicaoId: integer("medicao_id"),
+  medicaoNumero: integer("medicao_numero"),
+  percentualMedicao: numeric("percentual_medicao", { precision: 5, scale: 2 }),
+  valorMedicao: numeric("valor_medicao", { precision: 15, scale: 2 }),
+  nfNumero: varchar("nf_numero", { length: 50 }),
+  nfUrl: text("nf_url"),
+  nfEmitidaEm: date("nf_emitida_em", { mode: "string" }),
+  dataVencimento: date("data_vencimento", { mode: "string" }),
+  dataRecebimento: date("data_recebimento", { mode: "string" }),
+  valorRecebido: numeric("valor_recebido", { precision: 15, scale: 2 }),
+  status: text().default("a_faturar"), // a_faturar | faturado | a_receber | recebido_parcial | recebido_total | cancelado
+  formaPagamento: varchar("forma_pagamento", { length: 50 }),
+  comprovanteUrl: text("comprovante_url"),
+  retencaoISS: numeric("retencao_iss", { precision: 10, scale: 2 }).default("0"),
+  retencaoINSS: numeric("retencao_inss", { precision: 10, scale: 2 }).default("0"),
+  retencaoIR: numeric("retencao_ir", { precision: 10, scale: 2 }).default("0"),
+  retencaoTotal: numeric("retencao_total", { precision: 10, scale: 2 }).default("0"),
+  valorLiquidoReceber: numeric("valor_liquido_receber", { precision: 15, scale: 2 }),
+  observacoes: text(),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_fr_company").on(t.companyId),
+  index("idx_fr_obra").on(t.obraId),
+  index("idx_fr_status").on(t.status),
+]);
+
+// 4. Configuração tributária
+export const financialTaxConfig = pgTable("financial_tax_config", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  regimeTributario: text().notNull(), // simples_nacional | lucro_presumido | lucro_real | mei
+  anexoSimples: text("anexo_simples"), // I | II | III | IV | V
+  aliquotaSimples: numeric("aliquota_simples", { precision: 5, scale: 2 }),
+  aliquotaISS: numeric("aliquota_iss", { precision: 5, scale: 2 }).default("3.00"),
+  aliquotaPIS: numeric("aliquota_pis", { precision: 5, scale: 2 }).default("0.65"),
+  aliquotaCOFINS: numeric("aliquota_cofins", { precision: 5, scale: 2 }).default("3.00"),
+  aliquotaIRPJ: numeric("aliquota_irpj", { precision: 5, scale: 2 }).default("15.00"),
+  aliquotaCSLL: numeric("aliquota_csll", { precision: 5, scale: 2 }).default("9.00"),
+  aliquotaINSSEmpresa: numeric("aliquota_inss_empresa", { precision: 5, scale: 2 }).default("20.00"),
+  aliquotaFGTS: numeric("aliquota_fgts", { precision: 5, scale: 2 }).default("8.00"),
+  aliquotaRAT: numeric("aliquota_rat", { precision: 5, scale: 2 }).default("3.00"),
+  aliquotaSistema: numeric("aliquota_sistema", { precision: 5, scale: 2 }).default("5.80"),
+  diaPagamentoISS: integer("dia_pagamento_iss").default(10),
+  diaPagamentoPIS: integer("dia_pagamento_pis").default(25),
+  diaPagamentoCOFINS: integer("dia_pagamento_cofins").default(25),
+  diaPagamentoDARF: integer("dia_pagamento_darf").default(20),
+  diaPagamentoGPS: integer("dia_pagamento_gps").default(20),
+  diaPagamentoFGTS: integer("dia_pagamento_fgts").default(7),
+  ativo: smallint().default(1).notNull(),
+  updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_ftc_company").on(t.companyId)]);
+
+// 5. Obrigações fiscais (guias)
+export const financialTaxObligations = pgTable("financial_tax_obligations", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  tipo: text().notNull(), // das_simples | darf_irpj | darf_csll | darf_pis | darf_cofins | gps_inss | guia_fgts | iss | icms
+  mesCompetencia: varchar("mes_competencia", { length: 7 }).notNull(),
+  baseCalculo: numeric("base_calculo", { precision: 15, scale: 2 }),
+  aliquota: numeric({ precision: 5, scale: 2 }),
+  valorPrincipal: numeric("valor_principal", { precision: 15, scale: 2 }).notNull(),
+  valorMulta: numeric("valor_multa", { precision: 10, scale: 2 }).default("0"),
+  valorJuros: numeric("valor_juros", { precision: 10, scale: 2 }).default("0"),
+  valorTotal: numeric("valor_total", { precision: 15, scale: 2 }).notNull(),
+  dataVencimento: date("data_vencimento", { mode: "string" }).notNull(),
+  dataPagamento: date("data_pagamento", { mode: "string" }),
+  codigoReceita: varchar("codigo_receita", { length: 20 }),
+  codigoBarras: varchar("codigo_barras", { length: 100 }),
+  guiaUrl: text("guia_url"),
+  status: text().default("a_pagar"), // a_pagar | pago | atrasado | cancelado
+  geradaAutomaticamente: smallint("gerada_automaticamente").default(1),
+  entryId: integer("entry_id"),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_fto_company").on(t.companyId),
+  index("idx_fto_competencia").on(t.mesCompetencia),
+  index("idx_fto_vencimento").on(t.dataVencimento),
+]);
+
+// 6. Centros de custo
+export const financialCostCenters = pgTable("financial_cost_centers", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  codigo: varchar({ length: 20 }).notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  tipo: text().notNull(), // obra | administrativo | comercial | financeiro
+  obraId: integer("obra_id"),
+  responsavelId: integer("responsavel_id"),
+  responsavelNome: varchar("responsavel_nome", { length: 255 }),
+  orcamentoMensal: numeric("orcamento_mensal", { precision: 15, scale: 2 }),
+  ativo: smallint().default(1).notNull(),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_fcc_company").on(t.companyId)]);
+
+// 7. Extrato bancário (conciliação)
+export const bankStatementLines = pgTable("bank_statement_lines", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  contaBancariaId: integer("conta_bancaria_id").notNull(),
+  data: date({ mode: "string" }).notNull(),
+  descricao: text().notNull(),
+  valor: numeric({ precision: 15, scale: 2 }).notNull(),
+  tipo: text().notNull(), // credito | debito
+  saldoApos: numeric("saldo_apos", { precision: 15, scale: 2 }),
+  conciliado: smallint().default(0),
+  entryId: integer("entry_id"),
+  importadoEm: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_bsl_company").on(t.companyId),
+  index("idx_bsl_conta").on(t.contaBancariaId),
+  index("idx_bsl_data").on(t.data),
+]);
+
+// 8. Saldo bancário diário
+export const bankDailyBalance = pgTable("bank_daily_balance", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  contaBancariaId: integer("conta_bancaria_id").notNull(),
+  data: date({ mode: "string" }).notNull(),
+  saldo: numeric({ precision: 15, scale: 2 }).notNull(),
+  fonte: text().default("manual"), // manual | ofx | api_banco
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_bdb_company_data").on(t.companyId, t.data)]);
+
+// 9. Medições de obra
+export const obraMedicoes = pgTable("obra_medicoes", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  obraId: integer("obra_id").notNull(),
+  numero: integer().notNull(),
+  dataReferencia: date("data_referencia", { mode: "string" }).notNull(),
+  percentualAcumulado: numeric("percentual_acumulado", { precision: 5, scale: 2 }),
+  percentualPeriodo: numeric("percentual_periodo", { precision: 5, scale: 2 }),
+  valorContrato: numeric("valor_contrato", { precision: 15, scale: 2 }),
+  valorMedicao: numeric("valor_medicao", { precision: 15, scale: 2 }),
+  valorAcumulado: numeric("valor_acumulado", { precision: 15, scale: 2 }),
+  status: text().default("rascunho"), // rascunho | submetida | aprovada | faturada
+  aprovadoPorId: integer("aprovado_por_id"),
+  aprovadoEm: timestamp({ mode: "string" }),
+  revenueId: integer("revenue_id"),
+  observacoes: text(),
+  itens: text(),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_om_company").on(t.companyId),
+  index("idx_om_obra").on(t.obraId),
+]);
+
+// 10. Previsão de caixa
+export const cashFlowForecast = pgTable("cash_flow_forecast", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  data: date({ mode: "string" }).notNull(),
+  tipo: text().notNull(), // entrada_prevista | saida_prevista | entrada_realizada | saida_realizada
+  categoria: varchar({ length: 100 }),
+  descricao: text(),
+  valor: numeric({ precision: 15, scale: 2 }).notNull(),
+  origemTipo: varchar("origem_tipo", { length: 50 }),
+  origemId: integer("origem_id"),
+  obraId: integer("obra_id"),
+  saldoAcumulado: numeric("saldo_acumulado", { precision: 15, scale: 2 }),
+  geradoEm: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_cff_company_data").on(t.companyId, t.data)]);
+
+// 11. DRE cache
+export const dreCache = pgTable("dre_cache", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  obraId: integer("obra_id"),
+  periodo: varchar({ length: 7 }).notNull(),
+  tipoPeriodo: text().notNull(), // mensal | trimestral | anual
+  dados: text().notNull(),
+  calculadoEm: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_dc_company_periodo").on(t.companyId, t.periodo)]);
+
+// 12. Aprovações financeiras (anti-fraude)
+export const financialApprovals = pgTable("financial_approvals", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  entryId: integer("entry_id").notNull(),
+  valor: numeric({ precision: 15, scale: 2 }).notNull(),
+  status: text().default("pendente"), // pendente | aprovado | recusado
+  aprovadorId: integer("aprovador_id"),
+  aprovadorNome: varchar("aprovador_nome", { length: 255 }),
+  motivoRecusa: text("motivo_recusa"),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+  resolvidoEm: timestamp({ mode: "string" }),
+}, (t) => [index("idx_fap_company").on(t.companyId)]);
+
+// 13. Saldo de abertura dos bancos
+export const financialOpeningBalances = pgTable("financial_opening_balances", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  contaBancariaId: integer("conta_bancaria_id"),
+  contaNome: varchar("conta_nome", { length: 255 }),
+  dataAbertura: date("data_abertura", { mode: "string" }).notNull(),
+  valor: numeric({ precision: 15, scale: 2 }).notNull(),
+  confirmedByUserId: integer("confirmed_by_user_id"),
+  confirmedByName: varchar("confirmed_by_name", { length: 255 }),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_fob_company").on(t.companyId)]);
+
+// 14. Sócios e pró-labore
+export const companyPartners = pgTable("company_partners", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  cpf: varchar({ length: 14 }),
+  cargo: varchar({ length: 100 }),
+  percentualSociedade: numeric("percentual_sociedade", { precision: 5, scale: 2 }),
+  valorProLabore: numeric("valor_pro_labore", { precision: 10, scale: 2 }),
+  diaVencimento: integer("dia_vencimento").default(5),
+  contaBancariaDestinoId: integer("conta_bancaria_destino_id"),
+  pixChave: varchar("pix_chave", { length: 255 }),
+  ativo: smallint().default(1).notNull(),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_cp_company").on(t.companyId)]);
+
+// 15. Régua de cobrança
+export const collectionRules = pgTable("collection_rules", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  nome: varchar({ length: 255 }),
+  diasAtraso1: integer("dias_atraso_1").default(3),
+  mensagem1: text("mensagem_1"),
+  diasAtraso2: integer("dias_atraso_2").default(10),
+  mensagem2: text("mensagem_2"),
+  diasAtraso3: integer("dias_atraso_3").default(30),
+  mensagem3: text("mensagem_3"),
+  diasAtraso4: integer("dias_atraso_4").default(60),
+  mensagem4: text("mensagem_4"),
+  enviarEmail: smallint("enviar_email").default(1),
+  ativo: smallint().default(1).notNull(),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_cr_company").on(t.companyId)]);
+
+// 16. Log de cobranças
+export const collectionLog = pgTable("collection_log", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  revenueId: integer("revenue_id"),
+  obraId: integer("obra_id"),
+  clienteNome: varchar("cliente_nome", { length: 255 }),
+  valorDevido: numeric("valor_devido", { precision: 15, scale: 2 }),
+  diasAtraso: integer("dias_atraso"),
+  etapa: integer(),
+  mensagemEnviada: text("mensagem_enviada"),
+  canaisEnviados: varchar("canais_enviados", { length: 100 }),
+  enviadoEm: timestamp({ mode: "string" }).defaultNow().notNull(),
+  status: text().default("enviado"), // enviado | erro | ignorado
+}, (t) => [index("idx_cl_company").on(t.companyId)]);
+
+// 17. Budget anual
+export const financialBudget = pgTable("financial_budget", {
+  id: serial().notNull(),
+  companyId: integer().notNull(),
+  ano: integer().notNull(),
+  mes: integer().notNull(),
+  contaId: integer("conta_id"),
+  obraId: integer("obra_id"),
+  valorOrcado: numeric("valor_orcado", { precision: 15, scale: 2 }).notNull(),
+  observacoes: text(),
+  criadoPorId: integer("criado_por_id"),
+  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_fb_company_ano").on(t.companyId, t.ano)]);

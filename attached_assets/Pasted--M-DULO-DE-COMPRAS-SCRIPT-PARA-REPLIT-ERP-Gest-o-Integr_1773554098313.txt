@@ -1,0 +1,1075 @@
+# 🛒 MÓDULO DE COMPRAS — SCRIPT PARA REPLIT
+# ERP Gestão Integrada — FC Engenharia
+# ⚠️ Execute APÓS o módulo Financeiro estar pronto
+
+---
+
+## REGRAS OBRIGATÓRIAS
+1. Usar `fornecedores_epi` existente — NÃO criar tabela `suppliers`
+2. Usar `createAuditLog` em todas as ações
+3. Usar `smtpService` para e-mails automáticos
+4. Usar `storagePut` para uploads de fotos/documentos
+5. Usar `invokeLLM` para IA no mapa de cotação
+6. Todo cancelamento de OC faz ROLLBACK FINANCEIRO COMPLETO
+7. Confirmar cada passo antes de avançar
+8. Rodar `pnpm db:push` após o Passo 1
+
+---
+
+## PASSO 1 — BANCO DE DADOS
+
+### 1A — Expandir `fornecedores_epi` (ALTER TABLE)
+```sql
+ALTER TABLE fornecedores_epi
+  ADD COLUMN IF NOT EXISTS razao_social VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS nome_fantasia VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS situacao_receita VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS cep VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS bairro VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS cidade VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS estado VARCHAR(2),
+  ADD COLUMN IF NOT EXISTS contato_nome VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS contato_celular VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS contato_email VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS banco VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS agencia VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS conta VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS pix VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS categorias JSON,
+  ADD COLUMN IF NOT EXISTS tipo ENUM('material','epi','servico','todos') DEFAULT 'todos',
+  ADD COLUMN IF NOT EXISTS avaliacao_media DECIMAL(3,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS total_avaliacoes INT DEFAULT 0;
+```
+
+Adicionar também os campos acima na tabela `fornecedoresEpi` em `drizzle/schema.ts`.
+
+### 1B — Novas tabelas (adicionar no final de `drizzle/schema.ts`)
+
+```typescript
+// ============================================================
+// MÓDULO DE COMPRAS
+// ============================================================
+
+export const purchaseCatalogItems = mysqlTable("purchase_catalog_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  nomeAbreviado: varchar("nome_abreviado", { length: 100 }),
+  codigo: varchar({ length: 50 }),
+  unidade: varchar({ length: 20 }).notNull().default("un"),
+  categoria: varchar({ length: 100 }),
+  ncm: varchar({ length: 10 }),
+  fotoUrl: text("foto_url"),
+  codigoSinapi: varchar("codigo_sinapi", { length: 20 }),
+  contaFinanceiraId: int("conta_financeira_id"),
+  contaFinanceiraNome: varchar("conta_financeira_nome", { length: 255 }),
+  naturezaFinanceira: mysqlEnum("natureza_financeira", ['fixo','variavel']).default('variavel'),
+  ativo: tinyint().default(1).notNull(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_pci_company").on(t.companyId)]);
+
+export const supplierPriceHistory = mysqlTable("supplier_price_history", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  catalogItemId: int("catalog_item_id").notNull(),
+  supplierId: int("supplier_id").notNull(),
+  supplierNome: varchar("supplier_nome", { length: 255 }),
+  valorUnitario: decimal("valor_unitario", { precision: 10, scale: 2 }).notNull(),
+  valorFrete: decimal("valor_frete", { precision: 10, scale: 2 }).default("0"),
+  valorTotalUnitario: decimal("valor_total_unitario", { precision: 10, scale: 2 }),
+  unidade: varchar({ length: 20 }),
+  dataReferencia: date("data_referencia", { mode: 'string' }).notNull(),
+  cotacaoId: int("cotacao_id"),
+  ordemCompraId: int("ordem_compra_id"),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [
+  index("idx_sph_item").on(t.catalogItemId),
+  index("idx_sph_supplier").on(t.supplierId),
+]);
+
+export const supplierEvaluations = mysqlTable("supplier_evaluations", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  supplierId: int("supplier_id").notNull(),
+  ordemCompraId: int("ordem_compra_id"),
+  notaPrazo: int("nota_prazo"),
+  notaQualidade: int("nota_qualidade"),
+  notaAtendimento: int("nota_atendimento"),
+  mediaGeral: decimal("media_geral", { precision: 3, scale: 2 }),
+  observacoes: text(),
+  avaliadorId: int("avaliador_id"),
+  avaliadorNome: varchar("avaliador_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_se_supplier").on(t.supplierId)]);
+
+export const supplierContracts = mysqlTable("supplier_contracts", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  supplierId: int("supplier_id").notNull(),
+  supplierNome: varchar("supplier_nome", { length: 255 }),
+  catalogItemId: int("catalog_item_id"),
+  itemNome: varchar("item_nome", { length: 255 }),
+  valorUnitario: decimal("valor_unitario", { precision: 10, scale: 2 }).notNull(),
+  unidade: varchar({ length: 20 }),
+  dataInicio: date("data_inicio", { mode: 'string' }).notNull(),
+  dataFim: date("data_fim", { mode: 'string' }).notNull(),
+  observacoes: text(),
+  status: mysqlEnum(['ativo','vencido','cancelado']).default('ativo').notNull(),
+  alertaEnviado: tinyint("alerta_enviado").default(0),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_sc_company").on(t.companyId)]);
+
+export const purchaseApprovalRules = mysqlTable("purchase_approval_rules", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  obraId: int("obra_id"),
+  nivel1AprovadorTipo: mysqlEnum("nivel1_aprovador_tipo", ['engenheiro_obra','cargo','usuario_especifico']),
+  nivel1AprovadorId: int("nivel1_aprovador_id"),
+  nivel1Cargo: varchar("nivel1_cargo", { length: 100 }),
+  nivel1PrazoHoras: int("nivel1_prazo_horas").default(24),
+  nivel2Ativo: tinyint("nivel2_ativo").default(1),
+  nivel2AprovadorTipo: mysqlEnum("nivel2_aprovador_tipo", ['gerente','diretor','usuario_especifico']),
+  nivel2AprovadorId: int("nivel2_aprovador_id"),
+  nivel2PrazoHoras: int("nivel2_prazo_horas").default(8),
+  limiteCompraDireta: decimal("limite_compra_direta", { precision: 10, scale: 2 }).default("500"),
+  limiteCaixaMinimoOC: decimal("limite_caixa_minimo_oc", { precision: 15, scale: 2 }),
+  slaEmergencialHoras: int("sla_emergencial_horas").default(4),
+  ativo: tinyint().default(1).notNull(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_par_company").on(t.companyId)]);
+
+export const purchaseSpendingLimits = mysqlTable("purchase_spending_limits", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  nome: varchar({ length: 255 }),
+  obraId: int("obra_id"),
+  catalogCategoria: varchar("catalog_categoria", { length: 100 }),
+  periodoTipo: mysqlEnum("periodo_tipo", ['mensal','semanal','anual']).default('mensal'),
+  valorLimite: decimal("valor_limite", { precision: 15, scale: 2 }).notNull(),
+  acaoAoAtingir: mysqlEnum("acao_ao_atingir", ['alertar','bloquear']).default('alertar'),
+  alertaPercentual: int("alerta_percentual").default(80),
+  ativo: tinyint().default(1).notNull(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_psl_company").on(t.companyId)]);
+
+export const ocNumberConfig = mysqlTable("oc_number_config", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  prefixo: varchar({ length: 20 }).default('OC'),
+  separador: varchar({ length: 5 }).default('-'),
+  formatoAno: mysqlEnum("formato_ano", ['4dig','2dig','nenhum']).default('4dig'),
+  digitosSequencial: int("digitos_sequencial").default(3),
+  reiniciarAnualmente: tinyint("reiniciar_anualmente").default(1),
+  proximoNumero: int("proximo_numero").default(1),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_onc_company").on(t.companyId)]);
+
+export const purchaseRequests = mysqlTable("purchase_requests", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  obraId: int("obra_id").notNull(),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  eapItemId: int("eap_item_id"),
+  eapItemNome: varchar("eap_item_nome", { length: 255 }),
+  solicitanteId: int("solicitante_id").notNull(),
+  solicitanteNome: varchar("solicitante_nome", { length: 255 }),
+  tipo: mysqlEnum(['compra','locacao','servico']).default('compra').notNull(),
+  status: mysqlEnum([
+    'rascunho','aguardando_aprovacao','aprovada','recusada',
+    'em_cotacao','em_oc','concluida','cancelada'
+  ]).default('rascunho').notNull(),
+  emergencial: tinyint().default(0).notNull(),
+  justificativaEmergencial: text("justificativa_emergencial"),
+  prazoNecessidade: date("prazo_necessidade", { mode: 'string' }),
+  justificativaRecusa: text("justificativa_recusa"),
+  aprovadorId: int("aprovador_id"),
+  aprovadorNome: varchar("aprovador_nome", { length: 255 }),
+  aprovadoEm: timestamp({ mode: 'string' }),
+  valorEstimadoTotal: decimal("valor_estimado_total", { precision: 15, scale: 2 }),
+  valorMetaTotal: decimal("valor_meta_total", { precision: 15, scale: 2 }),
+  estouroMeta: tinyint("estourou_meta").default(0),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_pr_company").on(t.companyId),
+  index("idx_pr_obra").on(t.obraId),
+  index("idx_pr_status").on(t.status),
+  index("idx_pr_emergencial").on(t.emergencial),
+]);
+
+export const purchaseRequestItems = mysqlTable("purchase_request_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  solicitacaoId: int("solicitacao_id").notNull(),
+  catalogItemId: int("catalog_item_id"),
+  insumoNome: varchar("insumo_nome", { length: 255 }).notNull(),
+  unidade: varchar({ length: 20 }).notNull(),
+  quantidade: decimal({ precision: 10, scale: 3 }).notNull(),
+  quantidadeEstoqueDisponivel: decimal("quantidade_estoque_disponivel", { precision: 10, scale: 3 }).default("0"),
+  quantidadeRetiradaEstoque: decimal("quantidade_retirada_estoque", { precision: 10, scale: 3 }).default("0"),
+  quantidadeAComprar: decimal("quantidade_a_comprar", { precision: 10, scale: 3 }),
+  valorMetaUnitario: decimal("valor_meta_unitario", { precision: 10, scale: 2 }),
+  valorUltimaCompra: decimal("valor_ultima_compra", { precision: 10, scale: 2 }),
+  observacoes: text(),
+}, (t) => [index("idx_pri_sc").on(t.solicitacaoId)]);
+
+export const quotations = mysqlTable("quotations", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  solicitacaoId: int("solicitacao_id").notNull(),
+  status: mysqlEnum(['aberta','encerrada','cancelada','expirada']).default('aberta').notNull(),
+  minimoFornecedores: int("minimo_fornecedores").default(3),
+  fornecedorVencedorId: int("fornecedor_vencedor_id"),
+  justificativaVencedor: text("justificativa_vencedor"),
+  compradorId: int("comprador_id"),
+  compradorNome: varchar("comprador_nome", { length: 255 }),
+  validadeDias: int("validade_dias").default(5),
+  validadeAte: date("validade_ate", { mode: 'string' }),
+  emailEnviado: tinyint("email_enviado").default(0),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_q_company").on(t.companyId)]);
+
+export const quotationSuppliers = mysqlTable("quotation_suppliers", {
+  id: int().autoincrement().notNull().primaryKey(),
+  cotacaoId: int("cotacao_id").notNull(),
+  supplierId: int("supplier_id").notNull(),
+  supplierNome: varchar("supplier_nome", { length: 255 }),
+  status: mysqlEnum(['aguardando','respondida','recusada']).default('aguardando').notNull(),
+  valorUnitario: decimal("valor_unitario", { precision: 10, scale: 2 }),
+  valorFrete: decimal("valor_frete", { precision: 10, scale: 2 }).default("0"),
+  freteTipo: mysqlEnum("frete_tipo", ['cif','fob']).default('cif'),
+  valorTotalComFrete: decimal("valor_total_com_frete", { precision: 10, scale: 2 }),
+  prazoEntregaDias: int("prazo_entrega_dias"),
+  condicaoPagamento: varchar("condicao_pagamento", { length: 255 }),
+  validadeDias: int("validade_dias").default(5),
+  observacoes: text(),
+  respondidoEm: timestamp({ mode: 'string' }),
+  scoreTotal: decimal("score_total", { precision: 5, scale: 2 }),
+}, (t) => [index("idx_qs_cotacao").on(t.cotacaoId)]);
+
+export const quotationSupplierTokens = mysqlTable("quotation_supplier_tokens", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  cotacaoId: int("cotacao_id").notNull(),
+  quotationSupplierId: int("quotation_supplier_id").notNull(),
+  supplierId: int("supplier_id"),
+  supplierNome: varchar("supplier_nome", { length: 255 }),
+  supplierEmail: varchar("supplier_email", { length: 255 }),
+  token: varchar({ length: 64 }).notNull(),
+  expiresAt: timestamp({ mode: 'string' }),
+  accessedAt: timestamp({ mode: 'string' }),
+  respondedAt: timestamp({ mode: 'string' }),
+  status: mysqlEnum(['enviado','visualizado','respondido','expirado']).default('enviado'),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_qst_token").on(t.token)]);
+
+export const quotationNegotiations = mysqlTable("quotation_negotiations", {
+  id: int().autoincrement().notNull().primaryKey(),
+  cotacaoId: int("cotacao_id").notNull(),
+  quotationSupplierId: int("quotation_supplier_id"),
+  rodada: int().default(1),
+  tipo: mysqlEnum(['proposta_inicial','contraproposta_comprador','resposta_fornecedor','aceito','recusado']),
+  valorUnitarioProposto: decimal("valor_unitario_proposto", { precision: 10, scale: 2 }),
+  mensagem: text(),
+  autor: varchar({ length: 100 }),
+  autorNome: varchar("autor_nome", { length: 255 }),
+  criadoEm: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_qn_cotacao").on(t.cotacaoId)]);
+
+export const purchaseOrders = mysqlTable("purchase_orders", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  numero: varchar({ length: 20 }),
+  solicitacaoId: int("solicitacao_id"),
+  cotacaoId: int("cotacao_id"),
+  supplierId: int("supplier_id").notNull(),
+  supplierNome: varchar("supplier_nome", { length: 255 }),
+  obraId: int("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  compradorId: int("comprador_id"),
+  compradorNome: varchar("comprador_nome", { length: 255 }),
+  tipo: mysqlEnum(['compra','locacao','servico']).default('compra').notNull(),
+  status: mysqlEnum(['emitida','aprovada','entregue_parcial','entregue_total','cancelada']).default('emitida').notNull(),
+  valorItens: decimal("valor_itens", { precision: 15, scale: 2 }),
+  valorFrete: decimal("valor_frete", { precision: 15, scale: 2 }).default("0"),
+  freteTipo: mysqlEnum("frete_tipo", ['cif','fob']).default('cif'),
+  valorTotal: decimal("valor_total", { precision: 15, scale: 2 }),
+  formaPagamento: varchar("forma_pagamento", { length: 255 }),
+  numeroParcelas: int("numero_parcelas").default(1),
+  prazoEntrega: date("prazo_entrega", { mode: 'string' }),
+  cnpjComprador: varchar("cnpj_comprador", { length: 20 }),
+  inscricaoEstadual: varchar("inscricao_estadual", { length: 30 }),
+  enderecoEntrega: text("endereco_entrega"),
+  cidadeEntrega: varchar("cidade_entrega", { length: 100 }),
+  estadoEntrega: varchar("estado_entrega", { length: 2 }),
+  cepEntrega: varchar("cep_entrega", { length: 10 }),
+  locacaoDataInicio: date("locacao_data_inicio", { mode: 'string' }),
+  locacaoDataFim: date("locacao_data_fim", { mode: 'string' }),
+  locacaoValorDiario: decimal("locacao_valor_diario", { precision: 10, scale: 2 }),
+  financialEntryId: int("financial_entry_id"),
+  accountsPayableId: int("accounts_payable_id"),
+  retencaoINSS: decimal("retencao_inss", { precision: 10, scale: 2 }).default("0"),
+  retencaoIR: decimal("retencao_ir", { precision: 10, scale: 2 }).default("0"),
+  retencaoISS: decimal("retencao_iss", { precision: 10, scale: 2 }).default("0"),
+  observacoes: text(),
+  pdfUrl: text("pdf_url"),
+  emitidaEm: timestamp({ mode: 'string' }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_po_company").on(t.companyId),
+  index("idx_po_obra").on(t.obraId),
+  index("idx_po_status").on(t.status),
+]);
+
+export const purchaseOrderItems = mysqlTable("purchase_order_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  ordemId: int("ordem_id").notNull(),
+  catalogItemId: int("catalog_item_id"),
+  insumoNome: varchar("insumo_nome", { length: 255 }).notNull(),
+  unidade: varchar({ length: 20 }).notNull(),
+  quantidadePedida: decimal("quantidade_pedida", { precision: 10, scale: 3 }).notNull(),
+  quantidadeRecebida: decimal("quantidade_recebida", { precision: 10, scale: 3 }).default("0"),
+  valorUnitario: decimal("valor_unitario", { precision: 10, scale: 2 }).notNull(),
+  valorTotal: decimal("valor_total", { precision: 10, scale: 2 }).notNull(),
+  valorMetaUnitario: decimal("valor_meta_unitario", { precision: 10, scale: 2 }),
+  contaFinanceiraId: int("conta_financeira_id"),
+}, (t) => [index("idx_poi_ordem").on(t.ordemId)]);
+
+export const purchaseReceipts = mysqlTable("purchase_receipts", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  ordemId: int("ordem_id").notNull(),
+  obraId: int("obra_id"),
+  recebedorId: int("recebedor_id"),
+  recebedorNome: varchar("recebedor_nome", { length: 255 }),
+  status: mysqlEnum(['parcial','total']).notNull(),
+  notaFiscalNumero: varchar("nota_fiscal_numero", { length: 100 }),
+  notaFiscalUrl: text("nota_fiscal_url"),
+  fotoMaterialUrl: text("foto_material_url"),
+  observacoes: text(),
+  financialEntryLiberadoId: int("financial_entry_liberado_id"),
+  valorLiberado: decimal("valor_liberado", { precision: 15, scale: 2 }),
+  recebidoEm: timestamp({ mode: 'string' }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_prec_ordem").on(t.ordemId)]);
+
+export const purchaseReceiptItems = mysqlTable("purchase_receipt_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  recebimentoId: int("recebimento_id").notNull(),
+  ordemItemId: int("ordem_item_id").notNull(),
+  insumoNome: varchar("insumo_nome", { length: 255 }),
+  unidade: varchar({ length: 20 }),
+  quantidadePedida: decimal("quantidade_pedida", { precision: 10, scale: 3 }),
+  quantidadeRecebida: decimal("quantidade_recebida", { precision: 10, scale: 3 }).notNull(),
+  quantidadePendente: decimal("quantidade_pendente", { precision: 10, scale: 3 }),
+}, (t) => [index("idx_preci_receb").on(t.recebimentoId)]);
+
+export const purchaseReturns = mysqlTable("purchase_returns", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  ordemId: int("ordem_id").notNull(),
+  motivo: text().notNull(),
+  itens: text(),
+  status: mysqlEnum(['solicitada','enviada','concluida','cancelada']).default('solicitada'),
+  valorEstornado: decimal("valor_estornado", { precision: 15, scale: 2 }),
+  financialEntryEstornoId: int("financial_entry_estorno_id"),
+  solicitanteId: int("solicitante_id"),
+  solicitanteNome: varchar("solicitante_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_pret_ordem").on(t.ordemId)]);
+
+export const accountsPayable = mysqlTable("accounts_payable", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  ordemId: int("ordem_id"),
+  supplierId: int("supplier_id"),
+  supplierNome: varchar("supplier_nome", { length: 255 }),
+  obraId: int("obra_id"),
+  descricao: text(),
+  valorTotal: decimal("valor_total", { precision: 15, scale: 2 }).notNull(),
+  valorPago: decimal("valor_pago", { precision: 15, scale: 2 }).default("0"),
+  status: mysqlEnum([
+    'bloqueado','pendente','a_pagar','vencido','pago_parcial','pago_total','cancelado'
+  ]).default('bloqueado').notNull(),
+  formaPagamento: varchar("forma_pagamento", { length: 50 }),
+  dataVencimento: date("data_vencimento", { mode: 'string' }),
+  dataPagamento: date("data_pagamento", { mode: 'string' }),
+  supplierBanco: varchar("supplier_banco", { length: 100 }),
+  supplierAgencia: varchar("supplier_agencia", { length: 20 }),
+  supplierConta: varchar("supplier_conta", { length: 30 }),
+  supplierPix: varchar("supplier_pix", { length: 255 }),
+  supplierCnpj: varchar("supplier_cnpj", { length: 20 }),
+  comprovanteUrl: text("comprovante_url"),
+  financialEntryId: int("financial_entry_id"),
+  parcelaNumero: int("parcela_numero").default(1),
+  parcelaTotal: int("parcela_total").default(1),
+  parcelaGrupoId: varchar("parcela_grupo_id", { length: 36 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_ap_company").on(t.companyId),
+  index("idx_ap_status").on(t.status),
+  index("idx_ap_vencimento").on(t.dataVencimento),
+]);
+
+export const budgetReallocations = mysqlTable("budget_reallocations", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  obraId: int("obra_id").notNull(),
+  origemEapItemId: int("origem_eap_item_id"),
+  origemEapItemNome: varchar("origem_eap_item_nome", { length: 255 }),
+  destinoEapItemId: int("destino_eap_item_id"),
+  destinoEapItemNome: varchar("destino_eap_item_nome", { length: 255 }),
+  valorRealocado: decimal("valor_realocado", { precision: 15, scale: 2 }).notNull(),
+  motivo: text().notNull(),
+  usuarioId: int("usuario_id"),
+  usuarioNome: varchar("usuario_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_br_obra").on(t.obraId)]);
+
+export const buyerCommissions = mysqlTable("buyer_commissions", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  obraId: int("obra_id").notNull(),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  compradorId: int("comprador_id").notNull(),
+  compradorNome: varchar("comprador_nome", { length: 255 }),
+  valorMetaTotal: decimal("valor_meta_total", { precision: 15, scale: 2 }),
+  valorCompradoTotal: decimal("valor_comprado_total", { precision: 15, scale: 2 }),
+  economiaTotal: decimal("economia_total", { precision: 15, scale: 2 }),
+  percentualParticipacao: decimal("percentual_participacao", { precision: 5, scale: 2 }),
+  valorComissao: decimal("valor_comissao", { precision: 15, scale: 2 }),
+  status: mysqlEnum(['em_aberto','calculada','aprovada_diretor','paga','cancelada']).default('em_aberto').notNull(),
+  aprovadoPor: varchar("aprovado_por", { length: 255 }),
+  aprovadoEm: timestamp({ mode: 'string' }),
+  financialEntryId: int("financial_entry_id"),
+  calculadoEm: timestamp({ mode: 'string' }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_bc_obra").on(t.obraId)]);
+
+export const emergencyMetrics = mysqlTable("emergency_metrics", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  engenheiroId: int("engenheiro_id").notNull(),
+  engenheiroNome: varchar("engenheiro_nome", { length: 255 }),
+  obraId: int("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  mes: int().notNull(),
+  ano: int().notNull(),
+  totalSolicitacoes: int("total_solicitacoes").default(0),
+  totalEmergenciais: int("total_emergenciais").default(0),
+  percentualEmergencial: decimal("percentual_emergencial", { precision: 5, scale: 2 }).default("0"),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_em_eng").on(t.engenheiroId)]);
+
+export const purchaseCancellations = mysqlTable("purchase_cancellations", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  tipo: mysqlEnum(['sc','oc','cotacao','recebimento']).notNull(),
+  referenciaId: int("referencia_id").notNull(),
+  motivo: text().notNull(),
+  efeitos: text(),
+  canceladoPorId: int("cancelado_por_id"),
+  canceladoPorNome: varchar("cancelado_por_nome", { length: 255 }),
+  canceladoEm: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_pc_company").on(t.companyId)]);
+
+export const sinapiPriceCache = mysqlTable("sinapi_price_cache", {
+  id: int().autoincrement().notNull().primaryKey(),
+  codigo: varchar({ length: 20 }),
+  descricao: varchar({ length: 500 }),
+  unidade: varchar({ length: 20 }),
+  estado: varchar({ length: 2 }),
+  mesReferencia: varchar("mes_referencia", { length: 7 }),
+  precoSemDesoneracao: decimal("preco_sem_desoneracao", { precision: 10, scale: 2 }),
+  precoComDesoneracao: decimal("preco_com_desoneracao", { precision: 10, scale: 2 }),
+  atualizadoEm: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_sinapi_codigo").on(t.codigo)]);
+```
+
+**Rodar:** `pnpm db:push` — confirmar sucesso antes de continuar.
+
+---
+
+## PASSO 2 — SERVIÇO DE INTEGRAÇÃO FINANCEIRA
+
+Criar `server/services/purchaseFinancialBridge.ts`:
+
+```typescript
+import { getDb } from "../db";
+import {
+  purchaseOrders, purchaseRequests, accountsPayable,
+  financialEntries, financialAccounts, fornecedoresEpi,
+  buyerCommissions, purchaseCancellations, warnings,
+} from "../../drizzle/schema";
+import { eq, and } from "drizzle-orm";
+import { createAuditLog } from "../db";
+
+async function getContaId(db: any, companyId: number, codigo: string) {
+  const [conta] = await db.select({ id: financialAccounts.id })
+    .from(financialAccounts)
+    .where(and(eq(financialAccounts.companyId, companyId), eq(financialAccounts.codigo, codigo)))
+    .limit(1);
+  return conta?.id || null;
+}
+
+async function getSupplierField(db: any, supplierId: number, campo: string) {
+  const [s] = await db.select().from(fornecedoresEpi).where(eq(fornecedoresEpi.id, supplierId));
+  return s?.[campo] || null;
+}
+
+// ── PONTO 1: OC EMITIDA → gera financial_entry + accounts_payable
+export async function onOCEmitida(ocId: number, userId: number, userName: string) {
+  const db = await getDb();
+  if (!db) return;
+
+  const [oc] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.id, ocId));
+  if (!oc) return;
+
+  // Mapear tipo da OC para conta financeira
+  const codigoConta = oc.tipo === 'servico' ? '3.2' : oc.tipo === 'locacao' ? '3.4' : '3.3';
+  const contaId = await getContaId(db, oc.companyId, codigoConta);
+
+  // Criar financial_entry (BLOQUEADO até recebimento)
+  const [entryResult] = await db.insert(financialEntries).values({
+    companyId: oc.companyId,
+    obraId: oc.obraId || null,
+    obraNome: oc.obraNome || null,
+    contaId,
+    tipo: 'despesa',
+    natureza: 'variavel',
+    valorPrevisto: String(oc.valorTotal || '0'),
+    dataCompetencia: new Date().toISOString().split('T')[0],
+    dataVencimento: oc.prazoEntrega || null,
+    status: 'previsto', // bloqueado até recebimento
+    origemModulo: 'compras',
+    origemId: oc.id,
+    origemDescricao: `OC #${oc.numero || oc.id} — ${oc.supplierNome}`,
+    criadoPorId: userId,
+    criadoPorNome: userName,
+  } as any);
+
+  const financialEntryId = Number(entryResult.insertId);
+
+  // Criar accounts_payable BLOQUEADO
+  const [apResult] = await db.insert(accountsPayable).values({
+    companyId: oc.companyId,
+    ordemId: oc.id,
+    supplierId: oc.supplierId,
+    supplierNome: oc.supplierNome,
+    obraId: oc.obraId || null,
+    descricao: `OC #${oc.numero || oc.id} — ${oc.supplierNome}`,
+    valorTotal: String(oc.valorTotal || '0'),
+    status: 'bloqueado',
+    formaPagamento: oc.formaPagamento || null,
+    dataVencimento: oc.prazoEntrega || null,
+    financialEntryId,
+    // Dados bancários copiados automaticamente do fornecedor
+    supplierBanco: await getSupplierField(db, oc.supplierId, 'banco'),
+    supplierAgencia: await getSupplierField(db, oc.supplierId, 'agencia'),
+    supplierConta: await getSupplierField(db, oc.supplierId, 'conta'),
+    supplierPix: await getSupplierField(db, oc.supplierId, 'pix'),
+    supplierCnpj: await getSupplierField(db, oc.supplierId, 'cnpj'),
+  } as any);
+
+  const apId = Number(apResult.insertId);
+
+  // Atualizar OC com vínculos financeiros
+  await db.update(purchaseOrders).set({
+    financialEntryId,
+    accountsPayableId: apId,
+  } as any).where(eq(purchaseOrders.id, ocId));
+
+  await createAuditLog({
+    userId, userName, action: 'CREATE', module: 'compras',
+    entityType: 'oc_lancamento', entityId: ocId,
+    details: `OC #${oc.numero} → financial_entry #${financialEntryId} + accounts_payable #${apId}`,
+  });
+}
+
+// ── PONTO 2: RECEBIMENTO CONFIRMADO → libera pagamento
+export async function onRecebimentoConfirmado(
+  recebimentoId: number,
+  ordemId: number,
+  status: 'total' | 'parcial',
+  valorLiberado: number,
+  userId: number,
+  userName: string
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  const [oc] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.id, ordemId));
+  if (!oc || !oc.accountsPayableId || !oc.financialEntryId) return;
+
+  if (status === 'total') {
+    // Liberar pagamento integral
+    await db.update(accountsPayable)
+      .set({ status: 'pendente' } as any)
+      .where(eq(accountsPayable.id, oc.accountsPayableId));
+
+    await db.update(financialEntries)
+      .set({ status: 'a_pagar' } as any)
+      .where(eq(financialEntries.id, oc.financialEntryId));
+
+  } else {
+    // Liberar proporcionalmente
+    const totalOC = parseFloat(String(oc.valorTotal) || '0');
+    const percentual = totalOC > 0 ? (valorLiberado / totalOC) : 0;
+
+    await db.update(accountsPayable).set({
+      status: 'pendente',
+      valorTotal: String(valorLiberado.toFixed(2)),
+    } as any).where(eq(accountsPayable.id, oc.accountsPayableId));
+
+    await db.update(financialEntries).set({
+      status: 'a_pagar',
+      valorPrevisto: String(valorLiberado.toFixed(2)),
+      origemDescricao: `Recebimento parcial OC #${oc.numero} (${(percentual * 100).toFixed(1)}%)`,
+    } as any).where(eq(financialEntries.id, oc.financialEntryId));
+  }
+
+  await createAuditLog({
+    userId, userName, action: 'UPDATE', module: 'compras',
+    entityType: 'recebimento', entityId: recebimentoId,
+    details: `Recebimento ${status} — R$${valorLiberado.toFixed(2)} liberado para pagamento`,
+  });
+}
+
+// ── PONTO 3: OC CANCELADA → rollback financeiro completo
+export async function onOCCancelada(ocId: number, motivo: string, userId: number, userName: string) {
+  const db = await getDb();
+  if (!db) return;
+
+  const [oc] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.id, ocId));
+  if (!oc) return;
+
+  const efeitos: string[] = [];
+
+  // Cancelar financial_entry
+  if (oc.financialEntryId) {
+    await db.update(financialEntries)
+      .set({ status: 'cancelado' } as any)
+      .where(eq(financialEntries.id, oc.financialEntryId));
+    efeitos.push('financial_entry_cancelado');
+  }
+
+  // Cancelar accounts_payable
+  if (oc.accountsPayableId) {
+    await db.update(accountsPayable)
+      .set({ status: 'cancelado' } as any)
+      .where(eq(accountsPayable.id, oc.accountsPayableId));
+    efeitos.push('accounts_payable_cancelado');
+  }
+
+  // Reabrir SC (volta para aprovada)
+  if (oc.solicitacaoId) {
+    await db.update(purchaseRequests)
+      .set({ status: 'aprovada' } as any)
+      .where(eq(purchaseRequests.id, oc.solicitacaoId));
+    efeitos.push('sc_reaberta');
+  }
+
+  // Registrar cancelamento
+  await db.insert(purchaseCancellations).values({
+    companyId: oc.companyId,
+    tipo: 'oc',
+    referenciaId: ocId,
+    motivo,
+    efeitos: JSON.stringify(efeitos),
+    canceladoPorId: userId,
+    canceladoPorNome: userName,
+  } as any);
+
+  await createAuditLog({
+    userId, userName, action: 'DELETE', module: 'compras',
+    entityType: 'oc_cancelamento', entityId: ocId,
+    details: `OC cancelada. Rollback: ${efeitos.join(', ')}. Motivo: ${motivo}`,
+  });
+}
+
+// ── PONTO 4: COMISSÃO APROVADA → gera pagamento financeiro
+export async function onComissaoAprovada(comissaoId: number, userId: number, userName: string) {
+  const db = await getDb();
+  if (!db) return;
+
+  const [comissao] = await db.select().from(buyerCommissions)
+    .where(eq(buyerCommissions.id, comissaoId));
+  if (!comissao) return;
+
+  const contaId = await getContaId(db, comissao.companyId, '5.3'); // Comissões
+
+  const [entry] = await db.insert(financialEntries).values({
+    companyId: comissao.companyId,
+    obraId: comissao.obraId,
+    obraNome: comissao.obraNome,
+    contaId,
+    tipo: 'despesa',
+    natureza: 'variavel',
+    valorPrevisto: String(comissao.valorComissao),
+    dataCompetencia: new Date().toISOString().split('T')[0],
+    status: 'a_pagar',
+    origemModulo: 'comissao_comprador',
+    origemId: comissaoId,
+    origemDescricao: `Comissão — ${comissao.compradorNome} — ${comissao.obraNome}`,
+    criadoPorId: userId,
+    criadoPorNome: userName,
+  } as any);
+
+  await db.update(buyerCommissions).set({
+    financialEntryId: Number(entry.insertId),
+    status: 'aprovada_diretor',
+    aprovadoPor: userName,
+    aprovadoEm: new Date().toISOString(),
+  } as any).where(eq(buyerCommissions.id, comissaoId));
+}
+```
+
+---
+
+## PASSO 3 — ROUTER `server/routers/purchaseRouter.ts`
+
+Criar com os seguintes grupos de endpoints. Chamar o bridge financeiro onde indicado:
+
+### Catálogo:
+- `listCatalogItems(companyId, filters?)` — listar com busca por nome/categoria
+- `createCatalogItem(input)` — só ADM
+- `updateCatalogItem(input)` — só ADM
+
+### Fornecedores (usar `fornecedores_epi`):
+- `listSuppliers(companyId, tipo?)` — listar com avaliação média
+- `createSupplier(input)` — busca CNPJ na BrasilAPI automaticamente:
+```typescript
+const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+const data = await response.json();
+if (data.descricao_situacao_cadastral !== 'ATIVA') {
+  throw new TRPCError({ code: 'BAD_REQUEST', message: 'CNPJ não está ativo na Receita Federal' });
+}
+// Preencher campos automaticamente
+```
+- `checkActiveContract(supplierId, catalogItemId, companyId)` — verificar contrato vigente
+
+### Configurações:
+- `getApprovalRules(companyId)` / `saveApprovalRules(input)`
+- `getSpendingLimits(companyId)` / `saveSpendingLimit(input)`
+- `getOCNumberConfig(companyId)` / `saveOCNumberConfig(input)`
+
+### SC:
+- `createSC(input)` — verificar almoxarifado + meta EAP + atualizar emergency_metrics
+- `listSCs(companyId, filters)` — emergenciais sempre no topo
+- `approveSC(id, aprovadorId)` — verificar regras de alçada
+- `rejectSC(id, motivo)` — motivo obrigatório
+- `cancelSC(id, motivo)` — liberar reserva do almoxarifado
+
+### Cotação:
+- `createQuotation(solicitacaoId)` — criar + verificar se tem contrato vigente
+- `addSupplierToQuotation(cotacaoId, supplierId)` — gerar token para portal
+- `sendEmailsToSuppliers(cotacaoId)` — usar smtpService, enviar link do portal
+- `closeQuotation(cotacaoId, vencedorId, justificativa)` — salvar preço em supplier_price_history
+- `getAISuggestion(cotacaoId)` — usar invokeLLM para sugerir melhor fornecedor
+
+### Portal do Fornecedor (rota PÚBLICA, sem auth):
+- `getQuotationByToken(token)` — buscar dados da cotação pelo token
+- `submitQuotationResponse(token, precos)` — fornecedor responde → atualiza quotation_suppliers
+
+### OC:
+- `createOC(input)`:
+  1. Gerar número: `OC-AAAA-NNN` (baseado em `ocNumberConfig`)
+  2. Preencher campos fiscais da empresa automaticamente
+  3. Se tipo = locação → criar `warehouseRentals`
+  4. Se tipo = serviço → calcular retenções INSS (11%) e IR (1,5%)
+  5. **Chamar `onOCEmitida()` do bridge** → gera financial_entry + accounts_payable
+- `listOCs(companyId, filters)` — com badge financeiro
+- `cancelOC(id, motivo)` — **chamar `onOCCancelada()` do bridge**
+
+### Recebimento:
+- `createReceipt(input)`:
+  1. Calcular valor liberado (total ou proporcional)
+  2. Upload NF e foto via storagePut
+  3. **Chamar `onRecebimentoConfirmado()` do bridge**
+  4. Se recebimento total + avaliação preenchida → salvar em supplier_evaluations
+  5. Atualizar média do fornecedor
+- `listPendingReceipts(companyId)` — OCs aguardando recebimento
+
+### Realocação de saldo:
+- `listSaldosDisponiveis(obraId)` — itens com economia confirmada
+- `createReallocation(input)` — irreversível, motivo obrigatório
+
+### Comissões:
+- `calculateCommissions(obraId)` — calcular ao encerrar obra
+- `listCommissions(companyId)`
+- `approveCommission(id)` — só Diretor → **chamar `onComissaoAprovada()` do bridge**
+
+---
+
+## PASSO 4 — ROTA PÚBLICA DO PORTAL DO FORNECEDOR
+
+Em `server/_core/index.ts`, adicionar rota Express ANTES do tRPC:
+
+```typescript
+// Portal do fornecedor (sem autenticação)
+app.get('/cotacao/:token', (_req, res) => {
+  res.redirect(`/#/portal/cotacao/${_req.params.token}`);
+});
+```
+
+Em `client/src/App.tsx`, adicionar rota pública:
+```typescript
+import PortalCotacao from "@/pages/PortalCotacao";
+<Route path="/portal/cotacao/:token" component={PortalCotacao} />
+```
+
+---
+
+## PASSO 5 — JOB AUTOMÁTICO
+
+Criar `server/services/purchaseAutoJobs.ts`:
+
+```typescript
+import { getDb } from "../db";
+import { purchaseOrders, quotations, supplierContracts } from "../../drizzle/schema";
+import { eq, and, lte, sql } from "drizzle-orm";
+
+export function startPurchaseJobs() {
+  setInterval(async () => {
+    try {
+      await checkOCDeadlines();
+      await checkQuotationExpiries();
+      await checkContractExpirations();
+    } catch(e) { console.error('[PurchaseJobs] Erro:', e); }
+  }, 60 * 60 * 1000); // a cada hora
+
+  console.log('[PurchaseJobs] Jobs de compras iniciados');
+}
+
+async function checkOCDeadlines() {
+  const db = await getDb();
+  if (!db) return;
+  const hoje = new Date().toISOString().split('T')[0];
+  // OCs com prazo vencido sem recebimento → alerta
+  const vencidas = await db.select().from(purchaseOrders)
+    .where(and(
+      eq(purchaseOrders.status, 'emitida'),
+      lte(purchaseOrders.prazoEntrega, hoje)
+    ));
+  for (const oc of vencidas) {
+    console.log(`[PurchaseJobs] OC #${oc.numero} prazo vencido: ${oc.prazoEntrega}`);
+    // Enviar notificação ao comprador
+  }
+}
+
+async function checkQuotationExpiries() {
+  const db = await getDb();
+  if (!db) return;
+  const hoje = new Date().toISOString().split('T')[0];
+  await db.update(quotations).set({ status: 'expirada' } as any)
+    .where(and(eq(quotations.status, 'aberta'), lte(quotations.validadeAte, hoje)));
+}
+
+async function checkContractExpirations() {
+  const db = await getDb();
+  if (!db) return;
+  const em7dias = new Date();
+  em7dias.setDate(em7dias.getDate() + 7);
+  const em7diasStr = em7dias.toISOString().split('T')[0];
+  // Alertar contratos vencendo em 7 dias
+  const vencendo = await db.select().from(supplierContracts)
+    .where(and(eq(supplierContracts.status, 'ativo'), lte(supplierContracts.dataFim, em7diasStr)));
+  for (const c of vencendo) {
+    if (!c.alertaEnviado) {
+      console.log(`[PurchaseJobs] Contrato vencendo: ${c.supplierNome} — ${c.dataFim}`);
+      // Enviar notificação
+    }
+  }
+}
+```
+
+Adicionar em `server/_core/index.ts`:
+```typescript
+import("../services/purchaseAutoJobs").then(m => m.startPurchaseJobs()).catch(e => console.error("[PurchaseJobs] Erro:", e));
+```
+
+---
+
+## PASSO 6 — REGISTRAR ROUTER
+
+Em `server/routers.ts`:
+```typescript
+import { purchaseRouter } from "./routers/purchaseRouter";
+// No appRouter:
+purchase: purchaseRouter,
+```
+
+---
+
+## PASSO 7 — PÁGINAS REACT
+
+Criar em `client/src/pages/`:
+
+| Página | Rota | Descrição |
+|--------|------|-----------|
+| `ComprasDashboard.tsx` | `/compras` | Dashboard com alertas, comissão, emergenciais |
+| `ComprasSolicitacoes.tsx` | `/compras/solicitacoes` | Lista SCs, emergenciais no topo |
+| `ComprasEmergencial.tsx` | `/compras/emergencial` | Tela mobile-first 3 toques com botão flutuante ⚡ |
+| `ComprasAprovacoes.tsx` | `/compras/aprovacoes` | Fila de aprovação com meta vs solicitado |
+| `ComprasCotacoes.tsx` | `/compras/cotacoes` | Mapa de cotação com IA + SINAPI + histórico |
+| `ComprasOrdens.tsx` | `/compras/ordens` | Lista OCs com badge financeiro |
+| `ComprasRecebimentos.tsx` | `/compras/recebimentos` | Recebimento com foto câmera + NF |
+| `ComprasFinanceiro.tsx` | `/compras/financeiro` | Painel financeiro de compras |
+| `ComprasRealocacao.tsx` | `/compras/realocacao` | Realocação de saldo EAP |
+| `ComprasComissoes.tsx` | `/compras/comissoes` | Comissões (Diretor aprova) |
+| `Fornecedores.tsx` | `/fornecedores` | Cadastro com busca CNPJ |
+| `ComprasConfiguracoes.tsx` | `/compras/configuracoes` | Alçadas + limites + numeração OC |
+| `PortalCotacao.tsx` | `/portal/cotacao/:token` | Tela pública para fornecedor responder |
+
+### Tela Emergencial `/compras/emergencial` (mobile-first obrigatório):
+- Botão flutuante ⚡ vermelho fixo em TODAS as telas do módulo
+- Máximo 3 toques para abrir SC emergencial
+- Pré-selecionada a obra do usuário logado
+- Campo de busca com autocomplete no catálogo
+- Botões + e - grandes (60px) para quantidade
+- Justificativa obrigatória (max 100 chars)
+
+### Mapa de Cotação `/compras/cotacoes`:
+- Tabela comparativa: fornecedor × preço × frete × total × prazo × avaliação
+- Coluna SINAPI: preço de referência do governo para aquele item
+- Badge "🏆 MELHOR CUSTO" no vencedor automático
+- Box IA: "🤖 Baseado no histórico, recomendo..."
+- Histórico de preços dos últimos 6 meses por fornecedor
+- Botão "💬 Negociar" por fornecedor
+
+---
+
+## PASSO 8 — ROTAS (client/src/App.tsx)
+
+```typescript
+import ComprasDashboard from "@/pages/ComprasDashboard";
+import ComprasSolicitacoes from "@/pages/ComprasSolicitacoes";
+import ComprasEmergencial from "@/pages/ComprasEmergencial";
+import ComprasAprovacoes from "@/pages/ComprasAprovacoes";
+import ComprasCotacoes from "@/pages/ComprasCotacoes";
+import ComprasOrdens from "@/pages/ComprasOrdens";
+import ComprasRecebimentos from "@/pages/ComprasRecebimentos";
+import ComprasFinanceiro from "@/pages/ComprasFinanceiro";
+import ComprasRealocacao from "@/pages/ComprasRealocacao";
+import ComprasComissoes from "@/pages/ComprasComissoes";
+import Fornecedores from "@/pages/Fornecedores";
+import ComprasConfiguracoes from "@/pages/ComprasConfiguracoes";
+import PortalCotacao from "@/pages/PortalCotacao";
+
+// No Switch (adicionar, não alterar):
+<Route path="/compras" component={ComprasDashboard} />
+<Route path="/compras/emergencial" component={ComprasEmergencial} />
+<Route path="/compras/solicitacoes" component={ComprasSolicitacoes} />
+<Route path="/compras/aprovacoes" component={ComprasAprovacoes} />
+<Route path="/compras/cotacoes" component={ComprasCotacoes} />
+<Route path="/compras/ordens" component={ComprasOrdens} />
+<Route path="/compras/recebimentos" component={ComprasRecebimentos} />
+<Route path="/compras/financeiro" component={ComprasFinanceiro} />
+<Route path="/compras/realocacao" component={ComprasRealocacao} />
+<Route path="/compras/comissoes" component={ComprasComissoes} />
+<Route path="/fornecedores" component={Fornecedores} />
+<Route path="/compras/configuracoes" component={ComprasConfiguracoes} />
+<Route path="/portal/cotacao/:token" component={PortalCotacao} />
+```
+
+---
+
+## PASSO 9 — MENU LATERAL
+
+Em `client/src/components/DashboardLayout.tsx`:
+
+```typescript
+const menuSectionsCompras: MenuSection[] = [
+  {
+    title: "Fluxo de Compras",
+    items: [
+      { label: "Dashboard", path: "/compras", icon: LayoutDashboard },
+      { label: "⚡ Emergencial", path: "/compras/emergencial", icon: Zap },
+      { label: "Solicitações", path: "/compras/solicitacoes", icon: ClipboardList },
+      { label: "Aprovações", path: "/compras/aprovacoes", icon: CheckCircle },
+      { label: "Cotações", path: "/compras/cotacoes", icon: FileText },
+      { label: "Ordens de Compra", path: "/compras/ordens", icon: ShoppingCart },
+      { label: "Recebimentos", path: "/compras/recebimentos", icon: Package },
+    ]
+  },
+  {
+    title: "Gestão",
+    items: [
+      { label: "Fornecedores", path: "/fornecedores", icon: Building2 },
+      { label: "Painel Financeiro", path: "/compras/financeiro", icon: DollarSign },
+      { label: "Realocação de Saldo", path: "/compras/realocacao", icon: ArrowLeftRight },
+      { label: "Comissões", path: "/compras/comissoes", icon: Award },
+      { label: "Configurações", path: "/compras/configuracoes", icon: Settings },
+    ]
+  }
+];
+
+// Adicionar:
+"compras": menuSectionsCompras,
+"compras": "/compras",             // MODULE_HOME_ROUTES
+"compras": { icon: ShoppingCart, color: "#F43F5E", bg: "#E11D48" }, // MODULE_THEME
+```
+
+---
+
+## PASSO 10 — ATIVAR NO MODULEHUB
+
+Em `ModuleHub.tsx`, localizar `id: "compras"`:
+```typescript
+{
+  id: "compras",
+  title: "Compras",
+  subtitle: "Suprimentos",
+  path: "/compras",
+  active: true,  // ← mudar para true
+  features: ["SC → OC Automatizado", "IA no Mapa", "Portal Fornecedor", "Comissão Comprador"],
+}
+```
+
+---
+
+## ✅ CHECKLIST FINAL
+
+- [ ] `pnpm db:push` — todas as tabelas criadas sem erro
+- [ ] `purchaseFinancialBridge.ts` implementado e funcionando
+- [ ] OC emitida → `financial_entries` + `accounts_payable` criados automaticamente
+- [ ] OC cancelada → rollback financeiro completo (financial_entry + accounts_payable cancelados)
+- [ ] Recebimento → pagamento liberado proporcional
+- [ ] Busca CNPJ → preenche fornecedor automaticamente
+- [ ] Mapa de cotação → mostra histórico de preços + SINAPI + IA
+- [ ] Portal do fornecedor → link funciona sem login
+- [ ] SC emergencial → botão ⚡ flutuante em todas as telas
+- [ ] Comissão aprovada → gera lançamento financeiro automático
+- [ ] Módulo compras aparece no menu lateral
+
+---
+
+## 💬 MENSAGEM PARA O REPLIT
+
+```
+Implemente o Módulo de Compras seguindo este script passo a passo.
+
+PRÉ-REQUISITO: O módulo Financeiro deve estar implementado
+(tabelas financial_entries e financial_accounts precisam existir).
+
+PONTO MAIS CRÍTICO: purchaseFinancialBridge.ts (Passo 2).
+É ele que conecta Compras com Financeiro. Sem ele os módulos ficam isolados.
+
+REGRAS:
+- Usar fornecedores_epi existente (NÃO criar tabela suppliers)
+- Usar createAuditLog em todas as ações
+- Usar smtpService para e-mails
+- Usar storagePut para fotos/documentos
+- Usar invokeLLM para IA no mapa de cotação
+- Todo cancelamento de OC DEVE fazer rollback financeiro completo
+
+Comece pelo Passo 1 (banco de dados), rode pnpm db:push
+e confirme o resultado antes de avançar.
+```
