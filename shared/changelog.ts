@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 389,
+    titulo: "BD — Constraint única: 1 orçamento ativo por obra (nunca mais duplicata)",
+    descricao: "Criado índice único parcial no PostgreSQL: CREATE UNIQUE INDEX orcamentos_obra_unica_ativa ON orcamentos (companyId, obraId) WHERE deleted_at IS NULL AND obraId IS NOT NULL. Isso torna fisicamente impossível ter dois orçamentos ativos para a mesma obra, independente de qualquer bug no frontend ou backend. A constraint foi testada e confirmada: INSERT de duplicata retorna 0 rows inseridas. Orçamentos soft-deletados (deleted_at IS NOT NULL) ficam fora da constraint e podem coexistir.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:00:00",
+  },
+  {
     version: 388,
     titulo: "Importar Orçamento — Corrige race condition no guard de conflito de obra",
     descricao: "Fix adicional ao bug de race condition: o guard anterior verificava obraIdsComOrcamento enquanto orcamentosQ ainda estava carregando, resultando num Set vazio que deixava o usuário passar para a etapa de mapeamento. Agora o botão 'Mapear Colunas' é desabilitado enquanto orcamentosQ.isLoading=true, e as funções handleGoToMapping/handleImportarCusto também retornam precocemente nessa condição. Orçamento CUSTO_783_01_2026_R02 (id=15) removido via soft-delete para liberar obra HOTEL DO PAPA (id=7).",
