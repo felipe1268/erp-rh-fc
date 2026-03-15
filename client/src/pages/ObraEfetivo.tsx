@@ -70,9 +70,19 @@ export default function ObraEfetivo() {
   const funcObraQ = trpc.obras.funcionarios.useQuery({ obraId: selectedObraId || 0, obraIds: selectedObraIds.length > 1 ? selectedObraIds : undefined }, { enabled: !!selectedObraId });
   const funcObra = funcObraQ.data ?? [];
 
-  // All active employees for multi-select
-  const allEmpsQ = trpc.employees.list.useQuery({ companyId, companyIds, status: "ativo" }, { enabled: !!companyId });
+  // All employees for multi-select (sem filtro de status — mostra todos os não-deletados)
+  const allEmpsQ = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const allEmps = allEmpsQ.data ?? [];
+
+  // IDs de todas as obras para drill-down de status
+  const allObraIds = useMemo(() => (efetivo as any[]).flatMap((e: any) => e.obraIds || [e.obraId]).filter(Boolean), [efetivo]);
+
+  // Query de funcionários de todas as obras (para drill-down de status)
+  const drillDownQ = trpc.obras.funcionarios.useQuery(
+    { obraId: allObraIds[0] || 0, obraIds: allObraIds },
+    { enabled: !!statusFilter && allObraIds.length > 0 }
+  );
+  const drillDownEmps = drillDownQ.data ?? [];
 
   // Histórico de alocações
   const historyQ = trpc.obras.employeeHistory.useQuery({ employeeId: historyEmployeeId || 0 }, { enabled: !!historyEmployeeId });
@@ -431,6 +441,66 @@ export default function ObraEfetivo() {
               ))}
             </div>
             </>
+          );
+        })()}
+
+        {/* Drill-down: lista de funcionários quando um status é filtrado */}
+        {statusFilter && (() => {
+          const statusLabels: Record<string, { label: string; bg: string; text: string; border: string }> = {
+            Ativo:          { label: "Ativos",        bg: "bg-green-50",  text: "text-green-800",  border: "border-green-200" },
+            Aviso:          { label: "Aviso Prévio",  bg: "bg-red-50",    text: "text-red-800",    border: "border-red-200" },
+            AvisoDispensado:{ label: "Dispensados",   bg: "bg-orange-50", text: "text-orange-800", border: "border-orange-200" },
+            Ferias:         { label: "Férias",        bg: "bg-amber-50",  text: "text-amber-800",  border: "border-amber-200" },
+            Afastado:       { label: "Afastados",     bg: "bg-purple-50", text: "text-purple-800", border: "border-purple-200" },
+            Licenca:        { label: "Licença",       bg: "bg-cyan-50",   text: "text-cyan-800",   border: "border-cyan-200" },
+            Recluso:        { label: "Reclusos",      bg: "bg-gray-50",   text: "text-gray-800",   border: "border-gray-200" },
+          };
+          const cfg = statusLabels[statusFilter] || { label: statusFilter, bg: "bg-slate-50", text: "text-slate-800", border: "border-slate-200" };
+          const matching = (drillDownEmps as any[]).filter((a: any) => (a.employee?.status || a.employee?.status) === statusFilter);
+          return (
+            <Card className={`border-2 ${cfg.border}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className={`font-bold text-base flex items-center gap-2 ${cfg.text}`}>
+                    <Users className="h-4 w-4" />
+                    Funcionários — {cfg.label} ({matching.length})
+                  </h3>
+                  {drillDownQ.isFetching && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </div>
+                {drillDownQ.isLoading ? (
+                  <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : matching.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhum funcionário encontrado para este status.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className={`${cfg.bg} border-b`}>
+                          <th className="text-left p-2 font-semibold">Funcionário</th>
+                          <th className="text-left p-2 font-semibold">Função</th>
+                          <th className="text-left p-2 font-semibold">Obra</th>
+                          <th className="text-left p-2 font-semibold">Admissão</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {matching.map((a: any) => (
+                          <tr key={a.employeeId} className="border-b hover:bg-slate-50 cursor-pointer" onClick={() => setRaioXEmployeeId(a.employeeId)}>
+                            <td className="p-2 font-medium text-blue-700 hover:underline">{a.employee?.nomeCompleto || `#${a.employeeId}`}</td>
+                            <td className="p-2 text-muted-foreground">{a.employee?.funcao || a.employee?.cargo || "—"}</td>
+                            <td className="p-2">
+                              {(efetivo as any[]).find((o: any) => (o.obraIds || [o.obraId]).includes(a.obraId))?.obraNome || `Obra #${a.obraId}`}
+                            </td>
+                            <td className="p-2 text-muted-foreground">
+                              {a.employee?.dataAdmissao ? new Date(a.employee.dataAdmissao + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           );
         })()}
 

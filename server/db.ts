@@ -1519,7 +1519,7 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
     companyId: data.companyId,
     funcaoNaObra: data.funcaoNaObra || null,
     dataInicio: hoje,
-    isActive: true,
+    isActive: 1,
   };
   const [result] = await db.insert(obraFuncionarios).values(insertData);
   // Registrar entrada no histórico
