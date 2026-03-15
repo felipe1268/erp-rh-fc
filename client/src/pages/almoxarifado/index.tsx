@@ -151,14 +151,32 @@ export default function AlmoxarifadoPage() {
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [formItem, setFormItem] = useState({ ...EMPTY_ITEM });
   const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [analisandoFotoIA, setAnalisandoFotoIA] = useState(false);
+  const [camposPreenchidosIA, setCamposPreenchidosIA] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
-  function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setModalItem(true); }
+  function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setCamposPreenchidosIA(false); setModalItem(true); }
   function abrirEditar(i: any) {
     setFormItem({ nome: i.nome, unidade: i.unidade, categoria: i.categoria ?? "", codigoInterno: i.codigoInterno ?? "", quantidadeAtual: n(i.quantidadeAtual), quantidadeMinima: n(i.quantidadeMinima), observacoes: i.observacoes ?? "", fotoUrl: i.fotoUrl ?? "" });
     setEditandoId(i.id);
+    setCamposPreenchidosIA(false);
     setModalItem(true);
   }
+
+  const sugerirCadastroMut = trpc.warehouse.sugerirCadastroItem.useMutation({
+    onSuccess: (sug) => {
+      setFormItem(p => ({
+        ...p,
+        nome: p.nome.trim() === "" ? sug.nome : p.nome,
+        categoria: p.categoria.trim() === "" ? sug.categoria : p.categoria,
+        unidade: p.unidade === "un" ? sug.unidade : p.unidade,
+        observacoes: p.observacoes.trim() === "" ? sug.observacoes : p.observacoes,
+      }));
+      if (sug.nome) setCamposPreenchidosIA(true);
+      setAnalisandoFotoIA(false);
+    },
+    onError: () => { setAnalisandoFotoIA(false); },
+  });
 
   async function handleFotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -167,6 +185,20 @@ export default function AlmoxarifadoPage() {
     try {
       const compressed = await compressImage(file);
       setFormItem(p => ({ ...p, fotoUrl: compressed }));
+      // Só faz análise IA ao cadastrar novo item
+      if (editandoId === null) {
+        setAnalisandoFotoIA(true);
+        setCamposPreenchidosIA(false);
+        const base64 = compressed.split(",")[1];
+        const mimeType = file.type || "image/jpeg";
+        sugerirCadastroMut.mutate({
+          companyId,
+          base64,
+          mimeType,
+          categorias: categorias as string[],
+          unidades: (unidades as any[]).map(u => u.sigla),
+        });
+      }
     } catch { toast.error("Erro ao processar imagem."); }
     finally { setUploadingFoto(false); e.target.value = ""; }
   }
@@ -646,15 +678,33 @@ export default function AlmoxarifadoPage() {
                     )}
                   </div>
                   <div className="flex-1 space-y-2">
-                    <p className="text-xs text-gray-500">Adicione uma foto para identificar visualmente o produto no almoxarifado.</p>
+                    {editandoId === null ? (
+                      <p className="text-xs text-gray-500">
+                        Tire ou envie uma foto — a <span className="font-medium text-violet-600">IA preencherá os campos automaticamente</span>.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500">Adicione uma foto para identificar visualmente o produto no almoxarifado.</p>
+                    )}
+                    {analisandoFotoIA && (
+                      <div className="flex items-center gap-1.5 text-xs text-violet-600 font-medium">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando com IA…
+                      </div>
+                    )}
+                    {camposPreenchidosIA && !analisandoFotoIA && (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1">
+                        <Sparkles className="h-3.5 w-3.5" /> Campos preenchidos pela IA — revise antes de salvar
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
                     <button type="button" onClick={() => fotoInputRef.current?.click()} className="text-xs border border-gray-200 px-3 py-1.5 rounded-lg bg-white text-gray-600 hover:bg-gray-50 transition">
                       {formItem.fotoUrl ? "Trocar foto" : "Escolher imagem"}
                     </button>
                     {formItem.fotoUrl && (
-                      <button type="button" onClick={() => setFormItem(p => ({ ...p, fotoUrl: "" }))} className="text-xs text-red-500 hover:text-red-700 ml-2">
+                      <button type="button" onClick={() => { setFormItem(p => ({ ...p, fotoUrl: "" })); setCamposPreenchidosIA(false); }} className="text-xs text-red-500 hover:text-red-700">
                         Remover
                       </button>
                     )}
+                    </div>
                     <p className="text-[11px] text-gray-400">JPG, PNG ou WEBP • Max. comprimido automaticamente</p>
                   </div>
                 </div>

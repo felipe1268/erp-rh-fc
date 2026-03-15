@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 312,
+    titulo: "Almoxarifado — Cadastro de Item com Preenchimento Automático por IA",
+    descricao: "Ao fazer upload de foto no modal 'Novo Item de Estoque', a IA (Gemini Vision) analisa a imagem e preenche automaticamente: nome técnico, categoria, unidade e observações. Spinner 'Analisando com IA…' durante o processamento; badge verde 'Campos preenchidos pela IA' ao concluir. Campos já preenchidos pelo usuário não são sobrescritos. Funciona apenas ao criar novo item. Novo endpoint sugerirCadastroItem no backend.",
+    tipo: "funcionalidade",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 17:30:00",
+  },
+  {
     version: 308,
     titulo: "Almoxarifado — Modal Emprestar: tela maior e foto do funcionário ampliada",
     descricao: "Modal 'Emprestar Ferramenta' ampliado para max-w-lg. Card de funcionário selecionado redesenhado: foto circular centralizada de 112px (w-28 h-28) com borda esmeralda e sombra, nome e cargo abaixo. Ícone genérico também em 112px quando não há foto cadastrada.",
