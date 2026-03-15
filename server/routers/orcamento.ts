@@ -450,10 +450,14 @@ const COL_ALIASES: Record<string, string[]> = {
                    'preototalmaterial',   // sem c ← FC CUSTO ("Preço Total Material")
                    'valortotalmat', 'precototalmat'],
   cuTotalMdo:     ['ptotalmo', 'pttotalmo', 'ctmo', 'custototalmo', 'totalmo', 'totalmaodeobra',
-                   'precototalmo',        // com c (cedilha mantida)
-                   'preototalmo',         // sem c ← FC CUSTO ("Preço total MO")
+                   'precototalmo',          // combined "Preço Total" + "MO"
+                   'precototalmaodeobra',   // combined "Preço Total" + "Mão de Obra"
+                   'preototalmdo',          // sem c
+                   'preototalmo',           // sem c
+                   'maodeobra',             // sub-label standalone "Mão de Obra"
+                   'mdo',                   // sub-label standalone "MDO"
                    // NÃO usar 'precototal'/'preototal' aqui: são prefixo de "...material" → falso-positivo
-                   'valortotalmo'],
+                   'valortotalmo', 'valortotalmaodeobra'],
   // Custo total do serviço — "Custo" sozinho (col final de totais)
   // IMPORTANTE: "custo" e "total" são aliases CURTOS → só casam por igualdade exata
   custoTotal:     ['custototal', 'totalcusto', 'custogeral', 'totalgeral', 'custo', 'total', 'ct'],
@@ -468,16 +472,19 @@ const COL_ALIASES: Record<string, string[]> = {
 function detectarColunas(labelRow: any[], parentRow: any[] | null): Record<string, number> {
   const colMap: Record<string, number> = {};
 
-  // Forward-fill de 1 posição no parentRow para cobrir células mescladas.
-  // Ex: "Preço Total" mesclado sobre colunas W-X → Excel deixa X vazio.
-  // Preenchemos X com o valor de W (apenas 1 posição, não propagamos mais).
+  // Forward-fill completo no parentRow para cobrir células mescladas de N colunas.
+  // Ex: "Preço Total" mesclado sobre colunas W-X-Y → Excel deixa X e Y vazios.
+  // Preenchemos todas as posições vazias consecutivas após uma célula com valor.
   const filledParent: any[] | null = parentRow
-    ? parentRow.map((cell, idx) => {
-        if (String(cell || '').trim()) return cell;
-        // Só preenche se o original da posição anterior (não o já preenchido) tem valor
-        if (idx > 0 && String(parentRow[idx - 1] || '').trim()) return parentRow[idx - 1];
-        return cell;
-      })
+    ? (() => {
+        const filled = [...parentRow];
+        for (let i = 1; i < filled.length; i++) {
+          if (!String(filled[i] || '').trim() && String(filled[i - 1] || '').trim()) {
+            filled[i] = filled[i - 1];
+          }
+        }
+        return filled;
+      })()
     : null;
 
   labelRow.forEach((cell: any, idx: number) => {
@@ -1541,16 +1548,26 @@ export const orcamentoRouter = router({
       const parentRow = labelRowIdx > 0 ? rows[labelRowIdx - 1] : null;
       const labelRow  = rows[labelRowIdx];
 
-      // Mesmo forward-fill usado em detectarColunas para células mescladas
+      // Forward-fill completo — mesmo algoritmo de detectarColunas (células mescladas N colunas)
       const filledParentPreview: any[] | null = parentRow
-        ? parentRow.map((cell: any, idx: number) => {
-            if (String(cell || '').trim()) return cell;
-            if (idx > 0 && String(parentRow[idx - 1] || '').trim()) return parentRow[idx - 1];
-            return cell;
-          })
+        ? (() => {
+            const filled = [...parentRow];
+            for (let i = 1; i < filled.length; i++) {
+              if (!String(filled[i] || '').trim() && String(filled[i - 1] || '').trim()) {
+                filled[i] = filled[i - 1];
+              }
+            }
+            return filled;
+          })()
         : null;
 
       const detectedMap = detectarColunas(labelRow, parentRow);
+
+      // Diagnóstico — ajuda a rastrear falhas de detecção
+      console.log('[previewSheet] headerIdx:', headerIdx, 'labelRowIdx:', labelRowIdx);
+      console.log('[previewSheet] Labels (0-29):', labelRow.slice(0, 30).map((c: any, i: number) => `[${i}]${String(c||'').substring(0,14)}`).join(' '));
+      if (parentRow) console.log('[previewSheet] Parent (0-29):', parentRow.slice(0, 30).map((c: any, i: number) => `[${i}]${String(c||'').substring(0,14)}`).join(' '));
+      console.log('[previewSheet] detectedMap:', JSON.stringify(detectedMap));
 
       // Todas as colunas com algum conteúdo no cabeçalho (para os dropdowns)
       const allColumns: { idx: number; label: string }[] = [];

@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 382,
+    titulo: "Import Orçamento — Fix detecção 'Preço total MO' + forward-fill células mescladas",
+    descricao: "1) Adicionados aliases para cuTotalMdo: 'precototalmaodeobra', 'maodeobra', 'mdo', 'preototalmdo', 'valortotalmaodeobra' — cobre variações de 'Mão de Obra' como sub-label. 2) Forward-fill do parentRow agora propaga por TODAS as células vazias consecutivas (era só 1 posição), cobrindo células mescladas de 3+ colunas. 3) Mesmo fix aplicado no previewSheet. 4) Logs de diagnóstico adicionados ao previewSheet para rastrear falhas futuras.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 381,
     titulo: "Import Orçamento — Perfil fixo FC Engenharia (auto-bypass mapeamento)",
     descricao: "Criado perfil FC_PRESET com as colunas confirmadas pelo cliente: K=Item, P=Descrição, Q=Unidade, R=Quantidade, T=Preço Unit.Mat, V=Preço Unit.MO, W=Total Mat, X=Total MO, Y=Custo Total. Quando o arquivo uploadado possui pelo menos 25 colunas e todas as posições do preset existem, o mapeamento é aplicado automaticamente e a tela mostra banner verde 'Formato FC Engenharia detectado' com botão 'Importar agora' — sem precisar navegar pela tabela de colunas. Prioridade: 1) mapeamento salvo pelo usuário, 2) preset FC, 3) detecção automática por nomes.",
