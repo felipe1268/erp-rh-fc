@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 317,
+    titulo: "Correção — thinkingConfig no nível incorreto da API Gemini",
+    descricao: "thinkingConfig estava no nível raiz do body da requisição (inválido) em vez de dentro de generationConfig. Corrigido o aninhamento para generationConfig.thinkingConfig.thinkingBudget=0, eliminando o erro 400 'Unknown name thinkingConfig: Cannot find field' ao analisar foto de produto.",
+    tipo: "correcao",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 20:30:00",
+  },
+  {
     version: 316,
     titulo: "Almoxarifado — Modal Novo Item: remove Código Interno e corrige digitação de quantidade",
     descricao: "Removido campo 'Código Interno' do modal de cadastro de item (campo desnecessário para almoxarifado). Corrigidos os campos 'Qtd. Mínima (alerta)' e 'Quantidade Inicial em Estoque' que usavam type=number controlado e travavam ao digitar; substituídos por type=text com inputMode=decimal, aceitando vírgula e ponto como separador decimal.",
