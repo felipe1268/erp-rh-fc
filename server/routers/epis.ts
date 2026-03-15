@@ -159,8 +159,8 @@ export const episRouter = router({
       const db = (await getDb())!;
       const semFoto = await db.execute(sql`
         SELECT id, nome, categoria FROM epis
-        WHERE company_id = ${input.companyId}
-          AND (foto_url IS NULL OR foto_url = '')
+        WHERE "companyId" = ${input.companyId}
+          AND ("fotoUrl" IS NULL OR "fotoUrl" = '')
           AND lower(coalesce(nome,'')) NOT LIKE '%uniforme%'
           AND lower(coalesce(categoria,'')) NOT LIKE '%uniforme%'
         ORDER BY nome
@@ -172,7 +172,7 @@ export const episRouter = router({
         try {
           const url = await buscarFotoParaItem(item.nome);
           if (url) {
-            await db.execute(sql`UPDATE epis SET foto_url = ${url} WHERE id = ${item.id}`);
+            await db.execute(sql`UPDATE epis SET "fotoUrl" = ${url} WHERE id = ${item.id}`);
             atualizados++;
           } else {
             erros.push(item.nome);
