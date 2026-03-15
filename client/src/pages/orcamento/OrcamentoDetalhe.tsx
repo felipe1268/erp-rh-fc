@@ -18,7 +18,7 @@ import {
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, TrendingUp, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
-  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent, Pencil, Trash2,
+  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent, Pencil, Trash2, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -85,6 +85,7 @@ export default function OrcamentoDetalhe() {
   const [activeTab, setActiveTab]   = useState<string>("eap");
   const [versao, setVersao]         = useState<Versao>("custo");
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
+  const [searchText, setSearchText] = useState("");
   const [localMetaPerc, setLocalMetaPerc] = useState(20);
   const [metaInput, setMetaInput]   = useState("20");
   const [metaValInput, setMetaValInput] = useState(""); // input R$ — vazio = usa valor calculado
@@ -369,7 +370,32 @@ export default function OrcamentoDetalhe() {
     ? n(orc.margemLucroBdi)
     : (totalVenda > 0 && totalCusto > 0 ? (totalVenda - totalCusto) / totalVenda : 0);
 
+  const searchLower = searchText.trim().toLowerCase();
+
+  // Quando há busca: mostrar itens que batem + todos os ancestrais (para manter contexto da EAP)
+  const matchingCodes = searchLower
+    ? new Set(
+        itens
+          .filter(i =>
+            i.descricao.toLowerCase().includes(searchLower) ||
+            i.eapCodigo.toLowerCase().includes(searchLower)
+          )
+          .flatMap(match => {
+            // inclui o próprio item e todos seus ancestrais
+            const ancestors: string[] = [match.eapCodigo];
+            const parts = match.eapCodigo.split(".");
+            for (let k = parts.length - 1; k >= 1; k--) {
+              ancestors.push(parts.slice(0, k).join("."));
+            }
+            return ancestors;
+          })
+      )
+    : null;
+
   const visibleItems = itens.filter(item => {
+    // Modo busca: mostrar apenas itens relevantes, ignorar collapse
+    if (matchingCodes) return matchingCodes.has(item.eapCodigo);
+    // Modo normal: respeitar collapse
     if (item.nivel === 1) return true;
     const idx = itens.indexOf(item);
     for (let lvl = item.nivel - 1; lvl >= 1; lvl--) {
@@ -814,10 +840,32 @@ export default function OrcamentoDetalhe() {
                 setCollapsed(new Set(itens.filter(i => childMap[i.eapCodigo] && i.nivel >= lvl).map(i => i.eapCodigo)));
               return (
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    {itens.length} itens · exibindo{" "}
-                    <span className={`${cfg.valueClass} font-semibold`}>{cfg.label}</span>
-                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-xs text-muted-foreground">
+                      {searchText ? `${visibleItems.length} de ${itens.length} itens` : `${itens.length} itens`}
+                      {" · exibindo "}
+                      <span className={`${cfg.valueClass} font-semibold`}>{cfg.label}</span>
+                    </p>
+                    {/* Campo de busca por descrição */}
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Filtrar por descrição..."
+                        value={searchText}
+                        onChange={e => setSearchText(e.target.value)}
+                        className="pl-6 pr-6 py-0.5 h-6 text-[11px] border border-input rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring w-52"
+                      />
+                      {searchText && (
+                        <button
+                          onClick={() => setSearchText("")}
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-1 flex-wrap">
                     <span className="text-[11px] text-muted-foreground mr-1">Nível:</span>
                     {Array.from({ length: maxLvl }, (_, i) => i + 1).map(lvl => (

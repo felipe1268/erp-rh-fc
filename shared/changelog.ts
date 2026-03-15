@@ -1510,6 +1510,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 369,
+    titulo: "Orçamento — Filtro de busca por descrição na tabela EAP",
+    descricao: "Adicionado campo de busca textual na barra de controle da tabela EAP do orçamento. Ao digitar, filtra itens por descrição ou código EAP, exibindo os resultados juntamente com todos os ancestrais para manter o contexto hierárquico. O contador de itens mostra 'X de Y itens' durante a busca. Um botão X limpa o filtro instantaneamente. Em modo de busca o colapso é ignorado — todos os itens relevantes aparecem expandidos.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 368,
     titulo: "Orçamento — Visões Custo/Meta/Venda propagadas em todas as colunas",
     descricao: "Corrigido erro conceitual crítico no módulo Orçamento: ao trocar a visão entre Custo, Meta e Venda, agora TODAS as colunas se atualizam — P.Unit.Mat, P.Unit.MO, P.Total.Mat, P.Total.MO — e não apenas a coluna final. Para a visão Meta aplica o fator (1 − metaPerc/100) uniformemente sobre mat e mdo. Para a visão Venda aplica o fator BDI (vendaTotal/custoTotal) por item em unitários e por grupo em totais. Os cabeçalhos das colunas agora exibem um sublabel indicando a visão ativa. Isso corrige o fluxo de compras (SC → Cotação → OC) que dependia dos preços unitários corretos para as cotações.",
