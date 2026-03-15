@@ -452,24 +452,25 @@ export default function AlmoxarifadoPage() {
   // ── Modal Registros ─────────────────────────────────────────────
   const [modalRegistros, setModalRegistros] = useState(false);
   const [abaRegistros, setAbaRegistros] = useState<"entradas" | "saidas" | "emprestados" | "insumos" | "transferencias" | "cadastros">("entradas");
+  const [filtroData, setFiltroData] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const { data: movEntradas = [], isLoading: loadingEntradas } = trpc.warehouse.listMovements.useQuery(
-    { companyId, tipo: "entrada", limit: 300 },
+    { companyId, tipo: "entrada", limit: 300, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "entradas" }
   );
   const { data: movSaidas = [], isLoading: loadingSaidas } = trpc.warehouse.listMovements.useQuery(
-    { companyId, tipo: "saida", limit: 300 },
+    { companyId, tipo: "saida", limit: 300, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "saidas" }
   );
   const { data: loansAbertos = [], isLoading: loadingLoans } = trpc.warehouse.listOpenLoans.useQuery(
-    { companyId },
+    { companyId, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "emprestados" }
   );
   const { data: insumosRegistros = [], isLoading: loadingInsumos } = trpc.warehouse.listInsumos.useQuery(
-    { companyId, limit: 300 },
+    { companyId, limit: 300, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "insumos" }
   );
   const { data: transferenciasRegistros = [], isLoading: loadingTransferencias } = trpc.warehouse.listTransferencias.useQuery(
-    { companyId, limit: 300 },
+    { companyId, limit: 300, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "transferencias" }
   );
 
@@ -2063,6 +2064,51 @@ export default function AlmoxarifadoPage() {
               </button>
             ))}
           </div>
+          {/* ── FILTRO DE DATA ───────────────────────────────────── */}
+          {abaRegistros !== "cadastros" && (
+            <div className="flex items-center justify-between bg-gray-50 border-b px-4 py-2 gap-2">
+              <button
+                onClick={() => {
+                  const d = new Date(filtroData + "T12:00:00");
+                  d.setDate(d.getDate() - 1);
+                  setFiltroData(d.toISOString().split("T")[0]);
+                }}
+                className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-200 transition text-gray-600 font-bold text-lg"
+              >‹</button>
+              <div className="flex flex-col items-center flex-1">
+                <input
+                  type="date"
+                  value={filtroData}
+                  max={new Date().toISOString().split("T")[0]}
+                  onChange={e => setFiltroData(e.target.value)}
+                  className="text-sm font-semibold text-gray-800 bg-transparent border-none outline-none text-center cursor-pointer"
+                />
+                {filtroData === new Date().toISOString().split("T")[0] ? (
+                  <span className="text-xs text-emerald-600 font-bold">HOJE</span>
+                ) : filtroData === new Date(Date.now() - 86400000).toISOString().split("T")[0] ? (
+                  <span className="text-xs text-blue-500 font-semibold">ONTEM</span>
+                ) : (
+                  <span className="text-xs text-gray-400">
+                    {new Date(filtroData + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short" }).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  const d = new Date(filtroData + "T12:00:00");
+                  const hoje = new Date();
+                  hoje.setHours(0,0,0,0);
+                  if (d < hoje) {
+                    d.setDate(d.getDate() + 1);
+                    setFiltroData(d.toISOString().split("T")[0]);
+                  }
+                }}
+                className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-200 transition text-gray-600 font-bold text-lg disabled:opacity-30"
+                disabled={filtroData === new Date().toISOString().split("T")[0]}
+              >›</button>
+            </div>
+          )}
+
           {/* Conteúdo */}
           <div className="flex-1 overflow-y-auto p-4">
 
