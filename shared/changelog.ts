@@ -1239,4 +1239,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 17:00:00",
   },
+  {
+    version: 331,
+    titulo: "Almoxarifado — 5 correções de UX e fluxo",
+    descricao: "1) Removido 'Cadastros' da barra secundária (agora 4 itens: Entradas, Ferramentas, Insumos, Transferências). 2) Sidebar lateral recebe seção 'Ações Rápidas' com links para todos os modais via ?modal=X (Entrada, Ferramentas, Insumo, Transferir, Fechar Dia, Cadastros). 3) Fechar Dia agora exibe data completa no formato dd/MM/yyyy às HH:mm. 4) Timeline de empréstimos passa obraId correto para que o nome da obra apareça no RaioX. 5) Modal de Insumo auto-preenche 'Obra de destino' quando em contexto de obra (mostra campo bloqueado) e não exige seleção manual.",
+    tipo: "fix",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 18:00:00",
+  },
 ];
