@@ -194,6 +194,7 @@ export const warehouseRouter = router({
         itemId: z.number().optional(),
         tipo: z.string().optional(),
         limit: z.number().default(100),
+        data: z.string().optional(), // YYYY-MM-DD
       })
     )
     .query(async ({ input }) => {
@@ -205,6 +206,7 @@ export const warehouseRouter = router({
       ];
       if (input.itemId) conditions.push(eq(almoxarifadoMovimentacoes.itemId, input.itemId));
       if (input.tipo) conditions.push(eq(almoxarifadoMovimentacoes.tipo, input.tipo));
+      if (input.data) conditions.push(sql`DATE(${almoxarifadoMovimentacoes.criadoEm}) = ${input.data}::date`);
 
       const movs = await db
         .select({
@@ -330,20 +332,24 @@ export const warehouseRouter = router({
 
   // Listar todos empréstimos em aberto
   listOpenLoans: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), data: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      const conditions: any[] = [eq(warehouseLoans.companyId, input.companyId)];
+      if (input.data) {
+        // filtrar por dia: mostra todos (emprestado + devolvido) do dia
+        conditions.push(eq(warehouseLoans.dataEmprestimo, input.data));
+      } else {
+        // sem filtro de data: mostra só os abertos
+        conditions.push(eq(warehouseLoans.status, "emprestado"));
+      }
+
       return db
         .select()
         .from(warehouseLoans)
-        .where(
-          and(
-            eq(warehouseLoans.companyId, input.companyId),
-            eq(warehouseLoans.status, "emprestado")
-          )
-        )
+        .where(and(...conditions))
         .orderBy(desc(warehouseLoans.createdAt));
     }),
 
@@ -1026,6 +1032,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       limit:          z.number().default(200),
       funcionarioId:  z.number().optional(),
       obraId:         z.number().optional(),
+      data:           z.string().optional(), // YYYY-MM-DD
     }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1035,6 +1042,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
             WHERE company_id = ${input.companyId}
             ${input.funcionarioId ? sql`AND funcionario_id = ${input.funcionarioId}` : sql``}
             ${input.obraId ? sql`AND obra_id = ${input.obraId}` : sql``}
+            ${input.data ? sql`AND DATE(created_at) = ${input.data}::date` : sql``}
             ORDER BY created_at DESC
             LIMIT ${input.limit}`
       );
@@ -1151,13 +1159,14 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
 
   // ── LISTAR TRANSFERÊNCIAS ───────────────────────────────────
   listTransferencias: protectedProcedure
-    .input(z.object({ companyId: z.number(), limit: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), limit: z.number().optional(), data: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
       const rows = await db.execute(
         sql`SELECT * FROM almoxarifado_transferencias
             WHERE company_id = ${input.companyId}
+            ${input.data ? sql`AND DATE(created_at) = ${input.data}::date` : sql``}
             ORDER BY created_at DESC
             LIMIT ${input.limit ?? 200}`
       );

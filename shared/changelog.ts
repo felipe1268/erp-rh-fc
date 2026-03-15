@@ -1195,6 +1195,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 18:00:00",
   },
   {
+    version: 330,
+    titulo: "Almoxarifado — Filtro por dia nos Registros (Entradas, Ferramentas, Insumos, Transferências)",
+    descricao: "Adicionado filtro de data no painel de Registros do Almoxarifado. Barra de navegação com setas ‹ › para navegar entre dias, mostra 'HOJE' / 'ONTEM' / dia da semana. Input de data para ir direto a qualquer dia. Padrão: dia atual. Não mostra registros de datas futuras. Todos os endpoints (listMovements, listOpenLoans, listInsumos, listTransferencias) receberam parâmetro data opcional para filtrar no banco. Aba Cadastros não exibe filtro de data.",
+    tipo: "feature",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 21:00:00",
+  },
+  {
     version: 329,
     titulo: "Almoxarifado — UX simplificada: botão SAÍDA removido, EMPRESTAR renomeado para FERRAMENTAS",
     descricao: "Simplificação da interface do almoxarifado para usuários operacionais. Botão SAÍDA removido (coberto pelo INSUMO + TRANSFERIR). Botão EMPRESTAR renomeado para FERRAMENTAS. Modal renomeado para 'Ferramentas — Empréstimo'. Grid de botões ajustado de 6 para 5 colunas. Aba 'Emprestados' renomeada para 'Ferramentas' em todos os painéis. Histórico de saídas preservado internamente.",
