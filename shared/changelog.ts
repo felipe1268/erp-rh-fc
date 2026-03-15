@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 321,
+    titulo: "Almoxarifado — Botão Editar e Correção de Estoque nos Cards",
+    descricao: "Adicionado botão de lápis (✏) explícito na barra de ações de cada card de item, ao lado dos botões In/Out. No modal de edição, o campo 'Quantidade Inicial' vira 'Corrigir Estoque Atual' com borda âmbar e aviso, permitindo ajustar diretamente o saldo do item. Backend atualizado para aceitar quantidadeAtual no endpoint atualizarItem.",
+    tipo: "funcionalidade",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 22:30:00",
+  },
+  {
     version: 320,
     titulo: "Almoxarifado — Controle de Equipamentos Locados (Alugado/Próprio)",
     descricao: "Novo campo 'Origem' no cadastro de itens: 'Próprio da Empresa' ou 'Alugado / Locado'. Quando alugado, exibe campos extras: Fornecedor/Locadora, Data Início, Data de Vencimento, Valor Mensal e Observações do Contrato. Badge 'LOCADO' (laranja) aparece nos cards. Contador de vencimento direto no card (verde > 7d, laranja ≤ 7d, vermelho vencido). Alerta no header do módulo quando há locações a vencer em até 30 dias. Botão de devolução (✓) por card para registrar a devolução ao fornecedor e desativar o item. Modal de confirmação de devolução com campo de observação.",

@@ -304,6 +304,7 @@ export const comprasRouter = router({
       dataVencimentoLocacao: z.string().nullable().optional(),
       valorLocacaoMensal:    z.number().nullable().optional(),
       observacoesLocacao:    z.string().nullable().optional(),
+      quantidadeAtual:       z.number().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -322,6 +323,7 @@ export const comprasRouter = router({
       if ('dataVencimentoLocacao' in data)         updates.dataVencimentoLocacao = data.dataVencimentoLocacao;
       if ('valorLocacaoMensal' in data)            updates.valorLocacaoMensal = data.valorLocacaoMensal != null ? String(data.valorLocacaoMensal) : null;
       if ('observacoesLocacao' in data)            updates.observacoesLocacao = data.observacoesLocacao;
+      if (data.quantidadeAtual !== undefined && data.quantidadeAtual !== null) updates.quantidadeAtual = String(data.quantidadeAtual);
       await db.update(almoxarifadoItens).set(updates).where(eq(almoxarifadoItens.id, id));
       return { success: true };
     }),
