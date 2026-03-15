@@ -8,7 +8,7 @@ import {
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
   LayoutGrid, List, Camera, Trash2, ImageOff,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight,
-  Building2, HardHat,
+  Building2, HardHat, Sparkles, ScanLine,
 } from "lucide-react";
 
 
@@ -65,6 +65,43 @@ export default function AlmoxarifadoPage() {
   const [apenasAbaixo, setApenasAbaixo] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [obraContexto, setObraContexto] = useState<number | null>(null);
+
+  // Busca por foto (IA)
+  const fotoInputRef = useRef<HTMLInputElement>(null);
+  const [modalFotoIA, setModalFotoIA] = useState(false);
+  const [fotoIAPreview, setFotoIAPreview] = useState<string>("");
+  const [fotoIADescricao, setFotoIADescricao] = useState<string>("");
+  const [fotoIAMatches, setFotoIAMatches] = useState<Array<{id:number;nome:string;similaridade:number;motivo:string}>>([]);
+  const identificarPorFoto = trpc.warehouse.identificarPorFoto.useMutation({
+    onSuccess: (d) => { setFotoIADescricao(d.descricao); setFotoIAMatches(d.matches as any); },
+    onError: (e) => { toast.error("Erro ao identificar: " + e.message); setModalFotoIA(false); },
+  });
+
+  function handleFotoIAChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setFotoIAPreview(dataUrl);
+      setFotoIADescricao("");
+      setFotoIAMatches([]);
+      setModalFotoIA(true);
+      const base64 = dataUrl.split(",")[1];
+      identificarPorFoto.mutate({ companyId, obraId: obraContexto, base64, mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  function selecionarItemIA(id: number) {
+    const item = itens.find((i: any) => i.id === id);
+    if (item) {
+      setBusca(item.nome);
+      setModalFotoIA(false);
+      toast.success(`Item "${item.nome}" selecionado`);
+    }
+  }
 
   const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery(
     { companyId, companyIds: [companyId] }, { enabled: !!companyId }
@@ -390,6 +427,23 @@ export default function AlmoxarifadoPage() {
                 value={busca} onChange={e => setBusca(e.target.value)}
               />
             </div>
+            {/* Botão de busca por foto (IA) */}
+            <button
+              onClick={() => fotoInputRef.current?.click()}
+              className="h-9 px-3 flex items-center gap-2 bg-violet-500 hover:bg-violet-600 text-white text-sm font-medium rounded-lg transition shadow-sm"
+              title="Identificar item por foto (IA)"
+            >
+              <ScanLine className="w-4 h-4" />
+              <span className="hidden sm:inline">Foto IA</span>
+            </button>
+            <input
+              ref={fotoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleFotoIAChange}
+            />
             <select
               value={filtroCateg} onChange={e => setFiltroCateg(e.target.value)}
               className="h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 outline-none focus:border-emerald-400"
@@ -1174,6 +1228,98 @@ export default function AlmoxarifadoPage() {
               >
                 {criarUnidadeMut.isPending ? "Salvando..." : "Adicionar Unidade"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL BUSCA POR FOTO IA ══════════════════════════════════ */}
+      {modalFotoIA && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ background: "#ffffff", color: "#111827" }}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-violet-50">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-violet-500" />
+                <h2 className="text-base font-bold text-gray-900">Identificação por Foto — IA</h2>
+              </div>
+              <button onClick={() => setModalFotoIA(false)}><X className="w-5 h-5 text-gray-400 hover:text-gray-700" /></button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Preview da foto */}
+              {fotoIAPreview && (
+                <div className="flex justify-center">
+                  <img src={fotoIAPreview} alt="Foto enviada" className="max-h-52 rounded-xl object-contain border border-gray-100 shadow" />
+                </div>
+              )}
+
+              {/* Processando */}
+              {identificarPorFoto.isPending && (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="relative">
+                    <Loader2 className="w-10 h-10 animate-spin text-violet-500" />
+                    <Sparkles className="w-4 h-4 text-violet-400 absolute -top-1 -right-1 animate-pulse" />
+                  </div>
+                  <p className="text-sm text-gray-500 text-center">Analisando a foto com IA...<br /><span className="text-xs text-gray-400">Gemini Vision está identificando o item</span></p>
+                </div>
+              )}
+
+              {/* Descrição da IA */}
+              {fotoIADescricao && !identificarPorFoto.isPending && (
+                <div className="bg-violet-50 border border-violet-100 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-violet-700 mb-1 flex items-center gap-1"><Sparkles className="w-3 h-3" /> IA identificou:</p>
+                  <p className="text-sm text-gray-700">{fotoIADescricao}</p>
+                </div>
+              )}
+
+              {/* Matches */}
+              {fotoIAMatches.length > 0 && !identificarPorFoto.isPending && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Itens do catálogo correspondentes</p>
+                  {fotoIAMatches.map((m, idx) => (
+                    <button
+                      key={m.id}
+                      onClick={() => selecionarItemIA(m.id)}
+                      className="w-full text-left flex items-center gap-3 p-3 rounded-xl border hover:border-violet-400 hover:bg-violet-50 transition group"
+                    >
+                      {/* Ranking badge */}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${idx === 0 ? "bg-violet-500 text-white" : "bg-gray-100 text-gray-600"}`}>
+                        #{idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 text-sm truncate group-hover:text-violet-700">{m.nome}</p>
+                        <p className="text-xs text-gray-500 truncate">{m.motivo}</p>
+                      </div>
+                      {/* Barra de similaridade */}
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span className="text-xs font-bold text-violet-600">{m.similaridade}%</span>
+                        <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-violet-500 rounded-full" style={{ width: `${m.similaridade}%` }} />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Nenhum match */}
+              {!identificarPorFoto.isPending && fotoIADescricao && fotoIAMatches.length === 0 && (
+                <div className="text-center py-4 space-y-2">
+                  <ImageOff className="w-10 h-10 text-gray-300 mx-auto" />
+                  <p className="text-sm text-gray-500">Nenhum item do catálogo foi identificado.<br /><span className="text-xs text-gray-400">Tente uma foto mais próxima ou com melhor iluminação.</span></p>
+                </div>
+              )}
+
+              {/* Botão tirar outra foto */}
+              {!identificarPorFoto.isPending && (
+                <button
+                  onClick={() => fotoInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-violet-200 rounded-xl text-sm text-violet-500 hover:border-violet-400 hover:bg-violet-50 transition"
+                >
+                  <Camera className="w-4 h-4" /> Tirar outra foto
+                </button>
+              )}
             </div>
           </div>
         </div>

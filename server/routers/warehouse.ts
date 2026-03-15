@@ -487,6 +487,100 @@ export const warehouseRouter = router({
         .limit(6);
     }),
 
+  // ── IDENTIFICAR ITEM POR FOTO (IA) ────────────────────────────
+  identificarPorFoto: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().nullable().optional(),
+      base64: z.string(),
+      mimeType: z.string().default("image/jpeg"),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { invoke } = await import("../_core/llm");
+
+      // Busca catálogo de itens da empresa/obra
+      const { isNull } = await import("drizzle-orm");
+      const conditions: any[] = [
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.ativo, true),
+      ];
+      if (input.obraId) {
+        conditions.push(eq(almoxarifadoItens.obraId, input.obraId));
+      } else {
+        conditions.push(isNull(almoxarifadoItens.obraId));
+      }
+      const catalogo = await db
+        .select({
+          id: almoxarifadoItens.id,
+          nome: almoxarifadoItens.nome,
+          categoria: almoxarifadoItens.categoria,
+          codigoInterno: almoxarifadoItens.codigoInterno,
+          unidade: almoxarifadoItens.unidade,
+        })
+        .from(almoxarifadoItens)
+        .where(and(...conditions))
+        .limit(300);
+
+      if (catalogo.length === 0) {
+        return { matches: [], descricao: "Nenhum item no catálogo." };
+      }
+
+      const catalogoStr = catalogo
+        .map(i => `ID:${i.id} | ${i.nome}${i.codigoInterno ? ` (${i.codigoInterno})` : ""} | ${i.categoria ?? "Sem categoria"} | ${i.unidade}`)
+        .join("\n");
+
+      const dataUrl = `data:${input.mimeType};base64,${input.base64}`;
+
+      const result = await invoke({
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: dataUrl, detail: "high" },
+              },
+              {
+                type: "text",
+                text: `Você é um especialista em materiais de construção civil e ferramentas. Analise a imagem e identifique o produto/ferramenta mostrado.
+
+Catálogo disponível (formato ID | Nome | Categoria | Unidade):
+${catalogoStr}
+
+Responda SOMENTE em JSON, sem markdown, no formato:
+{
+  "descricao": "descrição breve do que você vê na foto em português",
+  "matches": [
+    { "id": <número do ID>, "nome": "<nome do item>", "similaridade": <0 a 100>, "motivo": "<por que corresponde>" }
+  ]
+}
+
+Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenhum item do catálogo for compatível, retorne matches vazio. Use apenas IDs que existam no catálogo acima.`,
+              },
+            ],
+          },
+        ],
+        maxTokens: 512,
+      });
+
+      const text = typeof result.choices[0].message.content === "string"
+        ? result.choices[0].message.content
+        : "";
+
+      try {
+        const clean = text.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(clean);
+        const validMatches = (parsed.matches ?? [])
+          .filter((m: any) => catalogo.some(c => c.id === m.id))
+          .slice(0, 5);
+        return { descricao: parsed.descricao ?? "", matches: validMatches };
+      } catch {
+        return { descricao: text.slice(0, 200), matches: [] };
+      }
+    }),
+
   // ── INVENTÁRIO SEMANAL ─────────────────────────────────────────
   getInventorySession: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().nullable().optional() }))
