@@ -2260,7 +2260,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                         variant="outline"
                                         className="text-xs text-green-700 border-green-300 hover:bg-green-50"
                                         onClick={() => aprovarDescontoMut.mutate({ id: d.id, mesDesconto: d.mesDesconto || undefined })}
-                                        disabled={aprovarDescontoMut.isLoading}
+                                        disabled={aprovarDescontoMut.isPending}
                                       >
                                         <CheckCircle className="w-3 h-3 mr-1" />
                                         Aprovar
@@ -2377,7 +2377,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               <Button variant="outline" onClick={() => setDescontoModal(null)}>Cancelar</Button>
               <Button
                 className="bg-red-600 hover:bg-red-700 text-white"
-                disabled={!descontoValor || parseFloat(descontoValor) <= 0 || criarDescontoMut.isLoading}
+                disabled={!descontoValor || parseFloat(descontoValor) <= 0 || criarDescontoMut.isPending}
                 onClick={() => criarDescontoMut.mutate({
                   companyId: descontoModal.loan.companyId,
                   employeeId: descontoModal.loan.funcionarioId,
@@ -2390,7 +2390,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   mesDesconto: descontoMes || undefined,
                 })}
               >
-                {criarDescontoMut.isLoading ? "Salvando..." : "Confirmar Desconto"}
+                {criarDescontoMut.isPending ? "Salvando..." : "Confirmar Desconto"}
               </Button>
             </div>
           </div>
@@ -2419,10 +2419,10 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               <Button variant="outline" onClick={() => setReprovarModal(null)}>Cancelar</Button>
               <Button
                 className="bg-red-600 hover:bg-red-700 text-white"
-                disabled={reprovarDescontoMut.isLoading}
+                disabled={reprovarDescontoMut.isPending}
                 onClick={() => reprovarDescontoMut.mutate({ id: reprovarModal.id, motivoReprovacao: reprovarMotivo || undefined })}
               >
-                {reprovarDescontoMut.isLoading ? "Salvando..." : "Confirmar Reprovação"}
+                {reprovarDescontoMut.isPending ? "Salvando..." : "Confirmar Reprovação"}
               </Button>
             </div>
           </div>
@@ -2458,7 +2458,7 @@ function ContratosTab({ employeeId, companyId, empNome }: { employeeId: number; 
         companyId,
         employeeId,
         tipo,
-        prazoExperiencia: prazoExp,
+        prazoExperienciaDias: prazoExp,
       });
       setPreviewHtml(result.conteudoHtml);
       setDadosContrato(result.dados);

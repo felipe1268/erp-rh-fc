@@ -15,9 +15,9 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export default function ComprasAprovacoes() {
-  const { company } = useCompany();
+  const { selectedCompany } = useCompany();
   const { user } = useAuth();
-  const companyId = company?.id ?? 0;
+  const companyId = selectedCompany?.id ?? 0;
   const [recusaId, setRecusaId] = useState<number | null>(null);
   const [justificativa, setJustificativa] = useState("");
 
@@ -38,7 +38,7 @@ export default function ComprasAprovacoes() {
   const lista = pendentes ?? [];
 
   return (
-    <DashboardLayout module="compras">
+    <DashboardLayout>
       <div className="p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-amber-100 rounded-lg">

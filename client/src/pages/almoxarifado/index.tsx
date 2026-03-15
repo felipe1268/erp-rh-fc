@@ -94,7 +94,7 @@ export default function AlmoxarifadoPage() {
       setFotoIAMatches([]);
       setModalFotoIA(true);
       const base64 = dataUrl.split(",")[1];
-      identificarPorFoto.mutate({ companyId, obraId: obraContexto, base64, mimeType: file.type });
+      identificarPorFoto.mutate({ companyId, obraId: obraContexto === "todos" ? undefined : obraContexto, base64, mimeType: file.type });
     };
     reader.readAsDataURL(file);
     e.target.value = "";
@@ -299,7 +299,7 @@ export default function AlmoxarifadoPage() {
         observacoes: formItem.observacoes || undefined, fotoUrl: formItem.fotoUrl || undefined,
         valorUnitario: formItem.valorUnitario || null,
         ...locacaoPayload,
-      });
+      } as any);
     }
   }
 
@@ -314,7 +314,7 @@ export default function AlmoxarifadoPage() {
 
   function abrirMovimento(i: any, tipo: "entrada" | "saida") {
     setMovItem(i);
-    setFormMov({ tipo, quantidade: 0, obraId: obraContexto ?? 0, motivo: "", observacoes: "" });
+    setFormMov({ tipo, quantidade: 0, obraId: typeof obraContexto === "number" ? obraContexto : 0, motivo: "", observacoes: "" });
     setModalMov(true);
   }
   function salvarMovimento() {
@@ -482,7 +482,7 @@ export default function AlmoxarifadoPage() {
   );
 
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
-  function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(obraContexto ?? 0); setSaidaOk(null); }
+  function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(typeof obraContexto === "number" ? obraContexto : 0); setSaidaOk(null); }
   function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpOk(null); setEmpErr(null); }
 
   // ── Abrir modal via URL param (?modal=X) ──────────────────────

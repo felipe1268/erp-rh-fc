@@ -22,9 +22,9 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 };
 
 export default function ComprasRecebimentos() {
-  const { company } = useCompany();
+  const { selectedCompany } = useCompany();
   const { user } = useAuth();
-  const companyId = company?.id ?? 0;
+  const companyId = selectedCompany?.id ?? 0;
   const [showNovo, setShowNovo] = useState(false);
   const [ordemId, setOrdemId] = useState("");
   const [notaFiscal, setNotaFiscal] = useState("");
@@ -51,7 +51,7 @@ export default function ComprasRecebimentos() {
   }, {});
 
   return (
-    <DashboardLayout module="compras">
+    <DashboardLayout>
       <div className="p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-green-100 rounded-lg">

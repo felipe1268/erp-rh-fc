@@ -52,7 +52,7 @@ export default function AlmoxarifadoCategorias() {
   }
 
   return (
-    <DashboardLayout moduleId="almoxarifado" activeItem="/almoxarifado/categorias">
+    <DashboardLayout>
       <div className="p-6 max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">

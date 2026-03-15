@@ -17,9 +17,9 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export default function ComprasRealocacao() {
-  const { company } = useCompany();
+  const { selectedCompany } = useCompany();
   const { user } = useAuth();
-  const companyId = company?.id ?? 0;
+  const companyId = selectedCompany?.id ?? 0;
   const [showNova, setShowNova] = useState(false);
   const [obraId, setObraId] = useState("");
   const [origem, setOrigem] = useState("");
@@ -48,7 +48,7 @@ export default function ComprasRealocacao() {
   const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
-    <DashboardLayout module="compras">
+    <DashboardLayout>
       <div className="p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-purple-100 rounded-lg">
