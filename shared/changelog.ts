@@ -1258,6 +1258,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 20:00:00",
   },
   {
+    version: 339,
+    titulo: "HE: Comparativo Custo Normal × Custo HE × Diferença",
+    descricao: "Tabela de análise de HE ganha coluna 'Custo Normal' (o que custaria se fosse dia útil sem adicional: Valor/h × horas) e coluna 'Diferença' (custo extra pago pelo adicional CLT = Custo HE − Custo Normal), além das colunas existentes. Rodapé da tabela exibe subtotais das três colunas. Painel de resumo ganha bloco comparativo 3 cards: 'Se fosse dia normal', 'Custo real da HE' e 'Custo extra (adicional)' — deixando explícito o impacto financeiro do adicional CLT de 50% ou 100%.",
+    tipo: "melhoria",
+    modulos: "SolicitacaoHE",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:00:00",
+  },
+  {
     version: 338,
     titulo: "HE: Detalhamento completo do custo previsto por funcionário",
     descricao: "Análise de HE agora exibe custo com máximo detalhamento: (1) Fórmula usada no cabeçalho (Valor/h × (1+%) × horas) com badge de tipo (FDS 100% / Dia útil 50%). (2) Tabela de funcionários ganha colunas Valor/hora, Adicional e Custo HE — cada célula mostra a fonte do salário (Valor/hora direto ou Salário ÷ 220h com valor bruto), o adicional em R$ calculado, e a fórmula aplicada por extenso em cada linha. (3) Rodapé da tabela exibe soma dos adicionais e total geral. (4) Painel de resumo: 5 cards — Duração, Adicional CLT, Funcionários com/sem salário, Base de cálculo (quantos usam valor/hora direto vs salário) e Total Previsto com fator multiplicador exibido.",

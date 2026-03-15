@@ -1163,13 +1163,23 @@ export default function SolicitacaoHE() {
                         <table className="w-full text-sm">
                           <thead className="bg-slate-50 border-b">
                             <tr>
-                              <th className="px-3 py-2 text-left text-xs text-slate-500 font-semibold">#</th>
+                              <th className="px-3 py-2 text-left text-xs text-slate-500 font-semibold w-6">#</th>
                               <th className="px-3 py-2 text-left text-xs text-slate-500 font-semibold">Nome</th>
                               <th className="px-3 py-2 text-left text-xs text-slate-500 font-semibold">Função</th>
                               {horasHE > 0 && (<>
                                 <th className="px-3 py-2 text-right text-xs text-slate-500 font-semibold">Valor/hora</th>
-                                <th className="px-3 py-2 text-right text-xs text-slate-500 font-semibold">Adicional</th>
-                                <th className="px-3 py-2 text-right text-xs text-slate-500 font-semibold">Custo HE</th>
+                                <th className="px-3 py-2 text-right text-xs text-slate-500 font-semibold">
+                                  <span className="text-slate-600">Custo Normal</span>
+                                  <p className="text-[9px] font-normal text-slate-400">(dia útil, sem adicional)</p>
+                                </th>
+                                <th className="px-3 py-2 text-right text-xs text-slate-500 font-semibold">
+                                  <span className="text-blue-700">Custo HE</span>
+                                  <p className="text-[9px] font-normal text-slate-400">(com {percentHE}% adicional)</p>
+                                </th>
+                                <th className="px-3 py-2 text-right text-xs text-slate-500 font-semibold">
+                                  <span className="text-orange-600">Diferença</span>
+                                  <p className="text-[9px] font-normal text-slate-400">(custo extra do adicional)</p>
+                                </th>
                               </>)}
                             </tr>
                           </thead>
@@ -1177,12 +1187,13 @@ export default function SolicitacaoHE() {
                             {funcs.map((f: any, i: number) => {
                               const info = getValorHoraInfo(f);
                               const vh = info.fonte ? info.vh : null;
-                              const adicional = vh ? vh * (percentHE / 100) * horasHE : null;
-                              const custoFunc = vh && horasHE > 0 ? vh * (1 + percentHE / 100) * horasHE : null;
+                              const custoNormal  = vh && horasHE > 0 ? vh * horasHE : null;
+                              const custoHE      = vh && horasHE > 0 ? vh * (1 + percentHE / 100) * horasHE : null;
+                              const diferenca    = custoNormal != null && custoHE != null ? custoHE - custoNormal : null;
                               return (
                                 <tr key={f.employeeId} className="border-t hover:bg-blue-50 transition-colors">
-                                  <td className="px-3 py-2.5 text-muted-foreground text-xs">{i + 1}</td>
-                                  <td className="px-3 py-2.5">
+                                  <td className="px-3 py-3 text-muted-foreground text-xs">{i + 1}</td>
+                                  <td className="px-3 py-3">
                                     <span
                                       className="text-blue-700 font-medium cursor-pointer hover:underline"
                                       onClick={() => setRaioXEmployeeId(f.employeeId)}
@@ -1190,128 +1201,170 @@ export default function SolicitacaoHE() {
                                       {f.employeeName || `ID ${f.employeeId}`}
                                     </span>
                                   </td>
-                                  <td className="px-3 py-2.5 text-muted-foreground text-xs">
+                                  <td className="px-3 py-3 text-muted-foreground text-xs">
                                     {f.employeeFuncao || <span className="italic text-slate-400">—</span>}
                                   </td>
                                   {horasHE > 0 && (<>
-                                    <td className="px-3 py-2.5 text-right">
+                                    {/* Valor/hora */}
+                                    <td className="px-3 py-3 text-right">
                                       {vh != null ? (
-                                        <div className="flex flex-col items-end">
+                                        <div className="flex flex-col items-end gap-0.5">
                                           <span className="font-mono text-sm font-semibold text-slate-800">R$ {fmtNum(vh)}</span>
                                           {info.fonte === "salarioBase" ? (
-                                            <span className="text-[10px] text-amber-600 mt-0.5">
-                                              Salário R$ {fmtNum(info.salario!)} ÷ 220h
-                                            </span>
+                                            <span className="text-[10px] text-amber-600">Sal. R$ {fmtNum(info.salario!)} ÷ 220h</span>
                                           ) : (
-                                            <span className="text-[10px] text-green-700 mt-0.5">Valor/hora direto</span>
+                                            <span className="text-[10px] text-green-700">Valor/hora direto</span>
                                           )}
                                         </div>
                                       ) : (
                                         <span className="text-xs text-red-400 italic">sem cadastro</span>
                                       )}
                                     </td>
-                                    <td className="px-3 py-2.5 text-right">
-                                      {adicional != null ? (
-                                        <div className="flex flex-col items-end">
-                                          <span className="font-mono text-sm text-orange-600">+R$ {fmtNum(adicional)}</span>
-                                          <span className="text-[10px] text-muted-foreground mt-0.5">{percentHE}% × {horasHE.toFixed(1)}h</span>
+                                    {/* Custo Normal */}
+                                    <td className="px-3 py-3 text-right">
+                                      {custoNormal != null ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          <span className="font-mono text-sm font-semibold text-slate-700">R$ {fmtNum(custoNormal)}</span>
+                                          <span className="text-[10px] text-slate-400">R$ {fmtNum(vh!)} × {horasHE.toFixed(1)}h</span>
                                         </div>
                                       ) : <span className="text-xs text-slate-300">—</span>}
                                     </td>
-                                    <td className="px-3 py-2.5 text-right">
-                                      {custoFunc != null ? (
-                                        <div className="flex flex-col items-end">
-                                          <span className="text-green-700 font-bold text-sm font-mono">R$ {fmtNum(custoFunc)}</span>
-                                          <span className="text-[10px] text-muted-foreground mt-0.5">
+                                    {/* Custo HE */}
+                                    <td className="px-3 py-3 text-right">
+                                      {custoHE != null ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          <span className="text-blue-800 font-bold text-sm font-mono">R$ {fmtNum(custoHE)}</span>
+                                          <span className="text-[10px] text-slate-400">
                                             R$ {fmtNum(vh!)} × {(1 + percentHE / 100).toFixed(2)} × {horasHE.toFixed(1)}h
                                           </span>
                                         </div>
-                                      ) : (
-                                        <span className="text-xs text-slate-400 italic">—</span>
-                                      )}
+                                      ) : <span className="text-xs text-slate-300">—</span>}
+                                    </td>
+                                    {/* Diferença */}
+                                    <td className="px-3 py-3 text-right">
+                                      {diferenca != null ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          <span className="font-mono text-sm font-bold text-orange-600">+R$ {fmtNum(diferenca)}</span>
+                                          <span className="text-[10px] text-slate-400">{percentHE}% de R$ {fmtNum(custoNormal!)}</span>
+                                        </div>
+                                      ) : <span className="text-xs text-slate-300">—</span>}
                                     </td>
                                   </>)}
                                 </tr>
                               );
                             })}
                           </tbody>
-                          {horasHE > 0 && custoTotal > 0 && (
-                            <tfoot className="border-t-2 border-slate-200 bg-slate-50">
-                              <tr>
-                                <td colSpan={4} className="px-3 py-2 text-xs text-muted-foreground text-right font-semibold">
-                                  TOTAL PREVISTO
-                                </td>
-                                <td className="px-3 py-2 text-right text-orange-600 font-semibold text-xs">
-                                  +R$ {fmtNum(funcs.reduce((acc: number, f: any) => {
-                                    const info2 = getValorHoraInfo(f);
-                                    const vh2 = info2.fonte ? info2.vh : null;
-                                    return acc + (vh2 && horasHE > 0 ? vh2 * (percentHE / 100) * horasHE : 0);
-                                  }, 0))}
-                                </td>
-                                <td className="px-3 py-2 text-right text-blue-800 font-bold text-base">
-                                  R$ {fmtNum(custoTotal)}
-                                </td>
-                              </tr>
-                            </tfoot>
-                          )}
+                          {horasHE > 0 && custoTotal > 0 && (() => {
+                            const totalNormal = funcs.reduce((acc: number, f: any) => {
+                              const i2 = getValorHoraInfo(f);
+                              return acc + (i2.fonte ? i2.vh * horasHE : 0);
+                            }, 0);
+                            const totalDif = custoTotal - totalNormal;
+                            return (
+                              <tfoot className="border-t-2 border-slate-300 bg-slate-100">
+                                <tr>
+                                  <td colSpan={3} className="px-3 py-2.5 text-xs font-bold text-slate-600 text-right uppercase tracking-wide">
+                                    Totais
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    <span className="text-xs text-slate-400 font-mono">—</span>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    <span className="font-mono font-bold text-slate-700">R$ {fmtNum(totalNormal)}</span>
+                                    <p className="text-[10px] text-slate-400">custo se fosse dia normal</p>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    <span className="font-mono font-bold text-blue-800 text-base">R$ {fmtNum(custoTotal)}</span>
+                                    <p className="text-[10px] text-slate-400">custo real da HE</p>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    <span className="font-mono font-bold text-orange-600 text-base">+R$ {fmtNum(totalDif)}</span>
+                                    <p className="text-[10px] text-slate-400">custo extra pelo adicional</p>
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            );
+                          })()}
                         </table>
                       </div>
                     </div>
 
                     {/* ── Painel de resumo ── */}
-                    {horasHE > 0 && (
-                      <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4 text-blue-700" />
-                          <span className="font-bold text-blue-800 text-sm">Resumo do Custo Previsto</span>
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                          <div className="bg-white rounded p-2 border border-blue-100">
-                            <p className="text-muted-foreground mb-1">Duração</p>
-                            <p className="font-bold text-base">{horasHE.toFixed(1)}h</p>
-                            <p className="text-[10px] text-muted-foreground">{sol.horaInicio} → {sol.horaFim}</p>
+                    {horasHE > 0 && (() => {
+                      const totalNormal = funcs.reduce((acc: number, f: any) => {
+                        const i2 = getValorHoraInfo(f);
+                        return acc + (i2.fonte ? i2.vh * horasHE : 0);
+                      }, 0);
+                      const totalDif = custoTotal - totalNormal;
+                      return (
+                        <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4 text-blue-700" />
+                            <span className="font-bold text-blue-800 text-sm">Resumo do Custo Previsto</span>
                           </div>
-                          <div className="bg-white rounded p-2 border border-blue-100">
-                            <p className="text-muted-foreground mb-1">Adicional CLT</p>
-                            <p className="font-bold text-base text-orange-600">{percentHE}%</p>
-                            <p className="text-[10px] text-muted-foreground">{isWeekend ? "Fim de semana/feriado" : "Dia útil (art. 59 CLT)"}</p>
+
+                          {/* Linha 1: info geral */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                            <div className="bg-white rounded p-2 border border-blue-100">
+                              <p className="text-muted-foreground mb-1">Duração</p>
+                              <p className="font-bold text-base">{horasHE.toFixed(1)}h</p>
+                              <p className="text-[10px] text-muted-foreground">{sol.horaInicio} → {sol.horaFim}</p>
+                            </div>
+                            <div className="bg-white rounded p-2 border border-blue-100">
+                              <p className="text-muted-foreground mb-1">Adicional CLT</p>
+                              <p className="font-bold text-base text-orange-600">{percentHE}%</p>
+                              <p className="text-[10px] text-muted-foreground">{isWeekend ? "Fim de semana/feriado" : "Dia útil (art. 59 CLT)"}</p>
+                            </div>
+                            <div className="bg-white rounded p-2 border border-blue-100">
+                              <p className="text-muted-foreground mb-1">Funcionários</p>
+                              <p className="font-bold text-base">{funcs.length - semSalario.length}<span className="text-xs font-normal text-muted-foreground">/{funcs.length}</span></p>
+                              {semSalario.length > 0
+                                ? <p className="text-[10px] text-red-500">{semSalario.length} sem salário</p>
+                                : <p className="text-[10px] text-green-600">Todos com salário</p>}
+                            </div>
+                            <div className="bg-white rounded p-2 border border-blue-100">
+                              <p className="text-muted-foreground mb-1">Base de cálculo</p>
+                              <p className="text-[10px] leading-relaxed text-slate-700">
+                                {funcs.filter((f: any) => getValorHoraInfo(f).fonte === "valorHora").length > 0 && (
+                                  <span className="block text-green-700">✓ {funcs.filter((f: any) => getValorHoraInfo(f).fonte === "valorHora").length} via Valor/h direto</span>
+                                )}
+                                {funcs.filter((f: any) => getValorHoraInfo(f).fonte === "salarioBase").length > 0 && (
+                                  <span className="block text-amber-600">✓ {funcs.filter((f: any) => getValorHoraInfo(f).fonte === "salarioBase").length} via Salário ÷ 220h</span>
+                                )}
+                                {semSalario.length > 0 && (
+                                  <span className="block text-red-500">✗ {semSalario.length} sem dados</span>
+                                )}
+                              </p>
+                            </div>
                           </div>
-                          <div className="bg-white rounded p-2 border border-blue-100">
-                            <p className="text-muted-foreground mb-1">Funcionários</p>
-                            <p className="font-bold text-base">{funcs.length - semSalario.length}<span className="text-xs font-normal text-muted-foreground">/{funcs.length}</span></p>
-                            {semSalario.length > 0
-                              ? <p className="text-[10px] text-red-500">{semSalario.length} sem salário</p>
-                              : <p className="text-[10px] text-green-600">Todos com salário</p>}
+
+                          {/* Linha 2: comparativo Normal × HE × Diferença */}
+                          <div className="grid grid-cols-3 gap-3 text-xs">
+                            <div className="bg-white rounded-lg p-3 border border-slate-200">
+                              <p className="text-slate-500 font-semibold mb-1 uppercase text-[10px] tracking-wide">Se fosse dia normal</p>
+                              <p className="font-bold text-xl text-slate-700">R$ {fmtNum(totalNormal)}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">Valor/h × {horasHE.toFixed(1)}h × {funcs.length - semSalario.length} func.</p>
+                            </div>
+                            <div className="bg-white rounded-lg p-3 border-2 border-blue-400">
+                              <p className="text-blue-700 font-semibold mb-1 uppercase text-[10px] tracking-wide">Custo real da HE</p>
+                              <p className="font-bold text-xl text-blue-800">R$ {fmtNum(custoTotal)}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">Valor/h × {(1 + percentHE / 100).toFixed(2)} × {horasHE.toFixed(1)}h</p>
+                            </div>
+                            <div className="bg-orange-50 rounded-lg p-3 border-2 border-orange-300">
+                              <p className="text-orange-600 font-semibold mb-1 uppercase text-[10px] tracking-wide">Custo extra ({percentHE}% adicional)</p>
+                              <p className="font-bold text-xl text-orange-600">+R$ {fmtNum(totalDif)}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">Custo HE − Custo normal</p>
+                            </div>
                           </div>
-                          <div className="bg-white rounded p-2 border border-blue-100">
-                            <p className="text-muted-foreground mb-1">Base de cálculo</p>
-                            <p className="text-[10px] leading-tight text-slate-700">
-                              {funcs.filter((f: any) => getValorHoraInfo(f).fonte === "valorHora").length > 0 && (
-                                <span className="block text-green-700">✓ {funcs.filter((f: any) => getValorHoraInfo(f).fonte === "valorHora").length} via Valor/h direto</span>
-                              )}
-                              {funcs.filter((f: any) => getValorHoraInfo(f).fonte === "salarioBase").length > 0 && (
-                                <span className="block text-amber-600">✓ {funcs.filter((f: any) => getValorHoraInfo(f).fonte === "salarioBase").length} via Salário ÷ 220h</span>
-                              )}
-                              {semSalario.length > 0 && (
-                                <span className="block text-red-500">✗ {semSalario.length} sem dados</span>
-                              )}
+
+                          {semSalario.length > 0 && (
+                            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                              ⚠ {semSalario.length} funcionário(s) sem salário/valor-hora cadastrado — não incluídos nos totais.
                             </p>
-                          </div>
-                          <div className="bg-white rounded p-2 border-2 border-blue-400">
-                            <p className="text-muted-foreground mb-1">Total Previsto</p>
-                            <p className="font-bold text-lg text-blue-800">
-                              {custoTotal > 0 ? `R$ ${fmtNum(custoTotal)}` : <span className="text-slate-400 text-sm">—</span>}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">Valor × {(1 + percentHE / 100).toFixed(2)} × {horasHE.toFixed(1)}h</p>
-                          </div>
+                          )}
                         </div>
-                        {semSalario.length > 0 && (
-                          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                            ⚠ {semSalario.length} funcionário(s) sem salário/valor-hora cadastrado — não incluídos no total.
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 );
               })()}
