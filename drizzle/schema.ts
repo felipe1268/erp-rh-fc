@@ -4706,6 +4706,7 @@ export const warehouseLoans = pgTable("warehouse_loans", {
 export const warehouseInventorySessions = pgTable("warehouse_inventory_sessions", {
   id:               serial().primaryKey(),
   companyId:        integer("company_id").notNull(),
+  obraId:           integer("obra_id"),
   semanaRef:        varchar("semana_ref", { length: 10 }).notNull(),
   status:           varchar({ length: 20 }).notNull().default("pendente"),
   totalItens:       integer("total_itens").notNull().default(0),

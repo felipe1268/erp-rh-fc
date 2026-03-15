@@ -437,12 +437,18 @@ export const warehouseRouter = router({
 
   // ── INVENTÁRIO SEMANAL ─────────────────────────────────────────
   getInventorySession: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number().nullable().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const semanaRef = getSemanaRef();
+
+      const obraFilter = input.obraId === null
+        ? sql`${warehouseInventorySessions.obraId} IS NULL`
+        : input.obraId !== undefined
+          ? eq(warehouseInventorySessions.obraId, input.obraId)
+          : sql`${warehouseInventorySessions.obraId} IS NULL`;
 
       const [session] = await db
         .select()
@@ -450,7 +456,8 @@ export const warehouseRouter = router({
         .where(
           and(
             eq(warehouseInventorySessions.companyId, input.companyId),
-            eq(warehouseInventorySessions.semanaRef, semanaRef)
+            eq(warehouseInventorySessions.semanaRef, semanaRef),
+            obraFilter,
           )
         )
         .limit(1);
@@ -459,27 +466,34 @@ export const warehouseRouter = router({
     }),
 
   startInventorySession: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number().nullable().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const semanaRef = getSemanaRef();
+      const obraId = input.obraId ?? null;
+
+      const itemConditions: any[] = [
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.ativo, true),
+      ];
+      if (obraId === null) {
+        itemConditions.push(sql`${almoxarifadoItens.obraId} IS NULL`);
+      } else {
+        itemConditions.push(eq(almoxarifadoItens.obraId, obraId));
+      }
 
       const itens = await db
         .select()
         .from(almoxarifadoItens)
-        .where(
-          and(
-            eq(almoxarifadoItens.companyId, input.companyId),
-            eq(almoxarifadoItens.ativo, true)
-          )
-        );
+        .where(and(...itemConditions));
 
       const [result] = await db
         .insert(warehouseInventorySessions)
         .values({
           companyId: input.companyId,
+          obraId,
           semanaRef,
           status: "em_andamento",
           totalItens: itens.length,

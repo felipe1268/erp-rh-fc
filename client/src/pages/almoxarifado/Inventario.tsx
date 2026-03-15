@@ -5,7 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import {
   ClipboardList, Loader2, CheckCircle2, AlertTriangle,
-  Play, Package, ChevronRight, XCircle,
+  Play, Package, ChevronRight, XCircle, Building2, HardHat,
 } from "lucide-react";
 
 function n(v: any) { return parseFloat(v ?? "0") || 0; }
@@ -134,8 +134,14 @@ export default function AlmoxarifadoInventario() {
   const companyId = selectedCompany?.id ?? 0;
   const utils = trpc.useUtils();
 
+  const [obraContexto, setObraContexto] = useState<number | null>(null);
+
+  const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery(
+    { companyId, companyIds: [companyId] }, { enabled: !!companyId }
+  );
+
   const { data: session, isLoading: loadingSession } = trpc.warehouse.getInventorySession.useQuery(
-    { companyId },
+    { companyId, obraId: obraContexto },
     { enabled: !!companyId }
   );
 
@@ -195,17 +201,52 @@ export default function AlmoxarifadoInventario() {
   const pendentes = sessionItems.filter(i => i.status === "pendente");
   const finalizados = sessionItems.filter(i => i.status !== "pendente");
 
+  const nomeContexto = obraContexto === null
+    ? "Central"
+    : obrasAtivas.find((o: any) => o.id === obraContexto)?.nome ?? "Obra";
+
   return (
     <DashboardLayout>
-      <div className="space-y-4 max-w-2xl mx-auto px-2">
+      {/* Seletor de contexto */}
+      <div className="bg-white border-b border-gray-100 px-4 py-2">
+        <div className="max-w-2xl mx-auto flex items-center gap-2 overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => setObraContexto(null)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+              obraContexto === null
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            <Building2 className="h-3.5 w-3.5" />
+            Central
+          </button>
+          {obrasAtivas.map((obra: any) => (
+            <button
+              key={obra.id}
+              onClick={() => setObraContexto(obra.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+                obraContexto === obra.id
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              <HardHat className="h-3.5 w-3.5" />
+              {obra.codigo ? `${obra.codigo} – ${obra.nome}` : obra.nome}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-4 max-w-2xl mx-auto px-2 pt-4">
         {/* Cabeçalho */}
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Inventário Semanal</h1>
             <p className="text-sm text-gray-500 mt-1">
               {session
-                ? `Semana ${session.semanaRef}`
-                : "Nenhuma sessão ativa esta semana"}
+                ? `${nomeContexto} · Semana ${session.semanaRef}`
+                : `${nomeContexto} · Nenhuma sessão ativa esta semana`}
             </p>
           </div>
           {session && session.status === "em_andamento" && (
@@ -239,7 +280,7 @@ export default function AlmoxarifadoInventario() {
             <button
               className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-8 py-4 rounded-xl text-lg flex items-center gap-2 mx-auto active:scale-95 transition disabled:opacity-50"
               disabled={startSession.isPending}
-              onClick={() => startSession.mutate({ companyId })}
+              onClick={() => startSession.mutate({ companyId, obraId: obraContexto })}
             >
               {startSession.isPending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
