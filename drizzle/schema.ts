@@ -1650,6 +1650,17 @@ export const heSolicitacoes = pgTable("he_solicitacoes", {
         index("he_sol_company_status").on(table.companyId, table.status),
 ]);
 
+export const heSolicitacaoAtividades = pgTable("he_solicitacao_atividades", {
+        id: serial().notNull(),
+        solicitacaoId: integer("solicitacao_id").notNull(),
+        atividadeId: integer("atividade_id").notNull(),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("he_sol_atv_sol").on(table.solicitacaoId),
+        index("he_sol_atv_atv").on(table.atividadeId),
+]);
+
 export const hydrants = pgTable("hydrants", {
         id: serial().notNull(),
         companyId: integer().notNull(),
