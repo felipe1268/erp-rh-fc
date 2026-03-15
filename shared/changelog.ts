@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 381,
+    titulo: "Import Orçamento — Perfil fixo FC Engenharia (auto-bypass mapeamento)",
+    descricao: "Criado perfil FC_PRESET com as colunas confirmadas pelo cliente: K=Item, P=Descrição, Q=Unidade, R=Quantidade, T=Preço Unit.Mat, V=Preço Unit.MO, W=Total Mat, X=Total MO, Y=Custo Total. Quando o arquivo uploadado possui pelo menos 25 colunas e todas as posições do preset existem, o mapeamento é aplicado automaticamente e a tela mostra banner verde 'Formato FC Engenharia detectado' com botão 'Importar agora' — sem precisar navegar pela tabela de colunas. Prioridade: 1) mapeamento salvo pelo usuário, 2) preset FC, 3) detecção automática por nomes.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 380,
     titulo: "Import Orçamento — Mapeamento em tabela de planilha",
     descricao: "Tela de mapeamento de colunas reformulada para exibir os dados da planilha em formato de tabela real (como no Excel): linha 1 = nome das colunas da planilha, linha 2 = dropdown 'O que é esta coluna?' para cada uma, linhas seguintes = 5 linhas de dados reais. Colunas mapeadas ficam com cabeçalho verde (obrigatório) ou azul (opcional). Dropdown só permite mapear cada campo do sistema para uma coluna; campos já usados aparecem desabilitados. Botão de importar na parte inferior.",

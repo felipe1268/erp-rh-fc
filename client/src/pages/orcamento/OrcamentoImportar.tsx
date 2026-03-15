@@ -55,6 +55,31 @@ const KEY_FIELDS: { key: string; label: string; required: boolean }[] = [
   { key: "abc",        label: "Curva ABC",                 required: false },
 ];
 
+/**
+ * Perfil fixo FC Engenharia — colunas confirmadas pelo cliente (0-based).
+ * K=10 · P=15 · Q=16 · R=17 · T=19 · V=21 · W=22 · X=23 · Y=24
+ * Quando o arquivo tem pelo menos 25 colunas e os campos obrigatórios
+ * estão nas posições esperadas, o mapeamento é aplicado automaticamente
+ * e a tela de mapeamento é pulada.
+ */
+const FC_PRESET: Record<string, number> = {
+  item:       10, // K
+  descricao:  15, // P
+  unidade:    16, // Q
+  quantidade: 17, // R
+  cuUnitMat:  19, // T
+  cuUnitMdo:  21, // V
+  cuTotalMat: 22, // W
+  cuTotalMdo: 23, // X
+  custoTotal: 24, // Y
+};
+
+/** Verifica se as colunas disponíveis contêm todos os índices do preset FC. */
+function isFCPresetValid(cols: { idx: number }[]): boolean {
+  const available = new Set(cols.map(c => c.idx));
+  return Object.values(FC_PRESET).every(idx => available.has(idx));
+}
+
 type AnalyzeResult = {
   ok: boolean;
   abas: string[];
@@ -391,6 +416,7 @@ export default function OrcamentoImportar() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [currentMapping, setCurrentMapping] = useState<Record<string, number>>({});
   const [autoDetectedMap, setAutoDetectedMap] = useState<Record<string, number>>({});
+  const [fcPresetApplied, setFcPresetApplied] = useState(false);
   const importarMut    = trpc.orcamento.importar.useMutation();
   const importarBdiMut = trpc.orcamento.importarBdi.useMutation();
   const previewSheetMut = trpc.orcamento.previewSheet.useMutation();
@@ -438,16 +464,35 @@ export default function OrcamentoImportar() {
   const handleGoToMapping = async () => {
     if (!fileCusto) return;
     setLoadingPreview(true);
+    setFcPresetApplied(false);
     try {
       const base64 = await fileToBase64(fileCusto);
       const res = await previewSheetMut.mutateAsync({ fileBase64: base64, fileName: fileCusto.name });
       setPreviewCols(res.allColumns);
       setPreviewSample(res.sampleRows);
       setAutoDetectedMap(res.detectedMap as Record<string, number>);
-      // Carregar mapeamento salvo anteriormente (por nome de arquivo)
+
+      // 1) Mapeamento salvo manualmente pelo usuário — máxima prioridade
       const savedKey = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
       const saved = localStorage.getItem(savedKey);
-      setCurrentMapping(saved ? JSON.parse(saved) : (res.detectedMap as Record<string, number>));
+      if (saved) {
+        setCurrentMapping(JSON.parse(saved));
+        setStep("mapping");
+        return;
+      }
+
+      // 2) Preset FC Engenharia — se o arquivo tem as colunas nas posições certas,
+      //    aplica diretamente e PULA a tela de mapeamento (vai direto para a confirmação)
+      const cols = res.allColumns as { idx: number; label: string }[];
+      if (isFCPresetValid(cols)) {
+        setCurrentMapping(FC_PRESET);
+        setFcPresetApplied(true);
+        setStep("mapping"); // entra no mapping mas já mostra banner "pronto para importar"
+        return;
+      }
+
+      // 3) Fallback: detecção automática por nomes de coluna
+      setCurrentMapping(res.detectedMap as Record<string, number>);
       setStep("mapping");
     } catch (err: any) {
       toast.error(err.message || "Erro ao analisar colunas da planilha");
@@ -736,6 +781,36 @@ export default function OrcamentoImportar() {
                 </Button>
               </div>
             </div>
+
+            {/* ── Banner FC Preset ── */}
+            {fcPresetApplied && (
+              <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-green-50 border-2 border-green-400">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0" />
+                  <div>
+                    <p className="font-bold text-green-800 text-sm">Formato FC Engenharia detectado</p>
+                    <p className="text-xs text-green-700 mt-0.5">
+                      Colunas mapeadas automaticamente: K=Item · P=Descrição · Q=Unidade · R=Quantidade · T=Preço Unit.Mat · V=Preço Unit.MO · W=Total Mat · X=Total MO · Y=Custo
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  className="bg-green-600 hover:bg-green-700 shrink-0 h-10 px-5 font-semibold"
+                  onClick={async () => {
+                    if (fileCusto) {
+                      const k = `fc-col-mapping-${fileCusto.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()}`;
+                      localStorage.setItem(k, JSON.stringify(currentMapping));
+                    }
+                    await handleImportarCusto();
+                  }}
+                  disabled={importingCusto}
+                >
+                  {importingCusto
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
+                    : <><FileCheck className="h-4 w-4 mr-2" /> Importar agora</>}
+                </Button>
+              </div>
+            )}
 
             {/* ── Tabela de planilha ── */}
             <div className="rounded-lg border overflow-x-auto shadow-sm">
