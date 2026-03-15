@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1004,6 +1004,10 @@ export const controleDocumentosRouter = router({
         .where(eq(warehouseLoans.funcionarioId, input.employeeId))
         .orderBy(desc(warehouseLoans.dataEmprestimo));
       const empEmprestimos = empEmprestimosRaw;
+      // Insumos/Consumíveis entregues ao funcionário
+      const empInsumos = await db.select().from(almoxarifadoSaidasInsumo)
+        .where(eq(almoxarifadoSaidasInsumo.funcionarioId, input.employeeId))
+        .orderBy(desc(almoxarifadoSaidasInsumo.createdAt));
       // VR - TODOS
       const empVR = await db.select().from(vrBenefits).where(eq(vrBenefits.employeeId, input.employeeId)).orderBy(desc(vrBenefits.mesReferencia));
       // Adiantamentos - TODOS
@@ -1277,6 +1281,7 @@ export const controleDocumentosRouter = router({
         epiDiscountAlerts: empEpiDiscountAlerts,
         emprestimosAlmox: empEmprestimos,
         descontosAlmox: empDescontosAlmox,
+        insumosAlmox: empInsumos,
       };
     }),
 

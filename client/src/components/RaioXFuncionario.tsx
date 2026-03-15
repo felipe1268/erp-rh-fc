@@ -13,7 +13,7 @@ import {
   Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer,
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
-  Package, PackageX, CheckCircle, XCircle
+  Package, PackageX, CheckCircle, XCircle, ShoppingCart
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -201,6 +201,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const pjPagamentos = (raioX as any)?.pjPagamentos || [];
   const emprestimosAlmox = (raioX as any)?.emprestimosAlmox || [];
   const descontosAlmox = (raioX as any)?.descontosAlmox || [];
+  const insumosAlmox = (raioX as any)?.insumosAlmox || [];
 
   const asosVencidos = asos.filter((a: any) => a.status === "VENCIDO").length;
   const asosAVencer = asos.filter((a: any) => a.status?.includes("DIAS PARA VENCER")).length;
@@ -857,6 +858,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     tabs: [
                       { value: "emprestimos_alm", label: "Empréstimos", icon: Package, count: emprestimosAlmox.length },
                       { value: "desconto_folha_alm", label: "Desconto Folha", icon: PackageX, count: descontosAlmox.filter((d: any) => d.status === "pendente").length },
+                      { value: "insumos_alm", label: "Insumos", icon: ShoppingCart, count: insumosAlmox.length },
                     ],
                   },
                 ];
@@ -2278,6 +2280,46 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                               </tr>
                             );
                           })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="insumos_alm" className="mt-4">
+                <div className="space-y-4">
+                  <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                    <ShoppingCart className="w-5 h-5 text-amber-600" />
+                    Insumos / Consumíveis Recebidos ({insumosAlmox.length})
+                  </h3>
+                  {insumosAlmox.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      <ShoppingCart className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                      <p className="text-sm">Nenhum insumo registrado para este funcionário</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-amber-50 text-amber-800">
+                            <th className="text-left px-3 py-2 font-semibold">Item</th>
+                            <th className="text-center px-3 py-2 font-semibold">Qtd</th>
+                            <th className="text-left px-3 py-2 font-semibold">Obra</th>
+                            <th className="text-left px-3 py-2 font-semibold">Motivo</th>
+                            <th className="text-center px-3 py-2 font-semibold">Data</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {insumosAlmox.map((r: any) => (
+                            <tr key={r.id} className="border-b border-gray-100 hover:bg-amber-50/30">
+                              <td className="px-3 py-2 font-medium">{r.itemNome}</td>
+                              <td className="px-3 py-2 text-center">{r.quantidade} {r.unidade || "un"}</td>
+                              <td className="px-3 py-2 text-gray-600 text-xs">{r.obraNome || "-"}</td>
+                              <td className="px-3 py-2 text-gray-600 text-xs">{r.motivo || "-"}</td>
+                              <td className="px-3 py-2 text-center text-gray-500 text-xs">{r.createdAt ? new Date(r.createdAt).toLocaleDateString("pt-BR") : "-"}</td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>

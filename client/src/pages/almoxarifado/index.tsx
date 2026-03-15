@@ -8,7 +8,7 @@ import {
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
   LayoutGrid, List, Camera, Trash2, ImageOff,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
-  Building2, HardHat, Sparkles, ScanLine,
+  Building2, HardHat, Sparkles, ScanLine, ShoppingCart,
 } from "lucide-react";
 
 
@@ -379,6 +379,29 @@ export default function AlmoxarifadoPage() {
     onError: (e) => { setEmpErr(e.message); setEmpOk(null); },
   });
 
+  // Modal Insumo/Consumível
+  const [modalInsumo, setModalInsumo] = useState(false);
+  const [insCodigo, setInsCodigo] = useState("");
+  const [insSearch, setInsSearch] = useState("");
+  const [insSelecionado, setInsSelecionado] = useState<any>(null);
+  const [insShowSug, setInsShowSug] = useState(false);
+  const [insItemId, setInsItemId] = useState<number>(0);
+  const [insQtd, setInsQtd] = useState("1");
+  const [insObraId, setInsObraId] = useState<number>(0);
+  const [insMotivo, setInsMotivo] = useState("");
+  const [insOk, setInsOk] = useState<null | { nome: string; item: string }>(null);
+  const [insErr, setInsErr] = useState<string | null>(null);
+  const { data: insSugestoes = [] } = trpc.warehouse.searchFuncionarios.useQuery(
+    { companyId, q: insSearch },
+    { enabled: insSearch.length >= 2 && !insSelecionado }
+  );
+  const registerInsumo = trpc.warehouse.registerInsumo.useMutation({
+    onSuccess: (d: any) => { refetch(); setInsOk({ nome: d.funcionarioNome, item: d.itemNome }); setInsErr(null); },
+    onError: (e: any) => { setInsErr(e.message); setInsOk(null); },
+  });
+  function resetInsumo() { setInsCodigo(""); setInsSearch(""); setInsSelecionado(null); setInsShowSug(false); setInsItemId(0); setInsQtd("1"); setInsObraId(0); setInsMotivo(""); setInsOk(null); setInsErr(null); }
+  function selecionarFuncionarioIns(f: any) { setInsSelecionado(f); setInsCodigo(f.codigoInterno); setInsSearch(f.nomeCompleto); setInsShowSug(false); }
+
   // Modal Fechar Dia (devolução)
   const [modalFecharDia, setModalFecharDia] = useState(false);
   const { data: emprestimosHoje = [], refetch: refetchLoans } = trpc.warehouse.listTodayLoans.useQuery(
@@ -392,7 +415,7 @@ export default function AlmoxarifadoPage() {
 
   // ── Modal Registros ─────────────────────────────────────────────
   const [modalRegistros, setModalRegistros] = useState(false);
-  const [abaRegistros, setAbaRegistros] = useState<"entradas" | "saidas" | "emprestados" | "cadastros">("entradas");
+  const [abaRegistros, setAbaRegistros] = useState<"entradas" | "saidas" | "emprestados" | "insumos" | "cadastros">("entradas");
   const { data: movEntradas = [], isLoading: loadingEntradas } = trpc.warehouse.listMovements.useQuery(
     { companyId, tipo: "entrada", limit: 300 },
     { enabled: !!companyId && modalRegistros && abaRegistros === "entradas" }
@@ -404,6 +427,10 @@ export default function AlmoxarifadoPage() {
   const { data: loansAbertos = [], isLoading: loadingLoans } = trpc.warehouse.listOpenLoans.useQuery(
     { companyId },
     { enabled: !!companyId && modalRegistros && abaRegistros === "emprestados" }
+  );
+  const { data: insumosRegistros = [], isLoading: loadingInsumos } = trpc.warehouse.listInsumos.useQuery(
+    { companyId, limit: 300 },
+    { enabled: !!companyId && modalRegistros && abaRegistros === "insumos" }
   );
 
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
@@ -510,6 +537,14 @@ export default function AlmoxarifadoPage() {
               <Wrench className="w-8 h-8" />
               🔧 EMPRESTAR
             </button>
+            {/* DAR INSUMO */}
+            <button
+              onClick={() => { resetInsumo(); setModalInsumo(true); }}
+              className="flex flex-col items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+            >
+              <ShoppingCart className="w-8 h-8" />
+              🛒 INSUMO
+            </button>
             {/* FECHAR DIA */}
             <button
               onClick={() => setModalFecharDia(true)}
@@ -521,11 +556,12 @@ export default function AlmoxarifadoPage() {
           </div>
 
           {/* ── VER REGISTROS (linha secundária) ────────────────── */}
-          <div className="grid grid-cols-4 gap-2 mt-2">
+          <div className="grid grid-cols-5 gap-2 mt-2">
             {[
-              { label: "Entradas", aba: "entradas" as const, icon: "↓", color: "text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100" },
-              { label: "Saídas",   aba: "saidas"   as const, icon: "↑", color: "text-orange-700 border-orange-300 bg-orange-50 hover:bg-orange-100" },
+              { label: "Entradas",    aba: "entradas"    as const, icon: "↓", color: "text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100" },
+              { label: "Saídas",      aba: "saidas"      as const, icon: "↑", color: "text-orange-700 border-orange-300 bg-orange-50 hover:bg-orange-100" },
               { label: "Emprestados", aba: "emprestados" as const, icon: "🔧", color: "text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100" },
+              { label: "Insumos",     aba: "insumos"     as const, icon: "🛒", color: "text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100" },
               { label: "Cadastros",   aba: "cadastros"   as const, icon: "📦", color: "text-gray-700 border-gray-300 bg-gray-50 hover:bg-gray-100" },
             ].map(({ label, aba, icon, color }) => (
               <button
@@ -1475,6 +1511,116 @@ export default function AlmoxarifadoPage() {
         </div>
       )}
 
+      {/* ══ MODAL INSUMO ════════════════════════════════════════════ */}
+      {modalInsumo && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{ background: "#ffffff", color: "#111827" }}>
+            {insOk ? (
+              <>
+                <div className="p-8 text-center space-y-3">
+                  <CheckCircle2 className="w-16 h-16 text-amber-500 mx-auto" />
+                  <p className="text-xl font-bold text-amber-700">Insumo registrado!</p>
+                  <p className="text-gray-600 text-sm">{insOk.item} entregue para <strong>{insOk.nome}</strong></p>
+                </div>
+                <div className="p-4 flex gap-3">
+                  <button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl text-base" onClick={() => { resetInsumo(); }}>Registrar outro</button>
+                  <button className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl text-base" onClick={() => { setModalInsumo(false); resetInsumo(); }}>Fechar</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-amber-500" /> Dar Insumo / Consumível</h2>
+                  <button onClick={() => setModalInsumo(false)}><X className="w-6 h-6 text-gray-400" /></button>
+                </div>
+                <div className="p-4 space-y-4">
+                  {/* Funcionário */}
+                  <div className="relative">
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Funcionário *</label>
+                    <input
+                      type="text"
+                      className="w-full border-2 rounded-xl p-3 text-base"
+                      placeholder="Digite o código (JFC199) ou nome do funcionário..."
+                      value={insSearch}
+                      autoComplete="off"
+                      onChange={e => { setInsSearch(e.target.value); setInsSelecionado(null); setInsCodigo(""); setInsShowSug(true); }}
+                      onFocus={() => setInsShowSug(true)}
+                      onBlur={() => setTimeout(() => setInsShowSug(false), 180)}
+                    />
+                    {insShowSug && insSugestoes.length > 0 && !insSelecionado && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                        {(insSugestoes as any[]).map((f: any) => (
+                          <button key={f.id} type="button" className="w-full flex items-center gap-3 px-3 py-2 hover:bg-amber-50 text-left transition" onMouseDown={() => selecionarFuncionarioIns(f)}>
+                            {f.fotoUrl ? <img src={f.fotoUrl} alt={f.nomeCompleto} className="w-9 h-9 rounded-full object-cover border border-gray-200 flex-shrink-0" /> : <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"><User className="w-5 h-5 text-amber-500" /></div>}
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 truncate">{f.nomeCompleto}</p>
+                              <p className="text-xs text-gray-500">{f.codigoInterno}{f.cargo ? ` — ${f.cargo}` : f.funcao ? ` — ${f.funcao}` : ""}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {insSelecionado && (
+                      <div className="mt-3 bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col items-center gap-2 relative">
+                        <button type="button" onClick={() => { setInsSelecionado(null); setInsSearch(""); setInsCodigo(""); }} className="absolute top-2 right-2 text-gray-400 hover:text-red-500 transition"><X className="w-4 h-4" /></button>
+                        {insSelecionado.fotoUrl ? <img src={insSelecionado.fotoUrl} alt={insSelecionado.nomeCompleto} className="w-20 h-20 rounded-full object-cover border-4 border-amber-400 shadow-md" /> : <div className="w-20 h-20 rounded-full bg-amber-100 border-4 border-amber-300 flex items-center justify-center shadow-md"><User className="w-10 h-10 text-amber-400" /></div>}
+                        <p className="font-bold text-amber-800 text-center text-base leading-tight">{insSelecionado.nomeCompleto}</p>
+                        <p className="text-sm text-amber-600 text-center">{insSelecionado.codigoInterno}{insSelecionado.cargo ? ` — ${insSelecionado.cargo}` : insSelecionado.funcao ? ` — ${insSelecionado.funcao}` : ""}</p>
+                      </div>
+                    )}
+                    {insSearch.length >= 2 && !insSelecionado && insSugestoes.length === 0 && <p className="text-xs text-red-500 mt-1">Nenhum funcionário encontrado</p>}
+                  </div>
+                  {/* Item */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Insumo *</label>
+                    <select className="w-full border-2 rounded-xl p-3 text-base" value={insItemId} onChange={e => setInsItemId(Number(e.target.value))}>
+                      <option value={0}>— escolha o item —</option>
+                      {itens.map((i: any) => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)} {i.unidade || "un"}</option>)}
+                    </select>
+                  </div>
+                  {/* Quantidade */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
+                    <input type="number" inputMode="decimal" min="0.01" step="0.01" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={insQtd} onChange={e => setInsQtd(e.target.value)} />
+                  </div>
+                  {/* Obra */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Obra de destino *</label>
+                    <select className="w-full border-2 rounded-xl p-3 text-base" value={insObraId} onChange={e => setInsObraId(Number(e.target.value))}>
+                      <option value={0}>— selecione a obra —</option>
+                      {(obrasAtivas as any[]).map((o: any) => <option key={o.id} value={o.id}>{o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>)}
+                    </select>
+                  </div>
+                  {/* Motivo */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Motivo / Observação</label>
+                    <input type="text" className="w-full border-2 rounded-xl p-3 text-base" placeholder="Ex: Disco de corte para produção..." value={insMotivo} onChange={e => setInsMotivo(e.target.value)} />
+                  </div>
+                  {insErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{insErr}</p>}
+                  <button
+                    className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
+                    disabled={!insSelecionado || !insItemId || !insQtd || !insObraId || registerInsumo.isPending}
+                    onClick={() => {
+                      const obraSel = (obrasAtivas as any[]).find((o: any) => o.id === insObraId);
+                      registerInsumo.mutate({
+                        companyId, itemId: insItemId,
+                        quantidade: parseFloat(insQtd),
+                        funcionarioCodigo: insSelecionado?.codigoInterno || insCodigo,
+                        obraId: insObraId || undefined,
+                        obraNome: obraSel ? (obraSel.codigo ? `${obraSel.codigo} – ${obraSel.nome}` : obraSel.nome) : undefined,
+                        motivo: insMotivo || undefined,
+                      });
+                    }}
+                  >
+                    {registerInsumo.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "🛒 CONFIRMAR INSUMO"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ══ MODAL FECHAR DIA ════════════════════════════════════════ */}
       {modalFecharDia && (
         <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ background: "#ffffff", color: "#111827" }}>
@@ -1716,6 +1862,7 @@ export default function AlmoxarifadoPage() {
               { key: "entradas",    label: "↓ Entradas",    cls: "text-emerald-700 border-emerald-500" },
               { key: "saidas",      label: "↑ Saídas",      cls: "text-orange-700 border-orange-500" },
               { key: "emprestados", label: "🔧 Emprestados", cls: "text-blue-700 border-blue-500" },
+              { key: "insumos",     label: "🛒 Insumos",     cls: "text-amber-700 border-amber-500" },
               { key: "cadastros",   label: "📦 Cadastros",   cls: "text-gray-700 border-gray-500" },
             ] as const).map(({ key, label, cls }) => (
               <button
@@ -1802,6 +1949,34 @@ export default function AlmoxarifadoPage() {
                     >
                       Devolver
                     </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* INSUMOS */}
+            {abaRegistros === "insumos" && (
+              loadingInsumos ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div> :
+              (insumosRegistros as any[]).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2">
+                  <ShoppingCart className="w-12 h-12 text-amber-300" />
+                  <p className="text-gray-500 font-medium">Nenhuma saída de insumo registrada</p>
+                </div>
+              ) :
+              <div className="space-y-2">
+                {(insumosRegistros as any[]).map((r: any) => (
+                  <div key={r.id} className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center gap-3">
+                    <ShoppingCart className="w-5 h-5 text-amber-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm truncate">{r.item_nome}</p>
+                      <p className="text-xs text-gray-600">
+                        {n(r.quantidade)} {r.unidade || "un"} · <span className="font-medium">{r.funcionario_nome}</span>
+                        {r.funcionario_codigo ? ` (${r.funcionario_codigo})` : ""}
+                      </p>
+                      {r.obra_nome && <p className="text-[11px] text-amber-700">🏗️ {r.obra_nome}</p>}
+                      {r.motivo && <p className="text-[11px] text-gray-400 italic">{r.motivo}</p>}
+                      <p className="text-[11px] text-gray-400">{r.created_at ? new Date(r.created_at).toLocaleString("pt-BR") : ""}</p>
+                    </div>
                   </div>
                 ))}
               </div>

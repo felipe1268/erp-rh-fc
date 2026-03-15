@@ -1185,4 +1185,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 16:00:00",
   },
+  {
+    version: 326,
+    titulo: "Almoxarifado — Rastreio de Insumos/Consumíveis (sem devolução)",
+    descricao: "Nova tabela almoxarifado_saidas_insumo para registrar saídas de consumíveis por funcionário sem retorno. Botão 'DAR INSUMO' (âmbar) na tela principal. Modal completo com busca de funcionário (autocomplete + foto), seleção de item/quantidade, obra de destino e motivo. Aba '🛒 Insumos' no modal Registros. Aba 'Insumos' no RaioX do funcionário com histórico completo. Backend: endpoints registerInsumo, listInsumos, listInsumosHoje; raioX inclui insumosAlmox.",
+    tipo: "feature",
+    modulos: "Almoxarifado, RaioX",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 17:00:00",
+  },
 ];
