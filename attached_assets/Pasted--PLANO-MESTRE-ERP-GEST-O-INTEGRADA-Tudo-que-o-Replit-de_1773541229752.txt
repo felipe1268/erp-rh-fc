@@ -1,0 +1,262 @@
+# 📋 PLANO MESTRE — ERP GESTÃO INTEGRADA
+# Tudo que o Replit deve implementar, na ordem certa
+
+---
+
+## 🗺️ VISÃO GERAL — 4 GRANDES ENTREGAS
+
+```
+ENTREGA 1 → Almoxarifado Central + PWA (app mobile)
+ENTREGA 2 → Módulo de Compras completo
+ENTREGA 3 → Módulo Financeiro (Contas a Pagar)
+ENTREGA 4 → Migração do Mas Controle
+```
+
+---
+
+## 📦 ENTREGA 1 — ALMOXARIFADO + PWA
+**Arquivo:** `SCRIPT_FINAL_ALMOXARIFADO.md`
+**Status:** ✅ Prompt completo e pronto
+
+### O que será entregue:
+- Múltiplos depósitos (Insumos, Ferramentas, Equipamentos — criados pelo ADM)
+- Entrada de material (só após atesto de recebimento + NF)
+- Saída de material (vinculada à obra)
+- Comodato diário de ferramentas (código JFCxxxx do funcionário)
+- Fechamento do dia (quem devolveu / quem ficou pendente)
+- Transferência Central ↔ Obra ↔ Obra
+- Inventário semanal automático (alerta toda segunda, almoxarife confere item a item)
+- Foto obrigatória de cada item no cadastro
+- Número de patrimônio por item (FC-0001, FC-0002...)
+- QR Code gerado automaticamente (etiqueta para impressão)
+- Manutenção preventiva (item bloqueado quando vencer)
+- Ajuste de inventário com aprovação dupla
+- Valor financeiro do estoque em tempo real
+- Custo indireto por obra (saída do almoxarifado vira custo)
+- Advertência automática quando ferramenta é perdida
+- Timeline no Raio X do funcionário (histórico de tudo que pegou)
+- **PWA** — app instalável no celular/tablet pelo Chrome, sem App Store
+- UX mobile-first: botões grandes, máximo 4 toques, confirmação visual
+
+---
+
+## 🛒 ENTREGA 2 — MÓDULO DE COMPRAS
+**Arquivo:** `PROMPT_REPLIT_MODULO_COMPRAS.md`
+**Status:** ✅ Prompt completo com correções críticas aplicadas
+
+### Fase 1 — Base (fazer primeiro)
+- **Catálogo de insumos centralizado** — padrão de nomes para todo o sistema
+- **Histórico de preços** como tabela separada (não JSON)
+- **Fornecedor unificado** — expandir `fornecedores_epi` existente (não criar tabela nova)
+  - Busca automática por CNPJ via BrasilAPI
+  - Bloqueia CNPJ inapto/baixado/suspenso
+  - Dados bancários, contato, categorias
+- **Configuração de alçadas de aprovação** — ADM define quem aprova, limites e SLAs
+
+### Fase 2 — Fluxo principal
+- **Solicitação de Compra (SC)**
+  - Engenheiro só vê obras dele
+  - Seleciona item do catálogo (não digita livremente)
+  - Sistema cruza com almoxarifado automaticamente
+  - Toggle ⚡ COMPRA EMERGENCIAL (justificativa obrigatória)
+  - SC emergencial vai ao topo de todas as filas
+
+- **Aprovação**
+  - Dentro da meta → aprovação normal
+  - Acima da meta (R$0,01 que seja) → escala para superior
+  - Compra direta abaixo do limite → sem cotação obrigatória
+  - Timer SLA configurável pelo ADM
+
+- **Mapa de Cotação**
+  - Mínimo 3 fornecedores
+  - Histórico de preços de cada fornecedor para aquele item
+  - Campo de frete + tipo (CIF/FOB)
+  - Validade da cotação (ex: "válido por 5 dias")
+  - E-mail automático para fornecedor via smtpService existente
+  - Ranking automático por menor custo total (item + frete)
+  - IA sugere melhor fornecedor baseada no histórico
+  - IA alerta se preço estiver acima da média histórica
+
+- **Ordem de Compra (OC)**
+  - Gerada a partir do vencedor da cotação
+  - Campos fiscais completos (CNPJ, IE, endereço de entrega)
+  - PDF para envio ao fornecedor
+  - Gera compromisso financeiro automaticamente
+  - Gera item em `financial_events` (tabela existente)
+  - Alerta automático se prazo vencer sem recebimento
+
+- **Recebimento na Obra**
+  - Foto do material que chegou (storagePut existente)
+  - Anexo da NF (foto pelo celular)
+  - Recebimento parcial: OC ajustada, alerta para todos, pagamento proporcional
+  - Avaliação do fornecedor pós-entrega (nota prazo, qualidade, atendimento)
+  - Se OC for de equipamento → cria item em `equipment` automaticamente (tabela existente)
+
+- **Devolução ao fornecedor**
+  - Material com defeito ou errado
+  - Gera estorno no estoque + nota de devolução + ajuste no financeiro
+
+### Fase 3 — Inteligência
+- **Realocação de saldo entre itens da EAP**
+  - Economia no cimento → pode cobrir estouro no aço
+  - Rastreabilidade total, irreversível, sem reuso do mesmo saldo
+
+- **Comissão do comprador**
+  - Calculada só no encerramento da obra
+  - Fórmula: (meta total - gasto total) × 20%
+  - Se obra estoura → comissão zero
+  - Mais de 1 comprador → divide proporcional às OCs de cada um
+  - Só o Diretor aprova e libera o pagamento
+  - Dashboard do comprador na tela inicial com comissão estimada em tempo real
+
+- **Indicadores de emergência por engenheiro**
+  - % de SCs emergenciais sobre total
+  - Semáforo 🟢🟡🔴 por engenheiro
+  - Ranking visível para o gestor
+  - Engenheiro vê o próprio indicador
+
+- **Cancelamento com rollback automático**
+  - SC cancelada → libera reserva no almoxarifado
+  - OC cancelada → cancela financeiro + libera saldo meta + reabre SC
+  - Log de auditoria em todos os cancelamentos
+
+- **Contrato de fornecimento**
+  - Preço fixo por período (ex: cimento R$42/sc por 6 meses)
+  - Com contrato vigente → pula cotação, vai direto para OC
+  - Alerta quando contrato vencer
+
+- **Compra recorrente automática**
+  - Sistema aprende padrão de consumo
+  - Quando estoque cair abaixo do mínimo → sugere SC automaticamente
+
+### Fase 4 — Dashboards
+- **Dashboard do comprador** (tela inicial)
+  - Comissão estimada por obra em tempo real
+  - Saving mensal (economia do mês)
+  - ⚡ Emergenciais aguardando + cotações em aberto + OCs vencendo
+
+- **Dashboard do gestor/diretor**
+  - Previsto × comprometido × realizado por obra
+  - Obras com orçamento em risco
+  - Ranking de engenheiros por emergenciais
+  - Economia acumulada por comprador
+
+- **Relatório de saving mensal**
+  - Independente do encerramento da obra
+  - Motivador diário para o comprador
+
+### Infraestrutura transversal
+- Auditoria automática em todas as ações (createAuditLog existente)
+- Integração com `financial_events` existente
+- Integração com `equipment` existente
+- Integração com `smtpService` existente (e-mails automáticos)
+- Integração com `storagePut` existente (fotos e documentos)
+
+---
+
+## 💰 ENTREGA 3 — MÓDULO FINANCEIRO (Contas a Pagar)
+**Parte do arquivo:** `PROMPT_REPLIT_MODULO_COMPRAS.md`
+**Criar junto com a Entrega 2**
+
+### O que será entregue:
+- Contas a pagar geradas automaticamente pelas OCs
+- Dados bancários do fornecedor passam automaticamente (banco, agência, conta, PIX)
+- Bloqueado até recebimento ser confirmado
+- Recebimento parcial → libera valor proporcional
+- Baixa de pagamento com upload de comprovante
+- Filtros: por obra, fornecedor, vencimento, status
+- Integração com `financial_events` existente
+
+---
+
+## 🔄 ENTREGA 4 — MIGRAÇÃO DO MAS CONTROLE
+**Arquivo:** `PROMPT_REPLIT_MIGRACAO_MAS_CONTROLE.md`
+**Fazer por último — após módulos estarem prontos**
+
+### O que será entregue:
+- Tela de configuração com credenciais da API
+  - Login: `ana@juliaferraz.com.br`
+  - Senha: gerada nas configurações do Mas Controle
+- Importadores de: Obras, EAP, Orçamento/Meta, Fornecedores, Insumos, Histórico de Compras
+- Importador CSV como alternativa (se API falhar)
+- Log completo de migração: quantos importados, duplicatas, erros
+- Relatório PDF da migração
+- Após confirmação da migração → cancelar o Mas Controle
+
+---
+
+## 📱 PWA — RESUMO RÁPIDO
+**Incluído na Entrega 1**
+
+O sistema vira um app instalável no celular:
+- Usuário abre Chrome → acessa URL do ERP → banner "Instalar no celular" → toca → ícone na tela inicial
+- Funciona offline (ver dados em cache)
+- Sem App Store, sem custo, atualização automática
+- Futuramente: publicar na Play Store / App Store via Capacitor (mesmo código)
+
+---
+
+## 🗓️ ORDEM DE EXECUÇÃO RECOMENDADA
+
+```
+SEMANA 1-2
+└── Entrega 1: Almoxarifado + PWA
+    ├── Banco de dados (12 tabelas)
+    ├── Router warehouse.ts
+    ├── Páginas mobile-first
+    └── PWA (manifest + ícones + service worker)
+
+SEMANA 3-5
+└── Entrega 2 Fase 1: Base do módulo compras
+    ├── Catálogo de insumos
+    ├── Fornecedor unificado
+    └── Configuração de alçadas
+
+SEMANA 5-8
+└── Entrega 2 Fase 2+3: Fluxo principal + Inteligência
+    ├── SC → Aprovação → Cotação → OC → Recebimento
+    ├── Cancelamento com rollback
+    └── Realocação de saldo
+
+SEMANA 8-10
+└── Entrega 2 Fase 4: Dashboards + Comissão
+
+SEMANA 10-11
+└── Entrega 3: Financeiro (Contas a Pagar)
+
+SEMANA 12
+└── Entrega 4: Migração do Mas Controle → cancelar contrato
+```
+
+---
+
+## 📁 ARQUIVOS PARA PASSAR AO REPLIT
+
+| Arquivo | Quando usar |
+|---------|-------------|
+| `SCRIPT_FINAL_ALMOXARIFADO.md` | Primeira coisa |
+| `PROMPT_REPLIT_MODULO_COMPRAS.md` | Após almoxarifado |
+| `PROMPT_REPLIT_MIGRACAO_MAS_CONTROLE.md` | Por último |
+
+---
+
+## 💬 MENSAGEM PADRÃO PARA O REPLIT
+
+Para cada arquivo, cole e diga:
+
+> *"Leia este documento completo antes de começar. Implemente na ordem exata indicada. Confirme cada etapa antes de avançar. Não altere nada que já existe no sistema — apenas adicione código novo."*
+
+---
+
+## ⚠️ REGRAS QUE O REPLIT DEVE SEMPRE SEGUIR
+
+1. **Nunca alterar tabelas existentes** — apenas adicionar novas ou fazer ALTER TABLE quando especificado
+2. **Nunca remover** o plugin `vitePluginManusDebugCollector` do vite.config.ts
+3. **Nunca alterar** o sistema de autenticação
+4. **Sempre rodar** `pnpm db:push` após adicionar tabelas e mostrar o resultado
+5. **Módulo de Almoxarifado** — UX mobile-first, botões mínimo 60px, máximo 4 toques por ação
+6. **Módulo de Compras** — usar `fornecedores_epi` existente (não criar tabela `suppliers`)
+7. **Auditoria** — usar `createAuditLog` existente em todas as ações dos novos módulos
+8. **Financeiro** — integrar com `financial_events` existente
+9. **Equipamentos** — integrar com tabela `equipment` existente ao receber OC de equipamento
+10. **E-mails** — usar `smtpService` existente para notificações automáticas
