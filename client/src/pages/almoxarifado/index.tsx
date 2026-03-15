@@ -67,7 +67,7 @@ export default function AlmoxarifadoPage() {
   const [obraContexto, setObraContexto] = useState<number | null>(null);
 
   // Busca por foto (IA)
-  const fotoInputRef = useRef<HTMLInputElement>(null);
+  const fotoIAInputRef = useRef<HTMLInputElement>(null);
   const [modalFotoIA, setModalFotoIA] = useState(false);
   const [fotoIAPreview, setFotoIAPreview] = useState<string>("");
   const [fotoIADescricao, setFotoIADescricao] = useState<string>("");
@@ -429,7 +429,7 @@ export default function AlmoxarifadoPage() {
             </div>
             {/* Botão de busca por foto (IA) */}
             <button
-              onClick={() => fotoInputRef.current?.click()}
+              onClick={() => fotoIAInputRef.current?.click()}
               className="h-9 px-3 flex items-center gap-2 bg-violet-500 hover:bg-violet-600 text-white text-sm font-medium rounded-lg transition shadow-sm"
               title="Identificar item por foto (IA)"
             >
@@ -437,7 +437,7 @@ export default function AlmoxarifadoPage() {
               <span className="hidden sm:inline">Foto IA</span>
             </button>
             <input
-              ref={fotoInputRef}
+              ref={fotoIAInputRef}
               type="file"
               accept="image/*"
               capture="environment"
@@ -1314,7 +1314,7 @@ export default function AlmoxarifadoPage() {
               {/* Botão tirar outra foto */}
               {!identificarPorFoto.isPending && (
                 <button
-                  onClick={() => fotoInputRef.current?.click()}
+                  onClick={() => fotoIAInputRef.current?.click()}
                   className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-violet-200 rounded-xl text-sm text-violet-500 hover:border-violet-400 hover:bg-violet-50 transition"
                 >
                   <Camera className="w-4 h-4" /> Tirar outra foto
