@@ -62,13 +62,15 @@ export default function Solicitacoes() {
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
 
   const [form, setForm] = useState({
-    titulo: "", departamento: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: ""
+    titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: ""
   });
   const [obraSearch, setObraSearch] = useState("");
   const [obraOpen, setObraOpen] = useState(false);
   const obraRef = useRef<HTMLDivElement>(null);
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
   const [recebQtd, setRecebQtd] = useState<Record<number, string>>({});
+  const [selectedEapIds, setSelectedEapIds] = useState<Set<number>>(new Set());
+  const [eapSearch, setEapSearch] = useState("");
 
   const q = trpc.compras.listarSolicitacoes.useQuery(
     { companyId, busca: busca || undefined, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -76,6 +78,10 @@ export default function Solicitacoes() {
   );
   const detalheQ = trpc.compras.getSolicitacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
+  const eapQ = trpc.compras.getEapParaObra.useQuery(
+    { obraId: parseInt(form.obraId), companyId },
+    { enabled: !!form.obraId && parseInt(form.obraId) > 0 }
+  );
 
   const criar = trpc.compras.criarSolicitacao.useMutation({
     onSuccess: () => { toast.success("SC criada!"); setShowNova(false); resetForm(); q.refetch(); },
@@ -99,9 +105,36 @@ export default function Solicitacoes() {
   });
 
   function resetForm() {
-    setForm({ titulo: "", departamento: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
+    setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
     setObraSearch(""); setObraOpen(false);
     setItens([newItem()]);
+    setSelectedEapIds(new Set());
+    setEapSearch("");
+  }
+
+  function toggleEapItem(it: any) {
+    setSelectedEapIds(prev => {
+      const next = new Set(prev);
+      if (next.has(it.id)) {
+        next.delete(it.id);
+        setItens(p => p.filter(x => x.orcamentoItemId !== it.id));
+      } else {
+        next.add(it.id);
+        const novoItem: ItemForm = {
+          descricao: `[${it.eapCodigo}] ${it.descricao}`,
+          unidade: it.unidade || "vb",
+          quantidade: String(parseFloat(it.quantidade || "1") || 1),
+          observacoes: "",
+          orcamentoItemId: it.id,
+          eapCodigo: it.eapCodigo,
+        };
+        setItens(p => {
+          const semVazio = p.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
+          return [...semVazio, novoItem];
+        });
+      }
+      return next;
+    });
   }
 
   function handleSalvar() {
@@ -113,12 +146,18 @@ export default function Solicitacoes() {
       companyId,
       solicitanteId: user?.id ? parseInt(String(user.id)) : undefined,
       titulo: form.titulo,
-      departamento: form.departamento || undefined,
       obraId: parseInt(form.obraId),
       dataNecessidade: form.dataNecessidade || undefined,
       prioridade: form.prioridade,
       observacoes: form.observacoes || undefined,
-      itens: validos.map(i => ({ descricao: i.descricao, unidade: i.unidade, quantidade: parseFloat(i.quantidade) || 1, observacoes: i.observacoes || undefined })),
+      itens: validos.map(i => ({
+        descricao: i.descricao,
+        unidade: i.unidade,
+        quantidade: parseFloat(i.quantidade) || 1,
+        observacoes: i.observacoes || undefined,
+        orcamentoItemId: i.orcamentoItemId,
+        eapCodigo: i.eapCodigo,
+      })),
     });
   }
 
@@ -270,7 +309,7 @@ export default function Solicitacoes() {
           </DialogHeader>
 
           <div className="space-y-3 pt-1">
-            {/* Linha 1: Título */}
+            {/* Título */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700">Título da Solicitação *</label>
               <input
@@ -281,14 +320,14 @@ export default function Solicitacoes() {
               />
             </div>
 
-            {/* Linha 2: Obra — combobox com busca */}
+            {/* Obra — combobox com busca */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
                 <Building2 className="h-3 w-3 text-amber-600" /> Obra / Centro de Custo *
               </label>
               <div className="relative" ref={obraRef}>
                 <input
-                  className="w-full h-8 px-3 text-sm border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full h-8 px-3 text-sm border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
                   placeholder={obrasQ.isLoading ? "Carregando obras..." : "Digite para buscar a obra..."}
                   value={obraOpen
                     ? obraSearch
@@ -308,10 +347,12 @@ export default function Solicitacoes() {
                     ) : obrasFiltradas.map((o: any) => (
                       <div
                         key={o.id}
-                        className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-blue-50 hover:text-blue-700 ${String(o.id) === form.obraId ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-900"}`}
+                        className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-amber-50 hover:text-amber-700 ${String(o.id) === form.obraId ? "bg-amber-50 text-amber-700 font-medium" : "text-gray-900"}`}
                         onMouseDown={e => {
                           e.preventDefault();
                           setForm(p => ({ ...p, obraId: String(o.id) }));
+                          setSelectedEapIds(new Set());
+                          setItens([newItem()]);
                           setObraSearch("");
                           setObraOpen(false);
                         }}
@@ -324,17 +365,90 @@ export default function Solicitacoes() {
               </div>
             </div>
 
-            {/* Linha 3: Setor | Data | Prioridade */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-700">Setor / Depto.</label>
-                <input
-                  className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
-                  placeholder="Ex: Obras"
-                  value={form.departamento}
-                  onChange={e => setForm(p => ({ ...p, departamento: e.target.value }))}
-                />
+            {/* Painel EAP — aparece quando obra é selecionada */}
+            {form.obraId && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                    <ListTree className="h-3.5 w-3.5 text-amber-600" />
+                    Itens da EAP — selecione para incluir na SC
+                  </label>
+                  {eapQ.isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
+                  {selectedEapIds.size > 0 && (
+                    <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                      {selectedEapIds.size} selecionado{selectedEapIds.size > 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+
+                {eapQ.data?.semOrcamento ? (
+                  <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Esta obra não possui orçamento vinculado. Adicione os itens manualmente abaixo.
+                  </div>
+                ) : eapQ.data && eapQ.data.items.length > 0 ? (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    {/* Filtro */}
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
+                      <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                      <input
+                        className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                        placeholder="Filtrar itens da EAP..."
+                        value={eapSearch}
+                        onChange={e => setEapSearch(e.target.value)}
+                      />
+                    </div>
+                    {/* Lista de itens selecionáveis */}
+                    <div className="max-h-52 overflow-y-auto divide-y divide-gray-50">
+                      {eapQ.data.items
+                        .filter(it => it.nivel >= 2 && it.tipo !== "grupo")
+                        .filter(it => !eapSearch || `${it.eapCodigo} ${it.descricao}`.toLowerCase().includes(eapSearch.toLowerCase()))
+                        .map(it => {
+                          const sel = selectedEapIds.has(it.id);
+                          return (
+                            <div
+                              key={it.id}
+                              onClick={() => toggleEapItem(it)}
+                              className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${sel ? "bg-amber-50" : "hover:bg-gray-50"}`}
+                            >
+                              <input
+                                type="checkbox"
+                                readOnly
+                                checked={sel}
+                                className="h-3.5 w-3.5 accent-amber-600 shrink-0 pointer-events-none"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs text-gray-900 truncate">
+                                  <span className="font-semibold text-amber-700 mr-1.5">{it.eapCodigo}</span>
+                                  {it.descricao}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 text-xs text-gray-400">
+                                <span>{parseFloat(String(it.quantidade ?? "0")).toLocaleString("pt-BR")} {it.unidade || "vb"}</span>
+                                {(it as any).prazoFim && (
+                                  <span className="text-blue-500">
+                                    até {new Date((it as any).prazoFim + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      }
+                      {eapQ.data.items.filter(it => it.nivel >= 2 && it.tipo !== "grupo").length === 0 && (
+                        <div className="px-3 py-4 text-xs text-center text-gray-400">Nenhum item de EAP encontrado</div>
+                      )}
+                    </div>
+                  </div>
+                ) : eapQ.isLoading ? null : (
+                  <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    Carregando itens da EAP...
+                  </div>
+                )}
               </div>
+            )}
+
+            {/* Data | Prioridade */}
+            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-gray-700">Data de Necessidade</label>
                 <input
@@ -355,7 +469,7 @@ export default function Solicitacoes() {
               </div>
             </div>
 
-            {/* Linha 4: Observações (compact) */}
+            {/* Observações */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700">Observações</label>
               <textarea

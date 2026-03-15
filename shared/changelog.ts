@@ -1429,6 +1429,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:59",
   },
   {
+    version: 360,
+    titulo: "SC: painel EAP integrado + remoção de Setor/Depto",
+    descricao: "Nova Solicitação de Compra redesenhada: (1) Campo Setor/Depto removido — não era usado na prática; (2) Grade Data+Prioridade reduzida para 2 colunas; (3) Painel EAP aparece automaticamente ao selecionar a Obra — lista os itens do orçamento (código EAP + descrição + qtd/unidade + prazo do planejamento) sem preços; (4) Checkbox clicável por item: ao marcar, o item é adicionado automaticamente à lista Itens Solicitados com o código EAP prefixado; ao desmarcar, é removido; (5) Campo de filtro por texto para busca rápida dentro da EAP; (6) Contador de itens selecionados; (7) Mensagem de aviso quando obra não tem orçamento vinculado; (8) Os campos orcamentoItemId e eapCodigo são enviados ao backend e gravados em compras_solicitacoes_itens para rastreabilidade.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 13:00:00",
+  },
+  {
     version: 359,
     titulo: "Módulo Terceiros — Contratos, Medições e Previsão de Caixa",
     descricao: "Módulo completo de gestão de contratos de terceiros: (1) 5 tabelas PostgreSQL: terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos; (2) Router terceiroContratos.ts com procedures: listarContratos (com KPIs de empresa, saldo e percentual pago), getContrato (itens + medições + documentos + empresa), proximoNumeroContrato (geração automática CT-YYYY-NNN), criarContrato (vínculo obra/empresa/planejamento), listarMedicoes, gerarMedicao (cálculo por itens do contrato), aprovarMedicao (com bloqueio por documentos pendentes), previsaoCaixa (fluxo semanal baseado no cronograma de planejamento), dashboardTerceiroContratos (KPIs globais); (3) 5 páginas React: ContratosList (lista com barra de progresso financeiro, badge variação orçamento/fechado, KPIs), ContratoDetalhe (abas: itens, medições, documentos, timeline), ContratoNovo (form vinculado a empresa terceira, obra, planejamento e cotação origem), Medicoes (tabela de aprovação com rejeição e motivo), PrevisaoCaixa (gráfico de barras semanal com filtro por obra); (4) Rotas registradas: /terceiros/contratos, /terceiros/contratos/novo, /terceiros/contratos/:id, /terceiros/medicoes, /terceiros/previsao-caixa; (5) Geração automática de contratos a partir de cotações aprovadas (gerarContratoFromCotacao).",
