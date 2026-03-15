@@ -781,6 +781,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-14 22:30:00",
   },
   {
+    version: 295,
+    titulo: "Crono. Financeiro — Correção: erro ao salvar configuração de medição",
+    descricao: "Substituído o padrão SELECT→INSERT/UPDATE por upsert atômico (ON CONFLICT DO UPDATE) na configuração de medição. Elimina falhas por race condition ao salvar pela primeira vez.",
+    tipo: "bugfix",
+    modulos: "Planejamento / Crono. Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 01:30:00",
+  },
+  {
     version: 294,
     titulo: "REFIS — Correção: isAdminMaster não definido ao consolidar",
     descricao: "Corrigido ReferenceError ao clicar em 'Consolidar REFIS': a variável isAdminMaster não estava sendo passada como prop para o componente Refis. Agora é propagada corretamente do componente pai.",
