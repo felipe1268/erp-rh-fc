@@ -1500,4 +1500,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 23:59:00",
   },
+  {
+    version: 366,
+    titulo: "Fix crítico: importação de BDI com muitos itens (timeout de conexão)",
+    descricao: "Corrigido erro 'Unexpected end of JSON input' ao importar planilha BDI com orçamentos de 1000+ itens. A causa era um loop N+1 que executava um UPDATE individual por item (ex.: 1875 queries sequenciais), esgotando a conexão Neon antes de retornar a resposta. Solução: substituído por um único UPDATE em massa usando SQL CASE/ROUND via Drizzle ORM, reduzindo o tempo de execução de minutos para segundos. O mesmo padrão foi corrigido na procedure 'aprovarMeta', que também iterava item a item.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
+    version: 367,
+    titulo: "Módulo Terceiros — Contratos, Medições e Previsão de Caixa (T001–T005)",
+    descricao: "Criação completa do submódulo de Contratos de Terceiros: (T001) 5 novas tabelas no PostgreSQL — terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos; (T002) router terceiroContratos.ts com CRUD de contratos, itens de contrato, medições (geração automática pelo planejamento de avanço físico) e previsão de caixa; (T003) router registrado em server/routers.ts como 'terceiroContratos'; (T004) 3 páginas React no módulo Terceiros: ContratosList, ContratoNovo e ContratoDetalhe (com gestão de itens, medições e documentos), mais MedicoesTerceiros e PrevisaoCaixa; (T005) rotas registradas no App.tsx e itens de menu adicionados ao sidebar Terceiros.",
+    tipo: "funcionalidade",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
 ];

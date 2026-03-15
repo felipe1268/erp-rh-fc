@@ -1733,21 +1733,12 @@ export const orcamentoRouter = router({
         status:            'aprovado',
       }).where(eq(orcamentos.id, input.id));
 
-      // Atualizar metaTotal de todos os itens
-      const itens = await db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.id));
-      for (let i = 0; i < itens.length; i += 500) {
-        const batch = itens.slice(i, i + 500);
-        for (const item of batch) {
-          const custo    = parseFloat(item.custoTotal || '0');
-          const meta     = custo * (1 - input.metaPercentual);
-          const qtd      = parseFloat(item.quantidade || '0');
-          const metaUnit = qtd > 0 ? meta / qtd : 0;
-          await db.update(orcamentoItens).set({
-            metaTotal:     fix2(meta),
-            metaUnitTotal: fix4(metaUnit),
-          }).where(eq(orcamentoItens.id, item.id));
-        }
-      }
+      // Atualizar metaTotal de todos os itens com um único UPDATE em massa
+      const metaFator = String(1 - input.metaPercentual);
+      await db.update(orcamentoItens).set({
+        metaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) * ${metaFator}, 2)`,
+        metaUnitTotal: sql`CASE WHEN COALESCE(${orcamentoItens.quantidade}::numeric, 0) > 0 THEN ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) * ${metaFator} / COALESCE(${orcamentoItens.quantidade}::numeric, 1), 4) ELSE 0 END`,
+      }).where(eq(orcamentoItens.orcamentoId, input.id));
 
       return { success: true };
     }),
@@ -2161,30 +2152,25 @@ export const orcamentoRouter = router({
 
       // ── Recalcular Venda dos itens com novo BDI% ───────────────
       if (bdiPercentual > 0) {
-        const itens = await db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, oid));
-        for (let i = 0; i < itens.length; i += BATCH) {
-          for (const item of itens.slice(i, i + BATCH)) {
-            const custo     = parseFloat(item.custoTotal     || '0');
-            const custoUnit = parseFloat(item.custoUnitTotal || '0');
-            // Fórmula ABNT/TCU: PV = CD ÷ (1 − BDI%)
-            const bdiDivisor = 1 - bdiPercentual;
-            await db.update(orcamentoItens).set({
-              vendaTotal:     fix2(bdiDivisor > 0 ? custo     / bdiDivisor : custo),
-              vendaUnitTotal: fix4(bdiDivisor > 0 ? custoUnit / bdiDivisor : custoUnit),
-            }).where(eq(orcamentoItens.id, item.id));
-          }
+        const bdiDivisor = 1 - bdiPercentual;
+        // Um único UPDATE em massa em vez de um loop por item (evita timeout com muitos itens)
+        if (bdiDivisor > 0) {
+          await db.update(orcamentoItens).set({
+            vendaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) / ${String(bdiDivisor)}, 2)`,
+            vendaUnitTotal: sql`ROUND(COALESCE(${orcamentoItens.custoUnitTotal}::numeric, 0) / ${String(bdiDivisor)}, 4)`,
+          }).where(eq(orcamentoItens.orcamentoId, oid));
         }
-        // Usa PV-2 da aba BDI como total de venda autoritativo (exclui indiretos da EAP).
-        // Fallback: soma dos itens nível 1 com fórmula ABNT/TCU.
-        const bdiDivisorTotal = 1 - bdiPercentual;
+        // Total de venda final: usa PV-2 da aba BDI se disponível, senão calcula da EAP
         let totalVendaFinal: number;
         if (totalVendaBdi > 0) {
           totalVendaFinal = totalVendaBdi;
         } else {
-          const nivel1 = itens.filter(i => i.nivel === 1);
+          const nivel1 = await db.select({ custoTotal: orcamentoItens.custoTotal })
+            .from(orcamentoItens)
+            .where(and(eq(orcamentoItens.orcamentoId, oid), eq(orcamentoItens.nivel, 1)));
           totalVendaFinal = nivel1.reduce((s, i) => {
             const c = parseFloat(i.custoTotal || '0');
-            return s + (bdiDivisorTotal > 0 ? c / bdiDivisorTotal : c);
+            return s + (bdiDivisor > 0 ? c / bdiDivisor : c);
           }, 0);
         }
         await db.update(orcamentos).set({
