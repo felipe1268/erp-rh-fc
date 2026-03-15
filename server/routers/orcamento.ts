@@ -4011,4 +4011,128 @@ export const orcamentoRouter = router({
         .where(eq(orcamentoSecItens.secId, input.secId))
         .orderBy(asc(orcamentoSecItens.ordem));
     }),
+
+  // ─── Importar Planilha META ────────────────────────────────────────────────
+  // Lê a planilha META (formato idêntico à planilha CUSTO) e armazena os
+  // preços META reais (negociados) por item, substituindo o cálculo por %.
+  // Matching: por eapCodigo. Itens não encontrados na META são zerados (excluídos
+  // da visão META). Itens presentes na META mas ausentes no orçamento são ignorados.
+  importarMeta: protectedProcedure
+    .input(z.object({
+      orcamentoId: z.number(),
+      fileBase64:  z.string().min(10),
+      fileName:    z.string(),
+      colMapping:  z.record(z.string(), z.number()).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível.' });
+
+      // Verificar que orçamento pertence à company do usuário
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos)
+        .where(eq(orcamentos.id, input.orcamentoId))
+        .limit(1);
+      if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      if (orc.companyId !== ctx.companyId) throw new TRPCError({ code: 'FORBIDDEN' });
+
+      // Parsear planilha META (metaPerc=0: lemos os preços como são, sem redução adicional)
+      const XLSX = await import('xlsx');
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const wb = XLSX.read(buffer, { type: 'buffer' });
+
+      const orcTab = wb.SheetNames.find(n =>
+        n.toLowerCase().replace(/[^a-z]/g, '').startsWith('or') ||
+        n.toLowerCase().includes('orcamento') ||
+        n.toLowerCase().includes('orçamento')
+      );
+      if (!orcTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "Orçamento" não encontrada na planilha META.' });
+
+      const dataOrc = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], { header: 1, defval: '' }) as any[][];
+      const { itens: metaItens } = parsearAbaCorcamento(dataOrc, 0, 0, input.colMapping);
+
+      if (metaItens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha META.' });
+
+      // Construir mapa EAP → dados META (somente leaf-nodes com total > 0)
+      const metaMap = new Map<string, typeof metaItens[0]>();
+      for (const m of metaItens) {
+        if (parseFloat(m.custoTotal) > 0 || parseFloat(m.custoTotalMat) > 0 || parseFloat(m.custoTotalMdo) > 0) {
+          metaMap.set(m.eapCodigo, m);
+        }
+      }
+
+      // Buscar todos os itens do orçamento
+      const orcItens = await db.select({ id: orcamentoItens.id, eapCodigo: orcamentoItens.eapCodigo })
+        .from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+
+      let atualizados = 0;
+      let naoEncontrados = 0;
+
+      // Atualizar cada item com os valores META reais
+      for (const item of orcItens) {
+        const m = metaMap.get(item.eapCodigo);
+        if (m) {
+          const metaTot = parseFloat(m.custoTotal);
+          const metaTotMat = parseFloat(m.custoTotalMat);
+          const metaTotMdo = parseFloat(m.custoTotalMdo);
+          const metaUnitTot = parseFloat(m.custoUnitTotal);
+          const metaUnitMat = parseFloat(m.custoUnitMat);
+          const metaUnitMdoV = parseFloat(m.custoUnitMdo);
+
+          await db.update(orcamentoItens)
+            .set({
+              metaTotal:    fix2(metaTot),
+              metaTotalMat: fix2(metaTotMat),
+              metaTotalMdo: fix2(metaTotMdo),
+              metaUnitTotal: fix4(metaUnitTot),
+              metaUnitMat:  fix4(metaUnitMat),
+              metaUnitMdo:  fix4(metaUnitMdoV),
+            })
+            .where(eq(orcamentoItens.id, item.id));
+          atualizados++;
+        } else {
+          // Item do orçamento não presente na planilha META: zerar meta
+          await db.update(orcamentoItens)
+            .set({
+              metaTotal:    '0.00',
+              metaTotalMat: '0.00',
+              metaTotalMdo: '0.00',
+              metaUnitTotal: '0.0000',
+              metaUnitMat:  '0.0000',
+              metaUnitMdo:  '0.0000',
+            })
+            .where(eq(orcamentoItens.id, item.id));
+          naoEncontrados++;
+        }
+      }
+
+      // Calcular novo totalMeta = soma dos items level-1 na META
+      const allItens = await db.select({
+        nivel: orcamentoItens.nivel,
+        metaTotal: orcamentoItens.metaTotal,
+      }).from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+
+      const novoTotalMeta = allItens
+        .filter(i => i.nivel === 1)
+        .reduce((s, i) => s + parseFloat(i.metaTotal ?? '0'), 0);
+
+      const agora = new Date().toISOString();
+      await db.update(orcamentos)
+        .set({
+          totalMeta:               fix2(novoTotalMeta),
+          metaPlanilhaCodigo:      input.fileName.replace(/\.[^/.]+$/, '').substring(0, 255),
+          metaPlanilhaImportadoEm: agora,
+        })
+        .where(eq(orcamentos.id, input.orcamentoId));
+
+      return {
+        ok: true,
+        atualizados,
+        naoEncontrados,
+        totalMeta: novoTotalMeta,
+        fileName: input.fileName,
+      };
+    }),
 });
