@@ -8,13 +8,169 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Building2, RefreshCw, TrendingDown, TrendingUp, Minus } from "lucide-react";
-import { formatCNPJ } from "@/lib/formatters";
+import { ArrowLeft, Save, Building2, Search, CheckSquare, Square, ChevronDown, X } from "lucide-react";
 import { toast } from "sonner";
 
-const parseVal = (s: string) => parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
-const BRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+// ─── Combobox pesquisável genérico ────────────────────────────────────────────
+function Combobox({
+  placeholder, value, onChange, items, labelKey, searchPlaceholder,
+}: {
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  items: any[];
+  labelKey: (item: any) => string;
+  searchPlaceholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selected = items.find(i => String(i.id) === value);
+  const filtered = items.filter(i =>
+    labelKey(i).toLowerCase().includes(search.toLowerCase())
+  );
 
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen(o => !o); setSearch(""); }}
+        className="w-full flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white hover:border-gray-300 transition-colors text-left"
+      >
+        <span className={selected ? "text-gray-900" : "text-gray-400"}>
+          {selected ? labelKey(selected) : placeholder}
+        </span>
+        <div className="flex items-center gap-1">
+          {value && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={e => { e.stopPropagation(); onChange(""); setOpen(false); }}
+              onKeyDown={e => e.key === "Enter" && onChange("")}
+              className="p-0.5 hover:text-red-500 text-gray-400"
+            >
+              <X className="w-3 h-3" />
+            </span>
+          )}
+          <ChevronDown className="w-4 h-4 text-gray-400" />
+        </div>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+          <div className="p-2 border-b border-gray-100">
+            <div className="flex items-center gap-2 bg-gray-50 rounded-md px-2">
+              <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+              <input
+                autoFocus
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={searchPlaceholder || "Buscar..."}
+                className="w-full py-1.5 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+              />
+            </div>
+          </div>
+          <div className="max-h-52 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-3">Nenhum resultado</p>
+            ) : filtered.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => { onChange(String(item.id)); setOpen(false); setSearch(""); }}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors ${String(item.id) === value ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700"}`}
+              >
+                {labelKey(item)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MultiSelect de atividades ─────────────────────────────────────────────────
+function AtividadesSelect({
+  atividades, selected, onToggle,
+}: {
+  atividades: any[];
+  selected: number[];
+  onToggle: (id: number) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const filtered = atividades.filter(a =>
+    !a.isGrupo && (
+      (a.nome || "").toLowerCase().includes(search.toLowerCase()) ||
+      (a.eapCodigo || "").toLowerCase().includes(search.toLowerCase())
+    )
+  );
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
+        <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Filtrar atividade..."
+          className="w-full text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+        />
+        {selected.length > 0 && (
+          <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">
+            {selected.length} selecionada{selected.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+      <div className="max-h-56 overflow-y-auto">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-4">
+            {search ? "Nenhuma atividade encontrada" : "Sem atividades disponíveis"}
+          </p>
+        ) : filtered.map(a => {
+          const isSelected = selected.includes(a.id);
+          return (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => onToggle(a.id)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left border-b border-gray-50 hover:bg-blue-50 transition-colors ${isSelected ? "bg-blue-50" : ""}`}
+            >
+              {isSelected ? (
+                <CheckSquare className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              ) : (
+                <Square className="w-4 h-4 text-gray-300 flex-shrink-0" />
+              )}
+              <span className={`flex-1 ${isSelected ? "text-blue-700 font-medium" : "text-gray-700"}`}>
+                {a.eapCodigo && <span className="text-gray-400 font-mono mr-1.5">{a.eapCodigo}</span>}
+                {a.nome}
+              </span>
+              {a.unidade && (
+                <span className="text-xs text-gray-400 flex-shrink-0">{a.unidade}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {filtered.length > 0 && (
+        <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-100 flex gap-2">
+          <button
+            type="button"
+            onClick={() => filtered.forEach(a => { if (!selected.includes(a.id)) onToggle(a.id); })}
+            className="text-xs text-blue-600 hover:underline"
+          >Selecionar todos</button>
+          <span className="text-xs text-gray-300">|</span>
+          <button
+            type="button"
+            onClick={() => filtered.forEach(a => { if (selected.includes(a.id)) onToggle(a.id); })}
+            className="text-xs text-gray-500 hover:underline"
+          >Limpar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ContratoNovo ──────────────────────────────────────────────────────────────
 export default function ContratoNovo() {
   const [, navigate] = useLocation();
   const { companyId } = useCompany();
@@ -23,88 +179,108 @@ export default function ContratoNovo() {
     empresaTerceiraId: "",
     obraId: "",
     descricao: "",
-    numeroContrato: "",
     tipoContrato: "empreitada_global",
-    valorOrcamento: "",
-    valorTotal: "",
     dataInicio: "",
     dataTermino: "",
     observacoes: "",
   });
-  const [numeroEditado, setNumeroEditado] = useState(false);
+  const [selectedProjetoId, setSelectedProjetoId] = useState<number | null>(null);
+  const [selectedAtividades, setSelectedAtividades] = useState<number[]>([]);
 
-  const { data: empresas = [] } = trpc.terceiros.listarEmpresas.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
+  const { data: empresas = [] } = trpc.terceiros.empresas.list.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: (companyId ?? 0) > 0 }
   );
 
-  const { data: obrasData = [] } = trpc.rh.listarObras.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
+  const { data: obrasAll = [] } = trpc.obras.list.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: (companyId ?? 0) > 0 }
   );
 
-  const { data: proximoNum, refetch: refetchNum } = trpc.terceiroContratos.proximoNumeroContrato.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
+  const { data: projetos = [] } = trpc.planejamento.listarProjetos.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: (companyId ?? 0) > 0 }
   );
 
-  // Auto-preenche o número quando carrega (só se o usuário não editou)
+  const { data: atividades = [] } = trpc.terceiroContratos.listarAtividadesProjeto.useQuery(
+    { projetoId: selectedProjetoId! },
+    { enabled: !!selectedProjetoId }
+  );
+
+  const obrasAtivas = (obrasAll as any[]).filter(
+    o => !o.status || o.status.toLowerCase() === "ativa" || o.status.toLowerCase() === "em andamento"
+  );
+
+  // Auto-detecta projeto quando obra muda
   useEffect(() => {
-    if (proximoNum && !numeroEditado) {
-      setForm(f => ({ ...f, numeroContrato: proximoNum.numero }));
+    if (form.obraId) {
+      const projeto = (projetos as any[]).find(p => String(p.obraId) === form.obraId);
+      setSelectedProjetoId(projeto?.id ?? null);
+    } else {
+      setSelectedProjetoId(null);
     }
-  }, [proximoNum, numeroEditado]);
+    setSelectedAtividades([]);
+  }, [form.obraId, projetos]);
+
+  const importarMut = trpc.terceiroContratos.importarAtividadesPlanejamento.useMutation({
+    onSuccess: () => toast.success("Atividades do planejamento vinculadas!"),
+    onError: (e) => toast.error(`Erro ao importar atividades: ${e.message}`),
+  });
 
   const criarMutation = trpc.terceiroContratos.criarContrato.useMutation({
     onSuccess: (c) => {
       toast.success(`Contrato ${c.numeroContrato} criado com sucesso!`);
+      if (selectedAtividades.length > 0 && selectedProjetoId) {
+        importarMut.mutate({
+          contratoId: c.id,
+          companyId: companyId ?? 0,
+          projetoId: selectedProjetoId,
+          atividadeIds: selectedAtividades,
+        });
+      }
       navigate(`/terceiros/contratos/${c.id}`);
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const set = (k: string) => (e: any) => {
-    const v = typeof e === "string" ? e : e.target.value;
-    if (k === "numeroContrato") setNumeroEditado(true);
-    setForm(f => ({ ...f, [k]: v }));
-  };
+  const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }));
+  const setInput = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const valOrc = parseVal(form.valorOrcamento);
-  const valFec = parseVal(form.valorTotal);
-  const variacao = valFec - valOrc;
-  const variacaoPct = valOrc > 0 ? (variacao / valOrc) * 100 : 0;
-  const showVariacao = valOrc > 0 && valFec > 0;
+  const toggleAtividade = (id: number) =>
+    setSelectedAtividades(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
 
   const handleSalvar = () => {
     if (!form.empresaTerceiraId) return toast.error("Selecione a empresa terceira");
     if (!form.descricao.trim()) return toast.error("Informe a descrição do contrato");
-    const obraObj = obrasData.find((o: any) => String(o.id) === form.obraId);
+    const obraObj = (obrasAll as any[]).find(o => String(o.id) === form.obraId);
     criarMutation.mutate({
-      companyId,
+      companyId: companyId ?? 0,
       empresaTerceiraId: parseInt(form.empresaTerceiraId),
       obraId: form.obraId ? parseInt(form.obraId) : undefined,
       obraNome: obraObj?.nome,
       descricao: form.descricao,
-      numeroContrato: form.numeroContrato || undefined,
       tipoContrato: form.tipoContrato,
-      valorOrcamento: valOrc,
-      valorTotal: valFec,
+      planejamentoProjetoId: selectedProjetoId ?? undefined,
       dataInicio: form.dataInicio || undefined,
       dataTermino: form.dataTermino || undefined,
       observacoes: form.observacoes || undefined,
     });
   };
 
+  const isLoading = criarMutation.isPending || importarMut.isPending;
+
   return (
     <DashboardLayout>
       <div className="p-5 max-w-2xl mx-auto space-y-6">
+        {/* Cabeçalho */}
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/terceiros/contratos")} className="p-2 hover:bg-gray-100 rounded-lg">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
             <h1 className="text-xl font-bold text-gray-900">Novo Contrato de Serviço</h1>
-            <p className="text-sm text-gray-500">Vinculado ao planejamento e orçamento da obra</p>
+            <p className="text-sm text-gray-500">O número e o valor são gerados automaticamente após salvar</p>
           </div>
         </div>
 
@@ -117,52 +293,35 @@ export default function ContratoNovo() {
 
             {/* Empresa Terceira */}
             <div className="col-span-2">
-              <Label>Empresa Terceira *</Label>
-              <Select value={form.empresaTerceiraId} onValueChange={set("empresaTerceiraId")}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a empresa..." /></SelectTrigger>
-                <SelectContent>
-                  {empresas.map((e: any) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.nomeFantasia || e.razaoSocial} — {formatCNPJ(e.cnpj)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="mb-1 block">Empresa Terceira *</Label>
+              <Combobox
+                placeholder="Busque ou selecione a empresa..."
+                value={form.empresaTerceiraId}
+                onChange={set("empresaTerceiraId")}
+                items={empresas as any[]}
+                labelKey={e => `${e.nomeFantasia || e.razaoSocial}${e.cnpj ? ` — ${e.cnpj}` : ""}`}
+                searchPlaceholder="Digite nome, fantasia ou CNPJ..."
+              />
+              {(empresas as any[]).length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">Nenhuma empresa terceira cadastrada. Cadastre primeiro em Empresas Terceiras.</p>
+              )}
             </div>
 
             {/* Descrição */}
             <div className="col-span-2">
-              <Label>Descrição do Serviço *</Label>
-              <Input className="mt-1" placeholder="Ex: Execução de instalação elétrica geral — Bloco A" value={form.descricao} onChange={set("descricao")} />
-            </div>
-
-            {/* Número do contrato (auto-gerado, editável) */}
-            <div>
-              <Label>Nº do Contrato</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  className="font-mono"
-                  placeholder="CT-2026-001"
-                  value={form.numeroContrato}
-                  onChange={set("numeroContrato")}
-                />
-                {numeroEditado && (
-                  <button
-                    type="button"
-                    title="Restaurar numeração automática"
-                    onClick={() => { setNumeroEditado(false); if (proximoNum) setForm(f => ({ ...f, numeroContrato: proximoNum.numero })); else refetchNum(); }}
-                    className="p-2 border border-gray-200 rounded-lg text-gray-400 hover:text-blue-600 hover:border-blue-300 transition-colors"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              <p className="text-xs text-gray-400 mt-1">Gerado automaticamente — pode editar</p>
+              <Label className="mb-1 block">Descrição do Serviço *</Label>
+              <Input
+                placeholder="Ex: Execução de instalação elétrica geral — Bloco A"
+                value={form.descricao}
+                onChange={setInput("descricao")}
+              />
             </div>
 
             {/* Tipo de Contrato */}
-            <div>
-              <Label>Tipo de Contrato</Label>
+            <div className="col-span-2">
+              <Label className="mb-1 block">Tipo de Contrato</Label>
               <Select value={form.tipoContrato} onValueChange={set("tipoContrato")}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="empreitada_global">Empreitada Global</SelectItem>
                   <SelectItem value="preco_unitario">Preço Unitário</SelectItem>
@@ -173,95 +332,85 @@ export default function ContratoNovo() {
 
             {/* Obra */}
             <div className="col-span-2">
-              <Label>Obra</Label>
-              <Select value={form.obraId} onValueChange={set("obraId")}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
-                <SelectContent>
-                  {obrasData.map((o: any) => (
-                    <SelectItem key={o.id} value={String(o.id)}>{o.codigo ? `${o.codigo} — ` : ""}{o.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Valor Orçamento */}
-            <div>
-              <Label>Valor do Orçamento (R$)</Label>
-              <Input
-                className="mt-1"
-                placeholder="0,00"
-                value={form.valorOrcamento}
-                onChange={set("valorOrcamento")}
+              <Label className="mb-1 block">Obra</Label>
+              <Combobox
+                placeholder="Busque ou selecione a obra..."
+                value={form.obraId}
+                onChange={set("obraId")}
+                items={obrasAtivas}
+                labelKey={o => `${o.codigo ? o.codigo + " — " : ""}${o.nome}`}
+                searchPlaceholder="Digite código ou nome da obra..."
               />
-              <p className="text-xs text-gray-400 mt-1">Valor previsto no orçamento interno</p>
+              {(obrasAll as any[]).length > 0 && obrasAtivas.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">Nenhuma obra ativa encontrada.</p>
+              )}
             </div>
 
-            {/* Valor Fechado */}
-            <div>
-              <Label>Valor Fechado c/ Fornecedor (R$)</Label>
-              <Input
-                className="mt-1"
-                placeholder="0,00"
-                value={form.valorTotal}
-                onChange={set("valorTotal")}
-              />
-              <p className="text-xs text-gray-400 mt-1">Valor contratado (pode ser ajustado pelos itens)</p>
-            </div>
-
-            {/* Indicador de variação entre orçamento e fechado */}
-            {showVariacao && (
+            {/* Atividades do Planejamento */}
+            {form.obraId && (
               <div className="col-span-2">
-                <div className={`rounded-lg p-3 flex items-center gap-3 ${
-                  variacao > 0 ? "bg-red-50 border border-red-200" :
-                  variacao < 0 ? "bg-green-50 border border-green-200" :
-                  "bg-gray-50 border border-gray-200"
-                }`}>
-                  {variacao > 0 ? (
-                    <TrendingUp className="w-5 h-5 text-red-500 flex-shrink-0" />
-                  ) : variacao < 0 ? (
-                    <TrendingDown className="w-5 h-5 text-green-600 flex-shrink-0" />
-                  ) : (
-                    <Minus className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                  )}
-                  <div>
-                    <p className={`text-sm font-semibold ${variacao > 0 ? "text-red-700" : variacao < 0 ? "text-green-700" : "text-gray-600"}`}>
-                      {variacao > 0 ? "Acima do orçamento" : variacao < 0 ? "Economia vs orçamento" : "Dentro do orçamento"}
-                      {" "}— {BRL(Math.abs(variacao))} ({Math.abs(variacaoPct).toFixed(1)}%)
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Orçado: {BRL(valOrc)} → Fechado: {BRL(valFec)}
-                    </p>
+                {!selectedProjetoId ? (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
+                    Nenhum planejamento encontrado para esta obra. Você pode vincular atividades depois, na tela do contrato.
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <Label className="mb-1 block">
+                      Atividades do Planejamento
+                      <span className="text-gray-400 font-normal ml-1">(selecione as que fazem parte do contrato)</span>
+                    </Label>
+                    {atividades.length === 0 ? (
+                      <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs text-gray-500">
+                        Planejamento encontrado, mas sem atividades cadastradas.
+                      </div>
+                    ) : (
+                      <AtividadesSelect
+                        atividades={atividades as any[]}
+                        selected={selectedAtividades}
+                        onToggle={toggleAtividade}
+                      />
+                    )}
+                  </>
+                )}
               </div>
             )}
 
             {/* Datas */}
             <div>
-              <Label>Data Início</Label>
-              <Input type="date" className="mt-1" value={form.dataInicio} onChange={set("dataInicio")} />
+              <Label className="mb-1 block">Data Início</Label>
+              <Input type="date" value={form.dataInicio} onChange={setInput("dataInicio")} />
             </div>
             <div>
-              <Label>Data Término</Label>
-              <Input type="date" className="mt-1" value={form.dataTermino} onChange={set("dataTermino")} />
+              <Label className="mb-1 block">Data Término</Label>
+              <Input type="date" value={form.dataTermino} onChange={setInput("dataTermino")} />
             </div>
 
             {/* Observações */}
             <div className="col-span-2">
-              <Label>Observações</Label>
-              <Textarea className="mt-1" rows={3} placeholder="Condições especiais, retenções, FD, etc." value={form.observacoes} onChange={set("observacoes")} />
+              <Label className="mb-1 block">Observações</Label>
+              <Textarea
+                rows={3}
+                placeholder="Condições especiais, retenções, FD, etc."
+                value={form.observacoes}
+                onChange={setInput("observacoes")}
+              />
             </div>
           </div>
 
           <div className="pt-2 bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
-            <strong>Próximo passo:</strong> Após criar o contrato, adicione os itens vinculando às atividades do planejamento. O sistema calculará as medições automaticamente com base no avanço físico registrado.
+            <strong>Nº e valor gerados automaticamente:</strong> O número do contrato (CT-{new Date().getFullYear()}-XXX) será gerado ao salvar. O valor total é calculado automaticamente conforme você preencher os valores nos itens após criar o contrato.
           </div>
         </div>
 
         <div className="flex gap-3 justify-end">
           <Button variant="outline" onClick={() => navigate("/terceiros/contratos")}>Cancelar</Button>
-          <Button onClick={handleSalvar} disabled={criarMutation.isPending} className="gap-2 bg-blue-600 hover:bg-blue-700">
-            <Save className="w-4 h-4" /> {criarMutation.isPending ? "Salvando..." : "Criar Contrato"}
+          <Button
+            onClick={handleSalvar}
+            disabled={isLoading}
+            className="gap-2 bg-blue-600 hover:bg-blue-700"
+          >
+            <Save className="w-4 h-4" />
+            {isLoading ? "Salvando..." : "Criar Contrato"}
           </Button>
         </div>
       </div>

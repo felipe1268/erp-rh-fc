@@ -247,6 +247,23 @@ export const terceiroContratosRouter = router({
       return { ok: true };
     }),
 
+  listarAtividadesProjeto: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select({
+        id: planejamentoAtividades.id,
+        eapCodigo: planejamentoAtividades.eapCodigo,
+        nome: planejamentoAtividades.nome,
+        nivel: planejamentoAtividades.nivel,
+        isGrupo: planejamentoAtividades.isGrupo,
+        unidade: planejamentoAtividades.unidade,
+        quantidadePlanejada: planejamentoAtividades.quantidadePlanejada,
+      }).from(planejamentoAtividades)
+        .where(eq(planejamentoAtividades.projetoId, input.projetoId))
+        .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
+    }),
+
   importarAtividadesPlanejamento: protectedProcedure
     .input(z.object({
       contratoId: z.number(),

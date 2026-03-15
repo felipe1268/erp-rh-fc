@@ -1348,6 +1348,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:59",
   },
   {
+    version: 353,
+    titulo: "ContratoNovo: dropdowns pesquisáveis, obras ativas, atividades multiselect",
+    descricao: "Reescrita completa do formulário de novo contrato: (1) Bugfix crítico — trpc.terceiros.listarEmpresas (inexistente) corrigido para terceiros.empresas.list; trpc.rh.listarObras (inexistente) corrigido para obras.list; (2) Combobox pesquisável para empresa e obra — campo de texto com filtro por nome/CNPJ/código em tempo real; (3) Obras filtradas por status ativa/em andamento; (4) Auto-detecção do projeto de planejamento vinculado à obra selecionada; (5) Multiselect de atividades do planejamento com busca por nome/EAP, checkbox individual, selecionar todos/limpar; (6) Número do contrato removido do formulário — gerado server-side automaticamente como CT-YYYY-NNN após salvar; (7) Valor total e valor orçamento removidos do formulário — calculados automaticamente pelos itens no ContratoDetalhe; (8) Novo endpoint backend listarAtividadesProjeto(projetoId) em terceiroContratos.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:59",
+  },
+  {
     version: 352,
     titulo: "Bugfix CRÍTICO: Tela branca no Railway (vitePluginManusRuntime)",
     descricao: "O plugin vitePluginManusRuntime() injetava um script inline de 368KB exclusivo do ambiente Replit/Manus em TODOS os builds, inclusive o de produção do Railway. Fora do iframe do Manus, esse script interceptava o carregamento de módulos e impedia o React de montar — resultando em tela branca com #root vazio, mesmo com todos os arquivos JS carregando 200 OK. Correção: o plugin agora é incluído APENAS quando RAILWAY_ENVIRONMENT não está definido (i.e., apenas no Replit). No Railway, o Vite gera um index.html limpo de 1.8KB com o script React padrão via <script type=module>, resolvendo completamente o problema. O vite.config.ts usa const isRailwayBuild = !!process.env.RAILWAY_ENVIRONMENT para controlar a inclusão do plugin.",
