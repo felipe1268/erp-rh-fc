@@ -101,6 +101,8 @@ async function startServer() {
     import("../services/warehouseInventoryJob").then(m => m.startInventoryJob()).catch(e => console.error("[InventoryJob] Erro:", e));
     // Job de auto-importação financeira (a cada 1h)
     import("../services/financialAutoImportJob").then(m => m.startFinancialAutoImportJob()).catch(e => console.error("[FinancialJob] Erro:", e));
+    // Jobs de compras: vencimentos de OC, expiração de cotações, alertas de contratos
+    import("../services/purchaseAutoJobs").then(m => m.startPurchaseJobs()).catch(e => console.error("[PurchaseJobs] Erro:", e));
   });
 }
 

@@ -296,11 +296,34 @@ const menuSectionsCompras: MenuSection[] = [
       { icon: ClipboardList,   label: "Solicitações (SC)",    path: "/compras/solicitacoes"     },
       { icon: FileText,        label: "Cotações",             path: "/compras/cotacoes"         },
       { icon: ShoppingCart,    label: "Ordens de Compra (OC)",path: "/compras/ordens"           },
+      { icon: Package,         label: "Recebimentos",         path: "/compras/recebimentos"     },
     ],
   },
   {
-    title: "Integrações",
+    title: "Prioridade",
     items: [
+      { icon: AlertTriangle,   label: "Compras Emergenciais", path: "/compras/emergencial"      },
+      { icon: CheckCircle,     label: "Aprovações Pendentes", path: "/compras/aprovacoes"       },
+    ],
+  },
+  {
+    title: "Financeiro",
+    items: [
+      { icon: DollarSign,      label: "Contas a Pagar",       path: "/compras/financeiro"       },
+      { icon: ArrowLeftRight,  label: "Realocação de Verba",  path: "/compras/realocacao"       },
+      { icon: Calculator,      label: "Comissões",            path: "/compras/comissoes"        },
+    ],
+  },
+  {
+    title: "Cadastros",
+    items: [
+      { icon: Users,           label: "Fornecedores",         path: "/compras/fornecedores"     },
+    ],
+  },
+  {
+    title: "Sistema",
+    items: [
+      { icon: Settings,        label: "Configurações",        path: "/compras/configuracoes"    },
       { icon: ArrowRightLeft,  label: "Mas Controle ERP",     path: "/integracoes/mas-controle" },
     ],
   },

@@ -3,13 +3,15 @@
 ## Project Overview
 A full-stack HR/ERP system built for FC Engenharia. It handles employees, payroll, time tracking, training, safety (SST), legal cases, administrative functions, and budget management.
 
-## Active Modules (6)
+## Active Modules (8)
 1. **RH & DP** — Payroll, time tracking, employees, benefits
 2. **SST** — Safety (EPIs, ASOs, CIPA, NRs)
 3. **Jurídico** — Labor lawsuits, deadlines, risk analysis
 4. **Terceiros** — Third-party companies and contractors
 5. **Parceiros** — Benefits partners (pharmacy, gas station, etc.)
 6. **Orçamento** — Excel import, 3 budget versions (Venda/Custo/Meta), ABC curve, BDI, EAP tree
+7. **Financeiro** (Rev.342) — 17 DB tables, 25+ tRPC endpoints, 12 React pages: DRE, fluxo de caixa, contas, conciliação bancária, obrigações fiscais
+8. **Compras** (Rev.343) — 24 DB tables, 30+ tRPC endpoints, 8 novas páginas: SC emergencial, cotações (portal fornecedor), OC com numeração configurável, recebimentos, AP integrada, realocação de verba, comissões, bridge financeiro
 
 ## Orçamento Module
 - Routes: `/orcamento/painel`, `/orcamento/lista`, `/orcamento/importar`, `/orcamento/:id`
