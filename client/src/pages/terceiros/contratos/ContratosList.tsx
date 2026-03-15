@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, Search, Building2, Calendar, TrendingUp, ChevronRight } from "lucide-react";
+import { Plus, FileText, Search, Building2, Calendar, TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
 
 const BRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const fmtDate = (d: string | null | undefined) => {
@@ -113,6 +113,10 @@ export default function ContratosList() {
           ) : filtrados.map(c => {
             const st = STATUS_MAP[c.status || "ativo"] || STATUS_MAP.ativo;
             const pct = c.percentualPago ?? 0;
+            const valOrc = Number(c.valorOrcamento ?? 0);
+            const valFec = Number(c.valorTotal ?? 0);
+            const variacao = valFec - valOrc;
+            const variacaoPct = valOrc > 0 ? (variacao / valOrc) * 100 : 0;
             return (
               <button
                 key={c.id}
@@ -124,6 +128,17 @@ export default function ContratosList() {
                     <div className="flex items-center gap-2 mb-1">
                       {c.numeroContrato && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">{c.numeroContrato}</span>}
                       <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
+                      {/* Badge variação orçamento × fechado */}
+                      {valOrc > 0 && (
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border font-medium ${
+                          variacao > 0 ? "bg-red-50 text-red-700 border-red-200" :
+                          variacao < 0 ? "bg-green-50 text-green-700 border-green-200" :
+                          "bg-gray-50 text-gray-500 border-gray-200"
+                        }`}>
+                          {variacao > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                          {variacao > 0 ? "+" : ""}{variacaoPct.toFixed(1)}% vs orçamento
+                        </span>
+                      )}
                     </div>
                     <p className="font-semibold text-gray-900 truncate">{c.descricao}</p>
                     <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
@@ -133,7 +148,8 @@ export default function ContratosList() {
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-gray-900">{BRL(Number(c.valorTotal))}</p>
+                    <p className="font-bold text-gray-900">{BRL(valFec)}</p>
+                    {valOrc > 0 && <p className="text-xs text-gray-400">Orçado: {BRL(valOrc)}</p>}
                     <p className="text-xs text-gray-400">Pago: {BRL(Number(c.valorPago))}</p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0 mt-1" />

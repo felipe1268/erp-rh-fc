@@ -92,6 +92,24 @@ export const terceiroContratosRouter = router({
       };
     }),
 
+  // Retorna o próximo número de contrato automático para a empresa/ano
+  proximoNumeroContrato: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ano = new Date().getFullYear();
+      const rows = await db.select({ numeroSequencia: terceiroContratos.numeroSequencia })
+        .from(terceiroContratos)
+        .where(eq(terceiroContratos.companyId, input.companyId));
+      // Encontra o maior sequencial do ano atual
+      const maxSeq = rows
+        .map(r => r.numeroSequencia ?? 0)
+        .reduce((m, v) => Math.max(m, v), 0);
+      const proximo = maxSeq + 1;
+      const seq = String(proximo).padStart(3, "0");
+      return { numero: `CT-${ano}-${seq}`, sequencia: proximo };
+    }),
+
   criarContrato: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -103,6 +121,7 @@ export const terceiroContratosRouter = router({
       numeroContrato: z.string().optional(),
       descricao: z.string(),
       tipoContrato: z.string().default("empreitada_global"),
+      valorOrcamento: z.number().default(0),
       valorTotal: z.number().default(0),
       dataInicio: z.string().optional(),
       dataTermino: z.string().optional(),
@@ -111,6 +130,20 @@ export const terceiroContratosRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const ano = new Date().getFullYear();
+
+      // Gera número automático se não informado
+      let numeroContrato = input.numeroContrato?.trim() || null;
+      let numeroSequencia: number | null = null;
+      if (!numeroContrato) {
+        const rows = await db.select({ numeroSequencia: terceiroContratos.numeroSequencia })
+          .from(terceiroContratos)
+          .where(eq(terceiroContratos.companyId, input.companyId));
+        const maxSeq = rows.map(r => r.numeroSequencia ?? 0).reduce((m, v) => Math.max(m, v), 0);
+        numeroSequencia = maxSeq + 1;
+        numeroContrato = `CT-${ano}-${String(numeroSequencia).padStart(3, "0")}`;
+      }
+
       const [c] = await db.insert(terceiroContratos).values({
         companyId: input.companyId,
         empresaTerceiraId: input.empresaTerceiraId,
@@ -118,9 +151,11 @@ export const terceiroContratosRouter = router({
         obraNome: input.obraNome ?? null,
         planejamentoProjetoId: input.planejamentoProjetoId ?? null,
         orcamentoId: input.orcamentoId ?? null,
-        numeroContrato: input.numeroContrato ?? null,
+        numeroContrato,
+        numeroSequencia,
         descricao: input.descricao,
         tipoContrato: input.tipoContrato,
+        valorOrcamento: String(input.valorOrcamento),
         valorTotal: String(input.valorTotal),
         dataInicio: input.dataInicio ?? null,
         dataTermino: input.dataTermino ?? null,
@@ -134,6 +169,8 @@ export const terceiroContratosRouter = router({
     .input(z.object({
       id: z.number(),
       descricao: z.string().optional(),
+      numeroContrato: z.string().optional(),
+      valorOrcamento: z.number().optional(),
       valorTotal: z.number().optional(),
       dataInicio: z.string().optional(),
       dataTermino: z.string().optional(),
@@ -145,6 +182,8 @@ export const terceiroContratosRouter = router({
       const { id, ...rest } = input;
       const upd: any = { atualizadoEm: new Date().toISOString() };
       if (rest.descricao !== undefined) upd.descricao = rest.descricao;
+      if (rest.numeroContrato !== undefined) upd.numeroContrato = rest.numeroContrato;
+      if (rest.valorOrcamento !== undefined) upd.valorOrcamento = String(rest.valorOrcamento);
       if (rest.valorTotal !== undefined) upd.valorTotal = String(rest.valorTotal);
       if (rest.dataInicio !== undefined) upd.dataInicio = rest.dataInicio;
       if (rest.dataTermino !== undefined) upd.dataTermino = rest.dataTermino;
