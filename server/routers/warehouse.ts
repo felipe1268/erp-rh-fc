@@ -466,6 +466,7 @@ export const warehouseRouter = router({
       const q = input.q.trim();
       if (q.length < 2) return [];
       const pattern = `%${q}%`;
+      const startPattern = `${q}%`;
       const rows = await db.execute(drizzleSql`
         SELECT id,
                "nomeCompleto",
@@ -480,7 +481,7 @@ export const warehouseRouter = router({
           AND (
             unaccent(lower("nomeCompleto")) LIKE unaccent(lower(${pattern}))
             OR lower(COALESCE("codigoInterno", '')) LIKE lower(${pattern})
-            OR lower(COALESCE(matricula, '')) LIKE lower(${pattern})
+            OR lower(COALESCE(matricula, '')) LIKE lower(${startPattern})
             OR unaccent(lower(COALESCE(cargo, ''))) LIKE unaccent(lower(${pattern}))
             OR unaccent(lower(COALESCE(funcao, ''))) LIKE unaccent(lower(${pattern}))
           )
