@@ -952,6 +952,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 13:00:00",
   },
   {
+    version: 302,
+    titulo: "Almoxarifado — Obra obrigatória na saída",
+    descricao: "Campo 'Obra' nos modais de Registrar Saída (rápido) e Movimentação passou de campo de texto livre/opcional para select obrigatório com lista de obras ativas. Validação bloqueia confirmação sem obra selecionada. obraId e obraNome são gravados no histórico de movimentações.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 16:00:00",
+  },
+  {
     version: 301,
     titulo: "Almoxarifado — Seletor de contexto como dropdown",
     descricao: "Substituição da barra de pills horizontais (que ficava apertada com muitas obras) por um select dropdown estilizado nas páginas de Almoxarifado e Inventário Semanal: ícone dinâmico (🏢 verde = Central, 🏗️ azul = Obra), opção 'Almoxarifado Central' no topo, obras agrupadas em optgroup, seleção nativa mobile-friendly.",

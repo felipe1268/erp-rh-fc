@@ -18,7 +18,7 @@ const EMPTY_ITEM = {
 };
 const EMPTY_MOV = {
   tipo: "entrada" as "entrada" | "saida" | "ajuste",
-  quantidade: 0, obraNome: "", motivo: "", observacoes: "",
+  quantidade: 0, obraId: 0, motivo: "", observacoes: "",
 };
 
 function n(v: any) { return parseFloat(v ?? "0") || 0; }
@@ -173,13 +173,15 @@ export default function AlmoxarifadoPage() {
 
   function abrirMovimento(i: any, tipo: "entrada" | "saida") {
     setMovItem(i);
-    setFormMov({ tipo, quantidade: 0, obraNome: "", motivo: "", observacoes: "" });
+    setFormMov({ tipo, quantidade: 0, obraId: obraContexto ?? 0, motivo: "", observacoes: "" });
     setModalMov(true);
   }
   function salvarMovimento() {
     if (!movItem) return;
     if (formMov.quantidade <= 0) { toast.error("Quantidade deve ser maior que zero."); return; }
-    movMut.mutate({ companyId, itemId: movItem.id, tipo: formMov.tipo, quantidade: formMov.quantidade, obraNome: formMov.obraNome || undefined, motivo: formMov.motivo || undefined, observacoes: formMov.observacoes || undefined });
+    if (formMov.tipo === "saida" && !formMov.obraId) { toast.error("Selecione a obra de destino."); return; }
+    const obraSel = obrasAtivas.find((o: any) => o.id === formMov.obraId);
+    movMut.mutate({ companyId, itemId: movItem.id, tipo: formMov.tipo, quantidade: formMov.quantidade, obraId: formMov.obraId || undefined, obraNome: obraSel ? (obraSel.codigo ? `${obraSel.codigo} – ${obraSel.nome}` : obraSel.nome) : undefined, motivo: formMov.motivo || undefined, observacoes: formMov.observacoes || undefined });
   }
 
   // ── Modal Histórico ─────────────────────────────────────────────
@@ -208,7 +210,7 @@ export default function AlmoxarifadoPage() {
   const [modalSaida, setModalSaida] = useState(false);
   const [saidaItemId, setSaidaItemId] = useState<number>(0);
   const [saidaQtd, setSaidaQtd] = useState("");
-  const [saidaObraNome, setSaidaObraNome] = useState("");
+  const [saidaObraId, setSaidaObraId] = useState<number>(0);
   const [saidaOk, setSaidaOk] = useState<boolean | null>(null);
   const registerExit = trpc.warehouse.registerExit.useMutation({
     onSuccess: () => { refetch(); setSaidaOk(true); },
@@ -243,7 +245,7 @@ export default function AlmoxarifadoPage() {
   });
 
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
-  function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraNome(""); setSaidaOk(null); }
+  function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(obraContexto ?? 0); setSaidaOk(null); }
   function resetEmprestimo() { setEmpCodigo(""); setEmpItemId(0); setEmpQtd("1"); setEmpOk(null); setEmpErr(null); }
 
   return (
@@ -738,8 +740,19 @@ export default function AlmoxarifadoPage() {
               </div>
               {formMov.tipo === "saida" && (
                 <div>
-                  <label className="text-xs font-medium text-gray-700">Obra (destino)</label>
-                  <input className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400" placeholder="Nome da obra" value={formMov.obraNome} onChange={e => setFormMov(p => ({ ...p, obraNome: e.target.value }))} />
+                  <label className="text-xs font-medium text-gray-700">Obra de destino *</label>
+                  <select
+                    className="mt-1 w-full h-9 px-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
+                    value={formMov.obraId}
+                    onChange={e => setFormMov(p => ({ ...p, obraId: Number(e.target.value) }))}
+                  >
+                    <option value={0}>— selecione a obra —</option>
+                    {obrasAtivas.map((o: any) => (
+                      <option key={o.id} value={o.id}>
+                        {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
               <div>
@@ -897,13 +910,27 @@ export default function AlmoxarifadoPage() {
                     <input type="number" inputMode="decimal" className="w-full border-2 rounded-xl p-4 text-2xl font-bold text-center" placeholder="0" value={saidaQtd} onChange={e => setSaidaQtd(e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-sm font-semibold text-gray-700 block mb-1">Obra (opcional)</label>
-                    <input type="text" className="w-full border rounded-xl p-3 text-base" placeholder="Nome da obra" value={saidaObraNome} onChange={e => setSaidaObraNome(e.target.value)} />
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Obra de destino *</label>
+                    <select
+                      className="w-full border-2 rounded-xl p-3 text-base"
+                      value={saidaObraId}
+                      onChange={e => setSaidaObraId(Number(e.target.value))}
+                    >
+                      <option value={0}>— selecione a obra —</option>
+                      {obrasAtivas.map((o: any) => (
+                        <option key={o.id} value={o.id}>
+                          {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <button
                     className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                    disabled={!saidaItemId || !saidaQtd || registerExit.isPending}
-                    onClick={() => registerExit.mutate({ companyId, itemId: saidaItemId, quantidade: parseFloat(saidaQtd), obraNome: saidaObraNome || undefined })}
+                    disabled={!saidaItemId || !saidaQtd || !saidaObraId || registerExit.isPending}
+                    onClick={() => {
+                      const obraSel = obrasAtivas.find((o: any) => o.id === saidaObraId);
+                      registerExit.mutate({ companyId, itemId: saidaItemId, quantidade: parseFloat(saidaQtd), obraId: saidaObraId || undefined, obraNome: obraSel ? (obraSel.codigo ? `${obraSel.codigo} – ${obraSel.nome}` : obraSel.nome) : undefined });
+                    }}
                   >
                     {registerExit.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "✅ CONFIRMAR SAÍDA"}
                   </button>
