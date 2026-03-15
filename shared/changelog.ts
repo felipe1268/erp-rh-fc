@@ -1014,4 +1014,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 14:00:00",
   },
+  {
+    version: 307,
+    titulo: "Almoxarifado — Busca de funcionário por nome no modal Emprestar Ferramenta",
+    descricao: "Modal 'Emprestar Ferramenta' agora conta com busca inteligente por código (JFCxxxx) ou nome: campo único de texto dispara autocomplete com até 6 sugestões exibindo foto + nome + cargo; ao selecionar o funcionário, um card de confirmação (com foto circular ou ícone) aparece com botão de limpar; foto real do funcionário exibida quando disponível. Novo endpoint searchFuncionarios no backend com busca por nome, código ou cargo via ilike.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 16:00:00",
+  },
 ];

@@ -220,6 +220,9 @@ export default function AlmoxarifadoPage() {
   // Modal Empréstimo
   const [modalEmprestimo, setModalEmprestimo] = useState(false);
   const [empCodigo, setEmpCodigo] = useState("");
+  const [empSearch, setEmpSearch] = useState("");
+  const [empSelecionado, setEmpSelecionado] = useState<any>(null);
+  const [empShowSug, setEmpShowSug] = useState(false);
   const [empItemId, setEmpItemId] = useState<number>(0);
   const [empQtd, setEmpQtd] = useState("1");
   const [empOk, setEmpOk] = useState<null | { nome: string }>(null);
@@ -227,6 +230,10 @@ export default function AlmoxarifadoPage() {
   const { data: empFuncionario } = trpc.warehouse.getFuncionarioByCodigo.useQuery(
     { companyId, codigo: empCodigo },
     { enabled: empCodigo.length >= 5 }
+  );
+  const { data: empSugestoes = [] } = trpc.warehouse.searchFuncionarios.useQuery(
+    { companyId, q: empSearch },
+    { enabled: empSearch.length >= 2 && !empSelecionado }
   );
   const registerLoan = trpc.warehouse.registerLoan.useMutation({
     onSuccess: (d) => { refetch(); setEmpOk({ nome: d.funcionarioNome }); setEmpErr(null); },
@@ -246,7 +253,8 @@ export default function AlmoxarifadoPage() {
 
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
   function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(obraContexto ?? 0); setSaidaOk(null); }
-  function resetEmprestimo() { setEmpCodigo(""); setEmpItemId(0); setEmpQtd("1"); setEmpOk(null); setEmpErr(null); }
+  function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpOk(null); setEmpErr(null); }
+  function selecionarFuncionario(f: any) { setEmpSelecionado(f); setEmpCodigo(f.codigoInterno); setEmpSearch(f.nomeCompleto); setEmpShowSug(false); }
 
   return (
     <DashboardLayout>
@@ -959,27 +967,63 @@ export default function AlmoxarifadoPage() {
                   <button onClick={() => setModalEmprestimo(false)}><X className="w-6 h-6 text-gray-400" /></button>
                 </div>
                 <div className="p-4 space-y-4">
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 block mb-1">Código do Funcionário (JFCxxxx)</label>
+                  <div className="relative">
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Funcionário *</label>
                     <input
                       type="text"
-                      inputMode="text"
-                      className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center uppercase tracking-widest"
-                      placeholder="JFC0000"
-                      value={empCodigo}
-                      onChange={e => setEmpCodigo(e.target.value.toUpperCase())}
+                      className="w-full border-2 rounded-xl p-3 text-base"
+                      placeholder="Digite o código (JFC199) ou nome do funcionário..."
+                      value={empSearch}
+                      autoComplete="off"
+                      onChange={e => {
+                        setEmpSearch(e.target.value);
+                        setEmpSelecionado(null);
+                        setEmpCodigo("");
+                        setEmpShowSug(true);
+                      }}
+                      onFocus={() => setEmpShowSug(true)}
+                      onBlur={() => setTimeout(() => setEmpShowSug(false), 180)}
                     />
-                    {empFuncionario && (
-                      <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
-                        <User className="w-8 h-8 text-emerald-500" />
-                        <div>
-                          <p className="font-bold text-emerald-800">{empFuncionario.nomeCompleto}</p>
-                          {empFuncionario.cargo && <p className="text-xs text-emerald-600">{empFuncionario.cargo}</p>}
-                        </div>
+                    {/* Lista de sugestões */}
+                    {empShowSug && empSugestoes.length > 0 && !empSelecionado && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                        {empSugestoes.map((f: any) => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-blue-50 text-left transition"
+                            onMouseDown={() => selecionarFuncionario(f)}
+                          >
+                            {f.fotoUrl
+                              ? <img src={f.fotoUrl} alt={f.nomeCompleto} className="w-9 h-9 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                              : <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><User className="w-5 h-5 text-blue-500" /></div>
+                            }
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 truncate">{f.nomeCompleto}</p>
+                              <p className="text-xs text-gray-500">{f.codigoInterno}{f.cargo ? ` — ${f.cargo}` : f.funcao ? ` — ${f.funcao}` : ""}</p>
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     )}
-                    {empCodigo.length >= 5 && !empFuncionario && (
-                      <p className="text-xs text-red-500 mt-1">Funcionário não encontrado</p>
+                    {/* Card do funcionário selecionado */}
+                    {empSelecionado && (
+                      <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
+                        {empSelecionado.fotoUrl
+                          ? <img src={empSelecionado.fotoUrl} alt={empSelecionado.nomeCompleto} className="w-12 h-12 rounded-full object-cover border-2 border-emerald-300 flex-shrink-0" />
+                          : <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"><User className="w-6 h-6 text-emerald-500" /></div>
+                        }
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-emerald-800 truncate">{empSelecionado.nomeCompleto}</p>
+                          <p className="text-xs text-emerald-600">{empSelecionado.codigoInterno}{empSelecionado.cargo ? ` — ${empSelecionado.cargo}` : empSelecionado.funcao ? ` — ${empSelecionado.funcao}` : ""}</p>
+                        </div>
+                        <button type="button" onClick={() => { setEmpSelecionado(null); setEmpSearch(""); setEmpCodigo(""); }} className="text-gray-400 hover:text-red-500 transition flex-shrink-0">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                    {empSearch.length >= 2 && !empSelecionado && empSugestoes.length === 0 && (
+                      <p className="text-xs text-red-500 mt-1">Nenhum funcionário encontrado</p>
                     )}
                   </div>
                   <div>
@@ -996,8 +1040,8 @@ export default function AlmoxarifadoPage() {
                   {empErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{empErr}</p>}
                   <button
                     className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                    disabled={!empFuncionario || !empItemId || !empQtd || registerLoan.isPending}
-                    onClick={() => registerLoan.mutate({ companyId, itemId: empItemId, quantidade: parseFloat(empQtd), funcionarioCodigo: empCodigo })}
+                    disabled={!empSelecionado || !empItemId || !empQtd || registerLoan.isPending}
+                    onClick={() => registerLoan.mutate({ companyId, itemId: empItemId, quantidade: parseFloat(empQtd), funcionarioCodigo: empSelecionado?.codigoInterno || empCodigo })}
                   >
                     {registerLoan.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "🔧 CONFIRMAR EMPRÉSTIMO"}
                   </button>

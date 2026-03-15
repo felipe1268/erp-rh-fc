@@ -408,31 +408,83 @@ export const warehouseRouter = router({
       return { success: true };
     }),
 
-  // ── BUSCAR FUNCIONÁRIO PELO CÓDIGO ─────────────────────────────
+  // ── BUSCAR FUNCIONÁRIO PELO CÓDIGO OU NOME ─────────────────────
   getFuncionarioByCodigo: protectedProcedure
     .input(z.object({ companyId: z.number(), codigo: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const [func] = await db
+      const { ilike, or, isNull } = await import("drizzle-orm");
+      const busca = input.codigo.trim();
+      if (!busca) return null;
+
+      // Tenta código exato primeiro
+      const [byCode] = await db
         .select({
           id: employees.id,
           nomeCompleto: employees.nomeCompleto,
           codigoInterno: employees.codigoInterno,
           cargo: (employees as any).cargo,
-          fotoUrl: (employees as any).fotoPerfil,
+          funcao: (employees as any).funcao,
+          fotoUrl: (employees as any).fotoUrl,
+        })
+        .from(employees)
+        .where(and(eq(employees.companyId, input.companyId), eq(employees.codigoInterno, busca), isNull(employees.deletedAt)))
+        .limit(1);
+
+      if (byCode) return byCode;
+
+      // Fallback: busca parcial por nome (retorna primeiro resultado)
+      const [byName] = await db
+        .select({
+          id: employees.id,
+          nomeCompleto: employees.nomeCompleto,
+          codigoInterno: employees.codigoInterno,
+          cargo: (employees as any).cargo,
+          funcao: (employees as any).funcao,
+          fotoUrl: (employees as any).fotoUrl,
+        })
+        .from(employees)
+        .where(and(eq(employees.companyId, input.companyId), ilike(employees.nomeCompleto, `%${busca}%`), isNull(employees.deletedAt)))
+        .limit(1);
+
+      return byName || null;
+    }),
+
+  // ── BUSCAR FUNCIONÁRIOS (SUGESTÕES) ────────────────────────────
+  searchFuncionarios: protectedProcedure
+    .input(z.object({ companyId: z.number(), q: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const { ilike, or, isNull } = await import("drizzle-orm");
+      const q = input.q.trim();
+      if (q.length < 2) return [];
+
+      return db
+        .select({
+          id: employees.id,
+          nomeCompleto: employees.nomeCompleto,
+          codigoInterno: employees.codigoInterno,
+          cargo: (employees as any).cargo,
+          funcao: (employees as any).funcao,
+          fotoUrl: (employees as any).fotoUrl,
         })
         .from(employees)
         .where(
           and(
             eq(employees.companyId, input.companyId),
-            eq(employees.codigoInterno, input.codigo)
+            isNull(employees.deletedAt),
+            or(
+              ilike(employees.nomeCompleto, `%${q}%`),
+              ilike(employees.codigoInterno, `%${q}%`),
+              ilike((employees as any).cargo, `%${q}%`),
+            )
           )
         )
-        .limit(1);
-
-      return func || null;
+        .orderBy(employees.nomeCompleto)
+        .limit(6);
     }),
 
   // ── INVENTÁRIO SEMANAL ─────────────────────────────────────────
