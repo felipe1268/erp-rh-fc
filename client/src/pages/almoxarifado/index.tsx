@@ -7,7 +7,7 @@ import {
   Search, Plus, Pencil, Package, ArrowDownCircle, ArrowUpCircle,
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
   LayoutGrid, List, Camera, Trash2, ImageOff,
-  Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight,
+  Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
   Building2, HardHat, Sparkles, ScanLine,
 } from "lucide-react";
 
@@ -1556,8 +1556,15 @@ export default function AlmoxarifadoPage() {
         <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ background: "#ffffff", color: "#111827" }}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
-            <h2 className="text-base font-bold text-gray-900">Registros do Almoxarifado</h2>
-            <button onClick={() => setModalRegistros(false)}><X className="w-6 h-6 text-gray-400" /></button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setModalRegistros(false)} className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 transition">
+                <ChevronLeft className="w-5 h-5 text-gray-600" />
+              </button>
+              <h2 className="text-base font-bold text-gray-900">Registros do Almoxarifado</h2>
+            </div>
+            <button onClick={() => setModalRegistros(false)} className="text-gray-400 hover:text-gray-600 transition">
+              <X className="w-5 h-5" />
+            </button>
           </div>
           {/* Abas */}
           <div className="flex border-b bg-white overflow-x-auto">
