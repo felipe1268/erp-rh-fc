@@ -4787,6 +4787,8 @@ export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores"
   observacoes:      text(),
   totalOrcado:      numeric("total_orcado", { precision: 14, scale: 2 }).default("0"),
   selecionado:      boolean().default(false),
+  arquivoUrl:       varchar("arquivo_url", { length: 500 }),
+  arquivoNome:      varchar("arquivo_nome", { length: 255 }),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
@@ -4795,6 +4797,7 @@ export const comprasCotacaoRespostas = pgTable("compras_cotacao_respostas", {
   cotacaoId:     integer("cotacao_id").notNull(),
   fornecedorId:  integer("fornecedor_id").notNull(),
   itemId:        integer("item_id").notNull(),
+  quantidade:    numeric("quantidade", { precision: 14, scale: 4 }).default("0"),
   precoUnitario: numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
   descontoPct:   numeric("desconto_pct", { precision: 5, scale: 2 }).default("0"),
   total:         numeric({ precision: 14, scale: 2 }).default("0"),

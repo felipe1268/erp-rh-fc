@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package } from "lucide-react";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pendente:  { label: "Pendente",  cls: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -54,11 +54,15 @@ export default function Cotacoes() {
   const [mapaFornSearch, setMapaFornSearch] = useState("");
   const [mapaFornOpen, setMapaFornOpen] = useState(false);
   const [editPrecos, setEditPrecos] = useState<Record<string, string>>({});
+  const [editQtds, setEditQtds] = useState<Record<string, string>>({});
   const [editPrazo, setEditPrazo] = useState<Record<number, string>>({});
   const [editCondPag, setEditCondPag] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
   const [novaCondicao, setNovaCondicao] = useState("");
+  const [anexoUrl, setAnexoUrl] = useState<Record<number, string>>({});
+  const [showAnexoInput, setShowAnexoInput] = useState<number | null>(null);
+  const [showRealocacao, setShowRealocacao] = useState(false);
 
   const q = trpc.compras.listarCotacoes.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -122,22 +126,32 @@ export default function Cotacoes() {
     onSuccess: () => { toast.success("Fornecedor vencedor selecionado!"); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const salvarAnexo = trpc.compras.salvarAnexoFornecedor.useMutation({
+    onSuccess: () => { toast.success("Anexo salvo!"); setShowAnexoInput(null); mapaQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   useEffect(() => {
     if (abaAtiva === "mapa" && mapaQ.data) {
-      const inicial: Record<string, string> = {};
+      const inicialPrecos: Record<string, string> = {};
+      const inicialQtds: Record<string, string> = {};
       const prazoInicial: Record<number, string> = {};
       const condInicial: Record<number, string> = {};
+      const anexoInicial: Record<number, string> = {};
       for (const [key, val] of Object.entries(mapaQ.data.respostaMap)) {
-        inicial[key] = (val as any).precoUnitario ?? "0";
+        inicialPrecos[key] = (val as any).precoUnitario ?? "0";
+        inicialQtds[key] = (val as any).quantidade ?? "0";
       }
       for (const p of mapaQ.data.participantes) {
         prazoInicial[p.fornecedorId] = p.prazoEntregaDias ? String(p.prazoEntregaDias) : "";
         condInicial[p.fornecedorId] = p.condicaoPagamento ?? "";
+        if ((p as any).arquivoUrl) anexoInicial[p.fornecedorId] = (p as any).arquivoUrl;
       }
-      setEditPrecos(inicial);
+      setEditPrecos(inicialPrecos);
+      setEditQtds(inicialQtds);
       setEditPrazo(prazoInicial);
       setEditCondPag(condInicial);
+      setAnexoUrl(anexoInicial);
     }
   }, [mapaQ.data, abaAtiva]);
 
@@ -230,13 +244,21 @@ export default function Cotacoes() {
       }, comTotal[0]);
     }
 
+    const melhorForn = getMelhorFornecedor();
+
     function handleSalvarPrecos(fornecedorId: number) {
       if (!mapa || !showDetalhe) return;
-      const respostas = mapa.itens.map((it: any) => ({
-        itemId: it.id,
-        precoUnitario: parseFloat(editPrecos[`${it.id}_${fornecedorId}`] ?? "0") || 0,
-        descontoPct: 0,
-      }));
+      const respostas = mapa.itens.map((it: any) => {
+        const key = `${it.id}_${fornecedorId}`;
+        const qtyStr = editQtds[key];
+        const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+        return {
+          itemId: it.id,
+          precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0,
+          descontoPct: 0,
+          quantidade: qty,
+        };
+      });
       salvarRespostas.mutate({
         cotacaoId: showDetalhe,
         fornecedorId,
@@ -246,7 +268,41 @@ export default function Cotacoes() {
       });
     }
 
-    const melhorForn = getMelhorFornecedor();
+    function getFornTotal(p: any): number {
+      if (editingFornId === p.fornecedorId) {
+        return (mapa?.itens ?? []).reduce((acc: number, it: any) => {
+          const key = `${it.id}_${p.fornecedorId}`;
+          const preco = parseFloat(editPrecos[key] ?? "0") || 0;
+          const qtyStr = editQtds[key];
+          const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+          return acc + preco * qty;
+        }, 0);
+      }
+      return parseFloat(p.totalOrcado ?? "0");
+    }
+
+    function getItemSaldo(it: any): { saldo: number; hasMeta: boolean } {
+      const metaUnit = parseFloat(it.metaUnitario ?? "0");
+      if (metaUnit === 0) return { saldo: 0, hasMeta: false };
+      const metaTot = metaUnit * parseFloat(it.quantidade ?? "0");
+      if (!melhorForn) return { saldo: 0, hasMeta: true };
+      const wKey = `${it.id}_${melhorForn.fornecedorId}`;
+      const wTotal = parseFloat(mapa?.respostaMap?.[wKey]?.total ?? "0");
+      return { saldo: metaTot - wTotal, hasMeta: true };
+    }
+
+    const metaGrandTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
+      acc + (parseFloat(it.metaUnitario ?? "0") * parseFloat(it.quantidade ?? "0")), 0);
+    const winnerGrandTotal = melhorForn ? parseFloat(melhorForn.totalOrcado ?? "0") : 0;
+    const saldoTotal = metaGrandTotal > 0 && melhorForn ? metaGrandTotal - winnerGrandTotal : 0;
+
+    const agrupados: Record<string, { descricao: string; unidade: string; qtdTotal: number }> = {};
+    for (const it of (mapa?.itens ?? [])) {
+      const chave = `${it.descricao}__${it.unidade || "un"}`;
+      if (!agrupados[chave]) agrupados[chave] = { descricao: it.descricao, unidade: it.unidade || "un", qtdTotal: 0 };
+      agrupados[chave].qtdTotal += parseFloat(it.quantidade ?? "0");
+    }
+    const gruposAgrupados = Object.values(agrupados).filter(g => g.qtdTotal > 0);
 
     return (
       <DashboardLayout>
