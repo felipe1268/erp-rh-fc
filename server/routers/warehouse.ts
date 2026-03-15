@@ -487,6 +487,63 @@ export const warehouseRouter = router({
         .limit(6);
     }),
 
+  // ── SUGERIR CADASTRO DE ITEM POR FOTO (IA) ────────────────────
+  sugerirCadastroItem: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      base64: z.string(),
+      mimeType: z.string().default("image/jpeg"),
+      categorias: z.array(z.string()).optional(),
+      unidades: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { invoke } = await import("../_core/llm");
+      const dataUrl = `data:${input.mimeType};base64,${input.base64}`;
+      const catList = (input.categorias ?? []).join(", ") || "Ferramentas, Materiais de construção, EPIs, Elétrico, Hidráulico, Outros";
+      const unidList = (input.unidades ?? []).join(", ") || "un, kg, m, m², L, cx, sc, rolo, barra, pç";
+
+      const result = await invoke({
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image_url", image_url: { url: dataUrl, detail: "high" } },
+            {
+              type: "text",
+              text: `Você é um especialista em materiais de construção civil e ferramentas industriais. Analise a imagem e sugira os dados de cadastro deste produto para um sistema de almoxarifado.
+
+Categorias disponíveis: ${catList}
+Unidades disponíveis: ${unidList}
+
+Responda SOMENTE em JSON válido, sem markdown:
+{
+  "nome": "nome técnico completo e preciso do produto (inclua marca, modelo, dimensão/peso se visível)",
+  "categoria": "uma das categorias disponíveis que melhor se encaixa",
+  "unidade": "uma das unidades disponíveis que mais faz sentido para este produto",
+  "observacoes": "especificações técnicas relevantes: material, norma, capacidade, etc. Máximo 100 caracteres. Deixe vazio se não houver nada relevante."
+}`,
+            },
+          ],
+        }],
+        maxTokens: 300,
+      });
+
+      const text = typeof result.choices[0].message.content === "string"
+        ? result.choices[0].message.content : "";
+
+      try {
+        const clean = text.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(clean);
+        return {
+          nome: String(parsed.nome ?? "").slice(0, 120),
+          categoria: String(parsed.categoria ?? "").slice(0, 60),
+          unidade: String(parsed.unidade ?? "un"),
+          observacoes: String(parsed.observacoes ?? "").slice(0, 100),
+        };
+      } catch {
+        return { nome: "", categoria: "", unidade: "un", observacoes: "" };
+      }
+    }),
+
   // ── IDENTIFICAR ITEM POR FOTO (IA) ────────────────────────────
   identificarPorFoto: protectedProcedure
     .input(z.object({
