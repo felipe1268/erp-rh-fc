@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 314,
+    titulo: "Almoxarifado — Dropdown de obras restrito por perfil do usuário",
+    descricao: "Usuários comuns (almoxarifes) só visualizam as obras às quais estão alocados via obra_funcionarios. Admins e Admin Masters continuam vendo todas as obras ativas. Se o almoxarife tiver apenas uma obra vinculada, ela é selecionada automaticamente ao abrir o módulo. Novo endpoint obras.listForAlmoxarifado implementado no backend com verificação de role e lookup por e-mail do usuário.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 19:00:00",
+  },
+  {
     version: 313,
     titulo: "Correção — Análise de Foto por IA não retornava resultados",
     descricao: "Corrigido bug crítico em que a função de IA (Gemini Vision) era importada com nome incorreto ('invoke' em vez de 'invokeLLM'), fazendo com que as chamadas fossem silenciosamente ignoradas. Afetava tanto a busca por foto no catálogo quanto o preenchimento automático de cadastro. Ambos os endpoints corrigidos.",

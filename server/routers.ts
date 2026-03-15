@@ -816,6 +816,25 @@ export const appRouter = router({
       return getObras(input.companyId);
     }),
     listActive: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getObrasByCompanyActive(input.companyId, input.companyIds)),
+    listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input, ctx }) => {
+      const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
+      if (isAdmin) return getObrasByCompanyActive(input.companyId);
+      const userEmail = ctx.user.email ?? '';
+      if (!userEmail) return getObrasByCompanyActive(input.companyId);
+      const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
+      const empRows = empResult?.rows ?? empResult ?? [];
+      if (!empRows.length) return [];
+      const employeeId = (empRows[0] as any).id;
+      const obrasResult = await db.execute(sql`
+        SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
+        FROM obras o
+        INNER JOIN obra_funcionarios of2 ON of2."obraId" = o.id AND of2."employeeId" = ${employeeId} AND of2."isActive" = 1
+        WHERE o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o.status = 'ativa'
+        ORDER BY o.nome
+      `);
+      const obrasRows = obrasResult?.rows ?? obrasResult ?? [];
+      return obrasRows as any[];
+    }),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(({ input }) => getObraById(input.id)),
     create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1),
       codigo: z.string().optional(),

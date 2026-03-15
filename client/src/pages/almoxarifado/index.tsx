@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
@@ -103,9 +103,15 @@ export default function AlmoxarifadoPage() {
     }
   }
 
-  const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery(
-    { companyId, companyIds: [companyId] }, { enabled: !!companyId }
+  const { data: obrasAtivas = [] } = trpc.obras.listForAlmoxarifado.useQuery(
+    { companyId }, { enabled: !!companyId }
   );
+
+  useEffect(() => {
+    if (obrasAtivas.length === 1 && obraContexto === null) {
+      setObraContexto((obrasAtivas[0] as any).id);
+    }
+  }, [obrasAtivas]);
 
   const { data: itens = [], refetch, isLoading } = trpc.compras.listarItens.useQuery(
     { companyId, obraId: obraContexto }, { enabled: !!companyId }
