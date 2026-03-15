@@ -1510,6 +1510,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 372,
+    titulo: "Mapa de Cotação — Meta calculada sobre custoUnitMat (igual ao EAP visão Meta)",
+    descricao: "Corrigida a fórmula da Meta no Mapa de Cotação: o valor correto é custoUnitMat × (1 − metaPercentual), não custoUnitTotal. O campo custoUnitTotal inclui mão de obra (MO), que não é comprada de fornecedor. O Mapa de Cotação é um instrumento de compra de materiais, portanto usa apenas o custo de material. Comportamento agora idêntico ao EAP na visão Meta (coluna Preço Unit. Mat.).",
+    tipo: "correcao",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 23:59:00",
+  },
+  {
     version: 371,
     titulo: "Mapa de Cotação — Contexto EAP (Tópico/Item) exibido abaixo da descrição",
     descricao: "No Mapa de Cotação, cada item agora exibe abaixo da sua descrição o caminho hierárquico do orçamento (EAP path), por exemplo 'Estrutura › Vigas › Pilares', facilitando a análise do comprador que pode identificar de qual tópico e subitem cada material pertence sem precisar consultar o orçamento separadamente.",

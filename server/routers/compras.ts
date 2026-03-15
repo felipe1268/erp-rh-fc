@@ -1040,6 +1040,7 @@ Responda APENAS com um objeto JSON no formato:
         orcItensData = await db.select({
           id: orcamentoItens.id,
           orcamentoId: orcamentoItens.orcamentoId,
+          custoUnitMat: orcamentoItens.custoUnitMat,
           custoUnitTotal: orcamentoItens.custoUnitTotal,
           quantidade: orcamentoItens.quantidade,
           eapCodigo: orcamentoItens.eapCodigo,
@@ -1088,7 +1089,9 @@ Responda APENAS com um objeto JSON no formato:
       const orcItemToPath: Record<number, string> = {};
       for (const o of orcItensData) {
         const metaPerc = orcToMetaPerc[o.orcamentoId] ?? 0;
-        orcItemToMeta[o.id] = n(o.custoUnitTotal) * (1 - metaPerc);
+        // Meta = custo de MATERIAL × (1 − metaPercentual), igual ao EAP visão Meta
+        // Não inclui MO pois o Mapa é para compra de materiais
+        orcItemToMeta[o.id] = n(o.custoUnitMat) * (1 - metaPerc);
         // Montar breadcrumb com até 3 níveis intermediários
         if (o.eapCodigo) {
           const parts = String(o.eapCodigo).split(".");
