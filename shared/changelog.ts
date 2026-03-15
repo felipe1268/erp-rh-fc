@@ -1609,6 +1609,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:00",
   },
   {
+    version: 387,
+    titulo: "Importar Orçamento — Corrige bug de conflito de obra (race condition)",
+    descricao: "Corrigido bug onde o usuário conseguia avançar para a etapa de mapeamento de colunas com uma obra que já possuía orçamento vinculado (race condition no carregamento da lista). Agora: (1) banner vermelho aparece no step 2 alertando sobre o conflito, (2) botão 'Mapear Colunas' é desabilitado automaticamente, (3) guards em handleGoToMapping e handleImportarCusto redirecionam de volta ao step 1 com mensagem clara antes de atingir o backend.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 00:00:00",
+  },
+  {
     version: 386,
     titulo: "Orçamento — Cards de Material/MO respondem à visão ativa (meta/venda)",
     descricao: "Cards 'Total Material' e 'Total Mão de Obra' na barra acima da tabela EAP agora exibem valores ajustados pela visão selecionada: na Meta aplicam o fator (1 − metaPerc%), na Venda aplicam o fator BDI global. O percentual de participação também usa o total da visão ativa como denominador (não mais fixo no custo). Os labels dos cards incluem o sufixo '(Meta)' ou '(Venda)' quando fora da visão de custo.",

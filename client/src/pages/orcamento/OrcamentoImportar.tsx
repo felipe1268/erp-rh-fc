@@ -463,6 +463,12 @@ export default function OrcamentoImportar() {
   /* ── ir para mapeamento de colunas ── */
   const handleGoToMapping = async () => {
     if (!fileCusto) return;
+    if (selectedObra && obraIdsComOrcamento.has(selectedObra.id)) {
+      toast.error(`A obra "${selectedObra.nome}" já possui um orçamento vinculado. Selecione outra obra ou continue sem vincular.`);
+      setSelectedObra(null);
+      setStep("obra");
+      return;
+    }
     setLoadingPreview(true);
     setFcPresetApplied(false);
     try {
@@ -497,6 +503,12 @@ export default function OrcamentoImportar() {
   /* ── importar planilha de custo ── */
   const handleImportarCusto = async () => {
     if (!fileCusto || !companyId) return;
+    if (selectedObra && obraIdsComOrcamento.has(selectedObra.id)) {
+      toast.error(`A obra "${selectedObra.nome}" já possui um orçamento vinculado. Selecione outra obra ou continue sem vincular.`);
+      setSelectedObra(null);
+      setStep("obra");
+      return;
+    }
     setImportingCusto(true);
     setImportProgCusto(0);
 
@@ -673,13 +685,22 @@ export default function OrcamentoImportar() {
               </div>
 
               {/* Obra selecionada */}
-              {selectedObra && (
+              {selectedObra && obraIdsComOrcamento.has(selectedObra.id) ? (
+                <div className="flex items-start gap-2 px-3 py-3 rounded-lg bg-red-50 border border-red-300 text-sm">
+                  <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-red-700">Esta obra já possui um orçamento vinculado</p>
+                    <p className="text-xs text-red-600 mt-0.5">Use "Atualizar Planilha" dentro do orçamento existente, ou selecione outra obra.</p>
+                  </div>
+                  <button onClick={() => { setSelectedObra(null); setStep("obra"); }} className="text-xs text-red-600 hover:underline font-medium whitespace-nowrap">← Voltar</button>
+                </div>
+              ) : selectedObra ? (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 border text-sm">
                   <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className="font-medium truncate">{selectedObra.nome}</span>
                   <button onClick={() => setStep("obra")} className="ml-auto text-xs text-primary hover:underline">Trocar</button>
                 </div>
-              )}
+              ) : null}
 
               {/* Dropzone */}
               <div>
@@ -724,7 +745,7 @@ export default function OrcamentoImportar() {
                   <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
                 </Button>
                 <Button className="flex-1 bg-amber-600 hover:bg-amber-700"
-                  disabled={!analyzeResCusto?.ok || analyzingCusto || loadingPreview}
+                  disabled={!analyzeResCusto?.ok || analyzingCusto || loadingPreview || !!(selectedObra && obraIdsComOrcamento.has(selectedObra.id))}
                   onClick={handleGoToMapping}
                 >
                   {loadingPreview
