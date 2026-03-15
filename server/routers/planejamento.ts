@@ -18,6 +18,10 @@ import {
   composicaoInsumos,
   almoxarifadoItens,
   equipment,
+  heSolicitacoes,
+  heSolicitacaoFuncionarios,
+  employees,
+  obras,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -1344,5 +1348,145 @@ export const planejamentoRouter = router({
       const semCronograma  = [...eapOrc].filter(e => !eapCron.has(e));
 
       return { ok, semOrcamento, semCronograma };
+    }),
+
+  // ── Atividades por Obra (para seleção no formulário de HE) ─────────────────
+  getAtividadesForObra: protectedProcedure
+    .input(z.object({ obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      // Buscar projeto da obra
+      const [projeto] = await db.select({ id: planejamentoProjetos.id, nome: planejamentoProjetos.nome })
+        .from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.obraId, input.obraId))
+        .limit(1);
+      if (!projeto) return [];
+
+      // Buscar revisão mais recente (baseline ou última)
+      const revisoes = await db.select()
+        .from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.projetoId, projeto.id))
+        .orderBy(desc(planejamentoRevisoes.criadoEm));
+      if (!revisoes.length) return [];
+
+      const revisao = revisoes.find(r => r.isBaseline) || revisoes[0];
+
+      // Buscar atividades da revisão (excluindo grupos)
+      const atividades = await db.select({
+        id: planejamentoAtividades.id,
+        eapCodigo: planejamentoAtividades.eapCodigo,
+        nome: planejamentoAtividades.nome,
+        nivel: planejamentoAtividades.nivel,
+        dataInicio: planejamentoAtividades.dataInicio,
+        dataFim: planejamentoAtividades.dataFim,
+        isGrupo: planejamentoAtividades.isGrupo,
+        recursoPrincipal: planejamentoAtividades.recursoPrincipal,
+        pesoFinanceiro: planejamentoAtividades.pesoFinanceiro,
+      })
+        .from(planejamentoAtividades)
+        .where(and(
+          eq(planejamentoAtividades.projetoId, projeto.id),
+          eq(planejamentoAtividades.revisaoId, revisao.id),
+        ))
+        .orderBy(asc(planejamentoAtividades.ordem));
+
+      return { projeto, revisao, atividades };
+    }),
+
+  // ── Custo RH por projeto (HEs vinculadas às atividades) ────────────────────
+  getHECustosByProjeto: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { atividades: [], hes: [], totalCustoPrevisto: 0, totalCustoRealizado: 0 };
+
+      // Buscar projeto + obra
+      const [projeto] = await db.select()
+        .from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.id, input.projetoId));
+      if (!projeto) return { atividades: [], hes: [], totalCustoPrevisto: 0, totalCustoRealizado: 0 };
+
+      // Buscar revisão ativa
+      const revisoes = await db.select()
+        .from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.projetoId, input.projetoId))
+        .orderBy(desc(planejamentoRevisoes.criadoEm));
+      const revisao = revisoes.find(r => r.isBaseline) || revisoes[0];
+
+      // Buscar atividades
+      const atividades = revisao
+        ? await db.select().from(planejamentoAtividades)
+            .where(and(
+              eq(planejamentoAtividades.projetoId, input.projetoId),
+              eq(planejamentoAtividades.revisaoId, revisao.id),
+            ))
+            .orderBy(asc(planejamentoAtividades.ordem))
+        : [];
+
+      // Buscar HEs vinculadas à obra do projeto
+      let hes: any[] = [];
+      if (projeto.obraId) {
+        hes = await db.select({
+          id: heSolicitacoes.id,
+          dataSolicitacao: heSolicitacoes.dataSolicitacao,
+          horaInicio: heSolicitacoes.horaInicio,
+          horaFim: heSolicitacoes.horaFim,
+          status: heSolicitacoes.status,
+          motivo: heSolicitacoes.motivo,
+          planejamentoAtividadeId: heSolicitacoes.planejamentoAtividadeId,
+          solicitadoPor: heSolicitacoes.solicitadoPor,
+          aprovadoEm: heSolicitacoes.aprovadoEm,
+        }).from(heSolicitacoes)
+          .where(and(
+            eq(heSolicitacoes.obraId, projeto.obraId),
+          ))
+          .orderBy(desc(heSolicitacoes.dataSolicitacao));
+
+        // Para cada HE, buscar funcionários com salário
+        for (const he of hes as any[]) {
+          const funcs = await db.select({
+            employeeId: heSolicitacaoFuncionarios.employeeId,
+            nomeCompleto: employees.nomeCompleto,
+            funcao: employees.funcao,
+            valorHora: employees.valorHora,
+            salarioBase: employees.salarioBase,
+          }).from(heSolicitacaoFuncionarios)
+            .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
+            .where(eq(heSolicitacaoFuncionarios.solicitacaoId, he.id));
+
+          // Calcular custo
+          const calcHoras = (ini: string, fim: string) => {
+            if (!ini || !fim) return 0;
+            const [h1, m1] = ini.split(":").map(Number);
+            const [h2, m2] = fim.split(":").map(Number);
+            const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+            return mins > 0 ? mins / 60 : 0;
+          };
+          const horas = calcHoras(he.horaInicio || "", he.horaFim || "");
+          const diaSemana = he.dataSolicitacao ? new Date(he.dataSolicitacao + "T12:00:00").getDay() : -1;
+          const percentHE = (diaSemana === 0 || diaSemana === 6) ? 100 : 50;
+
+          let custoPrevisto = 0;
+          for (const f of funcs) {
+            let vh: number | null = null;
+            if (f.valorHora) { const v = parseFloat(String(f.valorHora).replace(",", ".")); if (!isNaN(v) && v > 0) vh = v; }
+            if (!vh && f.salarioBase) { const s = parseFloat(String(f.salarioBase).replace(",", ".")); if (!isNaN(s) && s > 0) vh = s / 220; }
+            if (vh && horas > 0) custoPrevisto += vh * (1 + percentHE / 100) * horas;
+          }
+
+          (he as any).funcionarios = funcs;
+          (he as any).horas = horas;
+          (he as any).percentHE = percentHE;
+          (he as any).custoPrevisto = custoPrevisto;
+          (he as any).numFuncionarios = funcs.length;
+        }
+      }
+
+      const totalCustoPrevisto = (hes as any[]).reduce((s, h) => s + (h.custoPrevisto || 0), 0);
+      const totalCustoRealizado = (hes as any[]).filter(h => h.status === "aprovada").reduce((s, h) => s + (h.custoPrevisto || 0), 0);
+
+      return { atividades, hes, totalCustoPrevisto, totalCustoRealizado, projeto };
     }),
 });

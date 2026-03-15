@@ -1624,6 +1624,7 @@ export const heSolicitacoes = pgTable("he_solicitacoes", {
         id: serial().notNull(),
         companyId: integer().notNull(),
         obraId: integer(),
+        planejamentoAtividadeId: integer("planejamento_atividade_id"),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataSolicitacao: date({ mode: 'string' }).notNull(),
         horaInicio: varchar({ length: 10 }),
