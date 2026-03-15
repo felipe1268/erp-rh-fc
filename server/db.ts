@@ -323,10 +323,10 @@ export async function createEmployee(data: InsertEmployee) {
   
   // Buscar prefixo da empresa e incrementar nextCodigoInterno atomicamente
   await db.execute(
-    sql`UPDATE companies SET nextCodigoInterno = nextCodigoInterno + 1 WHERE id = ${companyId}`
+    sql`UPDATE companies SET "nextCodigoInterno" = "nextCodigoInterno" + 1 WHERE id = ${companyId}`
   );
   const [companyRows] = await db.execute(
-    sql`SELECT prefixoCodigo, nextCodigoInterno - 1 as usedNum, numerosProibidos FROM companies WHERE id = ${companyId}`
+    sql`SELECT "prefixoCodigo", "nextCodigoInterno" - 1 as "usedNum", "numerosProibidos" FROM companies WHERE id = ${companyId}`
   ) as any;
   
   const prefixo = companyRows?.[0]?.prefixoCodigo || 'EMP';
@@ -341,7 +341,7 @@ export async function createEmployee(data: InsertEmployee) {
   const originalNum = companyRows?.[0]?.usedNum || 1;
   if (num !== originalNum) {
     await db.execute(
-      sql`UPDATE companies SET nextCodigoInterno = ${num + 1} WHERE id = ${companyId}`
+      sql`UPDATE companies SET "nextCodigoInterno" = ${num + 1} WHERE id = ${companyId}`
     );
   }
   
@@ -356,17 +356,17 @@ export async function createEmployee(data: InsertEmployee) {
       if (err?.errno === 1062 && err?.sqlMessage?.includes('idx_codigo_interno')) {
         // Increment and retry, pulando números proibidos
         await db.execute(
-          sql`UPDATE companies SET nextCodigoInterno = nextCodigoInterno + 1 WHERE id = ${companyId}`
+          sql`UPDATE companies SET "nextCodigoInterno" = "nextCodigoInterno" + 1 WHERE id = ${companyId}`
         );
         const [retry] = await db.execute(
-          sql`SELECT prefixoCodigo, nextCodigoInterno - 1 as usedNum FROM companies WHERE id = ${companyId}`
+          sql`SELECT "prefixoCodigo", "nextCodigoInterno" - 1 as "usedNum" FROM companies WHERE id = ${companyId}`
         ) as any;
         let retryNum = retry?.[0]?.usedNum || (num + attempt + 1);
         retryNum = proximoNumeroValido(retryNum, proibidos);
         // Atualizar contador se pulou proibidos
         if (retryNum !== (retry?.[0]?.usedNum || 0)) {
           await db.execute(
-            sql`UPDATE companies SET nextCodigoInterno = ${retryNum + 1} WHERE id = ${companyId}`
+            sql`UPDATE companies SET "nextCodigoInterno" = ${retryNum + 1} WHERE id = ${companyId}`
           );
         }
         codigoInterno = prefixo + String(retryNum).padStart(3, '0');
