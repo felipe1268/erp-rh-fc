@@ -1023,16 +1023,48 @@ Responda APENAS com um objeto JSON no formato:
       const respostas = await db.select().from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId));
       const fornIds = participantes.map(p => p.fornecedorId);
       const forns = fornIds.length > 0 ? await db.select().from(fornecedores).where(inArray(fornecedores.id, fornIds)) : [];
-      const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string }> = {};
-      for (const r of respostas) respostaMap[`${r.itemId}_${r.fornecedorId}`] = { precoUnitario: r.precoUnitario ?? "0", descontoPct: r.descontoPct ?? "0", total: r.total ?? "0" };
+
+      // Buscar metaUnitario via SC item → orcamento item
+      const scItemIds = itens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+      let scItens: any[] = [];
+      if (scItemIds.length > 0) {
+        scItens = await db.select({
+          id: comprasSolicitacoesItens.id,
+          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+        }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+      }
+      const orcItemIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
+      let orcItensData: any[] = [];
+      if (orcItemIds.length > 0) {
+        orcItensData = await db.select({
+          id: orcamentoItens.id,
+          metaUnitTotal: orcamentoItens.metaUnitTotal,
+        }).from(orcamentoItens).where(inArray(orcamentoItens.id, orcItemIds));
+      }
+      const scItemToOrcItem: Record<number, number> = {};
+      for (const s of scItens) if (s.orcamentoItemId) scItemToOrcItem[s.id] = s.orcamentoItemId;
+      const orcItemToMeta: Record<number, number> = {};
+      for (const o of orcItensData) orcItemToMeta[o.id] = n(o.metaUnitTotal);
+
+      const itensComMeta = itens.map(it => {
+        const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
+        const metaUnitario = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
+        return { ...it, metaUnitario };
+      });
+
+      const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
+      for (const r of respostas) respostaMap[`${r.itemId}_${r.fornecedorId}`] = {
+        precoUnitario: r.precoUnitario ?? "0", descontoPct: r.descontoPct ?? "0", total: r.total ?? "0",
+        quantidade: r.quantidade ?? "0",
+      };
       const totaisPorFornecedor: Record<number, number> = {};
       for (const p of participantes) {
-        totaisPorFornecedor[p.fornecedorId] = itens.reduce((acc, it) => {
+        totaisPorFornecedor[p.fornecedorId] = itensComMeta.reduce((acc, it) => {
           const r = respostaMap[`${it.id}_${p.fornecedorId}`];
           return acc + n(r?.total ?? 0);
         }, 0);
       }
-      return { cotacao: cot, itens, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor };
+      return { cotacao: cot, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor };
     }),
 
   adicionarFornecedorMapa: protectedProcedure
@@ -1058,27 +1090,94 @@ Responda APENAS com um objeto JSON no formato:
       fornecedorId: z.number(),
       prazoEntregaDias: z.number().nullable().optional(),
       condicaoPagamento: z.string().optional(),
-      respostas: z.array(z.object({ itemId: z.number(), precoUnitario: z.number(), descontoPct: z.number().optional() })),
+      respostas: z.array(z.object({
+        itemId: z.number(),
+        precoUnitario: z.number(),
+        descontoPct: z.number().optional(),
+        quantidade: z.number().optional(),
+      })),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       let totalForn = 0;
       for (const r of input.respostas) {
         const desc = r.descontoPct ?? 0;
-        const itRow = await db.select({ quantidade: comprasCotacoesItens.quantidade }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, r.itemId));
-        const qty = n(itRow[0]?.quantidade ?? 1);
+        let qty = r.quantidade ?? 0;
+        if (qty <= 0) {
+          const itRow = await db.select({ quantidade: comprasCotacoesItens.quantidade }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, r.itemId));
+          qty = n(itRow[0]?.quantidade ?? 1);
+        }
         const total = qty * r.precoUnitario * (1 - desc / 100);
         totalForn += total;
         await db.insert(comprasCotacaoRespostas).values({
           cotacaoId: input.cotacaoId, fornecedorId: input.fornecedorId, itemId: r.itemId,
-          precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
+          quantidade: String(qty), precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
         }).onConflictDoUpdate({ target: [comprasCotacaoRespostas.cotacaoId, comprasCotacaoRespostas.fornecedorId, comprasCotacaoRespostas.itemId], set: {
-          precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
+          quantidade: String(qty), precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
         }});
       }
       await db.update(comprasCotacaoFornecedores).set({ totalOrcado: String(totalForn.toFixed(2)), prazoEntregaDias: input.prazoEntregaDias ?? null, condicaoPagamento: input.condicaoPagamento ?? null })
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true, total: totalForn };
+    }),
+
+  salvarAnexoFornecedor: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number(), arquivoUrl: z.string(), arquivoNome: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(comprasCotacaoFornecedores)
+        .set({ arquivoUrl: input.arquivoUrl, arquivoNome: input.arquivoNome })
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      return { ok: true };
+    }),
+
+  buscarSaldosRealocacao: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional(), deficit: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      // Busca OCs aprovadas/recebidas e contratos de terceiros ativos
+      // e compara com o meta do orçamento para achar sobras
+      const ocs = await db.select({
+        id: comprasOrdens.id,
+        numeroOc: comprasOrdens.numeroOc,
+        total: comprasOrdens.total,
+        status: comprasOrdens.status,
+        obraId: comprasOrdens.obraId,
+      }).from(comprasOrdens).where(and(
+        eq(comprasOrdens.companyId, input.companyId),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
+        input.obraId ? eq(comprasOrdens.obraId, input.obraId) : undefined,
+      ));
+
+      const ocItens = ocs.length > 0
+        ? await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)))
+        : [];
+
+      // Agrupa itens por descricao+unidade e compara com meta
+      type Sobra = { descricao: string; unidade: string; ocNumero: string; qtdOrcada: number; qtdComprada: number; vlrMeta: number; vlrComprado: number; sobra: number };
+      const sobras: Sobra[] = [];
+      for (const it of ocItens) {
+        const oc = ocs.find(o => o.id === it.ordemId);
+        if (!oc) continue;
+        const vlrOrcado = n(it.precoOrcado) * n(it.quantidade);
+        const vlrComprado = n(it.precoUnitario) * n(it.quantidade);
+        const diff = vlrOrcado - vlrComprado;
+        if (diff > 0.01 && vlrOrcado > 0) {
+          sobras.push({
+            descricao: it.descricao || "—",
+            unidade: it.unidade || "",
+            ocNumero: oc.numeroOc || String(oc.id),
+            qtdOrcada: n(it.quantidade),
+            qtdComprada: n(it.quantidade),
+            vlrMeta: vlrOrcado,
+            vlrComprado,
+            sobra: diff,
+          });
+        }
+      }
+      sobras.sort((a, b) => b.sobra - a.sobra);
+      const totalSobras = sobras.reduce((s, x) => s + x.sobra, 0);
+      return { sobras: sobras.slice(0, 10), totalSobras, deficit: input.deficit, cobreDeficit: totalSobras >= input.deficit };
     }),
 
   selecionarVencedorMapa: protectedProcedure
