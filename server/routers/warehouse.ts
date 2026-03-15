@@ -522,8 +522,11 @@ Responda SOMENTE com JSON válido (sem markdown, sem explicações):
               { text: prompt },
             ],
           }],
-          generationConfig: { maxOutputTokens: 1024, temperature: 0.1 },
-          thinkingConfig: { thinkingBudget: 0 },
+          generationConfig: {
+            maxOutputTokens: 1024,
+            temperature: 0.1,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
         };
 
         const res = await fetch(
