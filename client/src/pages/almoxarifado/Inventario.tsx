@@ -5,7 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import {
   ClipboardList, Loader2, CheckCircle2, AlertTriangle,
-  Play, Package, ChevronRight,
+  Play, Package, ChevronRight, XCircle,
 } from "lucide-react";
 
 function n(v: any) { return parseFloat(v ?? "0") || 0; }
@@ -169,6 +169,15 @@ export default function AlmoxarifadoInventario() {
     },
   });
 
+  const cancelSession = trpc.warehouse.cancelInventorySession.useMutation({
+    onSuccess: () => {
+      utils.warehouse.getInventorySession.invalidate();
+      utils.warehouse.getInventorySessionItems.invalidate();
+      toast.success("Inventário cancelado.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   if (loadingSession) {
     return (
       <DashboardLayout>
@@ -190,13 +199,31 @@ export default function AlmoxarifadoInventario() {
     <DashboardLayout>
       <div className="space-y-4 max-w-2xl mx-auto px-2">
         {/* Cabeçalho */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Inventário Semanal</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {session
-              ? `Semana ${session.semanaRef}`
-              : "Nenhuma sessão ativa esta semana"}
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Inventário Semanal</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {session
+                ? `Semana ${session.semanaRef}`
+                : "Nenhuma sessão ativa esta semana"}
+            </p>
+          </div>
+          {session && session.status === "em_andamento" && (
+            <button
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 text-sm font-semibold active:scale-95 transition disabled:opacity-50"
+              disabled={cancelSession.isPending}
+              onClick={() => {
+                if (window.confirm("Cancelar o inventário desta semana? Todos os dados registrados serão apagados.")) {
+                  cancelSession.mutate({ sessionId: session.id });
+                }
+              }}
+            >
+              {cancelSession.isPending
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <XCircle className="w-4 h-4" />}
+              Cancelar
+            </button>
+          )}
         </div>
 
         {/* Sem sessão ativa */}

@@ -586,4 +586,21 @@ export const warehouseRouter = router({
 
       return { success: true };
     }),
+
+  cancelInventorySession: protectedProcedure
+    .input(z.object({ sessionId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .delete(warehouseInventorySessionItems)
+        .where(eq(warehouseInventorySessionItems.sessionId, input.sessionId));
+
+      await db
+        .delete(warehouseInventorySessions)
+        .where(eq(warehouseInventorySessions.id, input.sessionId));
+
+      return { success: true };
+    }),
 });
