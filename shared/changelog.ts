@@ -952,6 +952,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 13:00:00",
   },
   {
+    version: 304,
+    titulo: "Colaboradores — Corrigido erro ao salvar novo colaborador (código interno)",
+    descricao: "Query SQL bruta que incrementa nextCodigoInterno da empresa não usava aspas nos nomes de coluna camelCase, causando erro no PostgreSQL. Corrigidas todas as referências a nextCodigoInterno, prefixoCodigo e numerosProibidos nas queries raw de geração de código JFCxxx.",
+    tipo: "fix",
+    modulos: "Colaboradores, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 17:30:00",
+  },
+  {
     version: 303,
     titulo: "Colaboradores — Corrigido bloqueio de CPF de registro excluído",
     descricao: "A verificação de CPF duplicado agora ignora registros com deletedAt preenchido (excluídos). Antes, ao excluir um colaborador e tentar recadastrá-lo, o sistema bloqueava com erro 'CPF já cadastrado'. Registros fisicamente excluídos também são limpos do banco. Fix em checkDuplicateCpf: adicionado isNull(employees.deletedAt) às condições da query.",
