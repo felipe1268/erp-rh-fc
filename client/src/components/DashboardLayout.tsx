@@ -334,6 +334,41 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
   },
 ];
 
+const menuSectionsFinanceiro: MenuSection[] = [
+  {
+    title: "Painel",
+    items: [
+      { icon: LayoutDashboard, label: "Dashboard", path: "/financeiro" },
+    ],
+  },
+  {
+    title: "Movimentações",
+    items: [
+      { icon: DollarSign,    label: "Lançamentos",       path: "/financeiro/lancamentos" },
+      { icon: TrendingUp,    label: "Receitas de Obras",  path: "/financeiro/receitas" },
+      { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
+      { icon: CreditCard,    label: "Contas a Receber",   path: "/financeiro/contas-a-receber" },
+    ],
+  },
+  {
+    title: "Análise",
+    items: [
+      { icon: BarChart3,     label: "DRE",               path: "/financeiro/dre" },
+      { icon: FileSpreadsheet, label: "Fluxo de Caixa",  path: "/financeiro/fluxo-de-caixa" },
+      { icon: AlertTriangle, label: "Obrigações Fiscais", path: "/financeiro/obrigacoes-fiscais" },
+    ],
+  },
+  {
+    title: "Cadastros",
+    items: [
+      { icon: BookOpen,      label: "Plano de Contas",   path: "/financeiro/plano-de-contas" },
+      { icon: Layers,        label: "Centros de Custo",  path: "/financeiro/centros-de-custo" },
+      { icon: ArrowLeftRight, label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
+      { icon: Settings2,     label: "Configurações",     path: "/financeiro/configuracoes" },
+    ],
+  },
+];
+
 const menuSectionsOrcamento: MenuSection[] = [
   {
     title: "Orçamento",
@@ -389,6 +424,7 @@ const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "cadastro":      menuSectionsCadastro,
   "compras":       menuSectionsCompras,
   "almoxarifado":  menuSectionsAlmoxarifado,
+  "financeiro":    menuSectionsFinanceiro,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
 

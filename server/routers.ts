@@ -67,6 +67,7 @@ import { pjContractsRouter } from "./routers/pjContracts";
 import { insuranceRouter } from "./routers/insurance";
 import { dixiPontoRouter } from "./routers/dixiPonto";
 import { heSolicitacoesRouter } from "./routers/heSolicitacoes";
+import { financialRouter } from "./routers/financial";
 import { pontoDescontosRouter } from "./routers/pontoDescontos";
 import { feriadosRouter } from "./routers/feriados";
 import { employeeDocumentsRouter } from "./routers/employeeDocuments";
@@ -777,6 +778,7 @@ export const appRouter = router({
   // SOLICITAÇÃO DE HORAS EXTRAS
   // ============================================================
   heSolicitacoes: heSolicitacoesRouter,
+  financial: financialRouter,
 
   // ============================================================
   // DESCONTOS CLT (Motor de Cálculo)

@@ -148,7 +148,7 @@ const MODULES: Module[] = [
   {
     id: "financeiro", title: "Financeiro", subtitle: "Gestão Financeira",
     description: "Contas a pagar e receber, fluxo de caixa e relatórios.",
-    icon: DollarSign, accentFrom: "#F59E0B", accentTo: "#D97706", accentGlow: "", iconBg: "", path: "", active: false, features: [],
+    icon: DollarSign, accentFrom: "#F59E0B", accentTo: "#D97706", accentGlow: "rgba(245,158,11,0.35)", iconBg: "rgba(245,158,11,0.12)", path: "/financeiro", active: true, features: ["Lançamentos", "Contas a Pagar", "Contas a Receber", "DRE", "Fluxo de Caixa", "Plano de Contas", "Obrigações Fiscais", "Conciliação Bancária"],
   },
   {
     id: "orcamento", title: "Orçamento", subtitle: "Orçamento de Obras",
