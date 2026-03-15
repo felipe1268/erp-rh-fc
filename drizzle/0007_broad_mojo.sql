@@ -1,0 +1,1 @@
+ALTER TABLE "almoxarifado_itens" ADD COLUMN "valor_unitario" numeric(14, 2);

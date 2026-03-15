@@ -15,6 +15,7 @@ import {
 const EMPTY_ITEM = {
   nome: "", unidade: "un", categoria: "", codigoInterno: "",
   quantidadeAtual: 0, quantidadeMinima: 0, observacoes: "", fotoUrl: "",
+  valorUnitario: 0,
   origem: "proprio" as "proprio" | "alugado",
   fornecedorLocacao: "", dataInicioLocacao: "", dataVencimentoLocacao: "",
   valorLocacaoMensal: 0, diasAlertaLocacao: 7, observacoesLocacao: "",
@@ -67,7 +68,7 @@ export default function AlmoxarifadoPage() {
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAbaixo, setApenasAbaixo] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
-  const [obraContexto, setObraContexto] = useState<number | null>(null);
+  const [obraContexto, setObraContexto] = useState<number | null | "todos">(null);
 
   // Busca por foto (IA)
   const fotoIAInputRef = useRef<HTMLInputElement>(null);
@@ -117,8 +118,22 @@ export default function AlmoxarifadoPage() {
   }, [obrasAtivas]);
 
   const { data: itens = [], refetch, isLoading } = trpc.compras.listarItens.useQuery(
-    { companyId, obraId: obraContexto }, { enabled: !!companyId }
+    { companyId, obraId: obraContexto === "todos" ? undefined : obraContexto },
+    { enabled: !!companyId && obraContexto !== "todos" }
   );
+  const { data: consolidado, isLoading: loadingConsolidado } = trpc.compras.listarItensConsolidado.useQuery(
+    { companyId, busca: busca || undefined },
+    { enabled: !!companyId && obraContexto === "todos" }
+  );
+  const [sugerindoPreco, setSugerindoPreco] = useState(false);
+  const sugerirPrecoMut = trpc.compras.sugerirPrecoIA.useMutation({
+    onSuccess: (d: any) => {
+      setFormItem(p => ({ ...p, valorUnitario: d.precoSugerido }));
+      toast.success(`💡 IA sugeriu R$ ${d.precoSugerido.toFixed(2)} — ${d.justificativa}`);
+      setSugerindoPreco(false);
+    },
+    onError: (e) => { toast.error(e.message); setSugerindoPreco(false); },
+  });
   const { data: categorias = [] } = trpc.compras.listarCategoriasAlmoxarifado.useQuery(
     { companyId }, { enabled: !!companyId }
   );
@@ -170,6 +185,7 @@ export default function AlmoxarifadoPage() {
       nome: i.nome, unidade: i.unidade, categoria: i.categoria ?? "", codigoInterno: i.codigoInterno ?? "",
       quantidadeAtual: n(i.quantidadeAtual), quantidadeMinima: n(i.quantidadeMinima),
       observacoes: i.observacoes ?? "", fotoUrl: i.fotoUrl ?? "",
+      valorUnitario: parseFloat((i as any).valorUnitario ?? "0") || 0,
       origem: (i.origem === "alugado" ? "alugado" : "proprio") as "proprio" | "alugado",
       fornecedorLocacao: i.fornecedorLocacao ?? "", dataInicioLocacao: i.dataInicioLocacao ?? "",
       dataVencimentoLocacao: i.dataVencimentoLocacao ?? "",
@@ -263,20 +279,23 @@ export default function AlmoxarifadoPage() {
       diasAlertaLocacao: formItem.diasAlertaLocacao || 7,
       observacoesLocacao: formItem.observacoesLocacao || undefined,
     } : { origem: "proprio" as const, fornecedorLocacao: null, dataInicioLocacao: null, dataVencimentoLocacao: null, valorLocacaoMensal: null, diasAlertaLocacao: null, observacoesLocacao: null };
+    const obraParaCriar = obraContexto === "todos" ? null : obraContexto;
     if (editandoId) {
       atualizarMut.mutate({
         id: editandoId, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
         quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined,
         fotoUrl: formItem.fotoUrl || null, quantidadeAtual: formItem.quantidadeAtual,
+        valorUnitario: formItem.valorUnitario || null,
         ...locacaoPayload,
       });
     } else {
       criarMut.mutate({
-        companyId, obraId: obraContexto, nome: formItem.nome, unidade: formItem.unidade,
+        companyId, obraId: obraParaCriar, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
         quantidadeAtual: formItem.quantidadeAtual, quantidadeMinima: formItem.quantidadeMinima,
         observacoes: formItem.observacoes || undefined, fotoUrl: formItem.fotoUrl || undefined,
+        valorUnitario: formItem.valorUnitario || null,
         ...locacaoPayload,
       });
     }
@@ -442,13 +461,14 @@ export default function AlmoxarifadoPage() {
               ? <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
               : <HardHat className="h-4 w-4 text-blue-600 shrink-0" />}
             <select
-              value={obraContexto ?? "central"}
+              value={obraContexto === "todos" ? "todos" : (obraContexto ?? "central")}
               onChange={e => {
                 const v = e.target.value;
-                setObraContexto(v === "central" ? null : Number(v));
+                setObraContexto(v === "central" ? null : v === "todos" ? "todos" : Number(v));
               }}
               className="flex-1 h-9 text-sm font-medium border border-gray-200 rounded-lg px-3 bg-white text-gray-800 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
             >
+              <option value="todos">📊 Todos os Almoxarifados (Consolidado)</option>
               <option value="central">🏢 Almoxarifado Central</option>
               {obrasAtivas.length > 0 && (
                 <optgroup label="── Por Obra ──">
@@ -521,6 +541,96 @@ export default function AlmoxarifadoPage() {
           </div>
         </div>
 
+        {/* ════════════ VISÃO CONSOLIDADA ════════════ */}
+        {obraContexto === "todos" && (
+          <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
+            {/* Busca */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input type="text" placeholder="Buscar item em todos os almoxarifados..." value={busca} onChange={e => setBusca(e.target.value)}
+                className="w-full pl-9 pr-4 h-10 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200" />
+            </div>
+            {/* KPI: Valor total */}
+            {consolidado && (
+              <div className="bg-gradient-to-r from-emerald-700 to-emerald-500 rounded-2xl px-6 py-4 flex items-center justify-between text-white shadow-md">
+                <div>
+                  <p className="text-sm font-medium opacity-80">Valor Total do Estoque (empresa)</p>
+                  <p className="text-3xl font-black mt-1">R$ {consolidado.totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                  <p className="text-xs opacity-70 mt-1">{consolidado.itens.length} ite{consolidado.itens.length !== 1 ? "ns" : "m"} agrupado{consolidado.itens.length !== 1 ? "s" : ""} · {consolidado.itens.filter((i: any) => i.valorUnitario).length} com preço cadastrado</p>
+                </div>
+                <BarChart2 className="h-12 w-12 opacity-30" />
+              </div>
+            )}
+            {/* Tabela consolidada */}
+            {loadingConsolidado ? (
+              <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-emerald-500" /></div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">ITEM</th>
+                        <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">QTD TOTAL</th>
+                        <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">LOCAIS</th>
+                        <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">PREÇO UNIT.</th>
+                        <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">VALOR TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(consolidado?.itens ?? []).length === 0 ? (
+                        <tr><td colSpan={5} className="text-center py-12 text-gray-400">Nenhum item no estoque</td></tr>
+                      ) : (consolidado?.itens ?? []).map((item: any, idx: number) => (
+                        <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/70">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{item.nome}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{item.unidade}</span>
+                              {item.categoria && <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{item.categoria}</span>}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className="font-bold text-gray-900">{item.quantidadeTotal % 1 === 0 ? item.quantidadeTotal : item.quantidadeTotal.toFixed(2)}</span>
+                            <span className="text-xs text-gray-400 ml-1">{item.unidade}</span>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <div className="flex flex-wrap gap-1 justify-center">
+                              {item.almoxarifados.map((a: any, ai: number) => (
+                                <span key={ai} className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${a.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+                                  {a.tipo === "central" ? "Central" : "Obra"}: {a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2)}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {item.valorUnitario
+                              ? <span className="font-medium text-gray-900">R$ {parseFloat(item.valorUnitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                              : <span className="text-gray-300 text-xs">sem preço</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {item.valorTotalEstoque > 0
+                              ? <span className="font-bold text-emerald-700">R$ {item.valorTotalEstoque.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                              : <span className="text-gray-300">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {consolidado && consolidado.totalGeral > 0 && (
+                      <tfoot className="bg-emerald-50 border-t-2 border-emerald-200">
+                        <tr>
+                          <td colSpan={4} className="px-4 py-3 font-bold text-emerald-800 text-sm">TOTAL GERAL DO ESTOQUE</td>
+                          <td className="px-4 py-3 text-right font-black text-emerald-700">R$ {consolidado.totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {obraContexto !== "todos" && (
         <div className="max-w-7xl mx-auto px-6 py-5 space-y-4">
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -641,6 +751,11 @@ export default function AlmoxarifadoPage() {
                           <span className="text-xs font-normal text-gray-400 ml-1">{item.unidade}</span>
                         </p>
                         <StatusBadge atual={atual} minimo={minimo} />
+                        {(item as any).valorUnitario && parseFloat((item as any).valorUnitario) > 0 && (
+                          <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
+                            R$ {parseFloat((item as any).valorUnitario).toFixed(2)}/un · Total: R$ {(atual * parseFloat((item as any).valorUnitario)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </p>
+                        )}
                       </div>
                       {(item as any).origem === "alugado" && (item as any).dataVencimentoLocacao && (() => {
                         const dias = Math.ceil((new Date((item as any).dataVencimentoLocacao).getTime() - Date.now()) / 86400000);
@@ -753,6 +868,8 @@ export default function AlmoxarifadoPage() {
             </div>
           )}
         </div>
+        )}
+
       </div>
 
       {/* ── Modal Novo/Editar Item ──────────────────────────────────── */}
@@ -906,6 +1023,30 @@ export default function AlmoxarifadoPage() {
                   rows={2} value={formItem.observacoes}
                   onChange={e => setFormItem(p => ({ ...p, observacoes: e.target.value }))}
                 />
+              </div>
+
+              {/* Valor Unitário + IA */}
+              <div>
+                <label className="text-xs font-medium text-gray-700">Valor Unitário (R$)</label>
+                <div className="mt-1 flex gap-2">
+                  <input type="text" inputMode="decimal" placeholder="0,00"
+                    className="flex-1 h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
+                    value={formItem.valorUnitario === 0 ? "" : formItem.valorUnitario}
+                    onChange={e => setFormItem(p => ({ ...p, valorUnitario: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
+                  <button type="button"
+                    disabled={sugerindoPreco || !formItem.nome.trim()}
+                    title={formItem.fotoUrl ? "IA sugere preço com base na foto e nome" : "IA sugere preço com base no nome do item"}
+                    onClick={() => {
+                      setSugerindoPreco(true);
+                      sugerirPrecoMut.mutate({ nome: formItem.nome, unidade: formItem.unidade || undefined, categoria: formItem.categoria || undefined, fotoUrl: formItem.fotoUrl || undefined });
+                    }}
+                    className="flex items-center gap-1 px-3 h-9 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold disabled:opacity-50 transition whitespace-nowrap"
+                  >
+                    {sugerindoPreco ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    {sugerindoPreco ? "..." : "IA"}
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-0.5">Usado no cálculo do valor total do estoque. O botão IA estima o preço de mercado automaticamente.</p>
               </div>
 
               {/* Origem (Próprio / Alugado) */}
