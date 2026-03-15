@@ -373,7 +373,6 @@ export default function Solicitacoes() {
                     <ListTree className="h-3.5 w-3.5 text-amber-600" />
                     Itens da EAP — selecione para incluir na SC
                   </label>
-                  {eapQ.isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
                   {selectedEapIds.size > 0 && (
                     <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
                       {selectedEapIds.size} selecionado{selectedEapIds.size > 1 ? "s" : ""}
@@ -439,9 +438,17 @@ export default function Solicitacoes() {
                       )}
                     </div>
                   </div>
-                ) : eapQ.isLoading ? null : (
+                ) : eapQ.isLoading ? (
+                  <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando itens da EAP...
+                  </div>
+                ) : eapQ.isError ? (
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                    Erro ao carregar EAP — adicione os itens manualmente.
+                  </div>
+                ) : (
                   <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                    Carregando itens da EAP...
+                    Nenhum item de EAP encontrado para esta obra.
                   </div>
                 )}
               </div>
