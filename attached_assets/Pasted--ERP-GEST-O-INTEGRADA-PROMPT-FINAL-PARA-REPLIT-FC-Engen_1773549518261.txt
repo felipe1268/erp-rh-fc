@@ -1,0 +1,1035 @@
+# 🏗️ ERP GESTÃO INTEGRADA — PROMPT FINAL PARA REPLIT
+# FC Engenharia — Implementação completa em 4 entregas
+
+---
+
+## ⚠️ REGRAS GERAIS — NUNCA VIOLAR
+
+1. **Nunca alterar tabelas existentes** — apenas ADD COLUMN ou tabelas novas
+2. **Nunca remover** o plugin `vitePluginManusDebugCollector` do `vite.config.ts`
+3. **Nunca alterar** o sistema de autenticação existente
+4. **Sempre rodar** `pnpm db:push` após criar tabelas e mostrar o resultado antes de continuar
+5. **Usar `fornecedores_epi`** existente (não criar tabela `suppliers`)
+6. **Usar `createAuditLog`** existente em todas as ações dos módulos novos
+7. **Usar `financial_events`** existente para lançamentos financeiros
+8. **Usar `equipment`** existente ao receber OC de equipamento
+9. **Usar `smtpService`** existente para e-mails automáticos
+10. **Usar `storagePut`** existente para uploads de fotos e documentos
+11. Confirmar cada etapa antes de avançar para a próxima
+12. Não alterar rotas, routers ou páginas existentes — apenas adicionar
+
+---
+
+# 📦 ENTREGA 1 — MÓDULO ALMOXARIFADO + PWA
+
+## PASSO 1 — BANCO DE DADOS
+Adicionar no final de `drizzle/schema.ts`:
+
+```typescript
+// ── ALMOXARIFADO ─────────────────────────────────────────────
+export const warehouseDepots = mysqlTable("warehouse_depots", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  descricao: text(),
+  ativo: tinyint().default(1).notNull(),
+  criadoPorId: int("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_wd_company").on(t.companyId)]);
+
+export const warehouseItems = mysqlTable("warehouse_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  depotId: int("depot_id").notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  codigo: varchar({ length: 100 }),
+  unidade: varchar({ length: 20 }).notNull().default("un"),
+  categoria: varchar({ length: 100 }),
+  quantidadeAtual: decimal("quantidade_atual", { precision: 10, scale: 3 }).default("0").notNull(),
+  quantidadeMinima: decimal("quantidade_minima", { precision: 10, scale: 3 }).default("0").notNull(),
+  valorUnitario: decimal("valor_unitario", { precision: 10, scale: 2 }),
+  fotoUrl: text("foto_url"),
+  observacoes: text(),
+  ativo: tinyint().default(1).notNull(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_wi_company").on(t.companyId), index("idx_wi_depot").on(t.depotId)]);
+
+export const warehouseAssetItems = mysqlTable("warehouse_asset_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  depotId: int("depot_id").notNull(),
+  numeroSerie: varchar("numero_serie", { length: 100 }),
+  numeroPatrimonio: varchar("numero_patrimonio", { length: 50 }),
+  qrCodeUrl: text("qr_code_url"),
+  status: mysqlEnum(['disponivel','emprestado','manutencao','perdido','baixado']).default('disponivel').notNull(),
+  observacoes: text(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_wai_company").on(t.companyId), index("idx_wai_item").on(t.itemId)]);
+
+export const warehouseMovements = mysqlTable("warehouse_movements", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  depotId: int("depot_id").notNull(),
+  tipo: mysqlEnum(['entrada','saida','ajuste','transferencia_saida','transferencia_entrada']).notNull(),
+  quantidade: decimal({ precision: 10, scale: 3 }).notNull(),
+  quantidadeAntes: decimal("quantidade_antes", { precision: 10, scale: 3 }).notNull(),
+  quantidadeDepois: decimal("quantidade_depois", { precision: 10, scale: 3 }).notNull(),
+  origemTipo: mysqlEnum("origem_tipo", ['recebimento_oc','requisicao_obra','ajuste_inventario','entrada_manual','transferencia','emprestimo','devolucao']),
+  ordemCompraId: int("ordem_compra_id"),
+  obraId: int("obra_id"),
+  loanId: int("loan_id"),
+  motivo: text(),
+  notaFiscal: varchar("nota_fiscal", { length: 100 }),
+  notaFiscalUrl: text("nota_fiscal_url"),
+  usuarioId: int("usuario_id"),
+  usuarioNome: varchar("usuario_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_wm_company").on(t.companyId), index("idx_wm_item").on(t.itemId)]);
+
+export const warehouseObraStock = mysqlTable("warehouse_obra_stock", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  depotId: int("depot_id").notNull(),
+  obraId: int("obra_id").notNull(),
+  quantidadeAtual: decimal("quantidade_atual", { precision: 10, scale: 3 }).default("0").notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_wos_item_obra").on(t.itemId, t.obraId)]);
+
+export const warehouseTransfers = mysqlTable("warehouse_transfers", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  depotId: int("depot_id").notNull(),
+  quantidade: decimal({ precision: 10, scale: 3 }).notNull(),
+  origemTipo: mysqlEnum("origem_tipo", ['central','obra']).notNull(),
+  origemObraId: int("origem_obra_id"),
+  destinoTipo: mysqlEnum("destino_tipo", ['central','obra']).notNull(),
+  destinoObraId: int("destino_obra_id"),
+  motivo: text(),
+  status: mysqlEnum(['confirmada','cancelada']).default('confirmada').notNull(),
+  solicitanteId: int("solicitante_id"),
+  solicitanteNome: varchar("solicitante_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_wt_company").on(t.companyId)]);
+
+export const warehouseLoans = mysqlTable("warehouse_loans", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  obraId: int("obra_id"),
+  itemId: int("item_id").notNull(),
+  itemNome: varchar("item_nome", { length: 255 }).notNull(),
+  assetItemId: int("asset_item_id"),
+  numeroPatrimonio: varchar("numero_patrimonio", { length: 50 }),
+  quantidade: decimal({ precision: 10, scale: 3 }).default("1").notNull(),
+  funcionarioId: int("funcionario_id"),
+  funcionarioCodigo: varchar("funcionario_codigo", { length: 20 }),
+  funcionarioNome: varchar("funcionario_nome", { length: 255 }).notNull(),
+  dataEmprestimo: date("data_emprestimo", { mode: 'string' }).notNull(),
+  horaEmprestimo: varchar("hora_emprestimo", { length: 5 }),
+  dataDevolucao: date("data_devolucao", { mode: 'string' }),
+  horaDevolucao: varchar("hora_devolucao", { length: 5 }),
+  status: mysqlEnum(['emprestado','devolvido','pendente','perdido']).default('emprestado').notNull(),
+  observacoes: text(),
+  almoxarifeId: int("almoxarife_id"),
+  almoxarifeNome: varchar("almoxarife_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [
+  index("idx_wl_company").on(t.companyId),
+  index("idx_wl_funcionario").on(t.funcionarioId),
+  index("idx_wl_data").on(t.dataEmprestimo),
+]);
+
+export const warehouseMaintenance = mysqlTable("warehouse_maintenance", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  assetItemId: int("asset_item_id"),
+  tipo: mysqlEnum(['preventiva','corretiva']).default('preventiva').notNull(),
+  intervaloMeses: int("intervalo_meses").default(3).notNull(),
+  ultimaManutencao: date("ultima_manutencao", { mode: 'string' }),
+  proximaManutencao: date("proxima_manutencao", { mode: 'string' }),
+  status: mysqlEnum(['ok','vencendo','vencida','em_manutencao']).default('ok').notNull(),
+  responsavel: varchar({ length: 255 }),
+  observacoes: text(),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_wmaint_company").on(t.companyId)]);
+
+export const warehouseAdjustmentRequests = mysqlTable("warehouse_adjustment_requests", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  quantidadeAtual: decimal("quantidade_atual", { precision: 10, scale: 3 }).notNull(),
+  quantidadeSolicitada: decimal("quantidade_solicitada", { precision: 10, scale: 3 }).notNull(),
+  diferenca: decimal({ precision: 10, scale: 3 }).notNull(),
+  motivo: text().notNull(),
+  status: mysqlEnum(['pendente','aprovado','recusado']).default('pendente').notNull(),
+  solicitanteId: int("solicitante_id"),
+  solicitanteNome: varchar("solicitante_nome", { length: 255 }),
+  aprovadorId: int("aprovador_id"),
+  aprovadorNome: varchar("aprovador_nome", { length: 255 }),
+  motivoRecusa: text("motivo_recusa"),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  resolvidoEm: timestamp("resolvido_em", { mode: 'string' }),
+}, (t) => [index("idx_war_company").on(t.companyId)]);
+
+export const warehouseInventoryConfig = mysqlTable("warehouse_inventory_config", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  depotId: int("depot_id").notNull(),
+  diaSemana: mysqlEnum("dia_semana", ['segunda','terca','quarta','quinta','sexta','sabado','domingo']).default('segunda').notNull(),
+  horarioAlerta: varchar("horario_alerta", { length: 5 }).default('07:00').notNull(),
+  prazoHoras: int("prazo_horas").default(24).notNull(),
+  ativo: tinyint().default(1).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [index("idx_wic_company").on(t.companyId)]);
+
+export const warehouseInventorySessions = mysqlTable("warehouse_inventory_sessions", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  depotId: int("depot_id").notNull(),
+  semanaRef: varchar("semana_ref", { length: 10 }).notNull(),
+  status: mysqlEnum(['pendente','em_andamento','concluido','expirado']).default('pendente').notNull(),
+  totalItens: int("total_itens").default(0).notNull(),
+  itensConferidos: int("itens_conferidos").default(0).notNull(),
+  itensDivergentes: int("itens_divergentes").default(0).notNull(),
+  almoxarifeId: int("almoxarife_id"),
+  almoxarifeNome: varchar("almoxarife_nome", { length: 255 }),
+  iniciadoEm: timestamp("iniciado_em", { mode: 'string' }),
+  concluidoEm: timestamp("concluido_em", { mode: 'string' }),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_wis_company").on(t.companyId)]);
+
+export const warehouseInventorySessionItems = mysqlTable("warehouse_inventory_session_items", {
+  id: int().autoincrement().notNull().primaryKey(),
+  sessionId: int("session_id").notNull(),
+  itemId: int("item_id").notNull(),
+  quantidadeSistema: decimal("quantidade_sistema", { precision: 10, scale: 3 }).notNull(),
+  quantidadeFisica: decimal("quantidade_fisica", { precision: 10, scale: 3 }),
+  diferenca: decimal({ precision: 10, scale: 3 }),
+  status: mysqlEnum(['pendente','conferido','divergente']).default('pendente').notNull(),
+  observacoes: text(),
+  conferidoEm: timestamp("conferido_em", { mode: 'string' }),
+}, (t) => [index("idx_wisi_session").on(t.sessionId)]);
+
+export const warehouseRentals = mysqlTable("warehouse_rentals", {
+  id: int().autoincrement().notNull().primaryKey(),
+  companyId: int().notNull(),
+  itemId: int("item_id").notNull(),
+  obraId: int("obra_id"),
+  ordemCompraId: int("ordem_compra_id"),
+  supplierId: int("supplier_id"),
+  supplierNome: varchar("supplier_nome", { length: 255 }),
+  numeroContrato: varchar("numero_contrato", { length: 100 }),
+  dataInicio: date("data_inicio", { mode: 'string' }).notNull(),
+  dataFim: date("data_fim", { mode: 'string' }).notNull(),
+  valorDiario: decimal("valor_diario", { precision: 10, scale: 2 }),
+  valorTotal: decimal("valor_total", { precision: 10, scale: 2 }),
+  formaPagamento: varchar("forma_pagamento", { length: 100 }),
+  status: mysqlEnum(['ativo','vencendo','vencido','renovado','devolvido']).default('ativo').notNull(),
+  diasAvisoAntecipado: int("dias_aviso_antecipado").default(5),
+  alertaEnviado: tinyint("alerta_enviado").default(0),
+  dataDevolucaoSolicitada: date("data_devolucao_solicitada", { mode: 'string' }),
+  dataDevolucaoReal: date("data_devolucao_real", { mode: 'string' }),
+  devolucaoConfirmadaPorId: int("devolucao_confirmada_por_id"),
+  devolucaoConfirmadaPorNome: varchar("devolucao_confirmada_por_nome", { length: 255 }),
+  condicaoDevolucao: mysqlEnum("condicao_devolucao", ['perfeito','avariado','perdido']),
+  observacoesDevolucao: text("observacoes_devolucao"),
+  createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_wr_company").on(t.companyId),
+  index("idx_wr_obra").on(t.obraId),
+  index("idx_wr_status").on(t.status),
+  index("idx_wr_datafim").on(t.dataFim),
+]);
+```
+
+Após adicionar: **rodar `pnpm db:push` e confirmar sucesso**.
+
+---
+
+## PASSO 2 — ROUTER `server/routers/warehouse.ts`
+
+Criar o router com os seguintes endpoints:
+
+**Depósitos:** `listDepots`, `createDepot`
+
+**Itens:** `listItems`, `createItem`, `updateItem`
+
+**Estoque:** `checkStock` (usado pelo módulo de compras — verifica disponibilidade antes de criar SC)
+
+**Entrada:** `registerEntry` (só após atesto de recebimento + NF)
+- Atualiza `quantidadeAtual`
+- Registra em `warehouseMovements`
+
+**Saída:** `registerExit`
+- Valida estoque disponível
+- Atualiza `quantidadeAtual`
+- Registra em `warehouseMovements`
+
+**Empréstimo (comodato):** `registerLoan`
+- Busca funcionário pelo código JFCxxxx em `employees.codigoInterno`
+- Desconta do estoque
+- Registra em `warehouseLoans`
+
+**Devolução:** `returnLoanById`
+- Marca como devolvido
+- Devolve ao estoque
+
+**Perdido:** `markLoanLost`
+- Marca como perdido
+- Cria advertência automática em `warnings`
+
+**Fechamento do dia:** `listTodayLoans`
+
+**Transferências:** `registerTransfer` (central↔obra, obra↔obra)
+
+**Inventário:** `getInventorySession`, `startInventorySession`, `confirmInventoryItem`
+
+**Equipamentos alugados:** `listRentals`, `createRental`, `requestReturn`, `confirmReturn`
+
+**Dashboard:** `getDashboard`
+- Total itens, itens críticos, valor total do estoque, empréstimos hoje, pendentes de devolução
+- Lista dos 5 itens mais críticos (estoque abaixo do mínimo)
+- Equipamentos alugados vencendo
+
+---
+
+## PASSO 3 — REGISTRAR O ROUTER
+
+Em `server/routers.ts`:
+```typescript
+import { warehouseRouter } from "./routers/warehouse";
+// No appRouter:
+warehouse: warehouseRouter,
+```
+
+---
+
+## PASSO 4 — JOBS AUTOMÁTICOS
+
+Criar `server/services/warehouseInventoryJob.ts`:
+- Verifica a cada 1 hora se é o dia/hora configurado para inventário
+- Cria sessão de inventário pendente
+- Notifica o almoxarife
+
+Criar `server/services/rentalAlertJob.ts`:
+- Roda todo dia às 07:00 (setInterval 24h)
+- Verifica equipamentos alugados
+- Se `diasRestantes <= diasAvisoAntecipado` → muda status para 'vencendo'
+- Se vencido → muda para 'vencido'
+
+Em `server/_core/index.ts`, após `server.listen`, adicionar:
+```typescript
+import("../services/warehouseInventoryJob").then(m => m.startInventoryJob()).catch(e => console.error("[InventoryJob] Erro:", e));
+import("../services/rentalAlertJob").then(m => m.startRentalAlertJob()).catch(e => console.error("[RentalAlert] Erro:", e));
+```
+
+---
+
+## PASSO 5 — INTEGRAÇÃO RAIO X
+
+Em `server/routers/controleDocumentos.ts`, na procedure `raioX`, antes do `timeline.sort(...)`:
+
+```typescript
+// Empréstimos de ferramentas do almoxarifado
+try {
+  const empLoans = await db.select().from(warehouseLoans)
+    .where(eq(warehouseLoans.funcionarioId, employeeId));
+  empLoans.forEach(loan => {
+    timeline.push({
+      data: loan.dataEmprestimo,
+      tipo: loan.status === 'perdido' ? '⚠️ Ferramenta Perdida' : '🔧 Ferramenta Emprestada',
+      descricao: `${loan.itemNome}${loan.numeroPatrimonio ? ` (${loan.numeroPatrimonio})` : ''} — Qtd: ${loan.quantidade}`,
+      cor: loan.status === 'perdido' ? 'red' : loan.status === 'pendente' ? 'orange' : 'blue',
+      icone: 'tool',
+    });
+    if (loan.status === 'devolvido' && loan.dataDevolucao) {
+      timeline.push({
+        data: loan.dataDevolucao,
+        tipo: '✅ Ferramenta Devolvida',
+        descricao: `${loan.itemNome} devolvida ao almoxarifado`,
+        cor: 'green', icone: 'check-circle',
+      });
+    }
+  });
+} catch(e) { console.warn('[RaioX] Empréstimos:', e); }
+```
+
+---
+
+## PASSO 6 — PÁGINAS REACT (mobile-first obrigatório)
+
+### `client/src/pages/Almoxarifado.tsx`
+Tela principal com **4 botões gigantes** (min 60px altura, fonte 16px):
+- 📥 **ENTRADA** → modal: busca item + quantidade + foto NF (câmera)
+- 📤 **SAÍDA** → modal: busca item + seleciona obra + quantidade
+- 🔧 **EMPRESTAR** → modal: campo JFCxxxx (teclado numérico) → mostra nome do funcionário → busca ferramenta → confirma
+- 📋 **FECHAR DIA** → lista de empréstimos do dia com botão ✅ devolveu por item
+
+**Dashboard no topo:**
+- 🔴 X itens críticos | 💰 R$ valor total do estoque
+- Lista dos itens críticos
+
+**Aba "Alugados":**
+- Semáforo 🔴🟡🟢 por vencimento
+- Custo diário acumulado visível
+- Botões [🔄 RENOVAR] e [📦 DEVOLVER]
+
+**Confirmação após cada ação:** tela verde ✅ grande ou vermelha ❌
+
+### `client/src/pages/AlmoxarifadoMovimentacoes.tsx`
+Histórico com filtros por depósito, tipo, período. Exportar Excel.
+
+### `client/src/pages/AlmoxarifadoInventario.tsx`
+Inventário semanal:
+- Sessão ativa ou botão para iniciar
+- Para cada item: foto + "Sistema diz: X" + [✅ BATE] [⚠️ DIFERENTE]
+- Barra de progresso no topo
+
+---
+
+## PASSO 7 — ROTAS (client/src/App.tsx)
+
+```typescript
+import Almoxarifado from "@/pages/Almoxarifado";
+import AlmoxarifadoMovimentacoes from "@/pages/AlmoxarifadoMovimentacoes";
+import AlmoxarifadoInventario from "@/pages/AlmoxarifadoInventario";
+
+// No Switch:
+<Route path="/almoxarifado" component={Almoxarifado} />
+<Route path="/almoxarifado/movimentacoes" component={AlmoxarifadoMovimentacoes} />
+<Route path="/almoxarifado/inventario" component={AlmoxarifadoInventario} />
+```
+
+---
+
+## PASSO 8 — MENU LATERAL (client/src/components/DashboardLayout.tsx)
+
+```typescript
+// Adicionar seções:
+const menuSectionsAlmoxarifado: MenuSection[] = [{
+  title: "Almoxarifado",
+  items: [
+    { label: "Visão Geral", path: "/almoxarifado", icon: Warehouse },
+    { label: "Movimentações", path: "/almoxarifado/movimentacoes", icon: ArrowLeftRight },
+    { label: "Inventário Semanal", path: "/almoxarifado/inventario", icon: ClipboardList },
+  ]
+}];
+
+// No MODULE_SECTIONS:
+"almoxarifado": menuSectionsAlmoxarifado,
+
+// No MODULE_HOME_ROUTES:
+"almoxarifado": "/almoxarifado",
+
+// No MODULE_THEME:
+"almoxarifado": { icon: Warehouse, color: "#78716C", bg: "#57534E" },
+```
+
+---
+
+## PASSO 9 — ATIVAR NO MODULEHUB
+
+Em `client/src/pages/ModuleHub.tsx`, localizar o item `almoxarifado` e mudar `active: false` para `active: true` e `path: ""` para `path: "/almoxarifado"`.
+
+---
+
+## PASSO 10 — PWA (app instalável no celular)
+
+### 10.1 — Criar `/client/public/manifest.json`
+```json
+{
+  "name": "ERP Gestão Integrada",
+  "short_name": "ERP FC",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A192F",
+  "theme_color": "#0A192F",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [{ "name": "Almoxarifado", "url": "/almoxarifado" }]
+}
+```
+
+### 10.2 — Gerar ícones
+```bash
+pnpm add -D sharp
+node -e "
+const sharp = require('sharp');
+const fs = require('fs');
+const svg = fs.readFileSync('client/public/fc-logo.svg');
+sharp(Buffer.from(svg)).resize(192,192).png().toFile('client/public/icon-192.png');
+sharp(Buffer.from(svg)).resize(512,512).png().toFile('client/public/icon-512.png');
+"
+```
+
+### 10.3 — Atualizar `client/index.html` (dentro do `<head>`):
+```html
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0A192F" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ERP FC" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+```
+
+### 10.4 — Instalar e configurar PWA
+```bash
+pnpm add -D vite-plugin-pwa
+```
+
+Em `vite.config.ts`, adicionar import e plugin (MANTER todos os outros plugins):
+```typescript
+import { VitePWA } from 'vite-plugin-pwa';
+// No array plugins — adicionar APÓS os existentes:
+VitePWA({
+  registerType: 'autoUpdate',
+  manifest: false,
+  workbox: {
+    globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+    navigateFallback: '/index.html',
+    navigateFallbackDenylist: [/^\/api/],
+  }
+})
+```
+
+### 10.5 — Banner de instalação `client/src/components/PwaInstallBanner.tsx`
+```tsx
+import { useState, useEffect } from 'react';
+import { Download, X } from 'lucide-react';
+export function PwaInstallBanner() {
+  const [prompt, setPrompt] = useState<any>(null);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    const handler = (e: any) => { e.preventDefault(); setPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+  if (!prompt || dismissed) return null;
+  const install = async () => { prompt.prompt(); const { outcome } = await prompt.userChoice; if (outcome === 'accepted') setDismissed(true); };
+  return (
+    <div className="fixed bottom-4 left-4 right-4 z-50 bg-[#0A192F] text-white rounded-xl p-4 shadow-2xl flex items-center gap-3 md:max-w-sm md:left-auto md:right-4">
+      <div className="flex-1">
+        <p className="font-bold text-sm">📱 Instalar no celular</p>
+        <p className="text-xs text-gray-300 mt-0.5">Acesse mais rápido pela tela inicial</p>
+      </div>
+      <button onClick={install} className="bg-blue-500 text-white text-sm font-bold px-4 py-2 rounded-lg flex items-center gap-1"><Download size={14}/> Instalar</button>
+      <button onClick={() => setDismissed(true)} className="text-gray-400 hover:text-white p-1"><X size={18}/></button>
+    </div>
+  );
+}
+```
+
+Adicionar no `App.tsx`:
+```typescript
+import { PwaInstallBanner } from "@/components/PwaInstallBanner";
+// No JSX: <PwaInstallBanner />
+```
+
+---
+
+# 🛒 ENTREGA 2 — MÓDULO DE COMPRAS
+
+## FASE 1 — BASE (fazer primeiro)
+
+### Novas tabelas a criar:
+
+```sql
+-- 1. Catálogo centralizado de insumos
+purchase_catalog_items (
+  id, companyId,
+  nome VARCHAR(255),
+  nomeAbreviado VARCHAR(100),
+  codigo VARCHAR(50),
+  unidade VARCHAR(20),
+  categoria VARCHAR(100),
+  ncm VARCHAR(10),
+  fotoUrl TEXT,
+  ativo BOOLEAN DEFAULT true,
+  createdAt, updatedAt
+)
+
+-- 2. Histórico de preços (tabela separada, não JSON)
+supplier_price_history (
+  id, companyId,
+  catalogItemId INT,
+  supplierId INT,
+  supplierNome VARCHAR(255),
+  valorUnitario DECIMAL(10,2),
+  valorFrete DECIMAL(10,2),
+  unidade VARCHAR(20),
+  dataReferencia DATE,
+  cotacaoId INT,
+  ordemCompraId INT,
+  createdAt TIMESTAMP
+)
+
+-- 3. Avaliação de fornecedor pós-entrega
+supplier_evaluations (
+  id, companyId,
+  supplierId INT,
+  ordemCompraId INT,
+  notaPrazo INT,        -- 1 a 5
+  notaQualidade INT,    -- 1 a 5
+  notaAtendimento INT,  -- 1 a 5
+  mediaGeral DECIMAL(3,2),
+  observacoes TEXT,
+  avaliadorId INT, avaliadorNome VARCHAR(255),
+  createdAt TIMESTAMP
+)
+
+-- 4. Configuração de alçadas de aprovação
+purchase_approval_rules (
+  id, companyId,
+  nome VARCHAR(255),
+  obraId INT,           -- null = todas as obras
+  nivel1AprovadorTipo ENUM('engenheiro_obra','cargo','usuario_especifico'),
+  nivel1AprovadorId INT,
+  nivel1PrazoHoras INT DEFAULT 24,
+  nivel2Ativo BOOLEAN DEFAULT true,
+  nivel2AprovadorTipo ENUM('gerente','diretor','usuario_especifico'),
+  nivel2AprovadorId INT,
+  nivel2PrazoHoras INT DEFAULT 8,
+  limiteCompraDireta DECIMAL(10,2) DEFAULT 500,
+  slaEmergencialHoras INT DEFAULT 4,
+  ativo BOOLEAN DEFAULT true,
+  createdAt, updatedAt
+)
+
+-- 5. Log de cancelamentos
+purchase_cancellations (
+  id, companyId,
+  tipo ENUM('sc','oc','cotacao'),
+  referenciaId INT,
+  motivo TEXT NOT NULL,
+  efeitos JSON,
+  canceladoPorId INT, canceladoPorNome VARCHAR(255),
+  canceladoEm TIMESTAMP
+)
+
+-- 6. Contratos de fornecimento
+supplier_contracts (
+  id, companyId,
+  supplierId INT, supplierNome VARCHAR(255),
+  catalogItemId INT, itemNome VARCHAR(255),
+  valorUnitario DECIMAL(10,2),
+  unidade VARCHAR(20),
+  dataInicio DATE, dataFim DATE,
+  observacoes TEXT,
+  status ENUM('ativo','vencido','cancelado') DEFAULT 'ativo',
+  createdAt, updatedAt
+)
+```
+
+### Expandir `fornecedores_epi` (ALTER TABLE — não criar tabela nova):
+```sql
+ALTER TABLE fornecedores_epi
+  ADD COLUMN IF NOT EXISTS razao_social VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS nome_fantasia VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS situacao_receita VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS cep VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS bairro VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS cidade VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS estado VARCHAR(2),
+  ADD COLUMN IF NOT EXISTS contato_nome VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS contato_celular VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS contato_email VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS banco VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS agencia VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS conta VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS pix VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS categorias JSON,
+  ADD COLUMN IF NOT EXISTS tipo ENUM('material','epi','servico','todos') DEFAULT 'todos',
+  ADD COLUMN IF NOT EXISTS avaliacao_media DECIMAL(3,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS total_avaliacoes INT DEFAULT 0;
+```
+
+**Busca automática de CNPJ:** ao digitar CNPJ → chamar `https://brasilapi.com.br/api/cnpj/v1/{cnpj}` → preencher campos automaticamente → bloquear se status INAPTA/BAIXADA/SUSPENSA.
+
+---
+
+## FASE 2 — FLUXO PRINCIPAL
+
+### Tabelas do fluxo:
+
+```sql
+-- Solicitação de Compra
+purchase_requests (
+  id, companyId, obraId,
+  eapItemId INT, eapItemNome VARCHAR(255),
+  solicitanteId INT, solicitanteNome VARCHAR(255),
+  tipo ENUM('compra','locacao','servico') DEFAULT 'compra',
+  status ENUM('rascunho','aguardando_aprovacao','aprovada','recusada','em_cotacao','em_oc','concluida','cancelada'),
+  emergencial BOOLEAN DEFAULT false,
+  justificativaEmergencial TEXT,
+  prazoNecessidade DATE,
+  justificativaRecusa TEXT,
+  aprovadorId INT, aprovadorNome VARCHAR(255),
+  aprovadoEm DATETIME,
+  createdAt, updatedAt
+)
+
+purchase_request_items (
+  id, solicitacaoId,
+  catalogItemId INT, insumoNome VARCHAR(255),
+  unidade VARCHAR(20), quantidade DECIMAL(10,3),
+  quantidadeEstoqueDisponivel DECIMAL(10,3),
+  quantidadeRetiradaEstoque DECIMAL(10,3),
+  quantidadeAComprar DECIMAL(10,3),
+  valorMetaUnitario DECIMAL(10,2),
+  observacoes TEXT
+)
+
+-- Cotação
+quotations (
+  id, companyId, solicitacaoId,
+  status ENUM('aberta','encerrada','cancelada'),
+  minimoFornecedores INT DEFAULT 3,
+  fornecedorVencedorId INT,
+  compradorId INT, compradorNome VARCHAR(255),
+  createdAt, updatedAt
+)
+
+quotation_suppliers (
+  id, cotacaoId, supplierId, supplierNome,
+  status ENUM('aguardando','respondida','recusada'),
+  valorUnitario DECIMAL(10,2),
+  valorFrete DECIMAL(10,2) DEFAULT 0,
+  freteTipo ENUM('cif','fob') DEFAULT 'cif',
+  valorTotalComFrete DECIMAL(10,2),
+  prazoEntrega INT,
+  validadeDias INT DEFAULT 5,
+  validadeAte DATE,
+  condicaoPagamento VARCHAR(255),
+  observacoes TEXT,
+  respondidoEm DATETIME
+)
+
+-- Ordem de Compra
+purchase_orders (
+  id, companyId, solicitacaoId, cotacaoId,
+  supplierId, supplierNome,
+  obraId, compradorId, compradorNome,
+  tipo ENUM('compra','locacao','servico') DEFAULT 'compra',
+  status ENUM('emitida','aprovada','entregue_parcial','entregue_total','cancelada'),
+  valorItens DECIMAL(10,2),
+  valorFrete DECIMAL(10,2) DEFAULT 0,
+  freteTipo ENUM('cif','fob') DEFAULT 'cif',
+  valorTotal DECIMAL(10,2),
+  formaPagamento VARCHAR(255),
+  prazoEntrega DATE,
+  -- Campos fiscais (preenchidos automaticamente da empresa)
+  cnpjComprador VARCHAR(20),
+  inscricaoEstadual VARCHAR(30),
+  enderecoEntrega TEXT,
+  cidadeEntrega VARCHAR(100),
+  estadoEntrega VARCHAR(2),
+  cepEntrega VARCHAR(10),
+  -- Locação (quando tipo = locacao)
+  locacaoDataInicio DATE,
+  locacaoDataFim DATE,
+  locacaoValorDiario DECIMAL(10,2),
+  emitidaEm DATETIME,
+  createdAt, updatedAt
+)
+
+purchase_order_items (
+  id, ordemId,
+  catalogItemId INT, insumoNome VARCHAR(255),
+  unidade VARCHAR(20),
+  quantidadePedida DECIMAL(10,3),
+  quantidadeRecebida DECIMAL(10,3) DEFAULT 0,
+  valorUnitario DECIMAL(10,2),
+  valorTotal DECIMAL(10,2),
+  valorMetaUnitario DECIMAL(10,2)
+)
+
+-- Recebimento
+receipts (
+  id, ordemId, obraId,
+  recebedorId INT, recebedorNome VARCHAR(255),
+  status ENUM('parcial','total'),
+  notaFiscalNumero VARCHAR(100),
+  notaFiscalUrl TEXT,
+  fotoMaterialUrl TEXT,
+  observacoes TEXT,
+  recebidoEm DATETIME,
+  createdAt
+)
+
+receipt_items (
+  id, recebimentoId, ordemItemId,
+  insumoNome VARCHAR(255), unidade VARCHAR(20),
+  quantidadePedida DECIMAL(10,3),
+  quantidadeRecebida DECIMAL(10,3),
+  quantidadePendente DECIMAL(10,3)
+)
+
+-- Devolução ao fornecedor
+purchase_returns (
+  id, companyId, ordemId, recebimentoId,
+  motivo TEXT NOT NULL,
+  itens JSON,
+  status ENUM('solicitada','confirmada','cancelada') DEFAULT 'solicitada',
+  solicitanteId INT, solicitanteNome VARCHAR(255),
+  createdAt
+)
+
+-- Contas a pagar
+accounts_payable (
+  id, companyId, ordemId, supplierId, supplierNome,
+  obraId, descricao TEXT,
+  valorTotal DECIMAL(10,2),
+  valorPago DECIMAL(10,2) DEFAULT 0,
+  status ENUM('pendente','bloqueado','pago_parcial','pago_total','cancelado') DEFAULT 'bloqueado',
+  formaPagamento VARCHAR(255),
+  dataVencimento DATE,
+  dataPagamento DATE,
+  -- Dados bancários do fornecedor (preenchidos automaticamente)
+  supplierBanco VARCHAR(100),
+  supplierAgencia VARCHAR(20),
+  supplierConta VARCHAR(30),
+  supplierPix VARCHAR(255),
+  supplierCnpj VARCHAR(20),
+  comprovanteUrl TEXT,
+  createdAt, updatedAt
+)
+
+-- Realocação de saldo entre itens EAP
+budget_reallocations (
+  id, companyId, obraId,
+  origemEapItemId INT, origemEapItemNome VARCHAR(255),
+  destinoEapItemId INT, destinoEapItemNome VARCHAR(255),
+  valorRealocado DECIMAL(10,2),
+  motivo TEXT NOT NULL,
+  usuarioId INT, usuarioNome VARCHAR(255),
+  createdAt
+)
+
+-- Comissão do comprador
+buyer_commissions (
+  id, companyId, obraId, obraNome VARCHAR(255),
+  compradorId INT, compradorNome VARCHAR(255),
+  valorMetaTotal DECIMAL(10,2),
+  valorCompradoTotal DECIMAL(10,2),
+  economiaTotal DECIMAL(10,2),
+  percentualParticipacao DECIMAL(5,2),
+  valorComissao DECIMAL(10,2),
+  status ENUM('em_aberto','calculada','aprovada_diretor','paga','cancelada'),
+  aprovadoPor VARCHAR(255), aprovadoEm DATETIME,
+  calculadoEm DATETIME, createdAt
+)
+
+-- Indicadores de emergência por engenheiro
+emergency_metrics (
+  id, companyId,
+  engenheiroId INT, engenheiroNome VARCHAR(255),
+  obraId INT, obraNome VARCHAR(255),
+  mes INT, ano INT,
+  totalSolicitacoes INT DEFAULT 0,
+  totalEmergenciais INT DEFAULT 0,
+  percentualEmergencial DECIMAL(5,2) DEFAULT 0,
+  createdAt, updatedAt
+)
+```
+
+---
+
+## REGRAS DE NEGÓCIO — COMPRAS
+
+### Solicitação de Compra:
+- Solicitante vê apenas obras vinculadas ao seu usuário
+- Itens selecionados do catálogo (não digitados livremente)
+- Sistema verifica almoxarifado antes de liberar SC (usar `warehouse.checkStock`)
+  - Estoque suficiente → bloqueia, obriga retirada
+  - Estoque parcial → pede só a diferença
+  - Sem estoque → libera normalmente
+- Toggle ⚡ EMERGENCIAL → justificativa obrigatória → vai ao topo de todas as filas
+- Atualizar `emergency_metrics` ao criar cada SC
+
+### Aprovação:
+- Consultar `purchase_approval_rules` para saber quem aprova
+- Dentro da meta → nível 1
+- Acima da meta (R$0,01) → nível 2 + alerta visual
+- Abaixo de `limiteCompraDireta` → compra direta sem cotação
+- SC emergencial: badge ⚡, notificação imediata, SLA configurável
+
+### Cotação:
+- Mínimo 3 fornecedores (configurável)
+- Exibir histórico de preços de cada fornecedor para aquele item (de `supplier_price_history`)
+- Exibir média geral e avaliação do fornecedor
+- Verificar `supplier_contracts` ativos — se existir contrato vigente, pular cotação → ir direto para OC
+- E-mail automático para fornecedor ao abrir cotação (usar `smtpService`)
+- Ranking por `valorTotalComFrete` (item + frete)
+- Verificar validade da cotação antes de gerar OC
+
+### Ordem de Compra:
+- Preencher campos fiscais automaticamente dos dados da empresa (`companies`)
+- Gerar `accounts_payable` automaticamente com dados bancários do fornecedor
+- Gerar `financial_events` (tipo `saida_pagamento`) automaticamente
+- Se tipo = `locacao` → criar registro em `warehouse_rentals` ao receber
+- Se OC de equipamento recebida → criar item em `equipment` automaticamente
+- Alerta automático se prazo vencer sem recebimento
+
+### Recebimento:
+- Foto do material (usar `storagePut`)
+- Foto/upload da NF
+- Recebimento parcial → OC atualizada, alerta para todos, `accounts_payable` liberado proporcionalmente
+- Ao concluir recebimento total → solicitar avaliação do fornecedor (opcional)
+- Salvar preço em `supplier_price_history` automaticamente
+- Se recebimento parcial → criar registro em `warehouse_rentals` se for locação
+
+### Cancelamento (rollback automático):
+- SC `aguardando` → qualquer um cancela → libera reserva almoxarifado
+- SC `aprovada` → só ADM → + motivo obrigatório
+- OC `emitida` → ADM + Diretor → cancela `accounts_payable` + libera saldo meta + reabre SC
+- Registrar em `purchase_cancellations`
+
+### Realocação de saldo:
+- Só com economia confirmada (OC recebida, valor abaixo da meta)
+- Saldo = meta do item - total das OCs recebidas daquele item
+- Um saldo só pode ser usado uma vez — bloquear reuso
+- Irreversível, rastreabilidade total
+
+### Comissão do comprador:
+- Calculada só no encerramento da obra
+- Fórmula: `(meta total - gasto total) × 20%`
+- Obra estourou → comissão zero
+- Mais compradores → divide proporcional ao valor de OCs de cada um
+- Só Diretor aprova → gera lançamento em `accounts_payable` para o comprador
+
+---
+
+## TELAS — COMPRAS
+
+```
+/fornecedores              → Lista + cadastro com busca CNPJ
+/compras/catalogo          → Catálogo de insumos (ADM gerencia)
+/compras/configuracoes     → Alçadas de aprovação (ADM)
+/compras/contratos         → Contratos de fornecimento
+/compras/solicitacoes      → SCs (emergenciais no topo)
+/compras/aprovacoes        → Fila de aprovação
+/compras/cotacoes          → Mapa de cotação
+/compras/ordens            → Ordens de Compra
+/compras/recebimentos      → Recebimentos + upload NF + foto
+/compras/realocacao        → Realocação de saldo EAP
+/compras/comissoes         → Comissões (Diretor aprova)
+/financeiro/contas-pagar   → Contas a pagar
+```
+
+---
+
+## DASHBOARDS — COMPRAS
+
+### Dashboard do comprador (tela inicial dele):
+- Por obra ativa: meta total | gasto atual | economia | comissão estimada | % realizado
+- ⚡ Emergenciais aguardando | cotações em aberto | OCs vencendo hoje
+- Saving mensal (economia do mês independente de obra encerrada)
+- Comissões pagas no ano
+
+### Dashboard do gestor/diretor:
+- Previsto × comprometido × realizado por obra
+- Ranking engenheiros por % emergenciais (semáforo 🟢🟡🔴)
+- Obras com orçamento em risco (>80% consumido)
+- Compras do dia: SC → aprovações → OCs → recebimentos
+
+---
+
+# 🔄 ENTREGA 3 — MIGRAÇÃO DO MAS CONTROLE
+
+**Fazer por último — após Almoxarifado e Compras estarem prontos.**
+
+### Tabela:
+```sql
+migration_logs (
+  id, fonte VARCHAR DEFAULT 'mas_controle',
+  tipoDado VARCHAR,
+  totalEncontrado INT, totalImportado INT,
+  totalDuplicado INT, totalErro INT,
+  detalhes JSON,
+  executadoPorId INT, executadoPorNome VARCHAR(255),
+  executadoEm DATETIME
+)
+```
+
+### Tela `/integracoes/mas-controle` (só ADM):
+- Campos: Login API + Senha/Token (visível só para ADM)
+- Botão "Testar Conexão"
+- Checkboxes de o que importar:
+  - ☑ Obras
+  - ☑ EAP (Estrutura Analítica)
+  - ☑ Orçamentos / Planilha Meta (custo, venda, meta)
+  - ☑ Fornecedores
+  - ☑ Insumos / Materiais
+  - ☑ Histórico de Compras
+- Botão "INICIAR MIGRAÇÃO"
+- Barra de progresso por tipo de dado
+- Relatório final: importados / duplicatas / erros
+
+### Credenciais do Mas Controle:
+- A API usa GraphQL (não REST convencional)
+- URLs encontradas:
+  - Obras/Dashboard: `https://xjdcc586b8.execute-api.us-east-1.amazonaws.com/prod/graphql`
+  - Compras: `https://nsgt4mq0sd.execute-api.us-east-1.amazonaws.com/prod/graphql`
+  - Financeiro: `https://u293yxmia8.execute-api.us-east-1.amazonaws.com/prod/graphql`
+- Tem também API para Relatórios (login: `ana@juliaferraz.com.br`)
+- Implementar importador CSV como alternativa caso a API GraphQL não funcione
+
+### Regras de migração:
+- Nunca sobrescrever dados existentes
+- Idempotente (pode rodar várias vezes sem duplicar)
+- Todo dado importado recebe `importedFrom = 'mas_controle'`
+- Manter IDs originais em campo `externalId`
+
+---
+
+## 📋 CHECKLIST FINAL
+
+Após tudo implementado:
+- [ ] `pnpm db:push` sem erros
+- [ ] Almoxarifado abre no celular com botões grandes
+- [ ] PWA instala no Android pelo Chrome
+- [ ] Comodato: JFCxxxx busca funcionário corretamente
+- [ ] Inventário semanal: job dispara e sessão criada
+- [ ] Equipamentos alugados: alerta de vencimento aparece
+- [ ] Raio X do funcionário mostra histórico de ferramentas
+- [ ] SC verifica almoxarifado antes de abrir
+- [ ] Cotação mostra histórico de preços do fornecedor
+- [ ] OC gera `accounts_payable` automaticamente
+- [ ] Comissão estimada aparece no dashboard do comprador
+
+---
+
+## 💬 MENSAGEM PARA O REPLIT
+
+```
+Leia este documento completo antes de começar.
+
+Implemente na ordem exata:
+1. ENTREGA 1 — Almoxarifado + PWA (Passos 1 a 10)
+2. ENTREGA 2 — Módulo de Compras (Fase 1 → 2 → Dashboards)
+3. ENTREGA 3 — Migração do Mas Controle
+
+REGRAS OBRIGATÓRIAS:
+- Confirme cada passo antes de avançar
+- Não altere nada existente — só adicione código novo
+- Não remova o plugin vitePluginManusDebugCollector do vite.config.ts
+- Almoxarifado: UX mobile-first, botões mínimo 60px, máximo 4 toques por ação
+- Compras: usar fornecedores_epi existente (não criar tabela suppliers)
+- Use createAuditLog, financial_events, equipment, smtpService e storagePut existentes
+
+Comece pelo Passo 1 da Entrega 1 agora.
+```

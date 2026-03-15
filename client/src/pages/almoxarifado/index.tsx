@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
@@ -63,6 +64,7 @@ function StatusBadge({ atual, minimo }: { atual: number; minimo: number }) {
 export default function AlmoxarifadoPage() {
   const { selectedCompany } = useCompany();
   const companyId = selectedCompany?.id ?? 0;
+  const [location, setLocation] = useLocation();
 
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
@@ -402,7 +404,12 @@ export default function AlmoxarifadoPage() {
     onSuccess: (d: any) => { refetch(); setInsOk({ nome: d.funcionarioNome, item: d.itemNome }); setInsErr(null); },
     onError: (e: any) => { setInsErr(e.message); setInsOk(null); },
   });
-  function resetInsumo() { setInsCodigo(""); setInsSearch(""); setInsSelecionado(null); setInsShowSug(false); setInsItemId(0); setInsQtd("1"); setInsObraId(0); setInsMotivo(""); setInsOk(null); setInsErr(null); }
+  function resetInsumo() {
+    setInsCodigo(""); setInsSearch(""); setInsSelecionado(null); setInsShowSug(false);
+    setInsItemId(0); setInsQtd("1");
+    setInsObraId(typeof obraContexto === "number" ? obraContexto : 0);
+    setInsMotivo(""); setInsOk(null); setInsErr(null);
+  }
   function selecionarFuncionarioIns(f: any) { setInsSelecionado(f); setInsCodigo(f.codigoInterno); setInsSearch(f.nomeCompleto); setInsShowSug(false); }
 
   // Modal Transferência entre Almoxarifados
@@ -477,6 +484,22 @@ export default function AlmoxarifadoPage() {
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
   function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(obraContexto ?? 0); setSaidaOk(null); }
   function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpOk(null); setEmpErr(null); }
+
+  // ── Abrir modal via URL param (?modal=X) ──────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const modal = params.get("modal");
+    if (!modal) return;
+    // Remove o param da URL sem recarregar
+    setLocation("/almoxarifado", { replace: true });
+    if (modal === "entrada")      { resetEntrada(); setModalEntrada(true); }
+    if (modal === "ferramentas")  { resetEmprestimo(); setModalEmprestimo(true); }
+    if (modal === "insumo")       { resetInsumo(); setModalInsumo(true); }
+    if (modal === "transferir")   { resetTransf(); setModalTransf(true); }
+    if (modal === "fechardia")    { setModalFecharDia(true); }
+    if (modal === "cadastros")    { setAbaRegistros("cadastros"); setModalRegistros(true); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
   function selecionarFuncionario(f: any) { setEmpSelecionado(f); setEmpCodigo(f.codigoInterno); setEmpSearch(f.nomeCompleto); setEmpShowSug(false); }
 
   return (
@@ -627,13 +650,12 @@ export default function AlmoxarifadoPage() {
           </div>
 
           {/* ── VER REGISTROS (linha secundária) ────────────────── */}
-          <div className="grid grid-cols-5 gap-2 mt-2">
+          <div className="grid grid-cols-4 gap-2 mt-2">
             {[
               { label: "Entradas",      aba: "entradas"      as const, icon: "↓",  color: "text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100" },
               { label: "Ferramentas",   aba: "emprestados"   as const, icon: "🔧", color: "text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100" },
               { label: "Insumos",       aba: "insumos"       as const, icon: "🛒", color: "text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100" },
               { label: "Transferênc.", aba: "transferencias" as const, icon: "↔",  color: "text-purple-700 border-purple-300 bg-purple-50 hover:bg-purple-100" },
-              { label: "Cadastros",     aba: "cadastros"     as const, icon: "📦", color: "text-gray-700 border-gray-300 bg-gray-50 hover:bg-gray-100" },
             ].map(({ label, aba, icon, color }) => (
               <button
                 key={aba}
@@ -1571,7 +1593,7 @@ export default function AlmoxarifadoPage() {
                   <button
                     className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
                     disabled={!empSelecionado || !empItemId || !empQtd || registerLoan.isPending}
-                    onClick={() => registerLoan.mutate({ companyId, itemId: empItemId, quantidade: parseFloat(empQtd), funcionarioCodigo: empSelecionado?.codigoInterno || empCodigo })}
+                    onClick={() => registerLoan.mutate({ companyId, itemId: empItemId, quantidade: parseFloat(empQtd), funcionarioCodigo: empSelecionado?.codigoInterno || empCodigo, obraId: typeof obraContexto === "number" ? obraContexto : undefined })}
                   >
                     {registerLoan.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "🔧 CONFIRMAR EMPRÉSTIMO"}
                   </button>
@@ -1655,13 +1677,24 @@ export default function AlmoxarifadoPage() {
                     <input type="number" inputMode="decimal" min="0.01" step="0.01" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={insQtd} onChange={e => setInsQtd(e.target.value)} />
                   </div>
                   {/* Obra */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 block mb-1">Obra de destino *</label>
-                    <select className="w-full border-2 rounded-xl p-3 text-base" value={insObraId} onChange={e => setInsObraId(Number(e.target.value))}>
-                      <option value={0}>— selecione a obra —</option>
-                      {(obrasAtivas as any[]).map((o: any) => <option key={o.id} value={o.id}>{o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>)}
-                    </select>
-                  </div>
+                  {typeof obraContexto === "number" ? (
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Obra de destino</label>
+                      <div className="w-full border-2 border-gray-200 rounded-xl p-3 text-base bg-gray-50 text-gray-700 flex items-center gap-2">
+                        <HardHat className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                        {(() => { const o = (obrasAtivas as any[]).find((o: any) => o.id === obraContexto); return o ? (o.codigo ? `${o.codigo} – ${o.nome}` : o.nome) : "Obra atual"; })()}
+                        <span className="ml-auto text-xs text-gray-400">automático</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Obra de destino *</label>
+                      <select className="w-full border-2 rounded-xl p-3 text-base" value={insObraId} onChange={e => setInsObraId(Number(e.target.value))}>
+                        <option value={0}>— selecione a obra —</option>
+                        {(obrasAtivas as any[]).map((o: any) => <option key={o.id} value={o.id}>{o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>)}
+                      </select>
+                    </div>
+                  )}
                   {/* Motivo */}
                   <div>
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Motivo / Observação</label>
@@ -1670,14 +1703,15 @@ export default function AlmoxarifadoPage() {
                   {insErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{insErr}</p>}
                   <button
                     className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                    disabled={!insSelecionado || !insItemId || !insQtd || !insObraId || registerInsumo.isPending}
+                    disabled={!insSelecionado || !insItemId || !insQtd || (typeof obraContexto !== "number" && !insObraId) || registerInsumo.isPending}
                     onClick={() => {
-                      const obraSel = (obrasAtivas as any[]).find((o: any) => o.id === insObraId);
+                      const efectiveObraId = typeof obraContexto === "number" ? obraContexto : insObraId;
+                      const obraSel = (obrasAtivas as any[]).find((o: any) => o.id === efectiveObraId);
                       registerInsumo.mutate({
                         companyId, itemId: insItemId,
                         quantidade: parseFloat(insQtd),
                         funcionarioCodigo: insSelecionado?.codigoInterno || insCodigo,
-                        obraId: insObraId || undefined,
+                        obraId: efectiveObraId || undefined,
                         obraNome: obraSel ? (obraSel.codigo ? `${obraSel.codigo} – ${obraSel.nome}` : obraSel.nome) : undefined,
                         motivo: insMotivo || undefined,
                       });
@@ -1839,7 +1873,11 @@ export default function AlmoxarifadoPage() {
                         <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5">
                           <User className="w-3 h-3" /> {loan.funcionarioNome}
                         </p>
-                        <p className="text-xs text-gray-400">{loan.horaEmprestimo} — Qtd: {n(loan.quantidade)}</p>
+                        <p className="text-xs text-gray-400">
+                          {loan.dataEmprestimo
+                            ? new Date(loan.dataEmprestimo + "T00:00:00").toLocaleDateString("pt-BR")
+                            : ""}{loan.horaEmprestimo ? ` às ${loan.horaEmprestimo}` : ""} — Qtd: {n(loan.quantidade)}
+                        </p>
                       </div>
                       {loan.status === "devolvido" ? (
                         <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full flex-shrink-0">✅ Devolvido</span>

@@ -310,9 +310,20 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
   {
     title: "Almoxarifado",
     items: [
-      { icon: Warehouse,     label: "Visão Geral",        path: "/almoxarifado" },
-      { icon: ArrowLeftRight, label: "Movimentações",      path: "/almoxarifado/movimentacoes" },
-      { icon: ClipboardList, label: "Inventário Semanal",  path: "/almoxarifado/inventario" },
+      { icon: Warehouse,      label: "Visão Geral",       path: "/almoxarifado" },
+      { icon: ArrowLeftRight, label: "Movimentações",     path: "/almoxarifado/movimentacoes" },
+      { icon: ClipboardList,  label: "Inventário Semanal",path: "/almoxarifado/inventario" },
+    ],
+  },
+  {
+    title: "Ações Rápidas",
+    items: [
+      { icon: Package,       label: "📥 Nova Entrada",    path: "/almoxarifado?modal=entrada" },
+      { icon: Wrench,        label: "🔧 Ferramentas",     path: "/almoxarifado?modal=ferramentas" },
+      { icon: ShoppingCart,  label: "🛒 Insumo",          path: "/almoxarifado?modal=insumo" },
+      { icon: ArrowRightLeft, label: "↔ Transferir",     path: "/almoxarifado?modal=transferir" },
+      { icon: ClipboardCheck, label: "📋 Fechar Dia",    path: "/almoxarifado?modal=fechardia" },
+      { icon: Tag,           label: "📦 Cadastros",       path: "/almoxarifado?modal=cadastros" },
     ],
   },
   {
