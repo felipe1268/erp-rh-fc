@@ -942,4 +942,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 12:00:00",
   },
+  {
+    version: 299,
+    titulo: "Inventário Semanal por contexto — Central e por Obra com sessões independentes",
+    descricao: "Inventário Semanal agora é separado por contexto de almoxarifado: (1) Seletor de contexto (pills Central / Obra) na página de Inventário igual ao da página principal; (2) Cada contexto tem sua própria sessão de inventário independente por semana; (3) Ao iniciar inventário, apenas os itens do contexto selecionado são carregados para conferência; (4) Título e subtítulo da sessão exibem o contexto atual; (5) Coluna obra_id adicionada à tabela warehouse_inventory_sessions no banco de dados.",
+    tipo: "feature",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 13:00:00",
+  },
 ];
