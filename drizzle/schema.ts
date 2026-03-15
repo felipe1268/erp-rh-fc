@@ -2974,6 +2974,108 @@ export const alertasTerceiros = pgTable("alertas_terceiros", {
 });
 
 // ============================================================
+// MÓDULO TERCEIROS — CONTRATOS DE SERVIÇO E MEDIÇÕES
+// ============================================================
+
+export const terceiroContratos = pgTable("terceiro_contratos", {
+  id:                serial().primaryKey(),
+  companyId:         integer("company_id").notNull(),
+  empresaTerceiraId: integer("empresa_terceira_id").notNull(),
+  obraId:            integer("obra_id"),
+  obraNome:          varchar("obra_nome", { length: 255 }),
+  planejamentoProjetoId: integer("planejamento_projeto_id"),
+  orcamentoId:       integer("orcamento_id"),
+  numeroContrato:    varchar("numero_contrato", { length: 50 }),
+  descricao:         varchar({ length: 500 }).notNull(),
+  tipoContrato:      varchar("tipo_contrato", { length: 50 }).default("empreitada_global"), // empreitada_global | preco_unitario | misto
+  valorTotal:        numeric("valor_total", { precision: 18, scale: 2 }).default("0"),
+  valorPago:         numeric("valor_pago", { precision: 18, scale: 2 }).default("0"),
+  dataInicio:        date("data_inicio"),
+  dataTermino:       date("data_termino"),
+  status:            varchar({ length: 50 }).default("ativo"), // ativo | encerrado | suspenso | concluido
+  observacoes:       text(),
+  criadoPor:         varchar("criado_por", { length: 255 }),
+  criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const terceiroContratoItens = pgTable("terceiro_contrato_itens", {
+  id:                  serial().primaryKey(),
+  contratoId:          integer("contrato_id").notNull(),
+  companyId:           integer("company_id").notNull(),
+  planejamentoAtividadeId: integer("planejamento_atividade_id"),
+  eapCodigo:           varchar("eap_codigo", { length: 100 }),
+  orcamentoItemId:     integer("orcamento_item_id"),
+  descricao:           varchar({ length: 500 }).notNull(),
+  unidade:             varchar({ length: 30 }),
+  quantidade:          numeric({ precision: 18, scale: 4 }).default("1"),
+  valorUnitario:       numeric("valor_unitario", { precision: 18, scale: 4 }).default("0"),
+  valorTotal:          numeric("valor_total", { precision: 18, scale: 2 }).default("0"),
+  percentualMedidoAcumulado: numeric("percentual_medido_acumulado", { precision: 8, scale: 4 }).default("0"),
+  valorMedidoAcumulado: numeric("valor_medido_acumulado", { precision: 18, scale: 2 }).default("0"),
+  ordem:               integer().default(0),
+  criadoEm:            timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const terceiroMedicoes = pgTable("terceiro_medicoes", {
+  id:                serial().primaryKey(),
+  contratoId:        integer("contrato_id").notNull(),
+  companyId:         integer("company_id").notNull(),
+  empresaTerceiraId: integer("empresa_terceira_id").notNull(),
+  obraId:            integer("obra_id"),
+  numero:            integer().default(1),
+  periodo:           varchar({ length: 7 }).notNull(), // YYYY-MM
+  dataReferencia:    date("data_referencia"),
+  valorMedido:       numeric("valor_medido", { precision: 18, scale: 2 }).default("0"),
+  valorAcumulado:    numeric("valor_acumulado", { precision: 18, scale: 2 }).default("0"),
+  percentualGlobal:  numeric("percentual_global", { precision: 8, scale: 4 }).default("0"),
+  status:            varchar({ length: 50 }).default("rascunho"), // rascunho | aguardando_aprovacao | aprovada | paga | rejeitada
+  aprovadoPor:       varchar("aprovado_por", { length: 255 }),
+  aprovadoEm:        timestamp("aprovado_em", { mode: "string" }),
+  observacoes:       text(),
+  motivoRejeicao:    text("motivo_rejeicao"),
+  geradoAutomaticamente: boolean("gerado_automaticamente").default(false),
+  criadoPor:         varchar("criado_por", { length: 255 }),
+  criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const terceiroMedicaoItens = pgTable("terceiro_medicao_itens", {
+  id:                serial().primaryKey(),
+  medicaoId:         integer("medicao_id").notNull(),
+  contratoItemId:    integer("contrato_item_id").notNull(),
+  companyId:         integer("company_id").notNull(),
+  descricao:         varchar({ length: 500 }),
+  percentualAvancoFisico:   numeric("percentual_avanco_fisico", { precision: 8, scale: 4 }).default("0"),
+  percentualAcumuladoAnterior: numeric("percentual_acumulado_anterior", { precision: 8, scale: 4 }).default("0"),
+  percentualMedidoPeriodo:  numeric("percentual_medido_periodo", { precision: 8, scale: 4 }).default("0"),
+  valorMedidoPeriodo:       numeric("valor_medido_periodo", { precision: 18, scale: 2 }).default("0"),
+  valorAcumulado:           numeric("valor_acumulado", { precision: 18, scale: 2 }).default("0"),
+  observacoes:       text(),
+  criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const terceiroDocumentos = pgTable("terceiro_documentos", {
+  id:                serial().primaryKey(),
+  contratoId:        integer("contrato_id").notNull(),
+  companyId:         integer("company_id").notNull(),
+  empresaTerceiraId: integer("empresa_terceira_id").notNull(),
+  tipo:              varchar({ length: 100 }).notNull(), // INSS | FGTS | CND | folha_pagamento | seguro | outro
+  descricao:         varchar({ length: 255 }),
+  competencia:       varchar({ length: 7 }), // YYYY-MM (para docs mensais)
+  url:               varchar({ length: 500 }),
+  dataVencimento:    date("data_vencimento"),
+  status:            varchar({ length: 50 }).default("pendente"), // pendente | enviado | aprovado | vencido
+  bloqueiaPagemento: boolean("bloqueia_pagamento").default(false),
+  observacoes:       text(),
+  enviadoPor:        varchar("enviado_por", { length: 255 }),
+  validadoPor:       varchar("validado_por", { length: 255 }),
+  validadoEm:        timestamp("validado_em", { mode: "string" }),
+  criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+// ============================================================
 // MÓDULO PARCEIROS - Portal de Parceiros Conveniados
 // ============================================================
 

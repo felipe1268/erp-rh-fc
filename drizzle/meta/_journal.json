@@ -78,6 +78,13 @@
       "when": 1773554245908,
       "tag": "0010_fat_ogun",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1773581571256,
+      "tag": "0011_silly_loki",
+      "breakpoints": true
     }
   ]
 }
