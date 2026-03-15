@@ -165,6 +165,7 @@ export default function SolicitacaoHE() {
   });
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [buscaFunc, setBuscaFunc] = useState("");
 
   const activeEmployees = useMemo(() => {
     return (employeesQuery.data || []).filter((e: any) => e.status === "Ativo" && !e.deletedAt);
@@ -445,6 +446,23 @@ export default function SolicitacaoHE() {
                   </div>
                 </div>
 
+                {/* Busca por nome */}
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
+                  <Input
+                    placeholder="Buscar funcionário pelo nome..."
+                    value={buscaFunc}
+                    onChange={e => setBuscaFunc(e.target.value)}
+                    className="pl-9 text-sm"
+                  />
+                  {buscaFunc && (
+                    <button
+                      onClick={() => setBuscaFunc("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                    >×</button>
+                  )}
+                </div>
+
                 <div className="border rounded-lg max-h-[300px] overflow-y-auto">
                   {obraEmployees.length === 0 ? (
                     <div className="p-4 text-center text-muted-foreground text-sm">
@@ -461,51 +479,65 @@ export default function SolicitacaoHE() {
                         </tr>
                       </thead>
                       <tbody>
-                        {obraEmployees.map((emp: any) => {
-                          const isAviso = avisoPrevioSet.has(emp.id);
-                          const isSelected = formData.funcionarioIds.includes(emp.id);
-                          return (
-                            <tr
-                              key={emp.id}
-                              className={`border-t transition-colors ${
-                                isAviso
-                                  ? "bg-orange-50 cursor-not-allowed"
-                                  : isSelected
-                                    ? "bg-blue-50 cursor-pointer hover:bg-blue-100"
-                                    : "cursor-pointer hover:bg-blue-50"
-                              }`}
-                              onClick={() => { if (!isAviso) toggleEmployee(emp.id); }}
-                            >
-                              <td className="p-2" onClick={e => e.stopPropagation()}>
-                                {isAviso ? (
-                                  <Ban className="h-4 w-4 text-orange-400 mx-auto" title="Em aviso prévio — HE não permitida" />
-                                ) : (
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => toggleEmployee(emp.id)}
-                                    className="rounded"
-                                  />
-                                )}
-                              </td>
-                              <td
-                                className={`p-2 font-medium cursor-pointer hover:underline flex items-center gap-1.5 ${isAviso ? "text-orange-600" : "text-blue-700"}`}
-                                onClick={e => { e.stopPropagation(); openHEHistory(emp.id, emp.nomeCompleto); }}
-                                title="Ver histórico de horas extras"
+                        {obraEmployees
+                          .filter((emp: any) =>
+                            !buscaFunc ||
+                            emp.nomeCompleto?.toLowerCase().includes(buscaFunc.toLowerCase())
+                          )
+                          .map((emp: any) => {
+                            const isAviso = avisoPrevioSet.has(emp.id);
+                            const isSelected = formData.funcionarioIds.includes(emp.id);
+                            return (
+                              <tr
+                                key={emp.id}
+                                className={`border-t transition-colors ${
+                                  isAviso
+                                    ? "bg-orange-50 cursor-not-allowed"
+                                    : isSelected
+                                      ? "bg-blue-50 cursor-pointer hover:bg-blue-100"
+                                      : "cursor-pointer hover:bg-blue-50"
+                                }`}
+                                onClick={() => { if (!isAviso) toggleEmployee(emp.id); }}
                               >
-                                <History className="h-3.5 w-3.5 opacity-60 shrink-0" />
-                                {emp.nomeCompleto}
-                                {isAviso && (
-                                  <span className="ml-1 text-[10px] font-semibold bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                                    AVISO PRÉVIO
-                                  </span>
-                                )}
-                              </td>
-                              <td className="p-2 text-muted-foreground">{emp.funcao || "-"}</td>
-                              <td className="p-2 text-muted-foreground">{emp.cpf || "-"}</td>
-                            </tr>
-                          );
-                        })}
+                                <td className="p-2" onClick={e => e.stopPropagation()}>
+                                  {isAviso ? (
+                                    <Ban className="h-4 w-4 text-orange-400 mx-auto" title="Em aviso prévio — HE não permitida" />
+                                  ) : (
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleEmployee(emp.id)}
+                                      className="rounded"
+                                    />
+                                  )}
+                                </td>
+                                <td
+                                  className={`p-2 font-medium cursor-pointer hover:underline flex items-center gap-1.5 ${isAviso ? "text-orange-600" : "text-blue-700"}`}
+                                  onClick={e => { e.stopPropagation(); openHEHistory(emp.id, emp.nomeCompleto); }}
+                                  title="Ver histórico de horas extras"
+                                >
+                                  <History className="h-3.5 w-3.5 opacity-60 shrink-0" />
+                                  {emp.nomeCompleto}
+                                  {isAviso && (
+                                    <span className="ml-1 text-[10px] font-semibold bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                      AVISO PRÉVIO
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-2 text-muted-foreground">{emp.funcao || "-"}</td>
+                                <td className="p-2 text-muted-foreground">{emp.cpf || "-"}</td>
+                              </tr>
+                            );
+                          })}
+                        {buscaFunc && obraEmployees.filter((emp: any) =>
+                          emp.nomeCompleto?.toLowerCase().includes(buscaFunc.toLowerCase())
+                        ).length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="p-4 text-center text-sm text-gray-400">
+                              Nenhum funcionário encontrado para "{buscaFunc}"
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table></div>
                   )}
