@@ -1042,6 +1042,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 17:00:00",
   },
   {
+    version: 313,
+    titulo: "Correção — Análise de Foto por IA não retornava resultados",
+    descricao: "Corrigido bug crítico em que a função de IA (Gemini Vision) era importada com nome incorreto ('invoke' em vez de 'invokeLLM'), fazendo com que as chamadas fossem silenciosamente ignoradas. Afetava tanto a busca por foto no catálogo quanto o preenchimento automático de cadastro. Ambos os endpoints corrigidos.",
+    tipo: "correcao",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 18:00:00",
+  },
+  {
     version: 312,
     titulo: "Almoxarifado — Cadastro de Item com Preenchimento Automático por IA",
     descricao: "Ao fazer upload de foto no modal 'Novo Item de Estoque', a IA (Gemini Vision) analisa a imagem e preenche automaticamente: nome técnico, categoria, unidade e observações. Spinner 'Analisando com IA…' durante o processamento; badge verde 'Campos preenchidos pela IA' ao concluir. Campos já preenchidos pelo usuário não são sobrescritos. Funciona apenas ao criar novo item. Novo endpoint sugerirCadastroItem no backend.",

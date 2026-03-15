@@ -497,7 +497,7 @@ export const warehouseRouter = router({
       unidades: z.array(z.string()).optional(),
     }))
     .mutation(async ({ input }) => {
-      const { invoke } = await import("../_core/llm");
+      const { invokeLLM: invoke } = await import("../_core/llm");
       const dataUrl = `data:${input.mimeType};base64,${input.base64}`;
       const catList = (input.categorias ?? []).join(", ") || "Ferramentas, Materiais de construção, EPIs, Elétrico, Hidráulico, Outros";
       const unidList = (input.unidades ?? []).join(", ") || "un, kg, m, m², L, cx, sc, rolo, barra, pç";
@@ -555,7 +555,7 @@ Responda SOMENTE em JSON válido, sem markdown:
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { invoke } = await import("../_core/llm");
+      const { invokeLLM: invoke } = await import("../_core/llm");
 
       // Busca catálogo de itens da empresa/obra
       const { isNull } = await import("drizzle-orm");
