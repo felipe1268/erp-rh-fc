@@ -502,7 +502,8 @@ export async function getEmployees(companyId: number, search?: string, status?: 
     else if (['estagio', 'estágio', 'estagiario', 'estagiário'].some(t => s.includes(t))) tipoContratoSearch = 'Estágio';
     else if (['aprendiz', 'jovem aprendiz'].some(t => s.includes(t))) tipoContratoSearch = 'Aprendiz';
 
-    const orConditions = [
+    const cleanDigits = search.replace(/\D/g, ''); // só dígitos, para comparar CPF/RG sem formatação
+    const orConditions: any[] = [
       ilike(employees.nomeCompleto, `%${search}%`),
       ilike(employees.cpf, `%${search}%`),
       ilike(employees.rg, `%${search}%`),
@@ -511,6 +512,13 @@ export async function getEmployees(companyId: number, search?: string, status?: 
       ilike(employees.codigoInterno, `%${search}%`),
       ilike(employees.setor, `%${search}%`),
     ];
+    // CPF/RG: comparar também com dígitos limpos (ex: busca "36250688854" acha "362.506.888-54")
+    if (cleanDigits.length >= 3) {
+      orConditions.push(
+        sql`regexp_replace(${employees.cpf}, '[^0-9]', '', 'g') ilike ${'%' + cleanDigits + '%'}`,
+        sql`regexp_replace(${employees.rg}, '[^0-9]', '', 'g') ilike ${'%' + cleanDigits + '%'}`,
+      );
+    }
     if (tipoContratoSearch) {
       orConditions.push(eq(employees.tipoContrato, tipoContratoSearch as any));
     }
