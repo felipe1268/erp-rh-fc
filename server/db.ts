@@ -325,20 +325,21 @@ export async function createEmployee(data: InsertEmployee) {
   await db.execute(
     sql`UPDATE companies SET "nextCodigoInterno" = "nextCodigoInterno" + 1 WHERE id = ${companyId}`
   );
-  const [companyRows] = await db.execute(
+  const companyExec = await db.execute(
     sql`SELECT "prefixoCodigo", "nextCodigoInterno" - 1 as "usedNum", "numerosProibidos" FROM companies WHERE id = ${companyId}`
   ) as any;
+  const companyRows = companyExec?.rows ?? companyExec ?? [];
   
   const prefixo = companyRows?.[0]?.prefixoCodigo || 'EMP';
   const numerosProibidosStr = companyRows?.[0]?.numerosProibidos;
   const proibidos = parseNumerosProibidos(numerosProibidosStr);
-  let num = companyRows?.[0]?.usedNum || 1;
+  let num = parseInt(String(companyRows?.[0]?.usedNum ?? 1)) || 1;
   
   // Pular números proibidos (dinâmico, configurado por empresa)
   num = proximoNumeroValido(num, proibidos);
   
   // Se o número foi avançado por causa de proibidos, atualizar o contador da empresa
-  const originalNum = companyRows?.[0]?.usedNum || 1;
+  const originalNum = parseInt(String(companyRows?.[0]?.usedNum ?? 1)) || 1;
   if (num !== originalNum) {
     await db.execute(
       sql`UPDATE companies SET "nextCodigoInterno" = ${num + 1} WHERE id = ${companyId}`
@@ -358,13 +359,15 @@ export async function createEmployee(data: InsertEmployee) {
         await db.execute(
           sql`UPDATE companies SET "nextCodigoInterno" = "nextCodigoInterno" + 1 WHERE id = ${companyId}`
         );
-        const [retry] = await db.execute(
+        const retryExec = await db.execute(
           sql`SELECT "prefixoCodigo", "nextCodigoInterno" - 1 as "usedNum" FROM companies WHERE id = ${companyId}`
         ) as any;
-        let retryNum = retry?.[0]?.usedNum || (num + attempt + 1);
+        const retryRows = retryExec?.rows ?? retryExec ?? [];
+        let retryNum = parseInt(String(retryRows?.[0]?.usedNum ?? (num + attempt + 1))) || (num + attempt + 1);
         retryNum = proximoNumeroValido(retryNum, proibidos);
         // Atualizar contador se pulou proibidos
-        if (retryNum !== (retry?.[0]?.usedNum || 0)) {
+        const retryOriginal = parseInt(String(retryRows?.[0]?.usedNum ?? 0)) || 0;
+        if (retryNum !== retryOriginal) {
           await db.execute(
             sql`UPDATE companies SET "nextCodigoInterno" = ${retryNum + 1} WHERE id = ${companyId}`
           );
@@ -466,10 +469,11 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   // Validar código interno: não permitir números proibidos (dinâmico)
   if (sanitized.codigoInterno) {
     // Buscar números proibidos da empresa
-    const [companyConfig] = await db.execute(
-      sql`SELECT numerosProibidos FROM companies WHERE id = ${companyId}`
+    const configExec = await db.execute(
+      sql`SELECT "numerosProibidos" FROM companies WHERE id = ${companyId}`
     ) as any;
-    const proibidosEmpresa = parseNumerosProibidos(companyConfig?.[0]?.numerosProibidos);
+    const configRows = configExec?.rows ?? configExec ?? [];
+    const proibidosEmpresa = parseNumerosProibidos(configRows?.[0]?.numerosProibidos);
     const numPart = parseInt(String(sanitized.codigoInterno).replace(/\D/g, ''));
     if (!isNaN(numPart) && proibidosEmpresa.has(numPart)) {
       const listaProibidos = Array.from(proibidosEmpresa).sort((a, b) => a - b).join(', ');
