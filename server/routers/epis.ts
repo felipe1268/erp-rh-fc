@@ -6,6 +6,7 @@ import { eq, and, desc, sql, isNull, gte, inArray } from "drizzle-orm";
 import { getConstrutorasIds } from "../db";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
+import { buscarFotoParaItem } from "../_core/autoFoto";
 
 export const episRouter = router({
   // ============================================================
@@ -145,36 +146,42 @@ export const episRouter = router({
     .input(z.object({ nomeEpi: z.string(), ca: z.string().optional() }))
     .mutation(async ({ input }) => {
       try {
-        const prompt = `Você é um assistente especializado em EPIs (Equipamentos de Proteção Individual) brasileiros.
-Sua tarefa é fornecer a URL de uma imagem de produto real e acessível na internet para o EPI descrito.
-
-EPI: ${input.nomeEpi}${input.ca ? `\nNúmero CA: ${input.ca}` : ''}
-
-Instruções:
-1. Identifique o tipo de EPI (capacete, botina, luva, óculos, protetor auricular, respirador, etc.)
-2. Busque uma URL de imagem de produto real de um site de fabricante ou loja online brasileira (Deltaplus, 3M, Honeywell, MSA, Uvex, Proteplus, KCBRASIL, CA certificado, Amazon.br, Leroy Merlin, etc.)
-3. Retorne APENAS um JSON válido com o formato: {"url": "https://...", "fonte": "nome do site"}
-4. A URL deve terminar em .jpg, .jpeg, .png ou .webp
-5. Prefira imagens de fundo branco do produto isolado
-6. Se não encontrar, retorne: {"url": null, "fonte": null}
-7. NÃO retorne texto fora do JSON
-
-Retorne apenas o JSON:`;
-
-        const response = await invokeLLM({
-          messages: [{ role: "user", content: prompt }],
-          generationConfig: { thinkingBudget: 0, maxOutputTokens: 500 },
-        });
-        const text = response?.candidates?.[0]?.content?.parts?.[0]?.text || response?.text || "";
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          return { url: parsed.url || null, fonte: parsed.fonte || null };
-        }
-        return { url: null, fonte: null };
+        const url = await buscarFotoParaItem(input.nomeEpi);
+        return { url: url || null, fonte: url ? "Openverse (CC)" : null };
       } catch (e) {
         return { url: null, fonte: null };
       }
+    }),
+
+  autoFotoBulk: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const semFoto = await db.execute(sql`
+        SELECT id, nome, categoria FROM epis
+        WHERE company_id = ${input.companyId}
+          AND (foto_url IS NULL OR foto_url = '')
+          AND lower(coalesce(nome,'')) NOT LIKE '%uniforme%'
+          AND lower(coalesce(categoria,'')) NOT LIKE '%uniforme%'
+        ORDER BY nome
+      `);
+      const itens = (semFoto?.rows ?? semFoto ?? []) as { id: number; nome: string; categoria: string }[];
+      let atualizados = 0;
+      const erros: string[] = [];
+      for (const item of itens) {
+        try {
+          const url = await buscarFotoParaItem(item.nome);
+          if (url) {
+            await db.execute(sql`UPDATE epis SET foto_url = ${url} WHERE id = ${item.id}`);
+            atualizados++;
+          } else {
+            erros.push(item.nome);
+          }
+        } catch (e) {
+          erros.push(item.nome);
+        }
+      }
+      return { total: itens.length, atualizados, semResultado: erros };
     }),
 
   delete: protectedProcedure

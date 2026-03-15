@@ -356,6 +356,9 @@ export default function AlmoxarifadoPage() {
     onError: (e) => { toast.error(e.message); setSaidaOk(false); },
   });
 
+  const [autoFotoBulkAlmoxLoading, setAutoFotoBulkAlmoxLoading] = useState(false);
+  const autoFotoBulkAlmoxMut = trpc.warehouse.autoFotoBulkAlmox.useMutation();
+
   // Modal Empréstimo
   const [modalEmprestimo, setModalEmprestimo] = useState(false);
   const [empCodigo, setEmpCodigo] = useState("");
@@ -511,6 +514,29 @@ export default function AlmoxarifadoPage() {
                   <List className="h-3.5 w-3.5" /> Tabela
                 </button>
               </div>
+              <button
+                disabled={autoFotoBulkAlmoxLoading}
+                className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-sm font-medium px-3 py-2 rounded-lg transition"
+                onClick={async () => {
+                  if (!companyId) return;
+                  setAutoFotoBulkAlmoxLoading(true);
+                  try {
+                    const res = await autoFotoBulkAlmoxMut.mutateAsync({ companyId });
+                    if (res.total === 0) {
+                      toast.success("Todos os itens já possuem foto!");
+                    } else {
+                      toast.success(`✓ ${res.atualizados} de ${res.total} itens atualizados com foto!`);
+                    }
+                    refetch();
+                  } catch (e: any) {
+                    toast.error("Erro ao buscar fotos: " + e.message);
+                  } finally {
+                    setAutoFotoBulkAlmoxLoading(false);
+                  }
+                }}
+              >
+                {autoFotoBulkAlmoxLoading ? <><span className="animate-spin">⏳</span> Buscando...</> : <>🤖 Auto-foto</>}
+              </button>
               <button onClick={abrirNovo} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
                 <Plus className="h-4 w-4" /> Novo Item
               </button>

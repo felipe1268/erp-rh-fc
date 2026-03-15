@@ -289,6 +289,8 @@ export default function Epis() {
   const [aiSuggestionLoading, setAiSuggestionLoading] = useState(false);
   const suggestLifespanMut = trpc.epis.suggestLifespan.useMutation();
   const sugerirFotoIAMut = trpc.epis.sugerirFotoIA.useMutation();
+  const [autoFotoBulkLoading, setAutoFotoBulkLoading] = useState(false);
+  const autoFotoBulkMut = trpc.epis.autoFotoBulk.useMutation();
   const uploadFotoEpiMut = trpc.epis.uploadFotoEpi.useMutation({
     onSuccess: (data: any) => { episQ.refetch(); setEpiForm(f => ({ ...f, fotoUrl: data.url || "" })); toast.success("Foto salva!"); },
     onError: (err) => toast.error("Erro ao fazer upload da foto: " + err.message),
@@ -1764,6 +1766,36 @@ export default function Epis() {
                 {!readOnly && <Button size="sm" variant="outline" onClick={() => setShowFornecedorList(true)}>
                   <Package className="h-4 w-4 mr-1" /> Fornecedores
                 </Button>}
+                {!readOnly && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={autoFotoBulkLoading}
+                    className="border-purple-400 text-purple-700 hover:bg-purple-50"
+                    onClick={async () => {
+                      setAutoFotoBulkLoading(true);
+                      try {
+                        const res = await autoFotoBulkMut.mutateAsync({ companyId: queryCompanyId });
+                        if (res.total === 0) {
+                          toast.success("Todos os EPIs já possuem foto!");
+                        } else {
+                          toast.success(`✓ ${res.atualizados} de ${res.total} EPIs atualizados com foto!`);
+                        }
+                        episQ.refetch();
+                      } catch (e: any) {
+                        toast.error("Erro ao buscar fotos: " + e.message);
+                      } finally {
+                        setAutoFotoBulkLoading(false);
+                      }
+                    }}
+                  >
+                    {autoFotoBulkLoading ? (
+                      <><span className="animate-spin mr-1">⏳</span> Buscando fotos...</>
+                    ) : (
+                      <>🤖 Auto-foto EPIs</>
+                    )}
+                  </Button>
+                )}
                 {!readOnly && <Button size="sm" onClick={() => setViewMode("novo_epi")} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   <Plus className="h-4 w-4 mr-1" /> Novo EPI
                 </Button>}
