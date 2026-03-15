@@ -26,6 +26,9 @@ import {
   orcamentoSecItens,
   planejamentoProjetos,
   planejamentoRefis,
+  comprasSolicitacoesItens,
+  comprasCotacoesItens,
+  terceiroContratoItens,
 } from "../../drizzle/schema";
 
 const ENCARGOS_DEFAULTS = [
@@ -1772,6 +1775,8 @@ export const orcamentoRouter = router({
       fileBase64:     z.string().min(10),
       fileName:       z.string(),
       userName:       z.string(),
+      forceUpdate:    z.boolean().optional().default(false),
+      updatePrices:   z.boolean().optional().default(false),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1827,6 +1832,62 @@ export const orcamentoRouter = router({
       const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
       const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
       const totalMeta     = totalCusto * (1 - metaPerc);
+
+      // ── Detecção de conflitos de preço ──────────────────────────────
+      // Carrega itens antigos e compara metaUnitTotal com os novos
+      const oldItems = await db.select({
+        id: orcamentoItens.id,
+        eapCodigo: orcamentoItens.eapCodigo,
+        descricao: orcamentoItens.descricao,
+        metaUnitTotal: orcamentoItens.metaUnitTotal,
+      }).from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+
+      const oldMap = new Map(oldItems.map(o => [o.eapCodigo, o]));
+      const newMap = new Map(itens.map((i: any) => [i.eapCodigo, i]));
+
+      // Encontra EAP codes onde o metaUnitTotal mudou
+      const conflicts: { eapCodigo: string; descricao: string; metaAntigo: string; metaNovo: string; emSC: number; emCotacao: number; emContrato: number }[] = [];
+
+      for (const [eap, oldItem] of oldMap) {
+        const newItem = newMap.get(eap);
+        if (!newItem) continue;
+        const oldMeta = parseFloat(String(oldItem.metaUnitTotal ?? '0'));
+        const newMeta = parseFloat(String(newItem.metaUnitTotal ?? '0'));
+        if (Math.abs(oldMeta - newMeta) < 0.001) continue;
+
+        // Verifica se este item está vinculado a SCs, cotações ou contratos
+        const [scCount] = await db.select({ c: sql<number>`count(*)` })
+          .from(comprasSolicitacoesItens)
+          .where(eq((comprasSolicitacoesItens as any).orcamentoItemId, oldItem.id));
+        const [cotCount] = await db.select({ c: sql<number>`count(*)` })
+          .from(comprasCotacoesItens)
+          .where(eq((comprasCotacoesItens as any).solicitacaoItemId, oldItem.id));
+        const [ctCount] = await db.select({ c: sql<number>`count(*)` })
+          .from(terceiroContratoItens)
+          .where(eq((terceiroContratoItens as any).orcamentoItemId, oldItem.id));
+
+        const emSC = Number(scCount.c);
+        const emCotacao = Number(cotCount.c);
+        const emContrato = Number(ctCount.c);
+
+        if (emSC + emCotacao + emContrato > 0) {
+          conflicts.push({
+            eapCodigo: eap,
+            descricao: oldItem.descricao,
+            metaAntigo: oldMeta.toFixed(4),
+            metaNovo: newMeta.toFixed(4),
+            emSC,
+            emCotacao,
+            emContrato,
+          });
+        }
+      }
+
+      // Se há conflitos e o usuário não confirmou → retorna sem salvar
+      if (conflicts.length > 0 && !input.forceUpdate) {
+        return { requiresConfirmation: true, conflicts, saved: false };
+      }
 
       // Apagar dados antigos
       await db.delete(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
@@ -1891,6 +1952,9 @@ export const orcamentoRouter = router({
 
       return {
         success: true,
+        saved: true,
+        requiresConfirmation: false,
+        conflicts: [] as any[],
         itemCount:    itens.length,
         insumosCount: insumosItens.length,
         composicoesCount: cpusParsedReimp.composicoes.length,

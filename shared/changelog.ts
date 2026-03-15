@@ -1429,6 +1429,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-15 23:59:59",
   },
   {
+    version: 359,
+    titulo: "Módulo Terceiros — Contratos, Medições e Previsão de Caixa",
+    descricao: "Módulo completo de gestão de contratos de terceiros: (1) 5 tabelas PostgreSQL: terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos; (2) Router terceiroContratos.ts com procedures: listarContratos (com KPIs de empresa, saldo e percentual pago), getContrato (itens + medições + documentos + empresa), proximoNumeroContrato (geração automática CT-YYYY-NNN), criarContrato (vínculo obra/empresa/planejamento), listarMedicoes, gerarMedicao (cálculo por itens do contrato), aprovarMedicao (com bloqueio por documentos pendentes), previsaoCaixa (fluxo semanal baseado no cronograma de planejamento), dashboardTerceiroContratos (KPIs globais); (3) 5 páginas React: ContratosList (lista com barra de progresso financeiro, badge variação orçamento/fechado, KPIs), ContratoDetalhe (abas: itens, medições, documentos, timeline), ContratoNovo (form vinculado a empresa terceira, obra, planejamento e cotação origem), Medicoes (tabela de aprovação com rejeição e motivo), PrevisaoCaixa (gráfico de barras semanal com filtro por obra); (4) Rotas registradas: /terceiros/contratos, /terceiros/contratos/novo, /terceiros/contratos/:id, /terceiros/medicoes, /terceiros/previsao-caixa; (5) Geração automática de contratos a partir de cotações aprovadas (gerarContratoFromCotacao).",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-15 12:00:00",
+  },
+  {
     version: 343,
     titulo: "Módulo de Compras completo — Versão Enterprise",
     descricao: "Expansão completa do Módulo de Compras com 24 tabelas PostgreSQL, 30+ endpoints tRPC e 8 novas páginas React: (1) Catálogo de itens de compra com vínculos SINAPI e Plano de Contas; (2) SC avançada com controle emergencial (SLA 4h), prazo de necessidade e comparação com estoque; (3) Cotações com portal exclusivo para fornecedor (token por link), histórico de negociação e score automático; (4) Ordens de Compra com numeração configurável (OC-2026-001), retenções fiscais (INSS/IR/ISS) e integração automática com Financeiro; (5) Recebimentos com conferência item-a-item e liberação de pagamento por recebimento parcial ou total; (6) Contas a Pagar integradas: bloqueadas no ato da OC, liberadas no recebimento e pagas com comprovante; (7) Realocação de verba entre itens da EAP com rastreabilidade; (8) Comissões de comprador com cálculo de economia vs. meta e lançamento financeiro automático na aprovação do diretor; (9) Painel de emergenciais com métricas por engenheiro; (10) Tela de aprovações centralizadas com prioridade emergencial; (11) Configurações de numeração de OC e regras de aprovação; (12) Bridge financeiro com 4 hooks de integração: OC emitida, recebimento confirmado, OC cancelada (rollback completo) e comissão aprovada; (13) Jobs automáticos a cada hora: vencimentos de OC, expiração de cotações e alertas de contratos.",
