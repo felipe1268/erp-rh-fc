@@ -333,6 +333,10 @@ export default function Cotacoes() {
     onSuccess: () => { toast.success("Anexo salvo!"); setShowAnexoInput(null); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const uploadAnexo = trpc.compras.uploadAnexoFornecedor.useMutation({
+    onSuccess: () => { toast.success("Arquivo enviado!"); setShowAnexoInput(null); mapaQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   useEffect(() => {
     if (abaAtiva === "mapa" && mapaQ.data) {
@@ -842,28 +846,70 @@ export default function Cotacoes() {
                                         ) : null}
                                       </div>
                                       {/* Botão de anexo */}
-                                      <div className="flex items-center gap-1">
+                                      <div className="relative">
                                         {showAnexoInput === p.fornecedorId ? (
-                                          <div className="flex items-center gap-1">
-                                            <input
-                                              type="url" placeholder="URL do arquivo..."
-                                              value={anexoUrl[p.fornecedorId] ?? ""}
-                                              onChange={e => setAnexoUrl(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))}
-                                              className="h-6 w-40 text-xs border border-gray-300 rounded px-2 bg-white text-gray-900 font-normal"
-                                              onClick={e => e.stopPropagation()}
-                                            />
-                                            <button onClick={() => {
-                                              const url = anexoUrl[p.fornecedorId] ?? "";
-                                              if (!url) return;
-                                              salvarAnexo.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, arquivoUrl: url, arquivoNome: url.split("/").pop() || "arquivo" });
-                                            }} className="text-emerald-600 hover:text-emerald-800" title="Salvar"><Save className="h-3 w-3" /></button>
-                                            <button onClick={() => setShowAnexoInput(null)} className="text-gray-400 hover:text-gray-600"><X className="h-3 w-3" /></button>
+                                          <div className="absolute z-50 top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-3 space-y-3" onClick={e => e.stopPropagation()}>
+                                            {/* Upload de arquivo */}
+                                            <div>
+                                              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Arquivo (JPG ou PDF)</p>
+                                              <label className="flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-blue-200 rounded-lg p-3 cursor-pointer hover:bg-blue-50 transition-colors">
+                                                <Paperclip className="h-5 w-5 text-blue-400" />
+                                                <span className="text-xs text-blue-600 font-medium">Clique para selecionar</span>
+                                                <span className="text-[10px] text-gray-400">JPG, JPEG ou PDF</span>
+                                                <input
+                                                  type="file"
+                                                  accept=".jpg,.jpeg,.pdf,image/jpeg,application/pdf"
+                                                  className="hidden"
+                                                  disabled={uploadAnexo.isPending}
+                                                  onChange={async e => {
+                                                    const file = e.target.files?.[0];
+                                                    if (!file) return;
+                                                    const reader = new FileReader();
+                                                    reader.onload = ev => {
+                                                      const base64 = (ev.target?.result as string).split(',')[1];
+                                                      uploadAnexo.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: file.name, mimeType: file.type });
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                  }}
+                                                />
+                                              </label>
+                                              {uploadAnexo.isPending && <p className="text-[10px] text-blue-500 text-center mt-1">Enviando...</p>}
+                                            </div>
+                                            {/* OU */}
+                                            <div className="flex items-center gap-2">
+                                              <div className="flex-1 h-px bg-gray-200" />
+                                              <span className="text-[10px] text-gray-400 font-medium">OU</span>
+                                              <div className="flex-1 h-px bg-gray-200" />
+                                            </div>
+                                            {/* Link/URL */}
+                                            <div>
+                                              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Link / URL</p>
+                                              <div className="flex gap-1">
+                                                <input
+                                                  type="url" placeholder="https://..."
+                                                  value={anexoUrl[p.fornecedorId] ?? ""}
+                                                  onChange={e => setAnexoUrl(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))}
+                                                  className="flex-1 h-8 text-xs border border-gray-300 rounded-lg px-2 bg-white text-gray-900"
+                                                />
+                                                <button onClick={() => {
+                                                  const url = anexoUrl[p.fornecedorId] ?? "";
+                                                  if (!url) return;
+                                                  salvarAnexo.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, arquivoUrl: url, arquivoNome: url.split("/").pop() || "link" });
+                                                }} className="px-2 h-8 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg" title="Salvar link">
+                                                  <Save className="h-3.5 w-3.5" />
+                                                </button>
+                                              </div>
+                                            </div>
+                                            <button onClick={() => setShowAnexoInput(null)} className="w-full text-xs text-gray-400 hover:text-gray-600 text-center pt-1">Cancelar</button>
                                           </div>
-                                        ) : (
-                                          <button onClick={() => setShowAnexoInput(p.fornecedorId)} className="flex items-center gap-0.5 text-xs text-gray-400 hover:text-blue-600 font-normal normal-case" title="Anexar cotação do fornecedor">
-                                            <Paperclip className="h-3 w-3" /> {(p as any).arquivoNome ? (p as any).arquivoNome.slice(0, 12) + "…" : "Anexar"}
-                                          </button>
-                                        )}
+                                        ) : null}
+                                        <button
+                                          onClick={() => setShowAnexoInput(showAnexoInput === p.fornecedorId ? null : p.fornecedorId)}
+                                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${(p as any).arquivoUrl ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" : "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"}`}
+                                          title="Anexar arquivo ou link da cotação">
+                                          <Paperclip className="h-4 w-4" />
+                                          {(p as any).arquivoNome ? (p as any).arquivoNome.slice(0, 14) + (((p as any).arquivoNome?.length ?? 0) > 14 ? "…" : "") : "Anexar"}
+                                        </button>
                                       </div>
                                     </div>
                                   </th>

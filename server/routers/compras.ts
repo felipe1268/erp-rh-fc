@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { invokeLLM } from "../_core/llm";
+import { storagePut } from "../storage";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
@@ -1221,6 +1222,28 @@ Responda APENAS com um objeto JSON no formato:
         .set({ arquivoUrl: input.arquivoUrl, arquivoNome: input.arquivoNome })
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true };
+    }),
+
+  uploadAnexoFornecedor: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      fornecedorId: z.number(),
+      companyId: z.number(),
+      fileBase64: z.string(),
+      fileName: z.string(),
+      mimeType: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const ext = input.fileName.split('.').pop() || 'pdf';
+      const randomSuffix = Math.random().toString(36).substring(2, 10);
+      const fileKey = `cotacoes/${input.companyId}/${input.cotacaoId}/forn-${input.fornecedorId}-${randomSuffix}.${ext}`;
+      const { url } = await storagePut(fileKey, buffer, input.mimeType);
+      await db.update(comprasCotacaoFornecedores)
+        .set({ arquivoUrl: url, arquivoNome: input.fileName })
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      return { ok: true, url };
     }),
 
   buscarSaldosRealocacao: protectedProcedure
