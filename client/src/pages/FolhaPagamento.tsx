@@ -3156,7 +3156,7 @@ function DescontosEPIView({ companyId, mesAno, onBack }: { companyId: number; me
           <div className="flex gap-2 flex-wrap text-xs">
             <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">Direto → Atividades EAP</span>
             <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Indireta Obra → 01.01 Equipe Técnica</span>
-            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">Escritório Central → CI-01 rateado</span>
+            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">Indireto Escritório Central → CI-01 rateado</span>
           </div>
           <div className="flex-1 overflow-y-auto min-h-0">
             {cargoCategorias.isLoading ? (
@@ -3200,7 +3200,7 @@ function DescontosEPIView({ companyId, mesAno, onBack }: { companyId: number; me
                       <option value="">— Não definido —</option>
                       <option value="direto">Direto</option>
                       <option value="indireta_obra">Indireta Obra</option>
-                      <option value="escritorio_central">Escritório Central</option>
+                      <option value="escritorio_central">Indireto Escritório Central</option>
                     </select>
                   </div>
                 ))}
