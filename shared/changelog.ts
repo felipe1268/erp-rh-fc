@@ -1852,6 +1852,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 411,
+    titulo: "Compras — Fix do modal 'Nova Solicitação de Compra'",
+    descricao: "Corrigido o layout do modal de criação de Solicitação de Compra. O modal agora tem altura máxima de 90% da tela com cabeçalho e rodapé fixos: o título da modal permanece visível no topo e os botões 'Cancelar' e 'Criar Solicitação' ficam sempre acessíveis na parte inferior, independente da quantidade de itens da EAP selecionados. Somente o corpo do formulário (campos de preenchimento e lista de itens) rola internamente.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 410,
     titulo: "Gestão de Usuários — Redesign completo com Grupos de Acesso",
     descricao: "Tela de Usuários completamente redesenhada com novo fluxo orientado a Grupos. (1) Nova arquitetura em 2 abas: 'Usuários' e 'Grupos de Acesso'. (2) Fluxo intuitivo: Criar Usuário → Atribuir Grupo → Liberar Acesso. (3) Aba Grupos: criação/edição de grupos com nome, descrição, cor identificadora; gerenciamento de membros (adicionar/remover usuários diretamente no grupo); configurador completo de permissões por módulo (Administrador / Somente Visualização / Personalizado) com todas as 85 telas; flags LGPD por módulo. (4) Aba Usuários: formulário simplificado com dados básicos, empresas e seleção de grupo; indicador visual 'Sem grupo / Acesso via grupo: [Nome]' em cada usuário na lista. (5) Backend: nova coluna module_access na tabela user_groups; novo endpoint setGroupModuleAccess; getMyPermissions agora prioriza moduleAccess do grupo (merge automático) antes do acesso individual. (6) Permissões do grupo são herdadas automaticamente por todos os membros sem configuração individual.",

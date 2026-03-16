@@ -331,14 +331,17 @@ export default function Solicitacoes() {
       {/* ── Dialog Nova SC ─────────────────────────────────────────── */}
       <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) resetForm(); }}>
         <DialogContent
-          className="border-gray-200 max-w-2xl"
+          className="border-gray-200 max-w-2xl flex flex-col max-h-[90vh] p-0 gap-0"
           style={{ background: '#ffffff', color: '#111827' }}
         >
-          <DialogHeader>
+          {/* Header fixo */}
+          <DialogHeader className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
             <DialogTitle style={{ color: '#111827' }} className="text-base font-semibold">Nova Solicitação de Compra</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 pt-1">
+          {/* Corpo rolável */}
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="space-y-3">
             {/* Título */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700">Título da Solicitação *</label>
@@ -560,8 +563,11 @@ export default function Solicitacoes() {
               </div>
             </div>
 
-            {/* Botões */}
-            <div className="flex gap-2 pt-1">
+          </div>{/* fim space-y-3 */}
+          </div>{/* fim corpo rolável */}
+
+          {/* Rodapé fixo com botões */}
+          <div className="px-5 py-3 border-t border-gray-100 bg-white shrink-0 flex gap-2">
               <button
                 onClick={() => { setShowNova(false); resetForm(); }}
                 className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 font-medium transition"
@@ -575,7 +581,6 @@ export default function Solicitacoes() {
               >
                 {criar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Solicitação"}
               </button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>
