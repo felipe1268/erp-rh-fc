@@ -29,7 +29,7 @@ export default function ComprasRealocacao() {
   const [destino, setDestino] = useState("");
   const [valor, setValor] = useState("");
   const [motivo, setMotivo] = useState("");
-  const [filtroObraRisco, setFiltroObraRisco] = useState("");
+  const [filtroObraRisco, setFiltroObraRisco] = useState("all");
 
   const { data: obras } = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
 
@@ -38,8 +38,9 @@ export default function ComprasRealocacao() {
     { enabled: !!companyId }
   );
 
+  const obraIdFiltro = filtroObraRisco && filtroObraRisco !== "all" ? parseInt(filtroObraRisco) : undefined;
   const { data: debitosRisco, isLoading: loadingRisco, refetch: refetchRisco } = trpc.compras.listarDebitosRisco.useQuery(
-    { companyId, obraId: filtroObraRisco ? parseInt(filtroObraRisco) : undefined },
+    { companyId, obraId: obraIdFiltro },
     { enabled: !!companyId }
   );
 
@@ -200,7 +201,7 @@ export default function ComprasRealocacao() {
                     <Select value={filtroObraRisco} onValueChange={setFiltroObraRisco}>
                       <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todas as obras" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Todas as obras</SelectItem>
+                        <SelectItem value="all">Todas as obras</SelectItem>
                         {(obras ?? []).map((o: any) => (
                           <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                         ))}
