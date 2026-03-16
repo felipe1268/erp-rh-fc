@@ -526,8 +526,10 @@ export default function Funcoes() {
                 <option value="">— Não definido —</option>
                 <option value="direto">MO Direta</option>
                 <option value="indireta_obra">MO Indireta</option>
-                <option value="escritorio_central">Indireto Escritório Central</option>
               </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Funcionários sem vínculo de obra no mês vão automaticamente para o Rateio Central, independente desta configuração.
+              </p>
             </div>
 
             {/* Descrição e OS lado a lado em telas grandes */}

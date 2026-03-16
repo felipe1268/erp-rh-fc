@@ -1924,6 +1924,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 420,
+    titulo: "Alocação MO — Rateio Central automático por vínculo de obra",
+    descricao: "O algoritmo de transferência de custo de MO foi simplificado: funcionários sem vínculo de obra no mês vão automaticamente para o Rateio Central (rateado entre obras pelo valor de contrato), sem necessidade de configuração manual. A categoria da função (MO Direta ou MO Indireta) só determina como o custo é alocado dentro da obra quando o funcionário está vinculado a ela. Com isso, um Engenheiro na obra vai para Indireta Obra (01.01) e um Engenheiro no escritório vai para o Rateio Central — automaticamente, pelo mesmo registro de alocação já existente. A opção 'Indireto Escritório Central' foi removida do cadastro de funções.",
+    tipo: "melhoria",
+    modulos: "RH, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 419,
     titulo: "Cadastro — Categoria de MO diretamente na página de Funções",
     descricao: "O campo 'Categoria de Mão de Obra' (Direto, Indireta Obra, Escritório Central) foi movido para a página Cadastro → Funções, que é o lugar natural para esta configuração. Ao criar ou editar uma função, o usuário agora define diretamente a categoria MO no formulário. Na lista de funções, cada card exibe um badge colorido com a categoria definida (MO Direta em azul, MO Indireta Obra em âmbar, MO Escritório Central em roxo, ou 'MO não definida' em cinza). O backend (create/update de jobFunctions) e o db helper foram atualizados para persistir o campo categoriaMO. O modal 'Config. Cargos' na Folha de Pagamento continua disponível como atalho para ajuste rápido.",

@@ -199,11 +199,17 @@ export const moAlocacaoRouter = router({
         const liquido = n(it.liquido);
         if (liquido <= 0) continue;
         const funcaoKey = (it.funcao || "").toLowerCase().trim();
-        const cat = catMap.get(funcaoKey) ?? "direto"; // fallback: direto
+        const cat = catMap.get(funcaoKey) ?? "direto";
+        const obraId = it.employeeId ? vinculoMap.get(it.employeeId) : undefined;
         const item: BucketItem = { employeeId: it.employeeId, funcao: it.funcao || "", liquido, categoria: cat };
-        if (cat === "indireta_obra") buckets.indireta.push(item);
-        else if (cat === "escritorio_central") buckets.central.push(item);
-        else buckets.direto.push(item);
+        // Sem vínculo de obra → rateio central automático, independente da função
+        if (!obraId) {
+          buckets.central.push(item);
+        } else if (cat === "indireta_obra") {
+          buckets.indireta.push(item);
+        } else {
+          buckets.direto.push(item);
+        }
       }
 
       const totalDireto = buckets.direto.reduce((s, i) => s + i.liquido, 0);
