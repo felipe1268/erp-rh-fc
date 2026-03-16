@@ -610,8 +610,32 @@ export default function Cotacoes() {
                   <h1 className="text-2xl font-bold text-gray-900 font-mono">{detalheFullscreen.numeroCotacao}</h1>
                   {(detalheFullscreen as any).descricao && <p className="text-gray-500 mt-0.5">{(detalheFullscreen as any).descricao}</p>}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap justify-end">
                   {st && <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium border ${st.cls}`}>{st.label}</span>}
+                  {detalheFullscreen.status === "pendente" && (
+                    <>
+                      <Button onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalheFullscreen.id })} disabled={gerarOC.isPending}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2">
+                        {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Aprovar e Gerar OC
+                      </Button>
+                      <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
+                        className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
+                        <XCircle className="h-4 w-4" /> Recusar
+                      </Button>
+                    </>
+                  )}
+                  {detalheFullscreen.status === "aprovada" && !(detalheFullscreen as any).contratoTerceiroId && (
+                    <Button onClick={() => gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId })} disabled={gerarContrato.isPending}
+                      className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
+                      {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Gerar Contrato de Serviço
+                    </Button>
+                  )}
+                  {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).contratoTerceiroId && (
+                    <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
+                      className="border-blue-200 text-blue-600 hover:bg-blue-50 gap-2">
+                      <FileText className="h-4 w-4" /> Ver Contrato
+                    </Button>
+                  )}
                 </div>
               </div>
 

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 425,
+    titulo: "Cotação: botões Aprovar / Recusar visíveis no cabeçalho",
+    descricao: "Botões 'Aprovar e Gerar OC' e 'Recusar' movidos para o topo da página de detalhe da cotação, ao lado do badge de status — sem precisar rolar a página. Quando aprovada, exibe 'Gerar Contrato de Serviço' ou 'Ver Contrato' no mesmo local.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "sistema",
+    dataPublicacao: "2026-03-16 21:30:00",
+  },
+  {
     version: 424,
     titulo: "Reserva de Risco: desfazer débito + trava de realocação duplicada + aba Realocações",
     descricao: "Botão Desfazer em cada débito de risco dentro do painel da cotação e na aba Realocações. Prevenção de realocação duplicada: o sistema impede debitar mais do que o déficit desta cotação, tanto no backend (erro) quanto no frontend (limite do input). Nova aba 'Reserva de Risco (DI-08)' na página Realocações com histórico completo de todos os débitos, filtro por obra e botão Desfazer por linha.",
