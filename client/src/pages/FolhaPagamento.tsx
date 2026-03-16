@@ -87,8 +87,7 @@ export default function FolhaPagamento() {
   const [heObraFilter, setHeObraFilter] = useState<string>("all");
   // MO alocação
   const [showCargosModal, setShowCargosModal] = useState(false);
-  const [novoCargoNome, setNovoCargoNome] = useState("");
-  const [novoCargoCategoria, setNovoCargoCategoria] = useState<"direto" | "indireta_obra" | "escritorio_central">("direto");
+
   const [fecharFolhaResult, setFecharFolhaResult] = useState<{ count: number } | null>(null);
 
   // ===== QUERIES =====
@@ -288,11 +287,7 @@ export default function FolhaPagamento() {
     onError: (e) => toast.error(e.message),
   });
   const salvarCargoMut = trpc.moAlocacao.salvarCargoCategoria.useMutation({
-    onSuccess: () => { cargoCategorias.refetch(); setNovoCargoNome(""); toast.success("Cargo configurado!"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const removerCargoMut = trpc.moAlocacao.removerCargoCategoria.useMutation({
-    onSuccess: () => { cargoCategorias.refetch(); toast.success("Cargo removido."); },
+    onSuccess: () => { cargoCategorias.refetch(); toast.success("Categoria salva!"); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -3148,88 +3143,69 @@ function DescontosEPIView({ companyId, mesAno, onBack }: { companyId: number; me
 
       {/* MODAL CONFIGURAÇÃO DE CARGOS MO */}
       <Dialog open={showCargosModal} onOpenChange={setShowCargosModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Wrench className="h-4 w-4" /> Configuração de Cargos — Custo de MO
+              <Wrench className="h-4 w-4" /> Categoria de MO por Função
             </DialogTitle>
             <DialogDescription>
-              Classifique cada cargo (função) em uma das 3 categorias para a alocação automática de custo de mão de obra.
+              Defina a categoria de custo de cada função cadastrada. Funções sem categoria são tratadas como <strong>Direto</strong> por padrão.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            {/* Adicionar novo */}
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wide">Adicionar mapeamento</p>
-              <div className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <label className="text-xs text-muted-foreground mb-1 block">Cargo / Função</label>
-                  <input
-                    className="w-full border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ex: Engenheiro, Servente, Administrador..."
-                    value={novoCargoNome}
-                    onChange={e => setNovoCargoNome(e.target.value)}
-                  />
-                </div>
-                <div className="w-56">
-                  <label className="text-xs text-muted-foreground mb-1 block">Categoria</label>
-                  <select
-                    className="w-full border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                    value={novoCargoCategoria}
-                    onChange={e => setNovoCargoCategoria(e.target.value as any)}
-                  >
-                    <option value="direto">Direto (→ Atividades EAP)</option>
-                    <option value="indireta_obra">Indireta Obra (→ 01.01 Equipe Técnica)</option>
-                    <option value="escritorio_central">Escritório Central (→ CI-01 rateado)</option>
-                  </select>
-                </div>
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 gap-1.5"
-                  disabled={!novoCargoNome.trim() || salvarCargoMut.isPending}
-                  onClick={() => salvarCargoMut.mutate({ companyId, cargo: novoCargoNome, categoria: novoCargoCategoria })}>
-                  <Plus className="h-3.5 w-3.5" /> Salvar
-                </Button>
+          {/* Legenda */}
+          <div className="flex gap-2 flex-wrap text-xs">
+            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">Direto → Atividades EAP</span>
+            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Indireta Obra → 01.01 Equipe Técnica</span>
+            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">Escritório Central → CI-01 rateado</span>
+          </div>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {cargoCategorias.isLoading ? (
+              <div className="text-center py-10 text-sm text-muted-foreground">
+                <RefreshCw className="h-4 w-4 animate-spin inline mr-2" />Carregando funções...
               </div>
-            </div>
-            {/* Lista existente */}
-            <div>
-              <p className="text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wide">
-                Mapeamentos configurados ({(cargoCategorias.data ?? []).length})
-              </p>
-              {cargoCategorias.isLoading ? (
-                <div className="text-center py-6 text-sm text-muted-foreground"><RefreshCw className="h-4 w-4 animate-spin inline mr-2" />Carregando...</div>
-              ) : (cargoCategorias.data ?? []).length === 0 ? (
-                <div className="text-center py-6 text-sm text-muted-foreground bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-                  <Wrench className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                  Nenhum cargo configurado ainda.
+            ) : (cargoCategorias.data ?? []).length === 0 ? (
+              <div className="text-center py-10 text-sm text-muted-foreground bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
+                <Wrench className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                Nenhuma função cadastrada no sistema.
+              </div>
+            ) : (
+              <div className="divide-y border rounded-lg overflow-hidden">
+                {/* Header */}
+                <div className="grid grid-cols-[1fr_auto_200px] gap-3 px-4 py-2 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span>Função</span>
+                  <span className="text-center">CBO</span>
+                  <span>Categoria MO</span>
                 </div>
-              ) : (
-                <div className="divide-y border rounded-lg overflow-hidden">
-                  {(cargoCategorias.data ?? []).map(c => (
-                    <div key={c.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50">
-                      <span className="text-sm font-medium">{c.cargo}</span>
-                      <div className="flex items-center gap-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          c.categoria === "direto" ? "bg-blue-100 text-blue-700" :
-                          c.categoria === "indireta_obra" ? "bg-amber-100 text-amber-700" :
-                          "bg-purple-100 text-purple-700"
-                        }`}>
-                          {c.categoria === "direto" ? "Direto" :
-                           c.categoria === "indireta_obra" ? "Indireta Obra" :
-                           "Escritório Central"}
-                        </span>
-                        <button
-                          className="text-red-400 hover:text-red-600 transition-colors"
-                          disabled={removerCargoMut.isPending}
-                          onClick={() => removerCargoMut.mutate({ id: c.id })}
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                {(cargoCategorias.data ?? []).map(c => (
+                  <div key={c.id} className="grid grid-cols-[1fr_auto_200px] gap-3 items-center px-4 py-2 hover:bg-slate-50">
+                    <span className="text-sm font-medium">{c.cargo}</span>
+                    <span className="text-xs text-muted-foreground font-mono">{c.cbo ?? "—"}</span>
+                    <select
+                      className={`text-xs border rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-full ${
+                        c.categoria === "direto" ? "border-blue-300 text-blue-700" :
+                        c.categoria === "indireta_obra" ? "border-amber-300 text-amber-700" :
+                        c.categoria === "escritorio_central" ? "border-purple-300 text-purple-700" :
+                        "border-slate-300 text-slate-500"
+                      }`}
+                      value={c.categoria ?? ""}
+                      disabled={salvarCargoMut.isPending}
+                      onChange={e => {
+                        const val = e.target.value;
+                        salvarCargoMut.mutate({
+                          id: c.id,
+                          categoria: val ? val as "direto" | "indireta_obra" | "escritorio_central" : null,
+                        });
+                      }}
+                    >
+                      <option value="">— Não definido —</option>
+                      <option value="direto">Direto</option>
+                      <option value="indireta_obra">Indireta Obra</option>
+                      <option value="escritorio_central">Escritório Central</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCargosModal(false)}>Fechar</Button>

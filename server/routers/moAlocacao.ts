@@ -2,9 +2,9 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
-  cargoCategoriasCusto,
+  jobFunctions,
   folhaMoTransferencias,
   planejamentoCustosMo,
   folhaLancamentos,
@@ -20,39 +20,38 @@ const n = (v: any) => parseFloat(v ?? "0") || 0;
 
 export const moAlocacaoRouter = router({
 
-  // ── CRUD CARGO CATEGORIAS ───────────────────────────────────────────
+  // ── LISTAR FUNÇÕES COM CATEGORIA MO ─────────────────────────────────
 
   listarCargoCategorias: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      return db.select().from(cargoCategoriasCusto)
-        .where(eq(cargoCategoriasCusto.companyId, input.companyId))
-        .orderBy(cargoCategoriasCusto.cargo);
+      return db.select({
+        id: jobFunctions.id,
+        cargo: jobFunctions.nome,
+        categoria: jobFunctions.categoriaMO,
+        cbo: jobFunctions.cbo,
+      }).from(jobFunctions)
+        .where(and(
+          eq(jobFunctions.companyId, input.companyId),
+          eq(jobFunctions.isActive, 1),
+          isNull(jobFunctions.deletedAt),
+        ))
+        .orderBy(jobFunctions.nome);
     }),
+
+  // ── SALVAR CATEGORIA MO DE UMA FUNÇÃO ───────────────────────────────
 
   salvarCargoCategoria: protectedProcedure
     .input(z.object({
-      companyId: z.number(),
-      cargo: z.string().min(1),
-      categoria: z.enum(["direto", "indireta_obra", "escritorio_central"]),
+      id: z.number(),
+      categoria: z.enum(["direto", "indireta_obra", "escritorio_central"]).nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      await db.insert(cargoCategoriasCusto)
-        .values({ companyId: input.companyId, cargo: input.cargo.trim(), categoria: input.categoria })
-        .onConflictDoUpdate({
-          target: [cargoCategoriasCusto.companyId, cargoCategoriasCusto.cargo],
-          set: { categoria: input.categoria },
-        });
-      return { ok: true };
-    }),
-
-  removerCargoCategoria: protectedProcedure
-    .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
-      const db = await getDb();
-      await db.delete(cargoCategoriasCusto).where(eq(cargoCategoriasCusto.id, input.id));
+      await db.update(jobFunctions)
+        .set({ categoriaMO: input.categoria })
+        .where(eq(jobFunctions.id, input.id));
       return { ok: true };
     }),
 
@@ -106,15 +105,21 @@ export const moAlocacaoRouter = router({
       const jaTransferido = transferencias.length > 0;
       const ultimaTransferencia = transferencias[0] ?? null;
 
-      const categorias = await db.select().from(cargoCategoriasCusto)
-        .where(eq(cargoCategoriasCusto.companyId, input.companyId));
+      const funcoesComCategoria = await db.select({ id: jobFunctions.id })
+        .from(jobFunctions)
+        .where(and(
+          eq(jobFunctions.companyId, input.companyId),
+          eq(jobFunctions.isActive, 1),
+          isNull(jobFunctions.deletedAt),
+          isNotNull(jobFunctions.categoriaMO),
+        ));
 
       return {
         folhaFechada,
         totalFolha,
         jaTransferido,
         ultimaTransferencia,
-        totalCargosConfigurados: categorias.length,
+        totalCargosConfigurados: funcoesComCategoria.length,
         lancamentos: lancamentos.map(l => ({ id: l.id, status: l.status, totalLiquido: l.totalLiquido })),
       };
     }),
@@ -154,15 +159,21 @@ export const moAlocacaoRouter = router({
         throw new TRPCError({ code: "CONFLICT", message: "Este mês já foi transferido. Para corrigir, desfaça a transferência primeiro." });
       }
 
+      // Carrega categorias de MO de job_functions
+      const funcoes = await db.select({
+        nome: jobFunctions.nome,
+        categoriaMO: jobFunctions.categoriaMO,
+      }).from(jobFunctions).where(and(
+        eq(jobFunctions.companyId, input.companyId),
+        eq(jobFunctions.isActive, 1),
+        isNull(jobFunctions.deletedAt),
+      ));
+      const catMap = new Map(funcoes.map(f => [f.nome.toLowerCase().trim(), f.categoriaMO]));
+
       // Carrega itens da folha
       const lancIds = lancamentos.map(l => l.id);
       const itens = await db.select().from(folhaItens)
         .where(inArray(folhaItens.folhaLancamentoId, lancIds));
-
-      // Carrega categorias de cargo
-      const categorias = await db.select().from(cargoCategoriasCusto)
-        .where(eq(cargoCategoriasCusto.companyId, input.companyId));
-      const catMap = new Map(categorias.map(c => [c.cargo.toLowerCase().trim(), c.categoria]));
 
       // Carrega vinculações obra-funcionário do mês
       const vinculos = await db.select().from(manualObraAssignments).where(and(
@@ -210,7 +221,6 @@ export const moAlocacaoRouter = router({
         const projeto = projetoByObraId.get(obraId);
         if (!projeto) continue;
 
-        // Busca revisão mais recente
         const [rev] = await db.select({ id: planejamentoRevisoes.id })
           .from(planejamentoRevisoes)
           .where(eq(planejamentoRevisoes.projetoId, projeto.id))
@@ -268,7 +278,6 @@ export const moAlocacaoRouter = router({
       }
 
       // ── CAMADA 3: Direto → diluído nas atividades executadas no mês ─
-      // Agrupa custo direto por obra
       const custoDiretoByObra = new Map<number, number>();
       for (const item of buckets.direto) {
         if (!item.employeeId) continue;
@@ -277,7 +286,6 @@ export const moAlocacaoRouter = router({
         custoDiretoByObra.set(obraId, (custoDiretoByObra.get(obraId) ?? 0) + item.liquido);
       }
 
-      // Mês de referência → semanas que pertencem ao mês
       const [ano, mes] = input.mesReferencia.split("-").map(Number);
       const inicioMes = new Date(ano, mes - 1, 1).toISOString().slice(0, 10);
       const fimMes = new Date(ano, mes, 0).toISOString().slice(0, 10);
@@ -293,7 +301,6 @@ export const moAlocacaoRouter = router({
           .limit(1);
         if (!rev) continue;
 
-        // Atividades com progresso no mês
         const avancos = await db.select({
           atividadeId: planejamentoAvancos.atividadeId,
           percentualSemanal: planejamentoAvancos.percentualSemanal,
@@ -306,7 +313,6 @@ export const moAlocacaoRouter = router({
 
         if (avancos.length === 0) continue;
 
-        // Agrupa avanço total por atividade no mês
         const avancoByAtiv = new Map<number, number>();
         for (const av of avancos) {
           if (n(av.percentualSemanal) > 0) {
@@ -315,14 +321,12 @@ export const moAlocacaoRouter = router({
         }
         if (avancoByAtiv.size === 0) continue;
 
-        // Carrega peso financeiro das atividades
         const atividadeIds = Array.from(avancoByAtiv.keys());
         const atividades = await db.select({ id: planejamentoAtividades.id, pesoFinanceiro: planejamentoAtividades.pesoFinanceiro })
           .from(planejamentoAtividades)
           .where(inArray(planejamentoAtividades.id, atividadeIds));
         const pesoMap = new Map(atividades.map(a => [a.id, n(a.pesoFinanceiro)]));
 
-        // Calcula peso composto: pesoFinanceiro × avanço no mês
         const pesosPonderados = new Map<number, number>();
         let somaTotal = 0;
         for (const [atId, avanco] of avancoByAtiv) {

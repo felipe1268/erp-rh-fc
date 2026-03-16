@@ -1758,6 +1758,7 @@ export const jobFunctions = pgTable("job_functions", {
         deletedAt: timestamp({ mode: 'string' }),
         deletedBy: varchar({ length: 255 }),
         deletedByUserId: integer(),
+        categoriaMO: varchar("categoria_mo", { length: 30 }), // 'direto' | 'indireta_obra' | 'escritorio_central'
 });
 
 export const manualObraAssignments = pgTable("manual_obra_assignments", {

@@ -1924,6 +1924,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 418,
+    titulo: "RH — Categoria de MO direto na tabela de Funções",
+    descricao: "Simplificação do sistema de categorização de custo de mão de obra: a categoria (Direto, Indireta Obra, Escritório Central) agora fica diretamente no cadastro de Função (campo categoria_mo na tabela job_functions), eliminando a tabela auxiliar cargo_categorias_custo. O modal 'Config. Cargos' foi redesenhado: em vez de um formulário de adição manual, agora exibe todas as funções ativas em uma lista com dropdown por linha — basta selecionar a categoria e ela é salva automaticamente. O backend de alocação MO foi atualizado para ler a categoria diretamente de job_functions.categoriaMO. Dados existentes foram migrados automaticamente.",
+    tipo: "melhoria",
+    modulos: "RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 417,
     titulo: "Compras — Correção de preços R$ 0,00 nos itens de cotação",
     descricao: "Corrigido bug onde os itens de uma cotação exibiam precoUnitario e total como R$ 0,00 mesmo com o total geral correto. O problema ocorria porque os itens de compras_cotacoes_itens eram criados com preço zero (preenchidos depois via Mapa de Cotação), mas o endpoint getCotacao não enriquecia esses itens com os preços reais do mapa. Solução: quando a cotação possui fornecedor vencedor selecionado, os itens são agora enriquecidos com os valores de precoUnitario, descontoPct, quantidade e total vindos de compras_cotacao_respostas antes de serem retornados ao frontend.",
