@@ -2041,6 +2041,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 428,
+    titulo: "Reserva de Risco — Desfazer débito restrito ao Admin Master com justificativa obrigatória",
+    descricao: "O botão 'Desfazer' no histórico de débitos da Reserva de Risco (DI-08) foi bloqueado para usuários comuns: apenas o Administrador Master (role = admin_master) pode reverter um débito. Para não-admins, o botão é substituído por um ícone de cadeado com tooltip explicativo. Ao clicar em Desfazer, um modal exibe os detalhes do débito e exige o preenchimento de uma justificativa obrigatória antes de confirmar a reversão. No backend, o endpoint reverterDebitoRisco agora valida o role do usuário (lança FORBIDDEN se não for admin_master) e exige o campo justificativa (z.string().min(1)).",
+    tipo: "seguranca",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 427,
     titulo: "Contratos — Template padrão com variáveis e geração automática do documento",
     descricao: "Sistema completo de template de contrato: nova tabela terceiro_contrato_templates armazena o texto padrão (com variáveis {{PLACEHOLDER}}); nova tabela terceiro_contrato_revisoes mantém histórico de versões do documento por contrato. Campos texto_contrato e versao_texto adicionados em terceiro_contratos. Backend: endpoints getTemplate, salvarTemplate, gerarTextoContrato (preenche as variáveis com dados reais do contrato — partes, obra, valores, datas), salvarTextoContrato (com auto-revisão da versão anterior), listarRevisoes e restaurarRevisao. Frontend: nova aba 'Documento' no detalhe do contrato com editor de texto livre, botão Gerar/Regenerar, histórico lateral de revisões com restauração por versão, e link para o template; nova página /terceiros/contratos/template com editor do texto-base, painel de variáveis clicáveis por categoria, busca, pré-visualização com dados de exemplo e restauração do template padrão.",

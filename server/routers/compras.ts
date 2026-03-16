@@ -1401,8 +1401,11 @@ Responda APENAS com um objeto JSON no formato:
     }),
 
   reverterDebitoRisco: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ id: z.number(), companyId: z.number(), justificativa: z.string().min(1, "Justificativa obrigatória") }))
+    .mutation(async ({ input, ctx }) => {
+      if ((ctx.user as any)?.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Administrador Master pode desfazer um débito da Reserva de Risco." });
+      }
       const db = await getDb();
       const [row] = await db.select().from(comprasRiscoDebitos).where(and(eq(comprasRiscoDebitos.id, input.id), eq(comprasRiscoDebitos.companyId, input.companyId)));
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Débito não encontrado." });

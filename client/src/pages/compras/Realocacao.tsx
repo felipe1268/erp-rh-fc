@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown } from "lucide-react";
+import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -30,6 +30,8 @@ export default function ComprasRealocacao() {
   const [valor, setValor] = useState("");
   const [motivo, setMotivo] = useState("");
   const [filtroObraRisco, setFiltroObraRisco] = useState("all");
+  const [desfazerModal, setDesfazerModal] = useState<{ id: number; valor: number; numeroCotacao: string | null } | null>(null);
+  const [justificativa, setJustificativa] = useState("");
 
   const { data: obras } = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
 
@@ -53,9 +55,13 @@ export default function ComprasRealocacao() {
     onError: () => toast.error("Erro ao criar realocação"),
   });
 
+  const isMasterAdmin = (user as any)?.role === "admin_master";
+
   const reverterMut = trpc.compras.reverterDebitoRisco.useMutation({
     onSuccess: (d) => {
       toast.success(`Débito revertido! ${fmt(d.valorRestituido)} devolvidos à reserva.`);
+      setDesfazerModal(null);
+      setJustificativa("");
       refetchRisco();
     },
     onError: (e) => toast.error(e.message),
@@ -241,12 +247,18 @@ export default function ComprasRealocacao() {
                           <TableCell className="max-w-xs truncate text-xs text-gray-600">{d.observacao || "—"}</TableCell>
                           <TableCell className="text-xs text-gray-500">{format(new Date(d.criadoEm), "dd/MM/yy HH:mm", { locale: ptBR })}</TableCell>
                           <TableCell className="text-center">
-                            <Button size="sm" variant="ghost"
-                              disabled={reverterMut.isPending}
-                              onClick={() => { if (confirm(`Reverter débito de ${fmt(Number(d.valor))} da cotação #${d.numeroCotacao ?? d.cotacaoId}?`)) reverterMut.mutate({ id: d.id, companyId }); }}
-                              className="h-7 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 gap-1">
-                              <Undo2 className="h-3 w-3" /> Desfazer
-                            </Button>
+                            {isMasterAdmin ? (
+                              <Button size="sm" variant="ghost"
+                                disabled={reverterMut.isPending}
+                                onClick={() => setDesfazerModal({ id: d.id, valor: Number(d.valor), numeroCotacao: d.numeroCotacao ?? null })}
+                                className="h-7 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 gap-1">
+                                <Undo2 className="h-3 w-3" /> Desfazer
+                              </Button>
+                            ) : (
+                              <span className="flex items-center justify-center gap-1 text-xs text-gray-300" title="Apenas o Administrador Master pode desfazer">
+                                <Lock className="h-3 w-3" />
+                              </span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -307,6 +319,52 @@ export default function ComprasRealocacao() {
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal: Desfazer Débito de Risco — somente Admin Master */}
+        <Dialog open={!!desfazerModal} onOpenChange={(o) => { if (!o) { setDesfazerModal(null); setJustificativa(""); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-700">
+                <ShieldAlert className="h-5 w-5" /> Desfazer Débito da Reserva de Risco
+              </DialogTitle>
+            </DialogHeader>
+            {desfazerModal && (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+                  <p>Você está prestes a reverter o débito de <strong>{fmt(desfazerModal.valor)}</strong>
+                  {desfazerModal.numeroCotacao ? ` da cotação #${desfazerModal.numeroCotacao}` : ""}.</p>
+                  <p className="mt-1">O valor será restituído à Reserva de Risco (DI-08). Esta ação é irreversível pelo sistema — ficará registrada no audit trail.</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">
+                    Justificativa <span className="text-red-600">*</span>
+                  </Label>
+                  <Textarea
+                    className="mt-1"
+                    placeholder="Descreva o motivo da reversão (ex: débito lançado indevidamente, cotação cancelada)..."
+                    value={justificativa}
+                    onChange={e => setJustificativa(e.target.value)}
+                    rows={4}
+                  />
+                  {justificativa.trim().length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">Justificativa obrigatória</p>
+                  )}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => { setDesfazerModal(null); setJustificativa(""); }}>Cancelar</Button>
+                  <Button
+                    variant="destructive"
+                    disabled={!justificativa.trim() || reverterMut.isPending}
+                    onClick={() => reverterMut.mutate({ id: desfazerModal.id, companyId, justificativa: justificativa.trim() })}
+                  >
+                    {reverterMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Undo2 className="h-4 w-4 mr-1" />}
+                    Confirmar Reversão
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
