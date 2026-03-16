@@ -368,7 +368,11 @@ export default function OrcamentoDetalhe() {
 
   // ── Valores de Material/MO ajustados pela visão ativa ───────────────────
   // Para os cards de summary: aplicar o mesmo fator que as linhas da tabela usam
-  const _metaFactor = 1 - localMetaPerc / 100;
+  // Se o usuário definiu um valor R$ exato, o fator é derivado dele (meta/custo).
+  // Isso garante que Mat/MO do resumo e as linhas da tabela usem o mesmo fator.
+  const _metaFactor = (localMetaVal !== null && totalCusto > 0)
+    ? localMetaVal / totalCusto
+    : 1 - localMetaPerc / 100;
   const _bdiGlobalFactor = totalCusto > 0 && totalVenda > 0 ? totalVenda / totalCusto : 1;
   const totalMatDisp = versao === "meta"  ? r2(totalMat * _metaFactor)
                      : versao === "venda" ? r2(totalMat * _bdiGlobalFactor)
@@ -1016,8 +1020,11 @@ export default function OrcamentoDetalhe() {
                       const ptVenda  = agg?.venda ?? n(item.vendaTotal);
 
                       // ── Fator de escala por visão ─────────────────────────────────
-                      // Meta: redução uniforme sobre o custo
-                      const metaFactor = 1 - localMetaPerc / 100;
+                      // Meta: redução proporcional. Se definido por R$ exato, deriva
+                      // o fator de localMetaVal/totalCusto para garantir consistência.
+                      const metaFactor = (localMetaVal !== null && totalCusto > 0)
+                        ? localMetaVal / totalCusto
+                        : 1 - localMetaPerc / 100;
                       // Venda (BDI): fator derivado do próprio item (leaf) ou do total do grupo
                       const bdiUnitFactor = costUnitTotal > 0
                         ? n(item.vendaUnitTotal) / costUnitTotal
@@ -1347,7 +1354,7 @@ export default function OrcamentoDetalhe() {
             const abcVendaRef = valorNegociado > 0 ? valorNegociado : totalVenda;
             const abcFactor =
               versao === "venda" ? (totalCusto > 0 ? abcVendaRef / totalCusto : 1)
-              : versao === "meta" ? (1 - localMetaPerc / 100)
+              : versao === "meta" ? ((localMetaVal !== null && totalCusto > 0) ? localMetaVal / totalCusto : (1 - localMetaPerc / 100))
               : 1;
             const abcColLabel =
               versao === "venda" ? "Venda Total"
@@ -1425,7 +1432,7 @@ export default function OrcamentoDetalhe() {
             const abcVendaRef2 = valorNegociado > 0 ? valorNegociado : totalVenda;
             const abcFactor2 =
               versao === "venda" ? (totalCusto > 0 ? abcVendaRef2 / totalCusto : 1)
-              : versao === "meta" ? (1 - localMetaPerc / 100)
+              : versao === "meta" ? ((localMetaVal !== null && totalCusto > 0) ? localMetaVal / totalCusto : (1 - localMetaPerc / 100))
               : 1;
             const abcColLabel2 =
               versao === "venda" ? "Venda Total"
