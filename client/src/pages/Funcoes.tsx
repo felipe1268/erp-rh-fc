@@ -434,8 +434,8 @@ export default function Funcoes() {
                               "bg-purple-100 text-purple-700"
                             }`}>
                               {fn.categoriaMO === "direto" ? "MO Direta" :
-                               fn.categoriaMO === "indireta_obra" ? "MO Indireta Obra" :
-                               "MO Indireto Escritório Central"}
+                               fn.categoriaMO === "indireta_obra" ? "MO Indireta" :
+                               "Indireto Escritório Central"}
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-medium bg-slate-100 text-slate-500">
@@ -524,9 +524,9 @@ export default function Funcoes() {
                 onChange={e => setForm(f => ({ ...f, categoriaMO: e.target.value as CategoriaMO }))}
               >
                 <option value="">— Não definido —</option>
-                <option value="direto">Direto → custo vai para as atividades da obra (EAP)</option>
-                <option value="indireta_obra">Indireta Obra → vai para a atividade Equipe Técnica (01.01)</option>
-                <option value="escritorio_central">Indireto Escritório Central → rateado entre obras pelo valor do contrato</option>
+                <option value="direto">MO Direta</option>
+                <option value="indireta_obra">MO Indireta</option>
+                <option value="escritorio_central">Indireto Escritório Central</option>
               </select>
             </div>
 
