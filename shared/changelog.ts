@@ -1807,6 +1807,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 402,
+    titulo: "Painel RH — Aniversariantes exibe obra alocada",
+    descricao: "No card 'Aniversariantes do Mês' e na tela cheia correspondente, passa a exibir a obra onde o funcionário está alocado (📍 Nome da Obra), tanto na visão compacta do card quanto no FullScreenDialog expandido.",
+    tipo: "melhoria",
+    modulos: "RH/DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 401,
     titulo: "Painel RH — Todos os cards expansíveis em tela cheia",
     descricao: "Adicionado botão de expandir (ícone Maximize2) no cabeçalho de todos os cards do Painel RH: Aniversariantes do Mês, Férias Painel Rápido, ASOs Atenção Necessária, Férias Período Aquisitivo, Movimentações (30 dias), Aniversários de Empresa e Advertências Recentes. Ao clicar no ícone, abre um FullScreenDialog com todos os registros sem limite de exibição, layout ampliado com mais detalhes por linha e atalhos de navegação diretos para o módulo correspondente.",

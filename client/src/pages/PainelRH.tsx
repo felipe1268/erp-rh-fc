@@ -356,9 +356,10 @@ export default function PainelRH() {
                                 <div>
                                   <span className="font-medium">{a.nome}</span>
                                   {a.funcao ? <span className="text-muted-foreground ml-1">({a.funcao})</span> : null}
+                                  {a.obra ? <span className="block text-[10px] text-blue-600 font-medium mt-0.5">📍 {a.obra}</span> : null}
                                 </div>
                               </div>
-                              <span className={`font-mono ${a.isHoje ? "font-bold text-pink-600" : a.jaPassou ? "text-muted-foreground line-through" : ""}`}>Dia {a.dia}</span>
+                              <span className={`font-mono shrink-0 ml-2 ${a.isHoje ? "font-bold text-pink-600" : a.jaPassou ? "text-muted-foreground line-through" : ""}`}>Dia {a.dia}</span>
                             </div>
                           ))}
                         </div>
@@ -689,7 +690,10 @@ export default function PainelRH() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base">{a.nome}</p>
-                    {a.funcao && <p className="text-sm text-muted-foreground">{a.funcao}</p>}
+                    <p className="text-sm text-muted-foreground">
+                      {a.funcao || ''}
+                      {a.obra ? <span className="ml-2 text-blue-600 font-medium">· 📍 {a.obra}</span> : ''}
+                    </p>
                   </div>
                   <Badge className={`text-sm px-3 shrink-0 ${a.isHoje ? 'bg-pink-500 text-white' : a.jaPassou ? 'bg-gray-100 text-gray-500' : 'bg-slate-100 text-slate-700'}`}>
                     {a.isHoje ? '🎉 Hoje!' : a.jaPassou ? `Dia ${a.dia} (passou)` : `Dia ${a.dia}`}
