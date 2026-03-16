@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Building2, Users, ClipboardCheck, AlertTriangle, ShieldCheck, HardHat, TrendingUp, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Building2, Users, ClipboardCheck, AlertTriangle, ShieldCheck, HardHat, TrendingUp, CheckCircle, XCircle, Clock, FileSignature, Receipt, DollarSign } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function PainelTerceiros() {
@@ -172,6 +172,52 @@ export default function PainelTerceiros() {
                 <span className="font-bold text-amber-600">{stats.obrigacoesMes.pendentes}</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Contratos & Medições */}
+        <div className="bg-card rounded-xl border p-5">
+          <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <FileSignature className="h-4 w-4 text-orange-500" />
+            Contratos, Medições e Caixa
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              onClick={() => setLocation("/terceiros/contratos")}
+              className="flex items-center gap-3 p-4 rounded-lg bg-indigo-50 hover:bg-indigo-100 transition-colors text-left"
+            >
+              <div className="h-10 w-10 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+                <FileSignature className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm text-indigo-900">Contratos de Serviço</p>
+                <p className="text-xs text-indigo-600">Empreitada global e preço unitário</p>
+              </div>
+            </button>
+            <button
+              onClick={() => setLocation("/terceiros/medicoes")}
+              className="flex items-center gap-3 p-4 rounded-lg bg-teal-50 hover:bg-teal-100 transition-colors text-left"
+            >
+              <div className="h-10 w-10 rounded-lg bg-teal-500 flex items-center justify-center shrink-0">
+                <Receipt className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm text-teal-900">Medições</p>
+                <p className="text-xs text-teal-600">Aprovação e registro de avanço físico</p>
+              </div>
+            </button>
+            <button
+              onClick={() => setLocation("/terceiros/previsao-caixa")}
+              className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors text-left"
+            >
+              <div className="h-10 w-10 rounded-lg bg-amber-500 flex items-center justify-center shrink-0">
+                <DollarSign className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm text-amber-900">Previsão de Caixa</p>
+                <p className="text-xs text-amber-600">Fluxo de pagamentos previsto</p>
+              </div>
+            </button>
           </div>
         </div>
 

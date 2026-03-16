@@ -1807,6 +1807,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 404,
+    titulo: "SyncSchema — Sincronização automática de colunas no startup",
+    descricao: "Criado sistema syncSchema.ts que roda automaticamente no startup do servidor: compara todas as colunas definidas no schema Drizzle com o banco Neon real e executa ALTER TABLE ADD COLUMN IF NOT EXISTS para qualquer coluna faltando. Nunca apaga ou altera colunas existentes. Também corrigidas 4 colunas faltando em orcamento_itens (meta_unit_mat, meta_unit_mdo, meta_total_mat, meta_total_mdo) e adicionados cards de Contratos, Medições e Previsão de Caixa no Painel Terceiros.",
+    tipo: "correcao",
+    modulos: "Sistema / Orçamento / Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 403,
     titulo: "Orçamento Import — Correção do erro 'Failed query' na importação",
     descricao: "Identificado e corrigido bug crítico na importação de planilhas: as colunas 'meta_planilha_codigo' e 'meta_planilha_importado_em' existiam no schema Drizzle mas não no banco de dados Neon. O Drizzle tentava inserir nessas colunas e o PostgreSQL retornava erro de coluna inexistente. Colunas adicionadas ao Neon via ALTER TABLE. Também apagados os orçamentos do Hotel do Papa (ids 20 e 31, com 1.186 itens + 622 insumos + 106 BDI) e desvinculados todos os demais orçamentos das obras para reimportação limpa.",
