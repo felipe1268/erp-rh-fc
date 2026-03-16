@@ -1685,6 +1685,7 @@ export const orcamentoRouter = router({
             isNull(orcamentos.deletedAt),
           ))
           .limit(1);
+        console.log(`[Importar] obraId=${input.obraId} companyId=${input.companyId} — conflito encontrado: ${existente.length > 0 ? 'SIM id=' + existente[0].id : 'NÃO'}`);
         if (existente.length > 0) {
           throw new TRPCError({
             code: 'CONFLICT',
