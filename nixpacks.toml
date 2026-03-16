@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_20"]
 cmds = ["npm install -g pnpm@9 && pnpm install --frozen-lockfile --no-strict-peer-dependencies"]
 
 [phases.build]
-cmds = ["pnpm run build"]
+cmds = ["rm -rf dist && pnpm run build"]
 
 [start]
 cmd = "NODE_ENV=production node dist/index.js"
