@@ -17,11 +17,15 @@ import {
   BarChart3, Gavel, Scale, ShieldCheck, Globe, Receipt, CheckCircle,
   Store, CreditCard, Star, TrendingUp, CalendarDays, UserSearch,
   Lock, Wifi, UtensilsCrossed, FileSignature, FileSpreadsheet, BookOpen,
-  BellIcon, FileSearch, Handshake, ClipboardCheck, ClipboardList
+  BellIcon, FileSearch, Handshake, ClipboardCheck, ClipboardList,
+  Calculator, CalendarRange, ShoppingCart, Banknote, Package, GraduationCap,
+  ArrowLeftRight, Warehouse, ListChecks, PieChart, FileBarChart2,
+  FilePen, DollarSign, BarChart2, LineChart, Tag
 } from "lucide-react";
 
 // Todas as rotas disponíveis no sistema, agrupadas por seção
 const ALL_ROUTES = [
+  // ── RH & DP ──────────────────────────────────────────────────────────────
   {
     section: "RH & DP - Principal",
     color: "blue",
@@ -41,12 +45,6 @@ const ALL_ROUTES = [
       { path: "/funcoes", label: "Funções", icon: "Briefcase" },
       { path: "/relogios-ponto", label: "Relógios de Ponto", icon: "Wifi" },
       { path: "/convencoes-coletivas", label: "Convenções Coletivas", icon: "Scale" },
-    ],
-  },
-  {
-    section: "RH & DP - Financeiro",
-    color: "blue",
-    routes: [
       { path: "/contas-bancarias", label: "Contas Bancárias", icon: "ClipboardList" },
     ],
   },
@@ -57,29 +55,22 @@ const ALL_ROUTES = [
       { path: "/fechamento-ponto", label: "Fechamento de Ponto", icon: "Clock" },
       { path: "/folha-pagamento", label: "Folha de Pagamento", icon: "Wallet" },
       { path: "/controle-documentos", label: "Controle de Documentos", icon: "FolderOpen" },
-      { path: "/controle-documentos?tab=atestados", label: "Lançar Atestados", icon: "ClipboardPlus" },
-      { path: "/controle-documentos?tab=advertencias", label: "Advertências", icon: "ShieldAlert" },
       { path: "/vale-alimentacao", label: "Vale Alimentação", icon: "UtensilsCrossed" },
       { path: "/solicitacao-he", label: "Solicitação de Hora Extra", icon: "Clock" },
       { path: "/apontamentos-campo", label: "Apontamentos de Campo", icon: "ClipboardList" },
       { path: "/crachas", label: "Crachás", icon: "CreditCard" },
-    ],
-  },
-  {
-    section: "RH & DP - Gestão de Pessoas",
-    color: "blue",
-    routes: [
       { path: "/aviso-previo", label: "Aviso Prévio", icon: "AlertTriangle" },
       { path: "/ferias", label: "Férias", icon: "Palmtree" },
       { path: "/modulo-pj", label: "Contratos PJ", icon: "FileSignature" },
       { path: "/pj-medicoes", label: "PJ Medições", icon: "FileSpreadsheet" },
+      { path: "/feriados", label: "Feriados", icon: "CalendarDays" },
+      { path: "/dissidio", label: "Dissídio", icon: "TrendingUp" },
     ],
   },
   {
-    section: "RH & DP - Dashboards",
+    section: "RH & DP - Dashboards e Relatórios",
     color: "indigo",
     routes: [
-      { path: "/dashboards", label: "Todos os Dashboards", icon: "BarChart3" },
       { path: "/dashboards/funcionarios", label: "Dashboard Funcionários", icon: "Users" },
       { path: "/dashboards/cartao-ponto", label: "Dashboard Cartão de Ponto", icon: "Clock" },
       { path: "/dashboards/folha-pagamento", label: "Dashboard Folha de Pagamento", icon: "Wallet" },
@@ -90,16 +81,16 @@ const ALL_ROUTES = [
       { path: "/dashboards/perfil-tempo-casa", label: "Dashboard Perfil Tempo de Casa", icon: "UserSearch" },
       { path: "/dashboards/controle-documentos", label: "Dashboard Controle de Documentos", icon: "ShieldCheck" },
       { path: "/dashboards/apontamentos", label: "Dashboard Apontamentos de Campo", icon: "ClipboardList" },
+      { path: "/dashboards/visao-panoramica", label: "Dashboard Visão Panorâmica", icon: "BarChart3" },
+      { path: "/relatorios/raio-x", label: "Raio-X do Funcionário", icon: "UserSearch" },
+      { path: "/relatorios/ponto", label: "Relatório de Ponto", icon: "Clock" },
+      { path: "/relatorios/folha", label: "Relatório de Folha", icon: "FileText" },
+      { path: "/relatorios/divergencias", label: "Relatório de Divergências", icon: "AlertTriangle" },
+      { path: "/relatorios/custo-obra", label: "Relatório Custo por Obra", icon: "Landmark" },
+      { path: "/comparativo-convencoes", label: "Comparativo Convenções", icon: "Scale" },
     ],
   },
-  {
-    section: "RH & DP - Tabelas",
-    color: "blue",
-    routes: [
-      { path: "/feriados", label: "Feriados", icon: "CalendarDays" },
-      { path: "/dissidio", label: "Dissídio", icon: "TrendingUp" },
-    ],
-  },
+  // ── SST ──────────────────────────────────────────────────────────────────
   {
     section: "SST - Segurança do Trabalho",
     color: "green",
@@ -107,27 +98,107 @@ const ALL_ROUTES = [
       { path: "/painel/sst", label: "Painel SST", icon: "LayoutDashboard" },
       { path: "/epis", label: "Controle de EPIs", icon: "HardHat" },
       { path: "/cipa", label: "CIPA", icon: "Shield" },
-      { path: "/dashboards/epis", label: "Dashboard EPIs", icon: "HardHat" },
+      { path: "/dashboards/epis", label: "Dashboard EPIs", icon: "BarChart3" },
     ],
   },
+  // ── JURÍDICO ─────────────────────────────────────────────────────────────
   {
     section: "Jurídico",
     color: "amber",
     routes: [
       { path: "/painel/juridico", label: "Painel Jurídico", icon: "LayoutDashboard" },
       { path: "/processos-trabalhistas", label: "Processos Trabalhistas", icon: "Gavel" },
-      { path: "/dashboards/juridico", label: "Dashboard Jurídico", icon: "Gavel" },
+      { path: "/dashboards/juridico", label: "Dashboard Jurídico", icon: "BarChart3" },
     ],
   },
+  // ── AVALIAÇÃO ─────────────────────────────────────────────────────────────
   {
     section: "Avaliação de Desempenho",
-    color: "amber",
+    color: "yellow",
     routes: [
       { path: "/avaliacao-desempenho", label: "Avaliação de Desempenho", icon: "Star" },
+      { path: "/dashboards/competencias", label: "Dashboard Competências", icon: "BarChart3" },
     ],
   },
+  // ── HABILIDADES ──────────────────────────────────────────────────────────
   {
-    section: "Terceiros",
+    section: "Habilidades e Capacitações",
+    color: "sky",
+    routes: [
+      { path: "/habilidades", label: "Habilidades", icon: "GraduationCap" },
+      { path: "/habilidades/importacao", label: "Importação de Habilidades", icon: "FileBarChart2" },
+      { path: "/relatorios/habilidades-obra", label: "Relatório Habilidades por Obra", icon: "ClipboardList" },
+      { path: "/dashboards/habilidades", label: "Dashboard Habilidades", icon: "BarChart3" },
+    ],
+  },
+  // ── ORÇAMENTO ────────────────────────────────────────────────────────────
+  {
+    section: "Orçamento",
+    color: "teal",
+    routes: [
+      { path: "/orcamento/painel", label: "Painel de Orçamentos", icon: "LayoutDashboard" },
+      { path: "/orcamento/lista", label: "Lista de Orçamentos", icon: "ClipboardList" },
+      { path: "/orcamento/importar", label: "Importar Planilha", icon: "FileBarChart2" },
+      { path: "/orcamento/biblioteca", label: "Biblioteca de Preços", icon: "BookOpen" },
+    ],
+  },
+  // ── PLANEJAMENTO ─────────────────────────────────────────────────────────
+  {
+    section: "Planejamento de Obras",
+    color: "violet",
+    routes: [
+      { path: "/planejamento", label: "Lista de Planejamentos", icon: "CalendarRange" },
+    ],
+  },
+  // ── COMPRAS ──────────────────────────────────────────────────────────────
+  {
+    section: "Compras",
+    color: "rose",
+    routes: [
+      { path: "/compras/painel", label: "Painel de Compras", icon: "LayoutDashboard" },
+      { path: "/compras/solicitacoes", label: "Solicitações de Compra", icon: "ClipboardList" },
+      { path: "/compras/cotacoes", label: "Cotações", icon: "FileText" },
+      { path: "/compras/ordens", label: "Ordens de Compra", icon: "ShoppingCart" },
+      { path: "/compras/recebimentos", label: "Recebimentos", icon: "Package" },
+      { path: "/compras/fornecedores", label: "Fornecedores", icon: "Store" },
+      { path: "/compras/aprovacoes", label: "Aprovações", icon: "CheckCircle" },
+      { path: "/compras/emergencial", label: "Compra Emergencial", icon: "AlertTriangle" },
+      { path: "/compras/financeiro", label: "Financeiro de Compras", icon: "Wallet" },
+      { path: "/compras/realocacao", label: "Realocação de Itens", icon: "ArrowLeftRight" },
+    ],
+  },
+  // ── ALMOXARIFADO ─────────────────────────────────────────────────────────
+  {
+    section: "Almoxarifado",
+    color: "orange",
+    routes: [
+      { path: "/almoxarifado", label: "Painel do Almoxarifado", icon: "LayoutDashboard" },
+      { path: "/almoxarifado/movimentacoes", label: "Movimentações", icon: "ArrowLeftRight" },
+      { path: "/almoxarifado/inventario", label: "Inventário Semanal", icon: "ClipboardCheck" },
+      { path: "/almoxarifado/categorias", label: "Categorias de Materiais", icon: "Tag" },
+    ],
+  },
+  // ── FINANCEIRO ───────────────────────────────────────────────────────────
+  {
+    section: "Financeiro",
+    color: "emerald",
+    routes: [
+      { path: "/financeiro", label: "Painel Financeiro", icon: "LayoutDashboard" },
+      { path: "/financeiro/lancamentos", label: "Lançamentos", icon: "Receipt" },
+      { path: "/financeiro/receitas", label: "Receitas", icon: "TrendingUp" },
+      { path: "/financeiro/contas-a-pagar", label: "Contas a Pagar", icon: "Wallet" },
+      { path: "/financeiro/contas-a-receber", label: "Contas a Receber", icon: "Banknote" },
+      { path: "/financeiro/dre", label: "DRE", icon: "BarChart2" },
+      { path: "/financeiro/fluxo-de-caixa", label: "Fluxo de Caixa", icon: "LineChart" },
+      { path: "/financeiro/obrigacoes-fiscais", label: "Obrigações Fiscais", icon: "FileText" },
+      { path: "/financeiro/plano-de-contas", label: "Plano de Contas", icon: "ListChecks" },
+      { path: "/financeiro/centros-de-custo", label: "Centros de Custo", icon: "Layers" },
+      { path: "/financeiro/conciliacao", label: "Conciliação Bancária", icon: "Scale" },
+    ],
+  },
+  // ── TERCEIROS ────────────────────────────────────────────────────────────
+  {
+    section: "Terceiros - Gestão",
     color: "orange",
     routes: [
       { path: "/terceiros/painel", label: "Painel Terceiros", icon: "LayoutDashboard" },
@@ -141,7 +212,17 @@ const ALL_ROUTES = [
     ],
   },
   {
-    section: "Parceiros",
+    section: "Terceiros - Contratos",
+    color: "orange",
+    routes: [
+      { path: "/terceiros/contratos", label: "Contratos de Terceiros", icon: "FileSignature" },
+      { path: "/terceiros/medicoes", label: "Medições de Contratos", icon: "ClipboardList" },
+      { path: "/terceiros/previsao-caixa", label: "Previsão de Caixa", icon: "LineChart" },
+    ],
+  },
+  // ── PARCEIROS ────────────────────────────────────────────────────────────
+  {
+    section: "Parceiros Conveniados",
     color: "purple",
     routes: [
       { path: "/parceiros/painel", label: "Painel Parceiros", icon: "LayoutDashboard" },
@@ -152,25 +233,31 @@ const ALL_ROUTES = [
       { path: "/parceiros/pagamentos", label: "Pagamentos", icon: "Wallet" },
     ],
   },
+  // ── GERAL ────────────────────────────────────────────────────────────────
   {
-    section: "Relatórios e IA",
+    section: "Geral",
     color: "slate",
     routes: [
-      { path: "/relatorios/raio-x", label: "Raio-X do Funcionário", icon: "UserSearch" },
-      { path: "/comparativo-convencoes", label: "Comparativo Convenções", icon: "Scale" },
       { path: "/ajuda", label: "Biblioteca de Conhecimento", icon: "BookOpen" },
+      { path: "/revisoes", label: "Revisões do Sistema", icon: "FileText" },
     ],
   },
 ];
 
 const sectionColorMap: Record<string, { bg: string; border: string; text: string; headerBg: string }> = {
-  blue: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", headerBg: "bg-blue-100" },
-  green: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", headerBg: "bg-emerald-100" },
-  amber: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", headerBg: "bg-amber-100" },
-  orange: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", headerBg: "bg-orange-100" },
-  purple: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", headerBg: "bg-purple-100" },
-  indigo: { bg: "bg-indigo-50", border: "border-indigo-200", text: "text-indigo-700", headerBg: "bg-indigo-100" },
-  slate: { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-700", headerBg: "bg-slate-100" },
+  blue:    { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-700",    headerBg: "bg-blue-100" },
+  indigo:  { bg: "bg-indigo-50",  border: "border-indigo-200",  text: "text-indigo-700",  headerBg: "bg-indigo-100" },
+  green:   { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", headerBg: "bg-emerald-100" },
+  emerald: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", headerBg: "bg-emerald-100" },
+  amber:   { bg: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-700",   headerBg: "bg-amber-100" },
+  yellow:  { bg: "bg-yellow-50",  border: "border-yellow-200",  text: "text-yellow-700",  headerBg: "bg-yellow-100" },
+  orange:  { bg: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-700",  headerBg: "bg-orange-100" },
+  rose:    { bg: "bg-rose-50",    border: "border-rose-200",    text: "text-rose-700",    headerBg: "bg-rose-100" },
+  purple:  { bg: "bg-purple-50",  border: "border-purple-200",  text: "text-purple-700",  headerBg: "bg-purple-100" },
+  violet:  { bg: "bg-violet-50",  border: "border-violet-200",  text: "text-violet-700",  headerBg: "bg-violet-100" },
+  teal:    { bg: "bg-teal-50",    border: "border-teal-200",    text: "text-teal-700",    headerBg: "bg-teal-100" },
+  sky:     { bg: "bg-sky-50",     border: "border-sky-200",     text: "text-sky-700",     headerBg: "bg-sky-100" },
+  slate:   { bg: "bg-slate-50",   border: "border-slate-200",   text: "text-slate-700",   headerBg: "bg-slate-100" },
 };
 
 type RoutePermission = {

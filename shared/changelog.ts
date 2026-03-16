@@ -1726,6 +1726,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 397,
+    titulo: "Grupos de Usuários — Módulos novos adicionados ao controle de permissões",
+    descricao: "A tela de Grupos de Usuários (controle de acesso por rota) estava incompleta: Orçamento, Planejamento, Compras, Almoxarifado, Financeiro, Terceiros Contratos, Habilidades, e vários Dashboards/Relatórios não apareciam na lista de permissões configuráveis. Isso impedia que admins bloqueassem acesso a essas áreas para grupos de usuários. Adicionadas 9 novas seções completas: Orçamento (4 rotas), Planejamento (1), Compras (10), Almoxarifado (4), Financeiro (11), Habilidades e Capacitações (4), Terceiros-Contratos (3), Avaliação de Desempenho expandida, Geral. RH & DP reestruturado em seções mais limpas. Total de rotas configuráveis passou de ~35 para 90+. Cores adicionadas ao mapa: yellow, sky, teal, violet, rose, emerald.",
+    tipo: "melhoria",
+    modulos: "Configurações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 396,
     titulo: "Orçamento — Corrigido: falso conflito de obra após exclusão de orçamento",
     descricao: "Ao excluir um orçamento e tentar importar um novo para a mesma obra, o sistema ainda bloqueava com 'obra já possui orçamento' mesmo o orçamento tendo sido excluído. Causa: o React Query mantinha a lista de orçamentos em cache por 30s, e a exclusão só invalidava o cache local da tela de lista, não o da tela de importação. Correção: (1) OrcamentoLista e OrcamentoDetalhe passaram a usar utils.orcamento.list.invalidate() ao excluir, invalidando o cache global; (2) OrcamentoImportar passou a usar staleTime: 0 para garantir que a lista de orçamentos é sempre buscada do servidor ao abrir a página.",
