@@ -1616,10 +1616,13 @@ export const orcamentoRouter = router({
       forceReplace:   z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
+      console.log(`[Importar] Iniciando — arquivo: ${input.fileName}, tamanho base64: ${input.fileBase64.length} chars, companyId: ${input.companyId}, obraId: ${input.obraId ?? 'sem obra'}`);
+      try {
       const XLSX = await import('xlsx');
 
       // Decodificar base64
       const buffer = Buffer.from(input.fileBase64, 'base64');
+      console.log(`[Importar] Buffer decodificado: ${buffer.length} bytes`);
       const wb = XLSX.read(buffer, { type: 'buffer' });
 
       // Localizar abas obrigatórias
@@ -1780,11 +1783,25 @@ export const orcamentoRouter = router({
       }
 
       // Catálogo NÃO é atualizado automaticamente — usuário decide via "Enviar para Biblioteca"
+      console.log(`[Importar] Concluído — orcamentoId: ${orcamentoId}, itens: ${itens.length}, CPUs: ${cpusParsed.composicoes.length}`);
       return {
         id: orcamentoId, codigo, totalVenda, totalCusto, totalMeta,
         itemCount: itens.length,
         composicoesCount: cpusParsed.composicoes.length,
       };
+      } catch (err: any) {
+        // Captura qualquer erro não tratado e loga com detalhes para diagnóstico
+        if (err?.code && err?.message && typeof err.code === 'string') {
+          // Já é TRPCError — re-throw diretamente
+          throw err;
+        }
+        const msg = err?.message ?? String(err);
+        console.error(`[Importar] ERRO NÃO TRATADO — arquivo: ${input.fileName}`, msg, err?.stack ?? '');
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Erro ao processar planilha: ${msg.substring(0, 300)}`,
+        });
+      }
     }),
 
   // ── Atualizar percentual Meta (admin_master) ──────────────

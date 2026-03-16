@@ -563,7 +563,13 @@ export default function OrcamentoImportar() {
           return;
         }
       } catch {}
-      toast.error(err.message || "Erro ao importar planilha de custo");
+      const rawMsg: string = err.message || "";
+      const isJsonError = rawMsg === "Unexpected end of JSON input" || rawMsg.startsWith("Unexpected token");
+      if (isJsonError) {
+        toast.error("Erro de comunicação com o servidor. Verifique se a planilha não está corrompida e tente novamente. Se o arquivo for muito grande, contacte o suporte.");
+      } else {
+        toast.error(rawMsg || "Erro ao importar planilha de custo");
+      }
     } finally {
       setImportingCusto(false);
     }

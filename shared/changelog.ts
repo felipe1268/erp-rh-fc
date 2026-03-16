@@ -1806,4 +1806,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-16 00:00:00",
   },
+  {
+    version: 400,
+    titulo: "Módulo Terceiros — Contratos de Serviço, Medições e Previsão de Caixa",
+    descricao: "Novo submódulo dentro do módulo Terceiros com gestão completa de contratos de serviço. Inclui: 5 novas tabelas no banco (terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos); router com 23 endpoints (CRUD contratos, itens, medições automáticas por avanço de planejamento, aprovação/rejeição de medições, documentos, previsão de caixa, dashboard KPIs, geração de contrato a partir de cotação); 5 páginas React (Lista de Contratos com filtros e KPIs, Detalhe do Contrato com itens/medições/documentos, Novo Contrato com importação de atividades do planejamento, Medições global com aprovação inline, Previsão de Caixa semanal com gráfico de barras); navegação no DashboardLayout e rotas registradas no App.tsx. Melhoria no tratamento de erros da importação de orçamento com logging detalhado e mensagem mais clara ao usuário.",
+    tipo: "funcionalidade",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
 ];
