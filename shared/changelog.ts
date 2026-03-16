@@ -1807,6 +1807,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 403,
+    titulo: "Orçamento Import — Correção do erro 'Failed query' na importação",
+    descricao: "Identificado e corrigido bug crítico na importação de planilhas: as colunas 'meta_planilha_codigo' e 'meta_planilha_importado_em' existiam no schema Drizzle mas não no banco de dados Neon. O Drizzle tentava inserir nessas colunas e o PostgreSQL retornava erro de coluna inexistente. Colunas adicionadas ao Neon via ALTER TABLE. Também apagados os orçamentos do Hotel do Papa (ids 20 e 31, com 1.186 itens + 622 insumos + 106 BDI) e desvinculados todos os demais orçamentos das obras para reimportação limpa.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 402,
     titulo: "Painel RH — Aniversariantes exibe obra alocada",
     descricao: "No card 'Aniversariantes do Mês' e na tela cheia correspondente, passa a exibir a obra onde o funcionário está alocado (📍 Nome da Obra), tanto na visão compacta do card quanto no FullScreenDialog expandido.",

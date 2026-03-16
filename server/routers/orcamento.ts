@@ -1796,7 +1796,8 @@ export const orcamentoRouter = router({
           throw err;
         }
         const msg = err?.message ?? String(err);
-        console.error(`[Importar] ERRO NÃO TRATADO — arquivo: ${input.fileName}`, msg, err?.stack ?? '');
+        const cause = err?.cause?.message ?? err?.cause ?? '';
+        console.error(`[Importar] ERRO NÃO TRATADO — arquivo: ${input.fileName}`, msg.substring(0, 500), 'CAUSE:', cause, err?.stack?.substring(0, 500) ?? '');
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: `Erro ao processar planilha: ${msg.substring(0, 300)}`,
