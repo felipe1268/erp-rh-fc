@@ -1797,4 +1797,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-16 00:00:00",
   },
+  {
+    version: 399,
+    titulo: "Painel RH — Aniversários de Empresa + Cards Expandíveis + Remoção de Atividade Recente",
+    descricao: "Removida a seção 'Atividade Recente' do Painel RH. Adicionado card 'Aniversários de Empresa' mostrando funcionários que completam anos de empresa no mês corrente (ícone troféu para aniversariantes do dia, estrela para demais). Cards de KPI com dados (ASOs Vencidos, ASOs Vencendo, Férias a Vencer) agora são expandíveis: clicar abre um dialog com a lista completa de funcionários e indicação de urgência, além de link 'Ver página' para navegar diretamente.",
+    tipo: "melhoria",
+    modulos: "RH/DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
 ];

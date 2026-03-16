@@ -17,7 +17,7 @@ import {
   ChevronRight, HeartPulse, Briefcase, Scale, ExternalLink,
   Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
   Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info,
-  BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows
+  BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows, Award, Trophy, Star
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -68,12 +68,8 @@ export default function PainelRH() {
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: hasValidCompany }
   );
-  const { data: logs } = trpc.audit.list.useQuery(
-    { companyId: queryCompanyId, limit: 6, ...(isConstrutoras ? { companyIds } : {}) },
-    { enabled: hasValidCompany }
-  );
-
   const s = homeData?.stats;
+  const [kpiExpand, setKpiExpand] = useState<{ title: string; items: { nome: string; funcao?: string; extra?: string; urgencia?: string }[] } | null>(null);
   const [alertaTab, setAlertaTab] = useState('todos');
   const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0) + (s?.avisosPreviosVencendo ?? 0);
 
@@ -166,9 +162,9 @@ export default function PainelRH() {
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Indicadores RH</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {canSeeObras && <KpiCard title="Obras Ativas" value={s?.obrasAtivas ?? 0} icon={Landmark} color="teal" onClick={() => navigate("/obras")} />}
-                  {canSeeDocumentos && <KpiCard title="ASOs Vencidos" value={s?.asosVencidos ?? 0} icon={FileWarning} color="red" onClick={() => navigate("/controle-documentos")} alert={!!s?.asosVencidos} />}
-                  {canSeeDocumentos && <KpiCard title="ASOs Vencendo (60d)" value={s?.asosVencendo ?? 0} icon={HeartPulse} color="orange" onClick={() => navigate("/controle-documentos")} />}
-                  {canSeeFerias && <KpiCard title="Férias a Vencer" value={s?.feriasAlerta ?? 0} icon={CalendarClock} color="yellow" onClick={() => navigate("/ferias")} />}
+                  {canSeeDocumentos && <KpiCard title="ASOs Vencidos" value={s?.asosVencidos ?? 0} icon={FileWarning} color="red" onClick={() => navigate("/controle-documentos")} alert={!!s?.asosVencidos} onExpand={(s?.asosVencidos ?? 0) > 0 ? () => setKpiExpand({ title: "ASOs Vencidos", items: (homeData?.asosAlerta ?? []).filter((a: any) => a.vencido).map((a: any) => ({ nome: a.nome, funcao: a.funcao, extra: `Vencido há ${Math.abs(a.diasRestantes)} dia${Math.abs(a.diasRestantes) !== 1 ? 's' : ''}`, urgencia: 'critico' })) }) : undefined} />}
+                  {canSeeDocumentos && <KpiCard title="ASOs Vencendo (60d)" value={s?.asosVencendo ?? 0} icon={HeartPulse} color="orange" onClick={() => navigate("/controle-documentos")} onExpand={(s?.asosVencendo ?? 0) > 0 ? () => setKpiExpand({ title: "ASOs Vencendo (60 dias)", items: (homeData?.asosAlerta ?? []).filter((a: any) => !a.vencido).map((a: any) => ({ nome: a.nome, funcao: a.funcao, extra: `Vence em ${a.diasRestantes} dia${a.diasRestantes !== 1 ? 's' : ''}`, urgencia: a.diasRestantes <= 15 ? 'urgente' : 'atencao' })) }) : undefined} />}
+                  {canSeeFerias && <KpiCard title="Férias a Vencer" value={s?.feriasAlerta ?? 0} icon={CalendarClock} color="yellow" onClick={() => navigate("/ferias")} onExpand={(s?.feriasAlerta ?? 0) > 0 ? () => setKpiExpand({ title: "Férias a Vencer", items: (homeData?.feriasAlerta ?? []).map((f: any) => ({ nome: f.nome, funcao: f.funcao, extra: f.diasParaVencer <= 0 ? 'Período vencido!' : `Vence em ${f.diasParaVencer} dias`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao' })) }) : undefined} />}
                 </div>
               </div>
 
@@ -514,34 +510,50 @@ export default function PainelRH() {
                     </CardContent>
                   </Card>
 
-                  {canSeeAuditoria && <Card>
+                  <Card>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-slate-500" />
-                          Atividade Recente
+                          <Award className="h-4 w-4 text-amber-500" />
+                          Aniversários de Empresa
+                          {(s?.aniversariosEmpresaHoje ?? 0) > 0 && (
+                            <Badge className="bg-amber-100 text-amber-700 text-[10px] animate-pulse">{s!.aniversariosEmpresaHoje} hoje!</Badge>
+                          )}
                         </CardTitle>
-                        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate("/auditoria")}>Ver tudo <ChevronRight className="h-3 w-3 ml-1" /></Button>
+                        <Badge variant="secondary" className="text-[10px]">{s?.aniversariosEmpresaMes ?? 0} no mês</Badge>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      {!logs || logs.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Nenhuma atividade registrada</p>
+                      {!homeData?.aniversariosEmpresa?.length ? (
+                        <p className="text-xs text-muted-foreground">Nenhum aniversário de empresa este mês</p>
                       ) : (
                         <div className="space-y-2">
-                          {logs.map((log: any) => (
-                            <div key={log.id} className="flex items-start gap-2 text-xs">
-                              <div className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${log.action === "DELETE" ? "bg-red-500" : log.action === "CREATE" ? "bg-green-500" : "bg-blue-500"}`} />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-foreground truncate">{log.details}</p>
-                                <p className="text-[10px] text-muted-foreground">{log.userName} · {formatDateTime(log.createdAt)}</p>
+                          {homeData.aniversariosEmpresa.slice(0, 6).map((a: any) => (
+                            <div key={a.id} className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 ${a.isHoje ? 'bg-amber-50 border border-amber-200' : 'hover:bg-accent/40'}`}>
+                              <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${a.isHoje ? 'bg-amber-100' : 'bg-slate-100'}`}>
+                                {a.isHoje ? <Trophy className="h-3.5 w-3.5 text-amber-600" /> : <Star className="h-3.5 w-3.5 text-slate-400" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className={`font-medium truncate block ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome}</span>
+                                <span className="text-muted-foreground text-[10px]">{a.funcao}{a.obra ? ` · ${a.obra}` : ''}</span>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <Badge className={`text-[10px] ${a.isHoje ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                                  {a.anosEmpresa} ano{a.anosEmpresa !== 1 ? 's' : ''}
+                                </Badge>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">dia {a.dia}</p>
                               </div>
                             </div>
                           ))}
+                          {homeData.aniversariosEmpresa.length > 6 && (
+                            <p className="text-[10px] text-muted-foreground text-center pt-1">
+                              +{homeData.aniversariosEmpresa.length - 6} mais este mês
+                            </p>
+                          )}
                         </div>
                       )}
                     </CardContent>
-                  </Card>}
+                  </Card>
 
                   {(homeData?.advertenciasRecentes?.length ?? 0) > 0 ? (
                     <Card>
@@ -600,6 +612,37 @@ export default function PainelRH() {
           </Card>
         )}
       </div>
+
+      {/* ===== DIALOG EXPANSÃO KPI ===== */}
+      <Dialog open={!!kpiExpand} onOpenChange={(o) => { if (!o) setKpiExpand(null); }}>
+        <DialogContent className="max-w-md max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Info className="h-4 w-4 text-blue-500" />
+              {kpiExpand?.title}
+              <Badge variant="secondary" className="text-xs ml-1">{kpiExpand?.items.length ?? 0}</Badge>
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[55vh] pr-2">
+            <div className="space-y-2 py-1">
+              {kpiExpand?.items.map((item, i) => (
+                <div key={i} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-sm ${item.urgencia === 'critico' ? 'border-red-200 bg-red-50' : item.urgencia === 'urgente' ? 'border-orange-200 bg-orange-50' : 'border-border bg-card'}`}>
+                  <div className={`h-2 w-2 rounded-full shrink-0 ${item.urgencia === 'critico' ? 'bg-red-500' : item.urgencia === 'urgente' ? 'bg-orange-500' : 'bg-yellow-400'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{item.nome}</p>
+                    {item.funcao && <p className="text-[11px] text-muted-foreground">{item.funcao}</p>}
+                  </div>
+                  {item.extra && (
+                    <Badge className={`text-[10px] shrink-0 ${item.urgencia === 'critico' ? 'bg-red-100 text-red-700' : item.urgencia === 'urgente' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                      {item.extra}
+                    </Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       {/* ===== DIALOG DE ALERTAS ===== */}
       <Dialog open={alertasOpen} onOpenChange={setAlertasOpen}>
@@ -686,23 +729,35 @@ const COLOR_MAP: Record<string, { bg: string; icon: string; border: string; text
   orange: { bg: "bg-orange-50", icon: "text-orange-600", border: "border-l-orange-500", text: "text-orange-600" },
 };
 
-function KpiCard({ title, value, icon: Icon, color, onClick, badge, badgeColor, alert }: {
-  title: string; value: number; icon: any; color: string; onClick?: () => void; badge?: string; badgeColor?: string; alert?: boolean;
+function KpiCard({ title, value, icon: Icon, color, onClick, badge, badgeColor, alert, onExpand }: {
+  title: string; value: number; icon: any; color: string; onClick?: () => void; badge?: string; badgeColor?: string; alert?: boolean; onExpand?: () => void;
 }) {
   const c = COLOR_MAP[color] || COLOR_MAP.blue;
+  const handleClick = onExpand ?? onClick;
   return (
-    <Card className={`border-l-4 ${c.border} hover:shadow-md transition-shadow cursor-pointer ${alert ? "ring-2 ring-red-300 animate-pulse" : ""}`} onClick={onClick}>
+    <Card className={`border-l-4 ${c.border} hover:shadow-md transition-all cursor-pointer ${alert ? "ring-2 ring-red-300 animate-pulse" : ""} ${onExpand ? "hover:scale-[1.02]" : ""}`} onClick={handleClick}>
       <CardContent className="p-3 flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div className={`h-8 w-8 rounded-lg ${c.bg} flex items-center justify-center shrink-0`}>
             <Icon className={`h-4 w-4 ${c.icon}`} />
           </div>
-          {badge ? <Badge className={`text-[9px] ${badgeColor === "red" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>{badge}</Badge> : null}
+          <div className="flex items-center gap-1">
+            {badge ? <Badge className={`text-[9px] ${badgeColor === "red" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>{badge}</Badge> : null}
+            {onExpand && <ChevronRight className="h-3 w-3 text-muted-foreground/50" />}
+          </div>
         </div>
         <div>
           <p className={`text-2xl font-bold ${c.text}`}>{typeof value === 'number' ? value.toLocaleString('pt-BR') : value}</p>
           <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{title}</p>
         </div>
+        {onExpand && onClick && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
+            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 w-fit mt-0.5"
+          >
+            Ver página <ArrowRight className="h-2.5 w-2.5" />
+          </button>
+        )}
       </CardContent>
     </Card>
   );
