@@ -1332,9 +1332,10 @@ Responda APENAS com um objeto JSON no formato:
 
       // Verifica débitos de risco feitos especificamente para esta cotação
       const debitosEstaCotacao = input.cotacaoId
-        ? await db.select({ valor: comprasRiscoDebitos.valor })
+        ? await db.select({ id: comprasRiscoDebitos.id, valor: comprasRiscoDebitos.valor, observacao: comprasRiscoDebitos.observacao, criadoEm: comprasRiscoDebitos.criadoEm })
             .from(comprasRiscoDebitos)
             .where(eq(comprasRiscoDebitos.cotacaoId, input.cotacaoId))
+            .orderBy(asc(comprasRiscoDebitos.id))
         : [];
       const totalDebitadoEstaCotacao = debitosEstaCotacao.reduce((s, x) => s + n(x.valor), 0);
       const cobertoPorRisco = totalDebitadoEstaCotacao >= input.deficit - 0.01;
@@ -1348,6 +1349,7 @@ Responda APENAS com um objeto JSON no formato:
         semCobertura: totalCobertura < 0.01,
         cobertoPorRisco,
         totalDebitadoEstaCotacao,
+        debitosEstaCotacao,
       };
     }),
 
@@ -1358,11 +1360,12 @@ Responda APENAS com um objeto JSON no formato:
       orcamentoId: z.number(),
       cotacaoId: z.number().optional(),
       valor: z.number().positive(),
+      deficit: z.number().optional(),
       observacao: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      // Valida que não excede disponível
+      // Valida que não excede disponível na reserva global
       const debitos = await db.select({ valor: comprasRiscoDebitos.valor })
         .from(comprasRiscoDebitos)
         .where(eq(comprasRiscoDebitos.orcamentoId, input.orcamentoId));
@@ -1375,6 +1378,17 @@ Responda APENAS com um objeto JSON no formato:
       if (input.valor > disponivel + 0.01) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `Valor solicitado (${input.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) excede a reserva disponível (${disponivel.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).` });
       }
+      // Valida que não excede o déficit desta cotação específica
+      if (input.cotacaoId && input.deficit !== undefined) {
+        const debitosEsta = await db.select({ valor: comprasRiscoDebitos.valor })
+          .from(comprasRiscoDebitos)
+          .where(eq(comprasRiscoDebitos.cotacaoId, input.cotacaoId));
+        const totalEsta = debitosEsta.reduce((s, x) => s + n(x.valor), 0);
+        const restante = Math.max(0, input.deficit - totalEsta);
+        if (input.valor > restante + 0.01) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `O débito de ${input.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} excede o déficit restante desta cotação (${restante.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).` });
+        }
+      }
       await db.insert(comprasRiscoDebitos).values({
         companyId: input.companyId,
         obraId: input.obraId ?? null,
@@ -1384,6 +1398,47 @@ Responda APENAS com um objeto JSON no formato:
         observacao: input.observacao ?? null,
       });
       return { ok: true, novoDisponivel: disponivel - input.valor };
+    }),
+
+  reverterDebitoRisco: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [row] = await db.select().from(comprasRiscoDebitos).where(and(eq(comprasRiscoDebitos.id, input.id), eq(comprasRiscoDebitos.companyId, input.companyId)));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Débito não encontrado." });
+      await db.delete(comprasRiscoDebitos).where(eq(comprasRiscoDebitos.id, input.id));
+      return { ok: true, valorRestituido: n(row.valor) };
+    }),
+
+  listarDebitosRisco: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const conds: any[] = [eq(comprasRiscoDebitos.companyId, input.companyId)];
+      if (input.obraId) conds.push(eq(comprasRiscoDebitos.obraId, input.obraId));
+      const rows = await db.select({
+        id: comprasRiscoDebitos.id,
+        obraId: comprasRiscoDebitos.obraId,
+        orcamentoId: comprasRiscoDebitos.orcamentoId,
+        cotacaoId: comprasRiscoDebitos.cotacaoId,
+        valor: comprasRiscoDebitos.valor,
+        observacao: comprasRiscoDebitos.observacao,
+        criadoEm: comprasRiscoDebitos.criadoEm,
+      }).from(comprasRiscoDebitos).where(and(...conds)).orderBy(desc(comprasRiscoDebitos.criadoEm));
+      // Enrich with cotacao numeroCotacao and obra nome
+      const cotacaoIds = [...new Set(rows.map(r => r.cotacaoId).filter(Boolean))] as number[];
+      const obraIds = [...new Set(rows.map(r => r.obraId).filter(Boolean))] as number[];
+      const [cotacoes, obrasRows] = await Promise.all([
+        cotacaoIds.length > 0 ? db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao }).from(comprasCotacoes).where(inArray(comprasCotacoes.id, cotacaoIds)) : [],
+        obraIds.length > 0 ? db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIds)) : [],
+      ]);
+      const cotMap = new Map(cotacoes.map(c => [c.id, c.numeroCotacao]));
+      const obraMap = new Map(obrasRows.map(o => [o.id, o.nome]));
+      return rows.map(r => ({
+        ...r,
+        numeroCotacao: r.cotacaoId ? cotMap.get(r.cotacaoId) ?? null : null,
+        obraNome: r.obraId ? obraMap.get(r.obraId) ?? null : null,
+      }));
     }),
 
   solicitarAutorizacaoCompra: protectedProcedure

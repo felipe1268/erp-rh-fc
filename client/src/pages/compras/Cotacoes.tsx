@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2 } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -27,6 +27,15 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
   const debitarRisco = trpc.compras.debitarDoRisco.useMutation({
     onSuccess: (d) => {
       toast.success(`Debitado do RISCO! Reserva restante: ${fmt(d.novoDisponivel)}`);
+      setValorDebito("");
+      q.refetch();
+      onAcao?.();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const reverterDebito = trpc.compras.reverterDebitoRisco.useMutation({
+    onSuccess: (d) => {
+      toast.success(`Débito revertido! ${fmt(d.valorRestituido)} devolvidos à reserva.`);
       q.refetch();
       onAcao?.();
     },
@@ -51,8 +60,11 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
   if (q.isLoading) return <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-red-400" /></div>;
   if (!q.data) return null;
 
-  const { risco, sobras, totalSobras, semCobertura } = q.data;
+  const { risco, sobras, totalSobras, semCobertura, totalDebitadoEstaCotacao, debitosEstaCotacao } = q.data;
   const deficitRestante = deficit;
+  // Quanto ainda pode debitar = déficit − já debitado p/ esta cotação, e não mais que o disponível
+  const debitarMax = Math.min(risco.disponivel, Math.max(0, deficit - totalDebitadoEstaCotacao));
+  const cotacaoCoberta = totalDebitadoEstaCotacao >= deficit - 0.01;
 
   const totalSobrasSel = sobras.filter((_, i) => sobrasSel.has(i)).reduce((s, x) => s + x.sobra, 0);
 
@@ -76,7 +88,6 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
   }
 
   const valorDebitoNum = parseFloat(valorDebito.replace(",", ".")) || 0;
-  const debitarMax = Math.min(risco.disponivel, deficit);
 
   return (
     <div className="space-y-4">
@@ -101,7 +112,30 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
             <p className={`font-bold ${risco.disponivel > 0 ? "text-orange-600" : "text-gray-400"}`}>{fmt(risco.disponivel)}</p>
           </div>
         </div>
-        {risco.disponivel > 0 && risco.orcamentoId ? (
+
+        {/* Débitos já feitos para esta cotação */}
+        {debitosEstaCotacao && debitosEstaCotacao.length > 0 && (
+          <div className="mt-2 space-y-1">
+            <p className="text-[10px] uppercase tracking-wide text-orange-700 font-semibold">Débitos desta cotação</p>
+            {debitosEstaCotacao.map((d: any) => (
+              <div key={d.id} className="flex items-center justify-between bg-orange-100/70 rounded px-2 py-1 text-xs">
+                <div>
+                  <span className="font-semibold text-orange-800">{fmt(Number(d.valor))}</span>
+                  {d.observacao && <span className="text-orange-600 ml-2 truncate max-w-xs">{d.observacao}</span>}
+                </div>
+                <Button size="sm" variant="ghost"
+                  disabled={reverterDebito.isPending}
+                  onClick={() => { if (confirm(`Reverter débito de ${fmt(Number(d.valor))}?`)) reverterDebito.mutate({ id: d.id, companyId }); }}
+                  className="h-5 text-[10px] text-red-600 hover:bg-red-100 hover:text-red-700 px-1.5 gap-0.5">
+                  <Undo2 className="h-3 w-3" /> Desfazer
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Input de novo débito — só aparece se ainda há saldo a cobrir */}
+        {!cotacaoCoberta && risco.disponivel > 0 && debitarMax > 0 && risco.orcamentoId ? (
           <div className="flex items-center gap-2 pt-1">
             <div className="relative flex-1">
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
@@ -116,8 +150,8 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
                 className="w-full pl-8 pr-2 py-1.5 text-xs border border-orange-300 rounded bg-white outline-none focus:ring-1 focus:ring-orange-400"
               />
             </div>
-            <Button size="sm" disabled={valorDebitoNum <= 0 || valorDebitoNum > risco.disponivel + 0.01 || debitarRisco.isPending}
-              onClick={() => debitarRisco.mutate({ companyId, obraId, orcamentoId: risco.orcamentoId!, cotacaoId, valor: valorDebitoNum, observacao: `Débito automático — Cotação #${cotacaoId}` })}
+            <Button size="sm" disabled={valorDebitoNum <= 0 || valorDebitoNum > debitarMax + 0.01 || debitarRisco.isPending}
+              onClick={() => debitarRisco.mutate({ companyId, obraId, orcamentoId: risco.orcamentoId!, cotacaoId, valor: valorDebitoNum, deficit, observacao: `Débito automático — Cotação #${cotacaoId}` })}
               className="h-7 bg-orange-500 hover:bg-orange-600 text-white text-xs gap-1 whitespace-nowrap">
               {debitarRisco.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Debitar do Risco
             </Button>
@@ -127,6 +161,8 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
               Usar tudo
             </Button>
           </div>
+        ) : cotacaoCoberta ? (
+          <p className="text-[11px] text-green-700 italic font-medium bg-green-50 rounded px-2 py-1">✓ Déficit desta cotação já coberto integralmente pela reserva de risco.</p>
         ) : risco.inicial === 0 ? (
           <p className="text-[11px] text-gray-400 italic">Nenhuma reserva de risco cadastrada no BDI desta obra.</p>
         ) : (

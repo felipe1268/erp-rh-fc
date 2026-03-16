@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 424,
+    titulo: "Reserva de Risco: desfazer débito + trava de realocação duplicada + aba Realocações",
+    descricao: "Botão Desfazer em cada débito de risco dentro do painel da cotação e na aba Realocações. Prevenção de realocação duplicada: o sistema impede debitar mais do que o déficit desta cotação, tanto no backend (erro) quanto no frontend (limite do input). Nova aba 'Reserva de Risco (DI-08)' na página Realocações com histórico completo de todos os débitos, filtro por obra e botão Desfazer por linha.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "sistema",
+    dataPublicacao: "2026-03-16 21:00:00",
+  },
+  {
     version: 168,
     titulo: "Atualizar Controle de Revisões",
     descricao: "Adicionadas revisões 143 a 167 no Controle de Revisões do sistema, cobrindo todo o histórico de atualizações.",

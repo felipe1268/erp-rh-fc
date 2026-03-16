@@ -11,10 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeftRight, Plus, Loader2, Building2 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function ComprasRealocacao() {
   const { selectedCompany } = useCompany();
@@ -26,11 +29,17 @@ export default function ComprasRealocacao() {
   const [destino, setDestino] = useState("");
   const [valor, setValor] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [filtroObraRisco, setFiltroObraRisco] = useState("");
 
   const { data: obras } = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
 
   const { data, isLoading, refetch } = trpc.purchase.listarRealocacoes.useQuery(
     { companyId, obraId: obraId ? parseInt(obraId) : undefined },
+    { enabled: !!companyId }
+  );
+
+  const { data: debitosRisco, isLoading: loadingRisco, refetch: refetchRisco } = trpc.compras.listarDebitosRisco.useQuery(
+    { companyId, obraId: filtroObraRisco ? parseInt(filtroObraRisco) : undefined },
     { enabled: !!companyId }
   );
 
@@ -43,9 +52,19 @@ export default function ComprasRealocacao() {
     onError: () => toast.error("Erro ao criar realocação"),
   });
 
+  const reverterMut = trpc.compras.reverterDebitoRisco.useMutation({
+    onSuccess: (d) => {
+      toast.success(`Débito revertido! ${fmt(d.valorRestituido)} devolvidos à reserva.`);
+      refetchRisco();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const realocacoes = data ?? [];
   const totalRealocado = realocacoes.reduce((s: number, r: any) => s + Number(r.valorRealocado), 0);
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  const debitos = debitosRisco ?? [];
+  const totalDebitado = debitos.reduce((s: number, d: any) => s + Number(d.valor), 0);
 
   return (
     <DashboardLayout>
@@ -55,84 +74,190 @@ export default function ComprasRealocacao() {
             <ArrowLeftRight className="h-6 w-6 text-purple-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Realocação de Verba</h1>
-            <p className="text-sm text-gray-500">Transfira orçamento entre itens da EAP dentro de uma obra</p>
+            <h1 className="text-2xl font-bold text-gray-900">Realocações</h1>
+            <p className="text-sm text-gray-500">Histórico de realocações de verba e débitos da reserva de risco</p>
           </div>
-          <Button className="ml-auto bg-purple-600 hover:bg-purple-700" onClick={() => setShowNova(true)}>
-            <Plus className="h-4 w-4 mr-2" />Nova Realocação
-          </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="border-purple-200 bg-purple-50">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <ArrowLeftRight className="h-8 w-8 text-purple-600" />
-                <div>
-                  <p className="text-2xl font-bold text-purple-700">{realocacoes.length}</p>
-                  <p className="text-sm text-purple-600">Total de Realocações</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-blue-200 bg-blue-50">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Building2 className="h-8 w-8 text-blue-600" />
-                <div>
-                  <p className="text-xl font-bold text-blue-700">{fmt(totalRealocado)}</p>
-                  <p className="text-sm text-blue-600">Volume Realocado</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Tabs defaultValue="verba">
+          <TabsList className="mb-4">
+            <TabsTrigger value="verba" className="gap-2">
+              <ArrowLeftRight className="h-4 w-4" /> Realocação de Verba
+            </TabsTrigger>
+            <TabsTrigger value="risco" className="gap-2">
+              <ShieldAlert className="h-4 w-4" /> Reserva de Risco (DI-08)
+            </TabsTrigger>
+          </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Histórico de Realocações</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
-            ) : realocacoes.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <ArrowLeftRight className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                <p>Nenhuma realocação registrada.</p>
+          {/* ── ABA 1: REALOCAÇÃO DE VERBA ─────────────────────────────── */}
+          <TabsContent value="verba" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="grid grid-cols-2 gap-4 flex-1 mr-4">
+                <Card className="border-purple-200 bg-purple-50">
+                  <CardContent className="pt-5 pb-4">
+                    <div className="flex items-center gap-3">
+                      <ArrowLeftRight className="h-7 w-7 text-purple-600" />
+                      <div>
+                        <p className="text-xl font-bold text-purple-700">{realocacoes.length}</p>
+                        <p className="text-xs text-purple-600">Total de Realocações</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-blue-200 bg-blue-50">
+                  <CardContent className="pt-5 pb-4">
+                    <div className="flex items-center gap-3">
+                      <Building2 className="h-7 w-7 text-blue-600" />
+                      <div>
+                        <p className="text-base font-bold text-blue-700">{fmt(totalRealocado)}</p>
+                        <p className="text-xs text-blue-600">Volume Realocado</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Obra</TableHead>
-                    <TableHead>Origem</TableHead>
-                    <TableHead>Destino</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Motivo</TableHead>
-                    <TableHead>Usuário</TableHead>
-                    <TableHead>Data</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {realocacoes.map((r: any) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono">#{r.id}</TableCell>
-                      <TableCell>{r.obraId || "—"}</TableCell>
-                      <TableCell>{r.origemEapItemNome || `Item #${r.origemEapItemId}` || "—"}</TableCell>
-                      <TableCell>{r.destinoEapItemNome || `Item #${r.destinoEapItemId}` || "—"}</TableCell>
-                      <TableCell className="font-medium text-purple-700">{fmt(Number(r.valorRealocado))}</TableCell>
-                      <TableCell className="max-w-xs truncate">{r.motivo}</TableCell>
-                      <TableCell>{r.usuarioNome || "—"}</TableCell>
-                      <TableCell>{format(new Date(r.createdAt), "dd/MM/yy HH:mm", { locale: ptBR })}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+              <Button className="bg-purple-600 hover:bg-purple-700 whitespace-nowrap" onClick={() => setShowNova(true)}>
+                <Plus className="h-4 w-4 mr-2" />Nova Realocação
+              </Button>
+            </div>
 
+            <Card>
+              <CardHeader><CardTitle>Histórico de Realocações de Verba</CardTitle></CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+                ) : realocacoes.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <ArrowLeftRight className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                    <p>Nenhuma realocação registrada.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>Obra</TableHead>
+                        <TableHead>Origem</TableHead>
+                        <TableHead>Destino</TableHead>
+                        <TableHead>Valor</TableHead>
+                        <TableHead>Motivo</TableHead>
+                        <TableHead>Usuário</TableHead>
+                        <TableHead>Data</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {realocacoes.map((r: any) => (
+                        <TableRow key={r.id}>
+                          <TableCell className="font-mono">#{r.id}</TableCell>
+                          <TableCell>{r.obraId || "—"}</TableCell>
+                          <TableCell>{r.origemEapItemNome || `Item #${r.origemEapItemId}` || "—"}</TableCell>
+                          <TableCell>{r.destinoEapItemNome || `Item #${r.destinoEapItemId}` || "—"}</TableCell>
+                          <TableCell className="font-medium text-purple-700">{fmt(Number(r.valorRealocado))}</TableCell>
+                          <TableCell className="max-w-xs truncate">{r.motivo}</TableCell>
+                          <TableCell>{r.usuarioNome || "—"}</TableCell>
+                          <TableCell>{format(new Date(r.createdAt), "dd/MM/yy HH:mm", { locale: ptBR })}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── ABA 2: RESERVA DE RISCO ─────────────────────────────── */}
+          <TabsContent value="risco" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="border-orange-200 bg-orange-50">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <ShieldAlert className="h-7 w-7 text-orange-600" />
+                    <div>
+                      <p className="text-xl font-bold text-orange-700">{debitos.length}</p>
+                      <p className="text-xs text-orange-600">Débitos realizados</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-red-200 bg-red-50">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <TrendingDown className="h-7 w-7 text-red-600" />
+                    <div>
+                      <p className="text-base font-bold text-red-700">{fmt(totalDebitado)}</p>
+                      <p className="text-xs text-red-600">Total debitado da reserva</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle>Histórico de Débitos — Reserva de Risco BDI (DI-08)</CardTitle>
+                  <div className="w-52">
+                    <Select value={filtroObraRisco} onValueChange={setFiltroObraRisco}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todas as obras" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Todas as obras</SelectItem>
+                        {(obras ?? []).map((o: any) => (
+                          <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingRisco ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+                ) : debitos.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <ShieldAlert className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                    <p>Nenhum débito de reserva de risco registrado.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>Cotação</TableHead>
+                        <TableHead>Obra</TableHead>
+                        <TableHead>Valor debitado</TableHead>
+                        <TableHead>Observação</TableHead>
+                        <TableHead>Data/Hora</TableHead>
+                        <TableHead className="text-center">Ação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {debitos.map((d: any) => (
+                        <TableRow key={d.id}>
+                          <TableCell className="font-mono text-xs text-gray-400">#{d.id}</TableCell>
+                          <TableCell>{d.numeroCotacao ? <span className="font-medium text-blue-700">#{d.numeroCotacao}</span> : <span className="text-gray-400">—</span>}</TableCell>
+                          <TableCell className="max-w-[180px] truncate">{d.obraNome || "—"}</TableCell>
+                          <TableCell><span className="font-semibold text-orange-700">{fmt(Number(d.valor))}</span></TableCell>
+                          <TableCell className="max-w-xs truncate text-xs text-gray-600">{d.observacao || "—"}</TableCell>
+                          <TableCell className="text-xs text-gray-500">{format(new Date(d.criadoEm), "dd/MM/yy HH:mm", { locale: ptBR })}</TableCell>
+                          <TableCell className="text-center">
+                            <Button size="sm" variant="ghost"
+                              disabled={reverterMut.isPending}
+                              onClick={() => { if (confirm(`Reverter débito de ${fmt(Number(d.valor))} da cotação #${d.numeroCotacao ?? d.cotacaoId}?`)) reverterMut.mutate({ id: d.id, companyId }); }}
+                              className="h-7 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 gap-1">
+                              <Undo2 className="h-3 w-3" /> Desfazer
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Dialog Nova Realocação */}
         <Dialog open={showNova} onOpenChange={setShowNova}>
           <DialogContent>
             <DialogHeader><DialogTitle>Nova Realocação de Verba</DialogTitle></DialogHeader>
