@@ -1924,6 +1924,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 417,
+    titulo: "Compras — Correção de preços R$ 0,00 nos itens de cotação",
+    descricao: "Corrigido bug onde os itens de uma cotação exibiam precoUnitario e total como R$ 0,00 mesmo com o total geral correto. O problema ocorria porque os itens de compras_cotacoes_itens eram criados com preço zero (preenchidos depois via Mapa de Cotação), mas o endpoint getCotacao não enriquecia esses itens com os preços reais do mapa. Solução: quando a cotação possui fornecedor vencedor selecionado, os itens são agora enriquecidos com os valores de precoUnitario, descontoPct, quantidade e total vindos de compras_cotacao_respostas antes de serem retornados ao frontend.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 416,
     titulo: "RH + Planejamento — Alocação automática de custo de MO nas atividades",
     descricao: "Implementa o ciclo completo de transferência de custo de mão de obra (MO) da folha para o cronograma físico-financeiro. (1) Novas tabelas: cargo_categorias_custo (mapeamento funcao→categoria), folha_mo_transferencias (histórico de fechamentos), planejamento_custos_mo (custo real por atividade/mês). (2) Backend moAlocacao com: CRUD de categorias de cargo, fecharFolhaMes (seta status→'fechado' nos lançamentos), verificarTransferenciaMO (checa pré-condições), executarTransferenciaMO (lógica das 3 camadas: Direto→atividades com avanço proporcional, Indireta Obra→01.01 Equipe Técnica, Escritório Central→CI-01 rateado por valorContrato), desfazerTransferenciaMO, listarCustosMoProjeto. (3) RH/Folha: novo card 'Fechar Folha para Custo de MO' com botão de fechamento e botão 'Config. Cargos' que abre modal de mapeamento de cargos por categoria. (4) Planejamento (PlanejamentoDetalhe): botão 'Importar Custos MO' no cabeçalho com dialog que mostra status das pré-condições (folha fechada, cargos configurados, já importado) e executa a transferência com confirmação.",

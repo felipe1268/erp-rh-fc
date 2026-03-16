@@ -915,6 +915,32 @@ Responda APENAS com um objeto JSON no formato:
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
+
+      // Se há um fornecedor vencedor selecionado, enriquecer os itens com preços reais do Mapa
+      if (cot.fornecedorId) {
+        const respostas = await db.select().from(comprasCotacaoRespostas).where(
+          and(
+            eq(comprasCotacaoRespostas.cotacaoId, input.id),
+            eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId),
+          )
+        );
+        if (respostas.length > 0) {
+          const respostaByItemId = new Map(respostas.map(r => [r.itemId, r]));
+          const itensEnriquecidos = itens.map(it => {
+            const r = respostaByItemId.get(it.id);
+            if (!r) return it;
+            return {
+              ...it,
+              precoUnitario: r.precoUnitario ?? it.precoUnitario,
+              descontoPct:   r.descontoPct   ?? it.descontoPct,
+              quantidade:    r.quantidade    ?? it.quantidade,
+              total:         r.total         ?? it.total,
+            };
+          });
+          return { ...cot, itens: itensEnriquecidos };
+        }
+      }
+
       return { ...cot, itens };
     }),
 
