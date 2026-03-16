@@ -8,4 +8,4 @@ cmds = ["npm install -g pnpm@9 && pnpm install --frozen-lockfile --no-strict-pee
 cmds = ["pnpm run build"]
 
 [start]
-cmd = "node dist/index.js"
+cmd = "NODE_ENV=production node dist/index.js"
