@@ -3720,6 +3720,25 @@ export const orcamentoRouter = router({
 
       const n = (v: any) => parseFloat(v || '0');
 
+      // Busca L-01 (Lucro Bruto) do BDI para todos os orçamentos — mesmo critério do planejamento
+      const orcIds = lista.map(o => o.id);
+      const lucroMap = new Map<number, number>();
+      if (orcIds.length > 0) {
+        const bdiRows = await db.select({
+          orcamentoId: orcamentoBdi.orcamentoId,
+          percentual: orcamentoBdi.percentual,
+        }).from(orcamentoBdi)
+          .where(and(
+            inArray(orcamentoBdi.orcamentoId, orcIds),
+            eq(orcamentoBdi.codigo, 'L-01'),
+          ));
+        for (const r of bdiRows) {
+          if (r.orcamentoId && n(r.percentual) > 0) {
+            lucroMap.set(r.orcamentoId, n(r.percentual));
+          }
+        }
+      }
+
       // Orçamentos com BDI calculado (totalVenda > 0) — usados para métricas financeiras
       // Orçamentos sem venda (importados só com custo, sem BDI) são excluídos das métricas
       // de carteira e margem para não distorcer os indicadores.
@@ -3797,11 +3816,11 @@ export const orcamentoRouter = router({
       // Para cada projeto ligado a um orçamento desta empresa, calcula:
       //   Previsto  = lucro / duração em meses do cronograma
       //   Realizado = (lucro × %avanço) / meses decorridos desde o início
-      const orcIds = comVenda.map(o => o.id);
+      const projOrcIds = comVenda.map(o => o.id);
       let lucroMensalPrev = 0;
       let lucroMensalReal = 0;
 
-      if (orcIds.length > 0) {
+      if (projOrcIds.length > 0) {
         const projRows = await db
           .select({
             id:                    planejamentoProjetos.id,
@@ -3813,7 +3832,7 @@ export const orcamentoRouter = router({
           .where(
             and(
               eq(planejamentoProjetos.companyId, input.companyId),
-              inArray(planejamentoProjetos.orcamentoId, orcIds),
+              inArray(planejamentoProjetos.orcamentoId, projOrcIds),
             )
           );
 
@@ -3864,6 +3883,7 @@ export const orcamentoRouter = router({
           status: o.status, bdiPercentual: o.bdiPercentual,
           totalVenda: o.totalVenda, totalCusto: o.totalCusto, totalMeta: o.totalMeta,
           createdAt: o.createdAt,
+          margemLucroBdi: lucroMap.get(o.id) ?? 0,
         })),
       };
     }),
