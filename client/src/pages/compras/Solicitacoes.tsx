@@ -587,7 +587,7 @@ export default function Solicitacoes() {
 
       {/* ── Dialog Detalhe SC ─────────────────────────────────────── */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => { if (!v) { setShowDetalhe(null); setRecebQtd({}); } }}>
-        <DialogContent className="border-gray-200 max-w-3xl max-h-[90vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
+        <DialogContent className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           {detalheQ.isLoading ? (
             <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
           ) : detalhe ? (
