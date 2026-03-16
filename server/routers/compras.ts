@@ -1531,6 +1531,15 @@ Responda APENAS com um objeto JSON no formato:
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+
+      // Busca preços do fornecedor vencedor no mapa de cotação
+      const respostasForn = cot.fornecedorId
+        ? await db.select().from(comprasCotacaoRespostas).where(
+            and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId))
+          )
+        : [];
+      const precoMap = new Map(respostasForn.map(r => [r.itemId, r]));
+
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
@@ -1552,15 +1561,21 @@ Responda APENAS com um objeto JSON no formato:
       }).returning();
       if (itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
-          itens.map(it => ({
-            ordemId: oc.id,
-            solicitacaoItemId: it.solicitacaoItemId ?? null,
-            descricao: it.descricao,
-            unidade: it.unidade,
-            quantidade: String(it.quantidade),
-            precoUnitario: String(it.precoUnitario),
-            total: String(it.total),
-          }))
+          itens.map(it => {
+            const resp = precoMap.get(it.id);
+            const pu = resp ? n(resp.precoUnitario) : n(it.precoUnitario);
+            const qty = resp ? n(resp.quantidade) : n(it.quantidade);
+            const tot = resp ? n(resp.total) : (pu * qty);
+            return {
+              ordemId: oc.id,
+              solicitacaoItemId: it.solicitacaoItemId ?? null,
+              descricao: it.descricao,
+              unidade: it.unidade,
+              quantidade: String(qty),
+              precoUnitario: String(pu.toFixed(4)),
+              total: String(tot.toFixed(2)),
+            };
+          })
         );
       }
       await db.update(comprasCotacoes).set({ status: "aprovada" }).where(eq(comprasCotacoes.id, input.cotacaoId));

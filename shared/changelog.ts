@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 426,
+    titulo: "Bugfix: preços unitários zerados na OC gerada pela aprovação da cotação",
+    descricao: "Ao gerar OC a partir da aprovação da cotação, os preços eram copiados dos itens da cotação (sem preço) em vez das respostas do mapa de cotação do fornecedor vencedor. Corrigido: endpoint criarOrdemDeCotacao agora busca preços, quantidades e totais em compras_cotacao_respostas para o fornecedor selecionado. OC existente (OC-2026-0001) também teve os 9 itens corrigidos diretamente no banco.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "sistema",
+    dataPublicacao: "2026-03-16 22:00:00",
+  },
+  {
     version: 425,
     titulo: "Cotação: botões Aprovar / Recusar visíveis no cabeçalho",
     descricao: "Botões 'Aprovar e Gerar OC' e 'Recusar' movidos para o topo da página de detalhe da cotação, ao lado do badge de status — sem precisar rolar a página. Quando aprovada, exibe 'Gerar Contrato de Serviço' ou 'Ver Contrato' no mesmo local.",
