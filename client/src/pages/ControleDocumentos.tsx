@@ -1002,23 +1002,29 @@ export default function ControleDocumentos() {
   const [validadeForceStatus, setValidadeForceStatus] = useState<string | undefined>(undefined);
 
   const handleCardClick = (filter: string) => {
-    if (cardFilter === filter) {
+    const resetAll = () => {
       setCardFilter(null);
       setStatusFilter("todos");
       setValidadeForceTipo(undefined);
       setValidadeForceStatus(undefined);
-      if (filter === "vencido" || filter === "vencer" || filter === "asos" || filter === "semASO") setActiveTab("aso");
+    };
+    if (cardFilter === filter) {
+      // Toggle off — volta ao tab padrão do grupo
+      resetAll();
+      if (filter === "asos" || filter === "vencido" || filter === "vencer" || filter === "semASO") setActiveTab("aso");
+      else if (filter === "treinamentos" || filter === "treinVencido" || filter === "treinVencer") setActiveTab("treinamentos");
+      else if (filter === "atestados") setActiveTab("atestados");
+      else if (filter === "advertencias") setActiveTab("advertencias");
     } else {
+      resetAll();
       setCardFilter(filter);
-      setValidadeForceTipo(undefined);
-      setValidadeForceStatus(undefined);
       if (filter === "asos") { setActiveTab("aso"); setStatusFilter("todos"); }
       else if (filter === "vencido") { setActiveTab("aso"); setStatusFilter("vencido"); }
       else if (filter === "vencer") { setActiveTab("aso"); setStatusFilter("vencer"); }
       else if (filter === "semASO") { setActiveTab("semASO"); setStatusFilter("todos"); }
       else if (filter === "treinamentos") { setActiveTab("treinamentos"); setStatusFilter("todos"); }
-      else if (filter === "treinVencido") { setActiveTab("validade"); setStatusFilter("todos"); setValidadeForceTipo("Treinamento"); setValidadeForceStatus("vencido"); }
-      else if (filter === "treinVencer") { setActiveTab("validade"); setStatusFilter("todos"); setValidadeForceTipo("Treinamento"); setValidadeForceStatus("vencer30"); }
+      else if (filter === "treinVencido") { setActiveTab("validade"); setValidadeForceTipo("Treinamento"); setValidadeForceStatus("vencido"); }
+      else if (filter === "treinVencer") { setActiveTab("validade"); setValidadeForceTipo("Treinamento"); setValidadeForceStatus("vencer30"); }
       else if (filter === "atestados") { setActiveTab("atestados"); setStatusFilter("todos"); }
       else if (filter === "advertencias") { setActiveTab("advertencias"); setStatusFilter("todos"); }
     }
@@ -1465,7 +1471,7 @@ export default function ControleDocumentos() {
             <span className="text-muted-foreground">Filtro ativo:</span>
             <Badge variant="secondary" className="gap-1">
               {cardFilter === "asos" ? "Todos os ASOs" : cardFilter === "vencido" ? "ASOs Vencidos" : cardFilter === "vencer" ? "ASOs A Vencer" : cardFilter === "semASO" ? "Sem ASO" : cardFilter === "treinamentos" ? "Treinamentos" : cardFilter === "treinVencido" ? "Trein. Vencidos" : cardFilter === "treinVencer" ? "Trein. A Vencer" : cardFilter === "atestados" ? "Atestados" : "Advertências"}
-              <button onClick={() => { setCardFilter(null); setStatusFilter("todos"); }} className="ml-1 hover:text-foreground">✕</button>
+              <button onClick={() => { setCardFilter(null); setStatusFilter("todos"); setValidadeForceTipo(undefined); setValidadeForceStatus(undefined); }} className="ml-1 hover:text-foreground">✕</button>
             </Badge>
           </div>
         )}

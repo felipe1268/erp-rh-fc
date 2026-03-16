@@ -1726,6 +1726,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 393,
+    titulo: "Controle de Documentos — Revisão geral dos filtros dos cards",
+    descricao: "Corrigidos três bugs nos filtros: (1) Botão X da badge 'Filtro ativo' não resetava os filtros forçados do Painel de Validade (forceTipo/forceStatus), deixando Treinamento filtrado mesmo após limpar o filtro. (2) Toggle-off de qualquer card (clicar novamente para desativar) não navegava de volta ao tab correto — ASOs voltam para 'ASO', Treinamentos voltam para 'Treinamentos', Atestados/Advertências para seus tabs; antes os cards de Trein. Vencidos/A Vencer ficavam em 'Validade' sem filtro ao desativar. (3) Lógica de resetAll() centralizada para garantir que todos os estados de filtro sejam sempre limpos antes de aplicar novo filtro, evitando estados residuais.",
+    tipo: "correcao",
+    modulos: "Controle de Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 392,
     titulo: "Controle de Documentos — Trein. Vencidos / A Vencer filtram só Treinamentos no Painel de Validade",
     descricao: "Ao clicar nos cards 'Trein. Vencidos' ou 'Trein. A Vencer' no header, o Painel de Validade agora abre pré-filtrado por tipo 'Treinamento' e com status correspondente ('Vencido' ou 'Vence em 30 dias'), sem misturar com ASOs. Os filtros internos do painel continuam editáveis pelo usuário. Ao desfazer o filtro do card, o painel volta para 'Todos os Tipos'.",
