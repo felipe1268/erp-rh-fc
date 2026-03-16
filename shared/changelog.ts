@@ -1725,4 +1725,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-16 00:00:00",
   },
+  {
+    version: 391,
+    titulo: "Controle de Documentos — Corrigido: aba Sem ASO exibia 0 funcionários",
+    descricao: "A query SQL da listagem de funcionários sem ASO usava '= true' para comparar a coluna isActive (tipo smallint) da tabela obra_funcionarios, o que causava erro de tipo no PostgreSQL e retornava array vazio. Corrigido para '= 1'. O contador no cabeçalho já funcionava corretamente (query diferente sem o JOIN problemático). Agora a aba exibe os funcionários corretamente.",
+    tipo: "correcao",
+    modulos: "Controle de Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
 ];

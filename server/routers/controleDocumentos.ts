@@ -913,7 +913,7 @@ export const controleDocumentosRouter = router({
         SELECT e.id, e."nomeCompleto", e.cpf, e.funcao, e."dataAdmissao", e.status,
           ob.nome as "obraNome"
         FROM employees e
-        LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = true
+        LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
         LEFT JOIN obras ob ON of2."obraId" = ob.id
         WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
           AND e."deletedAt" IS NULL
