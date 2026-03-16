@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package } from "lucide-react";
 
 function SaldosRealocacaoPanel({ companyId, obraId, deficit }: { companyId: number; obraId?: number; deficit: number }) {
   const q = trpc.compras.buscarSaldosRealocacao.useQuery(
@@ -176,6 +176,10 @@ export default function Cotacoes() {
   });
   const selecionarVencedor = trpc.compras.selecionarVencedorMapa.useMutation({
     onSuccess: () => { toast.success("Fornecedor vencedor selecionado!"); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const cancelarVencedor = trpc.compras.cancelarVencedorMapa.useMutation({
+    onSuccess: () => { toast.success("Seleção de vencedor cancelada. Ajuste os preços e selecione novamente."); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); },
     onError: (e) => toast.error(e.message),
   });
   const salvarAnexo = trpc.compras.salvarAnexoFornecedor.useMutation({
@@ -644,11 +648,21 @@ export default function Cotacoes() {
                           <p className="text-emerald-600 text-xs">Total: {parseFloat(melhorForn.totalOrcado ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}{melhorForn.prazoEntregaDias ? ` · Prazo: ${melhorForn.prazoEntregaDias} dias` : ""}</p>
                         </div>
                       </div>
-                      <Button onClick={() => selecionarVencedor.mutate({ cotacaoId: showDetalhe!, fornecedorId: melhorForn.fornecedorId })}
-                        disabled={selecionarVencedor.isPending || melhorForn.selecionado}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2 text-sm">
-                        {melhorForn.selecionado ? <><CheckCircle className="h-4 w-4" /> Vencedor Selecionado</> : <><Trophy className="h-4 w-4" /> Selecionar como Vencedor</>}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {melhorForn.selecionado && (
+                          <Button variant="outline"
+                            onClick={() => cancelarVencedor.mutate({ cotacaoId: showDetalhe! })}
+                            disabled={cancelarVencedor.isPending}
+                            className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 gap-2 text-sm">
+                            {cancelarVencedor.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Cancelar Seleção
+                          </Button>
+                        )}
+                        <Button onClick={() => selecionarVencedor.mutate({ cotacaoId: showDetalhe!, fornecedorId: melhorForn.fornecedorId })}
+                          disabled={selecionarVencedor.isPending || melhorForn.selecionado}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2 text-sm">
+                          {melhorForn.selecionado ? <><CheckCircle className="h-4 w-4" /> Vencedor Selecionado</> : <><Trophy className="h-4 w-4" /> Selecionar como Vencedor</>}
+                        </Button>
+                      </div>
                     </div>
                   )}
 

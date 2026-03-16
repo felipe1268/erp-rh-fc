@@ -1852,6 +1852,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 414,
+    titulo: "Compras — Cancelar vencedor do mapa de cotação antes de gerar OC",
+    descricao: "Adicionado botão 'Cancelar Seleção' no banner do fornecedor vencedor do Mapa de Cotação. Quando o vencedor já está marcado (Vencedor Selecionado), o botão vermelho aparece ao lado permitindo desfazer a escolha, voltar a editar preços e selecionar outro fornecedor antes de aprovar a OC. O cancelamento limpa a seleção de todos os participantes e desvincula o fornecedor da cotação, sem apagar os preços digitados.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 413,
     titulo: "Compras — Correção de erros na geração de OC e pré-preenchimento de preços",
     descricao: "Dois problemas corrigidos: (1) Erro 'coluna subtotal não existe' ao clicar em Aprovar e Gerar OC: a coluna subtotal estava no schema Drizzle mas ausente na tabela compras_ordens do banco — coluna adicionada via SQL direto, eliminando o erro de query. (2) Mapa de cotação agora pré-preenche os campos de 'Preço Unit.' de cada fornecedor com o valor da META (orçamento) quando nenhuma resposta foi salva ainda, facilitando a entrada de preços pelo comprador. Preços já salvos pelo fornecedor continuam com prioridade sobre o pré-preenchimento.",

@@ -1276,6 +1276,21 @@ Responda APENAS com um objeto JSON no formato:
       return { ok: true };
     }),
 
+  cancelarVencedorMapa: protectedProcedure
+    .input(z.object({ cotacaoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // Remove seleção de todos os fornecedores
+      await db.update(comprasCotacaoFornecedores)
+        .set({ selecionado: false })
+        .where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
+      // Limpa fornecedor vencedor da cotação mas mantém o total intacto para referência
+      await db.update(comprasCotacoes)
+        .set({ fornecedorId: null })
+        .where(eq(comprasCotacoes.id, input.cotacaoId));
+      return { ok: true };
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // ORDENS DE COMPRA (OC)
   // ══════════════════════════════════════════════════════════════
