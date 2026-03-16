@@ -615,25 +615,27 @@ export default function PainelRH() {
 
       {/* ===== DIALOG EXPANSÃO KPI ===== */}
       <Dialog open={!!kpiExpand} onOpenChange={(o) => { if (!o) setKpiExpand(null); }}>
-        <DialogContent className="max-w-md max-h-[80vh]">
+        <DialogContent className="max-w-2xl w-full max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Info className="h-4 w-4 text-blue-500" />
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Info className="h-5 w-5 text-blue-500" />
               {kpiExpand?.title}
-              <Badge variant="secondary" className="text-xs ml-1">{kpiExpand?.items.length ?? 0}</Badge>
+              <Badge variant="secondary" className="text-sm ml-1">{kpiExpand?.items.length ?? 0} funcionário{(kpiExpand?.items.length ?? 0) !== 1 ? 's' : ''}</Badge>
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[55vh] pr-2">
-            <div className="space-y-2 py-1">
+          <ScrollArea className="max-h-[72vh] pr-2">
+            <div className="space-y-2 py-2">
               {kpiExpand?.items.map((item, i) => (
-                <div key={i} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-sm ${item.urgencia === 'critico' ? 'border-red-200 bg-red-50' : item.urgencia === 'urgente' ? 'border-orange-200 bg-orange-50' : 'border-border bg-card'}`}>
-                  <div className={`h-2 w-2 rounded-full shrink-0 ${item.urgencia === 'critico' ? 'bg-red-500' : item.urgencia === 'urgente' ? 'bg-orange-500' : 'bg-yellow-400'}`} />
+                <div key={i} className={`flex items-center gap-4 px-4 py-3 rounded-lg border text-sm ${item.urgencia === 'critico' ? 'border-red-200 bg-red-50' : item.urgencia === 'urgente' ? 'border-orange-200 bg-orange-50' : 'border-border bg-card'}`}>
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${item.urgencia === 'critico' ? 'bg-red-100 text-red-700' : item.urgencia === 'urgente' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                    {i + 1}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{item.nome}</p>
-                    {item.funcao && <p className="text-[11px] text-muted-foreground">{item.funcao}</p>}
+                    <p className="font-semibold text-base">{item.nome}</p>
+                    {item.funcao && <p className="text-sm text-muted-foreground mt-0.5">{item.funcao}</p>}
                   </div>
                   {item.extra && (
-                    <Badge className={`text-[10px] shrink-0 ${item.urgencia === 'critico' ? 'bg-red-100 text-red-700' : item.urgencia === 'urgente' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                    <Badge className={`text-xs shrink-0 px-3 py-1 ${item.urgencia === 'critico' ? 'bg-red-100 text-red-700 border border-red-300' : item.urgencia === 'urgente' ? 'bg-orange-100 text-orange-700 border border-orange-300' : 'bg-yellow-100 text-yellow-700 border border-yellow-300'}`}>
                       {item.extra}
                     </Badge>
                   )}
