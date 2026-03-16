@@ -16,6 +16,8 @@ import { useModuleConfig } from "@/contexts/ModuleConfigContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
+import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
+import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
 import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -635,6 +637,28 @@ export default function Configuracoes() {
                 </div>
               </div>
             )}
+
+            {/* ========== CONFIGURAÇÕES POR MÓDULO ========== */}
+            <div className="pt-2">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2">Configurações por Módulo</span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+              <div className="space-y-3">
+                <ComprasConfigSection />
+                <FinanceiroConfigSection />
+              </div>
+            </div>
+
+            {/* ========== CRITÉRIOS CLT ========== */}
+            <div className="pt-2">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2">Parâmetros CLT e Trabalhistas</span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+            </div>
 
             {criteriaQuery.isLoading ? (
               <div className="text-center py-12 text-gray-400">Carregando critérios...</div>

@@ -1726,6 +1726,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 398,
+    titulo: "Configurações — Critérios de Compras e Financeiro centralizados na aba Critérios",
+    descricao: "As configurações dos módulos de Compras e Financeiro foram centralizadas na aba 'Critérios e Parâmetros do Sistema' em Configurações. Uma nova seção 'Configurações por Módulo' agrupa duas sub-seções colapsáveis: (1) Compras — Numeração de OC (prefixo, separador, formato do ano, dígitos sequenciais com preview ao vivo) e Regras de Aprovação; (2) Financeiro — Configuração Tributária (regime, alíquotas de ISS/PIS/COFINS/IRPJ/CSLL/INSS/FGTS/RAT), Sócios/Pró-labore (listar + cadastrar) e botão Auto-Importar Dados. Os botões de salvar de cada sub-seção persistem diretamente via API. As páginas originais /compras/configuracoes e /financeiro/configuracoes continuam funcionando. A aba Critérios ficou reorganizada com separadores visuais distinguindo Configurações por Módulo dos Parâmetros CLT e Trabalhistas.",
+    tipo: "melhoria",
+    modulos: "Configurações, Compras, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 397,
     titulo: "Grupos de Usuários — Módulos novos adicionados ao controle de permissões",
     descricao: "A tela de Grupos de Usuários (controle de acesso por rota) estava incompleta: Orçamento, Planejamento, Compras, Almoxarifado, Financeiro, Terceiros Contratos, Habilidades, e vários Dashboards/Relatórios não apareciam na lista de permissões configuráveis. Isso impedia que admins bloqueassem acesso a essas áreas para grupos de usuários. Adicionadas 9 novas seções completas: Orçamento (4 rotas), Planejamento (1), Compras (10), Almoxarifado (4), Financeiro (11), Habilidades e Capacitações (4), Terceiros-Contratos (3), Avaliação de Desempenho expandida, Geral. RH & DP reestruturado em seções mais limpas. Total de rotas configuráveis passou de ~35 para 90+. Cores adicionadas ao mapa: yellow, sky, teal, violet, rose, emerald.",
