@@ -17,7 +17,8 @@ import {
   ChevronRight, HeartPulse, Briefcase, Scale, ExternalLink,
   Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
   Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info,
-  BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows, Award, Trophy, Star
+  BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows, Award, Trophy, Star,
+  Maximize2
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -71,6 +72,7 @@ export default function PainelRH() {
   const s = homeData?.stats;
   const [kpiExpand, setKpiExpand] = useState<{ title: string; items: { nome: string; funcao?: string; extra?: string; urgencia?: string }[] } | null>(null);
   const [aniversariosFullOpen, setAniversariosFullOpen] = useState(false);
+  const [cardExpand, setCardExpand] = useState<string | null>(null);
   const [alertaTab, setAlertaTab] = useState('todos');
   const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0) + (s?.avisosPreviosVencendo ?? 0);
 
@@ -333,11 +335,14 @@ export default function PainelRH() {
                 <div className="space-y-4">
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <Cake className="h-4 w-4 text-pink-500" />
-                        Aniversariantes do Mês
-                        {s?.aniversariantesHoje ? <Badge className="bg-pink-100 text-pink-700 text-[10px]">{s.aniversariantesHoje} hoje!</Badge> : null}
-                      </CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Cake className="h-4 w-4 text-pink-500" />
+                          Aniversariantes do Mês
+                          {s?.aniversariantesHoje ? <Badge className="bg-pink-100 text-pink-700 text-[10px]">{s.aniversariantesHoje} hoje!</Badge> : null}
+                        </CardTitle>
+                        <button onClick={() => setCardExpand('aniversariantes')} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {!homeData?.aniversariantes?.length ? (
@@ -364,11 +369,14 @@ export default function PainelRH() {
                   {/* Férias Painel Rápido */}
                   {canSeeFerias && <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <Plane className="h-4 w-4 text-blue-500" />
-                        Férias - Painel Rápido
-                        {(homeData?.feriasDashboard?.emAndamento?.length ?? 0) > 0 ? <Badge className="bg-blue-100 text-blue-700 text-[10px]">{homeData!.feriasDashboard.emAndamento.length} em gozo</Badge> : null}
-                      </CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Plane className="h-4 w-4 text-blue-500" />
+                          Férias - Painel Rápido
+                          {(homeData?.feriasDashboard?.emAndamento?.length ?? 0) > 0 ? <Badge className="bg-blue-100 text-blue-700 text-[10px]">{homeData!.feriasDashboard.emAndamento.length} em gozo</Badge> : null}
+                        </CardTitle>
+                        <button onClick={() => setCardExpand('ferias-painel')} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {(homeData?.feriasDashboard?.emAndamento?.length ?? 0) > 0 ? (
@@ -422,7 +430,10 @@ export default function PainelRH() {
                           ASOs - Atenção Necessária
                           {(s?.asosVencidos ?? 0) > 0 ? <Badge variant="destructive" className="text-[10px]">{s!.asosVencidos} vencido{s!.asosVencidos !== 1 ? "s" : ""}</Badge> : null}
                         </CardTitle>
-                        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate("/controle-documentos")}>Ver todos <ChevronRight className="h-3 w-3 ml-1" /></Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate("/controle-documentos")}>Ver todos <ChevronRight className="h-3 w-3 ml-1" /></Button>
+                          <button onClick={() => setCardExpand('asos')} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -452,11 +463,14 @@ export default function PainelRH() {
 
                   {canSeeFerias && <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <CalendarClock className="h-4 w-4 text-amber-500" />
-                        Férias - Período Aquisitivo
-                        {(s?.feriasAlerta ?? 0) > 0 ? <Badge className="bg-amber-100 text-amber-700 text-[10px]">{s!.feriasAlerta} pendente{s!.feriasAlerta !== 1 ? "s" : ""}</Badge> : null}
-                      </CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <CalendarClock className="h-4 w-4 text-amber-500" />
+                          Férias - Período Aquisitivo
+                          {(s?.feriasAlerta ?? 0) > 0 ? <Badge className="bg-amber-100 text-amber-700 text-[10px]">{s!.feriasAlerta} pendente{s!.feriasAlerta !== 1 ? "s" : ""}</Badge> : null}
+                        </CardTitle>
+                        <button onClick={() => setCardExpand('ferias-periodo')} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {!homeData?.feriasAlerta?.length ? (
@@ -484,10 +498,13 @@ export default function PainelRH() {
                 <div className="space-y-4">
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <Activity className="h-4 w-4 text-blue-500" />
-                        Movimentações (30 dias)
-                      </CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-blue-500" />
+                          Movimentações (30 dias)
+                        </CardTitle>
+                        <button onClick={() => setCardExpand('movimentacoes')} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {!homeData?.movimentacoes?.length ? (
@@ -521,7 +538,10 @@ export default function PainelRH() {
                             <Badge className="bg-amber-100 text-amber-700 text-[10px] animate-pulse">{s!.aniversariosEmpresaHoje} hoje!</Badge>
                           )}
                         </CardTitle>
-                        <Badge variant="secondary" className="text-[10px]">{s?.aniversariosEmpresaMes ?? 0} no mês</Badge>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className="text-[10px]">{s?.aniversariosEmpresaMes ?? 0} no mês</Badge>
+                          <button onClick={() => setCardExpand('aniversarios-empresa')} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -563,10 +583,13 @@ export default function PainelRH() {
                   {(homeData?.advertenciasRecentes?.length ?? 0) > 0 ? (
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <ShieldAlert className="h-4 w-4 text-orange-500" />
-                          Advertências Recentes
-                        </CardTitle>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <ShieldAlert className="h-4 w-4 text-orange-500" />
+                            Advertências Recentes
+                          </CardTitle>
+                          <button onClick={() => setCardExpand('advertencias')} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
+                        </div>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-1">
@@ -617,6 +640,263 @@ export default function PainelRH() {
           </Card>
         )}
       </div>
+
+      {/* ===== FULL SCREEN CARD EXPAND ===== */}
+      <FullScreenDialog
+        open={!!cardExpand}
+        onClose={() => setCardExpand(null)}
+        title={
+          cardExpand === 'aniversariantes' ? 'Aniversariantes do Mês' :
+          cardExpand === 'ferias-painel' ? 'Férias — Painel Rápido' :
+          cardExpand === 'asos' ? 'ASOs — Atenção Necessária' :
+          cardExpand === 'ferias-periodo' ? 'Férias — Período Aquisitivo' :
+          cardExpand === 'movimentacoes' ? 'Movimentações (30 dias)' :
+          cardExpand === 'aniversarios-empresa' ? 'Aniversários de Empresa' :
+          cardExpand === 'advertencias' ? 'Advertências Recentes' : ''
+        }
+        icon={
+          cardExpand === 'aniversariantes' ? <Cake className="h-5 w-5" /> :
+          cardExpand === 'ferias-painel' ? <Plane className="h-5 w-5" /> :
+          cardExpand === 'asos' ? <HeartPulse className="h-5 w-5" /> :
+          cardExpand === 'ferias-periodo' ? <CalendarClock className="h-5 w-5" /> :
+          cardExpand === 'movimentacoes' ? <Activity className="h-5 w-5" /> :
+          cardExpand === 'aniversarios-empresa' ? <Award className="h-5 w-5" /> :
+          <ShieldAlert className="h-5 w-5" />
+        }
+        headerActions={
+          cardExpand === 'asos' ? (
+            <Button variant="outline" size="sm" className="text-white border-white/30 hover:bg-white/10 gap-1" onClick={() => { setCardExpand(null); navigate('/controle-documentos'); }}>
+              <ExternalLink className="h-4 w-4" /> Ver Controle de Documentos
+            </Button>
+          ) : cardExpand === 'ferias-painel' || cardExpand === 'ferias-periodo' ? (
+            <Button variant="outline" size="sm" className="text-white border-white/30 hover:bg-white/10 gap-1" onClick={() => { setCardExpand(null); navigate('/ferias'); }}>
+              <ExternalLink className="h-4 w-4" /> Ir para Férias
+            </Button>
+          ) : null
+        }
+      >
+        <div className="p-6">
+          {/* ── ANIVERSARIANTES DO MÊS ── */}
+          {cardExpand === 'aniversariantes' && (
+            <div className="space-y-2">
+              {!homeData?.aniversariantes?.length ? (
+                <p className="text-center text-muted-foreground py-12">Nenhum aniversariante este mês</p>
+              ) : homeData.aniversariantes.map((a: any, i: number) => (
+                <div key={a.id} onClick={() => { setCardExpand(null); navigate('/colaboradores'); }}
+                  className={`flex items-center gap-4 px-4 py-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${a.isHoje ? 'border-pink-300 bg-pink-50 hover:bg-pink-100' : a.jaPassou ? 'border-border bg-muted/30 opacity-60' : 'border-border bg-card hover:bg-accent/50'}`}>
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${a.isHoje ? 'bg-pink-200 text-pink-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {a.isHoje ? '🎂' : <span>{i + 1}</span>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-base">{a.nome}</p>
+                    {a.funcao && <p className="text-sm text-muted-foreground">{a.funcao}</p>}
+                  </div>
+                  <Badge className={`text-sm px-3 shrink-0 ${a.isHoje ? 'bg-pink-500 text-white' : a.jaPassou ? 'bg-gray-100 text-gray-500' : 'bg-slate-100 text-slate-700'}`}>
+                    {a.isHoje ? '🎉 Hoje!' : a.jaPassou ? `Dia ${a.dia} (passou)` : `Dia ${a.dia}`}
+                  </Badge>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── FÉRIAS PAINEL RÁPIDO ── */}
+          {cardExpand === 'ferias-painel' && (
+            <div className="space-y-6">
+              {(homeData?.feriasDashboard?.emAndamento?.length ?? 0) > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-600 uppercase mb-3 flex items-center gap-2"><Plane className="h-4 w-4" /> De Férias Agora ({homeData!.feriasDashboard.emAndamento.length})</h3>
+                  <div className="space-y-2">
+                    {homeData!.feriasDashboard.emAndamento.map((f: any) => (
+                      <div key={f.id} className="flex items-center justify-between px-4 py-3 rounded-lg bg-blue-50 border border-blue-100">
+                        <div>
+                          <p className="font-semibold text-base">{f.nome}</p>
+                          {f.funcao && <p className="text-sm text-muted-foreground">{f.funcao}</p>}
+                        </div>
+                        <Badge className="bg-blue-100 text-blue-700 border border-blue-300 text-sm px-3">volta em {f.diasRestantes}d</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(homeData?.feriasDashboard?.agendadas?.length ?? 0) > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-green-600 uppercase mb-3 flex items-center gap-2"><Calendar className="h-4 w-4" /> Próximas Agendadas ({homeData!.feriasDashboard.agendadas.length})</h3>
+                  <div className="space-y-2">
+                    {homeData!.feriasDashboard.agendadas.map((f: any) => (
+                      <div key={f.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent/50">
+                        <div>
+                          <p className="font-semibold text-base">{f.nome}</p>
+                          {f.funcao && <p className="text-sm text-muted-foreground">{f.funcao}</p>}
+                        </div>
+                        <div className="text-right">
+                          <Badge className="bg-green-100 text-green-700 border border-green-300 text-sm px-3">{f.diasGozo}d de gozo</Badge>
+                          <p className="text-xs text-muted-foreground mt-1">começa em {f.diasAteInicio}d</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {canSeeValues && (homeData?.feriasDashboard?.custoProximo90Dias ?? 0) > 0 && (
+                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground flex items-center gap-2"><DollarSign className="h-4 w-4 text-orange-600" /> Custo estimado próximos 90 dias</span>
+                  <span className="font-bold text-orange-700 text-lg">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(homeData!.feriasDashboard.custoProximo90Dias)}</span>
+                </div>
+              )}
+              {(homeData?.feriasDashboard?.emAndamento?.length ?? 0) === 0 && (homeData?.feriasDashboard?.agendadas?.length ?? 0) === 0 && (
+                <p className="text-center text-muted-foreground py-12">Nenhuma férias em andamento ou agendada</p>
+              )}
+            </div>
+          )}
+
+          {/* ── ASOs ATENÇÃO NECESSÁRIA ── */}
+          {cardExpand === 'asos' && (
+            <div className="space-y-2">
+              {!homeData?.asosAlerta?.length && !homeData?.semAso?.length ? (
+                <div className="flex flex-col items-center py-16 text-muted-foreground gap-3">
+                  <CheckCircle2 className="h-12 w-12 text-green-500" />
+                  <p className="font-semibold text-lg">Todos os ASOs estão em dia!</p>
+                </div>
+              ) : (
+                <>
+                  {(homeData?.asosAlerta ?? []).map((a: any) => (
+                    <div key={a.employeeId} className={`flex items-center gap-4 px-4 py-3 rounded-lg border ${a.vencido ? 'border-red-200 bg-red-50' : a.diasRestantes <= 15 ? 'border-orange-200 bg-orange-50' : 'border-border bg-card'}`}>
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${a.vencido ? 'bg-red-100 text-red-700' : a.diasRestantes <= 15 ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        <HeartPulse className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-base">{a.nome}</p>
+                        {a.funcao && <p className="text-sm text-muted-foreground">{a.funcao}</p>}
+                      </div>
+                      <Badge className={`text-sm px-3 shrink-0 ${a.vencido ? 'bg-red-100 text-red-700 border border-red-300' : a.diasRestantes <= 15 ? 'bg-orange-100 text-orange-700 border border-orange-300' : 'bg-yellow-100 text-yellow-700 border border-yellow-300'}`}>
+                        {a.vencido ? `Vencido há ${Math.abs(a.diasRestantes)}d` : `${a.diasRestantes}d restantes`}
+                      </Badge>
+                    </div>
+                  ))}
+                  {(homeData?.semAso?.length ?? 0) > 0 && (
+                    <div className="mt-4 pt-4 border-t">
+                      <p className="text-sm font-semibold text-red-600 mb-2">{homeData!.semAso!.length} funcionário{homeData!.semAso!.length !== 1 ? 's' : ''} sem ASO cadastrado:</p>
+                      <div className="space-y-2">
+                        {homeData!.semAso!.map((e: any) => (
+                          <div key={e.id} className="flex items-center gap-4 px-4 py-3 rounded-lg border border-gray-200 bg-gray-50">
+                            <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                              <User className="h-5 w-5 text-gray-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-base">{e.nome}</p>
+                              {e.funcao && <p className="text-sm text-muted-foreground">{e.funcao}</p>}
+                            </div>
+                            <Badge className="bg-gray-100 text-gray-600 border border-gray-300 text-sm px-3">Sem ASO</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── FÉRIAS PERÍODO AQUISITIVO ── */}
+          {cardExpand === 'ferias-periodo' && (
+            <div className="space-y-2">
+              {!homeData?.feriasAlerta?.length ? (
+                <div className="flex flex-col items-center py-16 text-muted-foreground gap-3">
+                  <CheckCircle2 className="h-12 w-12 text-green-500" />
+                  <p className="font-semibold text-lg">Nenhum alerta de férias no momento!</p>
+                </div>
+              ) : homeData.feriasAlerta.map((f: any, i: number) => (
+                <div key={f.id} className={`flex items-center gap-4 px-4 py-3 rounded-lg border ${f.urgente ? (f.diasParaVencer <= 0 ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50') : 'border-border bg-card'}`}>
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${f.urgente ? (f.diasParaVencer <= 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700') : 'bg-slate-100 text-slate-500'}`}>{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-base">{f.nome}</p>
+                    <p className="text-sm text-muted-foreground">{f.funcao} · {f.periodoAquisitivo}º período aquisitivo</p>
+                  </div>
+                  <Badge className={`text-sm px-3 shrink-0 ${f.diasParaVencer <= 0 ? 'bg-red-100 text-red-700 border border-red-300' : f.urgente ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-yellow-100 text-yellow-700 border border-yellow-300'}`}>
+                    {f.diasParaVencer <= 0 ? 'VENCIDO!' : `${f.diasParaVencer}d para vencer`}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── MOVIMENTAÇÕES 30 DIAS ── */}
+          {cardExpand === 'movimentacoes' && (
+            <div className="space-y-2">
+              {!homeData?.movimentacoes?.length ? (
+                <p className="text-center text-muted-foreground py-12">Nenhuma movimentação nos últimos 30 dias</p>
+              ) : homeData.movimentacoes.map((m: any, i: number) => (
+                <div key={`${m.tipo}-${m.id}-${i}`} className="flex items-center gap-4 px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-all">
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${m.tipo === 'admissao' ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {m.tipo === 'admissao' ? <ArrowUpRight className="h-5 w-5 text-green-600" /> : <ArrowDownRight className="h-5 w-5 text-red-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-base">{m.nome}</p>
+                    <p className="text-sm text-muted-foreground">{m.funcao}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <Badge className={`text-sm px-3 ${m.tipo === 'admissao' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>
+                      {m.tipo === 'admissao' ? 'Admissão' : 'Demissão'}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground mt-1">{new Date(m.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── ANIVERSÁRIOS DE EMPRESA ── */}
+          {cardExpand === 'aniversarios-empresa' && (
+            <div className="space-y-2">
+              {!homeData?.aniversariosEmpresa?.length ? (
+                <p className="text-center text-muted-foreground py-12">Nenhum aniversário de empresa este mês</p>
+              ) : homeData.aniversariosEmpresa.map((a: any, i: number) => (
+                <div key={a.id} onClick={() => { setCardExpand(null); navigate('/colaboradores'); }}
+                  className={`flex items-center gap-4 px-4 py-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${a.isHoje ? 'border-amber-300 bg-amber-50 hover:bg-amber-100' : 'border-border bg-card hover:bg-accent/50'}`}>
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${a.isHoje ? 'bg-amber-200 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {a.isHoje ? <Trophy className="h-5 w-5 text-amber-600" /> : <span>{i + 1}</span>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-semibold text-base ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome}</p>
+                    <p className="text-sm text-muted-foreground">{a.funcao}{a.obra ? ` · ${a.obra}` : ''}</p>
+                  </div>
+                  <div className="text-right shrink-0 space-y-1">
+                    <Badge className={`text-sm px-3 ${a.isHoje ? 'bg-amber-500 text-white' : a.anosEmpresa >= 5 ? 'bg-purple-100 text-purple-700 border border-purple-300' : 'bg-slate-100 text-slate-700'}`}>
+                      {a.anosEmpresa} ano{a.anosEmpresa !== 1 ? 's' : ''}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground">{a.isHoje ? '🎉 Hoje!' : a.jaPassou ? `Dia ${a.dia} (passou)` : `Dia ${a.dia}`}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── ADVERTÊNCIAS RECENTES ── */}
+          {cardExpand === 'advertencias' && (
+            <div className="space-y-2">
+              {!homeData?.advertenciasRecentes?.length ? (
+                <p className="text-center text-muted-foreground py-12">Nenhuma advertência recente</p>
+              ) : homeData.advertenciasRecentes.map((a: any) => (
+                <div key={a.id} className="flex items-center gap-4 px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-all">
+                  <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                    <ShieldAlert className="h-5 w-5 text-orange-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-base">{a.nome}</p>
+                    {a.funcao && <p className="text-sm text-muted-foreground">{a.funcao}</p>}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Badge variant="outline" className="text-sm px-3">{a.tipo}</Badge>
+                    <span className="text-sm text-muted-foreground">{a.data ? new Date(a.data + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </FullScreenDialog>
 
       {/* ===== DIALOG TODOS OS ANIVERSÁRIOS DE EMPRESA ===== */}
       <Dialog open={aniversariosFullOpen} onOpenChange={setAniversariosFullOpen}>
