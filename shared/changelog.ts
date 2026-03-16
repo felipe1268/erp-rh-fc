@@ -1852,6 +1852,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 412,
+    titulo: "Compras — Valores unitários da META (Orçamento) agora aparecem nas Cotações",
+    descricao: "Corrigido o cálculo de 'Preço Unitário' e 'Total Meta' na tabela META (ORÇAMENTO) dentro do detalhe de cotações. Anteriormente o sistema tentava recalcular a meta multiplicando o custo unitário de material pelo inverso do metaPercentual — mas esse valor frequentemente era zero. Agora o sistema lê diretamente o campo metaUnitTotal pré-calculado de cada item do orçamento (que é a fonte verdadeira da meta), com fallback ao cálculo antigo caso metaUnitTotal seja zero. Também adicionados metaUnitTotal e metaTotal ao retorno do endpoint getEapParaObra, possibilitando uso futuro desses valores na seleção de itens da SC.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 411,
     titulo: "Compras — Fix do modal 'Nova Solicitação de Compra'",
     descricao: "Corrigido o layout do modal de criação de Solicitação de Compra. O modal agora tem altura máxima de 90% da tela com cabeçalho e rodapé fixos: o título da modal permanece visível no topo e os botões 'Cancelar' e 'Criar Solicitação' ficam sempre acessíveis na parte inferior, independente da quantidade de itens da EAP selecionados. Somente o corpo do formulário (campos de preenchimento e lista de itens) rola internamente.",

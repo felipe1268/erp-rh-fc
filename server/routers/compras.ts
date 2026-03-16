@@ -1042,6 +1042,7 @@ Responda APENAS com um objeto JSON no formato:
           orcamentoId: orcamentoItens.orcamentoId,
           custoUnitMat: orcamentoItens.custoUnitMat,
           custoUnitTotal: orcamentoItens.custoUnitTotal,
+          metaUnitTotal: orcamentoItens.metaUnitTotal,
           quantidade: orcamentoItens.quantidade,
           eapCodigo: orcamentoItens.eapCodigo,
         }).from(orcamentoItens).where(inArray(orcamentoItens.id, orcItemIds));
@@ -1089,9 +1090,12 @@ Responda APENAS com um objeto JSON no formato:
       const orcItemToPath: Record<number, string> = {};
       for (const o of orcItensData) {
         const metaPerc = orcToMetaPerc[o.orcamentoId] ?? 0;
-        // Meta = custo de MATERIAL × (1 − metaPercentual), igual ao EAP visão Meta
-        // Não inclui MO pois o Mapa é para compra de materiais
-        orcItemToMeta[o.id] = n(o.custoUnitMat) * (1 - metaPerc);
+        // Prioridade: usar metaUnitTotal pré-calculado do orçamento.
+        // Fallback: custo de MATERIAL × (1 − metaPercentual)
+        const metaDireta = n(o.metaUnitTotal);
+        orcItemToMeta[o.id] = metaDireta > 0
+          ? metaDireta
+          : n(o.custoUnitMat) * (1 - metaPerc);
         // Montar breadcrumb com até 3 níveis intermediários
         if (o.eapCodigo) {
           const parts = String(o.eapCodigo).split(".");
@@ -1756,7 +1760,7 @@ Responda APENAS com um objeto JSON no formato:
 
       if (!orc) return { items: [], orcamentoId: null, projetoId: null, semOrcamento: true };
 
-      // Itens da EAP — SEM campos de custo/meta
+      // Itens da EAP com campos de meta para exibição na SC
       const orcItems = await db.select({
         id: orcamentoItens.id,
         eapCodigo: orcamentoItens.eapCodigo,
@@ -1766,6 +1770,9 @@ Responda APENAS com um objeto JSON no formato:
         unidade: orcamentoItens.unidade,
         quantidade: orcamentoItens.quantidade,
         ordem: orcamentoItens.ordem,
+        metaUnitTotal: orcamentoItens.metaUnitTotal,
+        metaTotal: orcamentoItens.metaTotal,
+        custoUnitTotal: orcamentoItens.custoUnitTotal,
       }).from(orcamentoItens)
         .where(and(
           eq(orcamentoItens.orcamentoId, orc.id),
