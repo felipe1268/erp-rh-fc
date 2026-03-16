@@ -351,7 +351,7 @@ export default function Ordens() {
 
       {/* Dialog Detalhe OC */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => !v && setShowDetalhe(null)}>
-        <DialogContent className="border-gray-200 max-w-2xl max-h-[90vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
+        <DialogContent className="border-gray-200 w-screen h-screen max-w-none max-h-none rounded-none overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           <DialogHeader>
             <DialogTitle className="text-gray-900">{detalhe?.numeroOc} — Ordem de Compra</DialogTitle>
           </DialogHeader>

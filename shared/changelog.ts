@@ -2059,6 +2059,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 430,
+    titulo: "Compras — Modal de detalhe da OC expandido para tela cheia",
+    descricao: "O modal de visualização de detalhes da Ordem de Compra passou a ocupar toda a tela (fullscreen), melhorando a leitura dos itens, quantidades e botões de status em telas de qualquer tamanho.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 429,
     titulo: "Deploy — Correção do servidor iniciando em modo desenvolvimento em produção",
     descricao: "Corrigido problema crítico de deploy: a variável NODE_ENV=development definida no ambiente compartilhado do Replit era passada para o servidor de produção, fazendo-o iniciar no modo de desenvolvimento (setupVite) em vez do modo de produção (serveStatic). Isso causava erro 'ENOENT: client/index.html not found' e impedia o Promote no deploy. Solução: comando de start do nixpacks e configuração de deploy atualizados para definir explicitamente NODE_ENV=production antes de iniciar o servidor.",
