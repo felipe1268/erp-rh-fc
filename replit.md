@@ -47,6 +47,11 @@ drizzle/        # Schema and migrations
 shared/         # Shared types and constants
 ```
 
+## Production Deployment — Railway
+Files: `railway.toml` + `nixpacks.toml` (Node 20 + pnpm). GitHub repo: `felipe1268/erp-rh-fc`.
+Railway env vars required: `NEON_DATABASE_URL`, `DATABASE_URL` (=same), `JWT_SECRET` (random 48-char hex), `NODE_ENV=production`, `SMTP_PASSWORD`, `GOOGLE_API_KEY`.
+SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date automatically.
+
 ## Running the App
 - Dev: `PORT=5000 NODE_ENV=development pnpm dev` — starts Express + Vite on port 5000
 - Build: `pnpm build` — builds frontend to dist/public, bundles server to dist/
