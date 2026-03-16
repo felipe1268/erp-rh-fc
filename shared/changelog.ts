@@ -1852,6 +1852,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 409,
+    titulo: "Permissões — Mapeamento completo de todas as 85 telas do sistema",
+    descricao: "Revisão completa do modulePages.ts: mapeamento exaustivo de 85 páginas reais distribuídas nos 12 módulos (RH/DP: 16 telas; SST: 3; Jurídico: 3; Avaliação: 3; Terceiros: 10; Parceiros: 5; Orçamento: 7; Planejamento: 6; Cadastro: 9; Compras: 9; Almoxarifado: 4; Financeiro: 10). Cada tela agora aparece na configuração de permissões por usuário com as ações corretas (Ver/Criar/Editar/Excluir). Adicionadas 14 flags de dados sensíveis/LGPD distribuídas nos módulos. Inclui telas antes ausentes: Controle de Documentos, Vale Alimentação, Hora Extra, Apontamentos, Crachás, PJ/Medições, Dissídio, Comparativo de Convenções, Gestão de Competências, Relatórios, Dashboards RH, Processos Trabalhistas, Convenções Coletivas, Habilidades, todas as telas de Parceiros, todos os tipos de Terceiros, EAP/Biblioteca/Encargos do Orçamento, Cronograma Financeiro e Previsão de Medição no Planejamento, Recebimentos/Aprovações/Emergencial/Realocação nas Compras, Categorias no Almoxarifado, DRE/Obrigações Fiscais/Plano de Contas/Centros de Custo/Conciliação no Financeiro.",
+    tipo: "melhoria",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 408,
     titulo: "Terceiros — Contratos de Serviço, Medições e Previsão de Caixa + Correção de CPF/RG por empresa",
     descricao: "Duas entregas nesta revisão. (1) Módulo Terceiros expandido: 5 tabelas no banco (terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos); router terceiroContratos com CRUD completo, geração automática de medições com base no avanço físico do planejamento, aprovação/rejeição de medições e previsão de caixa semanal vinculada ao cronograma; 5 páginas React — ContratosList (lista com KPIs e barra de progresso), ContratoNovo (formulário com combobox pesquisável de empresa/obra), ContratoDetalhe (abas Itens / Medições / Documentos com ações inline), Medicoes (painel de aprovação) e PrevisaoCaixa (gráfico de barras semanal + tabela); rotas /terceiros/contratos, /terceiros/contratos/novo, /terceiros/contratos/:id, /terceiros/medicoes e /terceiros/previsao-caixa registradas; página previsao_caixa adicionada ao modulePages.ts. (2) Correção crítica de unicidade: checkDuplicateCpf e checkBlacklist agora filtram por companyId — o mesmo CPF pode existir em empresas diferentes sem bloqueio cruzado. Verificação de RG também corrigida para escopo por empresa. Mensagens de erro atualizadas para refletir isolamento por empresa.",
