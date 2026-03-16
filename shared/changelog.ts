@@ -1726,6 +1726,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 396,
+    titulo: "Orçamento — Corrigido: falso conflito de obra após exclusão de orçamento",
+    descricao: "Ao excluir um orçamento e tentar importar um novo para a mesma obra, o sistema ainda bloqueava com 'obra já possui orçamento' mesmo o orçamento tendo sido excluído. Causa: o React Query mantinha a lista de orçamentos em cache por 30s, e a exclusão só invalidava o cache local da tela de lista, não o da tela de importação. Correção: (1) OrcamentoLista e OrcamentoDetalhe passaram a usar utils.orcamento.list.invalidate() ao excluir, invalidando o cache global; (2) OrcamentoImportar passou a usar staleTime: 0 para garantir que a lista de orçamentos é sempre buscada do servidor ao abrir a página.",
+    tipo: "correcao",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 395,
     titulo: "Orçamento — Conflito de obra resolvido com opção de substituição e link direto",
     descricao: "Ao importar uma planilha para uma obra que já possui orçamento ativo, o sistema agora mostra um banner laranja com duas opções: (1) 'Ir ao Orçamento Existente' — botão com link direto para o orçamento vinculado, sem precisar procurar na lista; (2) 'Substituir' — exclui o orçamento antigo (soft-delete) e importa o novo em seu lugar. Antes, o sistema mostrava apenas um erro genérico sem saída clara. Backend: endpoint importar recebe forceReplace=true, soft-deleta o existente e prossegue. Frontend: banner de conflito com botões, banner de 'modo substituição ativo' com opção de cancelar.",

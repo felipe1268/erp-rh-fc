@@ -97,6 +97,8 @@ export default function OrcamentoDetalhe() {
   const [editingNegociado, setEditingNegociado] = useState(false);
   const [negociadoInput, setNegociadoInput]     = useState("");
 
+  const utils = trpc.useUtils();
+
   const { data, isLoading, refetch } = trpc.orcamento.getById.useQuery(
     { id },
     { enabled: id > 0 }
@@ -127,6 +129,7 @@ export default function OrcamentoDetalhe() {
   const excluirMut = trpc.orcamento.excluir.useMutation({
     onSuccess: () => {
       toast.success("Orçamento excluído com sucesso.");
+      utils.orcamento.list.invalidate();
       navigate("/orcamento/lista");
     },
     onError: e => toast.error(e.message || "Erro ao excluir orçamento"),

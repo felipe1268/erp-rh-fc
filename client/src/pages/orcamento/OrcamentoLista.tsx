@@ -71,6 +71,8 @@ export default function OrcamentoLista() {
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
 
+  const utils = trpc.useUtils();
+
   const { data: lista = [], isLoading, refetch } = trpc.orcamento.list.useQuery(
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
@@ -82,7 +84,10 @@ export default function OrcamentoLista() {
   );
 
   const deleteMutation = trpc.orcamento.excluir.useMutation({
-    onSuccess: () => { toast.success("Orçamento excluído."); refetch(); },
+    onSuccess: () => {
+      toast.success("Orçamento excluído.");
+      utils.orcamento.list.invalidate();
+    },
     onError: (e) => toast.error(e.message || "Erro ao excluir"),
   });
 
@@ -90,7 +95,7 @@ export default function OrcamentoLista() {
     onSuccess: () => {
       toast.success("Orçamento atualizado com sucesso.");
       setEditOpen(false);
-      refetch();
+      utils.orcamento.list.invalidate();
     },
     onError: (e) => toast.error(e.message || "Erro ao salvar"),
   });
@@ -99,7 +104,7 @@ export default function OrcamentoLista() {
     onSuccess: (_, vars) => {
       const label = STATUS_CONFIG[vars.status as StatusKey]?.label ?? vars.status;
       toast.success(`Status alterado para "${label}".`);
-      refetch();
+      utils.orcamento.list.invalidate();
     },
     onError: (e) => toast.error(e.message || "Erro ao alterar status"),
   });

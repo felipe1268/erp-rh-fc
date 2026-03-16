@@ -402,9 +402,10 @@ export default function OrcamentoImportar() {
   );
 
   // Obras que já têm orçamento vinculado — regra: 1 orçamento por obra
+  // staleTime: 0 garante dados frescos (evita falso conflito após exclusão)
   const orcamentosQ = trpc.orcamento.list.useQuery(
     { companyId: companyId! },
-    { enabled: !!companyId },
+    { enabled: !!companyId, staleTime: 0 },
   );
   const obraIdsComOrcamento = new Set<number>(
     (orcamentosQ.data ?? [])
