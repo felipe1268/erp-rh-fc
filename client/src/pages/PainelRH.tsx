@@ -70,6 +70,7 @@ export default function PainelRH() {
   );
   const s = homeData?.stats;
   const [kpiExpand, setKpiExpand] = useState<{ title: string; items: { nome: string; funcao?: string; extra?: string; urgencia?: string }[] } | null>(null);
+  const [aniversariosFullOpen, setAniversariosFullOpen] = useState(false);
   const [alertaTab, setAlertaTab] = useState('todos');
   const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0) + (s?.avisosPreviosVencendo ?? 0);
 
@@ -529,7 +530,7 @@ export default function PainelRH() {
                       ) : (
                         <div className="space-y-2">
                           {homeData.aniversariosEmpresa.slice(0, 6).map((a: any) => (
-                            <div key={a.id} className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 ${a.isHoje ? 'bg-amber-50 border border-amber-200' : 'hover:bg-accent/40'}`}>
+                            <div key={a.id} onClick={() => navigate("/colaboradores")} className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 cursor-pointer transition-all ${a.isHoje ? 'bg-amber-50 border border-amber-200 hover:bg-amber-100' : 'hover:bg-accent/60 hover:shadow-sm'}`}>
                               <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${a.isHoje ? 'bg-amber-100' : 'bg-slate-100'}`}>
                                 {a.isHoje ? <Trophy className="h-3.5 w-3.5 text-amber-600" /> : <Star className="h-3.5 w-3.5 text-slate-400" />}
                               </div>
@@ -546,9 +547,13 @@ export default function PainelRH() {
                             </div>
                           ))}
                           {homeData.aniversariosEmpresa.length > 6 && (
-                            <p className="text-[10px] text-muted-foreground text-center pt-1">
-                              +{homeData.aniversariosEmpresa.length - 6} mais este mês
-                            </p>
+                            <button
+                              onClick={() => setAniversariosFullOpen(true)}
+                              className="w-full text-[11px] text-blue-600 hover:text-blue-800 font-medium text-center pt-2 pb-1 hover:underline flex items-center justify-center gap-1 transition-colors"
+                            >
+                              <ChevronRight className="h-3 w-3" />
+                              Ver todos — +{homeData.aniversariosEmpresa.length - 6} mais este mês
+                            </button>
                           )}
                         </div>
                       )}
@@ -612,6 +617,50 @@ export default function PainelRH() {
           </Card>
         )}
       </div>
+
+      {/* ===== DIALOG TODOS OS ANIVERSÁRIOS DE EMPRESA ===== */}
+      <Dialog open={aniversariosFullOpen} onOpenChange={setAniversariosFullOpen}>
+        <DialogContent className="max-w-3xl w-full max-h-[92vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Award className="h-5 w-5 text-amber-500" />
+              Aniversários de Empresa — Mês Atual
+              <Badge className="bg-amber-100 text-amber-700 text-sm ml-1">{homeData?.aniversariosEmpresa?.length ?? 0} funcionários</Badge>
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[75vh] pr-2">
+            <div className="space-y-2 py-2">
+              {(homeData?.aniversariosEmpresa ?? []).map((a: any, i: number) => (
+                <div
+                  key={a.id}
+                  onClick={() => { setAniversariosFullOpen(false); navigate("/colaboradores"); }}
+                  className={`flex items-center gap-4 px-4 py-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${a.isHoje ? 'border-amber-300 bg-amber-50 hover:bg-amber-100' : 'border-border bg-card hover:bg-accent/50'}`}
+                >
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${a.isHoje ? 'bg-amber-200 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {a.isHoje ? <Trophy className="h-5 w-5 text-amber-600" /> : <span>{i + 1}</span>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-semibold text-base ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {a.funcao}
+                      {a.obra ? <span className="ml-2 text-blue-600 font-medium">· {a.obra}</span> : ''}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0 space-y-1">
+                    <Badge className={`text-sm px-3 py-0.5 ${a.isHoje ? 'bg-amber-500 text-white' : a.anosEmpresa >= 5 ? 'bg-purple-100 text-purple-700 border border-purple-300' : 'bg-slate-100 text-slate-700'}`}>
+                      {a.anosEmpresa} ano{a.anosEmpresa !== 1 ? 's' : ''}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground">
+                      {a.isHoje ? '🎉 Hoje!' : a.jaPassou ? `Dia ${a.dia} (passou)` : `Dia ${a.dia}`}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       {/* ===== DIALOG EXPANSÃO KPI ===== */}
       <Dialog open={!!kpiExpand} onOpenChange={(o) => { if (!o) setKpiExpand(null); }}>
