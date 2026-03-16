@@ -15,54 +15,201 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package } from "lucide-react";
 
-function SaldosRealocacaoPanel({ companyId, obraId, deficit }: { companyId: number; obraId?: number; deficit: number }) {
+const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, onAcao }: {
+  companyId: number; obraId?: number; cotacaoId?: number; deficit: number; onAcao?: () => void;
+}) {
   const q = trpc.compras.buscarSaldosRealocacao.useQuery(
-    { companyId, obraId, deficit },
+    { companyId, obraId, cotacaoId, deficit },
     { enabled: companyId > 0 && deficit > 0 }
   );
+  const debitarRisco = trpc.compras.debitarDoRisco.useMutation({
+    onSuccess: (d) => {
+      toast.success(`Debitado do RISCO! Reserva restante: ${fmt(d.novoDisponivel)}`);
+      q.refetch();
+      onAcao?.();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const solicitarAutorizacao = trpc.compras.solicitarAutorizacaoCompra.useMutation({
+    onSuccess: () => {
+      toast.success("Solicitação de autorização enviada ao usuário master.");
+      onAcao?.();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [valorDebito, setValorDebito] = useState("");
+  const [sobrasSel, setSobrasSel] = useState<Set<number>>(new Set());
+
   if (q.isLoading) return <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-red-400" /></div>;
-  if (!q.data || q.data.sobras.length === 0) return <p className="text-xs text-red-500 italic">Nenhuma atividade comprada/contratada com sobra encontrada para realocação.</p>;
+  if (!q.data) return null;
+
+  const { risco, sobras, totalSobras, semCobertura } = q.data;
+  const deficitRestante = deficit;
+
+  const totalSobrasSel = sobras.filter((_, i) => sobrasSel.has(i)).reduce((s, x) => s + x.sobra, 0);
+
+  function toggleSobra(i: number) {
+    setSobrasSel(prev => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  }
+
+  function selecionarSuficiente() {
+    let acc = 0;
+    const sel = new Set<number>();
+    for (let i = 0; i < sobras.length; i++) {
+      if (acc >= deficitRestante) break;
+      sel.add(i);
+      acc += sobras[i].sobra;
+    }
+    setSobrasSel(sel);
+  }
+
+  const valorDebitoNum = parseFloat(valorDebito.replace(",", ".")) || 0;
+  const debitarMax = Math.min(risco.disponivel, deficit);
+
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold text-red-700">Sobras disponíveis em atividades já compradas (apenas estas podem ser realocadas):</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-red-200">
-              <th className="text-left py-1 pr-3 text-red-600 font-semibold">OC / Atividade</th>
-              <th className="text-left py-1 pr-3 text-red-600 font-semibold">Descrição</th>
-              <th className="text-right py-1 pr-3 text-red-600 font-semibold">Meta</th>
-              <th className="text-right py-1 pr-3 text-red-600 font-semibold">Comprado</th>
-              <th className="text-right py-1 text-red-600 font-semibold">Sobra</th>
-            </tr>
-          </thead>
-          <tbody>
-            {q.data.sobras.map((s, i) => (
-              <tr key={i} className="border-b border-red-100">
-                <td className="py-1.5 pr-3 font-mono text-red-700">{s.ocNumero}</td>
-                <td className="py-1.5 pr-3 text-gray-700">{s.descricao} <span className="text-gray-400">{s.unidade}</span></td>
-                <td className="py-1.5 pr-3 text-right text-gray-600">{s.vlrMeta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                <td className="py-1.5 pr-3 text-right text-gray-600">{s.vlrComprado.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                <td className="py-1.5 text-right font-bold text-emerald-700">{s.sobra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t border-red-200 bg-red-50/50">
-              <td colSpan={4} className="py-2 pr-3 font-semibold text-red-700">Total de sobras disponíveis</td>
-              <td className="py-2 text-right font-bold text-emerald-700">{q.data.totalSobras.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-            </tr>
-            <tr>
-              <td colSpan={5} className="py-2 text-xs italic">
-                {q.data.cobreDeficit
-                  ? <span className="text-emerald-700 font-semibold">✓ As sobras são suficientes para cobrir o déficit de {deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.</span>
-                  : <span className="text-red-700 font-semibold">⚠ As sobras disponíveis ({q.data.totalSobras.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) não cobrem o déficit de {deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Diferença de {(deficit - q.data.totalSobras).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} sem cobertura.</span>
-                }
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+    <div className="space-y-4">
+
+      {/* ── CAMADA 1: RISCO BDI ────────────────────────────────── */}
+      <div className={`rounded-lg border p-3 space-y-2 ${risco.disponivel > 0 ? "border-orange-200 bg-orange-50/60" : "border-gray-200 bg-gray-50/60 opacity-60"}`}>
+        <div className="flex items-center gap-2">
+          <div className={`h-2 w-2 rounded-full flex-shrink-0 ${risco.disponivel > 0 ? "bg-orange-400" : "bg-gray-300"}`} />
+          <p className="text-xs font-semibold text-gray-800">Reserva de Risco — BDI (DI-08)</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3 text-xs">
+          <div>
+            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Reserva inicial</p>
+            <p className="font-bold text-gray-700">{fmt(risco.inicial)}</p>
+          </div>
+          <div>
+            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Já debitado</p>
+            <p className="font-bold text-red-600">{fmt(risco.usado)}</p>
+          </div>
+          <div>
+            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Disponível</p>
+            <p className={`font-bold ${risco.disponivel > 0 ? "text-orange-600" : "text-gray-400"}`}>{fmt(risco.disponivel)}</p>
+          </div>
+        </div>
+        {risco.disponivel > 0 && risco.orcamentoId ? (
+          <div className="flex items-center gap-2 pt-1">
+            <div className="relative flex-1">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
+              <input
+                type="number"
+                min={0}
+                max={debitarMax}
+                step={0.01}
+                value={valorDebito}
+                onChange={e => setValorDebito(e.target.value)}
+                placeholder={`Máx. ${fmt(debitarMax)}`}
+                className="w-full pl-8 pr-2 py-1.5 text-xs border border-orange-300 rounded bg-white outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+            <Button size="sm" disabled={valorDebitoNum <= 0 || valorDebitoNum > risco.disponivel + 0.01 || debitarRisco.isPending}
+              onClick={() => debitarRisco.mutate({ companyId, obraId, orcamentoId: risco.orcamentoId!, cotacaoId, valor: valorDebitoNum, observacao: `Débito automático — Cotação #${cotacaoId}` })}
+              className="h-7 bg-orange-500 hover:bg-orange-600 text-white text-xs gap-1 whitespace-nowrap">
+              {debitarRisco.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Debitar do Risco
+            </Button>
+            <Button size="sm" variant="ghost"
+              onClick={() => setValorDebito(String(debitarMax.toFixed(2)))}
+              className="h-7 text-xs text-orange-700 hover:bg-orange-100 whitespace-nowrap">
+              Usar tudo
+            </Button>
+          </div>
+        ) : risco.inicial === 0 ? (
+          <p className="text-[11px] text-gray-400 italic">Nenhuma reserva de risco cadastrada no BDI desta obra.</p>
+        ) : (
+          <p className="text-[11px] text-orange-700 italic font-medium">Reserva de risco esgotada.</p>
+        )}
       </div>
+
+      {/* ── CAMADA 2: SOBRAS DE OCs ─────────────────────────────── */}
+      <div className={`rounded-lg border p-3 space-y-2 ${sobras.length > 0 ? "border-blue-200 bg-blue-50/40" : "border-gray-200 bg-gray-50/40 opacity-60"}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={`h-2 w-2 rounded-full flex-shrink-0 ${sobras.length > 0 ? "bg-blue-400" : "bg-gray-300"}`} />
+            <p className="text-xs font-semibold text-gray-800">Sobras de atividades já compradas</p>
+          </div>
+          {sobras.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={selecionarSuficiente} className="h-6 text-[11px] text-blue-700 hover:bg-blue-100 px-2">
+              Selecionar suficientes
+            </Button>
+          )}
+        </div>
+        {sobras.length === 0 ? (
+          <p className="text-[11px] text-gray-400 italic">Nenhuma atividade comprada com sobra encontrada.</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-blue-200">
+                    <th className="text-left py-1 pr-2 w-6" />
+                    <th className="text-left py-1 pr-3 text-blue-700 font-semibold">OC</th>
+                    <th className="text-left py-1 pr-3 text-blue-700 font-semibold">Descrição</th>
+                    <th className="text-right py-1 pr-3 text-blue-700 font-semibold">Meta</th>
+                    <th className="text-right py-1 pr-3 text-blue-700 font-semibold">Comprado</th>
+                    <th className="text-right py-1 text-blue-700 font-semibold">Sobra</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sobras.map((s, i) => (
+                    <tr key={i} className={`border-b border-blue-100 cursor-pointer hover:bg-blue-50 ${sobrasSel.has(i) ? "bg-blue-50" : ""}`} onClick={() => toggleSobra(i)}>
+                      <td className="py-1.5 pr-2">
+                        <input type="checkbox" readOnly checked={sobrasSel.has(i)} className="accent-blue-600 cursor-pointer" />
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono text-blue-700">{s.ocNumero}</td>
+                      <td className="py-1.5 pr-3 text-gray-700">{s.descricao} <span className="text-gray-400">{s.unidade}</span></td>
+                      <td className="py-1.5 pr-3 text-right text-gray-500">{fmt(s.vlrMeta)}</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-500">{fmt(s.vlrComprado)}</td>
+                      <td className="py-1.5 text-right font-bold text-emerald-700">{fmt(s.sobra)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {sobrasSel.size > 0 && (
+              <div className="flex items-center justify-between pt-1 border-t border-blue-200">
+                <p className="text-xs text-blue-800">
+                  <span className="font-bold">{fmt(totalSobrasSel)}</span> selecionados de <span className="font-bold">{fmt(totalSobras)}</span> disponíveis
+                  {totalSobrasSel >= deficitRestante
+                    ? <span className="ml-2 text-emerald-700 font-semibold">✓ Cobre o déficit</span>
+                    : <span className="ml-2 text-orange-600"> — faltam {fmt(deficitRestante - totalSobrasSel)}</span>
+                  }
+                </p>
+                <Button size="sm" variant="ghost" onClick={() => setSobrasSel(new Set())} className="h-6 text-[11px] text-gray-500 px-2">Limpar</Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── CAMADA 3: SEM COBERTURA → AUTORIZAÇÃO MASTER ─────────── */}
+      {semCobertura && (
+        <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
+            <p className="text-xs font-semibold text-red-800">Sem cobertura disponível — necessária autorização</p>
+          </div>
+          <p className="text-[11px] text-red-600">
+            Não há saldo no RISCO (DI-08) nem sobras em atividades compradas para cobrir o déficit de {fmt(deficit)}.
+            Clique abaixo para solicitar aprovação do usuário master antes de liberar a compra.
+          </p>
+          <Button size="sm"
+            disabled={solicitarAutorizacao.isPending}
+            onClick={() => cotacaoId && solicitarAutorizacao.mutate({ companyId, cotacaoId, deficit })}
+            className="h-7 bg-red-600 hover:bg-red-700 text-white text-xs gap-1">
+            {solicitarAutorizacao.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+            Solicitar Autorização do Master
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -925,18 +1072,20 @@ export default function Cotacoes() {
                               <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
                               <div>
                                 <p className="text-red-800 font-semibold text-sm">Acima da meta orçamentária</p>
-                                <p className="text-red-600 text-xs">Déficit de {Math.abs(saldoTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} em relação ao orçamento. Apenas atividades já compradas/contratadas com sobra podem ser usadas para realocação.</p>
+                                <p className="text-red-600 text-xs">Déficit de {Math.abs(saldoTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} em relação ao orçamento. Utilize a reserva de Risco (BDI DI-08), sobras de atividades compradas ou solicite autorização do master.</p>
                               </div>
                             </div>
                             <Button size="sm" variant="outline" onClick={() => setShowRealocacao(v => !v)} className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-100 flex-shrink-0">
-                              <TrendingDown className="h-3 w-3 mr-1" /> {showRealocacao ? "Fechar" : "Ver Realocação"}
+                              <TrendingDown className="h-3 w-3 mr-1" /> {showRealocacao ? "Fechar" : "Ver Opções"}
                             </Button>
                           </div>
                           {showRealocacao && (
                             <SaldosRealocacaoPanel
                               companyId={companyId}
                               obraId={(mapa?.cotacao as any)?.obraId}
+                              cotacaoId={showDetalhe ?? undefined}
                               deficit={Math.abs(saldoTotal)}
+                              onAcao={() => { mapaQ.refetch(); detalheQ.refetch(); }}
                             />
                           )}
                         </div>

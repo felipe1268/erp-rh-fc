@@ -1852,6 +1852,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 415,
+    titulo: "Compras — Gestão de déficit orçamentário: RISCO BDI + Sobras + Autorização Master",
+    descricao: "Quando uma cotação supera a meta orçamentária, o painel 'Ver Opções' agora apresenta 3 camadas de cobertura: (1) Reserva de Risco BDI (DI-08): exibe reserva inicial, quanto já foi debitado e saldo disponível — o comprador informa o valor a debitar e confirma; débitos são registrados em compras_risco_debitos, impedindo uso além do limite. (2) Sobras de atividades compradas: lista items de OCs aprovadas que ficaram abaixo da meta, com checkboxes individuais e botão 'Selecionar suficientes' que marca automaticamente itens até cobrir o déficit. (3) Sem cobertura: se RISCO esgotado e sem sobras, aparece bloco vermelho com botão 'Solicitar Autorização do Master' que registra o pedido na cotação para aprovação.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 414,
     titulo: "Compras — Cancelar vencedor do mapa de cotação antes de gerar OC",
     descricao: "Adicionado botão 'Cancelar Seleção' no banner do fornecedor vencedor do Mapa de Cotação. Quando o vencedor já está marcado (Vencedor Selecionado), o botão vermelho aparece ao lado permitindo desfazer a escolha, voltar a editar preços e selecionar outro fornecedor antes de aprovar a OC. O cancelamento limpa a seleção de todos os participantes e desvincula o fornecedor da cotação, sem apagar os preços digitados.",

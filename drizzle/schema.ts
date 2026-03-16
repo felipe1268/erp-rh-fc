@@ -4856,6 +4856,17 @@ export const comprasOrdensItens = pgTable("compras_ordens_itens", {
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
 });
 
+export const comprasRiscoDebitos = pgTable("compras_risco_debitos", {
+  id:          serial().primaryKey(),
+  companyId:   integer("company_id").notNull(),
+  obraId:      integer("obra_id"),
+  orcamentoId: integer("orcamento_id"),
+  cotacaoId:   integer("cotacao_id"),
+  valor:       numeric({ precision: 14, scale: 2 }).notNull(),
+  observacao:  text(),
+  criadoEm:    timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
 // ============================================================
 // MÓDULO ALMOXARIFADO — WAREHOUSE (adicionado Rev. 297)
 // Usa almoxarifado_itens e almoxarifado_movimentacoes existentes.

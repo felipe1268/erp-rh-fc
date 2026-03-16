@@ -12,8 +12,10 @@ import {
   comprasCotacaoFornecedores, comprasCotacaoRespostas,
   comprasCondicoesPagamento,
   comprasOrdens, comprasOrdensItens,
+  comprasRiscoDebitos,
   obras,
   orcamentos, orcamentoItens,
+  bdiIndiretos,
   planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades,
 } from "../../drizzle/schema";
 
@@ -1196,9 +1198,36 @@ Responda APENAS com um objeto JSON no formato:
     }),
 
   buscarSaldosRealocacao: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number().optional(), deficit: z.number() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional(), cotacaoId: z.number().optional(), deficit: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
+
+      // ── 1. RESERVA DE RISCO (BDI DI-08) ──────────────────────────────
+      let riscoInicial = 0;
+      let riscoOrcamentoId: number | null = null;
+      if (input.obraId) {
+        const [orc] = await db.select({ id: orcamentos.id })
+          .from(orcamentos)
+          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId)))
+          .orderBy(desc(orcamentos.id))
+          .limit(1);
+        if (orc) {
+          riscoOrcamentoId = orc.id;
+          const [di08] = await db.select({ totalLinha: bdiIndiretos.totalLinha })
+            .from(bdiIndiretos)
+            .where(and(eq(bdiIndiretos.orcamentoId, orc.id), eq(bdiIndiretos.codigo, "DI-08")));
+          riscoInicial = n(di08?.totalLinha ?? 0);
+        }
+      }
+      const debitosRisco = riscoOrcamentoId
+        ? await db.select({ valor: comprasRiscoDebitos.valor })
+            .from(comprasRiscoDebitos)
+            .where(eq(comprasRiscoDebitos.orcamentoId, riscoOrcamentoId))
+        : [];
+      const riscoUsado = debitosRisco.reduce((s, x) => s + n(x.valor), 0);
+      const riscoDisponivel = Math.max(0, riscoInicial - riscoUsado);
+
+      // ── 2. SOBRAS DE OCs APROVADAS ─────────────────────────────────────
       const ocs = await db.select({
         id: comprasOrdens.id,
         numeroOc: comprasOrdens.numeroOc,
@@ -1209,55 +1238,108 @@ Responda APENAS com um objeto JSON no formato:
         input.obraId ? eq(comprasOrdens.obraId, input.obraId) : undefined,
       ));
 
-      if (ocs.length === 0) return { sobras: [], totalSobras: 0, deficit: input.deficit, cobreDeficit: false };
-
-      const ocItens = await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)));
-
-      // Para itens com solicitacaoItemId, buscar metaUnitTotal via SC → orcamento
-      const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
-      let scItensOc: any[] = [];
-      if (scItemIds.length > 0) {
-        scItensOc = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId })
-          .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
-      }
-      const orcIdsOc = scItensOc.map(s => s.orcamentoItemId).filter(Boolean) as number[];
-      let orcMetasOc: any[] = [];
-      if (orcIdsOc.length > 0) {
-        orcMetasOc = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
-          .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIdsOc));
-      }
-      const scToOrc: Record<number, number> = {};
-      for (const s of scItensOc) if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
-      const orcToMeta: Record<number, number> = {};
-      for (const o of orcMetasOc) orcToMeta[o.id] = n(o.metaUnitTotal);
-
       type Sobra = { descricao: string; unidade: string; ocNumero: string; vlrMeta: number; vlrComprado: number; sobra: number };
       const sobras: Sobra[] = [];
-      for (const it of ocItens) {
-        if (!it.solicitacaoItemId) continue;
-        const orcId = scToOrc[it.solicitacaoItemId];
-        if (!orcId) continue;
-        const metaUnit = orcToMeta[orcId] ?? 0;
-        if (metaUnit === 0) continue;
-        const qty = n(it.quantidade);
-        const vlrMeta = metaUnit * qty;
-        const vlrComprado = n(it.precoUnitario) * qty;
-        const sobra = vlrMeta - vlrComprado;
-        if (sobra > 0.01) {
-          const oc = ocs.find(o => o.id === it.ordemId);
-          sobras.push({
-            descricao: it.descricao || "—",
-            unidade: it.unidade || "",
-            ocNumero: oc?.numeroOc || String(it.ordemId),
-            vlrMeta,
-            vlrComprado,
-            sobra,
-          });
+
+      if (ocs.length > 0) {
+        const ocItens = await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)));
+        const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+        let scItensOc: any[] = [];
+        if (scItemIds.length > 0) {
+          scItensOc = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId })
+            .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
         }
+        const orcIdsOc = scItensOc.map(s => s.orcamentoItemId).filter(Boolean) as number[];
+        let orcMetasOc: any[] = [];
+        if (orcIdsOc.length > 0) {
+          orcMetasOc = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
+            .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIdsOc));
+        }
+        const scToOrc: Record<number, number> = {};
+        for (const s of scItensOc) if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+        const orcToMeta: Record<number, number> = {};
+        for (const o of orcMetasOc) orcToMeta[o.id] = n(o.metaUnitTotal);
+
+        for (const it of ocItens) {
+          if (!it.solicitacaoItemId) continue;
+          const orcId = scToOrc[it.solicitacaoItemId];
+          if (!orcId) continue;
+          const metaUnit = orcToMeta[orcId] ?? 0;
+          if (metaUnit === 0) continue;
+          const qty = n(it.quantidade);
+          const vlrMeta = metaUnit * qty;
+          const vlrComprado = n(it.precoUnitario) * qty;
+          const sobra = vlrMeta - vlrComprado;
+          if (sobra > 0.01) {
+            const oc = ocs.find(o => o.id === it.ordemId);
+            sobras.push({ descricao: it.descricao || "—", unidade: it.unidade || "", ocNumero: oc?.numeroOc || String(it.ordemId), vlrMeta, vlrComprado, sobra });
+          }
+        }
+        sobras.sort((a, b) => b.sobra - a.sobra);
       }
-      sobras.sort((a, b) => b.sobra - a.sobra);
+
       const totalSobras = sobras.reduce((s, x) => s + x.sobra, 0);
-      return { sobras: sobras.slice(0, 10), totalSobras, deficit: input.deficit, cobreDeficit: totalSobras >= input.deficit };
+      const totalCobertura = riscoDisponivel + totalSobras;
+
+      return {
+        risco: { inicial: riscoInicial, usado: riscoUsado, disponivel: riscoDisponivel, orcamentoId: riscoOrcamentoId },
+        sobras: sobras.slice(0, 20),
+        totalSobras,
+        deficit: input.deficit,
+        cobreDeficit: totalCobertura >= input.deficit,
+        semCobertura: totalCobertura < 0.01,
+      };
+    }),
+
+  debitarDoRisco: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().optional(),
+      orcamentoId: z.number(),
+      cotacaoId: z.number().optional(),
+      valor: z.number().positive(),
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // Valida que não excede disponível
+      const debitos = await db.select({ valor: comprasRiscoDebitos.valor })
+        .from(comprasRiscoDebitos)
+        .where(eq(comprasRiscoDebitos.orcamentoId, input.orcamentoId));
+      const [di08] = await db.select({ totalLinha: bdiIndiretos.totalLinha })
+        .from(bdiIndiretos)
+        .where(and(eq(bdiIndiretos.orcamentoId, input.orcamentoId), eq(bdiIndiretos.codigo, "DI-08")));
+      const inicial = n(di08?.totalLinha ?? 0);
+      const usado = debitos.reduce((s, x) => s + n(x.valor), 0);
+      const disponivel = Math.max(0, inicial - usado);
+      if (input.valor > disponivel + 0.01) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Valor solicitado (${input.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) excede a reserva disponível (${disponivel.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).` });
+      }
+      await db.insert(comprasRiscoDebitos).values({
+        companyId: input.companyId,
+        obraId: input.obraId ?? null,
+        orcamentoId: input.orcamentoId,
+        cotacaoId: input.cotacaoId ?? null,
+        valor: String(input.valor),
+        observacao: input.observacao ?? null,
+      });
+      return { ok: true, novoDisponivel: disponivel - input.valor };
+    }),
+
+  solicitarAutorizacaoCompra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      cotacaoId: z.number(),
+      deficit: z.number(),
+      solicitanteNome: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // Grava um registro de pedido de autorização como observação especial na cotação
+      await db.update(comprasCotacoes)
+        .set({ observacoes: sql`COALESCE(observacoes || E'\n', '') || ${`[AGUARDANDO AUTORIZAÇÃO MASTER — Déficit de R$ ${input.deficit.toFixed(2)} em relação ao orçamento. Solicitado por: ${input.solicitanteNome ?? "Usuário"}]`}` })
+        .where(eq(comprasCotacoes.id, input.cotacaoId));
+      return { ok: true };
     }),
 
   selecionarVencedorMapa: protectedProcedure
