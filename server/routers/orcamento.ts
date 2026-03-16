@@ -1613,6 +1613,7 @@ export const orcamentoRouter = router({
       metaPercentual: z.number().min(0).max(0.99).default(0.2),
       userName:       z.string(),
       colMapping:     z.record(z.string(), z.number()).optional(),
+      forceReplace:   z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
       const XLSX = await import('xlsx');
@@ -1687,10 +1688,18 @@ export const orcamentoRouter = router({
           .limit(1);
         console.log(`[Importar] obraId=${input.obraId} companyId=${input.companyId} — conflito encontrado: ${existente.length > 0 ? 'SIM id=' + existente[0].id : 'NÃO'}`);
         if (existente.length > 0) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'Esta obra já possui um orçamento vinculado. Use "Atualizar Planilha" dentro do orçamento existente para importar uma nova versão.',
-          });
+          if (input.forceReplace) {
+            // Soft-delete o orçamento existente antes de criar o novo
+            await db.update(orcamentos)
+              .set({ deletedAt: new Date().toISOString() })
+              .where(eq(orcamentos.id, existente[0].id));
+            console.log(`[Importar] forceReplace=true — orçamento ${existente[0].id} excluído para substituição.`);
+          } else {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: JSON.stringify({ orcamentoId: existente[0].id, texto: 'Esta obra já possui um orçamento vinculado. Abra o orçamento existente e use "Atualizar Planilha", ou substitua-o importando novamente com a opção de substituir.' }),
+            });
+          }
         }
       }
 

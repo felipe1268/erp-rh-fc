@@ -12,7 +12,7 @@ import {
   Upload, FileSpreadsheet, X, AlertCircle, CheckCircle2,
   Loader2, Search, ArrowLeft, Building2, ChevronRight,
   TrendingDown, DollarSign, Target, BarChart3, SkipForward,
-  FileCheck, CircleDot, Columns, RefreshCw,
+  FileCheck, CircleDot, Columns, RefreshCw, ExternalLink, RefreshCcw,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -374,6 +374,8 @@ export default function OrcamentoImportar() {
   /* Obra */
   const [search, setSearch]             = useState("");
   const [selectedObra, setSelectedObra] = useState<any>(null);
+  const [conflitanteId, setConflitanteId] = useState<number | null>(null);
+  const [forceReplace, setForceReplace]   = useState(false);
 
   /* Custo */
   const [fileCusto, setFileCusto]             = useState<File | null>(null);
@@ -534,9 +536,12 @@ export default function OrcamentoImportar() {
         metaPercentual:  metaPerc / 100,
         userName:        (user as any)?.username || (user as any)?.name || "sistema",
         colMapping:      Object.keys(currentMapping).length > 0 ? currentMapping : undefined,
+        forceReplace:    forceReplace || undefined,
       });
       clearInterval(interval);
       setImportProgCusto(100);
+      setConflitanteId(null);
+      setForceReplace(false);
       setResultCusto({
         id:         res.id,
         totalCusto: parseFloat(res.totalCusto as any ?? "0"),
@@ -549,6 +554,14 @@ export default function OrcamentoImportar() {
     } catch (err: any) {
       clearInterval(interval);
       setImportProgCusto(0);
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed?.orcamentoId) {
+          setConflitanteId(parsed.orcamentoId);
+          setStep("custo");
+          return;
+        }
+      } catch {}
       toast.error(err.message || "Erro ao importar planilha de custo");
     } finally {
       setImportingCusto(false);
@@ -709,6 +722,39 @@ export default function OrcamentoImportar() {
                   <button onClick={() => setStep("obra")} className="ml-auto text-xs text-primary hover:underline">Trocar</button>
                 </div>
               ) : null}
+
+              {/* Banner de conflito — orçamento existente detectado */}
+              {conflitanteId && (
+                <div className="rounded-xl border border-orange-300 bg-orange-50 p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-orange-800">Esta obra já possui um orçamento vinculado (#{conflitanteId})</p>
+                      <p className="text-xs text-orange-700 mt-0.5">Você pode abrir o orçamento existente e usar "Atualizar Planilha" lá dentro, ou substituí-lo completamente por esta nova importação.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-100"
+                      onClick={() => navigate(`/orcamento/${conflitanteId}`)}>
+                      <ExternalLink className="w-3.5 h-3.5" /> Ir ao Orçamento Existente
+                    </Button>
+                    <Button size="sm" className="gap-1.5 bg-orange-600 hover:bg-orange-700 text-white"
+                      onClick={() => { setForceReplace(true); setConflitanteId(null); }}
+                      disabled={importingCusto}>
+                      <RefreshCcw className="w-3.5 h-3.5" /> Substituir (importar nova versão)
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Banner de substituição confirmada */}
+              {forceReplace && !conflitanteId && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-sm">
+                  <RefreshCcw className="h-4 w-4 text-blue-600 shrink-0" />
+                  <span className="text-blue-800 font-medium">Modo substituição ativo — o orçamento existente será excluído e substituído por esta importação.</span>
+                  <button onClick={() => setForceReplace(false)} className="ml-auto text-xs text-blue-600 hover:underline">Cancelar</button>
+                </div>
+              )}
 
               {/* Dropzone */}
               <div>

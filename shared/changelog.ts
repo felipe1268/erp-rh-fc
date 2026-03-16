@@ -1726,6 +1726,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 395,
+    titulo: "Orçamento — Conflito de obra resolvido com opção de substituição e link direto",
+    descricao: "Ao importar uma planilha para uma obra que já possui orçamento ativo, o sistema agora mostra um banner laranja com duas opções: (1) 'Ir ao Orçamento Existente' — botão com link direto para o orçamento vinculado, sem precisar procurar na lista; (2) 'Substituir' — exclui o orçamento antigo (soft-delete) e importa o novo em seu lugar. Antes, o sistema mostrava apenas um erro genérico sem saída clara. Backend: endpoint importar recebe forceReplace=true, soft-deleta o existente e prossegue. Frontend: banner de conflito com botões, banner de 'modo substituição ativo' com opção de cancelar.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 394,
     titulo: "Configurações — Módulos Compras, Almoxarifado e Financeiro adicionados ao painel de controle",
     descricao: "Os módulos Compras, Almoxarifado e Financeiro existiam com rotas e páginas funcionais mas não apareciam na tela de Módulos do Sistema (Configurações), impossibilitando que o admin os habilitasse/desabilitasse. Adicionado os 3 módulos ao array ALL_MODULES no backend (server/routers.ts) e ao objeto MODULE_INFO no frontend (Configuracoes.tsx) com ícone, cor e descrição próprios. Agora todos os 12 módulos do sistema são controláveis pela tela de configurações.",
