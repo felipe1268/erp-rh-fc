@@ -54,10 +54,13 @@ function formatDate(d: string | null | undefined) {
 }
 
 // ============ PAINEL DE VALIDADE (Componente) ============
-function ValidadePanel({ companyId, companyIds, onClickEmployee }: { companyId: number; companyIds?: number[]; onClickEmployee: (id: number) => void }) {
+function ValidadePanel({ companyId, companyIds, onClickEmployee, forceTipo, forceStatus }: { companyId: number; companyIds?: number[]; onClickEmployee: (id: number) => void; forceTipo?: string; forceStatus?: string }) {
   const { data, isLoading } = trpc.docs.painelValidade.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
-  const [filterStatus, setFilterStatus] = useState("todos");
-  const [filterTipo, setFilterTipo] = useState("todos");
+  const [filterStatus, setFilterStatus] = useState(forceStatus || "todos");
+  const [filterTipo, setFilterTipo] = useState(forceTipo || "todos");
+
+  useEffect(() => { setFilterTipo(forceTipo || "todos"); }, [forceTipo]);
+  useEffect(() => { setFilterStatus(forceStatus || "todos"); }, [forceStatus]);
   const [searchVal, setSearchVal] = useState("");
 
   const filtered = useMemo(() => {
@@ -995,20 +998,27 @@ export default function ControleDocumentos() {
   // ============ FILTER ============
   const [statusFilter, setStatusFilter] = useState("todos");
   const [cardFilter, setCardFilter] = useState<string | null>(null);
+  const [validadeForceTipo, setValidadeForceTipo] = useState<string | undefined>(undefined);
+  const [validadeForceStatus, setValidadeForceStatus] = useState<string | undefined>(undefined);
 
   const handleCardClick = (filter: string) => {
     if (cardFilter === filter) {
       setCardFilter(null);
       setStatusFilter("todos");
+      setValidadeForceTipo(undefined);
+      setValidadeForceStatus(undefined);
       if (filter === "vencido" || filter === "vencer" || filter === "asos" || filter === "semASO") setActiveTab("aso");
     } else {
       setCardFilter(filter);
+      setValidadeForceTipo(undefined);
+      setValidadeForceStatus(undefined);
       if (filter === "asos") { setActiveTab("aso"); setStatusFilter("todos"); }
       else if (filter === "vencido") { setActiveTab("aso"); setStatusFilter("vencido"); }
       else if (filter === "vencer") { setActiveTab("aso"); setStatusFilter("vencer"); }
       else if (filter === "semASO") { setActiveTab("semASO"); setStatusFilter("todos"); }
       else if (filter === "treinamentos") { setActiveTab("treinamentos"); setStatusFilter("todos"); }
-      else if (filter === "treinVencido" || filter === "treinVencer") { setActiveTab("validade"); setStatusFilter("todos"); }
+      else if (filter === "treinVencido") { setActiveTab("validade"); setStatusFilter("todos"); setValidadeForceTipo("Treinamento"); setValidadeForceStatus("vencido"); }
+      else if (filter === "treinVencer") { setActiveTab("validade"); setStatusFilter("todos"); setValidadeForceTipo("Treinamento"); setValidadeForceStatus("vencer30"); }
       else if (filter === "atestados") { setActiveTab("atestados"); setStatusFilter("todos"); }
       else if (filter === "advertencias") { setActiveTab("advertencias"); setStatusFilter("todos"); }
     }
@@ -1512,7 +1522,7 @@ export default function ControleDocumentos() {
 
           {/* ===================== ABA PAINEL DE VALIDADE ===================== */}
           <TabsContent value="validade">
-            <ValidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} />
+            <ValidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} forceTipo={validadeForceTipo} forceStatus={validadeForceStatus} />
           </TabsContent>
 
           {/* ===================== ABA DOCUMENTOS DO FUNCIONÁRIO ===================== */}

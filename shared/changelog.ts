@@ -1726,6 +1726,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 392,
+    titulo: "Controle de Documentos — Trein. Vencidos / A Vencer filtram só Treinamentos no Painel de Validade",
+    descricao: "Ao clicar nos cards 'Trein. Vencidos' ou 'Trein. A Vencer' no header, o Painel de Validade agora abre pré-filtrado por tipo 'Treinamento' e com status correspondente ('Vencido' ou 'Vence em 30 dias'), sem misturar com ASOs. Os filtros internos do painel continuam editáveis pelo usuário. Ao desfazer o filtro do card, o painel volta para 'Todos os Tipos'.",
+    tipo: "correcao",
+    modulos: "Controle de Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 391,
     titulo: "Controle de Documentos — Corrigido: aba Sem ASO exibia 0 funcionários",
     descricao: "A query SQL da listagem de funcionários sem ASO usava '= true' para comparar a coluna isActive (tipo smallint) da tabela obra_funcionarios, o que causava erro de tipo no PostgreSQL e retornava array vazio. Corrigido para '= 1'. O contador no cabeçalho já funcionava corretamente (query diferente sem o JOIN problemático). Agora a aba exibe os funcionários corretamente.",
