@@ -2041,6 +2041,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 427,
+    titulo: "Contratos — Template padrão com variáveis e geração automática do documento",
+    descricao: "Sistema completo de template de contrato: nova tabela terceiro_contrato_templates armazena o texto padrão (com variáveis {{PLACEHOLDER}}); nova tabela terceiro_contrato_revisoes mantém histórico de versões do documento por contrato. Campos texto_contrato e versao_texto adicionados em terceiro_contratos. Backend: endpoints getTemplate, salvarTemplate, gerarTextoContrato (preenche as variáveis com dados reais do contrato — partes, obra, valores, datas), salvarTextoContrato (com auto-revisão da versão anterior), listarRevisoes e restaurarRevisao. Frontend: nova aba 'Documento' no detalhe do contrato com editor de texto livre, botão Gerar/Regenerar, histórico lateral de revisões com restauração por versão, e link para o template; nova página /terceiros/contratos/template com editor do texto-base, painel de variáveis clicáveis por categoria, busca, pré-visualização com dados de exemplo e restauração do template padrão.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",

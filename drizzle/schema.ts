@@ -2990,6 +2990,9 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   orcamentoId:       integer("orcamento_id"),
   numeroContrato:    varchar("numero_contrato", { length: 50 }),
   numeroSequencia:   integer("numero_sequencia"),
+  templateId:        integer("template_id"),
+  textoContrato:     text("texto_contrato"),
+  versaoTexto:       integer("versao_texto").default(0),
   descricao:         varchar({ length: 500 }).notNull(),
   tipoContrato:      varchar("tipo_contrato", { length: 50 }).default("empreitada_global"), // empreitada_global | preco_unitario | misto
   valorOrcamento:    numeric("valor_orcamento", { precision: 18, scale: 2 }).default("0"),
@@ -3020,6 +3023,30 @@ export const terceiroContratoItens = pgTable("terceiro_contrato_itens", {
   valorMedidoAcumulado: numeric("valor_medido_acumulado", { precision: 18, scale: 2 }).default("0"),
   ordem:               integer().default(0),
   criadoEm:            timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+// Template padrão de contrato — armazenado por empresa, com variáveis {{PLACEHOLDER}}
+export const terceiroContratoTemplates = pgTable("terceiro_contrato_templates", {
+  id:           serial().primaryKey(),
+  companyId:    integer("company_id").notNull(),
+  nome:         varchar({ length: 200 }).notNull().default("Contrato Padrão"),
+  texto:        text().notNull(),
+  ativo:        boolean().default(true),
+  versao:       integer().default(1),
+  criadoEm:     timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+// Histórico de revisões do texto de cada contrato
+export const terceiroContratoRevisoes = pgTable("terceiro_contrato_revisoes", {
+  id:          serial().primaryKey(),
+  contratoId:  integer("contrato_id").notNull(),
+  companyId:   integer("company_id").notNull(),
+  versao:      integer().notNull(),
+  texto:       text().notNull(),
+  observacao:  varchar({ length: 200 }),
+  criadoPor:   varchar("criado_por", { length: 200 }),
+  criadoEm:    timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 });
 
 export const terceiroMedicoes = pgTable("terceiro_medicoes", {

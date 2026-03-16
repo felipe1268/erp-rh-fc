@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeft, Plus, FileCheck, AlertTriangle, CheckCircle,
   ChevronRight, Building2, Calendar, DollarSign, FileText,
-  Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus
+  Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
+  FileEdit, Save, Clock, RefreshCw, History, ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,7 +37,7 @@ const STATUS_DOC: Record<string, { label: string; cls: string }> = {
   vencido:  { label: "Vencido",  cls: "bg-orange-100 text-orange-700 border-orange-200" },
 };
 
-type Tab = "itens" | "medicoes" | "documentos";
+type Tab = "itens" | "medicoes" | "documentos" | "documento";
 
 export default function ContratoDetalhe() {
   const [, navigate] = useLocation();
@@ -49,6 +50,12 @@ export default function ContratoDetalhe() {
   const [periodo, setPeriodo] = useState(() => new Date().toISOString().slice(0, 7));
   const [newItem, setNewItem] = useState({ descricao: "", unidade: "m²", quantidade: "1", valorUnitario: "0", eapCodigo: "", planejamentoAtividadeId: "" });
   const [newDoc, setNewDoc] = useState({ tipo: "INSS", descricao: "", competencia: "", dataVencimento: "", bloqueiaPagemento: false });
+
+  // Documento tab state
+  const [textoEditado, setTextoEditado] = useState<string | null>(null);
+  const [obsRevisao, setObsRevisao] = useState("");
+  const [showRevisoes, setShowRevisoes] = useState(false);
+  const [showObsModal, setShowObsModal] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: contrato, isLoading } = trpc.terceiroContratos.getContrato.useQuery({ id }, { enabled: id > 0 });
@@ -80,6 +87,28 @@ export default function ContratoDetalhe() {
   const atualizarDocMut = trpc.terceiroContratos.atualizarDocumento.useMutation({
     onSuccess: () => { toast.success("Status atualizado!"); utils.terceiroContratos.getContrato.invalidate({ id }); },
   });
+
+  const gerarTextoMut = trpc.terceiroContratos.gerarTextoContrato.useMutation({
+    onSuccess: (r) => { toast.success(`Documento gerado — v${r.versao}`); setTextoEditado(r.texto); utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarRevisoes.invalidate({ contratoId: id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const salvarTextoMut = trpc.terceiroContratos.salvarTextoContrato.useMutation({
+    onSuccess: (r) => { toast.success(`Documento salvo — v${r.versao}`); setShowObsModal(false); setObsRevisao(""); utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarRevisoes.invalidate({ contratoId: id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const restaurarMut = trpc.terceiroContratos.restaurarRevisao.useMutation({
+    onSuccess: (r) => { toast.success(`Revisão restaurada — v${r.versao}`); utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarRevisoes.invalidate({ contratoId: id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const { data: revisoes = [] } = trpc.terceiroContratos.listarRevisoes.useQuery(
+    { contratoId: id },
+    { enabled: tab === "documento" && id > 0 }
+  );
+
+  const textoAtual = textoEditado ?? contrato?.textoContrato ?? null;
 
   if (isLoading) return <DashboardLayout><div className="flex items-center justify-center h-64 text-gray-400">Carregando...</div></DashboardLayout>;
   if (!contrato) return <DashboardLayout><div className="p-8 text-center text-gray-400">Contrato não encontrado</div></DashboardLayout>;
@@ -184,10 +213,13 @@ export default function ContratoDetalhe() {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200">
-          {(["itens", "medicoes", "documentos"] as Tab[]).map(t => (
+          {(["itens", "medicoes", "documentos", "documento"] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${tab === t ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500 hover:text-gray-700"}`}>
-              {t === "itens" ? `Itens (${contrato.itens.length})` : t === "medicoes" ? `Medições (${contrato.medicoes.length})` : `Documentos (${contrato.documentos.length})`}
+              className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${tab === t ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500 hover:text-gray-700"}`}>
+              {t === "itens" ? `Itens (${contrato.itens.length})` :
+               t === "medicoes" ? `Medições (${contrato.medicoes.length})` :
+               t === "documentos" ? `Docs (${contrato.documentos.length})` :
+               <span className="flex items-center gap-1.5"><FileEdit className="w-3.5 h-3.5" />Documento</span>}
             </button>
           ))}
         </div>
@@ -400,6 +432,137 @@ export default function ContratoDetalhe() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Tab: Documento do Contrato */}
+        {tab === "documento" && (
+          <div className="space-y-4">
+            {/* Toolbar */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                disabled={gerarTextoMut.isPending}
+                onClick={() => gerarTextoMut.mutate({ contratoId: id })}
+              >
+                <RefreshCw className={`w-4 h-4 ${gerarTextoMut.isPending ? "animate-spin" : ""}`} />
+                {textoAtual ? "Regenerar documento" : "Gerar documento"}
+              </Button>
+              {textoAtual && (
+                <Button
+                  size="sm"
+                  className="gap-2 bg-blue-600 hover:bg-blue-700"
+                  disabled={salvarTextoMut.isPending || !textoEditado}
+                  onClick={() => setShowObsModal(true)}
+                >
+                  <Save className="w-4 h-4" />
+                  Salvar alterações
+                </Button>
+              )}
+              {revisoes.length > 0 && (
+                <button
+                  onClick={() => setShowRevisoes(r => !r)}
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 ml-auto"
+                >
+                  <History className="w-4 h-4" />
+                  {revisoes.length} revisão(ões)
+                </button>
+              )}
+              <button
+                onClick={() => navigate("/terceiros/contratos/template")}
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 ml-auto"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Editar template padrão
+              </button>
+            </div>
+
+            {/* Versão info */}
+            {(contrato as any).versaoTexto > 0 && (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <Clock className="w-3.5 h-3.5" />
+                Versão atual: v{(contrato as any).versaoTexto}
+                {textoEditado && <span className="text-orange-500 font-medium ml-2">● Alterações não salvas</span>}
+              </div>
+            )}
+
+            {!textoAtual ? (
+              <div className="py-16 text-center border-2 border-dashed border-gray-200 rounded-xl">
+                <FileEdit className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-400 text-sm mb-1">Nenhum documento gerado ainda</p>
+                <p className="text-gray-400 text-xs mb-4">Clique em "Gerar documento" para preencher o template com os dados deste contrato</p>
+                <Button size="sm" variant="outline" onClick={() => navigate("/terceiros/contratos/template")}>
+                  <ExternalLink className="w-3.5 h-3.5 mr-2" />
+                  Configurar template padrão
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-4">
+                {/* Editor */}
+                <div className="flex-1">
+                  <textarea
+                    value={textoAtual}
+                    onChange={e => setTextoEditado(e.target.value)}
+                    className="w-full h-[680px] rounded-xl border border-gray-200 p-5 text-sm font-mono text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none leading-relaxed"
+                    spellCheck={false}
+                  />
+                </div>
+
+                {/* Histórico de revisões */}
+                {showRevisoes && revisoes.length > 0 && (
+                  <div className="w-64 flex-shrink-0 space-y-2">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Histórico de Revisões</p>
+                    <div className="space-y-1.5 max-h-[650px] overflow-y-auto">
+                      {revisoes.map((rev: any) => (
+                        <div key={rev.id} className="bg-white rounded-lg border border-gray-200 p-2.5">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-mono font-semibold text-blue-600">v{rev.versao}</span>
+                            <button
+                              onClick={() => { if (confirm(`Restaurar versão v${rev.versao}?`)) restaurarMut.mutate({ contratoId: id, revisaoId: rev.id }); }}
+                              className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
+                            >
+                              Restaurar
+                            </button>
+                          </div>
+                          {rev.observacao && <p className="text-xs text-gray-500 leading-snug">{rev.observacao}</p>}
+                          {rev.criadoPor && <p className="text-xs text-gray-400 mt-0.5">por {rev.criadoPor}</p>}
+                          <p className="text-xs text-gray-300 mt-0.5">
+                            {rev.criadoEm ? new Date(rev.criadoEm).toLocaleString("pt-BR") : ""}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Modal: Salvar com observação */}
+        {showObsModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+              <h2 className="text-lg font-bold mb-1">Salvar Documento</h2>
+              <p className="text-sm text-gray-500 mb-4">Adicione uma observação sobre esta revisão (opcional)</p>
+              <Input
+                placeholder="Ex: Ajustado prazo da Cláusula 2"
+                value={obsRevisao}
+                onChange={e => setObsRevisao(e.target.value)}
+              />
+              <div className="flex gap-3 mt-4 justify-end">
+                <Button variant="outline" onClick={() => setShowObsModal(false)}>Cancelar</Button>
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={salvarTextoMut.isPending}
+                  onClick={() => salvarTextoMut.mutate({ contratoId: id, texto: textoAtual!, observacao: obsRevisao || undefined })}
+                >
+                  {salvarTextoMut.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 

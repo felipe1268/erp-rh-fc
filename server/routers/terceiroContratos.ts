@@ -16,6 +16,9 @@ import {
   comprasCotacoes,
   comprasCotacoesItens,
   fornecedores,
+  terceiroContratoTemplates,
+  terceiroContratoRevisoes,
+  companies,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
@@ -727,6 +730,199 @@ export const terceiroContratosRouter = router({
         .where(eq(comprasCotacoes.id, input.cotacaoId));
 
       return { contratoId: contrato.id, numeroContrato, empresaTerceiraId, isNova };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // TEMPLATE DE CONTRATO
+  // ══════════════════════════════════════════════════════════════
+
+  getTemplate: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const [tpl] = await db.select().from(terceiroContratoTemplates)
+        .where(and(
+          eq(terceiroContratoTemplates.companyId, input.companyId),
+          eq(terceiroContratoTemplates.ativo, true)
+        ))
+        .orderBy(desc(terceiroContratoTemplates.versao))
+        .limit(1);
+      return tpl ?? null;
+    }),
+
+  salvarTemplate: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      nome: z.string().min(1),
+      texto: z.string().min(1),
+      id: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      if (input.id) {
+        const [cur] = await db.select({ versao: terceiroContratoTemplates.versao }).from(terceiroContratoTemplates).where(eq(terceiroContratoTemplates.id, input.id));
+        const novaVersao = (cur?.versao ?? 1) + 1;
+        await db.update(terceiroContratoTemplates)
+          .set({ nome: input.nome, texto: input.texto, versao: novaVersao, atualizadoEm: new Date().toISOString() })
+          .where(eq(terceiroContratoTemplates.id, input.id));
+        return { id: input.id, versao: novaVersao };
+      }
+      // Desativar template anterior
+      await db.update(terceiroContratoTemplates)
+        .set({ ativo: false })
+        .where(eq(terceiroContratoTemplates.companyId, input.companyId));
+      const [novo] = await db.insert(terceiroContratoTemplates)
+        .values({ companyId: input.companyId, nome: input.nome, texto: input.texto, ativo: true, versao: 1 })
+        .returning();
+      return { id: novo.id, versao: 1 };
+    }),
+
+  gerarTextoContrato: protectedProcedure
+    .input(z.object({ contratoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+
+      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+      if (!contrato) throw new Error("Contrato não encontrado");
+
+      const [template] = await db.select().from(terceiroContratoTemplates)
+        .where(and(
+          eq(terceiroContratoTemplates.companyId, contrato.companyId),
+          eq(terceiroContratoTemplates.ativo, true)
+        ))
+        .orderBy(desc(terceiroContratoTemplates.versao))
+        .limit(1);
+      if (!template) throw new Error("Nenhum template de contrato cadastrado. Acesse Configurações > Template de Contrato para criar um.");
+
+      const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
+      const [company] = await db.select().from(companies).where(eq(companies.id, contrato.companyId));
+      const [obra] = contrato.obraId ? await db.select().from(obras).where(eq(obras.id, contrato.obraId)) : [null];
+
+      const fmtDate = (d: string | null | undefined) => {
+        if (!d) return "___/___/______";
+        const [y, m, day] = d.slice(0, 10).split("-");
+        return `${day}/${m}/${y}`;
+      };
+      const fmtMoney = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
+      const endEmpresa = [empresa?.logradouro, empresa?.numero, empresa?.bairro, empresa?.cidade, empresa?.estado].filter(Boolean).join(", ");
+      const endCompany = company?.endereco ?? [company?.cidade, company?.estado].filter(Boolean).join(" - ") ?? "";
+
+      const vars: Record<string, string> = {
+        "NUMERO_CONTRATO": contrato.numeroContrato ?? "_______________",
+        "ANO_ATUAL": new Date().getFullYear().toString(),
+        "CONTRATANTE_NOME": company?.razaoSocial ?? "_______________",
+        "CONTRATANTE_CNPJ": company?.cnpj ?? "_______________",
+        "CONTRATANTE_ENDERECO": endCompany || "_______________",
+        "CONTRATANTE_REPRESENTANTE": "Felipe Costa Alves",
+        "CONTRATANTE_CARGO": "Sócio Administrador",
+        "CONTRATADA_NOME": empresa?.razaoSocial ?? "_______________",
+        "CONTRATADA_CNPJ": empresa?.cnpj ?? "_______________",
+        "CONTRATADA_ENDERECO": endEmpresa || "_______________",
+        "CONTRATADA_REPRESENTANTE": empresa?.responsavelNome ?? "_______________",
+        "CONTRATADA_CARGO": empresa?.responsavelCargo ?? "Representante Legal",
+        "OBRA_NOME": obra?.nome ?? contrato.obraNome ?? "_______________",
+        "DESCRICAO_OBJETO": contrato.descricao ?? "_______________",
+        "VALOR_TOTAL": fmtMoney(contrato.valorTotal),
+        "DATA_INICIO": fmtDate(contrato.dataInicio ?? undefined),
+        "DATA_TERMINO": fmtDate(contrato.dataTermino ?? undefined),
+        "CIDADE_ESTADO": [company?.cidade, company?.estado].filter(Boolean).join(" - ") || "Montes Claros - MG",
+        "DATA_ASSINATURA": fmtDate(new Date().toISOString()),
+      };
+
+      let texto = template.texto;
+      for (const [k, v] of Object.entries(vars)) {
+        texto = texto.replaceAll(`{{${k}}}`, v);
+      }
+
+      // Salvar revisão da versão atual, se já tiver texto
+      const versaoAtual = contrato.versaoTexto ?? 0;
+      if (contrato.textoContrato && versaoAtual > 0) {
+        await db.insert(terceiroContratoRevisoes).values({
+          contratoId: contrato.id,
+          companyId: contrato.companyId,
+          versao: versaoAtual,
+          texto: contrato.textoContrato,
+          observacao: "Substituído por regeneração automática",
+          criadoPor: ctx.user?.name ?? "sistema",
+        });
+      }
+
+      const novaVersao = versaoAtual + 1;
+      await db.update(terceiroContratos)
+        .set({ textoContrato: texto, templateId: template.id, versaoTexto: novaVersao, atualizadoEm: new Date().toISOString() })
+        .where(eq(terceiroContratos.id, input.contratoId));
+
+      return { texto, versao: novaVersao };
+    }),
+
+  salvarTextoContrato: protectedProcedure
+    .input(z.object({
+      contratoId: z.number(),
+      texto: z.string(),
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+      if (!contrato) throw new Error("Contrato não encontrado");
+
+      // Arquivar versão atual como revisão
+      const versaoAtual = contrato.versaoTexto ?? 0;
+      if (contrato.textoContrato) {
+        await db.insert(terceiroContratoRevisoes).values({
+          contratoId: contrato.id,
+          companyId: contrato.companyId,
+          versao: versaoAtual,
+          texto: contrato.textoContrato,
+          observacao: input.observacao ?? "Edição manual",
+          criadoPor: ctx.user?.name ?? "sistema",
+        });
+      }
+
+      const novaVersao = versaoAtual + 1;
+      await db.update(terceiroContratos)
+        .set({ textoContrato: input.texto, versaoTexto: novaVersao, atualizadoEm: new Date().toISOString() })
+        .where(eq(terceiroContratos.id, input.contratoId));
+
+      return { versao: novaVersao };
+    }),
+
+  listarRevisoes: protectedProcedure
+    .input(z.object({ contratoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      return db.select().from(terceiroContratoRevisoes)
+        .where(eq(terceiroContratoRevisoes.contratoId, input.contratoId))
+        .orderBy(desc(terceiroContratoRevisoes.versao));
+    }),
+
+  restaurarRevisao: protectedProcedure
+    .input(z.object({ contratoId: z.number(), revisaoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const [rev] = await db.select().from(terceiroContratoRevisoes).where(eq(terceiroContratoRevisoes.id, input.revisaoId));
+      if (!rev) throw new Error("Revisão não encontrada");
+
+      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+      const versaoAtual = contrato?.versaoTexto ?? 0;
+
+      if (contrato?.textoContrato) {
+        await db.insert(terceiroContratoRevisoes).values({
+          contratoId: input.contratoId,
+          companyId: rev.companyId,
+          versao: versaoAtual,
+          texto: contrato.textoContrato,
+          observacao: `Substituído ao restaurar revisão v${rev.versao}`,
+          criadoPor: ctx.user?.name ?? "sistema",
+        });
+      }
+
+      const novaVersao = versaoAtual + 1;
+      await db.update(terceiroContratos)
+        .set({ textoContrato: rev.texto, versaoTexto: novaVersao, atualizadoEm: new Date().toISOString() })
+        .where(eq(terceiroContratos.id, input.contratoId));
+
+      return { versao: novaVersao };
     }),
 });
 

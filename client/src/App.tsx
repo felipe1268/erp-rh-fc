@@ -119,6 +119,7 @@ const ValidacaoIA = lazy(() => import("./pages/terceiros/ValidacaoIA"));
 const ContratosList = lazy(() => import("./pages/terceiros/contratos/ContratosList"));
 const ContratoNovo = lazy(() => import("./pages/terceiros/contratos/ContratoNovo"));
 const ContratoDetalhe = lazy(() => import("./pages/terceiros/contratos/ContratoDetalhe"));
+const ContratoTemplate = lazy(() => import("./pages/terceiros/contratos/ContratoTemplate"));
 const MedicoesTerceiros = lazy(() => import("./pages/terceiros/Medicoes"));
 const PrevisaoCaixaTerceiros = lazy(() => import("./pages/terceiros/PrevisaoCaixa"));
 
@@ -296,6 +297,7 @@ function Router() {
         <Route path="/crachas" component={Crachas} />
         <Route path="/terceiros/validacao-ia" component={ValidacaoIA} />
         <Route path="/terceiros/contratos" component={ContratosList} />
+        <Route path="/terceiros/contratos/template" component={ContratoTemplate} />
         <Route path="/terceiros/contratos/novo" component={ContratoNovo} />
         <Route path="/terceiros/contratos/:id" component={ContratoDetalhe} />
         <Route path="/terceiros/medicoes" component={MedicoesTerceiros} />
