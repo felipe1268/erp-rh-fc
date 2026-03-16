@@ -86,7 +86,6 @@ export default function FolhaPagamento() {
   const [showVinculacaoPanel, setShowVinculacaoPanel] = useState(false);
   const [heObraFilter, setHeObraFilter] = useState<string>("all");
   // MO alocação
-  const [showCargosModal, setShowCargosModal] = useState(false);
 
   const [fecharFolhaResult, setFecharFolhaResult] = useState<{ count: number } | null>(null);
 
@@ -279,18 +278,10 @@ export default function FolhaPagamento() {
   });
 
   // ── MO Alocação ─────────────────────────────────────────────────────────────
-  const cargoCategorias = trpc.moAlocacao.listarCargoCategorias.useQuery(
-    { companyId }, { enabled: companyId > 0 && showCargosModal }
-  );
   const fecharFolhaMut = trpc.moAlocacao.fecharFolhaMes.useMutation({
     onSuccess: (d) => { toast.success(`Folha fechada — ${d.count} lançamentos encerrados.`); setFecharFolhaResult(d); lancamentos.refetch(); },
     onError: (e) => toast.error(e.message),
   });
-  const salvarCargoMut = trpc.moAlocacao.salvarCargoCategoria.useMutation({
-    onSuccess: () => { cargoCategorias.refetch(); toast.success("Categoria salva!"); },
-    onError: (e) => toast.error(e.message),
-  });
-
   const exportarCustosObraMut = trpc.folha.exportarCustosObra.useMutation({
     onSuccess: (data) => {
       if (!data.base64) { toast.error("Nenhum dado para exportar"); return; }
@@ -2024,9 +2015,6 @@ export default function FolhaPagamento() {
                 <p className="text-xs text-muted-foreground">Encerra o mês e libera a importação de custo de MO no Planejamento</p>
               </div>
             </div>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowCargosModal(true)}>
-              <Wrench className="h-3.5 w-3.5" /> Config. Cargos
-            </Button>
           </div>
           {fecharFolhaResult ? (
             <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
@@ -3140,78 +3128,6 @@ function DescontosEPIView({ companyId, mesAno, onBack }: { companyId: number; me
           </table>
         </div>
       )}
-
-      {/* MODAL CONFIGURAÇÃO DE CARGOS MO */}
-      <Dialog open={showCargosModal} onOpenChange={setShowCargosModal}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Wrench className="h-4 w-4" /> Categoria de MO por Função
-            </DialogTitle>
-            <DialogDescription>
-              Defina a categoria de custo de cada função cadastrada. Funções sem categoria são tratadas como <strong>Direto</strong> por padrão.
-            </DialogDescription>
-          </DialogHeader>
-          {/* Legenda */}
-          <div className="flex gap-2 flex-wrap text-xs">
-            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">Direto → Atividades EAP</span>
-            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Indireta Obra → 01.01 Equipe Técnica</span>
-            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">Indireto Escritório Central → CI-01 rateado</span>
-          </div>
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {cargoCategorias.isLoading ? (
-              <div className="text-center py-10 text-sm text-muted-foreground">
-                <RefreshCw className="h-4 w-4 animate-spin inline mr-2" />Carregando funções...
-              </div>
-            ) : (cargoCategorias.data ?? []).length === 0 ? (
-              <div className="text-center py-10 text-sm text-muted-foreground bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-                <Wrench className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                Nenhuma função cadastrada no sistema.
-              </div>
-            ) : (
-              <div className="divide-y border rounded-lg overflow-hidden">
-                {/* Header */}
-                <div className="grid grid-cols-[1fr_auto_200px] gap-3 px-4 py-2 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  <span>Função</span>
-                  <span className="text-center">CBO</span>
-                  <span>Categoria MO</span>
-                </div>
-                {(cargoCategorias.data ?? []).map(c => (
-                  <div key={c.id} className="grid grid-cols-[1fr_auto_200px] gap-3 items-center px-4 py-2 hover:bg-slate-50">
-                    <span className="text-sm font-medium">{c.cargo}</span>
-                    <span className="text-xs text-muted-foreground font-mono">{c.cbo ?? "—"}</span>
-                    <select
-                      className={`text-xs border rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-full ${
-                        c.categoria === "direto" ? "border-blue-300 text-blue-700" :
-                        c.categoria === "indireta_obra" ? "border-amber-300 text-amber-700" :
-                        c.categoria === "escritorio_central" ? "border-purple-300 text-purple-700" :
-                        "border-slate-300 text-slate-500"
-                      }`}
-                      value={c.categoria ?? ""}
-                      disabled={salvarCargoMut.isPending}
-                      onChange={e => {
-                        const val = e.target.value;
-                        salvarCargoMut.mutate({
-                          id: c.id,
-                          categoria: val ? val as "direto" | "indireta_obra" | "escritorio_central" : null,
-                        });
-                      }}
-                    >
-                      <option value="">— Não definido —</option>
-                      <option value="direto">Direto</option>
-                      <option value="indireta_obra">Indireta Obra</option>
-                      <option value="escritorio_central">Indireto Escritório Central</option>
-                    </select>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCargosModal(false)}>Fechar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Dialog de confirmação */}
       <Dialog open={validandoId !== null} onOpenChange={(v) => { if (!v) setValidandoId(null); }}>
