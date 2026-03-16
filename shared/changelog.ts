@@ -1852,6 +1852,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 408,
+    titulo: "Terceiros — Contratos de Serviço, Medições e Previsão de Caixa + Correção de CPF/RG por empresa",
+    descricao: "Duas entregas nesta revisão. (1) Módulo Terceiros expandido: 5 tabelas no banco (terceiro_contratos, terceiro_contrato_itens, terceiro_medicoes, terceiro_medicao_itens, terceiro_documentos); router terceiroContratos com CRUD completo, geração automática de medições com base no avanço físico do planejamento, aprovação/rejeição de medições e previsão de caixa semanal vinculada ao cronograma; 5 páginas React — ContratosList (lista com KPIs e barra de progresso), ContratoNovo (formulário com combobox pesquisável de empresa/obra), ContratoDetalhe (abas Itens / Medições / Documentos com ações inline), Medicoes (painel de aprovação) e PrevisaoCaixa (gráfico de barras semanal + tabela); rotas /terceiros/contratos, /terceiros/contratos/novo, /terceiros/contratos/:id, /terceiros/medicoes e /terceiros/previsao-caixa registradas; página previsao_caixa adicionada ao modulePages.ts. (2) Correção crítica de unicidade: checkDuplicateCpf e checkBlacklist agora filtram por companyId — o mesmo CPF pode existir em empresas diferentes sem bloqueio cruzado. Verificação de RG também corrigida para escopo por empresa. Mensagens de erro atualizadas para refletir isolamento por empresa.",
+    tipo: "funcionalidade",
+    modulos: "Terceiros, Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 407,
     titulo: "Permissões — Controle granular por página e dados sensíveis (LGPD)",
     descricao: "Redesenho completo do sistema de permissões de usuários para suportar controle granular. Cada módulo ativo agora permite configurar: (1) Nível de acesso — Administrador (acesso total), Somente Visualização ou Personalizado; (2) Quando Personalizado: tabela de páginas com checkboxes individuais para Visualizar, Criar, Editar e Excluir — com ação de marcar/desmarcar coluna inteira; (3) Flags de dados sensíveis LGPD por módulo — ocultar salários, valores de contratos, dados pessoais, saldos financeiros, etc. Novo arquivo shared/modulePages.ts centraliza a definição de páginas e flags sensíveis por módulo. PermissionsContext atualizado com helpers canViewPage(), canCreatePage(), canEditPage(), canDeletePage() e isSensitiveHidden(). Backend (setUserModuleAccess) agora aceita formato rico JSON. Formato armazenado é retrocompatível com o sistema anterior (strings 'admin'/'viewer' são normalizadas automaticamente).",

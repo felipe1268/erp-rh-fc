@@ -66,11 +66,12 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   },
   "terceiros": {
     pages: [
-      { id: "empresas",      label: "Empresas Terceiras",      actions: ["view","create","edit","delete"] },
-      { id: "trabalhadores", label: "Trabalhadores Terceiros", actions: ["view","create","edit","delete"] },
-      { id: "contratos",     label: "Contratos de Serviço",    actions: ["view","create","edit","delete"] },
-      { id: "medicoes",      label: "Medições",                actions: ["view","create","edit","delete"] },
-      { id: "documentos",    label: "Documentos",              actions: ["view","create","edit","delete"] },
+      { id: "empresas",       label: "Empresas Terceiras",      actions: ["view","create","edit","delete"] },
+      { id: "trabalhadores",  label: "Trabalhadores Terceiros", actions: ["view","create","edit","delete"] },
+      { id: "contratos",      label: "Contratos de Serviço",    actions: ["view","create","edit","delete"] },
+      { id: "medicoes",       label: "Medições",                actions: ["view","create","edit","delete"] },
+      { id: "previsao_caixa", label: "Previsão de Caixa",       actions: ["view"] },
+      { id: "documentos",     label: "Documentos",              actions: ["view","create","edit","delete"] },
     ],
     sensitiveFlags: [
       { id: "valores_contratos", label: "Valores de contratos de serviço" },

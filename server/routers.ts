@@ -316,47 +316,46 @@ export const appRouter = router({
     getById: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).query(({ input }) => getEmployeeById(input.id, input.companyId)),
     stats: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEmployeeStats(input.companyId)),
     create: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }) => {
-      // === REGRA-MÃE DE UNICIDADE ===
-      // Valida CPF em TODAS as empresas do grupo (não apenas na empresa atual)
-      if (input.cpf && !input.cpf.startsWith('000.000')) {
-        // Verificar se está na Blacklist (sempre bloqueia)
-        const blacklisted = await checkBlacklist(input.cpf);
+      // === UNICIDADE POR EMPRESA ===
+      // CPF e RG são únicos por empresa. O mesmo CPF pode existir em empresas diferentes.
+      const targetCompanyId: number = input.companyId || 0;
+      if (input.cpf && !input.cpf.startsWith('000.000') && targetCompanyId) {
+        // Verificar lista negra desta empresa
+        const blacklisted = await checkBlacklist(input.cpf, targetCompanyId);
         if (blacklisted) {
-          throw new TRPCError({ code: "FORBIDDEN", message: `\ud83d\udeab FUNCION\u00c1RIO NA BLACKLIST!\n\n${blacklisted.nomeCompleto} (CPF: ${input.cpf}) est\u00e1 na Blacklist da empresa.\nMotivo: ${blacklisted.motivoListaNegra || 'N\u00e3o informado'}\nData: ${blacklisted.dataListaNegra || 'N/A'}\nRegistrado por: ${(blacklisted as any).listaNegraPor || 'N/A'}\n\nPara reativar este funcion\u00e1rio, \u00e9 necess\u00e1ria a aprova\u00e7\u00e3o de 2 diretores da empresa.` });
+          throw new TRPCError({ code: "FORBIDDEN", message: `🚫 FUNCIONÁRIO NA BLACKLIST!\n\n${blacklisted.nomeCompleto} (CPF: ${input.cpf}) está na Blacklist desta empresa.\nMotivo: ${blacklisted.motivoListaNegra || 'Não informado'}\nData: ${blacklisted.dataListaNegra || 'N/A'}\nRegistrado por: ${(blacklisted as any).listaNegraPor || 'N/A'}\n\nPara reativar este funcionário, é necessária a aprovação de 2 diretores da empresa.` });
         }
-        // Verificar CPF duplicado com suporte a recontratação
-        const dup = await checkDuplicateCpf(input.cpf);
+        // Verificar CPF duplicado somente nesta empresa
+        const dup = await checkDuplicateCpf(input.cpf, targetCompanyId);
         if (dup && (dup as any[]).length > 0) {
           const dupInfo = (dup as any[])[0];
-          // Se o funcionário está desligado e flag de recontratação está ativa, permitir
           const isDesligado = dupInfo.status === 'Desligado' || dupInfo.status === 'Inativo';
           if (isDesligado && input._recontratacao) {
-            // Verificar carência de recontratação
+            // Recontratação com carência de 90 dias
             if (dupInfo.dataDesligamento) {
               const dataDeslig = new Date(dupInfo.dataDesligamento);
-              const hoje = new Date();
-              const diffDias = Math.floor((hoje.getTime() - dataDeslig.getTime()) / (1000 * 60 * 60 * 24));
-              // Carência padrão de 90 dias (pode ser configurado nos critérios)
+              const diffDias = Math.floor((new Date().getTime() - dataDeslig.getTime()) / (1000 * 60 * 60 * 24));
               if (diffDias < 90) {
-                throw new TRPCError({ code: "CONFLICT", message: `\u26a0\ufe0f Car\u00eancia de recontrata\u00e7\u00e3o!\n\n${dupInfo.nomeCompleto} foi desligado h\u00e1 ${diffDias} dias.\nCar\u00eancia m\u00ednima: 90 dias.\nData de desligamento: ${dupInfo.dataDesligamento}\n\nAguarde o t\u00e9rmino da car\u00eancia para recontrata\u00e7\u00e3o.` });
+                throw new TRPCError({ code: "CONFLICT", message: `⚠️ Carência de recontratação!\n\n${dupInfo.nomeCompleto} foi desligado há ${diffDias} dias.\nCarência mínima: 90 dias.\nData de desligamento: ${dupInfo.dataDesligamento}\n\nAguarde o término da carência para recontratação.` });
               }
             }
-            // Permitir recontratação - não bloquear
+            // Dentro da carência OK — permite seguir
           } else if (isDesligado) {
-            // Funcionário desligado mas sem flag de recontratação - informar que pode recontratar
-            throw new TRPCError({ code: "CONFLICT", message: `\u26a0\ufe0f CPF j\u00e1 cadastrado (Funcion\u00e1rio Desligado)\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nEmpresa: ${dupInfo.empresa || 'N/A'}\nStatus: ${dupInfo.status}\nData Desligamento: ${dupInfo.dataDesligamento || 'N/A'}\n\n\ud83d\udd04 Este funcion\u00e1rio pode ser RECONTRATADO.\nUse a op\u00e7\u00e3o de recontrata\u00e7\u00e3o no cadastro para prosseguir.` });
+            throw new TRPCError({ code: "CONFLICT", message: `⚠️ CPF já cadastrado nesta empresa (Funcionário Desligado)\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nStatus: ${dupInfo.status}\nData Desligamento: ${dupInfo.dataDesligamento || 'N/A'}\n\n🔄 Este funcionário pode ser RECONTRATADO.\nUse a opção de recontratação no cadastro para prosseguir.` });
           } else {
-            throw new TRPCError({ code: "CONFLICT", message: `\u26a0\ufe0f CPF j\u00e1 cadastrado!\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nEmpresa: ${dupInfo.empresa || 'N/A'}\nStatus: ${dupInfo.status || 'N/A'}\n\nN\u00e3o \u00e9 poss\u00edvel cadastrar o mesmo CPF novamente em nenhuma empresa do grupo.` });
+            throw new TRPCError({ code: "CONFLICT", message: `⚠️ CPF já cadastrado nesta empresa!\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nStatus: ${dupInfo.status || 'N/A'}\n\nSe este funcionário trabalha em outra empresa do grupo, selecione a empresa correta antes de cadastrá-lo.` });
           }
         }
       }
-      // Verificar RG duplicado (se informado)
-      if (input.rg && input.rg.trim()) {
+      // Verificar RG duplicado somente nesta empresa
+      if (input.rg && input.rg.trim() && targetCompanyId) {
         const db = await getDb();
         if (db) {
-          const rgDup = await db.select().from(employees).where(and(eq(employees.rg, input.rg), sql`${employees.rg} IS NOT NULL AND ${employees.rg} != ''`));
+          const rgDup = await db.select().from(employees).where(
+            and(eq(employees.rg, input.rg), eq(employees.companyId, targetCompanyId), sql`${employees.rg} IS NOT NULL AND ${employees.rg} != ''`, isNull(employees.deletedAt))
+          );
           if (rgDup.length > 0) {
-            throw new TRPCError({ code: "CONFLICT", message: `⚠️ RG já cadastrado!\n\nO RG ${input.rg} pertence a: ${rgDup[0].nomeCompleto}\nStatus: ${rgDup[0].status || 'N/A'}\n\nVerifique se não é o mesmo funcionário.` });
+            throw new TRPCError({ code: "CONFLICT", message: `⚠️ RG já cadastrado nesta empresa!\n\nO RG ${input.rg} pertence a: ${rgDup[0].nomeCompleto}\nStatus: ${rgDup[0].status || 'N/A'}\n\nVerifique se não é o mesmo funcionário.` });
           }
         }
       }

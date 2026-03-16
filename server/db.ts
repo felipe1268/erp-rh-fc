@@ -1264,31 +1264,39 @@ export async function restoreDixiDevice(id: number) {
 // LISTA NEGRA - Busca por CPF
 // ============================================================
 
-export async function checkDuplicateCpf(cpf: string, excludeEmployeeId?: number) {
+// Verifica CPF duplicado SOMENTE dentro da mesma empresa (companyId obrigatório).
+// Cada empresa tem isolamento total — o mesmo funcionário pode existir em empresas diferentes.
+export async function checkDuplicateCpf(cpf: string, companyId: number, excludeEmployeeId?: number) {
   const db = await getDb();
   if (!db) return [];
   const cleanCpf = cpf.replace(/\D/g, "");
   if (cleanCpf.length < 11) return [];
-  const conditions = [or(eq(employees.cpf, cpf), eq(employees.cpf, cleanCpf)), isNull(employees.deletedAt)];
+  const conditions: any[] = [
+    or(eq(employees.cpf, cpf), eq(employees.cpf, cleanCpf)),
+    isNull(employees.deletedAt),
+    eq(employees.companyId, companyId),
+  ];
   if (excludeEmployeeId) {
     const { ne } = await import("drizzle-orm");
-    conditions.push(ne(employees.id, excludeEmployeeId) as any);
+    conditions.push(ne(employees.id, excludeEmployeeId));
   }
-  // Retorna dados completos para auto-preenchimento (ignora registros excluídos)
   const results = await db.select().from(employees).where(and(...conditions));
   if (results.length > 0) {
-    const companyIds = Array.from(new Set(results.map(r => r.companyId)));
-    const companyList = await db.select({ id: companies.id, nomeFantasia: companies.nomeFantasia, razaoSocial: companies.razaoSocial }).from(companies).where(sql`${companies.id} IN (${sql.raw(companyIds.join(","))})`);
-    const companyMap = Object.fromEntries(companyList.map(c => [c.id, c.nomeFantasia || c.razaoSocial]));
-    return results.map(r => ({ ...r, empresa: companyMap[r.companyId] || "Desconhecida" }));
+    const [company] = await db.select({ nomeFantasia: companies.nomeFantasia, razaoSocial: companies.razaoSocial })
+      .from(companies).where(eq(companies.id, companyId));
+    const empresaNome = company?.nomeFantasia || company?.razaoSocial || "Desconhecida";
+    return results.map(r => ({ ...r, empresa: empresaNome }));
   }
   return [];
 }
 
-export async function checkBlacklist(cpf: string) {
+// Lista negra filtrada por empresa — isolamento total entre empresas.
+export async function checkBlacklist(cpf: string, companyId?: number) {
   const db = await getDb();
   if (!db) return null;
-  const result = await db.select().from(employees).where(and(eq(employees.cpf, cpf), eq(employees.listaNegra, 1)));
+  const conditions: any[] = [eq(employees.cpf, cpf), eq(employees.listaNegra, 1)];
+  if (companyId) conditions.push(eq(employees.companyId, companyId));
+  const result = await db.select().from(employees).where(and(...conditions));
   return result.length > 0 ? result[0] : null;
 }
 
