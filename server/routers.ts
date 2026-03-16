@@ -1118,10 +1118,11 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_permissions', entityId: input.userId, details: `Permissões do usuário atualizadas: ${input.permissions.filter(p => p.canAccess).length} funcionalidades habilitadas` });
       return { success: true };
     }),
-    // Definir acesso simplificado por módulo (novo sistema — armazena JSON em users.modulesAccess)
+    // Definir acesso detalhado por módulo (novo sistema — armazena JSON rico em users.modulesAccess)
+    // Aceita o formato novo {level, pages, sensitiveHidden} por módulo (z.any() para flexibilidade)
     setUserModuleAccess: protectedProcedure.input(z.object({
       userId: z.number(),
-      moduleAccess: z.record(z.string(), z.enum(["admin", "viewer"]).nullable()),
+      moduleAccess: z.record(z.string(), z.any()),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar permissões' });
@@ -1131,12 +1132,13 @@ export const appRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { users } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
-      const clean: Record<string, string> = {};
+      // Remove entradas nulas (módulos desativados)
+      const clean: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(input.moduleAccess)) {
         if (v != null) clean[k] = v;
       }
       await db.update(users).set({ modulesAccess: JSON.stringify(clean) }).where(eq(users.id, input.userId));
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_modules', entityId: input.userId, details: `Módulos do usuário atualizados: ${JSON.stringify(clean)}` });
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_modules', entityId: input.userId, details: `Módulos do usuário atualizados: ${Object.keys(clean).join(', ')}` });
       return { success: true };
     }),
     // Obter permissões do usuário logado (para sidebar/frontend)

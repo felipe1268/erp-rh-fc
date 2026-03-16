@@ -1852,6 +1852,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 407,
+    titulo: "Permissões — Controle granular por página e dados sensíveis (LGPD)",
+    descricao: "Redesenho completo do sistema de permissões de usuários para suportar controle granular. Cada módulo ativo agora permite configurar: (1) Nível de acesso — Administrador (acesso total), Somente Visualização ou Personalizado; (2) Quando Personalizado: tabela de páginas com checkboxes individuais para Visualizar, Criar, Editar e Excluir — com ação de marcar/desmarcar coluna inteira; (3) Flags de dados sensíveis LGPD por módulo — ocultar salários, valores de contratos, dados pessoais, saldos financeiros, etc. Novo arquivo shared/modulePages.ts centraliza a definição de páginas e flags sensíveis por módulo. PermissionsContext atualizado com helpers canViewPage(), canCreatePage(), canEditPage(), canDeletePage() e isSensitiveHidden(). Backend (setUserModuleAccess) agora aceita formato rico JSON. Formato armazenado é retrocompatível com o sistema anterior (strings 'admin'/'viewer' são normalizadas automaticamente).",
+    tipo: "funcionalidade",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 406,
     titulo: "Orçamento — Correção do fator de meta em preços unitários",
     descricao: "Corrigido bug onde os preços unitários da visão 'Meta' no EAP do orçamento ignoravam o valor R$ exato salvo pelo usuário (localMetaVal), usando apenas o percentual (localMetaPerc). Quando o usuário define a meta como valor absoluto, o fator proporcional agora é derivado corretamente de (meta / totalCusto), garantindo que cada linha da EAP exiba o preço unitário proporcional ao alvo definido. A mesma correção foi aplicada nos totais de Material/MO no resumo e nas abas Curva ABC e ABC por Categoria.",

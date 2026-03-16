@@ -1,6 +1,7 @@
 import { createContext, useContext, ReactNode, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { MODULE_DEFINITIONS, SHARED_FEATURES, ADMIN_FEATURES, type ActiveModuleId } from "../../../shared/modules";
+import { normalizeModulePerm, type ModulePerm } from "../../../shared/modulePages";
 
 interface GroupRoutePermission {
   rota: string;
@@ -29,19 +30,23 @@ interface GroupPermissions {
 interface PermissionsContextType {
   isAdminMaster: boolean;
   isLoading: boolean;
-  // Novo sistema simplificado: acesso por módulo
-  moduleAccess: Record<string, "admin" | "viewer">;
+  // ── Acesso por módulo (novo sistema) ──
+  moduleAccess: Record<string, unknown>;
   canAccessModule: (moduleId: ActiveModuleId | string) => boolean;
   isModuleAdmin: (moduleId: ActiveModuleId | string) => boolean;
-  // Verifica se o usuário pode acessar uma funcionalidade específica
+  // ── Permissões de página (nível granular) ──
+  canViewPage:   (moduleId: string, pageId: string) => boolean;
+  canCreatePage: (moduleId: string, pageId: string) => boolean;
+  canEditPage:   (moduleId: string, pageId: string) => boolean;
+  canDeletePage: (moduleId: string, pageId: string) => boolean;
+  // ── Dados sensíveis LGPD ──
+  isSensitiveHidden: (moduleId: string, flagId: string) => boolean;
+  // ── Features legadas ──
   canAccessFeature: (moduleId: ActiveModuleId, featureKey: string) => boolean;
-  // Verifica se pode acessar por rota
   canAccessRoute: (route: string) => boolean;
-  // Retorna os módulos que o usuário pode acessar
   accessibleModules: ActiveModuleId[];
-  // Retorna as features de um módulo que o usuário pode acessar
   getAccessibleFeatures: (moduleId: ActiveModuleId) => string[];
-  // ====== GRUPO ======
+  // ── Grupo ──
   groupPermissions: GroupPermissions | null;
   groupCanAccessRoute: (route: string) => boolean;
   groupCanEdit: (route: string) => boolean;
@@ -60,6 +65,11 @@ const PermissionsContext = createContext<PermissionsContextType>({
   moduleAccess: {},
   canAccessModule: () => false,
   isModuleAdmin: () => false,
+  canViewPage:   () => false,
+  canCreatePage: () => false,
+  canEditPage:   () => false,
+  canDeletePage: () => false,
+  isSensitiveHidden: () => false,
   canAccessFeature: () => false,
   canAccessRoute: () => false,
   accessibleModules: [],
@@ -85,7 +95,16 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const isAdminMaster = data?.isAdminMaster ?? false;
   const permissions = data?.permissions ?? [];
   const groupPermissions = (data?.groupPermissions as GroupPermissions | null | undefined) ?? null;
-  const moduleAccess = (data?.moduleAccess ?? {}) as Record<string, "admin" | "viewer">;
+  const rawModuleAccess = (data?.moduleAccess ?? {}) as Record<string, unknown>;
+
+  // Normaliza o mapa raw → Record<string, ModulePerm>
+  const normalizedAccess = useMemo<Record<string, ModulePerm | null>>(() => {
+    const result: Record<string, ModulePerm | null> = {};
+    for (const [moduleId, val] of Object.entries(rawModuleAccess)) {
+      result[moduleId] = normalizeModulePerm(moduleId, val);
+    }
+    return result;
+  }, [rawModuleAccess]);
 
   // Mapa de permissões granulares (sistema legado)
   const permMap = useMemo(() => {
@@ -109,35 +128,88 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const hasGroup = !!groupPermissions && groupPermissions.groups.length > 0;
 
-  // Novo: verifica se tem acesso ao módulo pelo sistema simplificado
+  // ── Acesso ao módulo ──────────────────────────────────────────────────────
   const canAccessModule = (moduleId: ActiveModuleId | string): boolean => {
     if (isAdminMaster) return true;
-    // Novo sistema: verificar moduleAccess JSON
-    if (moduleAccess[moduleId]) return true;
-    // Fallback: sistema legado por grupo
+    if (normalizedAccess[moduleId] != null) return true;
+    // Fallback grupo
     if (hasGroup) {
       const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
       if (!mod) return false;
       return mod.features.some(f => groupRouteMap.has(f.route) && !!groupRouteMap.get(f.route)?.canView);
     }
-    // Fallback: sistema legado por permissões granulares
+    // Fallback legado
     if (permissions.length === 0) return false;
     const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
     if (!mod) return false;
     return mod.features.some(f => permMap.get(`${moduleId}:${f.key}`) === true);
   };
 
-  // Novo: verifica se é admin no módulo (vs somente visualizador)
   const isModuleAdmin = (moduleId: ActiveModuleId | string): boolean => {
     if (isAdminMaster) return true;
-    return moduleAccess[moduleId] === "admin";
+    const perm = normalizedAccess[moduleId];
+    if (!perm) return false;
+    return perm.level === "admin";
   };
 
+  // ── Permissões por página ─────────────────────────────────────────────────
+  const getPagePerm = (moduleId: string, pageId: string) => {
+    const perm = normalizedAccess[moduleId];
+    if (!perm) return null;
+    return perm.pages?.[pageId] ?? null;
+  };
+
+  const canViewPage = (moduleId: string, pageId: string): boolean => {
+    if (isAdminMaster) return true;
+    const perm = normalizedAccess[moduleId];
+    if (!perm) return false;
+    if (perm.level === "admin" || perm.level === "viewer") return true;
+    const page = getPagePerm(moduleId, pageId);
+    return page?.view ?? false;
+  };
+
+  const canCreatePage = (moduleId: string, pageId: string): boolean => {
+    if (isAdminMaster) return true;
+    const perm = normalizedAccess[moduleId];
+    if (!perm) return false;
+    if (perm.level === "admin") return true;
+    if (perm.level === "viewer") return false;
+    const page = getPagePerm(moduleId, pageId);
+    return page?.create ?? false;
+  };
+
+  const canEditPage = (moduleId: string, pageId: string): boolean => {
+    if (isAdminMaster) return true;
+    const perm = normalizedAccess[moduleId];
+    if (!perm) return false;
+    if (perm.level === "admin") return true;
+    if (perm.level === "viewer") return false;
+    const page = getPagePerm(moduleId, pageId);
+    return page?.edit ?? false;
+  };
+
+  const canDeletePage = (moduleId: string, pageId: string): boolean => {
+    if (isAdminMaster) return true;
+    const perm = normalizedAccess[moduleId];
+    if (!perm) return false;
+    if (perm.level === "admin") return true;
+    if (perm.level === "viewer") return false;
+    const page = getPagePerm(moduleId, pageId);
+    return page?.delete ?? false;
+  };
+
+  // ── Dados sensíveis LGPD ──────────────────────────────────────────────────
+  const isSensitiveHidden = (moduleId: string, flagId: string): boolean => {
+    if (isAdminMaster) return false;
+    const perm = normalizedAccess[moduleId];
+    if (!perm) return false;
+    return perm.sensitiveHidden?.includes(flagId) ?? false;
+  };
+
+  // ── Features legadas ──────────────────────────────────────────────────────
   const canAccessFeature = (moduleId: ActiveModuleId, featureKey: string): boolean => {
     if (isAdminMaster) return true;
-    // Se tem acesso ao módulo pelo novo sistema, pode acessar a feature
-    if (moduleAccess[moduleId]) return true;
-    // Fallback: sistema legado
+    if (normalizedAccess[moduleId]) return true;
     if (permissions.length === 0) return false;
     return permMap.get(`${moduleId}:${featureKey}`) === true;
   };
@@ -145,7 +217,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const accessibleModules = useMemo(() => {
     if (isAdminMaster) return MODULE_DEFINITIONS.map(m => m.id);
     return MODULE_DEFINITIONS.filter(m => canAccessModule(m.id)).map(m => m.id);
-  }, [isAdminMaster, moduleAccess, permMap, groupRouteMap, hasGroup]);
+  }, [isAdminMaster, normalizedAccess, permMap, groupRouteMap, hasGroup]);
 
   const canAccessRoute = (route: string): boolean => {
     if (isAdminMaster) return true;
@@ -157,9 +229,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     }
     for (const mod of MODULE_DEFINITIONS) {
       const feat = mod.features.find(f => f.route === route);
-      if (feat) {
-        return canAccessModule(mod.id);
-      }
+      if (feat) return canAccessModule(mod.id);
     }
     return false;
   };
@@ -169,30 +239,28 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
       return mod ? mod.features.map(f => f.key) : [];
     }
-    // Novo sistema: se tem acesso ao módulo, tem acesso a todas as features
-    if (moduleAccess[moduleId]) {
+    if (normalizedAccess[moduleId]) {
       const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
       return mod ? mod.features.map(f => f.key) : [];
     }
-    // Fallback legado
     const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
     if (!mod) return [];
     return mod.features.filter(f => permMap.get(`${moduleId}:${f.key}`) === true).map(f => f.key);
   };
 
-  // ====== FUNÇÕES DE GRUPO ======
+  // ── Grupo ─────────────────────────────────────────────────────────────────
+  const getGroupPerm = (route: string) => {
+    let perm = groupRouteMap.get(route);
+    if (!perm && route.includes("?")) perm = groupRouteMap.get(route.split("?")[0]);
+    return perm;
+  };
+
   const groupCanAccessRoute = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true;
     if (groupRouteMap.has(route)) return !!groupRouteMap.get(route)?.canView;
-    const basePath = route.split('?')[0];
+    const basePath = route.split("?")[0];
     return groupRouteMap.has(basePath) && !!groupRouteMap.get(basePath)?.canView;
-  };
-
-  const getGroupPerm = (route: string) => {
-    let perm = groupRouteMap.get(route);
-    if (!perm && route.includes('?')) perm = groupRouteMap.get(route.split('?')[0]);
-    return perm;
   };
 
   const groupCanEdit = (route: string): boolean => {
@@ -243,9 +311,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       value={{
         isAdminMaster,
         isLoading,
-        moduleAccess,
+        moduleAccess: rawModuleAccess,
         canAccessModule,
         isModuleAdmin,
+        canViewPage,
+        canCreatePage,
+        canEditPage,
+        canDeletePage,
+        isSensitiveHidden,
         canAccessFeature,
         canAccessRoute,
         accessibleModules,

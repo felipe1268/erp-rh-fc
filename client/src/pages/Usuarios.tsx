@@ -3,47 +3,49 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Shield, Search, X, UserPlus, Users, Building2, Lock, Eye, EyeOff,
-  ChevronRight, Save, Trash2, RefreshCw, User, Mail, KeyRound,
-  LayoutGrid, ArrowLeft
+  ChevronRight, ChevronDown, Save, Trash2, RefreshCw, User, Mail, KeyRound,
+  LayoutGrid, ArrowLeft, Settings2, AlertTriangle, CheckSquare, Square,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
+import {
+  MODULE_PAGE_CONFIG, normalizeModulePerm, defaultPagesForLevel,
+  type ModulePerm, type ModuleLevel, type PageAction, type PagePerms,
+} from "../../../shared/modulePages";
 
 // ================================================================
-// Definição dos 12 módulos do sistema
+// 12 módulos do sistema
 // ================================================================
 const ALL_MODULES = [
-  { id: "rh-dp",         label: "RH / DP",          description: "Folha, admissões e desligamentos",          dot: "bg-blue-500",    badge: "bg-blue-100 text-blue-700 border-blue-200" },
-  { id: "sst",           label: "SST",               description: "Saúde e segurança do trabalho",             dot: "bg-green-500",   badge: "bg-green-100 text-green-700 border-green-200" },
-  { id: "juridico",      label: "Jurídico",           description: "Contratos e obrigações legais",             dot: "bg-amber-500",   badge: "bg-amber-100 text-amber-700 border-amber-200" },
-  { id: "avaliacao",     label: "Avaliação",          description: "Avaliação de desempenho",                   dot: "bg-purple-500",  badge: "bg-purple-100 text-purple-700 border-purple-200" },
-  { id: "terceiros",     label: "Terceiros",          description: "Empresas e trabalhadores terceirizados",    dot: "bg-orange-500",  badge: "bg-orange-100 text-orange-700 border-orange-200" },
-  { id: "parceiros",     label: "Parceiros",          description: "Gestão de parceiros e comissões",           dot: "bg-teal-500",    badge: "bg-teal-100 text-teal-700 border-teal-200" },
-  { id: "orcamento",     label: "Orçamento",          description: "Orçamentos e composições de custo",         dot: "bg-indigo-500",  badge: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  { id: "planejamento",  label: "Planejamento",       description: "Obras e cronogramas",                       dot: "bg-violet-500",  badge: "bg-violet-100 text-violet-700 border-violet-200" },
-  { id: "cadastro",      label: "Cadastro",           description: "Cadastro de obras e colaboradores",         dot: "bg-slate-500",   badge: "bg-slate-100 text-slate-700 border-slate-200" },
-  { id: "compras",       label: "Compras",            description: "Gestão de compras e fornecedores",          dot: "bg-rose-500",    badge: "bg-rose-100 text-rose-700 border-rose-200" },
-  { id: "almoxarifado",  label: "Almoxarifado",       description: "Controle de estoque e materiais",           dot: "bg-lime-600",    badge: "bg-lime-100 text-lime-700 border-lime-200" },
-  { id: "financeiro",    label: "Financeiro",         description: "Fluxo de caixa e gestão financeira",        dot: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { id: "rh-dp",        label: "RH / DP",        description: "Folha, admissões e desligamentos",        dot: "bg-blue-500",    tag: "bg-blue-100 text-blue-700 border-blue-200" },
+  { id: "sst",          label: "SST",             description: "Saúde e segurança do trabalho",           dot: "bg-green-500",   tag: "bg-green-100 text-green-700 border-green-200" },
+  { id: "juridico",     label: "Jurídico",         description: "Contratos e obrigações legais",           dot: "bg-amber-500",   tag: "bg-amber-100 text-amber-700 border-amber-200" },
+  { id: "avaliacao",    label: "Avaliação",        description: "Avaliação de desempenho",                 dot: "bg-purple-500",  tag: "bg-purple-100 text-purple-700 border-purple-200" },
+  { id: "terceiros",    label: "Terceiros",        description: "Empresas e trabalhadores terceirizados",  dot: "bg-orange-500",  tag: "bg-orange-100 text-orange-700 border-orange-200" },
+  { id: "parceiros",    label: "Parceiros",        description: "Gestão de parceiros e comissões",         dot: "bg-teal-500",    tag: "bg-teal-100 text-teal-700 border-teal-200" },
+  { id: "orcamento",    label: "Orçamento",        description: "Orçamentos e composições de custo",       dot: "bg-indigo-500",  tag: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+  { id: "planejamento", label: "Planejamento",     description: "Obras e cronogramas",                     dot: "bg-violet-500",  tag: "bg-violet-100 text-violet-700 border-violet-200" },
+  { id: "cadastro",     label: "Cadastro",         description: "Cadastro de obras e colaboradores",       dot: "bg-slate-500",   tag: "bg-slate-100 text-slate-700 border-slate-200" },
+  { id: "compras",      label: "Compras",          description: "Gestão de compras e fornecedores",        dot: "bg-rose-500",    tag: "bg-rose-100 text-rose-700 border-rose-200" },
+  { id: "almoxarifado", label: "Almoxarifado",     description: "Controle de estoque e materiais",         dot: "bg-lime-600",    tag: "bg-lime-100 text-lime-700 border-lime-200" },
+  { id: "financeiro",   label: "Financeiro",       description: "Fluxo de caixa e gestão financeira",      dot: "bg-emerald-500", tag: "bg-emerald-100 text-emerald-700 border-emerald-200" },
 ];
 
-const ROLE_LABELS: Record<string, string> = {
-  admin_master: "Admin Master",
-  admin: "Admin",
-  user: "Usuário",
+const ROLE_LABELS: Record<string, string> = { admin_master: "Admin Master", admin: "Admin", user: "Usuário" };
+const ROLE_BADGE:  Record<string, string> = {
+  admin_master: "bg-purple-100 text-purple-700 border-purple-200",
+  admin:        "bg-blue-100 text-blue-700 border-blue-200",
+  user:         "bg-gray-100 text-gray-600 border-gray-200",
 };
 
-const ROLE_BADGE: Record<string, string> = {
-  admin_master: "bg-purple-100 text-purple-700 border-purple-200",
-  admin: "bg-blue-100 text-blue-700 border-blue-200",
-  user: "bg-gray-100 text-gray-600 border-gray-200",
+const ACTION_LABELS: Record<PageAction, string> = {
+  view: "Ver", create: "Criar", edit: "Editar", delete: "Excluir",
 };
 
 // ================================================================
@@ -52,40 +54,40 @@ const ROLE_BADGE: Record<string, string> = {
 export default function Usuarios() {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
-  const isAdmin = user?.role === "admin" || isMaster;
+  const isAdmin  = user?.role === "admin" || isMaster;
   const { getCompanyIdsForQuery } = useCompany();
 
-  // Painel ativo: "list" ou "detail"
-  const [panel, setPanel] = useState<"list" | "detail">("list");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [panel, setPanel]               = useState<"list" | "detail">("list");
+  const [searchTerm, setSearchTerm]     = useState("");
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showNewUserForm, setShowNewUserForm] = useState(false);
 
-  // Formulário de edição
-  const [editName, setEditName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
+  // Formulário básico
+  const [editName, setEditName]         = useState("");
+  const [editEmail, setEditEmail]       = useState("");
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [editRole, setEditRole] = useState("user");
+  const [editRole, setEditRole]         = useState("user");
   const [editCompanyIds, setEditCompanyIds] = useState<number[]>([]);
-  const [editModuleAccess, setEditModuleAccess] = useState<Record<string, "admin" | "viewer" | null>>({});
+
+  // Permissões de módulos (formato rico)
+  const [editModuleAccess, setEditModuleAccess] = useState<Record<string, ModulePerm | null>>({});
+  // Módulo expandido para editar páginas
+  const [expandedModule, setExpandedModule] = useState<string | null>(null);
 
   // Formulário de novo usuário
-  const [newUsername, setNewUsername] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState<"user" | "admin" | "admin_master">("user");
-  const [newPassword, setNewPassword] = useState("");
+  const [newUsername, setNewUsername]   = useState("");
+  const [newName, setNewName]           = useState("");
+  const [newEmail, setNewEmail]         = useState("");
+  const [newRole, setNewRole]           = useState<"user" | "admin" | "admin_master">("user");
+  const [newPassword, setNewPassword]   = useState("");
   const [newCompanyIds, setNewCompanyIds] = useState<number[]>([]);
 
   const utils = trpc.useUtils();
-
-  // Queries
-  const usersQuery = trpc.userManagement.listUsers.useQuery();
+  const usersQuery        = trpc.userManagement.listUsers.useQuery();
   const allCompaniesQuery = trpc.companies.list.useQuery();
 
-  // Mutations
   const createUserMut = trpc.userManagement.createLocalUser.useMutation({
     onSuccess: (data) => {
       toast.success(`Usuário "${data.username}" criado! Senha padrão: ${data.defaultPassword}`);
@@ -97,11 +99,7 @@ export default function Usuarios() {
   });
 
   const updateUserMut = trpc.userManagement.updateUser.useMutation({
-    onSuccess: () => {
-      toast.success("Dados do usuário salvos!");
-      usersQuery.refetch();
-      utils.auth.me.invalidate();
-    },
+    onSuccess: () => { toast.success("Dados salvos!"); usersQuery.refetch(); utils.auth.me.invalidate(); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
 
@@ -112,7 +110,7 @@ export default function Usuarios() {
 
   const setModuleAccessMut = trpc.userManagement.setUserModuleAccess.useMutation({
     onSuccess: () => {
-      toast.success("Permissões de módulos salvas!");
+      toast.success("Permissões salvas!");
       utils.userManagement.getMyPermissions.invalidate();
     },
     onError: (e) => toast.error("Erro ao salvar permissões: " + e.message),
@@ -124,16 +122,10 @@ export default function Usuarios() {
   });
 
   const deleteUserMut = trpc.userManagement.deleteUser.useMutation({
-    onSuccess: () => {
-      toast.success("Usuário excluído!");
-      setSelectedUser(null);
-      setPanel("list");
-      usersQuery.refetch();
-    },
+    onSuccess: () => { toast.success("Usuário excluído!"); setSelectedUser(null); setPanel("list"); usersQuery.refetch(); },
     onError: (e) => toast.error(e.message),
   });
 
-  // Usuários filtrados
   const filteredUsers = useMemo(() => {
     if (!usersQuery.data) return [];
     const term = removeAccents(searchTerm.toLowerCase().trim());
@@ -145,12 +137,12 @@ export default function Usuarios() {
     );
   }, [usersQuery.data, searchTerm]);
 
-  // Resetar formulário de novo usuário
   const resetNewForm = () => {
-    setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setNewCompanyIds([]);
+    setNewUsername(""); setNewName(""); setNewEmail("");
+    setNewPassword(""); setNewRole("user"); setNewCompanyIds([]);
   };
 
-  // Abrir detalhe de usuário
+  // ── Abrir detalhe ─────────────────────────────────────────────
   const openUser = (u: any) => {
     setSelectedUser(u);
     setEditName(u.name || "");
@@ -160,26 +152,32 @@ export default function Usuarios() {
     setShowPassword(false);
     setEditRole(u.role || "user");
     setEditCompanyIds(u.companyIds || []);
-    // Carregar moduleAccess do usuário
-    let ma: Record<string, "admin" | "viewer" | null> = {};
+    setExpandedModule(null);
+    // Normaliza o JSON do banco para o formato rico
+    const ma: Record<string, ModulePerm | null> = {};
     try {
-      if (u.modulesAccess) ma = JSON.parse(u.modulesAccess);
+      if (u.modulesAccess) {
+        const raw = JSON.parse(u.modulesAccess);
+        for (const [moduleId, val] of Object.entries(raw)) {
+          ma[moduleId] = normalizeModulePerm(moduleId, val);
+        }
+      }
     } catch {}
     setEditModuleAccess(ma);
     setShowNewUserForm(false);
     setPanel("detail");
   };
 
-  // Salvar tudo
+  // ── Salvar ────────────────────────────────────────────────────
   const handleSave = () => {
     if (!selectedUser) return;
     if (!editName.trim()) { toast.error("Nome é obrigatório"); return; }
-    if (editPassword && editPassword.length < 6) { toast.error("Senha deve ter mínimo 6 caracteres"); return; }
+    if (editPassword && editPassword.length < 6) { toast.error("Senha mínimo 6 caracteres"); return; }
 
     updateUserMut.mutate({
       userId: selectedUser.id,
-      name: editName.trim(),
-      email: editEmail.trim() || undefined,
+      name:     editName.trim(),
+      email:    editEmail.trim() || undefined,
       username: editUsername.trim() || undefined,
       newPassword: editPassword.trim() || undefined,
       role: (isAdmin && selectedUser.id !== user?.id) ? editRole as any : undefined,
@@ -190,37 +188,97 @@ export default function Usuarios() {
     }
 
     if (editRole !== "admin_master") {
-      setModuleAccessMut.mutate({ userId: selectedUser.id, moduleAccess: editModuleAccess });
+      // Serializa o formato rico para envio
+      const payload: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(editModuleAccess)) {
+        if (v != null) payload[k] = v;
+      }
+      setModuleAccessMut.mutate({ userId: selectedUser.id, moduleAccess: payload });
     }
   };
 
-  // Toggle de módulo
+  // ── Manipulação de permissões ─────────────────────────────────
   const toggleModule = (moduleId: string, enabled: boolean) => {
-    setEditModuleAccess(prev => ({
-      ...prev,
-      [moduleId]: enabled ? (prev[moduleId] === "viewer" ? "viewer" : "admin") : null,
-    }));
+    if (enabled) {
+      const pages = defaultPagesForLevel(moduleId, "admin");
+      setEditModuleAccess(prev => ({
+        ...prev,
+        [moduleId]: { level: "admin", pages, sensitiveHidden: [] },
+      }));
+    } else {
+      setEditModuleAccess(prev => ({ ...prev, [moduleId]: null }));
+      if (expandedModule === moduleId) setExpandedModule(null);
+    }
   };
 
-  // Mudar nível (admin / viewer)
-  const setModuleLevel = (moduleId: string, level: "admin" | "viewer") => {
-    setEditModuleAccess(prev => ({ ...prev, [moduleId]: level }));
-  };
-
-  // Criar usuário
-  const handleCreate = () => {
-    if (!newUsername || !newName) { toast.error("Preencha usuário e nome"); return; }
-    createUserMut.mutate({
-      username: newUsername,
-      name: newName,
-      email: newEmail || undefined,
-      role: newRole,
-      password: newPassword || undefined,
-      companyIds: newCompanyIds.length > 0 ? newCompanyIds : undefined,
+  const setModuleLevel = (moduleId: string, level: ModuleLevel) => {
+    setEditModuleAccess(prev => {
+      const curr = prev[moduleId];
+      if (!curr) return prev;
+      if (level === "admin" || level === "viewer") {
+        const pages = defaultPagesForLevel(moduleId, level);
+        return { ...prev, [moduleId]: { ...curr, level, pages } };
+      }
+      // custom: mantém as páginas como estão (ou inicializa)
+      return { ...prev, [moduleId]: { ...curr, level: "custom" } };
     });
   };
 
-  // Contagem de módulos com acesso
+  const togglePageAction = (moduleId: string, pageId: string, action: PageAction, enabled: boolean) => {
+    setEditModuleAccess(prev => {
+      const curr = prev[moduleId];
+      if (!curr) return prev;
+      const currPage: PagePerms = curr.pages?.[pageId] ?? { view: false, create: false, edit: false, delete: false };
+      const newPage = { ...currPage, [action]: enabled };
+      // Ligar create/edit/delete implica ligar view
+      if ((action === "create" || action === "edit" || action === "delete") && enabled) newPage.view = true;
+      // Desligar view desliga todo o resto
+      if (action === "view" && !enabled) { newPage.create = false; newPage.edit = false; newPage.delete = false; }
+      return { ...prev, [moduleId]: { ...curr, pages: { ...curr.pages, [pageId]: newPage } } };
+    });
+  };
+
+  const toggleAllPageAction = (moduleId: string, action: PageAction, enabled: boolean) => {
+    setEditModuleAccess(prev => {
+      const curr = prev[moduleId];
+      if (!curr) return prev;
+      const config = MODULE_PAGE_CONFIG[moduleId];
+      if (!config) return prev;
+      const newPages = { ...curr.pages };
+      for (const p of config.pages) {
+        if (!p.actions.includes(action)) continue;
+        const cp: PagePerms = newPages[p.id] ?? { view: false, create: false, edit: false, delete: false };
+        newPages[p.id] = { ...cp, [action]: enabled };
+        if ((action === "create" || action === "edit" || action === "delete") && enabled) newPages[p.id].view = true;
+        if (action === "view" && !enabled) {
+          newPages[p.id].create = false; newPages[p.id].edit = false; newPages[p.id].delete = false;
+        }
+      }
+      return { ...prev, [moduleId]: { ...curr, pages: newPages } };
+    });
+  };
+
+  const toggleSensitiveFlag = (moduleId: string, flagId: string, hidden: boolean) => {
+    setEditModuleAccess(prev => {
+      const curr = prev[moduleId];
+      if (!curr) return prev;
+      const current = curr.sensitiveHidden ?? [];
+      const updated = hidden
+        ? [...current.filter(f => f !== flagId), flagId]
+        : current.filter(f => f !== flagId);
+      return { ...prev, [moduleId]: { ...curr, sensitiveHidden: updated } };
+    });
+  };
+
+  const setAllModulesAdmin = () => {
+    const all: Record<string, ModulePerm> = {};
+    ALL_MODULES.forEach(m => {
+      all[m.id] = { level: "admin", pages: defaultPagesForLevel(m.id, "admin"), sensitiveHidden: [] };
+    });
+    setEditModuleAccess(all);
+  };
+
+  // Contagem de módulos com acesso para a lista
   const moduleAccessCount = (u: any) => {
     if (u.role === "admin_master") return ALL_MODULES.length;
     try {
@@ -232,11 +290,11 @@ export default function Usuarios() {
   return (
     <DashboardLayout>
       <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+
         {/* ============================================================
             PAINEL ESQUERDO — Lista de usuários
         ============================================================ */}
         <div className={`${panel === "detail" ? "hidden lg:flex" : "flex"} flex-col w-full lg:w-80 xl:w-96 border-r bg-background shrink-0`}>
-          {/* Header */}
           <div className="p-4 border-b space-y-3">
             <div className="flex items-center justify-between">
               <h1 className="text-lg font-bold flex items-center gap-2">
@@ -249,8 +307,7 @@ export default function Usuarios() {
                   className="gap-1.5 bg-green-600 hover:bg-green-700 h-8"
                   onClick={() => { setShowNewUserForm(true); setSelectedUser(null); setPanel("detail"); }}
                 >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Novo
+                  <UserPlus className="h-3.5 w-3.5" /> Novo
                 </Button>
               )}
             </div>
@@ -270,11 +327,8 @@ export default function Usuarios() {
             </div>
           </div>
 
-          {/* Lista */}
           <div className="flex-1 overflow-y-auto">
-            {usersQuery.isLoading && (
-              <div className="p-8 text-center text-sm text-muted-foreground">Carregando...</div>
-            )}
+            {usersQuery.isLoading && <div className="p-8 text-center text-sm text-muted-foreground">Carregando...</div>}
             {!usersQuery.isLoading && filteredUsers.length === 0 && (
               <div className="p-8 text-center">
                 <Users className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
@@ -290,13 +344,11 @@ export default function Usuarios() {
                   onClick={() => openUser(u)}
                   className={`w-full text-left px-4 py-3 border-b transition-colors flex items-center gap-3 hover:bg-muted/50 ${isSelected ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
                 >
-                  {/* Avatar */}
                   <div className={`h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${
                     u.role === "admin_master" ? "bg-purple-600" : u.role === "admin" ? "bg-blue-600" : "bg-gray-500"
                   }`}>
                     {(u.name || u.username || "?").charAt(0).toUpperCase()}
                   </div>
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-sm font-medium truncate">{u.name || u.username}</span>
@@ -317,75 +369,53 @@ export default function Usuarios() {
         </div>
 
         {/* ============================================================
-            PAINEL DIREITO — Detalhe / Novo Usuário
+            PAINEL DIREITO
         ============================================================ */}
         <div className={`${panel === "list" && !showNewUserForm ? "hidden lg:flex" : "flex"} flex-1 flex-col overflow-hidden`}>
-          {/* ——— FORMULÁRIO DE NOVO USUÁRIO ——— */}
+
+          {/* ──── NOVO USUÁRIO ───────────────────────────────────── */}
           {showNewUserForm && (
             <div className="flex-1 overflow-y-auto">
               <div className="p-6 max-w-xl mx-auto space-y-6">
-                {/* Botão voltar mobile */}
-                <button
-                  className="lg:hidden flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                  onClick={() => { setShowNewUserForm(false); setPanel("list"); }}
-                >
+                <button className="lg:hidden flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+                  onClick={() => { setShowNewUserForm(false); setPanel("list"); }}>
                   <ArrowLeft className="h-4 w-4" /> Voltar
                 </button>
                 <div>
-                  <h2 className="text-xl font-bold flex items-center gap-2">
-                    <UserPlus className="h-5 w-5 text-green-600" />
-                    Novo Usuário
-                  </h2>
-                  <p className="text-sm text-muted-foreground mt-1">Preencha os dados básicos para criar o usuário. As permissões podem ser configuradas depois.</p>
+                  <h2 className="text-xl font-bold flex items-center gap-2"><UserPlus className="h-5 w-5 text-green-600" /> Novo Usuário</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Preencha os dados básicos. As permissões detalhadas são configuradas após a criação.</p>
                 </div>
-
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Username *</label>
-                      <Input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder="ex: joao.silva" className="h-9" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Nome *</label>
-                      <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome completo" className="h-9" />
-                    </div>
+                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Username *</label>
+                      <Input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder="ex: joao.silva" className="h-9" /></div>
+                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Nome *</label>
+                      <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome completo" className="h-9" /></div>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">E-mail</label>
-                    <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@empresa.com" type="email" className="h-9" />
-                  </div>
+                  <div><label className="text-xs font-medium text-muted-foreground block mb-1">E-mail</label>
+                    <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@empresa.com" type="email" className="h-9" /></div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Perfil</label>
+                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Perfil</label>
                       <Select value={newRole} onValueChange={v => setNewRole(v as any)}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="user">Usuário</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
                           {isMaster && <SelectItem value="admin_master">Admin Master</SelectItem>}
                         </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Senha (opcional)</label>
-                      <Input value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Deixe em branco para padrão" type="password" className="h-9" />
-                    </div>
+                      </Select></div>
+                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Senha (opcional)</label>
+                      <Input value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Deixe em branco" type="password" className="h-9" /></div>
                   </div>
-
-                  {/* Empresas */}
                   {newRole !== "admin_master" && allCompaniesQuery.data && allCompaniesQuery.data.length > 0 && (
                     <div>
                       <label className="text-xs font-medium text-muted-foreground block mb-2">Empresas com acesso</label>
                       <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto">
                         {allCompaniesQuery.data.map((c: any) => (
                           <label key={c.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm transition-colors ${
-                            newCompanyIds.includes(c.id) ? "bg-blue-50 border-blue-300" : "bg-secondary/20 border-border hover:bg-secondary/40"
-                          }`}>
+                            newCompanyIds.includes(c.id) ? "bg-blue-50 border-blue-300" : "bg-secondary/20 border-border hover:bg-secondary/40"}`}>
                             <input type="checkbox" className="rounded" checked={newCompanyIds.includes(c.id)}
-                              onChange={e => setNewCompanyIds(e.target.checked ? [...newCompanyIds, c.id] : newCompanyIds.filter(id => id !== c.id))}
-                            />
+                              onChange={e => setNewCompanyIds(e.target.checked ? [...newCompanyIds, c.id] : newCompanyIds.filter(id => id !== c.id))} />
                             {c.nomeFantasia || c.razaoSocial}
                           </label>
                         ))}
@@ -393,42 +423,32 @@ export default function Usuarios() {
                     </div>
                   )}
                 </div>
-
                 <div className="flex gap-3">
-                  <Button
-                    className="gap-2 bg-green-600 hover:bg-green-700"
-                    onClick={handleCreate}
-                    disabled={createUserMut.isPending}
-                  >
-                    <UserPlus className="h-4 w-4" />
-                    {createUserMut.isPending ? "Criando..." : "Criar Usuário"}
+                  <Button className="gap-2 bg-green-600 hover:bg-green-700" onClick={() => {
+                    if (!newUsername || !newName) { toast.error("Preencha usuário e nome"); return; }
+                    createUserMut.mutate({ username: newUsername, name: newName, email: newEmail || undefined, role: newRole, password: newPassword || undefined, companyIds: newCompanyIds.length > 0 ? newCompanyIds : undefined });
+                  }} disabled={createUserMut.isPending}>
+                    <UserPlus className="h-4 w-4" /> {createUserMut.isPending ? "Criando..." : "Criar Usuário"}
                   </Button>
-                  <Button variant="outline" onClick={() => { setShowNewUserForm(false); setPanel("list"); }}>
-                    Cancelar
-                  </Button>
+                  <Button variant="outline" onClick={() => { setShowNewUserForm(false); setPanel("list"); }}>Cancelar</Button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ——— DETALHE DO USUÁRIO ——— */}
+          {/* ──── DETALHE DO USUÁRIO ──────────────────────────────── */}
           {selectedUser && !showNewUserForm && (
             <div className="flex-1 overflow-y-auto">
               <div className="p-6 space-y-6">
-                {/* Botão voltar mobile */}
-                <button
-                  className="lg:hidden flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                  onClick={() => setPanel("list")}
-                >
+                <button className="lg:hidden flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground" onClick={() => setPanel("list")}>
                   <ArrowLeft className="h-4 w-4" /> Todos os usuários
                 </button>
 
-                {/* Header do usuário */}
+                {/* Header */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <div className={`h-14 w-14 rounded-full flex items-center justify-center text-white font-bold text-xl shrink-0 ${
-                      selectedUser.role === "admin_master" ? "bg-purple-600" : selectedUser.role === "admin" ? "bg-blue-600" : "bg-gray-500"
-                    }`}>
+                      selectedUser.role === "admin_master" ? "bg-purple-600" : selectedUser.role === "admin" ? "bg-blue-600" : "bg-gray-500"}`}>
                       {(selectedUser.name || selectedUser.username || "?").charAt(0).toUpperCase()}
                     </div>
                     <div>
@@ -441,93 +461,56 @@ export default function Usuarios() {
                       </div>
                     </div>
                   </div>
-                  {/* Ações rápidas */}
                   <div className="flex gap-2 shrink-0">
                     {isAdmin && selectedUser.id !== user?.id && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 text-xs h-8"
-                        onClick={() => {
-                          if (confirm(`Resetar senha de ${selectedUser.name}?`)) {
-                            resetPwdMut.mutate({ userId: selectedUser.id });
-                          }
-                        }}
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Resetar senha
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8"
+                        onClick={() => { if (confirm(`Resetar senha de ${selectedUser.name}?`)) resetPwdMut.mutate({ userId: selectedUser.id }); }}>
+                        <RefreshCw className="h-3.5 w-3.5" /> Resetar senha
                       </Button>
                     )}
                     {isMaster && selectedUser.id !== user?.id && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 text-xs h-8 text-red-600 hover:text-red-700 hover:border-red-300"
-                        onClick={() => {
-                          if (confirm(`Excluir usuário "${selectedUser.name}"? Esta ação não pode ser desfeita.`)) {
-                            deleteUserMut.mutate({ userId: selectedUser.id });
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Excluir
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 text-red-600 hover:text-red-700 hover:border-red-300"
+                        onClick={() => { if (confirm(`Excluir "${selectedUser.name}"? Esta ação não pode ser desfeita.`)) deleteUserMut.mutate({ userId: selectedUser.id }); }}>
+                        <Trash2 className="h-3.5 w-3.5" /> Excluir
                       </Button>
                     )}
                   </div>
                 </div>
 
-                {/* ---- SEÇÃO 1: Dados básicos ---- */}
+                {/* ── Dados básicos ── */}
                 <section className="space-y-4">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                     <User className="h-4 w-4" /> Dados do Usuário
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Nome</label>
-                      <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-9" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">E-mail</label>
+                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Nome</label>
+                      <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-9" /></div>
+                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">E-mail</label>
                       <div className="relative">
                         <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input value={editEmail} onChange={e => setEditEmail(e.target.value)} className="pl-8 h-9" type="email" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Username</label>
-                      <Input value={editUsername} onChange={e => setEditUsername(e.target.value)} className="h-9" />
-                    </div>
+                      </div></div>
+                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Username</label>
+                      <Input value={editUsername} onChange={e => setEditUsername(e.target.value)} className="h-9" /></div>
                     {isAdmin && selectedUser.id !== user?.id && (
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1">Perfil de acesso</label>
+                      <div><label className="text-xs font-medium text-muted-foreground block mb-1">Perfil de acesso</label>
                         <Select value={editRole} onValueChange={setEditRole}>
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="user">Usuário</SelectItem>
                             <SelectItem value="admin">Admin</SelectItem>
                             {isMaster && <SelectItem value="admin_master">Admin Master</SelectItem>}
                           </SelectContent>
-                        </Select>
-                      </div>
+                        </Select></div>
                     )}
                     <div className="md:col-span-2">
                       <label className="text-xs font-medium text-muted-foreground block mb-1">Nova senha (deixe em branco para manter)</label>
                       <div className="relative max-w-sm">
                         <KeyRound className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input
-                          value={editPassword}
-                          onChange={e => setEditPassword(e.target.value)}
-                          type={showPassword ? "text" : "password"}
-                          className="pl-8 pr-9 h-9"
-                          placeholder="Nova senha..."
-                        />
-                        <button
-                          type="button"
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
+                        <Input value={editPassword} onChange={e => setEditPassword(e.target.value)}
+                          type={showPassword ? "text" : "password"} className="pl-8 pr-9 h-9" placeholder="Nova senha..." />
+                        <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowPassword(!showPassword)}>
                           {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                         </button>
                       </div>
@@ -535,7 +518,7 @@ export default function Usuarios() {
                   </div>
                 </section>
 
-                {/* ---- SEÇÃO 2: Empresas ---- */}
+                {/* ── Empresas ── */}
                 {editRole !== "admin_master" && isAdmin && allCompaniesQuery.data && allCompaniesQuery.data.length > 0 && (
                   <section className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -543,32 +526,19 @@ export default function Usuarios() {
                         <Building2 className="h-4 w-4" /> Empresas com Acesso
                       </h3>
                       <div className="flex gap-1.5">
-                        <button
-                          className="text-xs text-blue-600 hover:underline"
-                          onClick={() => setEditCompanyIds(allCompaniesQuery.data!.map((c: any) => c.id))}
-                        >
-                          Todas
-                        </button>
+                        <button className="text-xs text-blue-600 hover:underline"
+                          onClick={() => setEditCompanyIds(allCompaniesQuery.data!.map((c: any) => c.id))}>Todas</button>
                         <span className="text-muted-foreground text-xs">·</span>
-                        <button
-                          className="text-xs text-muted-foreground hover:underline"
-                          onClick={() => setEditCompanyIds([])}
-                        >
-                          Limpar
-                        </button>
+                        <button className="text-xs text-muted-foreground hover:underline"
+                          onClick={() => setEditCompanyIds([])}>Limpar</button>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                       {allCompaniesQuery.data.map((c: any) => (
                         <label key={c.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm transition-colors ${
-                          editCompanyIds.includes(c.id) ? "bg-blue-50 border-blue-300" : "bg-secondary/20 border-border hover:bg-secondary/40"
-                        }`}>
-                          <input
-                            type="checkbox"
-                            className="rounded"
-                            checked={editCompanyIds.includes(c.id)}
-                            onChange={e => setEditCompanyIds(e.target.checked ? [...editCompanyIds, c.id] : editCompanyIds.filter(id => id !== c.id))}
-                          />
+                          editCompanyIds.includes(c.id) ? "bg-blue-50 border-blue-300" : "bg-secondary/20 border-border hover:bg-secondary/40"}`}>
+                          <input type="checkbox" className="rounded" checked={editCompanyIds.includes(c.id)}
+                            onChange={e => setEditCompanyIds(e.target.checked ? [...editCompanyIds, c.id] : editCompanyIds.filter(id => id !== c.id))} />
                           <div className="min-w-0">
                             <span className="font-medium truncate block">{c.nomeFantasia || c.razaoSocial}</span>
                             {c.grupoEmpresarial && <span className="text-[10px] text-blue-600">{c.grupoEmpresarial}</span>}
@@ -579,36 +549,20 @@ export default function Usuarios() {
                   </section>
                 )}
 
-                {/* ---- SEÇÃO 3: Permissões de Módulos ---- */}
+                {/* ── Permissões de Módulos ── */}
                 <section className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                       <LayoutGrid className="h-4 w-4" /> Acesso a Módulos
                     </h3>
                     {editRole === "admin_master" && (
-                      <span className="text-xs text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">
-                        Acesso total automático
-                      </span>
+                      <span className="text-xs text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">Acesso total automático</span>
                     )}
                     {editRole !== "admin_master" && (
                       <div className="flex gap-1.5">
-                        <button
-                          className="text-xs text-blue-600 hover:underline"
-                          onClick={() => {
-                            const all: Record<string, "admin" | "viewer" | null> = {};
-                            ALL_MODULES.forEach(m => { all[m.id] = "admin"; });
-                            setEditModuleAccess(all);
-                          }}
-                        >
-                          Todos admin
-                        </button>
+                        <button className="text-xs text-blue-600 hover:underline" onClick={setAllModulesAdmin}>Todos admin</button>
                         <span className="text-muted-foreground text-xs">·</span>
-                        <button
-                          className="text-xs text-muted-foreground hover:underline"
-                          onClick={() => setEditModuleAccess({})}
-                        >
-                          Limpar
-                        </button>
+                        <button className="text-xs text-muted-foreground hover:underline" onClick={() => { setEditModuleAccess({}); setExpandedModule(null); }}>Limpar</button>
                       </div>
                     )}
                   </div>
@@ -616,55 +570,166 @@ export default function Usuarios() {
                   {editRole === "admin_master" ? (
                     <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
                       <Shield className="h-4 w-4 text-purple-600 shrink-0" />
-                      <span className="text-sm text-purple-700">Admin Master tem acesso automático a todos os módulos e funcionalidades sem restrições.</span>
+                      <span className="text-sm text-purple-700">Admin Master tem acesso irrestrito a todos os módulos, páginas e dados sensíveis.</span>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="space-y-2">
                       {ALL_MODULES.map(mod => {
-                        const access = editModuleAccess[mod.id] ?? null;
-                        const isOn = access != null;
-                        return (
-                          <div
-                            key={mod.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                              isOn ? "border-border bg-card shadow-sm" : "border-dashed border-border/60 bg-secondary/10"
-                            }`}
-                          >
-                            {/* Dot colorido */}
-                            <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${isOn ? mod.dot : "bg-gray-300"}`} />
+                        const perm = editModuleAccess[mod.id] ?? null;
+                        const isOn = perm != null;
+                        const isExpanded = expandedModule === mod.id && isOn;
+                        const config = MODULE_PAGE_CONFIG[mod.id];
 
-                            {/* Nome + descrição */}
-                            <div className="flex-1 min-w-0">
-                              <span className={`text-sm font-medium ${isOn ? "" : "text-muted-foreground"}`}>{mod.label}</span>
+                        return (
+                          <div key={mod.id} className={`rounded-lg border transition-all ${
+                            isOn ? "border-border bg-card shadow-sm" : "border-dashed border-border/60 bg-secondary/10"}`}>
+
+                            {/* ─ Cabeçalho do módulo ─ */}
+                            <div className="flex items-center gap-3 p-3">
+                              <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${isOn ? mod.dot : "bg-gray-300"}`} />
+                              <div className="flex-1 min-w-0">
+                                <span className={`text-sm font-medium ${isOn ? "" : "text-muted-foreground"}`}>{mod.label}</span>
+                                {isOn && perm && (
+                                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                                    perm.level === "admin"  ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                    perm.level === "viewer" ? "bg-gray-50 text-gray-600 border-gray-200" :
+                                    "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                                    {perm.level === "admin" ? "Administrador" : perm.level === "viewer" ? "Visualizador" : "Personalizado"}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Botão expandir (só quando ON) */}
                               {isOn && (
-                                <div className="mt-1">
-                                  <Select value={access} onValueChange={v => setModuleLevel(mod.id, v as "admin" | "viewer")}>
-                                    <SelectTrigger className="h-6 text-xs border-0 bg-transparent p-0 shadow-none focus:ring-0 w-auto gap-1">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="admin">
-                                        <span className="flex items-center gap-1.5">
-                                          <Lock className="h-3 w-3" /> Administrador
-                                        </span>
-                                      </SelectItem>
-                                      <SelectItem value="viewer">
-                                        <span className="flex items-center gap-1.5">
-                                          <Eye className="h-3 w-3" /> Somente visualização
-                                        </span>
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
+                                <button
+                                  className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
+                                  onClick={() => setExpandedModule(isExpanded ? null : mod.id)}
+                                  title="Configurar páginas e dados sensíveis"
+                                >
+                                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
+                                </button>
                               )}
+                              <Switch checked={isOn} onCheckedChange={checked => toggleModule(mod.id, checked)} className="shrink-0" />
                             </div>
 
-                            {/* Toggle */}
-                            <Switch
-                              checked={isOn}
-                              onCheckedChange={checked => toggleModule(mod.id, checked)}
-                              className="shrink-0"
-                            />
+                            {/* ─ Painel expandido ─ */}
+                            {isExpanded && perm && config && (
+                              <div className="border-t bg-slate-50/50 rounded-b-lg px-3 py-3 space-y-4">
+
+                                {/* Nível de acesso */}
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Nível de acesso</p>
+                                  <div className="flex gap-2 flex-wrap">
+                                    {(["admin", "viewer", "custom"] as ModuleLevel[]).map(lvl => (
+                                      <button
+                                        key={lvl}
+                                        onClick={() => setModuleLevel(mod.id, lvl)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                                          perm.level === lvl
+                                            ? lvl === "admin"  ? "bg-blue-600 text-white border-blue-600"
+                                            : lvl === "viewer" ? "bg-gray-600 text-white border-gray-600"
+                                            :                    "bg-amber-500 text-white border-amber-500"
+                                            : "bg-white border-border text-muted-foreground hover:border-gray-400"}`}
+                                      >
+                                        {lvl === "admin"  && <Lock className="h-3 w-3" />}
+                                        {lvl === "viewer" && <Eye  className="h-3 w-3" />}
+                                        {lvl === "custom" && <Settings2 className="h-3 w-3" />}
+                                        {lvl === "admin" ? "Administrador" : lvl === "viewer" ? "Somente visualização" : "Personalizado"}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Tabela de páginas (só em custom) */}
+                                {perm.level === "custom" && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Páginas e ações permitidas</p>
+                                    <div className="rounded-lg border bg-white overflow-hidden">
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="bg-slate-100 border-b">
+                                            <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Página</th>
+                                            {(["view","create","edit","delete"] as PageAction[]).map(act => (
+                                              <th key={act} className="text-center px-2 py-2 w-16">
+                                                <div className="flex flex-col items-center gap-1">
+                                                  <span className="font-semibold text-muted-foreground">{ACTION_LABELS[act]}</span>
+                                                  {/* Checkbox de coluna (marcar/desmarcar tudo) */}
+                                                  {config.pages.some(p => p.actions.includes(act)) && (
+                                                    <button
+                                                      className="text-[9px] text-blue-600 hover:underline"
+                                                      onClick={() => {
+                                                        const allOn = config.pages.filter(p => p.actions.includes(act)).every(p => perm.pages?.[p.id]?.[act]);
+                                                        toggleAllPageAction(mod.id, act, !allOn);
+                                                      }}
+                                                    >
+                                                      {config.pages.filter(p => p.actions.includes(act)).every(p => perm.pages?.[p.id]?.[act]) ? "des." : "tudo"}
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {config.pages.map((page, i) => {
+                                            const pp: PagePerms = perm.pages?.[page.id] ?? { view: false, create: false, edit: false, delete: false };
+                                            return (
+                                              <tr key={page.id} className={`border-b last:border-0 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                                                <td className="px-3 py-2 font-medium text-slate-700">{page.label}</td>
+                                                {(["view","create","edit","delete"] as PageAction[]).map(act => (
+                                                  <td key={act} className="text-center px-2 py-2">
+                                                    {page.actions.includes(act) ? (
+                                                      <button
+                                                        onClick={() => togglePageAction(mod.id, page.id, act, !pp[act])}
+                                                        className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${
+                                                          pp[act] ? "text-blue-600 hover:text-blue-700" : "text-slate-300 hover:text-slate-500"}`}
+                                                      >
+                                                        {pp[act] ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                                                      </button>
+                                                    ) : (
+                                                      <span className="text-slate-200">—</span>
+                                                    )}
+                                                  </td>
+                                                ))}
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Dados sensíveis LGPD */}
+                                {config.sensitiveFlags && config.sensitiveFlags.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide flex items-center gap-1.5">
+                                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                      Dados sensíveis / LGPD
+                                    </p>
+                                    <div className="space-y-1.5">
+                                      {config.sensitiveFlags.map(flag => {
+                                        const isHidden = perm.sensitiveHidden?.includes(flag.id) ?? false;
+                                        return (
+                                          <label key={flag.id} className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all text-xs ${
+                                            isHidden
+                                              ? "bg-red-50 border-red-200 text-red-700"
+                                              : "bg-white border-border text-slate-700 hover:bg-slate-50"}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={isHidden}
+                                              onChange={e => toggleSensitiveFlag(mod.id, flag.id, e.target.checked)}
+                                              className="rounded"
+                                            />
+                                            <EyeOff className={`h-3.5 w-3.5 shrink-0 ${isHidden ? "text-red-500" : "text-slate-400"}`} />
+                                            <span className="font-medium">Ocultar: {flag.label}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -672,7 +737,7 @@ export default function Usuarios() {
                   )}
                 </section>
 
-                {/* Botão de salvar */}
+                {/* Botão salvar */}
                 <div className="flex gap-3 pt-2 border-t">
                   <Button
                     className="gap-2 bg-blue-600 hover:bg-blue-700"
@@ -682,25 +747,18 @@ export default function Usuarios() {
                     <Save className="h-4 w-4" />
                     {(updateUserMut.isPending || setModuleAccessMut.isPending) ? "Salvando..." : "Salvar Alterações"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => { setSelectedUser(null); setPanel("list"); }}
-                    className="lg:hidden"
-                  >
-                    Cancelar
-                  </Button>
+                  <Button variant="outline" onClick={() => setPanel("list")} className="lg:hidden">Voltar</Button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ——— PLACEHOLDER quando nada selecionado ——— */}
+          {/* Placeholder quando nada selecionado */}
           {!selectedUser && !showNewUserForm && (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-muted-foreground">
-                <Shield className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                <p className="text-lg font-medium">Selecione um usuário</p>
-                <p className="text-sm mt-1">Clique em um usuário à esquerda para gerenciar suas permissões</p>
+            <div className="flex-1 flex items-center justify-center text-center p-8">
+              <div>
+                <Shield className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">Selecione um usuário para configurar permissões</p>
               </div>
             </div>
           )}
