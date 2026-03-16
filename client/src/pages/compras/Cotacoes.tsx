@@ -17,8 +17,8 @@ import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, 
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, onAcao }: {
-  companyId: number; obraId?: number; cotacaoId?: number; deficit: number; onAcao?: () => void;
+function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showContent, onAcao, onCoberto }: {
+  companyId: number; obraId?: number; cotacaoId?: number; deficit: number; showContent?: boolean; onAcao?: () => void; onCoberto?: () => void;
 }) {
   const q = trpc.compras.buscarSaldosRealocacao.useQuery(
     { companyId, obraId, cotacaoId, deficit },
@@ -43,6 +43,11 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, onAcao }
   const [valorDebito, setValorDebito] = useState("");
   const [sobrasSel, setSobrasSel] = useState<Set<number>>(new Set());
 
+  useEffect(() => {
+    if (q.data?.cobertoPorRisco) onCoberto?.();
+  }, [q.data?.cobertoPorRisco]);
+
+  if (!showContent) return null;
   if (q.isLoading) return <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-red-400" /></div>;
   if (!q.data) return null;
 
@@ -262,6 +267,8 @@ export default function Cotacoes() {
   const [anexoUrl, setAnexoUrl] = useState<Record<number, string>>({});
   const [showAnexoInput, setShowAnexoInput] = useState<number | null>(null);
   const [showRealocacao, setShowRealocacao] = useState(false);
+  const [cobertoPorRisco, setCobertoPorRisco] = useState(false);
+  useEffect(() => { setCobertoPorRisco(false); setShowRealocacao(false); }, [showDetalhe]);
 
   const q = trpc.compras.listarCotacoes.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -531,6 +538,7 @@ export default function Cotacoes() {
     const qtdUnidade = unidadesUnicas.length === 1 ? unidadesUnicas[0] : null;
     const winnerGrandTotal = melhorForn ? parseFloat(melhorForn.totalOrcado ?? "0") : 0;
     const saldoTotal = metaGrandTotal > 0 && melhorForn ? metaGrandTotal - winnerGrandTotal : 0;
+    const deficit = saldoTotal < 0 ? Math.abs(saldoTotal) : 0;
 
     // Remove prefixo de código EAP "[xx.xx.xx.xx] " da descrição para agrupar itens iguais
     const stripEapPrefix = (desc: string) => desc.replace(/^\[[\d.]+\]\s*/, "").trim();
@@ -1111,33 +1119,41 @@ export default function Cotacoes() {
                       </div>
 
                       {/* Alerta de saldo negativo + Realocação */}
-                      {metaGrandTotal > 0 && melhorForn && saldoTotal < 0 && (
+                      {metaGrandTotal > 0 && melhorForn && deficit > 0 && !cobertoPorRisco && (
                         <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
                               <div>
                                 <p className="text-red-800 font-semibold text-sm">Acima da meta orçamentária</p>
-                                <p className="text-red-600 text-xs">Déficit de {Math.abs(saldoTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} em relação ao orçamento. Utilize a reserva de Risco (BDI DI-08), sobras de atividades compradas ou solicite autorização do master.</p>
+                                <p className="text-red-600 text-xs">Déficit de {deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} em relação ao orçamento. Utilize a reserva de Risco (BDI DI-08), sobras de atividades compradas ou solicite autorização do master.</p>
                               </div>
                             </div>
                             <Button size="sm" variant="outline" onClick={() => setShowRealocacao(v => !v)} className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-100 flex-shrink-0">
                               <TrendingDown className="h-3 w-3 mr-1" /> {showRealocacao ? "Fechar" : "Ver Opções"}
                             </Button>
                           </div>
-                          {showRealocacao && (
-                            <SaldosRealocacaoPanel
-                              companyId={companyId}
-                              obraId={(mapa?.cotacao as any)?.obraId}
-                              cotacaoId={showDetalhe ?? undefined}
-                              deficit={Math.abs(saldoTotal)}
-                              onAcao={() => { mapaQ.refetch(); detalheQ.refetch(); }}
-                            />
-                          )}
+                          <SaldosRealocacaoPanel
+                            companyId={companyId}
+                            obraId={(mapa?.cotacao as any)?.obraId}
+                            cotacaoId={showDetalhe ?? undefined}
+                            deficit={deficit}
+                            showContent={showRealocacao}
+                            onCoberto={() => setCobertoPorRisco(true)}
+                            onAcao={() => { mapaQ.refetch(); detalheQ.refetch(); }}
+                          />
                         </div>
                       )}
 
                       {/* Agrupamento final por material */}
+                      {/* Verde: déficit coberto por risco */}
+                      {metaGrandTotal > 0 && melhorForn && deficit > 0 && cobertoPorRisco && (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                          <p className="text-sm text-emerald-800 font-medium">Déficit coberto pela Reserva de Risco — compra autorizada</p>
+                        </div>
+                      )}
+
                       {gruposAgrupados.length > 0 && (
                         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                           <div className="flex items-center gap-2 mb-3">

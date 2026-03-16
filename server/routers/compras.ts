@@ -1330,6 +1330,15 @@ Responda APENAS com um objeto JSON no formato:
       const totalSobras = sobras.reduce((s, x) => s + x.sobra, 0);
       const totalCobertura = riscoDisponivel + totalSobras;
 
+      // Verifica débitos de risco feitos especificamente para esta cotação
+      const debitosEstaCotacao = input.cotacaoId
+        ? await db.select({ valor: comprasRiscoDebitos.valor })
+            .from(comprasRiscoDebitos)
+            .where(eq(comprasRiscoDebitos.cotacaoId, input.cotacaoId))
+        : [];
+      const totalDebitadoEstaCotacao = debitosEstaCotacao.reduce((s, x) => s + n(x.valor), 0);
+      const cobertoPorRisco = totalDebitadoEstaCotacao >= input.deficit - 0.01;
+
       return {
         risco: { inicial: riscoInicial, usado: riscoUsado, disponivel: riscoDisponivel, orcamentoId: riscoOrcamentoId },
         sobras: sobras.slice(0, 20),
@@ -1337,6 +1346,8 @@ Responda APENAS com um objeto JSON no formato:
         deficit: input.deficit,
         cobreDeficit: totalCobertura >= input.deficit,
         semCobertura: totalCobertura < 0.01,
+        cobertoPorRisco,
+        totalDebitadoEstaCotacao,
       };
     }),
 
