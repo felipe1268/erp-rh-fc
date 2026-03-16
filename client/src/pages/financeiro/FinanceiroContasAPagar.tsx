@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertTriangle, Search, Calendar } from "lucide-react";
+import { CheckCircle, AlertTriangle, Search, Calendar, ShoppingCart } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -100,7 +100,10 @@ export default function FinanceiroContasAPagar() {
                 {vencidos.map((c: any) => (
                   <div key={c.id} className="px-5 py-3 flex items-center justify-between bg-red-50/40 hover:bg-red-50">
                     <div>
-                      <p className="text-sm font-medium text-gray-800">{c.descricao ?? c.contaNome ?? "—"}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-gray-800">{c.descricao ?? c.contaNome ?? "—"}</p>
+                        {c.origemModulo === "compras" && <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200"><ShoppingCart className="w-2.5 h-2.5" />Compras</span>}
+                      </div>
                       <p className="text-xs text-gray-500">Venc.: {c.dataVencimento} • Atraso: <span className="text-red-600 font-medium">{c.diasAtraso} dias</span> {c.obraNome ? `• ${c.obraNome}` : ""}</p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -132,7 +135,10 @@ export default function FinanceiroContasAPagar() {
                 {aVencer.map((c: any) => (
                   <div key={c.id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50">
                     <div>
-                      <p className="text-sm font-medium text-gray-800">{c.descricao ?? c.contaNome ?? "—"}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-gray-800">{c.descricao ?? c.contaNome ?? "—"}</p>
+                        {c.origemModulo === "compras" && <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200"><ShoppingCart className="w-2.5 h-2.5" />Compras</span>}
+                      </div>
                       <p className="text-xs text-gray-500">Venc.: {c.dataVencimento ?? "Sem data"} {c.obraNome ? `• ${c.obraNome}` : ""}</p>
                     </div>
                     <div className="flex items-center gap-3">

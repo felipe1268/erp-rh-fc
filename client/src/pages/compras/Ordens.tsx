@@ -36,7 +36,7 @@ export default function Ordens() {
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
 
   const [form, setForm] = useState({
-    obraId: "", fornecedorId: "", dataEntregaPrevista: "", observacoes: "",
+    obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "",
     frete: "", outrasDespesas: "", impostos: "", desconto: "",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
@@ -71,7 +71,7 @@ export default function Ordens() {
   });
 
   function resetForm() {
-    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "" });
+    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "" });
     setItens([newItem()]);
   }
 
@@ -84,6 +84,7 @@ export default function Ordens() {
       obraId: parseInt(form.obraId),
       fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
       dataEntregaPrevista: form.dataEntregaPrevista || undefined,
+      dataVencimento: form.dataVencimento || undefined,
       observacoes: form.observacoes || undefined,
       frete: parseFloat(form.frete) || 0,
       outrasDespesas: parseFloat(form.outrasDespesas) || 0,
@@ -252,24 +253,29 @@ export default function Ordens() {
               <p className="text-xs text-gray-400">Obrigatório — o custo desta OC será apropriado à obra selecionada.</p>
             </div>
 
+            <div className="space-y-1.5">
+              <Label className="text-gray-700 text-sm font-medium">Fornecedor</Label>
+              <Select value={form.fornecedorId} onValueChange={v => setForm(p => ({ ...p, fornecedorId: v }))}>
+                <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-gray-200">
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  {fornecedores.map(f => (
+                    <SelectItem key={f.id} value={String(f.id)}>{f.nomeFantasia || f.razaoSocial}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-gray-700 text-sm font-medium">Fornecedor</Label>
-                <Select value={form.fornecedorId} onValueChange={v => setForm(p => ({ ...p, fornecedorId: v }))}>
-                  <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-gray-200">
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {fornecedores.map(f => (
-                      <SelectItem key={f.id} value={String(f.id)}>{f.nomeFantasia || f.razaoSocial}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Previsão de Entrega</Label>
                 <Input type="date" className="bg-white border-gray-300 text-gray-900" value={form.dataEntregaPrevista} onChange={e => setForm(p => ({ ...p, dataEntregaPrevista: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-gray-700 text-sm font-medium text-orange-700">Vencimento do Pagamento</Label>
+                <Input type="date" className="bg-white border-orange-300 text-gray-900 focus:border-orange-500" value={form.dataVencimento} onChange={e => setForm(p => ({ ...p, dataVencimento: e.target.value }))} />
+                <p className="text-xs text-orange-500">Data que o pagamento deve ser efetuado ao fornecedor.</p>
               </div>
             </div>
             <div className="space-y-1.5">

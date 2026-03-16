@@ -18,6 +18,7 @@ import {
   orcamentos, orcamentoItens,
   bdiIndiretos, orcamentoBdi,
   planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades,
+  financialEntries, financialAccounts,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
@@ -1594,6 +1595,7 @@ Responda APENAS com um objeto JSON no formato:
       obraId: z.number().nullable().optional(),
       fornecedorId: z.number().nullable().optional(),
       dataEntregaPrevista: z.string().optional(),
+      dataVencimento: z.string().optional(),
       observacoes: z.string().optional(),
       frete: z.number().optional(),
       outrasDespesas: z.number().optional(),
@@ -1617,12 +1619,22 @@ Responda APENAS com um objeto JSON no formato:
       const impostos = n(input.impostos);
       const desconto = n(input.desconto);
       const total = subtotal + frete + outrasDespesas + impostos - desconto;
+
+      let fornecedorNome: string | null = null;
+      if (input.fornecedorId) {
+        const [forn] = await db.select({ nomeFantasia: fornecedores.nomeFantasia, razaoSocial: fornecedores.razaoSocial })
+          .from(fornecedores).where(eq(fornecedores.id, input.fornecedorId));
+        fornecedorNome = forn?.nomeFantasia || forn?.razaoSocial || null;
+      }
+
       const [oc] = await db.insert(comprasOrdens).values({
         companyId: input.companyId,
         numeroOc,
         obraId: input.obraId ?? null,
         fornecedorId: input.fornecedorId ?? null,
+        fornecedorNome,
         dataEntregaPrevista: input.dataEntregaPrevista,
+        dataVencimento: input.dataVencimento ?? null,
         observacoes: input.observacoes,
         status: "pendente",
         aprovacaoStatus: "aguardando",
@@ -1632,7 +1644,7 @@ Responda APENAS com um objeto JSON no formato:
         impostos: String(impostos.toFixed(2)),
         desconto: String(desconto.toFixed(2)),
         total: String(total.toFixed(2)),
-      }).returning();
+      } as any).returning();
       if (input.itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
           input.itens.map(it => ({
@@ -1694,6 +1706,48 @@ Responda APENAS com um objeto JSON no formato:
         dataEntregaReal: input.dataEntregaReal,
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasOrdens.id, input.id));
+
+      // ── Integração financeira ─────────────────────────────────────────
+      if (input.status === "aprovada" || input.status === "entregue" || input.status === "entregue_parcial") {
+        const [ocFin] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+        if (ocFin) {
+          let obraNomeFin: string | null = ocFin.obraId
+            ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, ocFin.obraId)))[0]?.nome ?? null
+            : null;
+
+          const contaRows = await db.select({ id: (financialAccounts as any).id })
+            .from(financialAccounts as any)
+            .where(and(eq((financialAccounts as any).companyId, ocFin.companyId), eq((financialAccounts as any).codigo, "3.3")))
+            .limit(1);
+          const contaId = contaRows?.[0]?.id ?? null;
+
+          const novoStatus = (input.status === "aprovada") ? "previsto" : "a_pagar";
+
+          if (!ocFin.financialEntryId) {
+            const [entry] = await db.insert(financialEntries as any).values({
+              companyId: ocFin.companyId,
+              obraId: ocFin.obraId ?? null,
+              obraNome: obraNomeFin,
+              contaId,
+              tipo: "despesa",
+              natureza: "variavel",
+              valorPrevisto: String(ocFin.total ?? "0"),
+              dataCompetencia: new Date().toISOString().split("T")[0],
+              dataVencimento: (ocFin as any).dataVencimento ?? (ocFin as any).dataEntregaPrevista ?? null,
+              status: novoStatus,
+              origemModulo: "compras",
+              origemId: ocFin.id,
+              descricao: `OC ${ocFin.numeroOc}${ocFin.fornecedorNome ? " — " + ocFin.fornecedorNome : ""}`,
+            } as any).returning({ id: (financialEntries as any).id });
+            if (entry?.id) {
+              await db.update(comprasOrdens).set({ financialEntryId: entry.id } as any).where(eq(comprasOrdens.id, ocFin.id));
+            }
+          } else if (input.status !== "aprovada") {
+            await db.update(financialEntries as any).set({ status: "a_pagar" } as any)
+              .where(eq((financialEntries as any).id, ocFin.financialEntryId));
+          }
+        }
+      }
 
       // ── Integração automática: OC entregue → Almoxarifado ───────────
       if (input.status === "entregue") {

@@ -1128,7 +1128,8 @@ export const financialRouter = router({
     const res = await db.execute(
       `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
               conta_nome AS "contaNome", valor_previsto AS "valorPrevisto",
-              data_vencimento AS "dataVencimento",
+              data_vencimento AS "dataVencimento", origem_modulo AS "origemModulo",
+              origem_descricao AS "origemDescricao",
               CASE WHEN data_vencimento < CURRENT_DATE THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
        FROM financial_entries WHERE ${conds.join(" AND ")} ORDER BY data_vencimento ASC`,
       vals

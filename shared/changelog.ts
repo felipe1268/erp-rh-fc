@@ -2059,6 +2059,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 431,
+    titulo: "Compras + Financeiro — Integração OC ↔ Contas a Pagar",
+    descricao: "Campo 'Vencimento do Pagamento' adicionado ao formulário de criação de OC. Ao aprovar uma OC, o sistema cria automaticamente um lançamento financeiro (previsto). Ao marcar como entregue, o status muda para 'a_pagar' e aparece na tela Financeiro > Contas a Pagar. Badge 'Compras' identifica os lançamentos originados de OC.",
+    tipo: "feature",
+    modulos: "Compras, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 430,
     titulo: "Compras — Modal de detalhe da OC expandido para tela cheia",
     descricao: "O modal de visualização de detalhes da Ordem de Compra passou a ocupar toda a tela (fullscreen), melhorando a leitura dos itens, quantidades e botões de status em telas de qualquer tamanho.",
