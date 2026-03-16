@@ -33,7 +33,12 @@ const TODOS_ID = -1;
 function OrcamentoConsolidadoDash({ lista, formatBRL }: { lista: any[]; formatBRL: (v: number) => string }) {
   const totalVenda  = r2(lista.reduce((s, o) => s + n(o.totalVenda), 0));
   const totalCusto  = r2(lista.reduce((s, o) => s + n(o.totalCusto), 0));
-  const lucro       = r2(totalVenda - totalCusto);
+  // Mesmo critério do planejamento: usa bdiLucroPct quando definido, senão venda - custo
+  const lucro       = r2(lista.reduce((s, o) => {
+    const v = n(o.totalVenda);
+    const m = n(o.margemLucroBdi);
+    return s + (m > 0 ? v * m : v - n(o.totalCusto));
+  }, 0));
   const margemMedia = totalVenda > 0 ? (lucro / totalVenda) * 100 : 0;
   const bdiMedio    = lista.length > 0
     ? lista.reduce((s, o) => s + n(o.bdiPercentual) * 100, 0) / lista.length
@@ -189,11 +194,15 @@ function OrcamentoConsolidadoDash({ lista, formatBRL }: { lista: any[]; formatBR
               {[...lista]
                 .sort((a, b) => n(b.totalVenda) - n(a.totalVenda))
                 .map((o, i) => {
-                  const venda  = n(o.totalVenda);
-                  const custo  = n(o.totalCusto);
-                  const lucroO = r2(venda - custo);
-                  const marg   = venda > 0 ? ((lucroO / venda) * 100).toFixed(1) : "—";
-                  const bdi    = (n(o.bdiPercentual) * 100).toFixed(1);
+                  const venda    = n(o.totalVenda);
+                  const custo    = n(o.totalCusto);
+                  const margemBdi = n(o.margemLucroBdi);
+                  // Mesmo critério do planejamento: bdiLucroPct quando definido, senão venda - custo
+                  const lucroO   = r2(margemBdi > 0 ? venda * margemBdi : venda - custo);
+                  const marg     = margemBdi > 0
+                    ? (margemBdi * 100).toFixed(1)
+                    : (venda > 0 ? ((lucroO / venda) * 100).toFixed(1) : "—");
+                  const bdi      = (n(o.bdiPercentual) * 100).toFixed(1);
                   return (
                     <tr key={o.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
                       <td className="py-1.5 px-3 font-medium text-slate-800 max-w-[200px] truncate">
