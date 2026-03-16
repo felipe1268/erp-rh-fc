@@ -1149,16 +1149,33 @@ export const appRouter = router({
       const perms = await getUserPermissions(ctx.user.id);
       // Buscar permissões de grupo do usuário
       const groupPerms = await getUserEffectiveGroupPermissions(ctx.user.id);
-      // Buscar modulesAccess do usuário (novo sistema simplificado)
-      let moduleAccess: Record<string, string> = {};
+      // moduleAccess: prioridade = grupo (novo sistema) > individual > legado
+      let moduleAccess: Record<string, unknown> = {};
       try {
         const { getDb } = await import("./db");
         const db = await getDb();
         if (db) {
-          const { users } = await import("../drizzle/schema");
-          const { eq } = await import("drizzle-orm");
-          const [u] = await db.select({ modulesAccess: users.modulesAccess }).from(users).where(eq(users.id, ctx.user.id));
-          if (u?.modulesAccess) moduleAccess = JSON.parse(u.modulesAccess);
+          const { users, userGroups, userGroupMembers } = await import("../drizzle/schema");
+          const { eq, inArray } = await import("drizzle-orm");
+          // 1. Verificar se algum grupo do usuário tem moduleAccess
+          if (groupPerms.groups.length > 0) {
+            const groupIds = groupPerms.groups.map((g: any) => g.id as number);
+            const groupRows = await db.select({ id: userGroups.id, moduleAccess: (userGroups as any).moduleAccess }).from(userGroups).where(inArray(userGroups.id, groupIds));
+            for (const gr of groupRows) {
+              if (gr.moduleAccess) {
+                try {
+                  const parsed = JSON.parse(gr.moduleAccess as string);
+                  // Merge: grupo define moduleAccess
+                  Object.assign(moduleAccess, parsed);
+                } catch {}
+              }
+            }
+          }
+          // 2. Fallback: moduleAccess individual do usuário
+          if (Object.keys(moduleAccess).length === 0) {
+            const [u] = await db.select({ modulesAccess: users.modulesAccess }).from(users).where(eq(users.id, ctx.user.id));
+            if (u?.modulesAccess) moduleAccess = JSON.parse(u.modulesAccess);
+          }
         }
       } catch {}
       return {
@@ -1952,12 +1969,19 @@ export const appRouter = router({
         ativo: !!g.ativo,
         somenteVisualizacao: !!g.somenteVisualizacao,
         ocultarDadosSensiveis: !!g.ocultarDadosSensiveis,
+        moduleAccess: g.moduleAccess ? (() => { try { return JSON.parse(g.moduleAccess); } catch { return {}; } })() : {},
       }));
     }),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
       const g = await getUserGroupById(input.id);
       if (!g) return null;
-      return { ...g, ativo: !!g.ativo, somenteVisualizacao: !!g.somenteVisualizacao, ocultarDadosSensiveis: !!g.ocultarDadosSensiveis };
+      return {
+        ...g,
+        ativo: !!g.ativo,
+        somenteVisualizacao: !!g.somenteVisualizacao,
+        ocultarDadosSensiveis: !!g.ocultarDadosSensiveis,
+        moduleAccess: g.moduleAccess ? (() => { try { return JSON.parse(g.moduleAccess); } catch { return {}; } })() : {},
+      };
     }),
     create: protectedProcedure.input(z.object({
       nome: z.string().min(1),
@@ -2044,6 +2068,23 @@ export const appRouter = router({
         ocultarDocumentos: p.ocultarDocumentos ? 1 : 0,
       })));
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_group_permissions', entityId: input.groupId, details: `Permissões do grupo atualizadas: ${input.permissions.filter(p => p.canView).length} rotas habilitadas` });
+      return { success: true };
+    }),
+    // Salva moduleAccess (novo sistema) no grupo
+    setGroupModuleAccess: protectedProcedure.input(z.object({
+      groupId: z.number(),
+      moduleAccess: z.record(z.string(), z.any()),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode configurar permissões de grupo' });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { userGroups } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const clean: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(input.moduleAccess)) { if (v != null) clean[k] = v; }
+      await db.update(userGroups).set({ moduleAccess: JSON.stringify(clean) } as any).where(eq(userGroups.id, input.groupId));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_group', entityId: input.groupId, details: `Módulos do grupo atualizados: ${Object.keys(clean).join(', ')}` });
       return { success: true };
     }),
     // Membros do grupo

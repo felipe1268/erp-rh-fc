@@ -1852,6 +1852,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 410,
+    titulo: "Gestão de Usuários — Redesign completo com Grupos de Acesso",
+    descricao: "Tela de Usuários completamente redesenhada com novo fluxo orientado a Grupos. (1) Nova arquitetura em 2 abas: 'Usuários' e 'Grupos de Acesso'. (2) Fluxo intuitivo: Criar Usuário → Atribuir Grupo → Liberar Acesso. (3) Aba Grupos: criação/edição de grupos com nome, descrição, cor identificadora; gerenciamento de membros (adicionar/remover usuários diretamente no grupo); configurador completo de permissões por módulo (Administrador / Somente Visualização / Personalizado) com todas as 85 telas; flags LGPD por módulo. (4) Aba Usuários: formulário simplificado com dados básicos, empresas e seleção de grupo; indicador visual 'Sem grupo / Acesso via grupo: [Nome]' em cada usuário na lista. (5) Backend: nova coluna module_access na tabela user_groups; novo endpoint setGroupModuleAccess; getMyPermissions agora prioriza moduleAccess do grupo (merge automático) antes do acesso individual. (6) Permissões do grupo são herdadas automaticamente por todos os membros sem configuração individual.",
+    tipo: "melhoria",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 409,
     titulo: "Permissões — Mapeamento completo de todas as 85 telas do sistema",
     descricao: "Revisão completa do modulePages.ts: mapeamento exaustivo de 85 páginas reais distribuídas nos 12 módulos (RH/DP: 16 telas; SST: 3; Jurídico: 3; Avaliação: 3; Terceiros: 10; Parceiros: 5; Orçamento: 7; Planejamento: 6; Cadastro: 9; Compras: 9; Almoxarifado: 4; Financeiro: 10). Cada tela agora aparece na configuração de permissões por usuário com as ações corretas (Ver/Criar/Editar/Excluir). Adicionadas 14 flags de dados sensíveis/LGPD distribuídas nos módulos. Inclui telas antes ausentes: Controle de Documentos, Vale Alimentação, Hora Extra, Apontamentos, Crachás, PJ/Medições, Dissídio, Comparativo de Convenções, Gestão de Competências, Relatórios, Dashboards RH, Processos Trabalhistas, Convenções Coletivas, Habilidades, todas as telas de Parceiros, todos os tipos de Terceiros, EAP/Biblioteca/Encargos do Orçamento, Cronograma Financeiro e Previsão de Medição no Planejamento, Recebimentos/Aprovações/Emergencial/Realocação nas Compras, Categorias no Almoxarifado, DRE/Obrigações Fiscais/Plano de Contas/Centros de Custo/Conciliação no Financeiro.",

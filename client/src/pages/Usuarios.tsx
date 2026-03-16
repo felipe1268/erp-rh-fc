@@ -7,10 +7,12 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Shield, Search, X, UserPlus, Users, Building2, Lock, Eye, EyeOff,
-  ChevronRight, ChevronDown, Save, Trash2, RefreshCw, User, Mail, KeyRound,
-  LayoutGrid, ArrowLeft, Settings2, AlertTriangle, CheckSquare, Square,
+  ChevronDown, Save, Trash2, RefreshCw, User, Mail, KeyRound,
+  Settings2, AlertTriangle, CheckSquare, Square, ArrowLeft,
+  Layers, Plus, UserCheck, Edit2, Check, Palette, UsersRound,
+  ShieldCheck, ShieldAlert, Crown, Info, ChevronRight,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
@@ -19,748 +21,971 @@ import {
   type ModulePerm, type ModuleLevel, type PageAction, type PagePerms,
 } from "../../../shared/modulePages";
 
-// ================================================================
-// 12 módulos do sistema
-// ================================================================
+// ─────────────────────────────────────────────────
+// Constantes
+// ─────────────────────────────────────────────────
 const ALL_MODULES = [
-  { id: "rh-dp",        label: "RH / DP",        description: "Folha, admissões e desligamentos",        dot: "bg-blue-500",    tag: "bg-blue-100 text-blue-700 border-blue-200" },
-  { id: "sst",          label: "SST",             description: "Saúde e segurança do trabalho",           dot: "bg-green-500",   tag: "bg-green-100 text-green-700 border-green-200" },
-  { id: "juridico",     label: "Jurídico",         description: "Contratos e obrigações legais",           dot: "bg-amber-500",   tag: "bg-amber-100 text-amber-700 border-amber-200" },
-  { id: "avaliacao",    label: "Avaliação",        description: "Avaliação de desempenho",                 dot: "bg-purple-500",  tag: "bg-purple-100 text-purple-700 border-purple-200" },
-  { id: "terceiros",    label: "Terceiros",        description: "Empresas e trabalhadores terceirizados",  dot: "bg-orange-500",  tag: "bg-orange-100 text-orange-700 border-orange-200" },
-  { id: "parceiros",    label: "Parceiros",        description: "Gestão de parceiros e comissões",         dot: "bg-teal-500",    tag: "bg-teal-100 text-teal-700 border-teal-200" },
-  { id: "orcamento",    label: "Orçamento",        description: "Orçamentos e composições de custo",       dot: "bg-indigo-500",  tag: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  { id: "planejamento", label: "Planejamento",     description: "Obras e cronogramas",                     dot: "bg-violet-500",  tag: "bg-violet-100 text-violet-700 border-violet-200" },
-  { id: "cadastro",     label: "Cadastro",         description: "Cadastro de obras e colaboradores",       dot: "bg-slate-500",   tag: "bg-slate-100 text-slate-700 border-slate-200" },
-  { id: "compras",      label: "Compras",          description: "Gestão de compras e fornecedores",        dot: "bg-rose-500",    tag: "bg-rose-100 text-rose-700 border-rose-200" },
-  { id: "almoxarifado", label: "Almoxarifado",     description: "Controle de estoque e materiais",         dot: "bg-lime-600",    tag: "bg-lime-100 text-lime-700 border-lime-200" },
-  { id: "financeiro",   label: "Financeiro",       description: "Fluxo de caixa e gestão financeira",      dot: "bg-emerald-500", tag: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { id: "rh-dp",        label: "RH / DP",        dot: "bg-blue-500",    tag: "bg-blue-100 text-blue-700 border-blue-200" },
+  { id: "sst",          label: "SST",             dot: "bg-green-500",   tag: "bg-green-100 text-green-700 border-green-200" },
+  { id: "juridico",     label: "Jurídico",         dot: "bg-amber-500",   tag: "bg-amber-100 text-amber-700 border-amber-200" },
+  { id: "avaliacao",    label: "Avaliação",        dot: "bg-purple-500",  tag: "bg-purple-100 text-purple-700 border-purple-200" },
+  { id: "terceiros",    label: "Terceiros",        dot: "bg-orange-500",  tag: "bg-orange-100 text-orange-700 border-orange-200" },
+  { id: "parceiros",    label: "Parceiros",        dot: "bg-teal-500",    tag: "bg-teal-100 text-teal-700 border-teal-200" },
+  { id: "orcamento",    label: "Orçamento",        dot: "bg-indigo-500",  tag: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+  { id: "planejamento", label: "Planejamento",     dot: "bg-violet-500",  tag: "bg-violet-100 text-violet-700 border-violet-200" },
+  { id: "cadastro",     label: "Cadastro",         dot: "bg-slate-500",   tag: "bg-slate-100 text-slate-700 border-slate-200" },
+  { id: "compras",      label: "Compras",          dot: "bg-rose-500",    tag: "bg-rose-100 text-rose-700 border-rose-200" },
+  { id: "almoxarifado", label: "Almoxarifado",     dot: "bg-lime-600",    tag: "bg-lime-100 text-lime-700 border-lime-200" },
+  { id: "financeiro",   label: "Financeiro",       dot: "bg-emerald-500", tag: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+];
+
+const GROUP_COLORS = [
+  "#6b7280","#3b82f6","#10b981","#f59e0b","#ef4444",
+  "#8b5cf6","#ec4899","#06b6d4","#84cc16","#f97316",
 ];
 
 const ROLE_LABELS: Record<string, string> = { admin_master: "Admin Master", admin: "Admin", user: "Usuário" };
-const ROLE_BADGE:  Record<string, string> = {
+const ROLE_BADGE: Record<string, string> = {
   admin_master: "bg-purple-100 text-purple-700 border-purple-200",
   admin:        "bg-blue-100 text-blue-700 border-blue-200",
   user:         "bg-gray-100 text-gray-600 border-gray-200",
 };
+const ACTION_LABELS: Record<PageAction, string> = { view: "Ver", create: "Criar", edit: "Editar", delete: "Excluir" };
 
-const ACTION_LABELS: Record<PageAction, string> = {
-  view: "Ver", create: "Criar", edit: "Editar", delete: "Excluir",
-};
+// ─────────────────────────────────────────────────
+// Componente de permissões de módulo (reutilizável)
+// ─────────────────────────────────────────────────
+interface ModulePermsEditorProps {
+  moduleAccess: Record<string, ModulePerm | null>;
+  onChange: (next: Record<string, ModulePerm | null>) => void;
+}
+function ModulePermsEditor({ moduleAccess, onChange }: ModulePermsEditorProps) {
+  const [expandedModule, setExpandedModule] = useState<string | null>(null);
 
-// ================================================================
+  const toggleModule = (id: string, on: boolean) => {
+    onChange({ ...moduleAccess, [id]: on ? { level: "admin", pages: defaultPagesForLevel(id, "admin"), sensitiveHidden: [] } : null });
+  };
+  const setLevel = (id: string, level: ModuleLevel) => {
+    const cur = moduleAccess[id];
+    if (!cur) return;
+    onChange({ ...moduleAccess, [id]: { ...cur, level, pages: level !== "custom" ? defaultPagesForLevel(id, level as "admin" | "viewer") : cur.pages } });
+  };
+  const togglePage = (modId: string, pageId: string, act: PageAction, val: boolean) => {
+    const cur = moduleAccess[modId];
+    if (!cur) return;
+    const pages = { ...cur.pages, [pageId]: { ...cur.pages?.[pageId] ?? { view:false,create:false,edit:false,delete:false }, [act]: val } };
+    onChange({ ...moduleAccess, [modId]: { ...cur, pages } });
+  };
+  const toggleAllAction = (modId: string, act: PageAction, val: boolean) => {
+    const cur = moduleAccess[modId];
+    if (!cur) return;
+    const config = MODULE_PAGE_CONFIG[modId];
+    if (!config) return;
+    const pages = { ...cur.pages };
+    for (const p of config.pages) {
+      if (p.actions.includes(act)) pages[p.id] = { ...pages[p.id] ?? { view:false,create:false,edit:false,delete:false }, [act]: val };
+    }
+    onChange({ ...moduleAccess, [modId]: { ...cur, pages } });
+  };
+  const toggleSensitive = (modId: string, flagId: string, hidden: boolean) => {
+    const cur = moduleAccess[modId];
+    if (!cur) return;
+    const sh = cur.sensitiveHidden ?? [];
+    onChange({ ...moduleAccess, [modId]: { ...cur, sensitiveHidden: hidden ? [...sh.filter(x=>x!==flagId), flagId] : sh.filter(x=>x!==flagId) } });
+  };
+  const setAll = (level: "admin" | null) => {
+    if (level === null) { onChange(Object.fromEntries(ALL_MODULES.map(m => [m.id, null]))); return; }
+    const next: Record<string, ModulePerm | null> = {};
+    for (const m of ALL_MODULES) next[m.id] = { level, pages: defaultPagesForLevel(m.id, level), sensitiveHidden: [] };
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+          <Layers className="h-3.5 w-3.5" /> Acesso a Módulos
+        </p>
+        <div className="flex gap-2">
+          <button className="text-xs text-blue-600 hover:underline" onClick={() => setAll("admin")}>Todos admin</button>
+          <span className="text-muted-foreground text-xs">·</span>
+          <button className="text-xs text-muted-foreground hover:underline" onClick={() => setAll(null)}>Limpar tudo</button>
+        </div>
+      </div>
+      {ALL_MODULES.map(mod => {
+        const perm = moduleAccess[mod.id] ?? null;
+        const isOn = perm != null;
+        const isExpanded = expandedModule === mod.id && isOn;
+        const config = MODULE_PAGE_CONFIG[mod.id];
+        const enabledCount = isOn && perm?.level === "custom"
+          ? Object.values(perm.pages ?? {}).filter(p => p.view).length : 0;
+        return (
+          <div key={mod.id} className={`rounded-xl border transition-all ${isOn ? "border-border bg-card shadow-sm" : "border-dashed border-border/50 bg-secondary/5"}`}>
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${isOn ? mod.dot : "bg-gray-300"}`} />
+              <div className="flex-1 min-w-0">
+                <span className={`text-sm font-medium ${!isOn ? "text-muted-foreground" : ""}`}>{mod.label}</span>
+                {isOn && perm && (
+                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                    perm.level === "admin"  ? "bg-blue-50 text-blue-700 border-blue-200" :
+                    perm.level === "viewer" ? "bg-gray-50 text-gray-600 border-gray-200" :
+                                             "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                    {perm.level === "admin" ? "Administrador" : perm.level === "viewer" ? "Somente ver" : `Personalizado${enabledCount > 0 ? ` · ${enabledCount} pág.` : ""}`}
+                  </span>
+                )}
+              </div>
+              {isOn && (
+                <button onClick={() => setExpandedModule(isExpanded ? null : mod.id)}
+                  className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="Configurar permissões detalhadas">
+                  <Settings2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <Switch checked={isOn} onCheckedChange={v => toggleModule(mod.id, v)} className="shrink-0" />
+            </div>
+
+            {isExpanded && perm && config && (
+              <div className="border-t bg-slate-50/50 rounded-b-xl px-4 py-4 space-y-5">
+                {/* Nível */}
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Nível de acesso</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {(["admin","viewer","custom"] as ModuleLevel[]).map(lvl => (
+                      <button key={lvl} onClick={() => setLevel(mod.id, lvl)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                          perm.level === lvl
+                            ? lvl==="admin"  ? "bg-blue-600 text-white border-blue-600"
+                            : lvl==="viewer" ? "bg-gray-600 text-white border-gray-600"
+                            :                  "bg-amber-500 text-white border-amber-500"
+                            : "bg-white border-border text-muted-foreground hover:border-gray-400"}`}>
+                        {lvl==="admin"  ? <Lock className="h-3 w-3" /> :
+                         lvl==="viewer" ? <Eye className="h-3 w-3" /> :
+                                          <Settings2 className="h-3 w-3" />}
+                        {lvl==="admin" ? "Administrador" : lvl==="viewer" ? "Somente visualização" : "Personalizado"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tabela de páginas (custom) */}
+                {perm.level === "custom" && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Páginas e ações permitidas</p>
+                    <div className="rounded-xl border bg-white overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-100 border-b">
+                            <th className="text-left px-3 py-2.5 font-semibold text-slate-600">Página / Tela</th>
+                            {(["view","create","edit","delete"] as PageAction[]).map(act => (
+                              <th key={act} className="text-center px-2 py-2.5 w-14 font-semibold text-slate-600">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="text-[10px]">{ACTION_LABELS[act]}</span>
+                                  {config.pages.some(p => p.actions.includes(act)) && (
+                                    <button className="text-[9px] text-blue-500 hover:underline" onClick={() => {
+                                      const all = config.pages.filter(p=>p.actions.includes(act)).every(p=>perm.pages?.[p.id]?.[act]);
+                                      toggleAllAction(mod.id, act, !all);
+                                    }}>
+                                      {config.pages.filter(p=>p.actions.includes(act)).every(p=>perm.pages?.[p.id]?.[act]) ? "des." : "tudo"}
+                                    </button>
+                                  )}
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {config.pages.map((page, i) => {
+                            const pp: PagePerms = perm.pages?.[page.id] ?? { view:false,create:false,edit:false,delete:false };
+                            return (
+                              <tr key={page.id} className={`border-b last:border-0 ${i%2===0?"bg-white":"bg-slate-50/40"}`}>
+                                <td className="px-3 py-2 text-slate-700 font-medium">{page.label}</td>
+                                {(["view","create","edit","delete"] as PageAction[]).map(act => (
+                                  <td key={act} className="text-center px-2 py-2">
+                                    {page.actions.includes(act) ? (
+                                      <button onClick={() => togglePage(mod.id, page.id, act, !pp[act])}
+                                        className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${pp[act] ? "text-blue-600 hover:text-blue-700" : "text-slate-300 hover:text-slate-400"}`}>
+                                        {pp[act] ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                                      </button>
+                                    ) : <span className="text-slate-200 text-sm">—</span>}
+                                  </td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dados sensíveis LGPD */}
+                {config.sensitiveFlags && config.sensitiveFlags.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3 w-3 text-amber-500" /> Dados Sensíveis / LGPD
+                    </p>
+                    <div className="space-y-1.5">
+                      {config.sensitiveFlags.map(flag => {
+                        const hidden = perm.sensitiveHidden?.includes(flag.id) ?? false;
+                        return (
+                          <label key={flag.id} className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer text-xs transition-all ${
+                            hidden ? "bg-red-50 border-red-200 text-red-700" : "bg-white border-border text-slate-600 hover:bg-slate-50"}`}>
+                            <input type="checkbox" checked={hidden} onChange={e => toggleSensitive(mod.id, flag.id, e.target.checked)} className="rounded" />
+                            <EyeOff className={`h-3.5 w-3.5 shrink-0 ${hidden?"text-red-500":"text-slate-300"}`} />
+                            <span className="font-medium">Ocultar: {flag.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────
 // Componente Principal
-// ================================================================
+// ─────────────────────────────────────────────────
 export default function Usuarios() {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
   const isAdmin  = user?.role === "admin" || isMaster;
-  const { getCompanyIdsForQuery } = useCompany();
 
-  const [panel, setPanel]               = useState<"list" | "detail">("list");
-  const [searchTerm, setSearchTerm]     = useState("");
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [showNewUserForm, setShowNewUserForm] = useState(false);
+  const [activeTab, setActiveTab] = useState<"usuarios" | "grupos">("usuarios");
 
-  // Formulário básico
-  const [editName, setEditName]         = useState("");
-  const [editEmail, setEditEmail]       = useState("");
-  const [editUsername, setEditUsername] = useState("");
-  const [editPassword, setEditPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [editRole, setEditRole]         = useState("user");
-  const [editCompanyIds, setEditCompanyIds] = useState<number[]>([]);
-
-  // Permissões de módulos (formato rico)
-  const [editModuleAccess, setEditModuleAccess] = useState<Record<string, ModulePerm | null>>({});
-  // Módulo expandido para editar páginas
-  const [expandedModule, setExpandedModule] = useState<string | null>(null);
-
-  // Formulário de novo usuário
-  const [newUsername, setNewUsername]   = useState("");
-  const [newName, setNewName]           = useState("");
-  const [newEmail, setNewEmail]         = useState("");
-  const [newRole, setNewRole]           = useState<"user" | "admin" | "admin_master">("user");
-  const [newPassword, setNewPassword]   = useState("");
-  const [newCompanyIds, setNewCompanyIds] = useState<number[]>([]);
-
-  const utils = trpc.useUtils();
+  // ── Dados base ──
   const usersQuery        = trpc.userManagement.listUsers.useQuery();
   const allCompaniesQuery = trpc.companies.list.useQuery();
+  const groupsQuery       = trpc.userGroups.list.useQuery();
+  const utils             = trpc.useUtils();
 
-  const createUserMut = trpc.userManagement.createLocalUser.useMutation({
-    onSuccess: (data) => {
-      toast.success(`Usuário "${data.username}" criado! Senha padrão: ${data.defaultPassword}`);
-      setShowNewUserForm(false);
-      resetNewForm();
-      usersQuery.refetch();
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const allUsers   = usersQuery.data ?? [];
+  const allGroups  = groupsQuery.data ?? [];
 
+  // ──────────────────────────────────────────────
+  // TAB USUÁRIOS — estado
+  // ──────────────────────────────────────────────
+  const [uPanel, setUPanel]             = useState<"list"|"detail"|"new">("list");
+  const [uSearch, setUSearch]           = useState("");
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+
+  // Formulário edição
+  const [editName, setEditName]       = useState("");
+  const [editEmail, setEditEmail]     = useState("");
+  const [editUser, setEditUser]       = useState("");
+  const [editPwd, setEditPwd]         = useState("");
+  const [showPwd, setShowPwd]         = useState(false);
+  const [editRole, setEditRole]       = useState("user");
+  const [editCos, setEditCos]         = useState<number[]>([]);
+  const [editGroupIds, setEditGroupIds] = useState<number[]>([]);
+
+  // Formulário novo usuário
+  const [newUser, setNewUser]   = useState({ username:"", name:"", email:"", role:"user" as any, password:"", companyIds:[] as number[], groupIds:[] as number[] });
+
+  // Mutations usuários
   const updateUserMut = trpc.userManagement.updateUser.useMutation({
-    onSuccess: () => { toast.success("Dados salvos!"); usersQuery.refetch(); utils.auth.me.invalidate(); },
-    onError: (e) => toast.error("Erro: " + e.message),
+    onSuccess: () => { toast.success("Usuário atualizado"); utils.userManagement.listUsers.invalidate(); },
+    onError:   e => toast.error(e.message),
   });
-
-  const setCompaniesMut = trpc.userManagement.setUserCompanies.useMutation({
-    onSuccess: () => { usersQuery.refetch(); },
-    onError: (e) => toast.error("Erro ao salvar empresas: " + e.message),
-  });
-
-  const setModuleAccessMut = trpc.userManagement.setUserModuleAccess.useMutation({
-    onSuccess: () => {
-      toast.success("Permissões salvas!");
-      utils.userManagement.getMyPermissions.invalidate();
-    },
-    onError: (e) => toast.error("Erro ao salvar permissões: " + e.message),
-  });
-
-  const resetPwdMut = trpc.userManagement.resetPassword.useMutation({
-    onSuccess: (data) => toast.success(`Senha resetada! Nova senha: ${data.defaultPassword}`),
-    onError: (e) => toast.error(e.message),
-  });
-
   const deleteUserMut = trpc.userManagement.deleteUser.useMutation({
-    onSuccess: () => { toast.success("Usuário excluído!"); setSelectedUser(null); setPanel("list"); usersQuery.refetch(); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => { toast.success("Usuário excluído"); setSelectedUser(null); setUPanel("list"); utils.userManagement.listUsers.invalidate(); },
+    onError:   e => toast.error(e.message),
+  });
+  const resetPwdMut = trpc.userManagement.resetPassword.useMutation({
+    onSuccess: d => toast.success(`Nova senha: ${d.newPassword}`),
+    onError:   e => toast.error(e.message),
+  });
+  const createUserMut = trpc.userManagement.createLocalUser.useMutation({
+    onSuccess: async (d) => {
+      toast.success(`Usuário "${d.username}" criado! Senha: ${d.defaultPassword}`);
+      if (newUser.groupIds.length > 0) {
+        await setGroupsMut.mutateAsync({ userId: d.id, groupIds: newUser.groupIds });
+      }
+      if (newUser.companyIds.length > 0) {
+        await setCosMut.mutateAsync({ userId: d.id, companyIds: newUser.companyIds });
+      }
+      setNewUser({ username:"", name:"", email:"", role:"user", password:"", companyIds:[], groupIds:[] });
+      setUPanel("list");
+      utils.userManagement.listUsers.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const setCosMut = trpc.userManagement.setUserCompanies.useMutation({
+    onSuccess: () => utils.userManagement.listUsers.invalidate(),
+  });
+  const setGroupsMut = trpc.userGroups.setUserGroups.useMutation({
+    onSuccess: () => utils.userManagement.listUsers.invalidate(),
   });
 
-  const filteredUsers = useMemo(() => {
-    if (!usersQuery.data) return [];
-    const term = removeAccents(searchTerm.toLowerCase().trim());
-    if (!term) return usersQuery.data;
-    return usersQuery.data.filter((u: any) =>
-      removeAccents((u.name || "").toLowerCase()).includes(term) ||
-      removeAccents((u.username || "").toLowerCase()).includes(term) ||
-      removeAccents((u.email || "").toLowerCase()).includes(term)
-    );
-  }, [usersQuery.data, searchTerm]);
-
-  const resetNewForm = () => {
-    setNewUsername(""); setNewName(""); setNewEmail("");
-    setNewPassword(""); setNewRole("user"); setNewCompanyIds([]);
-  };
-
-  // ── Abrir detalhe ─────────────────────────────────────────────
   const openUser = (u: any) => {
     setSelectedUser(u);
     setEditName(u.name || "");
     setEditEmail(u.email || "");
-    setEditUsername(u.username || "");
-    setEditPassword("");
-    setShowPassword(false);
+    setEditUser(u.username || "");
+    setEditPwd("");
     setEditRole(u.role || "user");
-    setEditCompanyIds(u.companyIds || []);
-    setExpandedModule(null);
-    // Normaliza o JSON do banco para o formato rico
-    const ma: Record<string, ModulePerm | null> = {};
-    try {
-      if (u.modulesAccess) {
-        const raw = JSON.parse(u.modulesAccess);
-        for (const [moduleId, val] of Object.entries(raw)) {
-          ma[moduleId] = normalizeModulePerm(moduleId, val);
-        }
-      }
-    } catch {}
-    setEditModuleAccess(ma);
-    setShowNewUserForm(false);
-    setPanel("detail");
+    setEditCos(u.companyIds || []);
+    // Grupos do usuário — via allUsers (memberOf)
+    const mem = (allGroups as any[]).filter(g => (g as any)._memberIds?.includes(u.id)).map(g => g.id);
+    setEditGroupIds(mem);
+    setUPanel("detail");
   };
 
-  // ── Salvar ────────────────────────────────────────────────────
-  const handleSave = () => {
+  const handleSaveUser = async () => {
     if (!selectedUser) return;
-    if (!editName.trim()) { toast.error("Nome é obrigatório"); return; }
-    if (editPassword && editPassword.length < 6) { toast.error("Senha mínimo 6 caracteres"); return; }
+    await updateUserMut.mutateAsync({ userId: selectedUser.id, name: editName, email: editEmail||undefined, username: editUser, role: editRole as any, password: editPwd||undefined });
+    await setCosMut.mutateAsync({ userId: selectedUser.id, companyIds: editCos });
+    await setGroupsMut.mutateAsync({ userId: selectedUser.id, groupIds: editGroupIds });
+    utils.userGroups.list.invalidate();
+  };
 
-    updateUserMut.mutate({
-      userId: selectedUser.id,
-      name:     editName.trim(),
-      email:    editEmail.trim() || undefined,
-      username: editUsername.trim() || undefined,
-      newPassword: editPassword.trim() || undefined,
-      role: (isAdmin && selectedUser.id !== user?.id) ? editRole as any : undefined,
+  const filteredUsers = useMemo(() => {
+    const q = removeAccents(uSearch.toLowerCase());
+    return allUsers.filter((u: any) => {
+      if (!q) return true;
+      return removeAccents((u.name||"").toLowerCase()).includes(q) ||
+             removeAccents((u.username||"").toLowerCase()).includes(q) ||
+             removeAccents((u.email||"").toLowerCase()).includes(q);
     });
+  }, [allUsers, uSearch]);
 
-    if (isAdmin && editRole !== "admin_master") {
-      setCompaniesMut.mutate({ userId: selectedUser.id, companyIds: editCompanyIds });
-    }
+  // Grupo do usuário (display)
+  const getUserGroupLabel = (u: any) => {
+    if (u.role === "admin_master") return null;
+    const mem = (allGroups as any[]).filter(g => g.members?.some((m: any) => m.userId === u.id || m.id === u.id));
+    if (mem.length === 0) return null;
+    return mem.map(g => g.nome).join(", ");
+  };
 
-    if (editRole !== "admin_master") {
-      // Serializa o formato rico para envio
-      const payload: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(editModuleAccess)) {
-        if (v != null) payload[k] = v;
+  // ──────────────────────────────────────────────
+  // TAB GRUPOS — estado
+  // ──────────────────────────────────────────────
+  const [gPanel, setGPanel]               = useState<"list"|"detail"|"new">("list");
+  const [gSearch, setGSearch]             = useState("");
+  const [selectedGroup, setSelectedGroup] = useState<any>(null);
+
+  // Formulário grupo
+  const [gName, setGName]     = useState("");
+  const [gDesc, setGDesc]     = useState("");
+  const [gColor, setGColor]   = useState("#6b7280");
+  const [gModuleAccess, setGModuleAccess] = useState<Record<string, ModulePerm | null>>({});
+  const [gMembers, setGMembers] = useState<number[]>([]);
+  const [addMemberUserId, setAddMemberUserId] = useState<string>("");
+
+  // Mutations grupos
+  const createGroupMut = trpc.userGroups.create.useMutation({
+    onSuccess: (d) => {
+      toast.success(`Grupo "${gName}" criado!`);
+      utils.userGroups.list.invalidate();
+      setGPanel("list");
+      setGName(""); setGDesc(""); setGColor("#6b7280"); setGModuleAccess({});
+    },
+    onError: e => toast.error(e.message),
+  });
+  const updateGroupMut = trpc.userGroups.update.useMutation({
+    onSuccess: () => { toast.success("Grupo atualizado"); utils.userGroups.list.invalidate(); },
+    onError:   e => toast.error(e.message),
+  });
+  const deleteGroupMut = trpc.userGroups.delete.useMutation({
+    onSuccess: () => { toast.success("Grupo excluído"); setSelectedGroup(null); setGPanel("list"); utils.userGroups.list.invalidate(); },
+    onError:   e => toast.error(e.message),
+  });
+  const setGroupModAccessMut = trpc.userGroups.setGroupModuleAccess.useMutation({
+    onSuccess: () => utils.userGroups.list.invalidate(),
+    onError:   e => toast.error(e.message),
+  });
+  const addMemberMut = trpc.userGroups.addMember.useMutation({
+    onSuccess: () => utils.userGroups.list.invalidate(),
+    onError:   e => toast.error(e.message),
+  });
+  const removeMemberMut = trpc.userGroups.removeMember.useMutation({
+    onSuccess: () => utils.userGroups.list.invalidate(),
+    onError:   e => toast.error(e.message),
+  });
+
+  // Query membros do grupo selecionado
+  const groupMembersQuery = trpc.userGroups.getMembers.useQuery(
+    { groupId: selectedGroup?.id ?? 0 },
+    { enabled: !!selectedGroup }
+  );
+  const groupMemberIds = (groupMembersQuery.data ?? []).map((m: any) => m.userId);
+
+  const openGroup = (g: any) => {
+    setSelectedGroup(g);
+    setGName(g.nome || "");
+    setGDesc(g.descricao || "");
+    setGColor(g.cor || "#6b7280");
+    const ma: Record<string, ModulePerm | null> = {};
+    if (g.moduleAccess && typeof g.moduleAccess === "object") {
+      for (const [k, v] of Object.entries(g.moduleAccess)) {
+        ma[k] = normalizeModulePerm(k, v);
       }
-      setModuleAccessMut.mutate({ userId: selectedUser.id, moduleAccess: payload });
     }
+    setGModuleAccess(ma);
+    setGPanel("detail");
   };
 
-  // ── Manipulação de permissões ─────────────────────────────────
-  const toggleModule = (moduleId: string, enabled: boolean) => {
-    if (enabled) {
-      const pages = defaultPagesForLevel(moduleId, "admin");
-      setEditModuleAccess(prev => ({
-        ...prev,
-        [moduleId]: { level: "admin", pages, sensitiveHidden: [] },
-      }));
-    } else {
-      setEditModuleAccess(prev => ({ ...prev, [moduleId]: null }));
-      if (expandedModule === moduleId) setExpandedModule(null);
-    }
+  const handleSaveGroup = async () => {
+    if (!selectedGroup) return;
+    await updateGroupMut.mutateAsync({ id: selectedGroup.id, nome: gName, descricao: gDesc, cor: gColor });
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(gModuleAccess)) { if (v != null) clean[k] = v; }
+    await setGroupModAccessMut.mutateAsync({ groupId: selectedGroup.id, moduleAccess: clean });
+    toast.success("Grupo salvo com sucesso!");
+    utils.userGroups.list.invalidate();
   };
 
-  const setModuleLevel = (moduleId: string, level: ModuleLevel) => {
-    setEditModuleAccess(prev => {
-      const curr = prev[moduleId];
-      if (!curr) return prev;
-      if (level === "admin" || level === "viewer") {
-        const pages = defaultPagesForLevel(moduleId, level);
-        return { ...prev, [moduleId]: { ...curr, level, pages } };
-      }
-      // custom: mantém as páginas como estão (ou inicializa)
-      return { ...prev, [moduleId]: { ...curr, level: "custom" } };
-    });
+  const handleCreateGroup = () => {
+    if (!gName.trim()) { toast.error("Informe o nome do grupo"); return; }
+    createGroupMut.mutate({ nome: gName, descricao: gDesc||undefined, cor: gColor });
   };
 
-  const togglePageAction = (moduleId: string, pageId: string, action: PageAction, enabled: boolean) => {
-    setEditModuleAccess(prev => {
-      const curr = prev[moduleId];
-      if (!curr) return prev;
-      const currPage: PagePerms = curr.pages?.[pageId] ?? { view: false, create: false, edit: false, delete: false };
-      const newPage = { ...currPage, [action]: enabled };
-      // Ligar create/edit/delete implica ligar view
-      if ((action === "create" || action === "edit" || action === "delete") && enabled) newPage.view = true;
-      // Desligar view desliga todo o resto
-      if (action === "view" && !enabled) { newPage.create = false; newPage.edit = false; newPage.delete = false; }
-      return { ...prev, [moduleId]: { ...curr, pages: { ...curr.pages, [pageId]: newPage } } };
-    });
-  };
+  const filteredGroups = useMemo(() => {
+    const q = removeAccents(gSearch.toLowerCase());
+    return (allGroups as any[]).filter(g => !q || removeAccents((g.nome||"").toLowerCase()).includes(q));
+  }, [allGroups, gSearch]);
 
-  const toggleAllPageAction = (moduleId: string, action: PageAction, enabled: boolean) => {
-    setEditModuleAccess(prev => {
-      const curr = prev[moduleId];
-      if (!curr) return prev;
-      const config = MODULE_PAGE_CONFIG[moduleId];
-      if (!config) return prev;
-      const newPages = { ...curr.pages };
-      for (const p of config.pages) {
-        if (!p.actions.includes(action)) continue;
-        const cp: PagePerms = newPages[p.id] ?? { view: false, create: false, edit: false, delete: false };
-        newPages[p.id] = { ...cp, [action]: enabled };
-        if ((action === "create" || action === "edit" || action === "delete") && enabled) newPages[p.id].view = true;
-        if (action === "view" && !enabled) {
-          newPages[p.id].create = false; newPages[p.id].edit = false; newPages[p.id].delete = false;
-        }
-      }
-      return { ...prev, [moduleId]: { ...curr, pages: newPages } };
-    });
-  };
-
-  const toggleSensitiveFlag = (moduleId: string, flagId: string, hidden: boolean) => {
-    setEditModuleAccess(prev => {
-      const curr = prev[moduleId];
-      if (!curr) return prev;
-      const current = curr.sensitiveHidden ?? [];
-      const updated = hidden
-        ? [...current.filter(f => f !== flagId), flagId]
-        : current.filter(f => f !== flagId);
-      return { ...prev, [moduleId]: { ...curr, sensitiveHidden: updated } };
-    });
-  };
-
-  const setAllModulesAdmin = () => {
-    const all: Record<string, ModulePerm> = {};
-    ALL_MODULES.forEach(m => {
-      all[m.id] = { level: "admin", pages: defaultPagesForLevel(m.id, "admin"), sensitiveHidden: [] };
-    });
-    setEditModuleAccess(all);
-  };
-
-  // Contagem de módulos com acesso para a lista
-  const moduleAccessCount = (u: any) => {
-    if (u.role === "admin_master") return ALL_MODULES.length;
-    try {
-      const ma = u.modulesAccess ? JSON.parse(u.modulesAccess) : {};
-      return Object.values(ma).filter(v => v != null).length;
-    } catch { return 0; }
-  };
-
+  // ──────────────────────────────────────────────
+  // RENDER
+  // ──────────────────────────────────────────────
   return (
     <DashboardLayout>
-      <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+      <div className="flex flex-col h-full overflow-hidden">
 
-        {/* ============================================================
-            PAINEL ESQUERDO — Lista de usuários
-        ============================================================ */}
-        <div className={`${panel === "detail" ? "hidden lg:flex" : "flex"} flex-col w-full lg:w-80 xl:w-96 border-r bg-background shrink-0`}>
-          <div className="p-4 border-b space-y-3">
-            <div className="flex items-center justify-between">
-              <h1 className="text-lg font-bold flex items-center gap-2">
-                <Shield className="h-5 w-5 text-blue-600" />
-                Usuários
-              </h1>
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  className="gap-1.5 bg-green-600 hover:bg-green-700 h-8"
-                  onClick={() => { setShowNewUserForm(true); setSelectedUser(null); setPanel("detail"); }}
-                >
-                  <UserPlus className="h-3.5 w-3.5" /> Novo
-                </Button>
-              )}
-            </div>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Buscar usuário..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="pl-8 pr-8 h-8 text-sm"
-              />
-              {searchTerm && (
-                <button onClick={() => setSearchTerm("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {usersQuery.isLoading && <div className="p-8 text-center text-sm text-muted-foreground">Carregando...</div>}
-            {!usersQuery.isLoading && filteredUsers.length === 0 && (
-              <div className="p-8 text-center">
-                <Users className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Nenhum usuário encontrado</p>
-              </div>
-            )}
-            {filteredUsers.map((u: any) => {
-              const count = moduleAccessCount(u);
-              const isSelected = selectedUser?.id === u.id && !showNewUserForm;
-              return (
-                <button
-                  key={u.id}
-                  onClick={() => openUser(u)}
-                  className={`w-full text-left px-4 py-3 border-b transition-colors flex items-center gap-3 hover:bg-muted/50 ${isSelected ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
-                >
-                  <div className={`h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${
-                    u.role === "admin_master" ? "bg-purple-600" : u.role === "admin" ? "bg-blue-600" : "bg-gray-500"
-                  }`}>
-                    {(u.name || u.username || "?").charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-medium truncate">{u.name || u.username}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${ROLE_BADGE[u.role]}`}>
-                        {ROLE_LABELS[u.role] || u.role}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate">{u.email || u.username}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {u.role === "admin_master" ? "Acesso total" : `${count} módulo${count !== 1 ? "s" : ""}`}
-                    </div>
-                  </div>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                </button>
-              );
-            })}
+        {/* ── Header com Tabs ── */}
+        <div className="shrink-0 border-b bg-background px-4 pt-4 pb-0">
+          <div className="flex items-end gap-0">
+            <button
+              onClick={() => setActiveTab("usuarios")}
+              className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "usuarios"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              <Users className="h-4 w-4" /> Usuários
+              <span className="ml-1 text-xs bg-slate-100 border px-1.5 py-0.5 rounded-full text-slate-500">{allUsers.length}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("grupos")}
+              className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "grupos"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              <ShieldCheck className="h-4 w-4" /> Grupos de Acesso
+              <span className="ml-1 text-xs bg-slate-100 border px-1.5 py-0.5 rounded-full text-slate-500">{allGroups.length}</span>
+            </button>
           </div>
         </div>
 
-        {/* ============================================================
-            PAINEL DIREITO
-        ============================================================ */}
-        <div className={`${panel === "list" && !showNewUserForm ? "hidden lg:flex" : "flex"} flex-1 flex-col overflow-hidden`}>
+        {/* ── Conteúdo ── */}
+        <div className="flex-1 flex overflow-hidden">
 
-          {/* ──── NOVO USUÁRIO ───────────────────────────────────── */}
-          {showNewUserForm && (
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-6 max-w-xl mx-auto space-y-6">
-                <button className="lg:hidden flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                  onClick={() => { setShowNewUserForm(false); setPanel("list"); }}>
-                  <ArrowLeft className="h-4 w-4" /> Voltar
-                </button>
-                <div>
-                  <h2 className="text-xl font-bold flex items-center gap-2"><UserPlus className="h-5 w-5 text-green-600" /> Novo Usuário</h2>
-                  <p className="text-sm text-muted-foreground mt-1">Preencha os dados básicos. As permissões detalhadas são configuradas após a criação.</p>
+          {/* ═══════════════════════════════════════════
+              TAB: USUÁRIOS
+          ═══════════════════════════════════════════ */}
+          {activeTab === "usuarios" && (
+            <>
+              {/* Sidebar lista */}
+              <div className={`${uPanel !== "list" ? "hidden lg:flex" : "flex"} w-72 shrink-0 flex-col border-r bg-background`}>
+                <div className="p-3 border-b space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold flex items-center gap-1.5"><Users className="h-4 w-4 text-blue-600" /> Usuários</span>
+                    {isAdmin && (
+                      <Button size="sm" className="h-7 gap-1 bg-green-600 hover:bg-green-700 text-xs"
+                        onClick={() => { setSelectedUser(null); setUPanel("new"); }}>
+                        <UserPlus className="h-3 w-3" /> Novo
+                      </Button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input placeholder="Buscar..." value={uSearch} onChange={e=>setUSearch(e.target.value)} className="pl-8 h-8 text-xs" />
+                    {uSearch && <button onClick={()=>setUSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2"><X className="h-3 w-3 text-muted-foreground" /></button>}
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Username *</label>
-                      <Input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder="ex: joao.silva" className="h-9" /></div>
-                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Nome *</label>
-                      <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome completo" className="h-9" /></div>
-                  </div>
-                  <div><label className="text-xs font-medium text-muted-foreground block mb-1">E-mail</label>
-                    <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@empresa.com" type="email" className="h-9" /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Perfil</label>
-                      <Select value={newRole} onValueChange={v => setNewRole(v as any)}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="user">Usuário</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                          {isMaster && <SelectItem value="admin_master">Admin Master</SelectItem>}
-                        </SelectContent>
-                      </Select></div>
-                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Senha (opcional)</label>
-                      <Input value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Deixe em branco" type="password" className="h-9" /></div>
-                  </div>
-                  {newRole !== "admin_master" && allCompaniesQuery.data && allCompaniesQuery.data.length > 0 && (
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-2">Empresas com acesso</label>
-                      <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto">
-                        {allCompaniesQuery.data.map((c: any) => (
-                          <label key={c.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm transition-colors ${
-                            newCompanyIds.includes(c.id) ? "bg-blue-50 border-blue-300" : "bg-secondary/20 border-border hover:bg-secondary/40"}`}>
-                            <input type="checkbox" className="rounded" checked={newCompanyIds.includes(c.id)}
-                              onChange={e => setNewCompanyIds(e.target.checked ? [...newCompanyIds, c.id] : newCompanyIds.filter(id => id !== c.id))} />
-                            {c.nomeFantasia || c.razaoSocial}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                <div className="flex-1 overflow-y-auto">
+                  {filteredUsers.map((u: any) => {
+                    const grpLabel = getUserGroupLabel(u);
+                    const isSel = selectedUser?.id === u.id && uPanel === "detail";
+                    return (
+                      <button key={u.id} onClick={() => openUser(u)}
+                        className={`w-full text-left px-3 py-2.5 border-b transition-colors flex items-center gap-2.5 hover:bg-muted/50 ${isSel ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}>
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${
+                          u.role==="admin_master" ? "bg-purple-600" : u.role==="admin" ? "bg-blue-600" : "bg-gray-400"}`}>
+                          {(u.name||u.username||"?").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium truncate">{u.name||u.username}</span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${ROLE_BADGE[u.role]}`}>{ROLE_LABELS[u.role]||u.role}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {grpLabel
+                              ? <span className="flex items-center gap-1"><ShieldCheck className="h-2.5 w-2.5 text-green-500" />{grpLabel}</span>
+                              : <span className="text-orange-500 flex items-center gap-1"><ShieldAlert className="h-2.5 w-2.5" />Sem grupo</span>}
+                          </div>
+                        </div>
+                        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                      </button>
+                    );
+                  })}
+                  {filteredUsers.length === 0 && !usersQuery.isLoading && (
+                    <div className="p-6 text-center text-xs text-muted-foreground">Nenhum usuário encontrado</div>
                   )}
                 </div>
-                <div className="flex gap-3">
-                  <Button className="gap-2 bg-green-600 hover:bg-green-700" onClick={() => {
-                    if (!newUsername || !newName) { toast.error("Preencha usuário e nome"); return; }
-                    createUserMut.mutate({ username: newUsername, name: newName, email: newEmail || undefined, role: newRole, password: newPassword || undefined, companyIds: newCompanyIds.length > 0 ? newCompanyIds : undefined });
-                  }} disabled={createUserMut.isPending}>
-                    <UserPlus className="h-4 w-4" /> {createUserMut.isPending ? "Criando..." : "Criar Usuário"}
-                  </Button>
-                  <Button variant="outline" onClick={() => { setShowNewUserForm(false); setPanel("list"); }}>Cancelar</Button>
-                </div>
               </div>
-            </div>
-          )}
 
-          {/* ──── DETALHE DO USUÁRIO ──────────────────────────────── */}
-          {selectedUser && !showNewUserForm && (
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-6 space-y-6">
-                <button className="lg:hidden flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground" onClick={() => setPanel("list")}>
-                  <ArrowLeft className="h-4 w-4" /> Todos os usuários
-                </button>
+              {/* Painel direito: Novo / Detalhe */}
+              <div className={`${uPanel === "list" ? "hidden lg:flex" : "flex"} flex-1 flex-col overflow-hidden`}>
 
-                {/* Header */}
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className={`h-14 w-14 rounded-full flex items-center justify-center text-white font-bold text-xl shrink-0 ${
-                      selectedUser.role === "admin_master" ? "bg-purple-600" : selectedUser.role === "admin" ? "bg-blue-600" : "bg-gray-500"}`}>
-                      {(selectedUser.name || selectedUser.username || "?").charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold">{selectedUser.name || selectedUser.username}</h2>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-xs px-2 py-0.5 rounded border font-medium ${ROLE_BADGE[selectedUser.role]}`}>
-                          {ROLE_LABELS[selectedUser.role] || selectedUser.role}
-                        </span>
-                        <span className="text-sm text-muted-foreground">{selectedUser.email || selectedUser.username}</span>
+                {/* NOVO USUÁRIO */}
+                {uPanel === "new" && (
+                  <div className="flex-1 overflow-y-auto p-6">
+                    <div className="max-w-lg mx-auto space-y-6">
+                      <div className="flex items-center gap-3">
+                        <button className="lg:hidden" onClick={() => setUPanel("list")}><ArrowLeft className="h-4 w-4" /></button>
+                        <div>
+                          <h2 className="text-lg font-bold flex items-center gap-2"><UserPlus className="h-5 w-5 text-green-600" /> Novo Usuário</h2>
+                          <p className="text-xs text-muted-foreground mt-0.5">Crie o acesso e atribua um grupo de permissões</p>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    {isAdmin && selectedUser.id !== user?.id && (
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8"
-                        onClick={() => { if (confirm(`Resetar senha de ${selectedUser.name}?`)) resetPwdMut.mutate({ userId: selectedUser.id }); }}>
-                        <RefreshCw className="h-3.5 w-3.5" /> Resetar senha
-                      </Button>
-                    )}
-                    {isMaster && selectedUser.id !== user?.id && (
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 text-red-600 hover:text-red-700 hover:border-red-300"
-                        onClick={() => { if (confirm(`Excluir "${selectedUser.name}"? Esta ação não pode ser desfeita.`)) deleteUserMut.mutate({ userId: selectedUser.id }); }}>
-                        <Trash2 className="h-3.5 w-3.5" /> Excluir
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {/* ── Dados básicos ── */}
-                <section className="space-y-4">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                    <User className="h-4 w-4" /> Dados do Usuário
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Nome</label>
-                      <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-9" /></div>
-                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">E-mail</label>
-                      <div className="relative">
-                        <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input value={editEmail} onChange={e => setEditEmail(e.target.value)} className="pl-8 h-9" type="email" />
-                      </div></div>
-                    <div><label className="text-xs font-medium text-muted-foreground block mb-1">Username</label>
-                      <Input value={editUsername} onChange={e => setEditUsername(e.target.value)} className="h-9" /></div>
-                    {isAdmin && selectedUser.id !== user?.id && (
-                      <div><label className="text-xs font-medium text-muted-foreground block mb-1">Perfil de acesso</label>
-                        <Select value={editRole} onValueChange={setEditRole}>
-                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">Usuário</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                            {isMaster && <SelectItem value="admin_master">Admin Master</SelectItem>}
-                          </SelectContent>
-                        </Select></div>
-                    )}
-                    <div className="md:col-span-2">
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Nova senha (deixe em branco para manter)</label>
-                      <div className="relative max-w-sm">
-                        <KeyRound className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input value={editPassword} onChange={e => setEditPassword(e.target.value)}
-                          type={showPassword ? "text" : "password"} className="pl-8 pr-9 h-9" placeholder="Nova senha..." />
-                        <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          onClick={() => setShowPassword(!showPassword)}>
-                          {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        </button>
+                      {/* Passo 1: Dados básicos */}
+                      <div className="rounded-xl border p-4 space-y-3">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Dados Básicos</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><label className="text-xs text-muted-foreground">Username *</label>
+                            <Input value={newUser.username} onChange={e=>setNewUser(p=>({...p,username:e.target.value}))} placeholder="joao.silva" className="h-9 mt-1" /></div>
+                          <div><label className="text-xs text-muted-foreground">Nome *</label>
+                            <Input value={newUser.name} onChange={e=>setNewUser(p=>({...p,name:e.target.value}))} placeholder="Nome completo" className="h-9 mt-1" /></div>
+                        </div>
+                        <div><label className="text-xs text-muted-foreground">E-mail</label>
+                          <Input value={newUser.email} onChange={e=>setNewUser(p=>({...p,email:e.target.value}))} placeholder="email@empresa.com" type="email" className="h-9 mt-1" /></div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><label className="text-xs text-muted-foreground">Perfil</label>
+                            <Select value={newUser.role} onValueChange={v=>setNewUser(p=>({...p,role:v}))}>
+                              <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="user">Usuário</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                                {isMaster && <SelectItem value="admin_master">Admin Master</SelectItem>}
+                              </SelectContent>
+                            </Select></div>
+                          <div><label className="text-xs text-muted-foreground">Senha (opcional)</label>
+                            <Input value={newUser.password} onChange={e=>setNewUser(p=>({...p,password:e.target.value}))} placeholder="Padrão: asdf1020" type="password" className="h-9 mt-1" /></div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* ── Empresas ── */}
-                {editRole !== "admin_master" && isAdmin && allCompaniesQuery.data && allCompaniesQuery.data.length > 0 && (
-                  <section className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                        <Building2 className="h-4 w-4" /> Empresas com Acesso
-                      </h3>
-                      <div className="flex gap-1.5">
-                        <button className="text-xs text-blue-600 hover:underline"
-                          onClick={() => setEditCompanyIds(allCompaniesQuery.data!.map((c: any) => c.id))}>Todas</button>
-                        <span className="text-muted-foreground text-xs">·</span>
-                        <button className="text-xs text-muted-foreground hover:underline"
-                          onClick={() => setEditCompanyIds([])}>Limpar</button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                      {allCompaniesQuery.data.map((c: any) => (
-                        <label key={c.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm transition-colors ${
-                          editCompanyIds.includes(c.id) ? "bg-blue-50 border-blue-300" : "bg-secondary/20 border-border hover:bg-secondary/40"}`}>
-                          <input type="checkbox" className="rounded" checked={editCompanyIds.includes(c.id)}
-                            onChange={e => setEditCompanyIds(e.target.checked ? [...editCompanyIds, c.id] : editCompanyIds.filter(id => id !== c.id))} />
-                          <div className="min-w-0">
-                            <span className="font-medium truncate block">{c.nomeFantasia || c.razaoSocial}</span>
-                            {c.grupoEmpresarial && <span className="text-[10px] text-blue-600">{c.grupoEmpresarial}</span>}
+                      {/* Passo 2: Empresas */}
+                      {allCompaniesQuery.data && allCompaniesQuery.data.length > 0 && newUser.role !== "admin_master" && (
+                        <div className="rounded-xl border p-4 space-y-2">
+                          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> Empresas com Acesso</h3>
+                          <div className="grid grid-cols-1 gap-1 max-h-32 overflow-y-auto">
+                            {allCompaniesQuery.data.map((c: any) => (
+                              <label key={c.id} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer text-xs transition-colors ${newUser.companyIds.includes(c.id)?"bg-blue-50 border-blue-300":"bg-secondary/10 border-border hover:bg-secondary/30"}`}>
+                                <input type="checkbox" className="rounded" checked={newUser.companyIds.includes(c.id)}
+                                  onChange={e=>setNewUser(p=>({...p,companyIds:e.target.checked?[...p.companyIds,c.id]:p.companyIds.filter(id=>id!==c.id)}))} />
+                                {c.nomeFantasia||c.razaoSocial}
+                              </label>
+                            ))}
                           </div>
-                        </label>
-                      ))}
+                        </div>
+                      )}
+                      {/* Passo 3: Grupo de Acesso */}
+                      <div className="rounded-xl border p-4 space-y-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Grupo de Acesso</h3>
+                        {allGroups.length === 0 ? (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                            <span>Nenhum grupo criado ainda. Crie grupos na aba "Grupos de Acesso" e depois atribua ao usuário.</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            {(allGroups as any[]).map(g => (
+                              <label key={g.id} className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer text-sm transition-colors ${newUser.groupIds.includes(g.id)?"bg-blue-50 border-blue-300":"bg-secondary/10 border-border hover:bg-secondary/30"}`}>
+                                <input type="checkbox" className="rounded" checked={newUser.groupIds.includes(g.id)}
+                                  onChange={e=>setNewUser(p=>({...p,groupIds:e.target.checked?[...p.groupIds,g.id]:p.groupIds.filter(id=>id!==g.id)}))} />
+                                <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{background:g.cor||"#6b7280"}} />
+                                <span className="font-medium">{g.nome}</span>
+                                {g.descricao && <span className="text-muted-foreground text-xs">— {g.descricao}</span>}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-3">
+                        <Button onClick={() => {
+                          if (!newUser.username||!newUser.name) { toast.error("Preencha usuário e nome"); return; }
+                          createUserMut.mutate({ username:newUser.username, name:newUser.name, email:newUser.email||undefined, role:newUser.role, password:newUser.password||undefined, companyIds:newUser.companyIds.length>0?newUser.companyIds:undefined });
+                        }} disabled={createUserMut.isPending} className="gap-1.5 bg-green-600 hover:bg-green-700">
+                          <UserPlus className="h-4 w-4" />{createUserMut.isPending?"Criando...":"Criar Usuário"}
+                        </Button>
+                        <Button variant="outline" onClick={()=>setUPanel("list")}>Cancelar</Button>
+                      </div>
                     </div>
-                  </section>
+                  </div>
                 )}
 
-                {/* ── Permissões de Módulos ── */}
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                      <LayoutGrid className="h-4 w-4" /> Acesso a Módulos
-                    </h3>
-                    {editRole === "admin_master" && (
-                      <span className="text-xs text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">Acesso total automático</span>
-                    )}
-                    {editRole !== "admin_master" && (
-                      <div className="flex gap-1.5">
-                        <button className="text-xs text-blue-600 hover:underline" onClick={setAllModulesAdmin}>Todos admin</button>
-                        <span className="text-muted-foreground text-xs">·</span>
-                        <button className="text-xs text-muted-foreground hover:underline" onClick={() => { setEditModuleAccess({}); setExpandedModule(null); }}>Limpar</button>
-                      </div>
-                    )}
-                  </div>
-
-                  {editRole === "admin_master" ? (
-                    <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
-                      <Shield className="h-4 w-4 text-purple-600 shrink-0" />
-                      <span className="text-sm text-purple-700">Admin Master tem acesso irrestrito a todos os módulos, páginas e dados sensíveis.</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {ALL_MODULES.map(mod => {
-                        const perm = editModuleAccess[mod.id] ?? null;
-                        const isOn = perm != null;
-                        const isExpanded = expandedModule === mod.id && isOn;
-                        const config = MODULE_PAGE_CONFIG[mod.id];
-
-                        return (
-                          <div key={mod.id} className={`rounded-lg border transition-all ${
-                            isOn ? "border-border bg-card shadow-sm" : "border-dashed border-border/60 bg-secondary/10"}`}>
-
-                            {/* ─ Cabeçalho do módulo ─ */}
-                            <div className="flex items-center gap-3 p-3">
-                              <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${isOn ? mod.dot : "bg-gray-300"}`} />
-                              <div className="flex-1 min-w-0">
-                                <span className={`text-sm font-medium ${isOn ? "" : "text-muted-foreground"}`}>{mod.label}</span>
-                                {isOn && perm && (
-                                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
-                                    perm.level === "admin"  ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                    perm.level === "viewer" ? "bg-gray-50 text-gray-600 border-gray-200" :
-                                    "bg-amber-50 text-amber-700 border-amber-200"}`}>
-                                    {perm.level === "admin" ? "Administrador" : perm.level === "viewer" ? "Visualizador" : "Personalizado"}
-                                  </span>
-                                )}
-                              </div>
-                              {/* Botão expandir (só quando ON) */}
-                              {isOn && (
-                                <button
-                                  className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
-                                  onClick={() => setExpandedModule(isExpanded ? null : mod.id)}
-                                  title="Configurar páginas e dados sensíveis"
-                                >
-                                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
-                                </button>
-                              )}
-                              <Switch checked={isOn} onCheckedChange={checked => toggleModule(mod.id, checked)} className="shrink-0" />
-                            </div>
-
-                            {/* ─ Painel expandido ─ */}
-                            {isExpanded && perm && config && (
-                              <div className="border-t bg-slate-50/50 rounded-b-lg px-3 py-3 space-y-4">
-
-                                {/* Nível de acesso */}
-                                <div>
-                                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Nível de acesso</p>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {(["admin", "viewer", "custom"] as ModuleLevel[]).map(lvl => (
-                                      <button
-                                        key={lvl}
-                                        onClick={() => setModuleLevel(mod.id, lvl)}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                                          perm.level === lvl
-                                            ? lvl === "admin"  ? "bg-blue-600 text-white border-blue-600"
-                                            : lvl === "viewer" ? "bg-gray-600 text-white border-gray-600"
-                                            :                    "bg-amber-500 text-white border-amber-500"
-                                            : "bg-white border-border text-muted-foreground hover:border-gray-400"}`}
-                                      >
-                                        {lvl === "admin"  && <Lock className="h-3 w-3" />}
-                                        {lvl === "viewer" && <Eye  className="h-3 w-3" />}
-                                        {lvl === "custom" && <Settings2 className="h-3 w-3" />}
-                                        {lvl === "admin" ? "Administrador" : lvl === "viewer" ? "Somente visualização" : "Personalizado"}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {/* Tabela de páginas (só em custom) */}
-                                {perm.level === "custom" && (
-                                  <div>
-                                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Páginas e ações permitidas</p>
-                                    <div className="rounded-lg border bg-white overflow-hidden">
-                                      <table className="w-full text-xs">
-                                        <thead>
-                                          <tr className="bg-slate-100 border-b">
-                                            <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Página</th>
-                                            {(["view","create","edit","delete"] as PageAction[]).map(act => (
-                                              <th key={act} className="text-center px-2 py-2 w-16">
-                                                <div className="flex flex-col items-center gap-1">
-                                                  <span className="font-semibold text-muted-foreground">{ACTION_LABELS[act]}</span>
-                                                  {/* Checkbox de coluna (marcar/desmarcar tudo) */}
-                                                  {config.pages.some(p => p.actions.includes(act)) && (
-                                                    <button
-                                                      className="text-[9px] text-blue-600 hover:underline"
-                                                      onClick={() => {
-                                                        const allOn = config.pages.filter(p => p.actions.includes(act)).every(p => perm.pages?.[p.id]?.[act]);
-                                                        toggleAllPageAction(mod.id, act, !allOn);
-                                                      }}
-                                                    >
-                                                      {config.pages.filter(p => p.actions.includes(act)).every(p => perm.pages?.[p.id]?.[act]) ? "des." : "tudo"}
-                                                    </button>
-                                                  )}
-                                                </div>
-                                              </th>
-                                            ))}
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {config.pages.map((page, i) => {
-                                            const pp: PagePerms = perm.pages?.[page.id] ?? { view: false, create: false, edit: false, delete: false };
-                                            return (
-                                              <tr key={page.id} className={`border-b last:border-0 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                                                <td className="px-3 py-2 font-medium text-slate-700">{page.label}</td>
-                                                {(["view","create","edit","delete"] as PageAction[]).map(act => (
-                                                  <td key={act} className="text-center px-2 py-2">
-                                                    {page.actions.includes(act) ? (
-                                                      <button
-                                                        onClick={() => togglePageAction(mod.id, page.id, act, !pp[act])}
-                                                        className={`inline-flex items-center justify-center w-5 h-5 rounded transition-colors ${
-                                                          pp[act] ? "text-blue-600 hover:text-blue-700" : "text-slate-300 hover:text-slate-500"}`}
-                                                      >
-                                                        {pp[act] ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                                                      </button>
-                                                    ) : (
-                                                      <span className="text-slate-200">—</span>
-                                                    )}
-                                                  </td>
-                                                ))}
-                                              </tr>
-                                            );
-                                          })}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Dados sensíveis LGPD */}
-                                {config.sensitiveFlags && config.sensitiveFlags.length > 0 && (
-                                  <div>
-                                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide flex items-center gap-1.5">
-                                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                                      Dados sensíveis / LGPD
-                                    </p>
-                                    <div className="space-y-1.5">
-                                      {config.sensitiveFlags.map(flag => {
-                                        const isHidden = perm.sensitiveHidden?.includes(flag.id) ?? false;
-                                        return (
-                                          <label key={flag.id} className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all text-xs ${
-                                            isHidden
-                                              ? "bg-red-50 border-red-200 text-red-700"
-                                              : "bg-white border-border text-slate-700 hover:bg-slate-50"}`}>
-                                            <input
-                                              type="checkbox"
-                                              checked={isHidden}
-                                              onChange={e => toggleSensitiveFlag(mod.id, flag.id, e.target.checked)}
-                                              className="rounded"
-                                            />
-                                            <EyeOff className={`h-3.5 w-3.5 shrink-0 ${isHidden ? "text-red-500" : "text-slate-400"}`} />
-                                            <span className="font-medium">Ocultar: {flag.label}</span>
-                                          </label>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                {/* DETALHE DO USUÁRIO */}
+                {uPanel === "detail" && selectedUser && (
+                  <div className="flex-1 overflow-y-auto p-6">
+                    <div className="max-w-2xl mx-auto space-y-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <button className="lg:hidden" onClick={()=>setUPanel("list")}><ArrowLeft className="h-4 w-4" /></button>
+                          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0 ${selectedUser.role==="admin_master"?"bg-purple-600":selectedUser.role==="admin"?"bg-blue-600":"bg-gray-400"}`}>
+                            {(selectedUser.name||selectedUser.username||"?").charAt(0).toUpperCase()}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
+                          <div>
+                            <h2 className="text-xl font-bold">{selectedUser.name||selectedUser.username}</h2>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${ROLE_BADGE[selectedUser.role]}`}>{ROLE_LABELS[selectedUser.role]||selectedUser.role}</span>
+                              <span className="text-xs text-muted-foreground">{selectedUser.email||selectedUser.username}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {isAdmin && selectedUser.id !== user?.id && (
+                            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
+                              onClick={()=>{ if(confirm(`Resetar senha de ${selectedUser.name}?`)) resetPwdMut.mutate({userId:selectedUser.id}); }}>
+                              <RefreshCw className="h-3 w-3" /> Resetar senha
+                            </Button>
+                          )}
+                          {isMaster && selectedUser.id !== user?.id && (
+                            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs text-red-600 hover:text-red-700 hover:border-red-300"
+                              onClick={()=>{ if(confirm(`Excluir "${selectedUser.name}"?`)) deleteUserMut.mutate({userId:selectedUser.id}); }}>
+                              <Trash2 className="h-3 w-3" /> Excluir
+                            </Button>
+                          )}
+                        </div>
+                      </div>
 
-                {/* Botão salvar */}
-                <div className="flex gap-3 pt-2 border-t">
-                  <Button
-                    className="gap-2 bg-blue-600 hover:bg-blue-700"
-                    onClick={handleSave}
-                    disabled={updateUserMut.isPending || setModuleAccessMut.isPending || setCompaniesMut.isPending}
-                  >
-                    <Save className="h-4 w-4" />
-                    {(updateUserMut.isPending || setModuleAccessMut.isPending) ? "Salvando..." : "Salvar Alterações"}
-                  </Button>
-                  <Button variant="outline" onClick={() => setPanel("list")} className="lg:hidden">Voltar</Button>
-                </div>
+                      {/* Dados básicos */}
+                      <div className="rounded-xl border p-4 space-y-3">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Dados do Usuário</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><label className="text-xs text-muted-foreground">Nome</label><Input value={editName} onChange={e=>setEditName(e.target.value)} className="h-9 mt-1" /></div>
+                          <div><label className="text-xs text-muted-foreground">E-mail</label><Input value={editEmail} onChange={e=>setEditEmail(e.target.value)} className="h-9 mt-1" type="email" /></div>
+                          <div><label className="text-xs text-muted-foreground">Username</label><Input value={editUser} onChange={e=>setEditUser(e.target.value)} className="h-9 mt-1" /></div>
+                          {isAdmin && selectedUser.id !== user?.id && (
+                            <div><label className="text-xs text-muted-foreground">Perfil</label>
+                              <Select value={editRole} onValueChange={setEditRole}>
+                                <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="user">Usuário</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                  {isMaster && <SelectItem value="admin_master">Admin Master</SelectItem>}
+                                </SelectContent>
+                              </Select></div>
+                          )}
+                        </div>
+                        <div><label className="text-xs text-muted-foreground">Nova senha (deixe em branco para manter)</label>
+                          <div className="relative max-w-xs">
+                            <Input value={editPwd} onChange={e=>setEditPwd(e.target.value)} type={showPwd?"text":"password"} placeholder="Nova senha..." className="pr-9 h-9 mt-1" />
+                            <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={()=>setShowPwd(!showPwd)}>
+                              {showPwd?<EyeOff className="h-3.5 w-3.5"/>:<Eye className="h-3.5 w-3.5"/>}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Empresas */}
+                      {editRole !== "admin_master" && allCompaniesQuery.data && allCompaniesQuery.data.length > 0 && (
+                        <div className="rounded-xl border p-4 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> Empresas com Acesso</h3>
+                            <div className="flex gap-2">
+                              <button className="text-xs text-blue-600 hover:underline" onClick={()=>setEditCos(allCompaniesQuery.data!.map((c:any)=>c.id))}>Todas</button>
+                              <span className="text-muted-foreground text-xs">·</span>
+                              <button className="text-xs text-muted-foreground hover:underline" onClick={()=>setEditCos([])}>Limpar</button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
+                            {allCompaniesQuery.data.map((c:any) => (
+                              <label key={c.id} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer text-xs transition-colors ${editCos.includes(c.id)?"bg-blue-50 border-blue-300":"bg-secondary/10 border-border hover:bg-secondary/30"}`}>
+                                <input type="checkbox" className="rounded" checked={editCos.includes(c.id)}
+                                  onChange={e=>setEditCos(e.target.checked?[...editCos,c.id]:editCos.filter(id=>id!==c.id))} />
+                                <span className="truncate">{c.nomeFantasia||c.razaoSocial}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Grupo de Acesso */}
+                      {editRole !== "admin_master" && (
+                        <div className="rounded-xl border p-4 space-y-3">
+                          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                            <ShieldCheck className="h-3.5 w-3.5" /> Grupo de Acesso
+                          </h3>
+                          {allGroups.length === 0 ? (
+                            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                              <span>Crie grupos na aba "Grupos de Acesso" e atribua aqui.</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {(allGroups as any[]).map(g => (
+                                <label key={g.id} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${editGroupIds.includes(g.id)?"bg-blue-50 border-blue-400 ring-1 ring-blue-200":"bg-secondary/5 border-border hover:bg-secondary/20"}`}>
+                                  <input type="checkbox" className="rounded" checked={editGroupIds.includes(g.id)}
+                                    onChange={e=>setEditGroupIds(e.target.checked?[...editGroupIds,g.id]:editGroupIds.filter(id=>id!==g.id))} />
+                                  <div className="h-3 w-3 rounded-full shrink-0" style={{background:g.cor||"#6b7280"}} />
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-medium">{g.nome}</span>
+                                    {g.descricao && <span className="text-xs text-muted-foreground ml-2">{g.descricao}</span>}
+                                  </div>
+                                  {editGroupIds.includes(g.id) && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          {editGroupIds.length === 0 && allGroups.length > 0 && (
+                            <p className="text-xs text-orange-600 flex items-center gap-1.5">
+                              <ShieldAlert className="h-3.5 w-3.5" /> Sem grupo — os acessos individuais serão aplicados (se configurados).
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {editRole === "admin_master" && (
+                        <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-xl border border-purple-200">
+                          <Crown className="h-4 w-4 text-purple-600 shrink-0" />
+                          <span className="text-sm text-purple-700">Admin Master tem acesso irrestrito a todos os módulos.</span>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3 pt-2 border-t">
+                        <Button onClick={handleSaveUser} disabled={updateUserMut.isPending||setGroupsMut.isPending} className="gap-1.5 bg-blue-600 hover:bg-blue-700">
+                          <Save className="h-4 w-4" />{(updateUserMut.isPending||setGroupsMut.isPending)?"Salvando...":"Salvar Alterações"}
+                        </Button>
+                        <Button variant="outline" onClick={()=>setUPanel("list")} className="lg:hidden">Voltar</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Placeholder */}
+                {uPanel === "list" && (
+                  <div className="flex-1 hidden lg:flex items-center justify-center text-center p-8">
+                    <div>
+                      <Users className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground">Selecione um usuário</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            </>
           )}
 
-          {/* Placeholder quando nada selecionado */}
-          {!selectedUser && !showNewUserForm && (
-            <div className="flex-1 flex items-center justify-center text-center p-8">
-              <div>
-                <Shield className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">Selecione um usuário para configurar permissões</p>
+          {/* ═══════════════════════════════════════════
+              TAB: GRUPOS DE ACESSO
+          ═══════════════════════════════════════════ */}
+          {activeTab === "grupos" && (
+            <>
+              {/* Sidebar grupos */}
+              <div className={`${gPanel !== "list" ? "hidden lg:flex" : "flex"} w-72 shrink-0 flex-col border-r bg-background`}>
+                <div className="p-3 border-b space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-blue-600" /> Grupos</span>
+                    {isAdmin && (
+                      <Button size="sm" className="h-7 gap-1 bg-green-600 hover:bg-green-700 text-xs"
+                        onClick={() => { setSelectedGroup(null); setGName(""); setGDesc(""); setGColor("#6b7280"); setGModuleAccess({}); setGPanel("new"); }}>
+                        <Plus className="h-3 w-3" /> Novo
+                      </Button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input placeholder="Buscar grupo..." value={gSearch} onChange={e=>setGSearch(e.target.value)} className="pl-8 h-8 text-xs" />
+                    {gSearch && <button onClick={()=>setGSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2"><X className="h-3 w-3 text-muted-foreground" /></button>}
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  {filteredGroups.length === 0 && (
+                    <div className="p-6 text-center">
+                      <ShieldCheck className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground">Nenhum grupo criado ainda</p>
+                      {isAdmin && <button onClick={()=>setGPanel("new")} className="mt-2 text-xs text-blue-600 hover:underline">Criar primeiro grupo</button>}
+                    </div>
+                  )}
+                  {filteredGroups.map((g: any) => {
+                    const memberCount = (allUsers as any[]).filter(u => u.groupIds?.includes?.(g.id)).length;
+                    const modCount = Object.keys(g.moduleAccess||{}).length;
+                    const isSel = selectedGroup?.id === g.id && gPanel === "detail";
+                    return (
+                      <button key={g.id} onClick={() => openGroup(g)}
+                        className={`w-full text-left px-3 py-2.5 border-b transition-colors flex items-center gap-2.5 hover:bg-muted/50 ${isSel ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}>
+                        <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{background:(g.cor||"#6b7280")+"22"}}>
+                          <ShieldCheck className="h-4 w-4" style={{color:g.cor||"#6b7280"}} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{g.nome}</div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-2">
+                            <span className="flex items-center gap-0.5"><Users className="h-2.5 w-2.5" /> {memberCount} membro{memberCount!==1?"s":""}</span>
+                            {modCount > 0 && <span className="flex items-center gap-0.5"><Layers className="h-2.5 w-2.5" /> {modCount} módulo{modCount!==1?"s":""}</span>}
+                          </div>
+                        </div>
+                        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+
+              {/* Painel direito grupos */}
+              <div className={`${gPanel === "list" ? "hidden lg:flex" : "flex"} flex-1 flex-col overflow-hidden`}>
+
+                {/* NOVO GRUPO */}
+                {gPanel === "new" && (
+                  <div className="flex-1 overflow-y-auto p-6">
+                    <div className="max-w-lg mx-auto space-y-5">
+                      <div className="flex items-center gap-3">
+                        <button className="lg:hidden" onClick={()=>setGPanel("list")}><ArrowLeft className="h-4 w-4"/></button>
+                        <h2 className="text-lg font-bold flex items-center gap-2"><Plus className="h-5 w-5 text-green-600"/>Novo Grupo de Acesso</h2>
+                      </div>
+                      <div className="rounded-xl border p-4 space-y-3">
+                        <div><label className="text-xs text-muted-foreground">Nome do grupo *</label>
+                          <Input value={gName} onChange={e=>setGName(e.target.value)} placeholder="Ex: Operação de Campo, Diretoria, RH..." className="h-9 mt-1" /></div>
+                        <div><label className="text-xs text-muted-foreground">Descrição</label>
+                          <Input value={gDesc} onChange={e=>setGDesc(e.target.value)} placeholder="Descreva o perfil deste grupo..." className="h-9 mt-1" /></div>
+                        <div>
+                          <label className="text-xs text-muted-foreground block mb-1.5">Cor de identificação</label>
+                          <div className="flex gap-2 flex-wrap">
+                            {GROUP_COLORS.map(c => (
+                              <button key={c} onClick={()=>setGColor(c)}
+                                className={`h-7 w-7 rounded-full border-2 transition-all ${gColor===c?"border-foreground scale-110":"border-transparent"}`}
+                                style={{background:c}} />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <Button onClick={handleCreateGroup} disabled={createGroupMut.isPending} className="gap-1.5 bg-green-600 hover:bg-green-700">
+                          <Plus className="h-4 w-4"/>{createGroupMut.isPending?"Criando...":"Criar Grupo"}
+                        </Button>
+                        <Button variant="outline" onClick={()=>setGPanel("list")}>Cancelar</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* DETALHE DO GRUPO */}
+                {gPanel === "detail" && selectedGroup && (
+                  <div className="flex-1 overflow-y-auto p-6">
+                    <div className="max-w-2xl mx-auto space-y-5">
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <button className="lg:hidden" onClick={()=>setGPanel("list")}><ArrowLeft className="h-4 w-4"/></button>
+                          <div className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0" style={{background:(gColor||"#6b7280")+"22"}}>
+                            <ShieldCheck className="h-6 w-6" style={{color:gColor||"#6b7280"}} />
+                          </div>
+                          <div>
+                            <h2 className="text-xl font-bold">{selectedGroup.nome}</h2>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-xs text-muted-foreground">{groupMemberIds.length} membro{groupMemberIds.length!==1?"s":""}</span>
+                              {selectedGroup.descricao && <span className="text-xs text-muted-foreground">— {selectedGroup.descricao}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        {isMaster && (
+                          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs text-red-600 hover:text-red-700 hover:border-red-300"
+                            onClick={()=>{if(confirm(`Excluir o grupo "${selectedGroup.nome}"?`)) deleteGroupMut.mutate({id:selectedGroup.id});}}>
+                            <Trash2 className="h-3 w-3"/>Excluir
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Info do grupo */}
+                      <div className="rounded-xl border p-4 space-y-3">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Edit2 className="h-3.5 w-3.5"/>Identificação</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><label className="text-xs text-muted-foreground">Nome</label><Input value={gName} onChange={e=>setGName(e.target.value)} className="h-9 mt-1"/></div>
+                          <div><label className="text-xs text-muted-foreground">Descrição</label><Input value={gDesc} onChange={e=>setGDesc(e.target.value)} className="h-9 mt-1"/></div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground block mb-1.5">Cor</label>
+                          <div className="flex gap-2 flex-wrap">
+                            {GROUP_COLORS.map(c => (
+                              <button key={c} onClick={()=>setGColor(c)}
+                                className={`h-6 w-6 rounded-full border-2 transition-all ${gColor===c?"border-foreground scale-110":"border-transparent"}`}
+                                style={{background:c}} />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Membros */}
+                      <div className="rounded-xl border p-4 space-y-3">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><UsersRound className="h-3.5 w-3.5"/>Membros do Grupo</h3>
+                        {groupMemberIds.length === 0 && <p className="text-xs text-muted-foreground">Nenhum membro ainda. Adicione usuários aqui ou na aba Usuários.</p>}
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                          {groupMemberIds.map(uid => {
+                            const u = allUsers.find((x:any)=>x.id===uid);
+                            if (!u) return null;
+                            return (
+                              <div key={uid} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/10 border">
+                                <div className={`h-7 w-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${(u as any).role==="admin"?"bg-blue-600":"bg-gray-400"}`}>
+                                  {((u as any).name||(u as any).username||"?").charAt(0).toUpperCase()}
+                                </div>
+                                <span className="flex-1 text-sm">{(u as any).name||(u as any).username}</span>
+                                <button onClick={()=>removeMemberMut.mutate({groupId:selectedGroup.id,userId:uid})} className="text-muted-foreground hover:text-red-600 transition-colors"><X className="h-3.5 w-3.5"/></button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {/* Adicionar membro */}
+                        <div className="flex gap-2">
+                          <Select value={addMemberUserId} onValueChange={setAddMemberUserId}>
+                            <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="Adicionar usuário..." /></SelectTrigger>
+                            <SelectContent>
+                              {allUsers.filter((u:any)=>!groupMemberIds.includes(u.id)).map((u:any)=>(
+                                <SelectItem key={u.id} value={String(u.id)}>{u.name||u.username}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button size="sm" className="h-8 gap-1 text-xs" variant="outline"
+                            onClick={()=>{
+                              if(!addMemberUserId) return;
+                              addMemberMut.mutate({groupId:selectedGroup.id, userId:Number(addMemberUserId)});
+                              setAddMemberUserId("");
+                            }}>
+                            <UserPlus className="h-3 w-3"/>Add
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Módulos e permissões */}
+                      <div className="rounded-xl border p-4 space-y-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-1"><Lock className="h-3.5 w-3.5"/>Permissões de Acesso</h3>
+                        <p className="text-xs text-muted-foreground mb-3">Configure quais módulos e telas os membros deste grupo podem acessar.</p>
+                        <ModulePermsEditor moduleAccess={gModuleAccess} onChange={setGModuleAccess} />
+                      </div>
+
+                      <div className="flex gap-3 pt-2 border-t">
+                        <Button onClick={handleSaveGroup} disabled={updateGroupMut.isPending||setGroupModAccessMut.isPending} className="gap-1.5 bg-blue-600 hover:bg-blue-700">
+                          <Save className="h-4 w-4"/>{(updateGroupMut.isPending||setGroupModAccessMut.isPending)?"Salvando...":"Salvar Grupo"}
+                        </Button>
+                        <Button variant="outline" onClick={()=>setGPanel("list")} className="lg:hidden">Voltar</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Placeholder */}
+                {gPanel === "list" && (
+                  <div className="flex-1 hidden lg:flex items-center justify-center text-center p-8">
+                    <div>
+                      <ShieldCheck className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3"/>
+                      <p className="text-sm font-medium text-muted-foreground">Selecione um grupo para configurar</p>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-xs">Grupos definem os acessos — configure módulos e telas, depois atribua usuários.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
