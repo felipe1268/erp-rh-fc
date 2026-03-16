@@ -4856,6 +4856,39 @@ export const comprasOrdensItens = pgTable("compras_ordens_itens", {
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
 });
 
+// ── Alocação MO: configuração de cargos ──────────────────────
+export const cargoCategoriasCusto = pgTable("cargo_categorias_custo", {
+  id:          serial().primaryKey(),
+  companyId:   integer("company_id").notNull(),
+  cargo:       varchar({ length: 150 }).notNull(),
+  categoria:   varchar({ length: 30 }).notNull(), // 'direto' | 'indireta_obra' | 'escritorio_central'
+  criadoEm:    timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const folhaMoTransferencias = pgTable("folha_mo_transferencias", {
+  id:             serial().primaryKey(),
+  companyId:      integer("company_id").notNull(),
+  mesReferencia:  varchar("mes_referencia", { length: 7 }).notNull(),
+  executadoEm:    timestamp("executado_em", { mode: "string" }).defaultNow().notNull(),
+  executadoPor:   varchar("executado_por", { length: 255 }),
+  totalDireto:    numeric("total_direto", { precision: 14, scale: 2 }).default("0"),
+  totalIndireto:  numeric("total_indireto", { precision: 14, scale: 2 }).default("0"),
+  totalCentral:   numeric("total_central", { precision: 14, scale: 2 }).default("0"),
+  detalhes:       json("detalhes"),
+});
+
+export const planejamentoCustosMo = pgTable("planejamento_custos_mo", {
+  id:              serial().primaryKey(),
+  projetoId:       integer("projeto_id").notNull(),
+  atividadeId:     integer("atividade_id"),
+  mesReferencia:   varchar("mes_referencia", { length: 7 }).notNull(),
+  tipo:            varchar({ length: 30 }).notNull(), // 'direto' | 'indireta_01_01' | 'ci01_central'
+  custo:           numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+  descricao:       text(),
+  transferenciaId: integer("transferencia_id"),
+  criadoEm:        timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
 export const comprasRiscoDebitos = pgTable("compras_risco_debitos", {
   id:          serial().primaryKey(),
   companyId:   integer("company_id").notNull(),

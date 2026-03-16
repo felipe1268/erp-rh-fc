@@ -73,6 +73,12 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
 - Neon uses pooler URL for app connections, direct URL for migrations
 - Priority: `NEON_DATABASE_URL` → `DATABASE_URL` (set in `server/_core/env.ts`)
 
+## Rev. 416 — Custo de MO nas Atividades (16/03/2026)
+- **Novas tabelas**: `cargo_categorias_custo` (cargo→categoria), `folha_mo_transferencias` (histórico), `planejamento_custos_mo` (custo real por atividade/mês)
+- **Router**: `server/routers/moAlocacao.ts` — CRUD categorias, `fecharFolhaMes`, `verificarTransferenciaMO`, `executarTransferenciaMO` (3 camadas: direto, indireta_obra, escritorio_central), `desfazerTransferenciaMO`
+- **RH**: card "Fechar Folha para Custo de MO" + modal "Config. Cargos" em `FolhaPagamento.tsx`
+- **Planejamento**: botão "Importar Custos MO" no cabeçalho de `PlanejamentoDetalhe.tsx` com dialog de pré-condições
+
 ## Planejamento Module
 - Routes: `/planejamento/:id` (tabs: cronograma, curva-s, avanco, refis, compras, ia-gestora, etc.)
 - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` — main file ~7430 lines

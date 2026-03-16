@@ -85,6 +85,11 @@ export default function FolhaPagamento() {
   const [vinculacaoJustificativa, setVinculacaoJustificativa] = useState("");
   const [showVinculacaoPanel, setShowVinculacaoPanel] = useState(false);
   const [heObraFilter, setHeObraFilter] = useState<string>("all");
+  // MO alocação
+  const [showCargosModal, setShowCargosModal] = useState(false);
+  const [novoCargoNome, setNovoCargoNome] = useState("");
+  const [novoCargoCategoria, setNovoCargoCategoria] = useState<"direto" | "indireta_obra" | "escritorio_central">("direto");
+  const [fecharFolhaResult, setFecharFolhaResult] = useState<{ count: number } | null>(null);
 
   // ===== QUERIES =====
   const statusMes = trpc.folha.statusMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
@@ -272,6 +277,23 @@ export default function FolhaPagamento() {
   });
   const excluirMut = trpc.folha.excluirLancamento.useMutation({
     onSuccess: () => { toast.success("Lançamento excluído!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); setViewMode("resumo"); },
+  });
+
+  // ── MO Alocação ─────────────────────────────────────────────────────────────
+  const cargoCategorias = trpc.moAlocacao.listarCargoCategorias.useQuery(
+    { companyId }, { enabled: companyId > 0 && showCargosModal }
+  );
+  const fecharFolhaMut = trpc.moAlocacao.fecharFolhaMes.useMutation({
+    onSuccess: (d) => { toast.success(`Folha fechada — ${d.count} lançamentos encerrados.`); setFecharFolhaResult(d); lancamentos.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const salvarCargoMut = trpc.moAlocacao.salvarCargoCategoria.useMutation({
+    onSuccess: () => { cargoCategorias.refetch(); setNovoCargoNome(""); toast.success("Cargo configurado!"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const removerCargoMut = trpc.moAlocacao.removerCargoCategoria.useMutation({
+    onSuccess: () => { cargoCategorias.refetch(); toast.success("Cargo removido."); },
+    onError: (e) => toast.error(e.message),
   });
 
   const exportarCustosObraMut = trpc.folha.exportarCustosObra.useMutation({
@@ -1995,6 +2017,44 @@ export default function FolhaPagamento() {
           </CardContent>
         </Card>
 
+        {/* FECHAR FOLHA PARA MO */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-slate-700 flex items-center justify-center">
+                <Lock className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-sm text-slate-800">Fechar Folha para Custo de MO</p>
+                <p className="text-xs text-muted-foreground">Encerra o mês e libera a importação de custo de MO no Planejamento</p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowCargosModal(true)}>
+              <Wrench className="h-3.5 w-3.5" /> Config. Cargos
+            </Button>
+          </div>
+          {fecharFolhaResult ? (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <span className="text-sm text-green-800 font-medium">Folha de {formatMesAno(mesAno)} fechada — {fecharFolhaResult.count} lançamentos.</span>
+              <span className="text-xs text-green-600 ml-2">Acesse Planejamento → projeto → "Importar Custos MO".</span>
+            </div>
+          ) : (
+            <Button
+              className="w-full bg-slate-700 hover:bg-slate-800 gap-2"
+              disabled={fecharFolhaMut.isPending}
+              onClick={() => {
+                if (!window.confirm(`Fechar folha de ${formatMesAno(mesAno)}? Esta ação marca todos os lançamentos do mês como "fechado", liberando a importação de custo de MO no Planejamento.`)) return;
+                fecharFolhaMut.mutate({ companyId, mesReferencia: mesAno });
+              }}
+            >
+              {fecharFolhaMut.isPending
+                ? <><RefreshCw className="h-4 w-4 animate-spin" /> Fechando...</>
+                : <><Lock className="h-4 w-4" /> Fechar Folha de {formatMesAno(mesAno)}</>}
+            </Button>
+          )}
+        </div>
+
         {/* ALERTA DE DIVERGÊNCIA: ATIVOS SEM FOLHA */}
         <AlertaDivergenciaFolha mesReferencia={mesAno} mesLabel={formatMesAno(mesAno)} variant="full" />
 
@@ -3085,6 +3145,97 @@ function DescontosEPIView({ companyId, mesAno, onBack }: { companyId: number; me
           </table>
         </div>
       )}
+
+      {/* MODAL CONFIGURAÇÃO DE CARGOS MO */}
+      <Dialog open={showCargosModal} onOpenChange={setShowCargosModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-4 w-4" /> Configuração de Cargos — Custo de MO
+            </DialogTitle>
+            <DialogDescription>
+              Classifique cada cargo (função) em uma das 3 categorias para a alocação automática de custo de mão de obra.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Adicionar novo */}
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+              <p className="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wide">Adicionar mapeamento</p>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground mb-1 block">Cargo / Função</label>
+                  <input
+                    className="w-full border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: Engenheiro, Servente, Administrador..."
+                    value={novoCargoNome}
+                    onChange={e => setNovoCargoNome(e.target.value)}
+                  />
+                </div>
+                <div className="w-56">
+                  <label className="text-xs text-muted-foreground mb-1 block">Categoria</label>
+                  <select
+                    className="w-full border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    value={novoCargoCategoria}
+                    onChange={e => setNovoCargoCategoria(e.target.value as any)}
+                  >
+                    <option value="direto">Direto (→ Atividades EAP)</option>
+                    <option value="indireta_obra">Indireta Obra (→ 01.01 Equipe Técnica)</option>
+                    <option value="escritorio_central">Escritório Central (→ CI-01 rateado)</option>
+                  </select>
+                </div>
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+                  disabled={!novoCargoNome.trim() || salvarCargoMut.isPending}
+                  onClick={() => salvarCargoMut.mutate({ companyId, cargo: novoCargoNome, categoria: novoCargoCategoria })}>
+                  <Plus className="h-3.5 w-3.5" /> Salvar
+                </Button>
+              </div>
+            </div>
+            {/* Lista existente */}
+            <div>
+              <p className="text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wide">
+                Mapeamentos configurados ({(cargoCategorias.data ?? []).length})
+              </p>
+              {cargoCategorias.isLoading ? (
+                <div className="text-center py-6 text-sm text-muted-foreground"><RefreshCw className="h-4 w-4 animate-spin inline mr-2" />Carregando...</div>
+              ) : (cargoCategorias.data ?? []).length === 0 ? (
+                <div className="text-center py-6 text-sm text-muted-foreground bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
+                  <Wrench className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                  Nenhum cargo configurado ainda.
+                </div>
+              ) : (
+                <div className="divide-y border rounded-lg overflow-hidden">
+                  {(cargoCategorias.data ?? []).map(c => (
+                    <div key={c.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50">
+                      <span className="text-sm font-medium">{c.cargo}</span>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          c.categoria === "direto" ? "bg-blue-100 text-blue-700" :
+                          c.categoria === "indireta_obra" ? "bg-amber-100 text-amber-700" :
+                          "bg-purple-100 text-purple-700"
+                        }`}>
+                          {c.categoria === "direto" ? "Direto" :
+                           c.categoria === "indireta_obra" ? "Indireta Obra" :
+                           "Escritório Central"}
+                        </span>
+                        <button
+                          className="text-red-400 hover:text-red-600 transition-colors"
+                          disabled={removerCargoMut.isPending}
+                          onClick={() => removerCargoMut.mutate({ id: c.id })}
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCargosModal(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de confirmação */}
       <Dialog open={validandoId !== null} onOpenChange={(v) => { if (!v) setValidandoId(null); }}>

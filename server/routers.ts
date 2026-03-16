@@ -98,6 +98,7 @@ import { purchaseRouter } from "./routers/purchaseRouter";
 import { warehouseRouter } from "./routers/warehouse";
 import { clientesRouter } from "./routers/clientes";
 import { masControleRouter } from "./routers/masControle";
+import { moAlocacaoRouter } from "./routers/moAlocacao";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -142,6 +143,7 @@ export const appRouter = router({
   warehouse: warehouseRouter,
   clientes: clientesRouter,
   masControle: masControleRouter,
+  moAlocacao: moAlocacaoRouter,
   portalExterno: portalExternoRouter,
   payrollEngine: payrollEngineRouter,
   fieldNotes: fieldNotesRouter,

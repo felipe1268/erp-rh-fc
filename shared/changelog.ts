@@ -1924,6 +1924,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 416,
+    titulo: "RH + Planejamento — Alocação automática de custo de MO nas atividades",
+    descricao: "Implementa o ciclo completo de transferência de custo de mão de obra (MO) da folha para o cronograma físico-financeiro. (1) Novas tabelas: cargo_categorias_custo (mapeamento funcao→categoria), folha_mo_transferencias (histórico de fechamentos), planejamento_custos_mo (custo real por atividade/mês). (2) Backend moAlocacao com: CRUD de categorias de cargo, fecharFolhaMes (seta status→'fechado' nos lançamentos), verificarTransferenciaMO (checa pré-condições), executarTransferenciaMO (lógica das 3 camadas: Direto→atividades com avanço proporcional, Indireta Obra→01.01 Equipe Técnica, Escritório Central→CI-01 rateado por valorContrato), desfazerTransferenciaMO, listarCustosMoProjeto. (3) RH/Folha: novo card 'Fechar Folha para Custo de MO' com botão de fechamento e botão 'Config. Cargos' que abre modal de mapeamento de cargos por categoria. (4) Planejamento (PlanejamentoDetalhe): botão 'Importar Custos MO' no cabeçalho com dialog que mostra status das pré-condições (folha fechada, cargos configurados, já importado) e executa a transferência com confirmação.",
+    tipo: "feature",
+    modulos: "RH, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 407,
     titulo: "Permissões — Controle granular por página e dados sensíveis (LGPD)",
     descricao: "Redesenho completo do sistema de permissões de usuários para suportar controle granular. Cada módulo ativo agora permite configurar: (1) Nível de acesso — Administrador (acesso total), Somente Visualização ou Personalizado; (2) Quando Personalizado: tabela de páginas com checkboxes individuais para Visualizar, Criar, Editar e Excluir — com ação de marcar/desmarcar coluna inteira; (3) Flags de dados sensíveis LGPD por módulo — ocultar salários, valores de contratos, dados pessoais, saldos financeiros, etc. Novo arquivo shared/modulePages.ts centraliza a definição de páginas e flags sensíveis por módulo. PermissionsContext atualizado com helpers canViewPage(), canCreatePage(), canEditPage(), canDeletePage() e isSensitiveHidden(). Backend (setUserModuleAccess) agora aceita formato rico JSON. Formato armazenado é retrocompatível com o sistema anterior (strings 'admin'/'viewer' são normalizadas automaticamente).",
