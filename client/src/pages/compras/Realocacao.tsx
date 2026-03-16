@@ -79,7 +79,7 @@ export default function ComprasRealocacao() {
           </div>
         </div>
 
-        <Tabs defaultValue="verba">
+        <Tabs defaultValue="risco">
           <TabsList className="mb-4">
             <TabsTrigger value="verba" className="gap-2">
               <ArrowLeftRight className="h-4 w-4" /> Realocação de Verba
