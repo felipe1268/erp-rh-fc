@@ -1987,6 +1987,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 422,
+    titulo: "Compras — Correção da Reserva de Risco (BDI DI-08)",
+    descricao: "Corrigido bug crítico onde a Reserva de Risco (BDI DI-08) sempre aparecia como R$ 0,00 na tela de realocação de SC. A consulta buscava o código 'DI-08' na tabela bdi_indiretos (que usa códigos como '08.01', '08.01.01') — tabela errada. A correção direciona a busca para a tabela orcamento_bdi com o campo valorAbsoluto, onde DI-08 está corretamente armazenado. A mesma correção foi aplicada na validação do endpoint debitarDoRisco.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 421,
     titulo: "Cotações — Botão de anexo ampliado com suporte a arquivo e link",
     descricao: "O botão de anexo no mapa de cotações foi redesenhado: agora é maior, visualmente destacado (verde quando há arquivo, cinza quando vazio) e abre um painel flutuante com duas opções — upload de arquivo (JPG, JPEG ou PDF, enviado ao armazenamento via base64) e campo de link/URL. Novo endpoint uploadAnexoFornecedor no servidor processa o arquivo e salva a URL resultante junto ao participante da cotação.",

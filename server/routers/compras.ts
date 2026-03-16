@@ -16,7 +16,7 @@ import {
   comprasRiscoDebitos,
   obras,
   orcamentos, orcamentoItens,
-  bdiIndiretos,
+  bdiIndiretos, orcamentoBdi,
   planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades,
 } from "../../drizzle/schema";
 
@@ -1262,10 +1262,10 @@ Responda APENAS com um objeto JSON no formato:
           .limit(1);
         if (orc) {
           riscoOrcamentoId = orc.id;
-          const [di08] = await db.select({ totalLinha: bdiIndiretos.totalLinha })
-            .from(bdiIndiretos)
-            .where(and(eq(bdiIndiretos.orcamentoId, orc.id), eq(bdiIndiretos.codigo, "DI-08")));
-          riscoInicial = n(di08?.totalLinha ?? 0);
+          const [di08] = await db.select({ valorAbsoluto: orcamentoBdi.valorAbsoluto })
+            .from(orcamentoBdi)
+            .where(and(eq(orcamentoBdi.orcamentoId, orc.id), eq(orcamentoBdi.codigo, "DI-08")));
+          riscoInicial = n(di08?.valorAbsoluto ?? 0);
         }
       }
       const debitosRisco = riscoOrcamentoId
@@ -1355,10 +1355,10 @@ Responda APENAS com um objeto JSON no formato:
       const debitos = await db.select({ valor: comprasRiscoDebitos.valor })
         .from(comprasRiscoDebitos)
         .where(eq(comprasRiscoDebitos.orcamentoId, input.orcamentoId));
-      const [di08] = await db.select({ totalLinha: bdiIndiretos.totalLinha })
-        .from(bdiIndiretos)
-        .where(and(eq(bdiIndiretos.orcamentoId, input.orcamentoId), eq(bdiIndiretos.codigo, "DI-08")));
-      const inicial = n(di08?.totalLinha ?? 0);
+      const [di08] = await db.select({ valorAbsoluto: orcamentoBdi.valorAbsoluto })
+        .from(orcamentoBdi)
+        .where(and(eq(orcamentoBdi.orcamentoId, input.orcamentoId), eq(orcamentoBdi.codigo, "DI-08")));
+      const inicial = n(di08?.valorAbsoluto ?? 0);
       const usado = debitos.reduce((s, x) => s + n(x.valor), 0);
       const disponivel = Math.max(0, inicial - usado);
       if (input.valor > disponivel + 0.01) {
