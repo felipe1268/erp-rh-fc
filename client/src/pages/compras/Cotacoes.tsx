@@ -190,10 +190,32 @@ export default function Cotacoes() {
       const prazoInicial: Record<number, string> = {};
       const condInicial: Record<number, string> = {};
       const anexoInicial: Record<number, string> = {};
-      for (const [key, val] of Object.entries(mapaQ.data.respostaMap)) {
-        inicialPrecos[key] = (val as any).precoUnitario ?? "0";
-        inicialQtds[key] = (val as any).quantidade ?? "0";
+
+      // Pré-preencher com meta price para itens sem resposta
+      const metaMap: Record<number, number> = {};
+      for (const it of (mapaQ.data.itens ?? [])) {
+        const meta = parseFloat((it as any).metaUnitario ?? "0");
+        if (meta > 0) metaMap[(it as any).id] = meta;
       }
+      for (const p of mapaQ.data.participantes) {
+        for (const it of (mapaQ.data.itens ?? [])) {
+          const key = `${(it as any).id}_${p.fornecedorId}`;
+          if (metaMap[(it as any).id]) {
+            inicialPrecos[key] = metaMap[(it as any).id].toFixed(4);
+          }
+          inicialQtds[key] = String((it as any).quantidade ?? "1");
+        }
+      }
+
+      // Sobrescrever com respostas já salvas (têm prioridade)
+      for (const [key, val] of Object.entries(mapaQ.data.respostaMap)) {
+        const saved = parseFloat((val as any).precoUnitario ?? "0");
+        if (saved > 0) {
+          inicialPrecos[key] = (val as any).precoUnitario ?? "0";
+          inicialQtds[key] = (val as any).quantidade ?? inicialQtds[key] ?? "0";
+        }
+      }
+
       for (const p of mapaQ.data.participantes) {
         prazoInicial[p.fornecedorId] = p.prazoEntregaDias ? String(p.prazoEntregaDias) : "";
         condInicial[p.fornecedorId] = p.condicaoPagamento ?? "";
