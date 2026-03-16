@@ -509,9 +509,6 @@ export default function ModuleHub() {
                   <DropdownMenuItem onClick={() => navigate("/usuarios")} className="cursor-pointer">
                     <Lock className="mr-2 h-4 w-4" /> Usuários e Permissões
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/grupos-usuarios")} className="cursor-pointer">
-                    <Users className="mr-2 h-4 w-4" /> Grupos de Usuários
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/auditoria")} className="cursor-pointer">
                     <FileText className="mr-2 h-4 w-4" /> Auditoria do Sistema
                   </DropdownMenuItem>

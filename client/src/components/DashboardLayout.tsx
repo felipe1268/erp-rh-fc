@@ -923,8 +923,6 @@ function DashboardLayoutContent({
             if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
             // Ajuda/Biblioteca sempre visível
             if (item.path === '/ajuda') return true;
-            // Grupos de Usuários sempre visível para quem tem grupo (pode ver seu próprio grupo)
-            if (item.path === '/grupos-usuarios') return true;
             // Verificar se o grupo permite acesso a esta rota
             return groupCanAccessRoute(item.path);
           }),

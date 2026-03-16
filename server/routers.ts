@@ -1118,17 +1118,51 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_permissions', entityId: input.userId, details: `Permissões do usuário atualizadas: ${input.permissions.filter(p => p.canAccess).length} funcionalidades habilitadas` });
       return { success: true };
     }),
+    // Definir acesso simplificado por módulo (novo sistema — armazena JSON em users.modulesAccess)
+    setUserModuleAccess: protectedProcedure.input(z.object({
+      userId: z.number(),
+      moduleAccess: z.record(z.string(), z.enum(["admin", "viewer"]).nullable()),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar permissões' });
+      }
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { users } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const clean: Record<string, string> = {};
+      for (const [k, v] of Object.entries(input.moduleAccess)) {
+        if (v != null) clean[k] = v;
+      }
+      await db.update(users).set({ modulesAccess: JSON.stringify(clean) }).where(eq(users.id, input.userId));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_modules', entityId: input.userId, details: `Módulos do usuário atualizados: ${JSON.stringify(clean)}` });
+      return { success: true };
+    }),
     // Obter permissões do usuário logado (para sidebar/frontend)
     getMyPermissions: protectedProcedure.query(async ({ ctx }) => {
       // Admin Master tem acesso total
       if (ctx.user.role === 'admin_master') {
-        return { isAdminMaster: true, permissions: [], groupPermissions: null };
+        return { isAdminMaster: true, permissions: [], groupPermissions: null, moduleAccess: {} as Record<string, string> };
       }
       const perms = await getUserPermissions(ctx.user.id);
       // Buscar permissões de grupo do usuário
       const groupPerms = await getUserEffectiveGroupPermissions(ctx.user.id);
+      // Buscar modulesAccess do usuário (novo sistema simplificado)
+      let moduleAccess: Record<string, string> = {};
+      try {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (db) {
+          const { users } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          const [u] = await db.select({ modulesAccess: users.modulesAccess }).from(users).where(eq(users.id, ctx.user.id));
+          if (u?.modulesAccess) moduleAccess = JSON.parse(u.modulesAccess);
+        }
+      } catch {}
       return {
         isAdminMaster: false,
+        moduleAccess,
         permissions: perms.map((p: any) => ({ moduleId: p.moduleId, featureKey: p.featureKey, canAccess: !!p.canAccess })),
         groupPermissions: groupPerms.groups.length > 0 ? {
           groups: groupPerms.groups,

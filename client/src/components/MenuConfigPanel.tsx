@@ -145,7 +145,6 @@ const DEFAULT_MENU = [
   ]},
   { title: "Administração", items: [
     { label: "Usuários e Permissões", path: "/usuarios", visible: true },
-    { label: "Grupos de Usuários", path: "/grupos-usuarios", visible: true },
     { label: "Auditoria do Sistema", path: "/auditoria", visible: true },
     { label: "Configurações", path: "/configuracoes", visible: true },
     { label: "Revisões do Sistema", path: "/revisoes", visible: true },
