@@ -1374,10 +1374,7 @@ export default function Cotacoes() {
                       <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
                         <TableHead className="text-gray-500 text-xs">Descrição</TableHead>
                         <TableHead className="text-gray-500 text-xs w-16">Un.</TableHead>
-                        <TableHead className="text-gray-500 text-xs w-20">Qtd</TableHead>
-                        <TableHead className="text-gray-500 text-xs w-28">Preço Unit.</TableHead>
-                        <TableHead className="text-gray-500 text-xs w-16">Desc%</TableHead>
-                        <TableHead className="text-gray-500 text-xs w-28">Total</TableHead>
+                        <TableHead className="text-gray-500 text-xs w-24 text-right">Qtd</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1385,10 +1382,7 @@ export default function Cotacoes() {
                         <TableRow key={it.id} className="border-gray-100">
                           <TableCell className="text-gray-900 text-sm">{it.descricao}</TableCell>
                           <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
-                          <TableCell className="text-gray-500 text-sm">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
-                          <TableCell className="text-gray-700 text-sm">{parseFloat(it.precoUnitario || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
-                          <TableCell className="text-gray-500 text-sm">{parseFloat(it.descontoPct || "0")}%</TableCell>
-                          <TableCell className="text-emerald-700 text-sm font-medium">{parseFloat(it.total || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
+                          <TableCell className="text-gray-500 text-sm text-right">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
