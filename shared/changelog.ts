@@ -1716,4 +1716,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-15 23:59:00",
   },
+  {
+    version: 390,
+    titulo: "Home — Substituição de Atividade Recente por Aniversário de Empresa",
+    descricao: "Card 'Atividade Recente' removido da coluna direita do painel inicial e substituído por 'Aniversário de Empresa': exibe colaboradores com aniversário de admissão no mês corrente, mostrando quantos anos estão completando com badge destacada (âmbar), ícone 🏆 para quem comemora hoje e 🎖️ para os demais, data do dia e cargo. Botão 'Expandir' abre modal com a lista completa — ao clicar em qualquer colaborador abre o RaioX com todos os dados. Link '+N mais' aparece quando há mais de 6 itens. Query de auditoria (logs) removida pois não é mais consumida.",
+    tipo: "melhoria",
+    modulos: "Home",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
 ];

@@ -14,7 +14,7 @@ import {
   Printer, Plane, DollarSign, TreePalm, ClipboardCheck, UserPlus, Ban, RefreshCw, Award
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
+import { nowBrasilia } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -49,6 +49,7 @@ export default function Home() {
   const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : undefined;
   const companyIds = getCompanyIdsForQuery();
   const [alertasOpen, setAlertasOpen] = useState(false);
+  const [anivEmpresaOpen, setAnivEmpresaOpen] = useState(false);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [expAction, setExpAction] = useState<{ type: 'prorrogar' | 'efetivar' | 'desligar'; emp: any } | null>(null);
   const [expMotivo, setExpMotivo] = useState('');
@@ -68,11 +69,6 @@ export default function Home() {
     { companyId: companyId! },
     { enabled: !!companyId || companyIds?.length > 0 }
   );
-  const { data: logs } = trpc.audit.list.useQuery(
-    { companyId, limit: 6 },
-    { enabled: !!companyId || companyIds?.length > 0 }
-  );
-
   const s = homeData?.stats;
 
   // Calcular total de alertas
@@ -654,39 +650,107 @@ export default function Home() {
                     </CardContent>
                   </Card>}
 
-                  {/* Atividade Recente do Sistema */}
-                  {(isAdminMaster || (!hasGroup && user?.role === 'admin')) && <Card>
+                  {/* Aniversários de Empresa — substitui Atividade Recente */}
+                  {canSee('/colaboradores') && <Card>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-slate-500" />
-                          Atividade Recente
+                          <Award className="h-4 w-4 text-amber-500" />
+                          Aniversário de Empresa
+                          {(s?.aniversariosEmpresaHoje ?? 0) > 0 && (
+                            <Badge className="bg-amber-100 text-amber-700 text-[10px]">{s!.aniversariosEmpresaHoje} hoje!</Badge>
+                          )}
                         </CardTitle>
-                        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate("/auditoria")}>
-                          Ver tudo <ChevronRight className="h-3 w-3 ml-1" />
+                        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1" onClick={() => setAnivEmpresaOpen(true)}>
+                          <ExternalLink className="h-3 w-3" /> Expandir
                         </Button>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      {!logs || logs.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Nenhuma atividade registrada</p>
+                      {!homeData?.aniversariosEmpresa?.length ? (
+                        <p className="text-xs text-muted-foreground">Nenhum aniversário de empresa este mês</p>
                       ) : (
-                        <div className="space-y-2">
-                          {logs.map((log: any) => (
-                            <div key={log.id} className="flex items-start gap-2 text-xs">
-                              <div className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${log.action === "DELETE" ? "bg-red-500" : log.action === "CREATE" ? "bg-green-500" : "bg-blue-500"}`} />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-foreground truncate">{log.details}</p>
-                                <p className="text-[10px] text-muted-foreground">
-                                  {log.userName} · {formatDateTime(log.createdAt)}
-                                </p>
+                        <div className="space-y-1.5">
+                          {homeData.aniversariosEmpresa.slice(0, 6).map(a => (
+                            <div
+                              key={a.id}
+                              className={`flex items-center justify-between text-xs px-2 py-1.5 rounded cursor-pointer hover:bg-accent/50 transition-colors ${a.isHoje ? "bg-amber-50 border border-amber-200" : ""}`}
+                              onClick={() => setRaioXEmployeeId(a.id)}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {a.isHoje ? <span className="text-sm flex-shrink-0">🏆</span> : <span className="text-sm flex-shrink-0">🎖️</span>}
+                                <div className="min-w-0">
+                                  <span className="font-medium block truncate">{a.nome}</span>
+                                  {a.funcao && <span className="text-muted-foreground text-[10px]">{a.funcao}</span>}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                                <Badge className={`text-[10px] px-1.5 py-0 font-bold ${a.isHoje ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-700 border border-amber-300"}`}>
+                                  {a.anosEmpresa} {a.anosEmpresa === 1 ? 'ano' : 'anos'}
+                                </Badge>
+                                <span className={`font-mono text-[10px] ${a.isHoje ? "text-amber-600 font-bold" : a.jaPassou ? "text-muted-foreground line-through" : "text-gray-500"}`}>
+                                  Dia {a.dia}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                          {homeData.aniversariosEmpresa.length > 6 && (
+                            <button
+                              className="w-full text-center text-[11px] text-amber-600 hover:text-amber-700 hover:underline pt-1"
+                              onClick={() => setAnivEmpresaOpen(true)}
+                            >
+                              +{homeData.aniversariosEmpresa.length - 6} mais — clique para expandir
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>}
+
+                  {/* Dialog expandido de Aniversários de Empresa */}
+                  <Dialog open={anivEmpresaOpen} onOpenChange={setAnivEmpresaOpen}>
+                    <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Award className="h-5 w-5 text-amber-500" />
+                          Aniversários de Empresa — {new Date().toLocaleString("pt-BR", { month: "long", year: "numeric" })}
+                          {(s?.aniversariosEmpresaMes ?? 0) > 0 && (
+                            <Badge className="bg-amber-100 text-amber-700 text-xs ml-1">{s!.aniversariosEmpresaMes} no mês</Badge>
+                          )}
+                        </DialogTitle>
+                      </DialogHeader>
+                      {!homeData?.aniversariosEmpresa?.length ? (
+                        <p className="text-sm text-muted-foreground py-6 text-center">Nenhum aniversário de empresa este mês</p>
+                      ) : (
+                        <div className="space-y-2 mt-2">
+                          {homeData.aniversariosEmpresa.map(a => (
+                            <div
+                              key={a.id}
+                              className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer hover:bg-accent/50 transition-colors border ${a.isHoje ? "bg-amber-50 border-amber-300" : "border-transparent hover:border-border"}`}
+                              onClick={() => { setAnivEmpresaOpen(false); setRaioXEmployeeId(a.id); }}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xl flex-shrink-0">{a.isHoje ? "🏆" : "🎖️"}</span>
+                                <div className="min-w-0">
+                                  <p className={`font-semibold text-sm truncate ${a.isHoje ? "text-amber-700" : ""}`}>{a.nome}</p>
+                                  {a.funcao && <p className="text-xs text-muted-foreground">{a.funcao}</p>}
+                                  {a.obra && <p className="text-[10px] text-blue-500">📍 {a.obra}</p>}
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-3">
+                                <Badge className={`text-xs px-2 py-0.5 font-bold ${a.isHoje ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-700 border border-amber-300"}`}>
+                                  {a.anosEmpresa} {a.anosEmpresa === 1 ? 'ano' : 'anos'}
+                                </Badge>
+                                <span className={`font-mono text-[10px] ${a.isHoje ? "text-amber-600 font-bold" : a.jaPassou ? "text-muted-foreground line-through" : "text-gray-500"}`}>
+                                  Dia {a.dia}
+                                </span>
                               </div>
                             </div>
                           ))}
                         </div>
                       )}
-                    </CardContent>
-                  </Card>}
+                    </DialogContent>
+                  </Dialog>
 
                   {/* Advertências Recentes */}
                   {canSee('/colaboradores') && (homeData?.advertenciasRecentes?.length ?? 0) > 0 && (
