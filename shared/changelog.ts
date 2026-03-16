@@ -1726,6 +1726,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 394,
+    titulo: "Configurações — Módulos Compras, Almoxarifado e Financeiro adicionados ao painel de controle",
+    descricao: "Os módulos Compras, Almoxarifado e Financeiro existiam com rotas e páginas funcionais mas não apareciam na tela de Módulos do Sistema (Configurações), impossibilitando que o admin os habilitasse/desabilitasse. Adicionado os 3 módulos ao array ALL_MODULES no backend (server/routers.ts) e ao objeto MODULE_INFO no frontend (Configuracoes.tsx) com ícone, cor e descrição próprios. Agora todos os 12 módulos do sistema são controláveis pela tela de configurações.",
+    tipo: "correcao",
+    modulos: "Configurações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 393,
     titulo: "Controle de Documentos — Revisão geral dos filtros dos cards",
     descricao: "Corrigidos três bugs nos filtros: (1) Botão X da badge 'Filtro ativo' não resetava os filtros forçados do Painel de Validade (forceTipo/forceStatus), deixando Treinamento filtrado mesmo após limpar o filtro. (2) Toggle-off de qualquer card (clicar novamente para desativar) não navegava de volta ao tab correto — ASOs voltam para 'ASO', Treinamentos voltam para 'Treinamentos', Atestados/Advertências para seus tabs; antes os cards de Trein. Vencidos/A Vencer ficavam em 'Validade' sem filtro ao desativar. (3) Lógica de resetAll() centralizada para garantir que todos os estados de filtro sejam sempre limpos antes de aplicar novo filtro, evitando estados residuais.",

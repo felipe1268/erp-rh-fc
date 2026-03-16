@@ -140,6 +140,16 @@ shared/         # Shared types and constants
 - **Vite build**: `sourcemap: false`, target `es2020`, finer manual chunks (added `vendor-utils-sm` for superjson/zod/clsx).
 - **Dashboard queries parallelized with Promise.all**: Reduced from 66 sequential `await db.` calls to 8, using 10 `Promise.all()` groups. Each dashboard function now runs all independent queries in parallel: getDashFuncionarios (20→parallel), getDashDocumentos (26→parallel), getDashControleDocumentos (6→parallel), getDashHorasExtras (5→parallel), getDashEpis (5→parallel), getDashPerfilTempoCasa (5→parallel), getDashCompetenciasAnual (4→parallel), getDashFolhaPagamento (2→parallel), getDashCartaoPonto (2→parallel). Expected ~10x reduction in dashboard response time.
 
+## ⚠️ REGRA DE OURO — Criação de Novo Módulo
+Todo novo módulo criado OBRIGATORIAMENTE deve ser registrado em **3 lugares**:
+1. **`server/routers.ts`** → array `ALL_MODULES` (linha ~2065): adicionar a chave do módulo (ex: `"novo-modulo"`)
+2. **`client/src/pages/Configuracoes.tsx`** → objeto `MODULE_INFO` (linha ~2056): adicionar entrada com `label`, `subtitle`, `icon`, `color`, `bgColor`, `borderColor`, `description`
+3. **`client/src/contexts/ModuleContext.tsx`** → tipo `ModuleId` + mapeamento de rotas `ROUTE_MODULE_MAP`
+
+Sem isso, o módulo NÃO aparece em Configurações → Módulos do Sistema e NÃO pode ser habilitado/desabilitado pelo admin.
+
+Módulos atualmente registrados (Rev. 394): `rh`, `sst`, `juridico`, `avaliacao`, `terceiros`, `parceiros`, `orcamento`, `planejamento`, `cadastro`, `compras`, `almoxarifado`, `financeiro`
+
 ## Notes
 - Default password for first login: `asdf1020`
 - After every completed adjustment, click **Publish** to deploy (autoscale, build=`pnpm run build`, run=`node dist/index.js`)
