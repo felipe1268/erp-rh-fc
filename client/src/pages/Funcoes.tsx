@@ -18,8 +18,9 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
 import { fmtNum } from "@/lib/formatters";
 
-type FuncaoForm = { nome: string; descricao: string; ordemServico: string; cbo: string };
-const emptyForm: FuncaoForm = { nome: "", descricao: "", ordemServico: "", cbo: "" };
+type CategoriaMO = "direto" | "indireta_obra" | "escritorio_central" | "";
+type FuncaoForm = { nome: string; descricao: string; ordemServico: string; cbo: string; categoriaMO: CategoriaMO };
+const emptyForm: FuncaoForm = { nome: "", descricao: "", ordemServico: "", cbo: "", categoriaMO: "" };
 
 type CboItem = { cod: string; desc: string };
 
@@ -180,17 +181,18 @@ export default function Funcoes() {
   const openNew = () => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); };
   const openEdit = (fn: any) => {
     setEditingId(fn.id);
-    setForm({ nome: fn.nome || "", descricao: fn.descricao || "", ordemServico: fn.ordemServico || "", cbo: fn.cbo || "" });
+    setForm({ nome: fn.nome || "", descricao: fn.descricao || "", ordemServico: fn.ordemServico || "", cbo: fn.cbo || "", categoriaMO: (fn.categoriaMO || "") as CategoriaMO });
     setDialogOpen(true);
   };
 
   const handleSave = () => {
     if (!form.nome.trim()) { toast.error("Nome da função é obrigatório"); return; }
     if (!form.descricao.trim()) { toast.error("Descrição da função é obrigatória. Use o botão IA para gerar automaticamente."); return; }
+    const catMO = form.categoriaMO || null;
     if (editingId) {
-      updateMut.mutate({ id: editingId, companyId, nome: form.nome, descricao: form.descricao, ordemServico: form.ordemServico || undefined, cbo: form.cbo || undefined });
+      updateMut.mutate({ id: editingId, companyId, nome: form.nome, descricao: form.descricao, ordemServico: form.ordemServico || undefined, cbo: form.cbo || undefined, categoriaMO: catMO as any });
     } else {
-      createMut.mutate({ companyId, companyIds, nome: form.nome, descricao: form.descricao, ordemServico: form.ordemServico || undefined, cbo: form.cbo || undefined });
+      createMut.mutate({ companyId, companyIds, nome: form.nome, descricao: form.descricao, ordemServico: form.ordemServico || undefined, cbo: form.cbo || undefined, categoriaMO: catMO as any });
     }
   };
 
@@ -425,6 +427,21 @@ export default function Funcoes() {
                             <Shield className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                             {hasOS ? "OS NR-1 OK" : "Sem OS NR-1"}
                           </span>
+                          {fn.categoriaMO ? (
+                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-medium ${
+                              fn.categoriaMO === "direto" ? "bg-blue-100 text-blue-700" :
+                              fn.categoriaMO === "indireta_obra" ? "bg-amber-100 text-amber-700" :
+                              "bg-purple-100 text-purple-700"
+                            }`}>
+                              {fn.categoriaMO === "direto" ? "MO Direta" :
+                               fn.categoriaMO === "indireta_obra" ? "MO Indireta Obra" :
+                               "MO Escritório Central"}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-medium bg-slate-100 text-slate-500">
+                              MO não definida
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0" onClick={e => e.stopPropagation()}>
@@ -493,6 +510,24 @@ export default function Funcoes() {
                 />
                 <p className="text-xs text-muted-foreground mt-1">Preenchido automaticamente ao selecionar a função</p>
               </div>
+            </div>
+
+            {/* Categoria de Mão de Obra */}
+            <div>
+              <Label className="flex items-center gap-1.5 mb-1">
+                Categoria de Mão de Obra (MO)
+                <span className="text-xs text-muted-foreground font-normal">(usado na alocação de custos de folha)</span>
+              </Label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                value={form.categoriaMO}
+                onChange={e => setForm(f => ({ ...f, categoriaMO: e.target.value as CategoriaMO }))}
+              >
+                <option value="">— Não definido —</option>
+                <option value="direto">Direto → custo vai para as atividades da obra (EAP)</option>
+                <option value="indireta_obra">Indireta Obra → vai para a atividade Equipe Técnica (01.01)</option>
+                <option value="escritorio_central">Escritório Central → rateado entre obras pelo valor do contrato</option>
+              </select>
             </div>
 
             {/* Descrição e OS lado a lado em telas grandes */}

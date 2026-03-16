@@ -289,14 +289,14 @@ export const appRouter = router({
   // ============================================================
   jobFunctions: router({
     list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => listJobFunctions(input.companyId)),
-    create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1), descricao: z.string().optional(), ordemServico: z.string().optional(), cbo: z.string().optional(),
+    create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1), descricao: z.string().optional(), ordemServico: z.string().optional(), cbo: z.string().optional(), categoriaMO: z.enum(["direto", "indireta_obra", "escritorio_central"]).nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const result = await createJobFunction(input);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "cadastro", entityType: "jobFunction", entityId: result.id, details: `Função criada: ${input.nome}` });
       return result;
     }),
     update: protectedProcedure.input(z.object({
-      id: z.number(), companyId: z.number(), nome: z.string().optional(), descricao: z.string().optional(), ordemServico: z.string().optional(), cbo: z.string().optional(), isActive: z.boolean().optional(),
+      id: z.number(), companyId: z.number(), nome: z.string().optional(), descricao: z.string().optional(), ordemServico: z.string().optional(), cbo: z.string().optional(), isActive: z.boolean().optional(), categoriaMO: z.enum(["direto", "indireta_obra", "escritorio_central"]).nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, companyId, ...data } = input;
       await updateJobFunction(id, companyId, data);

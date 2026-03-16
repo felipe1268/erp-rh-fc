@@ -1924,6 +1924,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 419,
+    titulo: "Cadastro — Categoria de MO diretamente na página de Funções",
+    descricao: "O campo 'Categoria de Mão de Obra' (Direto, Indireta Obra, Escritório Central) foi movido para a página Cadastro → Funções, que é o lugar natural para esta configuração. Ao criar ou editar uma função, o usuário agora define diretamente a categoria MO no formulário. Na lista de funções, cada card exibe um badge colorido com a categoria definida (MO Direta em azul, MO Indireta Obra em âmbar, MO Escritório Central em roxo, ou 'MO não definida' em cinza). O backend (create/update de jobFunctions) e o db helper foram atualizados para persistir o campo categoriaMO. O modal 'Config. Cargos' na Folha de Pagamento continua disponível como atalho para ajuste rápido.",
+    tipo: "melhoria",
+    modulos: "Cadastro, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-16 00:00:00",
+  },
+  {
     version: 418,
     titulo: "RH — Categoria de MO direto na tabela de Funções",
     descricao: "Simplificação do sistema de categorização de custo de mão de obra: a categoria (Direto, Indireta Obra, Escritório Central) agora fica diretamente no cadastro de Função (campo categoria_mo na tabela job_functions), eliminando a tabela auxiliar cargo_categorias_custo. O modal 'Config. Cargos' foi redesenhado: em vez de um formulário de adição manual, agora exibe todas as funções ativas em uma lista com dropdown por linha — basta selecionar a categoria e ela é salva automaticamente. O backend de alocação MO foi atualizado para ler a categoria diretamente de job_functions.categoriaMO. Dados existentes foram migrados automaticamente.",

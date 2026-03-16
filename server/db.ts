@@ -1640,7 +1640,7 @@ export async function listJobFunctions(companyId: number) {
   return db.select().from(jobFunctions).where(and(eq(jobFunctions.companyId, companyId), isNull(jobFunctions.deletedAt))).orderBy(jobFunctions.nome);
 }
 
-export async function createJobFunction(data: { companyId: number; nome: string; descricao?: string; ordemServico?: string; cbo?: string }) {
+export async function createJobFunction(data: { companyId: number; nome: string; descricao?: string; ordemServico?: string; cbo?: string; categoriaMO?: string | null }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const existing = await db.select().from(jobFunctions).where(and(eq(jobFunctions.companyId, data.companyId), eq(jobFunctions.nome, data.nome)));
@@ -1651,11 +1651,12 @@ export async function createJobFunction(data: { companyId: number; nome: string;
     descricao: data.descricao || null,
     ordemServico: data.ordemServico || null,
     cbo: data.cbo || null,
+    categoriaMO: data.categoriaMO || null,
   }).returning();
   return { id: result[0].id };
 }
 
-export async function updateJobFunction(id: number, companyId: number, data: { nome?: string; descricao?: string; ordemServico?: string; cbo?: string; isActive?: boolean }) {
+export async function updateJobFunction(id: number, companyId: number, data: { nome?: string; descricao?: string; ordemServico?: string; cbo?: string; isActive?: boolean; categoriaMO?: string | null }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const updateData: Record<string, unknown> = {};
@@ -1664,6 +1665,7 @@ export async function updateJobFunction(id: number, companyId: number, data: { n
   if (data.ordemServico !== undefined) updateData.ordemServico = data.ordemServico;
   if (data.cbo !== undefined) updateData.cbo = data.cbo;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
+  if (data.categoriaMO !== undefined) updateData.categoriaMO = data.categoriaMO;
   await db.update(jobFunctions).set(updateData).where(and(eq(jobFunctions.id, id), eq(jobFunctions.companyId, companyId)));
 }
 
