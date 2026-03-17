@@ -180,7 +180,30 @@ export default function OrcamentoBdiIndicadores({
   //   DI-05 = CSLL, DI-06 = CPRB, DI-07 = ISS Municipal.
   //   Usa diretamente sem deduplicação (códigos já são únicos).
   const tributosChart = useMemo(() => {
-    // --- Fonte 1: bdiTributos (A.x/B.x) ---
+    // --- Fonte 1 (PRIORITÁRIA): DI-xx em bdiLinhas (formato FC Engenharia) ---
+    // DI-02=PIS, DI-03=COFINS, DI-04=IRPJ, DI-05=CSLL, DI-06=CPRB, DI-07=ISS
+    // Estes são os percentuais REALMENTE usados no cálculo do BDI.
+    const fromDI = bdiLinhas
+      .filter(l => /^DI-\d+$/.test(String(l.codigo ?? "").trim()) && n(l.percentual) > 0);
+    if (fromDI.length > 0) {
+      return fromDI
+        .map(l => {
+          const aliquota = +(n(l.percentual) * 100).toFixed(4);
+          return {
+            label:    `${l.codigo} - ${l.descricao ?? "?"}`,
+            aliquota,
+            // valorAbsoluto do banco pode ser 0 (base vazia no Excel);
+            // recalcula com base no preço de venda real do projeto.
+            valor: totalVenda > 0 ? (aliquota / 100) * totalVenda : n(l.valorAbsoluto),
+          };
+        })
+        .sort((a, b) => b.aliquota - a.aliquota);
+    }
+
+    // --- Fonte 2 (fallback): bdiTributos (A.x/B.x aba "Tributos Fiscais") ---
+    // Deduplication A.x ↔ B.x pelo sufixo numérico; exclui C.x (ICMS/CPMF) e D.x (IPI).
+    // Mantém a alíquota MENOR entre duplicatas (A.x vs B.x) para evitar inflar o total
+    // com o "Adicional IRPJ" (A.4 = 15%) que normalmente não faz parte do BDI operacional.
     const fromTributos = tributos.filter(t => !t.isHeader && n(t.aliquota) > 0);
     if (fromTributos.length > 0) {
       const seen = new Map<string, { label: string; aliquota: number; valor: number }>();
@@ -189,29 +212,21 @@ export default function OrcamentoBdiIndicadores({
         if (/^[CD]\./i.test(codigo)) return;
         const sufixo = codigo.replace(/^[A-Z]\./, "");
         const aliquota = +(n(t.aliquota) * 100).toFixed(4);
-        const valor = n(t.valorCalculado);
         const entrada = seen.get(sufixo);
-        if (!entrada || aliquota > entrada.aliquota) {
+        // Mantém a alíquota MENOR (evita duplicar IRPJ regular com o Adicional)
+        if (!entrada || aliquota < entrada.aliquota) {
           seen.set(sufixo, {
             label: (codigo ? `${codigo} - ` : "") + (t.descricao ?? "?"),
             aliquota,
-            valor,
+            valor: totalVenda > 0 ? (aliquota / 100) * totalVenda : n(t.valorCalculado),
           });
         }
       });
       return [...seen.values()].filter(t => t.aliquota > 0).sort((a, b) => b.aliquota - a.aliquota);
     }
 
-    // --- Fonte 2: DI-xx em bdiLinhas (formato FC Engenharia) ---
-    return bdiLinhas
-      .filter(l => /^DI-\d+$/.test(String(l.codigo ?? "").trim()) && n(l.percentual) > 0)
-      .map(l => ({
-        label:    `${l.codigo} - ${l.descricao ?? "?"}`,
-        aliquota: +(n(l.percentual) * 100).toFixed(4),
-        valor:    n(l.valorAbsoluto),
-      }))
-      .sort((a, b) => b.aliquota - a.aliquota);
-  }, [tributos, bdiLinhas]);
+    return [];
+  }, [tributos, bdiLinhas, totalVenda]);
 
   // ── Taxa de Comercialização (LC) detalhada ────────────────────────
   const lcChart = useMemo(() => {
@@ -526,9 +541,9 @@ export default function OrcamentoBdiIndicadores({
           <p className="text-sm font-semibold text-slate-700 mb-1">Tributos — Detalhamento por Imposto</p>
           <p className="text-[10px] text-slate-500 mb-1">
             Alíquotas extraídas da planilha BDI · Total: {tributosChart.reduce((s,t)=>s+t.aliquota,0).toFixed(3)}%
-            {tributos.filter(t => !t.isHeader && n(t.aliquota) > 0).length > 0
-              ? " · Fonte: aba Tributos Fiscais (grupos A/B) · ICMS, IPI e CPMF excluídos automaticamente"
-              : " · Fonte: linhas DI-xx da aba BDI principal"}
+            {bdiLinhas.some(l => /^DI-\d+$/.test(String(l.codigo ?? "").trim()) && n(l.percentual) > 0)
+              ? " · Fonte: linhas DI-xx da aba BDI principal (taxas efetivas do BDI)"
+              : " · Fonte: aba Tributos Fiscais (grupos A/B) · ICMS, IPI e CPMF excluídos automaticamente"}
           </p>
           <div className="flex flex-col md:flex-row gap-4">
             <ResponsiveContainer width="100%" height={Math.max(180, tributosChart.length * 38)}>
