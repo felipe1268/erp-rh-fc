@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 458,
+    titulo: "Bugfix CI-01 — coluna Total/Obra corrigida: fator quantidade (FTE) agora aplicado corretamente",
+    descricao: "Corrigido bug onde a coluna Total/Obra da tabela de detalhe CI-01 mostrava valores inflados (ex: R$235.386 para Engenheiro 0,5 FTE quando o correto é R$117.693). Causa: a fórmula de importação calculava totalObra = totalMes × meses sem multiplicar pela quantidade (FTE fraction). Correção em 3 frentes: (1) fórmula do importador corrigida para totalMes × meses × qty; (2) display do frontend recalcula totalObra on-the-fly como totalMes × mesesObra × quantidade; (3) 790 linhas existentes no banco atualizadas via SQL para refletir o valor correto.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 457,
     titulo: "Dashboard — Curva ABC: redesign total com ranking visual intuitivo (barra + % + R$ visíveis)",
     descricao: "Substituído o gráfico ComposedChart de dois eixos pelo formato mais didático: barra de concentração acumulada A/B/C no topo mostrando a distribuição visual do custo; seguida de lista ranqueada dos top-20 insumos onde cada linha mostra rank, nome, mini-barra de proporção, % individual em bold colorido, valor R$ alinhado, badge de classe (A/B/C) e acumulado parcial. Tudo visível sem hover.",

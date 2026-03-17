@@ -823,8 +823,8 @@ function parsearAbaIndiretos(rows: any[][], companyId: number, orcamentoId: numb
       const totalMes  = totalHE > 0 ? totalHE
                         : (toNum(row[16]) || toNum(row[17]) || (sal + bonus));
       // Regra de negócio: qty=0 explícito → funcionário NÃO está alocado nesta obra → custo=0.
-      // Salário já vem pré-rateado pelo usuário (ex: 0,5 FTE → salário já é 50% do valor total).
-      const totalObra = qty === 0 ? 0 : totalMes * (meses || 1);
+      // totalObra = totalMes × meses × qty  (mesma fórmula de calcCI01Linha).
+      const totalObra = qty === 0 ? 0 : totalMes * (meses || 1) * qty;
       linhas.push({
         orcamentoId, companyId, secao, isHeader: false,
         codigo:               c3.substring(0, 30),
