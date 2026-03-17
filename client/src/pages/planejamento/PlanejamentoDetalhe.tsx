@@ -903,6 +903,92 @@ export default function PlanejamentoDetalhe() {
         </DialogContent>
       </Dialog>
 
+      {/* ── MODAL: Importar Custos MO ─────────────────────────────────── */}
+      <Dialog open={showImportarMoModal} onOpenChange={v => setShowImportarMoModal(v)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-blue-600" /> Importar Custos de MO
+            </DialogTitle>
+            <DialogDescription>
+              Aloca o custo real de Mão de Obra da folha fechada para as atividades do cronograma.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Mês de referência</label>
+              <input
+                type="month"
+                className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={mesMoSelecionado}
+                onChange={e => setMesMoSelecionado(e.target.value)}
+              />
+            </div>
+
+            {verificarMoQuery.isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-4 justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" /> Verificando folha...
+              </div>
+            ) : verificarMoQuery.data ? (() => {
+              const v = verificarMoQuery.data;
+              return (
+                <div className="space-y-2">
+                  <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${v.folhaFechada ? "bg-green-50 border border-green-200 text-green-800" : "bg-amber-50 border border-amber-200 text-amber-800"}`}>
+                    {v.folhaFechada ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+                    {v.folhaFechada ? `Folha fechada — ${v.lancamentos.length} lançamento(s)` : "Folha ainda não fechada no módulo RH"}
+                  </div>
+                  <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${v.totalCargosConfigurados > 0 ? "bg-green-50 border border-green-200 text-green-800" : "bg-amber-50 border border-amber-200 text-amber-800"}`}>
+                    {v.totalCargosConfigurados > 0 ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+                    {v.totalCargosConfigurados > 0 ? `${v.totalCargosConfigurados} cargo(s) classificado(s)` : "Nenhum cargo classificado — configure em RH → Config. Cargos"}
+                  </div>
+                  {v.jaTransferido && (
+                    <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm bg-blue-50 border border-blue-200 text-blue-800">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      Já importado em {v.ultimaTransferencia?.executadoEm?.slice(0, 10)} —
+                      D: {Number(v.ultimaTransferencia?.totalDireto ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} |
+                      I: {Number(v.ultimaTransferencia?.totalIndireto ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} |
+                      C: {Number(v.ultimaTransferencia?.totalCentral ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </div>
+                  )}
+                  {v.totalFolha > 0 && (
+                    <div className="bg-slate-50 border rounded-lg px-3 py-2 text-sm">
+                      <span className="text-slate-600">Total líquido da folha: </span>
+                      <span className="font-bold text-slate-800">{v.totalFolha.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })() : null}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImportarMoModal(false)}>Cancelar</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+              disabled={
+                executarTransferenciaMut.isPending ||
+                !verificarMoQuery.data?.folhaFechada ||
+                verificarMoQuery.data?.jaTransferido === true ||
+                (verificarMoQuery.data?.totalCargosConfigurados ?? 0) === 0
+              }
+              onClick={() => {
+                if (!window.confirm(`Importar custos de MO do mês ${mesMoSelecionado}? Os custos serão alocados nas atividades do cronograma.`)) return;
+                executarTransferenciaMut.mutate({
+                  companyId: proj?.companyId ?? 0,
+                  mesReferencia: mesMoSelecionado,
+                  executadoPor: user?.name ?? user?.email ?? "Sistema",
+                });
+              }}
+            >
+              {executarTransferenciaMut.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Importando...</>
+                : <><Users className="h-4 w-4" /> Importar Custos MO</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </DashboardLayout>
   );
 }
@@ -6514,91 +6600,6 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
         </DialogContent>
       </Dialog>
 
-      {/* ── MODAL: Importar Custos MO ─────────────────────────────────── */}
-      <Dialog open={showImportarMoModal} onOpenChange={v => setShowImportarMoModal(v)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-blue-600" /> Importar Custos de MO
-            </DialogTitle>
-            <DialogDescription>
-              Aloca o custo real de Mão de Obra da folha fechada para as atividades do cronograma.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Mês de referência</label>
-              <input
-                type="month"
-                className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={mesMoSelecionado}
-                onChange={e => setMesMoSelecionado(e.target.value)}
-              />
-            </div>
-
-            {verificarMoQuery.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-4 justify-center">
-                <Loader2 className="h-4 w-4 animate-spin" /> Verificando folha...
-              </div>
-            ) : verificarMoQuery.data ? (() => {
-              const v = verificarMoQuery.data;
-              return (
-                <div className="space-y-2">
-                  <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${v.folhaFechada ? "bg-green-50 border border-green-200 text-green-800" : "bg-amber-50 border border-amber-200 text-amber-800"}`}>
-                    {v.folhaFechada ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
-                    {v.folhaFechada ? `Folha fechada — ${v.lancamentos.length} lançamento(s)` : "Folha ainda não fechada no módulo RH"}
-                  </div>
-                  <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${v.totalCargosConfigurados > 0 ? "bg-green-50 border border-green-200 text-green-800" : "bg-amber-50 border border-amber-200 text-amber-800"}`}>
-                    {v.totalCargosConfigurados > 0 ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
-                    {v.totalCargosConfigurados > 0 ? `${v.totalCargosConfigurados} cargo(s) classificado(s)` : "Nenhum cargo classificado — configure em RH → Config. Cargos"}
-                  </div>
-                  {v.jaTransferido && (
-                    <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm bg-blue-50 border border-blue-200 text-blue-800">
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      Já importado em {v.ultimaTransferencia?.executadoEm?.slice(0, 10)} —
-                      D: {Number(v.ultimaTransferencia?.totalDireto ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} |
-                      I: {Number(v.ultimaTransferencia?.totalIndireto ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} |
-                      C: {Number(v.ultimaTransferencia?.totalCentral ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                    </div>
-                  )}
-                  {v.totalFolha > 0 && (
-                    <div className="bg-slate-50 border rounded-lg px-3 py-2 text-sm">
-                      <span className="text-slate-600">Total líquido da folha: </span>
-                      <span className="font-bold text-slate-800">{v.totalFolha.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })() : null}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowImportarMoModal(false)}>Cancelar</Button>
-            <Button
-              className="bg-blue-600 hover:bg-blue-700 gap-1.5"
-              disabled={
-                executarTransferenciaMut.isPending ||
-                !verificarMoQuery.data?.folhaFechada ||
-                verificarMoQuery.data?.jaTransferido === true ||
-                (verificarMoQuery.data?.totalCargosConfigurados ?? 0) === 0
-              }
-              onClick={() => {
-                if (!window.confirm(`Importar custos de MO do mês ${mesMoSelecionado}? Os custos serão alocados nas atividades do cronograma.`)) return;
-                executarTransferenciaMut.mutate({
-                  companyId: proj?.companyId ?? 0,
-                  mesReferencia: mesMoSelecionado,
-                  executadoPor: user?.name ?? user?.email ?? "Sistema",
-                });
-              }}
-            >
-              {executarTransferenciaMut.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Importando...</>
-                : <><Users className="h-4 w-4" /> Importar Custos MO</>}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

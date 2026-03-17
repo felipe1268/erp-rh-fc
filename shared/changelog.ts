@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 475,
+    titulo: "Planejamento — Corrigido erro 'showImportarMoModal is not defined' na aba Revisões",
+    descricao: "Corrigido ReferenceError ao abrir a aba Revisões do cronograma. O modal 'Importar Custos MO' havia sido colocado dentro do componente filho Revisoes(), mas usava variáveis de estado (showImportarMoModal, mesMoSelecionado, verificarMoQuery, executarTransferenciaMut) definidas no componente pai PlanejamentoDetalhe. Correção: o modal foi movido para o componente pai, onde todas as variáveis necessárias estão disponíveis.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 474,
     titulo: "Cotações — Corrigido tela travada ao Cancelar Aprovação",
     descricao: "Corrigido bug onde o diálogo 'Cancelar Aprovação' ficava travado sem resposta ao clicar em Confirmar. Causa: o diálogo é renderizado fora do bloco de detalhe fullscreen; quando showDetalhe se tornava null (por refetch ou navegação), o onClick fazia 'if (!showDetalhe) return' silenciosamente, sem disparar a mutation. Correção: novo estado cancelarCotacaoId armazena o ID da cotação no momento em que o diálogo é aberto. A mutation usa cancelarCotacaoId (imutável durante o fluxo) em vez de showDetalhe. Após cancelamento com sucesso, fecha o fullscreen e volta para a lista.",
