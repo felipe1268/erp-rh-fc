@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 459,
+    titulo: "Indicadores Financeiros — redesign dos cards: R$ como valor principal, % como badge colorido",
+    descricao: "Redesenhados os 6 cards de Indicadores Financeiros do Contrato para hierarquia visual correta: R$ em text-xl font-extrabold como valor primário; % como badge colorido (pill branca sobre fundo da cor) no canto superior direito do card; borda esquerda colorida (border-l-4) por tipo; label e descrição em tipografia menor. Antes: % em text-3xl dominava o card e o R$ era minúsculo (text-xs). Agora: proporção adequada entre os dois valores.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 458,
     titulo: "Bugfix CI-01 — coluna Total/Obra corrigida: fator quantidade (FTE) agora aplicado corretamente",
     descricao: "Corrigido bug onde a coluna Total/Obra da tabela de detalhe CI-01 mostrava valores inflados (ex: R$235.386 para Engenheiro 0,5 FTE quando o correto é R$117.693). Causa: a fórmula de importação calculava totalObra = totalMes × meses sem multiplicar pela quantidade (FTE fraction). Correção em 3 frentes: (1) fórmula do importador corrigida para totalMes × meses × qty; (2) display do frontend recalcula totalObra on-the-fly como totalMes × mesesObra × quantidade; (3) 790 linhas existentes no banco atualizadas via SQL para refletir o valor correto.",
