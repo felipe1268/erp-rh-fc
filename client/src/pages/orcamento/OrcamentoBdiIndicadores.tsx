@@ -674,7 +674,7 @@ export default function OrcamentoBdiIndicadores({
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <div className="flex flex-col gap-1 min-w-[240px] max-w-[280px]">
+            <div className="flex flex-col gap-1 min-w-[320px] max-w-[420px]">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1 px-1.5">Legenda — clique para detalhar</p>
               {indiretosModal.map((d, i) => {
                 const codigo = d.label.match(/^(CI-\d+)/)?.[1] ?? "";
@@ -682,15 +682,15 @@ export default function OrcamentoBdiIndicadores({
                 const active = selectedCI === codigo;
                 return (
                   <div key={i}
-                    className={`flex items-center gap-2 text-xs rounded px-2 py-1.5 cursor-pointer transition-colors ${active ? "bg-blue-50 ring-1 ring-blue-300" : "hover:bg-slate-50"}`}
+                    className={`flex items-start gap-2 text-xs rounded px-2 py-2 cursor-pointer transition-colors ${active ? "bg-blue-50 ring-1 ring-blue-300" : "hover:bg-slate-50"}`}
                     onClick={() => setSelectedCI(prev => prev === codigo ? null : codigo)}>
                     <span className="inline-block w-3 h-3 rounded-sm shrink-0 mt-0.5"
                       style={{ background: active ? "#1e3a8a" : COLORS[i % COLORS.length] }} />
                     <div className="flex-1 min-w-0">
                       <span className="font-bold text-slate-700">{codigo}</span>
-                      <span className="text-slate-500 ml-1 truncate block text-[10px] leading-tight">{descricao}</span>
+                      <span className="text-slate-500 ml-1 block text-[11px] leading-snug whitespace-normal">{descricao}</span>
                     </div>
-                    <span className="font-semibold text-slate-700 shrink-0">{formatBRL(d.valor)}</span>
+                    <span className="font-semibold text-slate-700 shrink-0 text-right">{formatBRL(d.valor)}</span>
                   </div>
                 );
               })}

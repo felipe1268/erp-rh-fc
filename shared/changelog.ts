@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 447,
+    titulo: "BDI — Legenda CI ampliada: textos completos sem truncamento",
+    descricao: "Legenda do gráfico 'Composição dos Custos Indiretos (CI-01..CI-08)' ampliada de max-w-[280px] para max-w-[420px]. Texto da descrição de cada item passou de truncate (cortado com '...') para whitespace-normal com quebra de linha, exibindo o nome completo de cada componente CI. Tamanho do texto de descrição aumentado de 10px para 11px e alinhamento ajustado para items-start.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 446,
     titulo: "BDI — Correção Tributos Fiscais no donut Margem vs. BDI",
     descricao: "O donut 'Margem vs. BDI Total' exibia 'Tributos' = 18,93% por usar regex /^DI-\\d+$/ que capturava todos os DI-xx (inclusive DI-01 Adm. Central, DI-08 Riscos, DI-10 Comissionamento). Corrigido para /^DI-0[2-7]$/ capturando apenas os tributos fiscais reais: DI-02 PIS, DI-03 COFINS, DI-04 IRPJ, DI-05 CSLL, DI-06 CPRB, DI-07 ISS = 10,93%. A terceira fatia agora exibe 'Adm., Riscos e Outros' com o valor correto (BDI − LC − Tributos Fiscais). Label renomeado de 'Tributos' para 'Tributos Fiscais'. Variáveis overheadPct/overheadR$ renomeadas para despIndPct/despIndR$.",
