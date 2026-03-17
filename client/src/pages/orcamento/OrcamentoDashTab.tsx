@@ -445,80 +445,41 @@ export default function OrcamentoDashTab({
       {abcCurva.length > 0 && (
         <div className="rounded-xl border bg-white p-4">
 
-          {/* Cabeçalho com resumo executivo */}
-          <div className="mb-3">
-            <p className="text-sm font-semibold text-slate-700">Quais insumos pesam mais no orçamento?</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Regra 80/20 (Pareto): normalmente poucos itens concentram a maior parte do custo.
-              Quanto menor o rank, mais caro o insumo.
-            </p>
-          </div>
-
-          {/* Cards de resumo rápido */}
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            <div className="rounded-lg bg-red-50 border border-red-100 p-2.5 text-center">
-              <p className="text-[10px] text-red-500 font-semibold uppercase tracking-wide">🔴 Atenção máxima</p>
-              <p className="text-xl font-extrabold text-red-700 leading-none mt-1">{abcStats.classA.length}</p>
-              <p className="text-[10px] text-red-600 font-medium mt-0.5">
-                {abcStats.pctA.toFixed(1)}% do custo total
-              </p>
-              <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                {abcStats.classA.length === 1 ? "Este insumo" : `Estes ${abcStats.classA.length} insumos`} devem ser negociados com prioridade
-              </p>
+          {/* Cabeçalho */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Curva ABC de Pareto — Top 30 Insumos</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Concentração de custo por insumo · ordenado do mais representativo ao menor</p>
             </div>
-            <div className="rounded-lg bg-amber-50 border border-amber-100 p-2.5 text-center">
-              <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wide">🟡 Acompanhar</p>
-              <p className="text-xl font-extrabold text-amber-700 leading-none mt-1">{abcStats.classB.length}</p>
-              <p className="text-[10px] text-amber-600 font-medium mt-0.5">
-                {abcStats.pctB.toFixed(1)}% do custo total
-              </p>
-              <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                Revisão mensal de cotação é suficiente
-              </p>
-            </div>
-            <div className="rounded-lg bg-green-50 border border-green-100 p-2.5 text-center">
-              <p className="text-[10px] text-green-600 font-semibold uppercase tracking-wide">🟢 Baixo impacto</p>
-              <p className="text-xl font-extrabold text-green-700 leading-none mt-1">{abcStats.classC.length}</p>
-              <p className="text-[10px] text-green-600 font-medium mt-0.5">
-                {abcStats.pctC.toFixed(1)}% do custo total
-              </p>
-              <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                Muitos itens, mas juntos somam pouco
-              </p>
+            <div className="flex items-center gap-3 text-[11px] shrink-0">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded-sm bg-indigo-500" />
+                <span className="text-slate-600">% individual (eixo esq.)</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-5 h-0 border-t-2 border-rose-500" />
+                <span className="text-slate-600">% acumulado (eixo dir.)</span>
+              </span>
             </div>
           </div>
 
-          {/* Legenda do gráfico */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] mb-2">
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-center gap-0.5">
-                <div className="w-3 h-3 rounded-sm bg-red-400 shrink-0" />
-                <div className="w-3 h-3 rounded-sm bg-amber-400 shrink-0" />
-                <div className="w-3 h-3 rounded-sm bg-green-400 shrink-0" />
-              </div>
-              <span className="text-slate-600">Barra = quanto cada insumo pesa no custo</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-5 h-0.5 bg-indigo-500 shrink-0" style={{borderTop:"2px dashed #6366f1"}} />
-              <span className="text-slate-600">Linha = soma acumulada dos insumos anteriores</span>
-            </div>
-          </div>
-
-          <ResponsiveContainer width="100%" height={250}>
-            <ComposedChart data={abcCurva} margin={{ top: 8, right: 48, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+          {/* Gráfico */}
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={abcCurva} margin={{ top: 4, right: 52, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis
                 dataKey="idx"
                 tick={{ fontSize: 9, fill: "#94a3b8" }}
-                label={{ value: "← mais caro · rank do insumo · mais barato →", position: "insideBottom", offset: -2, fontSize: 9, fill: "#94a3b8" }}
-                height={28}
+                tickLine={false}
+                axisLine={{ stroke: "#e2e8f0" }}
               />
               <YAxis
                 yAxisId="pct"
                 tickFormatter={v => `${v}%`}
                 tick={{ fontSize: 10, fill: "#94a3b8" }}
-                label={{ value: "peso individual", angle: -90, position: "insideLeft", offset: 12, fontSize: 9, fill: "#94a3b8" }}
-                width={44}
+                tickLine={false}
+                axisLine={false}
+                width={40}
               />
               <YAxis
                 yAxisId="acc"
@@ -526,55 +487,117 @@ export default function OrcamentoDashTab({
                 tickFormatter={v => `${v}%`}
                 tick={{ fontSize: 10, fill: "#94a3b8" }}
                 domain={[0, 100]}
-                label={{ value: "acumulado", angle: 90, position: "insideRight", offset: 12, fontSize: 9, fill: "#94a3b8" }}
-                width={44}
+                tickLine={false}
+                axisLine={false}
+                width={40}
               />
               <Tooltip
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0]?.payload;
                   const classe = d.acc <= 80 ? "A" : d.acc <= 95 ? "B" : "C";
-                  const classeColor = classe === "A" ? "#dc2626" : classe === "B" ? "#d97706" : "#16a34a";
-                  const classeBg   = classe === "A" ? "#fef2f2" : classe === "B" ? "#fffbeb" : "#f0fdf4";
-                  const classeMsg  = classe === "A"
-                    ? "Prioridade máxima — negociar agora"
-                    : classe === "B"
-                    ? "Acompanhar mensalmente"
-                    : "Baixo impacto — gestão simples";
+                  const classeStyle: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+                    A: { bg: "#fafafa", border: "#e2e8f0", text: "#1e293b", badge: "#1e40af" },
+                    B: { bg: "#fafafa", border: "#e2e8f0", text: "#1e293b", badge: "#b45309" },
+                    C: { bg: "#fafafa", border: "#e2e8f0", text: "#1e293b", badge: "#15803d" },
+                  };
+                  const cs = classeStyle[classe];
                   return (
-                    <div className="bg-white border rounded-lg shadow-lg px-3 py-2.5 text-xs min-w-[200px]">
-                      <p className="font-bold mb-1.5 text-slate-800">#{d.idx} {d.label}</p>
-                      <p className="text-slate-600">Peso individual: <b className="text-slate-800">{d.pctVal}%</b></p>
-                      <p className="text-slate-600">Valor: <b className="text-slate-800">{formatBRL(d.custo)}</b></p>
-                      <p className="text-slate-600">Soma até aqui: <b className="text-slate-800">{d.acc}%</b></p>
-                      <div className="mt-1.5 rounded px-2 py-1" style={{ backgroundColor: classeBg, color: classeColor }}>
-                        <span className="font-bold">Classe {classe}</span> · {classeMsg}
+                    <div style={{ background: cs.bg, border: `1px solid ${cs.border}`, borderRadius: 8, padding: "10px 14px", minWidth: 200, boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                        #{d.idx} · {d.label}
+                      </p>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 4 }}>
+                        <div>
+                          <p style={{ fontSize: 10, color: "#94a3b8", marginBottom: 1 }}>Participação</p>
+                          <p style={{ fontSize: 16, fontWeight: 800, color: "#3b82f6", lineHeight: 1 }}>{d.pctVal}%</p>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <p style={{ fontSize: 10, color: "#94a3b8", marginBottom: 1 }}>Valor do insumo</p>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", lineHeight: 1 }}>{formatBRL(d.custo)}</p>
+                        </div>
+                      </div>
+                      <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 6, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 10, color: "#94a3b8" }}>Acumulado até aqui</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{d.acc}%</span>
+                      </div>
+                      <div style={{ marginTop: 6, display: "inline-block", background: cs.badge, color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>
+                        CLASSE {classe}
                       </div>
                     </div>
                   );
                 }}
               />
-              <ReferenceLine yAxisId="acc" y={80}  stroke="#ef4444" strokeDasharray="5 3" strokeWidth={1.5}
-                label={{ value: "80% (fim Classe A)", position: "right", fontSize: 9, fill: "#ef4444", dx: 4 }} />
-              <ReferenceLine yAxisId="acc" y={95}  stroke="#f59e0b" strokeDasharray="5 3" strokeWidth={1.5}
-                label={{ value: "95% (fim Classe B)", position: "right", fontSize: 9, fill: "#f59e0b", dx: 4 }} />
-              <Bar yAxisId="pct" dataKey="pctVal" name="Peso %" radius={[3,3,0,0]}>
+              <ReferenceLine
+                yAxisId="acc" y={80}
+                stroke="#64748b" strokeDasharray="4 3" strokeWidth={1}
+                label={{ value: "80%", position: "right", fontSize: 10, fill: "#64748b", dx: 6 }}
+              />
+              <ReferenceLine
+                yAxisId="acc" y={95}
+                stroke="#94a3b8" strokeDasharray="4 3" strokeWidth={1}
+                label={{ value: "95%", position: "right", fontSize: 10, fill: "#94a3b8", dx: 6 }}
+              />
+              <Bar yAxisId="pct" dataKey="pctVal" name="% individual" radius={[3, 3, 0, 0]} maxBarSize={28}>
                 {abcCurva.map((d, i) => (
                   <Cell
                     key={i}
-                    fill={d.acc <= 80 ? "#f87171" : d.acc <= 95 ? "#fbbf24" : "#4ade80"}
-                    opacity={0.85}
+                    fill={d.acc <= 80 ? "#3b82f6" : d.acc <= 95 ? "#93c5fd" : "#cbd5e1"}
                   />
                 ))}
               </Bar>
-              <Line yAxisId="acc" dataKey="acc" name="Acumulado" stroke="#6366f1" strokeWidth={2}
-                dot={false} strokeDasharray="6 2" />
+              <Line
+                yAxisId="acc" dataKey="acc" name="% acumulado"
+                stroke="#f43f5e" strokeWidth={2} dot={false}
+              />
             </ComposedChart>
           </ResponsiveContainer>
 
-          <p className="text-[10px] text-slate-400 text-center mt-1">
-            Cada barra representa um insumo ordenado do mais caro ao mais barato · a linha mostra a soma acumulada do custo
-          </p>
+          {/* Rodapé com legenda de classes */}
+          <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-3">
+            {[
+              {
+                classe: "A",
+                count: abcStats.classA.length,
+                pct: abcStats.pctA,
+                custo: abcStats.classA.reduce((s,d)=>s+d.custo,0),
+                color: "text-blue-700",
+                bg: "bg-blue-50",
+                border: "border-blue-100",
+                desc: "Alta prioridade · controle contínuo",
+              },
+              {
+                classe: "B",
+                count: abcStats.classB.length,
+                pct: abcStats.pctB,
+                custo: abcStats.classB.reduce((s,d)=>s+d.custo,0),
+                color: "text-sky-600",
+                bg: "bg-sky-50",
+                border: "border-sky-100",
+                desc: "Média prioridade · revisão periódica",
+              },
+              {
+                classe: "C",
+                count: abcStats.classC.length,
+                pct: abcStats.pctC,
+                custo: abcStats.classC.reduce((s,d)=>s+d.custo,0),
+                color: "text-slate-500",
+                bg: "bg-slate-50",
+                border: "border-slate-200",
+                desc: "Baixa prioridade · gestão simplificada",
+              },
+            ].map(c => (
+              <div key={c.classe} className={`rounded-lg border ${c.border} ${c.bg} px-3 py-2.5`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-[10px] font-bold uppercase tracking-widest ${c.color}`}>Classe {c.classe}</span>
+                  <span className={`text-[10px] font-semibold ${c.color}`}>{c.count} insumo{c.count !== 1 ? "s" : ""}</span>
+                </div>
+                <p className={`text-lg font-extrabold leading-none ${c.color}`}>{c.pct.toFixed(2)}%</p>
+                <p className="text-[11px] font-semibold text-slate-600 mt-0.5">{formatBRL(c.custo)}</p>
+                <p className="text-[10px] text-slate-400 mt-1 leading-tight">{c.desc}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

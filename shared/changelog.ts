@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 455,
+    titulo: "Dashboard — Curva ABC: redesign profissional com tooltip de destaque e rodapé por classe",
+    descricao: "Curva ABC/Pareto reformulada: barras azul-escuro (A) / azul-claro (B) / cinza (C) com linha vermelha acumulada; referências tracejadas em 80% e 95%; tooltip profissional mostrando % individual em destaque + valor R$; rodapé com 3 cards de classe mostrando contagem de insumos, % do custo e valor R$ total da classe.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 454,
     titulo: "Dashboard — Curva ABC redesenhada para leitura leiga",
     descricao: "Curva ABC/Pareto dos insumos totalmente reformulada: (1) título em linguagem acessível 'Quais insumos pesam mais no orçamento?'; (2) 3 cards de resumo executivo acima do gráfico com contagem e % de custo por classe (Atenção máxima/Acompanhar/Baixo impacto); (3) barras coloridas por classe (vermelho=A, amarelo=B, verde=C); (4) linhas de referência tracejadas em 80% e 95%; (5) linha acumulada em roxo tracejado; (6) tooltip em linguagem direta com mensagem de ação por classe; (7) legenda e rodapé explicativos.",
