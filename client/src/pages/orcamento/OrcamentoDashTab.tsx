@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ComposedChart, Line,
+  Tooltip, ResponsiveContainer, ComposedChart, Line, ReferenceLine,
 } from "recharts";
 import OrcamentoBdiIndicadores from "./OrcamentoBdiIndicadores";
 
@@ -163,6 +163,17 @@ export default function OrcamentoDashTab({
       };
     });
   }, [insumos]);
+
+  // ── 5b. Stats de classe ABC ──────────────────────────────────────
+  const abcStats = useMemo(() => {
+    const classA = abcCurva.filter(d => d.acc <= 80);
+    const classB = abcCurva.filter(d => d.acc > 80 && d.acc <= 95);
+    const classC = abcCurva.filter(d => d.acc > 95);
+    const pctA = classA.reduce((s, d) => s + d.pctVal, 0);
+    const pctB = classB.reduce((s, d) => s + d.pctVal, 0);
+    const pctC = classC.reduce((s, d) => s + d.pctVal, 0);
+    return { classA, classB, classC, pctA, pctB, pctC };
+  }, [abcCurva]);
 
   // ── 6. Tipos de insumo em % ──────────────────────────────────────
   const tipoDonut = useMemo(() => {
@@ -433,74 +444,137 @@ export default function OrcamentoDashTab({
       {/* ── Row 4: Curva ABC ─────────────────────────────────────── */}
       {abcCurva.length > 0 && (
         <div className="rounded-xl border bg-white p-4">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-700">Curva ABC — Top 30 Insumos</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Pareto: poucos insumos concentram a maior parte do custo</p>
+
+          {/* Cabeçalho com resumo executivo */}
+          <div className="mb-3">
+            <p className="text-sm font-semibold text-slate-700">Quais insumos pesam mais no orçamento?</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Regra 80/20 (Pareto): normalmente poucos itens concentram a maior parte do custo.
+              Quanto menor o rank, mais caro o insumo.
+            </p>
+          </div>
+
+          {/* Cards de resumo rápido */}
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="rounded-lg bg-red-50 border border-red-100 p-2.5 text-center">
+              <p className="text-[10px] text-red-500 font-semibold uppercase tracking-wide">🔴 Atenção máxima</p>
+              <p className="text-xl font-extrabold text-red-700 leading-none mt-1">{abcStats.classA.length}</p>
+              <p className="text-[10px] text-red-600 font-medium mt-0.5">
+                {abcStats.pctA.toFixed(1)}% do custo total
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                {abcStats.classA.length === 1 ? "Este insumo" : `Estes ${abcStats.classA.length} insumos`} devem ser negociados com prioridade
+              </p>
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px]">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-sm bg-blue-500 shrink-0" />
-                <span className="text-slate-600">Barra = participação individual (%)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-0.5 bg-red-500 shrink-0" />
-                <span className="text-slate-600">Linha = % acumulado</span>
-              </div>
+            <div className="rounded-lg bg-amber-50 border border-amber-100 p-2.5 text-center">
+              <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wide">🟡 Acompanhar</p>
+              <p className="text-xl font-extrabold text-amber-700 leading-none mt-1">{abcStats.classB.length}</p>
+              <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+                {abcStats.pctB.toFixed(1)}% do custo total
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                Revisão mensal de cotação é suficiente
+              </p>
+            </div>
+            <div className="rounded-lg bg-green-50 border border-green-100 p-2.5 text-center">
+              <p className="text-[10px] text-green-600 font-semibold uppercase tracking-wide">🟢 Baixo impacto</p>
+              <p className="text-xl font-extrabold text-green-700 leading-none mt-1">{abcStats.classC.length}</p>
+              <p className="text-[10px] text-green-600 font-medium mt-0.5">
+                {abcStats.pctC.toFixed(1)}% do custo total
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                Muitos itens, mas juntos somam pouco
+              </p>
             </div>
           </div>
 
-          <ResponsiveContainer width="100%" height={230}>
-            <ComposedChart data={abcCurva} margin={{ top: 0, right: 40, left: 0, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="idx" tick={{ fontSize: 9 }} label={{ value: "Rank", position: "insideBottom", offset: -10, fontSize: 10 }} />
-              <YAxis yAxisId="pct"  tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="acc"  orientation="right" tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} domain={[0, 100]} />
+          {/* Legenda do gráfico */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] mb-2">
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-0.5">
+                <div className="w-3 h-3 rounded-sm bg-red-400 shrink-0" />
+                <div className="w-3 h-3 rounded-sm bg-amber-400 shrink-0" />
+                <div className="w-3 h-3 rounded-sm bg-green-400 shrink-0" />
+              </div>
+              <span className="text-slate-600">Barra = quanto cada insumo pesa no custo</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-5 h-0.5 bg-indigo-500 shrink-0" style={{borderTop:"2px dashed #6366f1"}} />
+              <span className="text-slate-600">Linha = soma acumulada dos insumos anteriores</span>
+            </div>
+          </div>
+
+          <ResponsiveContainer width="100%" height={250}>
+            <ComposedChart data={abcCurva} margin={{ top: 8, right: 48, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+              <XAxis
+                dataKey="idx"
+                tick={{ fontSize: 9, fill: "#94a3b8" }}
+                label={{ value: "← mais caro · rank do insumo · mais barato →", position: "insideBottom", offset: -2, fontSize: 9, fill: "#94a3b8" }}
+                height={28}
+              />
+              <YAxis
+                yAxisId="pct"
+                tickFormatter={v => `${v}%`}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                label={{ value: "peso individual", angle: -90, position: "insideLeft", offset: 12, fontSize: 9, fill: "#94a3b8" }}
+                width={44}
+              />
+              <YAxis
+                yAxisId="acc"
+                orientation="right"
+                tickFormatter={v => `${v}%`}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                domain={[0, 100]}
+                label={{ value: "acumulado", angle: 90, position: "insideRight", offset: 12, fontSize: 9, fill: "#94a3b8" }}
+                width={44}
+              />
               <Tooltip
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0]?.payload;
                   const classe = d.acc <= 80 ? "A" : d.acc <= 95 ? "B" : "C";
-                  const classeColor = classe === "A" ? "text-red-600" : classe === "B" ? "text-amber-600" : "text-green-600";
+                  const classeColor = classe === "A" ? "#dc2626" : classe === "B" ? "#d97706" : "#16a34a";
+                  const classeBg   = classe === "A" ? "#fef2f2" : classe === "B" ? "#fffbeb" : "#f0fdf4";
+                  const classeMsg  = classe === "A"
+                    ? "Prioridade máxima — negociar agora"
+                    : classe === "B"
+                    ? "Acompanhar mensalmente"
+                    : "Baixo impacto — gestão simples";
                   return (
-                    <div className="bg-white border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[180px]">
-                      <p className="font-semibold mb-1 text-slate-700">#{d.idx} {d.label}</p>
-                      <p>Participação: <b>{d.pctVal}%</b></p>
-                      <p>Custo: <b>{formatBRL(d.custo)}</b></p>
-                      <p>Acumulado: <b>{d.acc}%</b></p>
-                      <p className={`font-semibold ${classeColor}`}>Classe {classe}</p>
+                    <div className="bg-white border rounded-lg shadow-lg px-3 py-2.5 text-xs min-w-[200px]">
+                      <p className="font-bold mb-1.5 text-slate-800">#{d.idx} {d.label}</p>
+                      <p className="text-slate-600">Peso individual: <b className="text-slate-800">{d.pctVal}%</b></p>
+                      <p className="text-slate-600">Valor: <b className="text-slate-800">{formatBRL(d.custo)}</b></p>
+                      <p className="text-slate-600">Soma até aqui: <b className="text-slate-800">{d.acc}%</b></p>
+                      <div className="mt-1.5 rounded px-2 py-1" style={{ backgroundColor: classeBg, color: classeColor }}>
+                        <span className="font-bold">Classe {classe}</span> · {classeMsg}
+                      </div>
                     </div>
                   );
                 }}
               />
-              <Bar    yAxisId="pct" dataKey="pctVal" name="Part. %" fill="#3b82f6" radius={[2,2,0,0]} />
-              <Line  yAxisId="acc" dataKey="acc"    name="Acum. %" stroke="#ef4444" strokeWidth={2} dot={false} />
+              <ReferenceLine yAxisId="acc" y={80}  stroke="#ef4444" strokeDasharray="5 3" strokeWidth={1.5}
+                label={{ value: "80% (fim Classe A)", position: "right", fontSize: 9, fill: "#ef4444", dx: 4 }} />
+              <ReferenceLine yAxisId="acc" y={95}  stroke="#f59e0b" strokeDasharray="5 3" strokeWidth={1.5}
+                label={{ value: "95% (fim Classe B)", position: "right", fontSize: 9, fill: "#f59e0b", dx: 4 }} />
+              <Bar yAxisId="pct" dataKey="pctVal" name="Peso %" radius={[3,3,0,0]}>
+                {abcCurva.map((d, i) => (
+                  <Cell
+                    key={i}
+                    fill={d.acc <= 80 ? "#f87171" : d.acc <= 95 ? "#fbbf24" : "#4ade80"}
+                    opacity={0.85}
+                  />
+                ))}
+              </Bar>
+              <Line yAxisId="acc" dataKey="acc" name="Acumulado" stroke="#6366f1" strokeWidth={2}
+                dot={false} strokeDasharray="6 2" />
             </ComposedChart>
           </ResponsiveContainer>
 
-          <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-[11px]">
-            <div className="flex items-start gap-2 bg-red-50 rounded-lg p-2">
-              <div className="w-4 h-4 rounded flex items-center justify-center bg-red-100 text-red-700 font-bold text-[10px] shrink-0 mt-0.5">A</div>
-              <div>
-                <p className="font-semibold text-red-700">Classe A — até 80%</p>
-                <p className="text-slate-500 leading-tight">Poucos insumos, alto valor. Controle diário.</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-2 bg-amber-50 rounded-lg p-2">
-              <div className="w-4 h-4 rounded flex items-center justify-center bg-amber-100 text-amber-700 font-bold text-[10px] shrink-0 mt-0.5">B</div>
-              <div>
-                <p className="font-semibold text-amber-700">Classe B — 80–95%</p>
-                <p className="text-slate-500 leading-tight">Controle moderado e revisão periódica.</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-2 bg-green-50 rounded-lg p-2">
-              <div className="w-4 h-4 rounded flex items-center justify-center bg-green-100 text-green-700 font-bold text-[10px] shrink-0 mt-0.5">C</div>
-              <div>
-                <p className="font-semibold text-green-700">Classe C — 95–100%</p>
-                <p className="text-slate-500 leading-tight">Muitos itens, baixo impacto. Gestão simples.</p>
-              </div>
-            </div>
-          </div>
+          <p className="text-[10px] text-slate-400 text-center mt-1">
+            Cada barra representa um insumo ordenado do mais caro ao mais barato · a linha mostra a soma acumulada do custo
+          </p>
         </div>
       )}
 

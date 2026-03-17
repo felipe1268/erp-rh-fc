@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 454,
+    titulo: "Dashboard — Curva ABC redesenhada para leitura leiga",
+    descricao: "Curva ABC/Pareto dos insumos totalmente reformulada: (1) título em linguagem acessível 'Quais insumos pesam mais no orçamento?'; (2) 3 cards de resumo executivo acima do gráfico com contagem e % de custo por classe (Atenção máxima/Acompanhar/Baixo impacto); (3) barras coloridas por classe (vermelho=A, amarelo=B, verde=C); (4) linhas de referência tracejadas em 80% e 95%; (5) linha acumulada em roxo tracejado; (6) tooltip em linguagem direta com mensagem de ação por classe; (7) legenda e rodapé explicativos.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 453,
     titulo: "BDI — Indicadores Financeiros redesenhados em cards KPI com % em destaque",
     descricao: "Layout dos 'Indicadores Financeiros do Contrato' totalmente redesenhado: de lista de linhas para grid 3×2 de cards KPI individuais. Cada card exibe: label pequeno no topo, % em font-extrabold text-3xl colorido (2 casas decimais), valor R$ em bold abaixo. Markup exibe ×1.5893 em destaque azul. Lucro Bruto = verde, Carga Tributária = vermelho, Lucro Líquido = emerald, Break-even = cinza, Folga = verde, Desconto (se houver) = âmbar.",
