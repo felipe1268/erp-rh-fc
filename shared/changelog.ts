@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 449,
+    titulo: "BDI — Lucro Líquido corrigido: lê L-02 diretamente da planilha",
+    descricao: "Lucro Líquido era calculado erroneamente como 'Lucro Bruto − Tributos Fiscais' (LC − DI-02..07), resultando em R$ 112K. O correto é o L-02 da planilha BDI = R$ 268.251,71 (15,51%), que já inclui todas as deduções internas da planilha (comissionamento etc.). Código atualizado: lê bdiLinhas.find(l => l.codigo === 'L-02') e usa valorAbsoluto (ou percentual × totalVenda como fallback). Subtítulo do card atualizado para 'L-02 da planilha BDI · 15,5059% do contrato'.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 448,
     titulo: "BDI — Destaque visual em linhas com valor nas tabelas CI",
     descricao: "Nas tabelas de detalhe dos Custos Indiretos (CI-01..CI-08), linhas com Total/Obra > 0 recebem fundo verde-esmeralda (bg-emerald-50), borda esquerda verde (border-l-3 border-emerald-500), descrição em negrito e valor em verde-escuro (text-emerald-700 bg-emerald-100). Linhas sem valor (—) ficam apagadas (text-slate-300/400) para não distrair. Aplicado nas duas variantes de tabela: CI-01 (RH) e CI-02..CI-08 (materiais/equipamentos).",

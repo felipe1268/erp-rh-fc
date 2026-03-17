@@ -309,18 +309,22 @@ export default function OrcamentoBdiIndicadores({
   const overheadPct      = Math.max(0, bdiPct - totalTributosPct - totalLcPct);
 
   // ── Indicadores financeiros ───────────────────────────────────────
-  // Lucro Bruto (LC) = totalVenda × margemLC%
+  // Lucro Bruto (LC) = totalVenda × margemLC% (L-01 da planilha)
   const lucroLC        = totalVenda * margemLucroPct;
   // Tributos = totalVenda × aliquota% (impostos calculados sobre a receita)
   const tributosAbsR$  = totalVenda * totalTributosPct / 100;
   // Break-even = receita mínima onde lucro = 0
-  //   = totalCusto + overhead + tributos calculados na própria receita de equilíbrio
-  //   = totalVenda - LucroLC  (equivalente: toda receita exceto a margem de lucro)
+  //   = totalVenda - LucroLC (toda receita exceto a margem de lucro bruto)
   const breakEven      = totalVenda - lucroLC;
   // Folga acima do break-even = Lucro Bruto (o que supera todos os custos + tributos)
   const folgaBreakEven = lucroLC;
-  // Lucro Líquido = Lucro Bruto − Tributos (o que a empresa efetivamente embolsa)
-  const lucroLiquido   = lucroLC - tributosAbsR$;
+  // Lucro Líquido = L-02 da planilha BDI (já calculado pela planilha, após deduções como
+  // comissionamento e outros ajustes internos). NÃO é Lucro Bruto − Tributos fiscais.
+  const l02Line        = bdiLinhas.find((l: any) => l.codigo === 'L-02');
+  const lucroLiquido   = l02Line
+    ? (n(l02Line.valorAbsoluto) > 0 ? n(l02Line.valorAbsoluto) : n(l02Line.percentual) * totalVenda)
+    : lucroLC - tributosAbsR$;
+  const lucroLiquidoPct = l02Line ? n(l02Line.percentual) * 100 : 0;
   const distribuicaoBdi  = [
     { name: "Lucro (LC)",  value: +totalLcPct.toFixed(2),       fill: "#10b981" },
     { name: "Tributos",    value: +totalTributosPct.toFixed(2),  fill: "#ef4444" },
@@ -512,8 +516,10 @@ export default function OrcamentoBdiIndicadores({
             </div>
             <div className="flex justify-between items-center py-2 border-b">
               <span className="flex flex-col gap-0.5">
-                <span className="text-xs text-slate-600">Lucro líquido (após tributos)</span>
-                <span className="text-[10px] text-slate-400">Lucro Bruto − Carga Tributária</span>
+                <span className="text-xs text-slate-600">Lucro líquido</span>
+                <span className="text-[10px] text-slate-400">
+                  L-02 da planilha BDI{lucroLiquidoPct > 0 ? ` · ${lucroLiquidoPct.toFixed(4)}% do contrato` : ""}
+                </span>
               </span>
               <span className={`font-bold ${lucroLiquido >= 0 ? "text-emerald-700" : "text-red-500"}`}>
                 {formatBRL(lucroLiquido)}
