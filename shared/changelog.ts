@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 481,
+    titulo: "Hotfix — Projeto não carregava após Rev. 480",
+    descricao: "A coluna 'diferencas' adicionada na Rev. 480 não estava sendo criada no banco da empresa (Neon), pois o mecanismo de sincronização automática não detectou o tipo 'text'. Corrigido com: (1) hook de startup que adiciona a coluna via ALTER TABLE IF NOT EXISTS diretamente no banco Neon, (2) fallback no getProjetoById que usa SQL simples (sem diferencas) caso o SELECT com a nova coluna falhe — garantindo que o projeto sempre carregue.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 480,
     titulo: "Revisões — Detecção automática de alterações no cronograma",
     descricao: "Ao criar uma nova revisão com novo arquivo MS Project, o sistema compara automaticamente as atividades da revisão anterior com as da nova e registra: atividades adicionadas, removidas e alteradas (com campo, valor anterior e novo valor). O card de cada revisão exibe um resumo clicável (badges +X/-Y/~Z) que expande um painel detalhado com todas as mudanças identificadas por código EAP.",

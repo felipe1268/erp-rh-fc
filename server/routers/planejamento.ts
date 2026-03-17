@@ -170,7 +170,10 @@ export const planejamentoRouter = router({
       const [revisoes, orcamento] = await Promise.all([
         db.select().from(planejamentoRevisoes)
           .where(eq(planejamentoRevisoes.projetoId, input.id))
-          .orderBy(asc(planejamentoRevisoes.numero)),
+          .orderBy(asc(planejamentoRevisoes.numero))
+          .catch(() => db.execute(
+            sql`SELECT id, projeto_id, numero, descricao, data_revisao, motivo, responsavel, aprovado_por, status, observacao, is_baseline, consolidado, criado_em FROM planejamento_revisoes WHERE projeto_id = ${input.id} ORDER BY numero ASC`
+          ).then((r: any) => Array.isArray(r) ? r : (r?.rows ?? []))),
         projeto.orcamentoId
           ? db.select().from(orcamentos).where(eq(orcamentos.id, projeto.orcamentoId)).then(r => r[0])
           : Promise.resolve(null),
