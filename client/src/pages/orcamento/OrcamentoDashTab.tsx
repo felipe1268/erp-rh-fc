@@ -128,8 +128,7 @@ export default function OrcamentoDashTab({
         label:  i.descricao?.slice(0, 32) ?? "—",
         custo:  n(i.custoTotal),
         pctVal: +(n(i.percentualTotal) * 100).toFixed(2),
-      }))
-      .reverse(),
+      })),
   [insumos]);
 
   // ── 4. BDI por aba (pie) ─────────────────────────────────────────

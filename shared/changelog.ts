@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 450,
+    titulo: "Dashboard — Top 15 Insumos: maior valor no topo do gráfico",
+    descricao: "O gráfico horizontal 'Top 15 Insumos — Participação no Custo (%)' exibia os insumos em ordem crescente (menor no topo, maior na base). Removido o .reverse() que invertia a ordenação após o .sort() descendente. Agora o insumo de maior custo aparece sempre no topo do gráfico, facilitando a leitura imediata.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 449,
     titulo: "BDI — Lucro Líquido corrigido: lê L-02 diretamente da planilha",
     descricao: "Lucro Líquido era calculado erroneamente como 'Lucro Bruto − Tributos Fiscais' (LC − DI-02..07), resultando em R$ 112K. O correto é o L-02 da planilha BDI = R$ 268.251,71 (15,51%), que já inclui todas as deduções internas da planilha (comissionamento etc.). Código atualizado: lê bdiLinhas.find(l => l.codigo === 'L-02') e usa valorAbsoluto (ou percentual × totalVenda como fallback). Subtítulo do card atualizado para 'L-02 da planilha BDI · 15,5059% do contrato'.",
