@@ -507,70 +507,82 @@ export default function OrcamentoBdiIndicadores({
 
       {/* ── 4. Indicadores Financeiros do Contrato ────────────────── */}
       <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-2">Indicadores Financeiros do Contrato</p>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center py-2 border-b">
-              <span className="text-xs text-slate-600">Markup (fator multiplicador)</span>
-              <span className="font-bold text-blue-700">×{(totalVenda / Math.max(totalCusto, 1)).toFixed(4)}</span>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b">
-              <span className="text-xs text-slate-600">Lucro bruto (LC%)</span>
-              <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[11px] text-slate-400 font-mono">{(margemLucroPct * 100).toFixed(4)}%</span>
-                <span className="font-bold text-green-700">{formatBRL(totalVenda * margemLucroPct)}</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b">
-              <span className="text-xs text-slate-600">Carga tributária estimada</span>
-              <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[11px] text-slate-400 font-mono">{totalTributosPct.toFixed(4)}%</span>
-                <span className="font-bold text-red-600">{formatBRL(tributosAbsR$)}</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b">
-              <span className="flex flex-col gap-0.5">
-                <span className="text-xs text-slate-600">Lucro líquido</span>
-                <span className="text-[10px] text-slate-400">L-02 da planilha BDI</span>
-              </span>
-              <div className="flex flex-col items-end gap-0.5">
-                {lucroLiquidoPct > 0 && <span className="text-[11px] text-slate-400 font-mono">{lucroLiquidoPct.toFixed(4)}%</span>}
-                <span className={`font-bold ${lucroLiquido >= 0 ? "text-emerald-700" : "text-red-500"}`}>
-                  {formatBRL(lucroLiquido)}
-                </span>
-              </div>
-            </div>
-            {valorNegociado > 0 && (
-              <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-xs text-slate-600">Desconto negociado</span>
-                <div className="flex flex-col items-end gap-0.5">
-                  <span className="text-[11px] text-slate-400 font-mono">{totalVenda > 0 ? (((totalVenda - valorNegociado) / totalVenda) * 100).toFixed(4) : "0.0000"}%</span>
-                  <span className="font-bold text-amber-600">{formatBRL(totalVenda - valorNegociado)}</span>
-                </div>
-              </div>
-            )}
-            <div className="flex justify-between items-center py-2 border-b">
-              <span className="flex flex-col gap-0.5">
-                <span className="text-xs text-slate-600">Ponto de equilíbrio (break-even)</span>
-                <span className="text-[10px] text-slate-400">Receita mínima: cobre custo + overhead + tributos (lucro = 0)</span>
-              </span>
-              <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[11px] text-slate-400 font-mono">{totalVenda > 0 ? ((breakEven / totalVenda) * 100).toFixed(4) : "0.0000"}%</span>
-                <span className="font-bold text-slate-700">{formatBRL(breakEven)}</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="flex flex-col gap-0.5">
-                <span className="text-xs text-slate-600">Folga acima do break-even</span>
-                <span className="text-[10px] text-slate-400">= Lucro Bruto (LC) · margem acima do ponto de equilíbrio</span>
-              </span>
-              <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[11px] text-slate-400 font-mono">{totalVenda > 0 ? ((folgaBreakEven / totalVenda) * 100).toFixed(4) : "0.0000"}%</span>
-                <span className={`font-bold ${folgaBreakEven >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {formatBRL(folgaBreakEven)}
-                </span>
-              </div>
-            </div>
+        <p className="text-sm font-semibold text-slate-700 mb-3">Indicadores Financeiros do Contrato</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+
+          {/* Markup */}
+          <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 flex flex-col gap-1">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">Markup</span>
+            <span className="text-3xl font-extrabold text-blue-700 leading-none">
+              ×{(totalVenda / Math.max(totalCusto, 1)).toFixed(4)}
+            </span>
+            <span className="text-[11px] text-slate-400 mt-1">fator multiplicador</span>
           </div>
+
+          {/* Lucro Bruto */}
+          <div className="rounded-lg border border-green-100 bg-green-50/50 p-3 flex flex-col gap-1">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">Lucro Bruto (LC)</span>
+            <span className="text-3xl font-extrabold text-green-700 leading-none">
+              {(margemLucroPct * 100).toFixed(2)}%
+            </span>
+            <span className="text-xs font-bold text-slate-600 mt-1">{formatBRL(totalVenda * margemLucroPct)}</span>
+          </div>
+
+          {/* Carga Tributária */}
+          <div className="rounded-lg border border-red-100 bg-red-50/50 p-3 flex flex-col gap-1">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">Carga Tributária</span>
+            <span className="text-3xl font-extrabold text-red-600 leading-none">
+              {totalTributosPct.toFixed(2)}%
+            </span>
+            <span className="text-xs font-bold text-slate-600 mt-1">{formatBRL(tributosAbsR$)}</span>
+          </div>
+
+          {/* Lucro Líquido */}
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3 flex flex-col gap-1">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">Lucro Líquido</span>
+            <span className={`text-3xl font-extrabold leading-none ${lucroLiquido >= 0 ? "text-emerald-700" : "text-red-500"}`}>
+              {lucroLiquidoPct > 0 ? `${lucroLiquidoPct.toFixed(2)}%` : "—"}
+            </span>
+            <span className={`text-xs font-bold mt-1 ${lucroLiquido >= 0 ? "text-slate-600" : "text-red-500"}`}>
+              {formatBRL(lucroLiquido)}
+            </span>
+            <span className="text-[10px] text-slate-400">L-02 · planilha BDI</span>
+          </div>
+
+          {/* Break-even */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-1">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">Break-even</span>
+            <span className="text-3xl font-extrabold text-slate-700 leading-none">
+              {totalVenda > 0 ? ((breakEven / totalVenda) * 100).toFixed(2) : "0.00"}%
+            </span>
+            <span className="text-xs font-bold text-slate-600 mt-1">{formatBRL(breakEven)}</span>
+            <span className="text-[10px] text-slate-400">receita mínima sem lucro</span>
+          </div>
+
+          {/* Folga acima do break-even */}
+          <div className="rounded-lg border border-green-100 bg-green-50/50 p-3 flex flex-col gap-1">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">Folga (acima B-E)</span>
+            <span className={`text-3xl font-extrabold leading-none ${folgaBreakEven >= 0 ? "text-green-600" : "text-red-500"}`}>
+              {totalVenda > 0 ? ((folgaBreakEven / totalVenda) * 100).toFixed(2) : "0.00"}%
+            </span>
+            <span className={`text-xs font-bold mt-1 ${folgaBreakEven >= 0 ? "text-slate-600" : "text-red-500"}`}>
+              {formatBRL(folgaBreakEven)}
+            </span>
+            <span className="text-[10px] text-slate-400">= Lucro Bruto (LC)</span>
+          </div>
+
+          {/* Desconto negociado (condicional) */}
+          {valorNegociado > 0 && (
+            <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 flex flex-col gap-1">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">Desconto Negociado</span>
+              <span className="text-3xl font-extrabold text-amber-600 leading-none">
+                {totalVenda > 0 ? (((totalVenda - valorNegociado) / totalVenda) * 100).toFixed(2) : "0.00"}%
+              </span>
+              <span className="text-xs font-bold text-slate-600 mt-1">{formatBRL(totalVenda - valorNegociado)}</span>
+            </div>
+          )}
+
+        </div>
       </div>
 
       {/* ── 5. Tributos Detalhados ────────────────────────────────── */}

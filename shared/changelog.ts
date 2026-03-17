@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 453,
+    titulo: "BDI — Indicadores Financeiros redesenhados em cards KPI com % em destaque",
+    descricao: "Layout dos 'Indicadores Financeiros do Contrato' totalmente redesenhado: de lista de linhas para grid 3×2 de cards KPI individuais. Cada card exibe: label pequeno no topo, % em font-extrabold text-3xl colorido (2 casas decimais), valor R$ em bold abaixo. Markup exibe ×1.5893 em destaque azul. Lucro Bruto = verde, Carga Tributária = vermelho, Lucro Líquido = emerald, Break-even = cinza, Folga = verde, Desconto (se houver) = âmbar.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 452,
     titulo: "BDI — Indicadores Financeiros: exibe % acima do R$ em cada linha",
     descricao: "Cada indicador financeiro (Lucro Bruto, Carga Tributária, Lucro Líquido, Break-even, Folga) agora exibe o percentual correspondente em cinza acima do valor em R$. Lucro Bruto = margemLC%; Carga Tributária = totalTributosPct; Lucro Líquido = L-02%; Break-even = breakEven/totalVenda; Folga = folgaBreakEven/totalVenda. Formato: XX.XXXX% acima do R$ principal.",
