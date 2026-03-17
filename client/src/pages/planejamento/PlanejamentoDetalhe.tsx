@@ -2780,7 +2780,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               const isCollapsed = collapsed.has(a.eapCodigo);
               const indent = a.nivel ? (a.nivel - 1) * 16 : 0;
               const avanco = avMap[a.id] ?? 0;
-              const atrasada = !editando && a.dataFim && a.dataFim < new Date().toISOString().split("T")[0] && avanco < 100;
+              const atrasada = !editando && !hasChildren && a.dataFim && a.dataFim < new Date().toISOString().split("T")[0] && avanco < 100;
 
               // MS-Project style row color
               const nivel = a.nivel ?? 1;
