@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 464,
+    titulo: "Bugfix CI-01 — Total/Obra corrigido: banco ORC=35 e lógica do frontend",
+    descricao: "ORC=35 (Onda da Luciana): a planilha Excel gravou em total_mes o custo total da obra (já × meses × qty). O frontend multiplicava novamente, inflando o Total/Obra em ~2,5x (ex: R$24.293 virava R$60.733). Correção dupla: (1) SQL corrigiu os 3 funcionários alocados — total_obra = valor original de total_mes, total_mes = custo mensal real por pessoa; (2) Frontend agora usa row.totalObra diretamente do banco em vez de recalcular totalMes × meses × qty. Para outros orcamentos o comportamento não muda.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 463,
     titulo: "Indicadores Financeiros — Folga (B-E) substituída por ROI do Contrato",
     descricao: "Card 'Folga (acima B-E)' removido por ser redundante com Lucro Bruto. Substituído por 'ROI do Contrato' (Lucro Líquido ÷ Custo Total × 100) — indica o retorno financeiro real sobre cada R$ investido na obra, com badge de % em roxo/vermelho conforme positivo/negativo.",

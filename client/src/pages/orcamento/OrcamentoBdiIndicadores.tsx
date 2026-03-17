@@ -891,9 +891,11 @@ export default function OrcamentoBdiIndicadores({
                   <tbody>
                     {selectedCILinhas.map((row: any, i: number) => {
                       const qty = n(row.quantidade);
-                      const ci01TotalObra = qty > 0
-                        ? Math.round(n(row.totalMes) * n(row.mesesObra) * qty * 100) / 100
-                        : 0;
+                      // totalObra já vem correto do banco (gravado na importação ou corrigido via SQL).
+                      // NÃO recalculamos totalMes × meses × qty pois totalMes pode já ser o total da obra.
+                      const ci01TotalObra = n(row.totalObra) > 0
+                        ? n(row.totalObra)
+                        : (qty > 0 ? Math.round(n(row.totalMes) * n(row.mesesObra) * qty * 100) / 100 : 0);
                       const hasVal = ci01TotalObra > 0;
                       return (
                       <tr key={row.id ?? i} className={hasVal ? "bg-emerald-50 border-l-[3px] border-emerald-500" : `${i % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
@@ -915,7 +917,10 @@ export default function OrcamentoBdiIndicadores({
                       <td className="px-3 py-2 text-right font-bold font-mono text-xs bg-yellow-100">
                         {formatBRL(selectedCILinhas.reduce((s: number, r: any) => {
                           const qty = n(r.quantidade);
-                          return s + (qty > 0 ? Math.round(n(r.totalMes) * n(r.mesesObra) * qty * 100) / 100 : 0);
+                          const val = n(r.totalObra) > 0
+                            ? n(r.totalObra)
+                            : (qty > 0 ? Math.round(n(r.totalMes) * n(r.mesesObra) * qty * 100) / 100 : 0);
+                          return s + val;
                         }, 0))}
                       </td>
                     </tr>
