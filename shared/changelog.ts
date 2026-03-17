@@ -2725,6 +2725,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 504,
+    titulo: "Cronograma — Corrigido erro de validação ao salvar atividades (quantidadePlanejada)",
+    descricao: "O erro 'Invalid input: expected number, received string' ao salvar atividades do cronograma foi corrigido. A causa raiz era que colunas do tipo `numeric` no PostgreSQL retornam valores como strings no JavaScript (ex: '0', '5.25'), mas o schema Zod da mutation `salvarAtividades` esperava `number`. A correção usa `z.preprocess` em todos os campos numéricos da mutation (id, nivel, duracaoDias, pesoFinanceiro, quantidadePlanejada, ordem), convertendo automaticamente strings para número antes da validação. Isso torna o endpoint robusto para receber dados do banco ou do formulário.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 503,
     titulo: "Dashboard RH — Mapa interativo de funcionários (Brasil → Estado → Cidade → Rua)",
     descricao: "O mapa estático de distribuição por estado foi substituído por um mapa totalmente interativo com drill-down em 3 níveis: Nível 1 (Brasil) — mapa SVG do Brasil com estados coloridos por densidade de funcionários; Nível 2 (Estado) — ao clicar em um estado, abre mapa Leaflet/OpenStreetMap com marcadores circulares por cidade, onde o tamanho do círculo é proporcional ao número de funcionários. Grade de cidades clicáveis abaixo do mapa para navegação rápida; Nível 3 (Cidade) — ao clicar em uma cidade, geocodifica endereços individuais dos funcionários via Nominatim (OpenStreetMap, gratuito) e plota pins personalizados nas ruas onde moram. Cada pin mostra nome, função, status e endereço completo no popup. Funcionários sem endereço cadastrado não aparecem. Cache em sessionStorage evita re-geocodificação. Novo endpoint tRPC `funcionariosParaMapa` no backend retorna endereços por empresa. BrazilMap recebeu prop `hideCard` para reutilização sem Card wrapper.",
