@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 457,
+    titulo: "Dashboard — Curva ABC: redesign total com ranking visual intuitivo (barra + % + R$ visíveis)",
+    descricao: "Substituído o gráfico ComposedChart de dois eixos pelo formato mais didático: barra de concentração acumulada A/B/C no topo mostrando a distribuição visual do custo; seguida de lista ranqueada dos top-20 insumos onde cada linha mostra rank, nome, mini-barra de proporção, % individual em bold colorido, valor R$ alinhado, badge de classe (A/B/C) e acumulado parcial. Tudo visível sem hover.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 456,
     titulo: "Dashboard — Curva ABC: pills de classe no cabeçalho + tabela-ranking de insumos com % e R$ em destaque",
     descricao: "Curva ABC redesenhada: (1) pills de classe A/B/C no topo com % em destaque (18px bold) e R$ total de cada classe; (2) gráfico ComposedChart mantido com barras e linha acumulada; (3) rodapé substituído por tabela-ranking dos top-12 insumos mostrando nome, mini barra de proporção, % individual em bold colorido e valor R$ alinhado — tudo visível sem hover.",

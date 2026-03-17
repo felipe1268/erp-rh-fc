@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ComposedChart, Line, ReferenceLine,
+  Tooltip, ResponsiveContainer, ComposedChart, Line, ReferenceLine, LabelList,
 } from "recharts";
 import OrcamentoBdiIndicadores from "./OrcamentoBdiIndicadores";
 
@@ -442,177 +442,113 @@ export default function OrcamentoDashTab({
       )}
 
       {/* ── Row 4: Curva ABC ─────────────────────────────────────── */}
-      {abcCurva.length > 0 && (
-        <div className="rounded-xl border bg-white p-4">
+      {abcCurva.length > 0 && (() => {
+        const top20 = abcCurva.slice(0, 20);
+        const maxPct = top20[0]?.pctVal ?? 1;
+        const totalAcc = abcCurva[abcCurva.length - 1]?.acc ?? 0;
+        const clsA = abcStats.classA.length;
+        const classColor = (acc: number) => acc <= 80 ? "#1d4ed8" : acc <= 95 ? "#0284c7" : "#64748b";
+        const classBg   = (acc: number) => acc <= 80 ? "#eff6ff" : acc <= 95 ? "#f0f9ff" : "#f8fafc";
+        const classTag  = (acc: number) => acc <= 80 ? "A" : acc <= 95 ? "B" : "C";
+        return (
+          <div className="rounded-xl border bg-white p-4">
 
-          {/* Cabeçalho + pills de classe */}
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Curva ABC de Pareto — Top 30 Insumos</p>
+            {/* Cabeçalho */}
+            <div className="mb-3">
+              <p className="text-sm font-semibold text-slate-800">Análise ABC — Concentração de Custo por Insumo</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Barras = participação individual &nbsp;·&nbsp; Linha = % acumulado do custo total
+                Regra de Pareto: os <b className="text-slate-600">{clsA} insumos de maior custo</b> representam <b className="text-slate-600">{abcStats.pctA.toFixed(1)}%</b> do custo total desta obra
               </p>
             </div>
-            <div className="flex gap-2 shrink-0 flex-wrap">
-              {[
-                { label: "A", count: abcStats.classA.length, pct: abcStats.pctA, custo: abcStats.classA.reduce((s,d)=>s+d.custo,0), bar: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
-                { label: "B", count: abcStats.classB.length, pct: abcStats.pctB, custo: abcStats.classB.reduce((s,d)=>s+d.custo,0), bar: "#0369a1", bg: "#f0f9ff", border: "#bae6fd", text: "#0369a1" },
-                { label: "C", count: abcStats.classC.length, pct: abcStats.pctC, custo: abcStats.classC.reduce((s,d)=>s+d.custo,0), bar: "#64748b", bg: "#f8fafc", border: "#e2e8f0", text: "#64748b" },
-              ].map(c => (
-                <div key={c.label} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, padding: "6px 12px", minWidth: 100 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
-                    <span style={{ background: c.bar, color: "#fff", borderRadius: 3, fontSize: 9, fontWeight: 800, padding: "1px 5px", letterSpacing: "0.05em" }}>CLASSE {c.label}</span>
-                    <span style={{ fontSize: 10, color: c.text, fontWeight: 600 }}>{c.count} itens</span>
-                  </div>
-                  <p style={{ fontSize: 18, fontWeight: 800, color: c.text, lineHeight: 1, margin: "2px 0 1px" }}>{c.pct.toFixed(2)}%</p>
-                  <p style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>{formatBRL(c.custo)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Gráfico */}
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={abcCurva} margin={{ top: 4, right: 52, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis
-                dataKey="idx"
-                tick={{ fontSize: 9, fill: "#94a3b8" }}
-                tickLine={false}
-                axisLine={{ stroke: "#e2e8f0" }}
-              />
-              <YAxis
-                yAxisId="pct"
-                tickFormatter={v => `${v}%`}
-                tick={{ fontSize: 10, fill: "#94a3b8" }}
-                tickLine={false}
-                axisLine={false}
-                width={40}
-              />
-              <YAxis
-                yAxisId="acc"
-                orientation="right"
-                tickFormatter={v => `${v}%`}
-                tick={{ fontSize: 10, fill: "#94a3b8" }}
-                domain={[0, 100]}
-                tickLine={false}
-                axisLine={false}
-                width={40}
-              />
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0]?.payload;
-                  const classe = d.acc <= 80 ? "A" : d.acc <= 95 ? "B" : "C";
-                  const classeStyle: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-                    A: { bg: "#fafafa", border: "#e2e8f0", text: "#1e293b", badge: "#1e40af" },
-                    B: { bg: "#fafafa", border: "#e2e8f0", text: "#1e293b", badge: "#b45309" },
-                    C: { bg: "#fafafa", border: "#e2e8f0", text: "#1e293b", badge: "#15803d" },
-                  };
-                  const cs = classeStyle[classe];
-                  return (
-                    <div style={{ background: cs.bg, border: `1px solid ${cs.border}`, borderRadius: 8, padding: "10px 14px", minWidth: 200, boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }}>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
-                        #{d.idx} · {d.label}
-                      </p>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 4 }}>
-                        <div>
-                          <p style={{ fontSize: 10, color: "#94a3b8", marginBottom: 1 }}>Participação</p>
-                          <p style={{ fontSize: 16, fontWeight: 800, color: "#3b82f6", lineHeight: 1 }}>{d.pctVal}%</p>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <p style={{ fontSize: 10, color: "#94a3b8", marginBottom: 1 }}>Valor do insumo</p>
-                          <p style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", lineHeight: 1 }}>{formatBRL(d.custo)}</p>
-                        </div>
-                      </div>
-                      <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 6, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: 10, color: "#94a3b8" }}>Acumulado até aqui</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{d.acc}%</span>
-                      </div>
-                      <div style={{ marginTop: 6, display: "inline-block", background: cs.badge, color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>
-                        CLASSE {classe}
-                      </div>
-                    </div>
-                  );
-                }}
-              />
-              <ReferenceLine
-                yAxisId="acc" y={80}
-                stroke="#64748b" strokeDasharray="4 3" strokeWidth={1}
-                label={{ value: "80%", position: "right", fontSize: 10, fill: "#64748b", dx: 6 }}
-              />
-              <ReferenceLine
-                yAxisId="acc" y={95}
-                stroke="#94a3b8" strokeDasharray="4 3" strokeWidth={1}
-                label={{ value: "95%", position: "right", fontSize: 10, fill: "#94a3b8", dx: 6 }}
-              />
-              <Bar yAxisId="pct" dataKey="pctVal" name="% individual" radius={[3, 3, 0, 0]} maxBarSize={28}>
-                {abcCurva.map((d, i) => (
-                  <Cell
-                    key={i}
-                    fill={d.acc <= 80 ? "#3b82f6" : d.acc <= 95 ? "#93c5fd" : "#cbd5e1"}
-                  />
+            {/* Barra de concentração acumulada A/B/C */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                <span className="font-semibold">Distribuição do custo por classe (top {abcCurva.length} insumos = {totalAcc.toFixed(1)}% do total)</span>
+                <span>0% ← custo acumulado → {totalAcc.toFixed(1)}%</span>
+              </div>
+              <div className="rounded-full overflow-hidden flex" style={{ height: 12, background: "#f1f5f9" }}>
+                {abcStats.pctA > 0 && <div style={{ width: `${(abcStats.pctA / totalAcc) * 100}%`, background: "#1d4ed8" }} title={`Classe A: ${abcStats.pctA.toFixed(1)}%`} />}
+                {abcStats.pctB > 0 && <div style={{ width: `${(abcStats.pctB / totalAcc) * 100}%`, background: "#38bdf8" }} title={`Classe B: ${abcStats.pctB.toFixed(1)}%`} />}
+                {abcStats.pctC > 0 && <div style={{ width: `${(abcStats.pctC / totalAcc) * 100}%`, background: "#94a3b8" }} title={`Classe C: ${abcStats.pctC.toFixed(1)}%`} />}
+              </div>
+              <div className="flex items-center gap-4 mt-1.5 text-[10px]">
+                {[
+                  { tag: "A", count: abcStats.classA.length, pct: abcStats.pctA, custo: abcStats.classA.reduce((s,d)=>s+d.custo,0), color: "#1d4ed8" },
+                  { tag: "B", count: abcStats.classB.length, pct: abcStats.pctB, custo: abcStats.classB.reduce((s,d)=>s+d.custo,0), color: "#0284c7" },
+                  { tag: "C", count: abcStats.classC.length, pct: abcStats.pctC, custo: abcStats.classC.reduce((s,d)=>s+d.custo,0), color: "#64748b" },
+                ].map(c => c.count > 0 && (
+                  <span key={c.tag} className="flex items-center gap-1">
+                    <span style={{ background: c.color, color: "#fff", borderRadius: 3, fontSize: 9, fontWeight: 800, padding: "0 4px" }}>{c.tag}</span>
+                    <span style={{ color: c.color, fontWeight: 700 }}>{c.pct.toFixed(1)}%</span>
+                    <span className="text-slate-400">· {formatBRL(c.custo)} · {c.count} item{c.count !== 1 ? "s" : ""}</span>
+                  </span>
                 ))}
-              </Bar>
-              <Line
-                yAxisId="acc" dataKey="acc" name="% acumulado"
-                stroke="#f43f5e" strokeWidth={2} dot={false}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
+              </div>
+            </div>
 
-          {/* Ranking de insumos — tabela profissional */}
-          <div className="mt-4 pt-3 border-t border-slate-100">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-              Ranking de insumos por custo
-            </p>
-            <div className="space-y-1">
-              {abcCurva.slice(0, 12).map((d) => {
-                const classe = d.acc <= 80 ? "A" : d.acc <= 95 ? "B" : "C";
-                const maxPct = abcCurva[0]?.pctVal ?? 1;
-                const barW = Math.round((d.pctVal / maxPct) * 100);
-                const classCfg: Record<string, { badge: string; bar: string; pct: string }> = {
-                  A: { badge: "#1d4ed8", bar: "#3b82f6", pct: "#1d4ed8" },
-                  B: { badge: "#0369a1", bar: "#7dd3fc", pct: "#0369a1" },
-                  C: { badge: "#64748b", bar: "#cbd5e1", pct: "#475569" },
-                };
-                const cfg = classCfg[classe];
+            {/* Gráfico horizontal — barra + % + R$ visíveis diretamente */}
+            <div className="space-y-1.5">
+              {top20.map((d) => {
+                const barPct = (d.pctVal / maxPct) * 100;
+                const color  = classColor(d.acc);
+                const bg     = classBg(d.acc);
+                const tag    = classTag(d.acc);
                 return (
                   <div
                     key={d.idx}
-                    style={{ display: "grid", gridTemplateColumns: "24px 1fr 90px 110px 32px", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 6 }}
-                    className="hover:bg-slate-50 transition-colors"
+                    className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors"
+                    style={{ background: "transparent" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = bg; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
                   >
-                    <span style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textAlign: "right" }}>#{d.idx}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: 11, fontWeight: 600, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 2 }}>
+                    {/* Rank */}
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", width: 20, textAlign: "right", flexShrink: 0 }}>
+                      {d.idx}
+                    </span>
+
+                    {/* Nome + barra */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 3, lineHeight: 1 }}>
                         {d.label}
                       </p>
-                      <div style={{ height: 4, background: "#f1f5f9", borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${barW}%`, background: cfg.bar, borderRadius: 2, transition: "width 0.3s" }} />
+                      <div style={{ height: 6, background: "#f1f5f9", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: 3 }} />
                       </div>
                     </div>
-                    <p style={{ fontSize: 13, fontWeight: 800, color: cfg.pct, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+
+                    {/* % individual — destaque principal */}
+                    <span style={{ fontSize: 14, fontWeight: 800, color, width: 52, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                       {d.pctVal.toFixed(2)}%
-                    </p>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "#334155", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                    </span>
+
+                    {/* R$ */}
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#334155", width: 106, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                       {formatBRL(d.custo)}
-                    </p>
-                    <span style={{ background: cfg.badge, color: "#fff", borderRadius: 3, fontSize: 9, fontWeight: 800, padding: "1px 4px", textAlign: "center" }}>
-                      {classe}
+                    </span>
+
+                    {/* Badge classe */}
+                    <span style={{ background: color, color: "#fff", borderRadius: 3, fontSize: 9, fontWeight: 800, padding: "1px 5px", flexShrink: 0 }}>
+                      {tag}
+                    </span>
+
+                    {/* Acumulado (aparece no hover) */}
+                    <span style={{ fontSize: 9, color: "#94a3b8", width: 38, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                      ∑{d.acc.toFixed(0)}%
                     </span>
                   </div>
                 );
               })}
             </div>
-            {abcCurva.length > 12 && (
-              <p className="text-[10px] text-slate-400 text-center mt-2">
-                + {abcCurva.length - 12} insumos adicionais · ver gráfico acima para visão completa
+
+            {abcCurva.length > 20 && (
+              <p className="text-[10px] text-slate-400 text-center mt-2 pt-2 border-t border-slate-100">
+                + {abcCurva.length - 20} insumos adicionais (classes B e C) · acumulado total {totalAcc.toFixed(1)}%
               </p>
             )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Row 5: BDI por aba + Tipos de Insumo em % ────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
