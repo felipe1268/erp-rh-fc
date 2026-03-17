@@ -2868,7 +2868,12 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                           <span className={`text-[12px] leading-tight ${a.isGrupo ? "text-slate-900 font-bold uppercase tracking-wide" : "text-slate-700"} ${atrasada ? "text-red-700" : ""}`}>
                             {a.nome}
                           </span>
-                          {atrasada && <AlertTriangle className="h-3 w-3 text-red-500 ml-1 shrink-0" />}
+                          {atrasada && (
+                            <AlertTriangle
+                              className="h-3 w-3 text-red-500 ml-1 shrink-0 cursor-help"
+                              title={`⚠️ Atividade atrasada\nData de fim: ${fmtBR(a.dataFim)}\nAvanço atual: ${avanco.toFixed(1)}%\nEsta atividade deveria ter sido concluída mas ainda não atingiu 100%.`}
+                            />
+                          )}
                         </div>
                       </td>
                       {/* Início */}
