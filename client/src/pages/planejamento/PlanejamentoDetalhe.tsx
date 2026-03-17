@@ -41,7 +41,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora" | "prog-semanal" | "diagrama-rede" | "custo-rh";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "simulador";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -120,6 +120,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
   { id: "ia-gestora",           label: "IA Gestora",         Icon: Bot },
+  { id: "simulador",            label: "Simulador",          Icon: Calculator },
 ];
 const TAB_IDS = TAB_DEFS.map(t => t.id);
 const LS_KEY  = "plan-tab-order";
@@ -808,6 +809,18 @@ export default function PlanejamentoDetalhe() {
               );
             })()}
           </div>
+        )}
+
+        {/* ── Simulador de Cronograma por Orçamento Mensal ── */}
+        {aba === "simulador" && (
+          <SimuladorCronograma
+            proj={proj}
+            revisaoAtiva={revisaoAtiva}
+            atividades={atividades}
+            projetoId={projetoId}
+            utils={utils}
+            onAdotado={() => { utils.planejamento.getProjetoById.invalidate({ id: projetoId }); setAba("cronograma"); }}
+          />
         )}
 
       </div>
@@ -9996,6 +10009,255 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ABA: SIMULADOR DE CRONOGRAMA POR ORÇAMENTO MENSAL
+// ═════════════════════════════════════════════════════════════════════════════
+type SimAtiv = { id: number; nome: string; eapCodigo: string | null; pesoFinanceiro: number; duracaoDias: number; custo: number };
+type SimMes  = { mes: number; atividades: SimAtiv[]; custoTotal: number };
+
+function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils, onAdotado }: any) {
+  const valorContrato  = parseFloat(proj?.valorContrato ?? "0") || 0;
+  const dataInicioProj = atividades.find((a: any) => a.dataInicio)?.dataInicio ?? new Date().toISOString().split("T")[0];
+
+  const [orcamentoMensal, setOrcamentoMensal] = useState<string>(valorContrato > 0 ? String(Math.round(valorContrato / 12)) : "");
+  const [valorTotal,      setValorTotal]      = useState<string>(valorContrato > 0 ? String(valorContrato) : "");
+  const [dataInicio,      setDataInicio]      = useState<string>(dataInicioProj);
+  const [mesesEdit,       setMesesEdit]       = useState<SimMes[]>([]);
+  const [usouIA,          setUsouIA]          = useState(false);
+  const [simulado,        setSimulado]        = useState(false);
+
+  const fmtR = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const orcNum = parseFloat(String(orcamentoMensal).replace(/\./g, "").replace(",", ".")) || 0;
+  const valNum = parseFloat(String(valorTotal).replace(/\./g, "").replace(",", ".")) || 0;
+
+  const simularMut = trpc.planejamento.simularCronograma.useMutation({
+    onSuccess: (data) => {
+      setMesesEdit(data.meses as SimMes[]);
+      setUsouIA(data.usouIA);
+      setSimulado(true);
+      toast.success(`Simulação concluída: ${data.totalMeses} ${data.totalMeses === 1 ? "mês" : "meses"} para concluir a obra.${data.usouIA ? " (sequência sugerida por IA)" : ""}`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const adotarMut = trpc.planejamento.adotarSimulacao.useMutation({
+    onSuccess: () => {
+      toast.success("Cronograma adotado! Nova revisão criada com as datas calculadas.");
+      onAdotado?.();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  function moverAtividade(atividadeId: number, deMes: number, paraMes: number) {
+    if (deMes === paraMes) return;
+    setMesesEdit(prev => {
+      const atv = prev.find(m => m.mes === deMes)?.atividades.find(a => a.id === atividadeId);
+      if (!atv) return prev;
+      const novoCustoDestino = (prev.find(m => m.mes === paraMes)?.custoTotal ?? 0) + atv.custo;
+      if (novoCustoDestino > orcNum * 1.05) {
+        toast.error(`Mês ${paraMes} ficaria em ${fmtR(novoCustoDestino)}, ultrapassando o teto de ${fmtR(orcNum)}.`);
+        return prev;
+      }
+      return prev.map(m => {
+        if (m.mes === deMes) {
+          const novas = m.atividades.filter(a => a.id !== atividadeId);
+          return { ...m, atividades: novas, custoTotal: novas.reduce((s, a) => s + a.custo, 0) };
+        }
+        if (m.mes === paraMes) {
+          const novas = [...m.atividades, atv];
+          return { ...m, atividades: novas, custoTotal: novas.reduce((s, a) => s + a.custo, 0) };
+        }
+        return m;
+      });
+    });
+  }
+
+  function handleSimular() {
+    if (!revisaoAtiva) return toast.error("Nenhuma revisão ativa encontrada.");
+    if (orcNum <= 0)   return toast.error("Informe o orçamento mensal.");
+    if (valNum <= 0)   return toast.error("Informe o valor total da obra.");
+    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    if (folhas.length === 0) return toast.error("O cronograma não tem atividades folha cadastradas.");
+    simularMut.mutate({ revisaoId: revisaoAtiva.id, projetoId, orcamentoMensal: orcNum, valorTotal: valNum, dataInicio });
+  }
+
+  function handleAdotar() {
+    if (!revisaoAtiva || mesesEdit.length === 0) return;
+    if (!confirm(`Criar uma nova revisão com o cronograma simulado (${mesesEdit.length} meses)?\n\nAs datas de cada atividade serão recalculadas com base na distribuição mensal.`)) return;
+    adotarMut.mutate({
+      projetoId,
+      revisaoId:  revisaoAtiva.id,
+      dataInicio,
+      meses: mesesEdit.map(m => ({ mes: m.mes, atividadeIds: m.atividades.map(a => a.id) })),
+    });
+  }
+
+  const totalSimulado = mesesEdit.reduce((s, m) => s + m.custoTotal, 0);
+
+  return (
+    <div className="space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex items-start gap-4">
+        <div className="p-2.5 rounded-xl bg-violet-100 shrink-0">
+          <Calculator className="h-5 w-5 text-violet-700" />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-bold text-slate-800">Simulador de Cronograma por Orçamento Mensal</h2>
+            {usouIA && simulado && (
+              <span className="inline-flex items-center gap-1 bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                <Sparkles className="h-3 w-3" /> Sequência definida por IA
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Informe o valor máximo por mês. O sistema distribui as atividades respeitando a sequência lógica da obra.
+            Se não houver predecessoras, a IA sugere a ordem construtiva automaticamente.
+          </p>
+        </div>
+      </div>
+
+      {/* Parâmetros */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-700">Parâmetros da Simulação</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">Orçamento Mensal Máximo (R$) *</label>
+            <Input placeholder="Ex: 150000" value={orcamentoMensal} onChange={e => setOrcamentoMensal(e.target.value)} className="text-sm" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">Valor Total da Obra (R$) *</label>
+            <Input placeholder="Ex: 1800000" value={valorTotal} onChange={e => setValorTotal(e.target.value)} className="text-sm" />
+            {valorContrato > 0 && (
+              <button className="text-[10px] text-blue-500 mt-1 hover:underline" onClick={() => setValorTotal(String(valorContrato))}>
+                Usar contrato ({fmtR(valorContrato)})
+              </button>
+            )}
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">Data de Início da Obra *</label>
+            <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+              className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3 pt-1 flex-wrap">
+          <Button onClick={handleSimular} disabled={simularMut.isPending} className="gap-2 bg-violet-600 hover:bg-violet-700">
+            {simularMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
+            {simularMut.isPending ? "Simulando... (IA ordenando atividades)" : "Simular Cronograma"}
+          </Button>
+          {simulado && (
+            <span className="text-xs text-slate-500">
+              <strong className="text-slate-700">{mesesEdit.length} meses</strong> ·{" "}
+              Custo distribuído: <strong className="text-slate-700">{fmtR(totalSimulado)}</strong>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Grade de meses editável */}
+      {simulado && mesesEdit.length > 0 && (
+        <div className="space-y-4">
+          {/* Resumo */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 text-center">
+              <p className="text-[10px] text-violet-500 font-semibold uppercase tracking-wide">Duração Total</p>
+              <p className="text-2xl font-bold text-violet-700 mt-0.5">{mesesEdit.length}</p>
+              <p className="text-[11px] text-violet-500">meses</p>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+              <p className="text-[10px] text-emerald-500 font-semibold uppercase tracking-wide">Custo Distribuído</p>
+              <p className="text-lg font-bold text-emerald-700 mt-0.5">{fmtR(totalSimulado)}</p>
+              <p className="text-[11px] text-emerald-500">de {fmtR(valNum)}</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+              <p className="text-[10px] text-amber-500 font-semibold uppercase tracking-wide">Teto Mensal</p>
+              <p className="text-lg font-bold text-amber-700 mt-0.5">{fmtR(orcNum)}</p>
+              <p className="text-[11px] text-amber-500">por mês</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500 flex items-center gap-1.5">
+            <Edit3 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            Mova atividades entre meses pelo seletor em cada card. O sistema bloqueia se o destino ultrapassar 105% do teto.
+          </p>
+
+          {/* Cards de meses */}
+          <div className="space-y-3">
+            {mesesEdit.map(mes => {
+              const di_ = new Date(dataInicio + "T12:00:00");
+              di_.setMonth(di_.getMonth() + (mes.mes - 1));
+              const mesLabel = di_.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+              const pct  = orcNum > 0 ? Math.min(100, (mes.custoTotal / orcNum) * 100) : 0;
+              const over = mes.custoTotal > orcNum * 1.01;
+              return (
+                <div key={mes.mes} className={`bg-white border rounded-xl overflow-hidden ${over ? "border-red-300" : "border-slate-200"}`}>
+                  {/* Header */}
+                  <div className={`flex items-center justify-between px-4 py-2.5 border-b ${over ? "bg-red-50 border-red-200" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm text-slate-700">Mês {mes.mes} — {mesLabel}</span>
+                      {over && (
+                        <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" /> Acima do teto
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-bold ${over ? "text-red-600" : "text-slate-700"}`}>{fmtR(mes.custoTotal)}</p>
+                      <p className="text-[10px] text-slate-400">{mes.atividades.length} atividade{mes.atividades.length !== 1 ? "s" : ""}</p>
+                    </div>
+                  </div>
+                  {/* Barra de progresso do mês */}
+                  <div className="h-1.5 bg-slate-100">
+                    <div className={`h-full transition-all ${over ? "bg-red-400" : pct > 80 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                  </div>
+                  {/* Atividades */}
+                  <div className="p-3 flex flex-col gap-1.5">
+                    {mes.atividades.map(atv => (
+                      <div key={atv.id} className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-slate-700 truncate">
+                            {atv.eapCodigo && <span className="text-slate-400 mr-1">{atv.eapCodigo}</span>}
+                            {atv.nome}
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {fmtR(atv.custo)} · {atv.pesoFinanceiro.toFixed(2)}% · {atv.duracaoDias}d
+                          </p>
+                        </div>
+                        <select
+                          className="text-[10px] border border-slate-200 rounded px-1.5 py-1 bg-white text-slate-600 cursor-pointer shrink-0"
+                          value={mes.mes}
+                          onChange={e => moverAtividade(atv.id, mes.mes, parseInt(e.target.value))}
+                          title="Mover atividade para outro mês"
+                        >
+                          {mesesEdit.map(m => (
+                            <option key={m.mes} value={m.mes}>Mês {m.mes}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                    {mes.atividades.length === 0 && (
+                      <p className="text-xs text-slate-400 text-center py-3 italic">Nenhuma atividade neste mês</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Adotar */}
+          <div className="flex flex-col items-end gap-1 pt-2 border-t border-slate-100">
+            <Button onClick={handleAdotar} disabled={adotarMut.isPending} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6">
+              {adotarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              {adotarMut.isPending ? "Criando revisão..." : "Adotar como Cronograma Oficial"}
+            </Button>
+            <p className="text-[11px] text-slate-400">Cria uma nova revisão com as datas calculadas com base na distribuição acima.</p>
           </div>
         </div>
       )}

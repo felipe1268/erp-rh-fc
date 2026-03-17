@@ -1737,4 +1737,290 @@ export const planejamentoRouter = router({
 
       return { atividades, hes, totalCustoPrevisto, totalCustoRealizado, projeto };
     }),
+
+  // ── Simulador de Cronograma por Orçamento Mensal ─────────────────────────
+  simularCronograma: protectedProcedure
+    .input(z.object({
+      revisaoId:      z.number(),
+      projetoId:      z.number(),
+      orcamentoMensal: z.number().positive(),
+      valorTotal:     z.number().positive(),
+      dataInicio:     z.string(), // YYYY-MM-DD
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      // 1. Buscar todas as atividades folha da revisão
+      const rows = await db.select().from(planejamentoAtividades)
+        .where(and(
+          eq(planejamentoAtividades.revisaoId, input.revisaoId),
+          eq(planejamentoAtividades.isGrupo, false),
+        ))
+        .orderBy(asc(planejamentoAtividades.ordem));
+
+      if (rows.length === 0) throw new Error("Nenhuma atividade folha encontrada nesta revisão.");
+
+      // 2. Verificar se existem predecessoras definidas
+      const temPredecessoras = rows.some(a => a.predecessora && a.predecessora.trim() !== "");
+
+      // 3. Sequência das atividades
+      let sequencia: typeof rows = [];
+
+      if (temPredecessoras) {
+        // Usar predecessoras existentes: ordenação topológica (Kahn)
+        const byEap = new Map<string, typeof rows[0]>();
+        rows.forEach(a => byEap.set(a.eapCodigo || String(a.id), a));
+
+        const inDeg = new Map<string, number>();
+        const adj   = new Map<string, string[]>(); // eap → [successors]
+        rows.forEach(a => { const k = a.eapCodigo || String(a.id); inDeg.set(k, 0); adj.set(k, []); });
+
+        rows.forEach(a => {
+          if (!a.predecessora) return;
+          const k = a.eapCodigo || String(a.id);
+          a.predecessora.split(/[,;]/).map(s => s.trim()).forEach(pk => {
+            if (adj.has(pk)) {
+              adj.get(pk)!.push(k);
+              inDeg.set(k, (inDeg.get(k) || 0) + 1);
+            }
+          });
+        });
+
+        const q = rows.filter(a => (inDeg.get(a.eapCodigo || String(a.id)) || 0) === 0);
+        const visited = new Set<number>();
+        while (q.length > 0) {
+          const node = q.shift()!;
+          if (visited.has(node.id)) continue;
+          visited.add(node.id);
+          sequencia.push(node);
+          const k = node.eapCodigo || String(node.id);
+          (adj.get(k) || []).forEach(sk => {
+            inDeg.set(sk, (inDeg.get(sk) || 0) - 1);
+            if ((inDeg.get(sk) || 0) === 0) {
+              const next = byEap.get(sk);
+              if (next && !visited.has(next.id)) q.push(next);
+            }
+          });
+        }
+        // Append restantes (ciclos)
+        rows.forEach(a => { if (!visited.has(a.id)) sequencia.push(a); });
+
+      } else {
+        // Sem predecessoras: pedir sequência à IA
+        const apiKey = process.env.GOOGLE_API_KEY;
+        if (!apiKey) {
+          // Fallback: usar ordem existente
+          sequencia = rows;
+        } else {
+          try {
+            const listaAtiv = rows.map(a => `ID:${a.id} EAP:${a.eapCodigo || "-"} NOME:${a.nome}`).join("\n");
+            const prompt = `Você é um especialista em construção civil brasileiro. Abaixo está uma lista de atividades de uma obra. Ordene-as em sequência lógica de execução, respeitando dependências típicas da construção civil (fundação, estrutura, alvenaria, instalações, revestimento, acabamento, etc.).
+
+Atividades:
+${listaAtiv}
+
+Responda SOMENTE com JSON válido no formato: {"ordem":[id1,id2,...]} onde os ids são números inteiros.`;
+
+            const body = {
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { maxOutputTokens: 2048, temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } },
+            };
+            const res = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+              { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+            );
+            if (res.ok) {
+              const data: any = await res.json();
+              const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+              const match = text.match(/\{[\s\S]*\}/);
+              if (match) {
+                const parsed = JSON.parse(match[0]);
+                if (Array.isArray(parsed.ordem)) {
+                  const idOrder = parsed.ordem as number[];
+                  const rowMap = new Map(rows.map(r => [r.id, r]));
+                  const sorted: typeof rows = [];
+                  idOrder.forEach(id => { const r = rowMap.get(id); if (r) sorted.push(r); });
+                  rows.forEach(r => { if (!sorted.find(s => s.id === r.id)) sorted.push(r); });
+                  sequencia = sorted;
+                } else { sequencia = rows; }
+              } else { sequencia = rows; }
+            } else { sequencia = rows; }
+          } catch { sequencia = rows; }
+        }
+      }
+
+      // 4. Algoritmo guloso de distribuição mensal
+      const getKey  = (a: typeof rows[0]) => a.eapCodigo || String(a.id);
+      const getCusto = (a: typeof rows[0]) => (parseFloat(String(a.pesoFinanceiro ?? 0)) / 100) * input.valorTotal;
+
+      // Build predecessor set for validation
+      const predSet = new Map<number, Set<string>>();
+      rows.forEach(a => {
+        const preds = new Set<string>();
+        if (a.predecessora) a.predecessora.split(/[,;]/).map(s => s.trim()).filter(Boolean).forEach(p => preds.add(p));
+        predSet.set(a.id, preds);
+      });
+
+      const meses: { mes: number; atividades: { id: number; nome: string; eapCodigo: string | null; pesoFinanceiro: number; duracaoDias: number; custo: number }[]; custoTotal: number }[] = [];
+      let remaining = [...sequencia];
+      const completedKeys = new Set<string>();
+      let mesNum = 1;
+
+      while (remaining.length > 0) {
+        const mesAtivs: typeof sequencia = [];
+        let mesCusto = 0;
+        let progressed = false;
+
+        // First pass: add activities that fit in budget with predecessors done
+        for (let i = 0; i < remaining.length; i++) {
+          const a = remaining[i];
+          const preds = predSet.get(a.id) ?? new Set();
+          const predsOk = [...preds].every(p => completedKeys.has(p));
+          if (!predsOk) continue;
+
+          const custo = getCusto(a);
+          // Allow at least 1 per month even if over budget
+          if (mesCusto + custo <= input.orcamentoMensal || mesAtivs.length === 0) {
+            mesAtivs.push(a);
+            mesCusto += custo;
+            progressed = true;
+          }
+        }
+
+        // Safety: if no progress (circular or stuck), force first available
+        if (!progressed && remaining.length > 0) {
+          mesAtivs.push(remaining[0]);
+          mesCusto = getCusto(remaining[0]);
+        }
+
+        // Commit month
+        mesAtivs.forEach(a => {
+          completedKeys.add(getKey(a));
+          remaining = remaining.filter(r => r.id !== a.id);
+        });
+
+        meses.push({
+          mes: mesNum++,
+          custoTotal: mesCusto,
+          atividades: mesAtivs.map(a => ({
+            id: a.id,
+            nome: a.nome,
+            eapCodigo: a.eapCodigo,
+            pesoFinanceiro: parseFloat(String(a.pesoFinanceiro ?? 0)),
+            duracaoDias: a.duracaoDias ?? 0,
+            custo: getCusto(a),
+          })),
+        });
+
+        if (mesNum > 500) break; // Safety valve
+      }
+
+      return {
+        meses,
+        totalMeses: meses.length,
+        usouIA: !temPredecessoras,
+        temPredecessoras,
+        orcamentoMensal: input.orcamentoMensal,
+        valorTotal: input.valorTotal,
+        dataInicio: input.dataInicio,
+      };
+    }),
+
+  // ── Adotar Simulação como Cronograma Oficial ──────────────────────────────
+  adotarSimulacao: protectedProcedure
+    .input(z.object({
+      projetoId:   z.number(),
+      revisaoId:   z.number(),
+      dataInicio:  z.string(),
+      meses: z.array(z.object({
+        mes: z.number(),
+        atividadeIds: z.array(z.number()),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      // Buscar todas as atividades da revisão (folha + grupo)
+      const todasAtivs = await db.select().from(planejamentoAtividades)
+        .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+
+      // Calcular datas por atividade com base no mês
+      const di = new Date(input.dataInicio + "T12:00:00");
+      const atividadeDatas = new Map<number, { dataInicio: string; dataFim: string }>();
+
+      input.meses.forEach(({ mes, atividadeIds }) => {
+        const mesStart = new Date(di);
+        mesStart.setMonth(mesStart.getMonth() + (mes - 1));
+        const mesEnd   = new Date(mesStart);
+        mesEnd.setMonth(mesEnd.getMonth() + 1);
+        mesEnd.setDate(mesEnd.getDate() - 1);
+
+        // Distribute activities sequentially within the month
+        let cursor = new Date(mesStart);
+        atividadeIds.forEach(id => {
+          const atv = todasAtivs.find(a => a.id === id);
+          const dur = Math.max(1, atv?.duracaoDias ?? 1);
+          const start = new Date(cursor);
+          const end   = new Date(cursor);
+          end.setDate(end.getDate() + dur - 1);
+          // Don't go past the month end
+          const clampedEnd = end > mesEnd ? mesEnd : end;
+          atividadeDatas.set(id, {
+            dataInicio: start.toISOString().split("T")[0],
+            dataFim:    clampedEnd.toISOString().split("T")[0],
+          });
+          cursor = new Date(clampedEnd);
+          cursor.setDate(cursor.getDate() + 1);
+        });
+      });
+
+      // Criar nova revisão com +1 no número
+      const revisaoAtual = await db.select().from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.revisaoId))
+        .then(r => r[0]);
+      if (!revisaoAtual) throw new Error("Revisão não encontrada.");
+
+      const [novaRevisao] = await db.insert(planejamentoRevisoes).values({
+        projetoId:   input.projetoId,
+        numero:      (revisaoAtual.numero ?? 0) + 1,
+        descricao:   "Cronograma gerado pelo Simulador de Orçamento Mensal",
+        status:      "aprovada",
+        criadoPor:   ctx.user?.name || "Sistema",
+        isBaseline:  false,
+        consolidado: false,
+      } as any).returning({ id: planejamentoRevisoes.id });
+
+      if (!novaRevisao) throw new Error("Falha ao criar revisão.");
+
+      // Copiar atividades com novas datas
+      const rows = todasAtivs.map((a, i) => {
+        const datas = atividadeDatas.get(a.id);
+        return {
+          revisaoId:           novaRevisao.id,
+          projetoId:           input.projetoId,
+          eapCodigo:           a.eapCodigo,
+          nome:                a.nome,
+          nivel:               a.nivel,
+          dataInicio:          datas?.dataInicio ?? a.dataInicio,
+          dataFim:             datas?.dataFim    ?? a.dataFim,
+          duracaoDias:         a.duracaoDias,
+          predecessora:        a.predecessora,
+          pesoFinanceiro:      a.pesoFinanceiro,
+          recursoPrincipal:    a.recursoPrincipal,
+          quantidadePlanejada: a.quantidadePlanejada,
+          unidade:             a.unidade,
+          ordem:               a.ordem ?? i,
+          isGrupo:             a.isGrupo,
+        };
+      });
+
+      const CHUNK = 100;
+      await db.transaction(async tx => {
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          await tx.insert(planejamentoAtividades).values(rows.slice(i, i + CHUNK) as any);
+        }
+      });
+
+      return { novaRevisaoId: novaRevisao.id };
+    }),
 });

@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 498,
+    titulo: "Simulador de Cronograma por Orçamento Mensal",
+    descricao: "Nova aba 'Simulador' no módulo Planejamento: o usuário informa o orçamento mensal máximo e o sistema distribui as atividades mês a mês respeitando o teto. Se não houver predecessoras definidas, a IA sugere a sequência construtiva automaticamente (fundação → estrutura → alvenaria → etc.). A grade de meses é editável: o usuário pode mover atividades entre meses com validação de orçamento em tempo real. Botão 'Adotar como Cronograma Oficial' cria uma nova revisão com as datas recalculadas.",
+    tipo: "nova-funcionalidade",
+    modulos: "Planejamento / Simulador",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 497,
     titulo: "Visão Geral — corrigido 'selectedCompany is not defined'",
     descricao: "Corrigido ReferenceError ao clicar em 'Ver detalhes' em Atividades em Atraso: o componente VisaoGeral é uma função separada e precisava chamar useCompany() para ter acesso a selectedCompany, que é usada no cabeçalho do relatório imprimível.",
