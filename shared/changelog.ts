@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 462,
+    titulo: "Indicadores Financeiros — nova ordem dos cards e tooltips explicativos ao hover",
+    descricao: "Cards reordenados: linha 1 = Lucro Bruto | Lucro Líquido | Break-even (sequência lógica de resultado); linha 2 = Markup | Carga Tributária | Folga (acima B-E). Cada card agora exibe um tooltip dark ao passar o mouse mostrando o cálculo exato (fórmula e explicação do indicador).",
+    tipo: "feature",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 461,
     titulo: "Bugfix — Carga Tributária R$ alinhada com tabela de detalhe (base Excel, não totalVenda × alíquota)",
     descricao: "Corrigido inconsistência no card 'Carga Tributária' dos Indicadores Financeiros: antes, o valor em R$ era calculado como totalVenda × alíquota%, o que divergia da tabela de detalhe quando a base do BDI ≠ preço negociado (ex: orcamento 'onda da Luciana' mostrava R$201K no card vs R$124K na tabela). Agora tributosAbsR$ = soma dos valorAbsoluto de cada DI-xx, idêntico ao total exibido na tabela 'Tributos — Detalhamento por Imposto'. O orcamento do 'papa' continua correto pois os dois métodos coincidem quando base BDI = preço de venda.",

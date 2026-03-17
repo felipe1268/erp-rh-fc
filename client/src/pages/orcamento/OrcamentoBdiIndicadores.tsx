@@ -511,17 +511,10 @@ export default function OrcamentoBdiIndicadores({
         <p className="text-sm font-semibold text-slate-700 mb-3">Indicadores Financeiros do Contrato</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
 
-          {/* Markup */}
-          <div className="rounded-lg border-l-4 border-l-blue-500 border border-blue-100 bg-blue-50/30 p-3 flex flex-col gap-0.5">
-            <span className="text-[10px] text-blue-600 uppercase tracking-widest font-bold">Markup</span>
-            <span className="text-2xl font-extrabold text-blue-700 leading-tight mt-0.5">
-              ×{(totalVenda / Math.max(totalCusto, 1)).toFixed(4)}
-            </span>
-            <span className="text-[11px] text-slate-400 mt-0.5">fator multiplicador</span>
-          </div>
+          {/* ── LINHA 1: Lucro Bruto | Lucro Líquido | Break-even ── */}
 
           {/* Lucro Bruto */}
-          <div className="rounded-lg border-l-4 border-l-green-500 border border-green-100 bg-green-50/30 p-3 flex flex-col gap-0.5">
+          <div className="relative group rounded-lg border-l-4 border-l-green-500 border border-green-100 bg-green-50/30 p-3 flex flex-col gap-0.5 cursor-default">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-green-700 uppercase tracking-widest font-bold">Lucro Bruto (LC)</span>
               <span className="text-[11px] font-bold text-white bg-green-500 rounded px-1.5 py-0.5 leading-none">
@@ -532,24 +525,18 @@ export default function OrcamentoBdiIndicadores({
               {formatBRL(totalVenda * margemLucroPct)}
             </span>
             <span className="text-[10px] text-slate-400">sobre preço de venda</span>
-          </div>
-
-          {/* Carga Tributária */}
-          <div className="rounded-lg border-l-4 border-l-red-500 border border-red-100 bg-red-50/30 p-3 flex flex-col gap-0.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-red-700 uppercase tracking-widest font-bold">Carga Tributária</span>
-              <span className="text-[11px] font-bold text-white bg-red-500 rounded px-1.5 py-0.5 leading-none">
-                {totalTributosPct.toFixed(2)}%
-              </span>
+            <div className="absolute bottom-full left-0 mb-2 z-20 w-64 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+              <div className="bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+                <p className="font-semibold mb-1 text-green-300">📐 Cálculo</p>
+                <p>L-01 da planilha BDI × Preço de Venda</p>
+                <p className="text-slate-400 mt-1">Lucro bruto antes de tributos e deduções internas. Mede a rentabilidade do contrato sobre o preço negociado.</p>
+              </div>
+              <div className="w-2.5 h-2.5 bg-slate-800 rotate-45 ml-4 -mt-1.5" />
             </div>
-            <span className="text-xl font-extrabold text-red-800 leading-tight mt-0.5">
-              {formatBRL(tributosAbsR$)}
-            </span>
-            <span className="text-[10px] text-slate-400">impostos sobre venda</span>
           </div>
 
           {/* Lucro Líquido */}
-          <div className={`rounded-lg border-l-4 border p-3 flex flex-col gap-0.5 ${lucroLiquido >= 0 ? "border-l-emerald-500 border-emerald-100 bg-emerald-50/30" : "border-l-red-500 border-red-100 bg-red-50/30"}`}>
+          <div className={`relative group rounded-lg border-l-4 border p-3 flex flex-col gap-0.5 cursor-default ${lucroLiquido >= 0 ? "border-l-emerald-500 border-emerald-100 bg-emerald-50/30" : "border-l-red-500 border-red-100 bg-red-50/30"}`}>
             <div className="flex items-center justify-between">
               <span className={`text-[10px] uppercase tracking-widest font-bold ${lucroLiquido >= 0 ? "text-emerald-700" : "text-red-700"}`}>Lucro Líquido</span>
               {lucroLiquidoPct > 0 && (
@@ -562,10 +549,18 @@ export default function OrcamentoBdiIndicadores({
               {formatBRL(lucroLiquido)}
             </span>
             <span className="text-[10px] text-slate-400">L-02 · planilha BDI</span>
+            <div className="absolute bottom-full left-0 mb-2 z-20 w-64 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+              <div className="bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+                <p className="font-semibold mb-1 text-emerald-300">📐 Cálculo</p>
+                <p>Linha L-02 da planilha BDI</p>
+                <p className="text-slate-400 mt-1">Lucro após impostos, comissões e todas as deduções internas do BDI. É o resultado líquido efetivo do contrato.</p>
+              </div>
+              <div className="w-2.5 h-2.5 bg-slate-800 rotate-45 ml-4 -mt-1.5" />
+            </div>
           </div>
 
           {/* Break-even */}
-          <div className="rounded-lg border-l-4 border-l-slate-400 border border-slate-200 bg-slate-50/50 p-3 flex flex-col gap-0.5">
+          <div className="relative group rounded-lg border-l-4 border-l-slate-400 border border-slate-200 bg-slate-50/50 p-3 flex flex-col gap-0.5 cursor-default">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">Break-even</span>
               <span className="text-[11px] font-bold text-white bg-slate-500 rounded px-1.5 py-0.5 leading-none">
@@ -576,10 +571,59 @@ export default function OrcamentoBdiIndicadores({
               {formatBRL(breakEven)}
             </span>
             <span className="text-[10px] text-slate-400">receita mínima sem lucro</span>
+            <div className="absolute bottom-full left-0 mb-2 z-20 w-64 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+              <div className="bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+                <p className="font-semibold mb-1 text-slate-300">📐 Cálculo</p>
+                <p>Preço de Venda − Lucro Bruto (LC)</p>
+                <p className="text-slate-400 mt-1">Valor mínimo de faturamento para cobrir todos os custos diretos, indiretos e tributos sem gerar lucro. Acima disso, a obra é lucrativa.</p>
+              </div>
+              <div className="w-2.5 h-2.5 bg-slate-800 rotate-45 ml-4 -mt-1.5" />
+            </div>
+          </div>
+
+          {/* ── LINHA 2: Markup | Carga Tributária | Folga ── */}
+
+          {/* Markup */}
+          <div className="relative group rounded-lg border-l-4 border-l-blue-500 border border-blue-100 bg-blue-50/30 p-3 flex flex-col gap-0.5 cursor-default">
+            <span className="text-[10px] text-blue-600 uppercase tracking-widest font-bold">Markup</span>
+            <span className="text-2xl font-extrabold text-blue-700 leading-tight mt-0.5">
+              ×{(totalVenda / Math.max(totalCusto, 1)).toFixed(4)}
+            </span>
+            <span className="text-[11px] text-slate-400 mt-0.5">fator multiplicador</span>
+            <div className="absolute bottom-full left-0 mb-2 z-20 w-64 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+              <div className="bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+                <p className="font-semibold mb-1 text-blue-300">📐 Cálculo</p>
+                <p>Preço de Venda ÷ Custo Base</p>
+                <p className="text-slate-400 mt-1">Quantas vezes o custo foi multiplicado para chegar ao preço de venda. Markup ×1,50 significa que o preço é 50% acima do custo.</p>
+              </div>
+              <div className="w-2.5 h-2.5 bg-slate-800 rotate-45 ml-4 -mt-1.5" />
+            </div>
+          </div>
+
+          {/* Carga Tributária */}
+          <div className="relative group rounded-lg border-l-4 border-l-red-500 border border-red-100 bg-red-50/30 p-3 flex flex-col gap-0.5 cursor-default">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-red-700 uppercase tracking-widest font-bold">Carga Tributária</span>
+              <span className="text-[11px] font-bold text-white bg-red-500 rounded px-1.5 py-0.5 leading-none">
+                {totalTributosPct.toFixed(2)}%
+              </span>
+            </div>
+            <span className="text-xl font-extrabold text-red-800 leading-tight mt-0.5">
+              {formatBRL(tributosAbsR$)}
+            </span>
+            <span className="text-[10px] text-slate-400">impostos sobre venda</span>
+            <div className="absolute bottom-full left-0 mb-2 z-20 w-64 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+              <div className="bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+                <p className="font-semibold mb-1 text-red-300">📐 Cálculo</p>
+                <p>PIS + COFINS + IRPJ + CSLL + CPRB + ISS</p>
+                <p className="text-slate-400 mt-1">Soma dos impostos DI-02 a DI-07 calculados pelo Excel sobre a base do BDI. Detalhamento por imposto na tabela abaixo.</p>
+              </div>
+              <div className="w-2.5 h-2.5 bg-slate-800 rotate-45 ml-4 -mt-1.5" />
+            </div>
           </div>
 
           {/* Folga acima do break-even */}
-          <div className={`rounded-lg border-l-4 border p-3 flex flex-col gap-0.5 ${folgaBreakEven >= 0 ? "border-l-teal-500 border-teal-100 bg-teal-50/30" : "border-l-red-500 border-red-100 bg-red-50/30"}`}>
+          <div className={`relative group rounded-lg border-l-4 border p-3 flex flex-col gap-0.5 cursor-default ${folgaBreakEven >= 0 ? "border-l-teal-500 border-teal-100 bg-teal-50/30" : "border-l-red-500 border-red-100 bg-red-50/30"}`}>
             <div className="flex items-center justify-between">
               <span className={`text-[10px] uppercase tracking-widest font-bold ${folgaBreakEven >= 0 ? "text-teal-700" : "text-red-700"}`}>Folga (acima B-E)</span>
               <span className={`text-[11px] font-bold text-white rounded px-1.5 py-0.5 leading-none ${folgaBreakEven >= 0 ? "bg-teal-500" : "bg-red-500"}`}>
@@ -590,11 +634,19 @@ export default function OrcamentoBdiIndicadores({
               {formatBRL(folgaBreakEven)}
             </span>
             <span className="text-[10px] text-slate-400">= Lucro Bruto (LC)</span>
+            <div className="absolute bottom-full left-0 mb-2 z-20 w-64 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+              <div className="bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+                <p className="font-semibold mb-1 text-teal-300">📐 Cálculo</p>
+                <p>= Lucro Bruto (LC)</p>
+                <p className="text-slate-400 mt-1">Quanto o contrato supera o ponto de equilíbrio financeiro. Equivale ao Lucro Bruto — é a "gordura" acima dos custos mínimos.</p>
+              </div>
+              <div className="w-2.5 h-2.5 bg-slate-800 rotate-45 ml-4 -mt-1.5" />
+            </div>
           </div>
 
           {/* Desconto negociado (condicional) */}
           {valorNegociado > 0 && (
-            <div className="rounded-lg border-l-4 border-l-amber-500 border border-amber-100 bg-amber-50/30 p-3 flex flex-col gap-0.5">
+            <div className="relative group rounded-lg border-l-4 border-l-amber-500 border border-amber-100 bg-amber-50/30 p-3 flex flex-col gap-0.5 cursor-default">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-amber-700 uppercase tracking-widest font-bold">Desconto Negociado</span>
                 <span className="text-[11px] font-bold text-white bg-amber-500 rounded px-1.5 py-0.5 leading-none">
@@ -604,6 +656,14 @@ export default function OrcamentoBdiIndicadores({
               <span className="text-xl font-extrabold text-amber-800 leading-tight mt-0.5">
                 {formatBRL(totalVenda - valorNegociado)}
               </span>
+              <div className="absolute bottom-full left-0 mb-2 z-20 w-64 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+                <div className="bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+                  <p className="font-semibold mb-1 text-amber-300">📐 Cálculo</p>
+                  <p>Preço Original − Preço Negociado</p>
+                  <p className="text-slate-400 mt-1">Valor total concedido como desconto na negociação em relação ao preço original do orçamento.</p>
+                </div>
+                <div className="w-2.5 h-2.5 bg-slate-800 rotate-45 ml-4 -mt-1.5" />
+              </div>
             </div>
           )}
 
