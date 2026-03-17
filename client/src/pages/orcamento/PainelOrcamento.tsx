@@ -289,7 +289,7 @@ export default function PainelOrcamento() {
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
                         <span className="text-muted-foreground">{s.label}</span>
                       </div>
-                      <span className="font-semibold">{s.count} · {formatBRL(s.venda, true)}</span>
+                      <span className="font-semibold">{s.count} · {formatBRL(s.venda)}</span>
                     </div>
                   ))}
                 </div>
@@ -336,7 +336,7 @@ export default function PainelOrcamento() {
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />
                         <span className="text-muted-foreground">{c.name}</span>
                       </div>
-                      <span className="font-semibold">{pct(c.value / custosTotais)} · {formatBRL(c.value, true)}</span>
+                      <span className="font-semibold">{pct(c.value / custosTotais)} · {formatBRL(c.value)}</span>
                     </div>
                   ))}
                 </div>
@@ -563,7 +563,7 @@ export default function PainelOrcamento() {
                             </span>
                           )}
                           <div className="text-right hidden sm:block">
-                            <p className="text-sm font-semibold text-green-600">{formatBRL(venda, true)}</p>
+                            <p className="text-sm font-semibold text-green-600">{formatBRL(venda)}</p>
                             <p className="text-xs text-muted-foreground">venda</p>
                           </div>
                           <span className="text-xs text-white px-2 py-0.5 rounded-full" style={{ background: st.color }}>

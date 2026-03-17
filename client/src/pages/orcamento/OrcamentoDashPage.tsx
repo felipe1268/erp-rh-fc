@@ -22,8 +22,6 @@ function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 function fBRLK(v: number) {
-  if (v >= 1_000_000) return `R$${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `R$${(v / 1_000).toFixed(0)}k`;
   return formatBRL(v);
 }
 
