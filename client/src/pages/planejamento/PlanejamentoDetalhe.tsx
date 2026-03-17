@@ -3215,11 +3215,47 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
               height={50} interval={Math.max(0, Math.floor(merged.length / 10) - 1)}
               tickFormatter={v => semanaLabel[v] ?? v} />
             <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
-            <Tooltip formatter={(v: any) => `${n(v).toFixed(1)}%`}
-              labelFormatter={l => {
-                const [y, m, d] = String(l).split("-");
-                return `${semanaLabel[l] ?? l} (${d}/${m}/${y})`;
-              }} />
+            <Tooltip
+              content={({ payload, label }: any) => {
+                if (!payload?.length) return null;
+                const get = (key: string) => payload.find((p: any) => p.dataKey === key)?.value;
+                const base = get("baseline");
+                const plan = get("planejada");
+                const real = get("realizada");
+                const tend = get("tendencia");
+                const desvBaseVsPlan = base != null && plan != null ? plan - base : null;
+                const desvBaseVsReal = base != null && real != null ? real - base : null;
+                const [y, m, d] = String(label).split("-");
+                const extras = payload.filter((p: any) =>
+                  !["baseline","planejada","realizada","tendencia"].includes(p.dataKey));
+                return (
+                  <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-[200px]">
+                    <p className="font-semibold text-slate-700 mb-2">{semanaLabel[label] ?? label} ({d}/{m}/{y})</p>
+                    {base   != null && <p style={{ color: "#1e40af" }}>Baseline : <strong>{n(base).toFixed(1)}%</strong></p>}
+                    {plan   != null && <p style={{ color: "#ef4444" }}>Revisão Atual : <strong>{n(plan).toFixed(1)}%</strong></p>}
+                    {real   != null && <p style={{ color: "#22c55e" }}>Realizado : <strong>{n(real).toFixed(1)}%</strong></p>}
+                    {tend   != null && <p style={{ color: "#16a34a" }}>Tendência : <strong>{n(tend).toFixed(1)}%</strong></p>}
+                    {extras.map((p: any) => (
+                      <p key={p.dataKey} style={{ color: p.color }}>{p.name} : <strong>{n(p.value).toFixed(1)}%</strong></p>
+                    ))}
+                    {(desvBaseVsPlan != null || desvBaseVsReal != null) && (
+                      <div className="mt-2 pt-2 border-t border-slate-100 space-y-0.5">
+                        {desvBaseVsPlan != null && (
+                          <p className={`font-semibold ${desvBaseVsPlan >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            ↔ Desvio Atual vs Baseline: {desvBaseVsPlan >= 0 ? "+" : ""}{desvBaseVsPlan.toFixed(1)}%
+                          </p>
+                        )}
+                        {desvBaseVsReal != null && (
+                          <p className={`font-semibold ${desvBaseVsReal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            ↔ Realizado vs Baseline: {desvBaseVsReal >= 0 ? "+" : ""}{desvBaseVsReal.toFixed(1)}%
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }}
+            />
             {semanas.includes(hoje) && (
               <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
             )}

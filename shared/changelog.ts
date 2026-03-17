@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 488,
+    titulo: "Curva S — desvio da Baseline exibido no tooltip",
+    descricao: "Tooltip customizado agora mostra: Baseline, Revisão Atual, Realizado, Tendência e dois desvios calculados: 'Desvio Atual vs Baseline' e 'Realizado vs Baseline', com cor verde (adiantado) ou vermelha (atrasado).",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 487,
     titulo: "Curva S — toggles para exibir curvas de revisões anteriores",
     descricao: "Botões na legenda permitem ligar/desligar a curva planejada de cada revisão anterior aprovada. Cada revisão recebe uma cor distinta e linha tracejada para diferenciação visual.",
