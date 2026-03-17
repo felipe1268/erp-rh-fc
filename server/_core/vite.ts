@@ -48,15 +48,16 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath =
-    process.env.NODE_ENV === "development"
-      ? path.resolve(import.meta.dirname, "../..", "dist", "public")
-      : path.resolve(import.meta.dirname, "public");
-  if (!fs.existsSync(distPath)) {
-    console.error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`
-    );
-  }
+  // Use process.cwd() for reliable path resolution in production bundles
+  const cwd = process.cwd();
+  const candidates = [
+    path.join(cwd, "dist", "public"),          // running from workspace root
+    path.resolve(import.meta.dirname, "public"), // running from dist/
+    path.resolve(import.meta.dirname, "../dist", "public"), // fallback
+  ];
+
+  const distPath = candidates.find(p => fs.existsSync(p)) || candidates[0];
+  console.log(`[Static] Serving from: ${distPath} (exists: ${fs.existsSync(distPath)})`);
 
   // Serve hashed assets with long-term cache (1 year)
   app.use("/assets", express.static(path.join(distPath, "assets"), {
@@ -71,9 +72,10 @@ export function serveStatic(app: Express) {
     etag: true,
   }));
 
-  // fall through to index.html if the file doesn't exist
+  // fall through to index.html for client-side routing
   app.use("*", (_req, res) => {
+    const indexPath = path.resolve(distPath, "index.html");
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.sendFile(path.resolve(distPath, "index.html"));
+    res.sendFile(indexPath);
   });
 }
