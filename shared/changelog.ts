@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 496,
+    titulo: "EPIs — corrigido erro ao cadastrar novo EPI",
+    descricao: "Corrigido bug 'Cannot read properties of undefined (reading id)' ao cadastrar EPI: o insert precisava de .returning() para devolver o ID inserido no PostgreSQL/Drizzle, pois sem ele o array de resultado vinha vazio.",
+    tipo: "correcao",
+    modulos: "SST / Controle de EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 495,
     titulo: "Cronograma — salvar em lotes + toast de sucesso/erro",
     descricao: "Corrigido problema de save silencioso: agora exibe toast de sucesso ou mensagem de erro específica. A inserção de atividades passou a usar transação com lotes de 100 linhas para evitar timeout com projetos de 600+ atividades. Nome nulo agora convertido para string vazia para não quebrar validação.",

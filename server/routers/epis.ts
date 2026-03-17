@@ -45,7 +45,7 @@ export const episRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const userName = ctx.user?.name || input.criadoPor || 'Sistema';
-      const result = await db.insert(epis).values({
+      const [inserted] = await db.insert(epis).values({
         companyId: input.companyId,
         nome: input.nome,
         ca: input.ca || null,
@@ -65,8 +65,8 @@ export const episRouter = router({
         corCapacete: input.corCapacete || null,
         condicao: input.condicao,
         criadoPor: userName,
-      } as any);
-      return { id: result[0].id };
+      } as any).returning({ id: epis.id });
+      return { id: inserted.id };
     }),
 
   update: protectedProcedure
