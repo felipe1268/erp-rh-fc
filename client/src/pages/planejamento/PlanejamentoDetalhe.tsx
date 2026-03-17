@@ -10026,16 +10026,28 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const valorContrato  = parseFloat(proj?.valorContrato ?? "0") || 0;
   const dataInicioProj = atividades.find((a: any) => a.dataInicio)?.dataInicio ?? new Date().toISOString().split("T")[0];
 
-  const [orcamentoMensal, setOrcamentoMensal] = useState<string>(valorContrato > 0 ? String(Math.round(valorContrato / 12)) : "");
-  const [valorTotal,      setValorTotal]      = useState<string>(valorContrato > 0 ? String(valorContrato) : "");
+  const fmtR   = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const toMoney = (v: number) => v > 0 ? v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+  const parseMoney = (s: string) => parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+
+  const [orcamentoMensal, setOrcamentoMensal] = useState<string>(valorContrato > 0 ? toMoney(Math.round(valorContrato / 12)) : "");
+  const [valorTotal,      setValorTotal]      = useState<string>(valorContrato > 0 ? toMoney(valorContrato) : "");
   const [dataInicio,      setDataInicio]      = useState<string>(dataInicioProj);
   const [mesesEdit,       setMesesEdit]       = useState<SimMes[]>([]);
   const [usouIA,          setUsouIA]          = useState(false);
   const [simulado,        setSimulado]        = useState(false);
 
-  const fmtR = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const orcNum = parseFloat(String(orcamentoMensal).replace(/\./g, "").replace(",", ".")) || 0;
-  const valNum = parseFloat(String(valorTotal).replace(/\./g, "").replace(",", ".")) || 0;
+  const orcNum = parseMoney(orcamentoMensal);
+  const valNum = parseMoney(valorTotal);
+
+  function handleMoneyChange(val: string, set: (s: string) => void) {
+    // Allow only digits, dots, commas — strip everything else
+    set(val.replace(/[^0-9.,]/g, ""));
+  }
+  function handleMoneyBlur(val: string, set: (s: string) => void) {
+    const n = parseMoney(val);
+    set(n > 0 ? toMoney(n) : "");
+  }
 
   const simularMut = trpc.planejamento.simularCronograma.useMutation({
     onSuccess: (data) => {
@@ -10130,13 +10142,31 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="text-xs font-medium text-slate-600 mb-1 block">Orçamento Mensal Máximo (R$) *</label>
-            <Input placeholder="Ex: 150000" value={orcamentoMensal} onChange={e => setOrcamentoMensal(e.target.value)} className="text-sm" />
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">R$</span>
+              <Input
+                placeholder="150.000,00"
+                value={orcamentoMensal}
+                onChange={e => handleMoneyChange(e.target.value, setOrcamentoMensal)}
+                onBlur={e => handleMoneyBlur(e.target.value, setOrcamentoMensal)}
+                className="text-sm pl-9"
+              />
+            </div>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 mb-1 block">Valor Total da Obra (R$) *</label>
-            <Input placeholder="Ex: 1800000" value={valorTotal} onChange={e => setValorTotal(e.target.value)} className="text-sm" />
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">R$</span>
+              <Input
+                placeholder="1.800.000,00"
+                value={valorTotal}
+                onChange={e => handleMoneyChange(e.target.value, setValorTotal)}
+                onBlur={e => handleMoneyBlur(e.target.value, setValorTotal)}
+                className="text-sm pl-9"
+              />
+            </div>
             {valorContrato > 0 && (
-              <button className="text-[10px] text-blue-500 mt-1 hover:underline" onClick={() => setValorTotal(String(valorContrato))}>
+              <button className="text-[10px] text-blue-500 mt-1 hover:underline" onClick={() => setValorTotal(toMoney(valorContrato))}>
                 Usar contrato ({fmtR(valorContrato)})
               </button>
             )}
