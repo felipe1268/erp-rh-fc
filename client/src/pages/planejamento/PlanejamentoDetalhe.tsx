@@ -2748,6 +2748,25 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
         </div>
       )}
 
+      {/* ── Indicador de soma do Peso% ────────────────────────────────────────── */}
+      {atividades.length > 0 && (() => {
+        const folhas = (editando ? linhas : atividades).filter((a: any) => !a.isGrupo);
+        const soma = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+        const ok = Math.abs(soma - 100) < 0.1;
+        const overshot = soma > 100.05;
+        return (
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold w-fit
+            ${ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : overshot ? "bg-red-50 border-red-200 text-red-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+            <span className="text-[11px] font-normal text-inherit opacity-70">Soma Peso%:</span>
+            <span className="tabular-nums text-sm">{soma.toFixed(2)}%</span>
+            {ok
+              ? <span className="text-[10px] font-bold tracking-wide">✓ 100%</span>
+              : <span className="text-[10px]">{overshot ? "▲ acima de 100%" : `▼ faltam ${(100 - soma).toFixed(2)}%`}</span>
+            }
+          </div>
+        );
+      })()}
+
       {/* Tabela */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
         <table className="text-xs" style={{ width: "100%", minWidth: editando ? 900 : "auto", tableLayout: editando ? "fixed" : "auto" }}>
@@ -2775,7 +2794,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               <th className="py-2 px-2 text-right text-[11px]">Dur.</th>
               <th className="py-2 px-2 text-center text-[11px]">Pred.</th>
               {!editando && <th className="py-2 px-2 text-center w-20 text-[11px]">Suc.</th>}
-              <th className="py-2 px-2 text-right text-[11px]">Peso%</th>
+              <th className="py-2 px-2 text-right text-[11px] whitespace-nowrap min-w-[64px]">Peso%</th>
               <th className="py-2 px-2 text-left text-[11px]">Recurso</th>
               {!editando && <th className="py-2 px-3 text-right w-20 text-[11px]">Avanço</th>}
               {editando && <th className="py-2 px-1 w-7"></th>}
@@ -2931,7 +2950,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                         })()}
                       </td>
                       {/* Peso% */}
-                      <td className="py-1.5 px-2 text-right text-slate-600 text-[11px] tabular-nums">{n(a.pesoFinanceiro).toFixed(2)}%</td>
+                      <td className="py-1.5 px-2 text-right text-slate-600 text-[11px] tabular-nums whitespace-nowrap">{n(a.pesoFinanceiro).toFixed(2)}%</td>
                       {/* Recurso */}
                       <td className="py-1.5 px-2 text-slate-500 text-[11px] truncate max-w-[90px]">{a.recursoPrincipal || <span className="text-slate-300">—</span>}</td>
                       {/* Avanço */}
