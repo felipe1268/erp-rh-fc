@@ -287,6 +287,7 @@ export default function Cotacoes() {
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [abaAtiva, setAbaAtiva] = useState<"detalhes" | "mapa">("detalhes");
   const [showCancelarAprovacao, setShowCancelarAprovacao] = useState(false);
+  const [cancelarCotacaoId, setCancelarCotacaoId] = useState<number | null>(null);
   const [justificativaCancelar, setJustificativaCancelar] = useState("");
 
   const [form, setForm] = useState({
@@ -390,7 +391,8 @@ export default function Cotacoes() {
       toast.success(`Aprovação cancelada. ${d.ocsRemovidas} OC(s) removida(s). Cotação voltou para Pendente.`);
       setShowCancelarAprovacao(false);
       setJustificativaCancelar("");
-      detalheQ.refetch();
+      setCancelarCotacaoId(null);
+      setShowDetalhe(null);
       q.refetch();
     },
     onError: (e) => toast.error(e.message),
@@ -652,7 +654,7 @@ export default function Cotacoes() {
                     </Button>
                   )}
                   {detalheFullscreen.status === "aprovada" && isAdminMaster && (
-                    <Button variant="outline" onClick={() => { setJustificativaCancelar(""); setShowCancelarAprovacao(true); }}
+                    <Button variant="outline" onClick={() => { setJustificativaCancelar(""); setCancelarCotacaoId(showDetalhe); setShowCancelarAprovacao(true); }}
                       className="border-orange-200 text-orange-600 hover:bg-orange-50 gap-2">
                       <Undo2 className="h-4 w-4" /> Cancelar Aprovação
                     </Button>
@@ -1571,7 +1573,7 @@ export default function Cotacoes() {
       </Dialog>
 
       {/* ── Cancelar Aprovação ── */}
-      <Dialog open={showCancelarAprovacao} onOpenChange={(o) => { if (!o) setShowCancelarAprovacao(false); }}>
+      <Dialog open={showCancelarAprovacao} onOpenChange={(o) => { if (!o) { setShowCancelarAprovacao(false); setCancelarCotacaoId(null); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-orange-700">
@@ -1599,10 +1601,10 @@ export default function Cotacoes() {
                 Voltar
               </Button>
               <Button
-                disabled={justificativaCancelar.trim().length < 1 || cancelarAprovacao.isPending}
+                disabled={!cancelarCotacaoId || justificativaCancelar.trim().length < 1 || cancelarAprovacao.isPending}
                 onClick={() => {
-                  if (!showDetalhe) return;
-                  cancelarAprovacao.mutate({ cotacaoId: showDetalhe, companyId, justificativa: justificativaCancelar.trim() });
+                  if (!cancelarCotacaoId) return;
+                  cancelarAprovacao.mutate({ cotacaoId: cancelarCotacaoId, companyId, justificativa: justificativaCancelar.trim() });
                 }}
                 className="bg-orange-600 hover:bg-orange-500 text-white gap-2"
               >

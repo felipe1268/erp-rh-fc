@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 474,
+    titulo: "Cotações — Corrigido tela travada ao Cancelar Aprovação",
+    descricao: "Corrigido bug onde o diálogo 'Cancelar Aprovação' ficava travado sem resposta ao clicar em Confirmar. Causa: o diálogo é renderizado fora do bloco de detalhe fullscreen; quando showDetalhe se tornava null (por refetch ou navegação), o onClick fazia 'if (!showDetalhe) return' silenciosamente, sem disparar a mutation. Correção: novo estado cancelarCotacaoId armazena o ID da cotação no momento em que o diálogo é aberto. A mutation usa cancelarCotacaoId (imutável durante o fluxo) em vez de showDetalhe. Após cancelamento com sucesso, fecha o fullscreen e volta para a lista.",
+    tipo: "correcao",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 473,
     titulo: "Cotações — Corrigido 'Cannot convert undefined or null to object' ao Excluir cotação",
     descricao: "Corrigida a causa raiz do erro ao excluir cotações: excluirCotacao tentava selecionar comprasOrdens.solicitacaoId, mas esse campo não existe em compras_ordens (existe apenas solicitante_id). O Drizzle tentava serializar uma coluna undefined e lançava 'Cannot convert undefined or null to object'. Correção: busca o solicitacaoId diretamente da cotação (que tem o campo correto) para reverter o status da SC para 'pendente'.",
