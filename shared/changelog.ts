@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 500,
+    titulo: "Cronograma — Predecessoras, Sucessoras e cálculo automático de datas",
+    descricao: "O cronograma agora exibe e edita predecessoras (coluna Pred.) e calcula automaticamente as sucessoras (coluna Suc.). Ao digitar a duração ou a data de início, a data de fim é recalculada imediatamente. Ao alterar a data de fim de uma atividade, as datas das sucessoras são propagadas em cascata (Finish-to-Start). Botão 'Recalcular Datas' recalcula toda a rede de atividades de uma vez. Visual aprimorado: grupos nível-1 em amarelo, nível-2 em âmbar, folhas alternadas — estilo MS Project. Mini barra de avanço nas atividades em progresso.",
+    tipo: "melhoria",
+    modulos: "Planejamento / Cronograma",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 499,
     titulo: "Simulador — correção da sugestão de IA + prompt estruturado",
     descricao: "Corrigido erro na chamada ao Gemini: thinkingBudget:0 incompatível com gemini-2.5-flash foi removido. Modelo trocado para gemini-2.0-flash com suporte nativo a JSON Schema (responseMimeType + responseSchema), eliminando falhas de parsing. Prompt aprimorado com as 16 fases típicas da construção civil brasileira para sequenciamento mais preciso.",

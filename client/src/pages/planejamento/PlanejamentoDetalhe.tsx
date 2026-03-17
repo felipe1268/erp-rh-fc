@@ -2344,11 +2344,53 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 
   const isConsolidado = !!revisaoAtiva?.consolidado;
 
+  // ── Helpers de data ─────────────────────────────────────────────────────────
+  function addDias(data: string, dias: number): string {
+    if (!data || !dias) return data;
+    const d = new Date(data + "T12:00:00");
+    d.setDate(d.getDate() + dias);
+    return d.toISOString().split("T")[0];
+  }
+
+  function diffDias(ini: string, fim: string): number {
+    if (!ini || !fim) return 0;
+    const a = new Date(ini + "T12:00:00");
+    const b = new Date(fim + "T12:00:00");
+    return Math.max(0, Math.round((b.getTime() - a.getTime()) / 86400000));
+  }
+
+  // Propaga datas por predecessoras (Finish-to-Start)
+  function propagateDates(rows: any[]): any[] {
+    const result = rows.map(r => ({ ...r }));
+    const byEap = new Map<string, number>();
+    result.forEach((r, i) => { if (r.eapCodigo) byEap.set(r.eapCodigo, i); });
+    // Múltiplos passes para resolver cadeias longas
+    for (let pass = 0; pass < 5; pass++) {
+      result.forEach((r, i) => {
+        if (!r.predecessora || !r.predecessora.trim() || r.isGrupo) return;
+        const preds = r.predecessora.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean);
+        let latestFim = "";
+        preds.forEach(p => {
+          const pi = byEap.get(p);
+          if (pi !== undefined && result[pi].dataFim && result[pi].dataFim > latestFim)
+            latestFim = result[pi].dataFim;
+        });
+        if (latestFim) {
+          const novoInicio = addDias(latestFim, 1);
+          result[i].dataInicio = novoInicio;
+          if (result[i].duracaoDias > 0)
+            result[i].dataFim = addDias(novoInicio, result[i].duracaoDias);
+        }
+      });
+    }
+    return result;
+  }
+
   function adicionarLinha() {
     setLinhas(l => [...l, {
       id: undefined, eapCodigo: "", nome: "", nivel: 1,
       dataInicio: "", dataFim: "", duracaoDias: 0,
-      pesoFinanceiro: 0, recursoPrincipal: "", isGrupo: false, ordem: l.length,
+      predecessora: "", pesoFinanceiro: 0, recursoPrincipal: "", isGrupo: false, ordem: l.length,
     }]);
   }
 
@@ -2357,8 +2399,44 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   }
 
   function updateLinha(idx: number, field: string, value: any) {
-    setLinhas(l => l.map((line, i) => i === idx ? { ...line, [field]: value } : line));
+    setLinhas(prev => {
+      const updated = prev.map((line, i) => {
+        if (i !== idx) return line;
+        const novo = { ...line, [field]: value };
+        // Auto-calcular dataFim quando duração ou início mudam
+        if (field === "duracaoDias" && novo.dataInicio && Number(value) > 0)
+          novo.dataFim = addDias(novo.dataInicio, Number(value));
+        if (field === "dataInicio" && novo.duracaoDias > 0 && value)
+          novo.dataFim = addDias(value, novo.duracaoDias);
+        // Auto-calcular duração quando fim muda manualmente
+        if (field === "dataFim" && novo.dataInicio && value)
+          novo.duracaoDias = diffDias(novo.dataInicio, value);
+        return novo;
+      });
+      // Propagar datas quando qualquer campo de data/duração/pred muda
+      if (["dataInicio", "dataFim", "duracaoDias", "predecessora"].includes(field))
+        return propagateDates(updated);
+      return updated;
+    });
   }
+
+  function recalcularDatas() {
+    setLinhas(prev => propagateDates([...prev]));
+    toast.success("Datas recalculadas pelas predecessoras.");
+  }
+
+  // Mapa de sucessoras para a view (EAP → EAPs que a têm como predecessora)
+  const sucessorasMap = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    atividades.forEach((a: any) => {
+      if (!a.predecessora) return;
+      a.predecessora.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean).forEach((p: string) => {
+        if (!m[p]) m[p] = [];
+        if (a.eapCodigo && !m[p].includes(a.eapCodigo)) m[p].push(a.eapCodigo);
+      });
+    });
+    return m;
+  }, [atividades]);
 
   function calcularPesosAutomaticos() {
     setLinhas(current => {
@@ -2473,6 +2551,14 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
           {editando ? (
             <>
               <Button variant="outline" size="sm" onClick={() => setEditando(false)}>Cancelar</Button>
+              <Button
+                variant="outline" size="sm"
+                className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+                title="Propaga as datas a partir das predecessoras (Finish-to-Start)"
+                onClick={recalcularDatas}>
+                <RefreshCw className="h-3.5 w-3.5" />
+                Recalcular Datas
+              </Button>
               <Button
                 variant="outline" size="sm"
                 className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
@@ -2668,11 +2754,13 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
             <tr className="bg-slate-700 text-white">
               <th className="py-2 px-2 text-left w-20">EAP</th>
               <th className="py-2 px-3 text-left">Atividade</th>
-              <th className="py-2 px-2 text-left w-32">Início</th>
-              <th className="py-2 px-2 text-left w-32">Fim</th>
-              <th className="py-2 px-2 text-right w-16 text-xs">Dur.</th>
-              <th className="py-2 px-2 text-right w-20 text-xs">Peso%</th>
-              <th className="py-2 px-2 text-left w-24">Recurso</th>
+              <th className="py-2 px-2 text-left w-28">Início</th>
+              <th className="py-2 px-2 text-left w-28">Fim</th>
+              <th className="py-2 px-2 text-right w-14 text-xs">Dur.</th>
+              <th className="py-2 px-2 text-center w-20 text-xs">Pred.</th>
+              {!editando && <th className="py-2 px-2 text-center w-20 text-xs">Suc.</th>}
+              <th className="py-2 px-2 text-right w-16 text-xs">Peso%</th>
+              <th className="py-2 px-2 text-left w-20">Recurso</th>
               {!editando && <th className="py-2 px-3 text-right w-20">Avanço</th>}
               {editando && <th className="py-2 px-2 w-8"></th>}
             </tr>
@@ -2694,9 +2782,23 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               const avanco = avMap[a.id] ?? 0;
               const atrasada = !editando && a.dataFim && a.dataFim < new Date().toISOString().split("T")[0] && avanco < 100;
 
+              // MS-Project style row color
+              const nivel = a.nivel ?? 1;
+              const rowBg = editando
+                ? "bg-white"
+                : atrasada
+                  ? "bg-red-50"
+                  : a.isGrupo && nivel === 1
+                    ? "bg-yellow-50 border-l-4 border-l-yellow-400"
+                    : a.isGrupo && nivel === 2
+                      ? "bg-amber-50/60 border-l-4 border-l-amber-300"
+                      : a.isGrupo
+                        ? "bg-slate-50 border-l-4 border-l-slate-300"
+                        : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30";
+
               return (
                 <tr key={a.id ?? idx}
-                  className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"} ${a.isGrupo ? "font-semibold" : ""} ${atrasada ? "bg-red-50/50" : ""}`}>
+                  className={`border-b border-slate-100 ${rowBg} ${a.isGrupo ? "font-semibold" : ""}`}>
                   {editando ? (
                     <>
                       <td className="py-1 px-1">
@@ -2720,8 +2822,17 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                           className="h-6 text-xs w-32" />
                       </td>
                       <td className="py-1 px-1">
-                        <Input type="number" value={a.duracaoDias ?? 0} onChange={e => updateLinha(idx, "duracaoDias", parseInt(e.target.value))}
+                        <Input type="number" value={a.duracaoDias ?? 0} onChange={e => updateLinha(idx, "duracaoDias", parseInt(e.target.value) || 0)}
                           className="h-6 text-xs w-14 text-right" />
+                      </td>
+                      <td className="py-1 px-1">
+                        <Input
+                          value={a.predecessora ?? ""}
+                          onChange={e => updateLinha(idx, "predecessora", e.target.value)}
+                          className="h-6 text-xs w-20 font-mono"
+                          placeholder="1.1;1.2"
+                          title="EAP das atividades predecessoras, separadas por ;"
+                        />
                       </td>
                       <td className="py-1 px-1">
                         <Input type="number" step="0.01" value={a.pesoFinanceiro ?? 0}
@@ -2741,8 +2852,10 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                     </>
                   ) : (
                     <>
-                      <td className="py-1.5 px-3 font-mono text-slate-500 w-24">{a.eapCodigo ?? ""}</td>
-                      <td className="py-1.5 px-3">
+                      {/* EAP */}
+                      <td className="py-1.5 px-2 font-mono text-slate-500 text-[11px]">{a.eapCodigo ?? ""}</td>
+                      {/* Nome com indentação */}
+                      <td className="py-1.5 px-2">
                         <div className="flex items-center gap-1" style={{ paddingLeft: indent }}>
                           {hasChildren && (
                             <button onClick={() => toggleCollapse(a.eapCodigo)}
@@ -2752,22 +2865,48 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                                 : <ChevronDown className="h-3 w-3 text-slate-400" />}
                             </button>
                           )}
-                          <span className={`${a.isGrupo ? "text-slate-800 font-semibold" : "text-slate-700"} ${atrasada ? "text-red-700" : ""}`}>
+                          <span className={`text-[12px] leading-tight ${a.isGrupo ? "text-slate-900 font-bold uppercase tracking-wide" : "text-slate-700"} ${atrasada ? "text-red-700" : ""}`}>
                             {a.nome}
                           </span>
                           {atrasada && <AlertTriangle className="h-3 w-3 text-red-500 ml-1 shrink-0" />}
                         </div>
                       </td>
-                      <td className="py-1.5 px-3 text-slate-500">{fmtBR(a.dataInicio)}</td>
-                      <td className="py-1.5 px-3 text-slate-500">{fmtBR(a.dataFim)}</td>
-                      <td className="py-1.5 px-2 text-right text-slate-500 text-xs">{a.duracaoDias ?? 0}d</td>
-                      <td className="py-1.5 px-2 text-right text-slate-600 text-xs tabular-nums">{n(a.pesoFinanceiro).toFixed(2)}%</td>
-                      <td className="py-1.5 px-3 text-slate-500 truncate max-w-[100px]">{a.recursoPrincipal ?? "—"}</td>
+                      {/* Início */}
+                      <td className="py-1.5 px-2 text-slate-600 text-[11px] tabular-nums whitespace-nowrap">{fmtBR(a.dataInicio)}</td>
+                      {/* Fim */}
+                      <td className="py-1.5 px-2 text-slate-600 text-[11px] tabular-nums whitespace-nowrap">{fmtBR(a.dataFim)}</td>
+                      {/* Duração */}
+                      <td className="py-1.5 px-2 text-right text-slate-500 text-[11px] tabular-nums">
+                        {a.duracaoDias ? `${a.duracaoDias}d` : <span className="text-slate-300">—</span>}
+                      </td>
+                      {/* Predecessoras */}
+                      <td className="py-1.5 px-2 text-center text-[11px] font-mono text-blue-600">
+                        {a.predecessora || <span className="text-slate-300">—</span>}
+                      </td>
+                      {/* Sucessoras (computada) */}
+                      <td className="py-1.5 px-2 text-center text-[11px] font-mono text-violet-600">
+                        {(() => {
+                          const sucs = a.eapCodigo ? (sucessorasMap[a.eapCodigo] ?? []) : [];
+                          return sucs.length > 0 ? sucs.join("; ") : <span className="text-slate-300">—</span>;
+                        })()}
+                      </td>
+                      {/* Peso% */}
+                      <td className="py-1.5 px-2 text-right text-slate-600 text-[11px] tabular-nums">{n(a.pesoFinanceiro).toFixed(2)}%</td>
+                      {/* Recurso */}
+                      <td className="py-1.5 px-2 text-slate-500 text-[11px] truncate max-w-[90px]">{a.recursoPrincipal || <span className="text-slate-300">—</span>}</td>
+                      {/* Avanço */}
                       <td className="py-1.5 px-3 text-right">
                         {!a.isGrupo && (
-                          <span className={`font-semibold ${avanco >= 100 ? "text-emerald-700" : avanco > 0 ? "text-blue-700" : "text-slate-400"}`}>
-                            {fPct(avanco)}
-                          </span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className={`text-[11px] font-bold tabular-nums ${avanco >= 100 ? "text-emerald-700" : avanco > 0 ? "text-blue-700" : "text-slate-400"}`}>
+                              {fPct(avanco)}
+                            </span>
+                            {avanco > 0 && avanco < 100 && (
+                              <div className="w-12 h-1 bg-slate-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${avanco}%` }} />
+                              </div>
+                            )}
+                          </div>
                         )}
                       </td>
                     </>
