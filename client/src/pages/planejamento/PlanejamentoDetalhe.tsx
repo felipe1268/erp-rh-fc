@@ -6487,6 +6487,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
   const [parsendo, setParsendo] = useState(false);
   const fileRefRev = useRef<HTMLInputElement>(null);
   const [confirmExcluirId, setConfirmExcluirId] = useState<number | null>(null);
+  const [diffExpandido, setDiffExpandido] = useState<number | null>(null);
 
   // ID da revisão mais recente que não é Baseline (pode ser excluída)
   const idMaisRecente = useMemo(() => {
@@ -6667,6 +6668,91 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
             {r.motivo && <p className="text-xs text-slate-500 mt-2 pl-10">Motivo: {r.motivo}</p>}
             {r.observacao && <p className="text-xs text-slate-400 mt-1 pl-10">{r.observacao}</p>}
             {r.aprovadoPor && <p className="text-xs text-slate-400 mt-1 pl-10">Aprovado por: {r.aprovadoPor}</p>}
+
+            {/* ── Diff automático entre revisões ─────────────────────────── */}
+            {r.diferencas && (() => {
+              let diff: any = null;
+              try { diff = JSON.parse(r.diferencas); } catch { return null; }
+              if (!diff) return null;
+              const total = (diff.adicionadas?.length ?? 0) + (diff.removidas?.length ?? 0) + (diff.alteradas?.length ?? 0);
+              if (total === 0) return null;
+              const expandido = diffExpandido === r.id;
+              return (
+                <div className="mt-3 pl-10">
+                  <button
+                    onClick={() => setDiffExpandido(expandido ? null : r.id)}
+                    className="flex items-center gap-2 text-xs font-medium text-slate-600 hover:text-slate-800 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {diff.adicionadas?.length > 0 && (
+                        <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                          +{diff.adicionadas.length} adicionada{diff.adicionadas.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {diff.removidas?.length > 0 && (
+                        <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                          -{diff.removidas.length} removida{diff.removidas.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {diff.alteradas?.length > 0 && (
+                        <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                          ~{diff.alteradas.length} alterada{diff.alteradas.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-slate-400">{expandido ? "▲ ocultar detalhes" : "▼ ver detalhes"}</span>
+                  </button>
+
+                  {expandido && (
+                    <div className="mt-2 border border-slate-100 rounded-lg overflow-hidden text-[11px]">
+                      {diff.adicionadas?.length > 0 && (
+                        <div className="bg-emerald-50 border-b border-emerald-100">
+                          <p className="font-semibold text-emerald-700 px-3 py-1.5">Atividades adicionadas</p>
+                          {diff.adicionadas.map((a: any, i: number) => (
+                            <div key={i} className="px-3 py-1 border-t border-emerald-100 flex gap-2 text-emerald-800">
+                              <span className="text-emerald-500 font-mono">{a.eapCodigo}</span>
+                              <span>{a.nome}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {diff.removidas?.length > 0 && (
+                        <div className="bg-red-50 border-b border-red-100">
+                          <p className="font-semibold text-red-700 px-3 py-1.5">Atividades removidas</p>
+                          {diff.removidas.map((a: any, i: number) => (
+                            <div key={i} className="px-3 py-1 border-t border-red-100 flex gap-2 text-red-700 line-through opacity-60">
+                              <span className="font-mono">{a.eapCodigo}</span>
+                              <span>{a.nome}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {diff.alteradas?.length > 0 && (
+                        <div className="bg-amber-50">
+                          <p className="font-semibold text-amber-700 px-3 py-1.5">Atividades alteradas</p>
+                          {diff.alteradas.map((a: any, i: number) => (
+                            <div key={i} className="px-3 py-1.5 border-t border-amber-100">
+                              <div className="flex gap-2 text-amber-800 font-medium mb-1">
+                                <span className="font-mono">{a.eapCodigo}</span>
+                                <span>{a.nome}</span>
+                              </div>
+                              {a.mudancas.map((m: any, j: number) => (
+                                <div key={j} className="ml-4 flex items-center gap-1.5 text-[10px] text-slate-600">
+                                  <span className="font-medium text-slate-500">{m.campo}:</span>
+                                  <span className="line-through text-red-500">{m.de || "—"}</span>
+                                  <span className="text-slate-400">→</span>
+                                  <span className="text-emerald-600 font-medium">{m.para || "—"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ))}
       </div>

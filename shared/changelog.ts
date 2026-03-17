@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 480,
+    titulo: "Revisões — Detecção automática de alterações no cronograma",
+    descricao: "Ao criar uma nova revisão com novo arquivo MS Project, o sistema compara automaticamente as atividades da revisão anterior com as da nova e registra: atividades adicionadas, removidas e alteradas (com campo, valor anterior e novo valor). O card de cada revisão exibe um resumo clicável (badges +X/-Y/~Z) que expande um painel detalhado com todas as mudanças identificadas por código EAP.",
+    tipo: "funcionalidade",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 479,
     titulo: "Revisões — Herança de avanços ao criar nova revisão",
     descricao: "Nova revisão agora herda automaticamente todos os avanços (percentuais por semana) da revisão anterior, cruzando pelo código EAP de cada atividade. 'O que está pronto, está pronto.' Corrigidos também: (1) limparCronograma apagava avanços de TODAS as revisões do projeto — agora só apaga os da revisão atual; (2) excluirRevisao não apagava os avanços da revisão deletada, deixando registros orfãos no banco.",

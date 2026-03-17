@@ -314,38 +314,79 @@ export const planejamentoRouter = router({
           ne(planejamentoRevisoes.status, "cancelada"),
         ))
         .orderBy(desc(planejamentoRevisoes.numero));
+
+      // ── Atividades das duas revisões (para diff + transferência de avanços) ──
+      const [atvsNova, atvsAnterior] = await Promise.all([
+        db.select().from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, input.novaRevisaoId)),
+        anteriores.length
+          ? db.select().from(planejamentoAtividades)
+              .where(eq(planejamentoAtividades.revisaoId, anteriores[0].id))
+          : Promise.resolve([]),
+      ]);
+
+      // ── Diff automático de alterações entre revisões ──────────────────────
+      type DiffItem  = { eapCodigo: string; nome: string };
+      type DiffChange = { campo: string; de: string | null; para: string | null };
+      type DiffAlterada = DiffItem & { mudancas: DiffChange[] };
+
+      const adicionadas: DiffItem[] = [];
+      const removidas:   DiffItem[] = [];
+      const alteradas:   DiffAlterada[] = [];
+
+      if (atvsAnterior.length > 0) {
+        const mapAnt = new Map(atvsAnterior.map(a => [a.eapCodigo ?? `_${a.id}`, a]));
+        const mapNova = new Map(atvsNova.map(a => [a.eapCodigo ?? `_${a.id}`, a]));
+
+        for (const [eap, ant] of mapAnt.entries()) {
+          if (!mapNova.has(eap)) removidas.push({ eapCodigo: eap, nome: ant.nome });
+        }
+        for (const [eap, nova] of mapNova.entries()) {
+          if (!mapAnt.has(eap)) {
+            adicionadas.push({ eapCodigo: eap, nome: nova.nome });
+          } else {
+            const ant = mapAnt.get(eap)!;
+            const mudancas: DiffChange[] = [];
+            if (ant.nome !== nova.nome)
+              mudancas.push({ campo: "Nome", de: ant.nome, para: nova.nome });
+            if (ant.dataInicio !== nova.dataInicio)
+              mudancas.push({ campo: "Início", de: ant.dataInicio, para: nova.dataInicio });
+            if (ant.dataFim !== nova.dataFim)
+              mudancas.push({ campo: "Fim", de: ant.dataFim, para: nova.dataFim });
+            if (ant.duracaoDias !== nova.duracaoDias)
+              mudancas.push({ campo: "Duração (dias)", de: String(ant.duracaoDias ?? ""), para: String(nova.duracaoDias ?? "") });
+            if (String(ant.pesoFinanceiro ?? "0") !== String(nova.pesoFinanceiro ?? "0"))
+              mudancas.push({ campo: "Peso financeiro", de: ant.pesoFinanceiro, para: nova.pesoFinanceiro });
+            if (mudancas.length) alteradas.push({ eapCodigo: eap, nome: nova.nome, mudancas });
+          }
+        }
+
+        const diff = { adicionadas, removidas, alteradas };
+        await db.update(planejamentoRevisoes)
+          .set({ diferencas: JSON.stringify(diff) })
+          .where(eq(planejamentoRevisoes.id, input.novaRevisaoId));
+      }
+
+      // ── Transferência de avanços ──────────────────────────────────────────
       if (!anteriores.length) return { transferidas: 0 };
       const revisaoAnterior = anteriores[0];
 
-      // Atividades das duas revisões
-      const [atvsAnterior, atvsNova] = await Promise.all([
-        db.select().from(planejamentoAtividades)
-          .where(eq(planejamentoAtividades.revisaoId, revisaoAnterior.id)),
-        db.select().from(planejamentoAtividades)
-          .where(eq(planejamentoAtividades.revisaoId, input.novaRevisaoId)),
-      ]);
-
-      // Avanços da revisão anterior
       const avancosAnteriores = await db.select().from(planejamentoAvancos)
         .where(eq(planejamentoAvancos.revisaoId, revisaoAnterior.id))
         .orderBy(asc(planejamentoAvancos.semana));
       if (!avancosAnteriores.length) return { transferidas: 0 };
 
-      // Mapas eapCodigo → id por revisão
       const eapToIdAnt = new Map<string, number>();
       for (const a of atvsAnterior) if (a.eapCodigo) eapToIdAnt.set(a.eapCodigo, a.id);
-
       const eapToIdNovo = new Map<string, number>();
       for (const a of atvsNova) if (a.eapCodigo) eapToIdNovo.set(a.eapCodigo, a.id);
 
-      // Mapa: atividadeId anterior → atividadeId novo (mesma EAP)
       const idAntToIdNovo = new Map<number, number>();
       for (const [eap, idAnt] of eapToIdAnt.entries()) {
         const idNovo = eapToIdNovo.get(eap);
         if (idNovo) idAntToIdNovo.set(idAnt, idNovo);
       }
 
-      // Constrói registros de avanço para a nova revisão
       const novosAvancos = avancosAnteriores
         .filter(av => idAntToIdNovo.has(av.atividadeId))
         .map(av => ({
@@ -359,9 +400,7 @@ export const planejamentoRouter = router({
           criadoPor:           av.criadoPor,
         }));
 
-      if (!novosAvancos.length) return { transferidas: 0 };
-
-      await db.insert(planejamentoAvancos).values(novosAvancos);
+      if (novosAvancos.length) await db.insert(planejamentoAvancos).values(novosAvancos);
       return { transferidas: novosAvancos.length };
     }),
 

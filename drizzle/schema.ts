@@ -4365,6 +4365,7 @@ export const planejamentoRevisoes = pgTable("planejamento_revisoes", {
   observacao:   text(),
   isBaseline:   boolean("is_baseline").default(false),
   consolidado:  boolean("consolidado").default(false),
+  diferencas:   text("diferencas"),
   criadoEm:     timestamp("criado_em").defaultNow(),
 });
 
