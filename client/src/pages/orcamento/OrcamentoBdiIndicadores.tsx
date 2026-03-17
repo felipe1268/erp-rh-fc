@@ -748,18 +748,21 @@ export default function OrcamentoBdiIndicadores({
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedCILinhas.map((row: any, i: number) => (
-                      <tr key={row.id ?? i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
-                        <td className="px-3 py-1.5 text-slate-700">{row.descricao ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-center text-slate-500">{row.modalidade ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-center text-slate-500 uppercase text-[10px]">{row.tipoContrato ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-right font-mono">{n(row.quantidade) > 0 ? n(row.quantidade) : "—"}</td>
-                        <td className="px-3 py-1.5 text-right font-mono">{n(row.salarioBase) > 0 ? formatBRL(n(row.salarioBase)) : "—"}</td>
-                        <td className="px-3 py-1.5 text-right font-mono">{n(row.decimoTerceiroFerias) > 0 ? formatBRL(n(row.decimoTerceiroFerias)) : "—"}</td>
-                        <td className="px-3 py-1.5 text-right font-mono">{n(row.totalMes) > 0 ? formatBRL(n(row.totalMes)) : "—"}</td>
-                        <td className="px-3 py-1.5 text-right font-mono font-semibold bg-yellow-50">{n(row.totalObra) > 0 ? formatBRL(n(row.totalObra)) : "—"}</td>
+                    {selectedCILinhas.map((row: any, i: number) => {
+                      const hasVal = n(row.totalObra) > 0;
+                      return (
+                      <tr key={row.id ?? i} className={hasVal ? "bg-emerald-50 border-l-[3px] border-emerald-500" : `${i % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
+                        <td className={`px-3 py-1.5 ${hasVal ? "font-semibold text-slate-800" : "text-slate-400"}`}>{row.descricao ?? "—"}</td>
+                        <td className={`px-3 py-1.5 text-center ${hasVal ? "text-slate-600" : "text-slate-300"}`}>{row.modalidade ?? "—"}</td>
+                        <td className={`px-3 py-1.5 text-center uppercase text-[10px] ${hasVal ? "text-slate-600" : "text-slate-300"}`}>{row.tipoContrato ?? "—"}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono ${hasVal ? "text-slate-700" : "text-slate-300"}`}>{n(row.quantidade) > 0 ? n(row.quantidade) : "—"}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono ${hasVal ? "text-slate-700" : "text-slate-300"}`}>{n(row.salarioBase) > 0 ? formatBRL(n(row.salarioBase)) : "—"}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono ${hasVal ? "text-slate-700" : "text-slate-300"}`}>{n(row.decimoTerceiroFerias) > 0 ? formatBRL(n(row.decimoTerceiroFerias)) : "—"}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono ${hasVal ? "text-slate-700" : "text-slate-300"}`}>{n(row.totalMes) > 0 ? formatBRL(n(row.totalMes)) : "—"}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono font-bold ${hasVal ? "text-emerald-700 bg-emerald-100" : "text-slate-300 bg-slate-50"}`}>{hasVal ? formatBRL(n(row.totalObra)) : "—"}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-slate-300 bg-slate-100">
@@ -783,16 +786,19 @@ export default function OrcamentoBdiIndicadores({
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedCILinhas.map((row: any, i: number) => (
-                      <tr key={row.id ?? i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
-                        <td className="px-3 py-1.5 font-mono text-slate-400">{row.codigo ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-slate-700">{row.descricao ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-center text-slate-500">{row.unidade ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-right font-mono">{n(row.quantidade) > 0 ? n(row.quantidade) : "—"}</td>
-                        <td className="px-3 py-1.5 text-right font-mono">{row.mesesObra ? n(row.mesesObra) : "—"}</td>
-                        <td className="px-3 py-1.5 text-right font-mono font-semibold bg-yellow-50">{n(row.totalObra) > 0 ? formatBRL(n(row.totalObra)) : "—"}</td>
+                    {selectedCILinhas.map((row: any, i: number) => {
+                      const hasVal = n(row.totalObra) > 0;
+                      return (
+                      <tr key={row.id ?? i} className={hasVal ? "bg-emerald-50 border-l-[3px] border-emerald-500" : `${i % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
+                        <td className={`px-3 py-1.5 font-mono ${hasVal ? "text-slate-600" : "text-slate-300"}`}>{row.codigo ?? "—"}</td>
+                        <td className={`px-3 py-1.5 ${hasVal ? "font-semibold text-slate-800" : "text-slate-400"}`}>{row.descricao ?? "—"}</td>
+                        <td className={`px-3 py-1.5 text-center ${hasVal ? "text-slate-600" : "text-slate-300"}`}>{row.unidade ?? "—"}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono ${hasVal ? "text-slate-700" : "text-slate-300"}`}>{n(row.quantidade) > 0 ? n(row.quantidade) : "—"}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono ${hasVal ? "text-slate-700" : "text-slate-300"}`}>{row.mesesObra ? n(row.mesesObra) : "—"}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono font-bold ${hasVal ? "text-emerald-700 bg-emerald-100" : "text-slate-300 bg-slate-50"}`}>{hasVal ? formatBRL(n(row.totalObra)) : "—"}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-slate-300 bg-slate-100">

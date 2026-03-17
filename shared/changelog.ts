@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 448,
+    titulo: "BDI — Destaque visual em linhas com valor nas tabelas CI",
+    descricao: "Nas tabelas de detalhe dos Custos Indiretos (CI-01..CI-08), linhas com Total/Obra > 0 recebem fundo verde-esmeralda (bg-emerald-50), borda esquerda verde (border-l-3 border-emerald-500), descrição em negrito e valor em verde-escuro (text-emerald-700 bg-emerald-100). Linhas sem valor (—) ficam apagadas (text-slate-300/400) para não distrair. Aplicado nas duas variantes de tabela: CI-01 (RH) e CI-02..CI-08 (materiais/equipamentos).",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 447,
     titulo: "BDI — Legenda CI ampliada: textos completos sem truncamento",
     descricao: "Legenda do gráfico 'Composição dos Custos Indiretos (CI-01..CI-08)' ampliada de max-w-[280px] para max-w-[420px]. Texto da descrição de cada item passou de truncate (cortado com '...') para whitespace-normal com quebra de linha, exibindo o nome completo de cada componente CI. Tamanho do texto de descrição aumentado de 10px para 11px e alinhamento ajustado para items-start.",
