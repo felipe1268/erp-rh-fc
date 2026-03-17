@@ -7,7 +7,7 @@ import { usePermissions } from "@/contexts/PermissionsContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import PrintHeader from "@/components/PrintHeader";
-import ImportarCronograma from "./ImportarCronograma";
+import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, TarefaImportada } from "./ImportarCronograma";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
 import { Button } from "@/components/ui/button";
@@ -6479,14 +6479,84 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
 // ═════════════════════════════════════════════════════════════════════════════
 function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
   const [modalAberto, setModalAberto] = useState(false);
-  const [form, setForm] = useState({ motivo: "", responsavel: "", dataRevisao: new Date().toISOString().split("T")[0], observacao: "", copiarAtividades: true });
+  const [form, setForm] = useState({ motivo: "", responsavel: "", dataRevisao: new Date().toISOString().split("T")[0], observacao: "" });
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [tarefas, setTarefas] = useState<TarefaImportada[]>([]);
+  const [parseErr, setParseErr] = useState<string | null>(null);
+  const [parsendo, setParsendo] = useState(false);
+  const fileRefRev = useRef<HTMLInputElement>(null);
+
+  const aprovarMutation = trpc.planejamento.aprovarRevisao.useMutation({
+    onSuccess: () => { utils.planejamento.getProjetoById.invalidate(); fecharModal(); },
+  });
+
+  const salvarAtividadesMut = trpc.planejamento.salvarAtividades.useMutation({
+    onSuccess: (_, vars) => {
+      aprovarMutation.mutate({ id: vars.revisaoId });
+    },
+  });
 
   const criarMutation = trpc.planejamento.criarRevisao.useMutation({
-    onSuccess: () => { utils.planejamento.getProjetoById.invalidate(); setModalAberto(false); },
+    onSuccess: (revisao: any) => {
+      const atividades = tarefas.map((t, i) => ({
+        eapCodigo:        t.eapCodigo || t.wbs,
+        nome:             t.nome,
+        nivel:            t.nivel,
+        dataInicio:       t.inicio || undefined,
+        dataFim:          t.fim || undefined,
+        duracaoDias:      t.durDias,
+        predecessora:     t.pred || undefined,
+        pesoFinanceiro:   t.pesoFin,
+        recursoPrincipal: t.recurso || undefined,
+        isGrupo:          t.isGrupo,
+        ordem:            i,
+      }));
+      salvarAtividadesMut.mutate({ revisaoId: revisao.id, projetoId, atividades });
+    },
   });
-  const aprovarMutation = trpc.planejamento.aprovarRevisao.useMutation({
-    onSuccess: () => utils.planejamento.getProjetoById.invalidate(),
-  });
+
+  function fecharModal() {
+    setModalAberto(false);
+    setForm({ motivo: "", responsavel: "", dataRevisao: new Date().toISOString().split("T")[0], observacao: "" });
+    setArquivo(null);
+    setTarefas([]);
+    setParseErr(null);
+  }
+
+  async function handleArquivo(file: File) {
+    setParsendo(true);
+    setParseErr(null);
+    setArquivo(null);
+    setTarefas([]);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      let parsed: TarefaImportada[];
+      if (ext === "xml") {
+        const text = await file.text();
+        parsed = parseMSProjectXML(text);
+      } else if (["xlsx", "xls", "xlsm"].includes(ext ?? "")) {
+        const buf = await file.arrayBuffer();
+        parsed = await parseMSProjectXLSX(buf);
+      } else {
+        throw new Error("Formato inválido. Use .xml ou .xlsx exportado do MS Project.");
+      }
+      if (!parsed.length) throw new Error("Nenhuma tarefa encontrada no arquivo.");
+      setArquivo(file);
+      setTarefas(parsed);
+    } catch (e: any) {
+      setParseErr(e.message ?? "Erro ao processar o arquivo.");
+    } finally {
+      setParsendo(false);
+    }
+  }
+
+  const isPending = criarMutation.isPending || salvarAtividadesMut.isPending || aprovarMutation.isPending;
+  const canSubmit = form.motivo.trim() && tarefas.length > 0 && !isPending;
+
+  let statusMsg = "";
+  if (criarMutation.isPending)       statusMsg = "Criando revisão...";
+  else if (salvarAtividadesMut.isPending) statusMsg = "Salvando atividades...";
+  else if (aprovarMutation.isPending) statusMsg = "Ativando revisão...";
 
   return (
     <div className="space-y-4">
@@ -6522,12 +6592,6 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${r.status === "aprovada" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
                   {r.status}
                 </span>
-                {r.status === "pendente" && (
-                  <Button size="sm" variant="outline" className="text-xs h-6 px-2 gap-1 text-emerald-700 border-emerald-200"
-                    onClick={() => aprovarMutation.mutate({ id: r.id })}>
-                    <CheckCircle2 className="h-3 w-3" /> Aprovar
-                  </Button>
-                )}
               </div>
             </div>
             {r.motivo && <p className="text-xs text-slate-500 mt-2 pl-10">Motivo: {r.motivo}</p>}
@@ -6540,17 +6604,21 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 space-y-1">
         <p className="font-semibold">Sobre o controle de revisões</p>
         <p>• Rev 00 (Baseline) é criada automaticamente e nunca pode ser alterada.</p>
-        <p>• Novas revisões copiam as atividades da revisão anterior.</p>
-        <p>• A Curva S sempre compara Baseline × Revisão Atual × Realizado.</p>
-        <p>• Revisões pendentes precisam ser aprovadas para ativar.</p>
+        <p>• Cada nova revisão exige upload de um novo cronograma (MS Project) e torna-se o cronograma oficial imediatamente.</p>
+        <p>• A Curva S compara Baseline × todas as revisões × Realizado.</p>
+        <p>• Todos os outros módulos (Gantt, Avanço, REFIS, Caminho Crítico etc.) usam sempre a revisão ativa.</p>
       </div>
 
-      <Dialog open={modalAberto} onOpenChange={setModalAberto}>
+      <Dialog open={modalAberto} onOpenChange={v => { if (!v) fecharModal(); else setModalAberto(true); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Nova Revisão do Cronograma</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              O arquivo enviado substituirá o cronograma oficial em todos os módulos. A Curva S manterá o histórico de todas as revisões.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 mt-1">
+
             <div>
               <Label className="text-xs">Motivo do Replanejamento *</Label>
               <textarea
@@ -6558,9 +6626,10 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
                 onChange={e => setForm(f => ({...f, motivo: e.target.value}))}
                 placeholder="Ex: Chuvas prolongadas em fevereiro atrasaram fundação..."
                 className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background resize-none"
-                rows={3}
+                rows={2}
               />
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Data da Revisão</Label>
@@ -6571,31 +6640,72 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
                 <Label className="text-xs">Responsável</Label>
                 <Input value={form.responsavel}
                   onChange={e => setForm(f => ({...f, responsavel: e.target.value}))}
-                  placeholder="Engenheiro responsável" className="mt-1" />
+                  placeholder="Engenheiro" className="mt-1" />
               </div>
             </div>
+
             <div>
               <Label className="text-xs">Observação</Label>
               <Input value={form.observacao}
                 onChange={e => setForm(f => ({...f, observacao: e.target.value}))}
                 placeholder="Notas adicionais..." className="mt-1" />
             </div>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.copiarAtividades}
-                onChange={e => setForm(f => ({...f, copiarAtividades: e.target.checked}))}
-                className="h-4 w-4" />
-              Copiar atividades da revisão anterior
-            </label>
-            <div className="flex gap-2 justify-end pt-1">
-              <Button variant="outline" onClick={() => setModalAberto(false)}>Cancelar</Button>
-              <Button
-                disabled={!form.motivo || criarMutation.isPending}
-                onClick={() => criarMutation.mutate({ projetoId, ...form })}
-                className="bg-blue-600 hover:bg-blue-700"
+
+            {/* ── Upload do novo cronograma ── */}
+            <div>
+              <Label className="text-xs">Novo Cronograma (MS Project) *</Label>
+              <div
+                className={`mt-1 border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${arquivo ? "border-emerald-400 bg-emerald-50" : "border-slate-300 hover:border-blue-400 hover:bg-blue-50/30"}`}
+                onClick={() => fileRefRev.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleArquivo(f); }}
               >
-                {criarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Revisão"}
+                {parsendo ? (
+                  <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" /> Processando arquivo...
+                  </div>
+                ) : arquivo ? (
+                  <div className="flex items-center justify-center gap-2 text-sm text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span className="font-medium truncate max-w-[200px]">{arquivo.name}</span>
+                    <span className="text-xs text-emerald-600 shrink-0">— {tarefas.length} tarefas</span>
+                  </div>
+                ) : (
+                  <div className="text-slate-400 space-y-1">
+                    <Upload className="h-6 w-6 mx-auto" />
+                    <p className="text-sm">Arraste ou clique para selecionar</p>
+                    <p className="text-xs">.xml (MS Project XML) · .xlsx · .xls</p>
+                  </div>
+                )}
+              </div>
+              <input
+                ref={fileRefRev}
+                type="file"
+                accept=".xml,.xlsx,.xls,.xlsm"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleArquivo(f); e.target.value = ""; }}
+              />
+              {parseErr && (
+                <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />{parseErr}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" onClick={fecharModal} disabled={isPending}>Cancelar</Button>
+              <Button
+                disabled={!canSubmit}
+                onClick={() => criarMutation.mutate({ projetoId, ...form, copiarAtividades: false })}
+                className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+              >
+                {isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> {statusMsg}</>
+                  : <><GitBranch className="h-4 w-4" /> Criar e Ativar Revisão</>
+                }
               </Button>
             </div>
+
           </div>
         </DialogContent>
       </Dialog>

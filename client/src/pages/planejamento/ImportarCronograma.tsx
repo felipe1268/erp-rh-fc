@@ -13,7 +13,7 @@ import {
 const n = (v: any) => parseFloat(v || "0") || 0;
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
-interface TarefaImportada {
+export interface TarefaImportada {
   wbs:       string;
   nome:      string;
   nivel:     number;
@@ -29,7 +29,7 @@ interface TarefaImportada {
 }
 
 // ── Utilitários de parse ──────────────────────────────────────────────────────
-function parseDuration(dur: string): number {
+export function parseDuration(dur: string): number {
   if (!dur) return 0;
   const h = dur.match(/(\d+)H/);
   const d = dur.match(/(\d+)D/);
@@ -47,7 +47,7 @@ function excelSerialToISO(serial: number): string {
 }
 
 // Converte qualquer representação de data → "YYYY-MM-DD" ou ""
-function fmtDate(raw: any): string {
+export function fmtDate(raw: any): string {
   if (raw == null || raw === "") return "";
 
   // Já é um Date (cellDates: true)
@@ -100,7 +100,7 @@ function fmtBRLocal(iso: string): string {
 }
 
 // ── Parser MS Project XML ─────────────────────────────────────────────────────
-function parseMSProjectXML(text: string): TarefaImportada[] {
+export function parseMSProjectXML(text: string): TarefaImportada[] {
   const doc  = new DOMParser().parseFromString(text, "text/xml");
   const err  = doc.querySelector("parsererror");
   if (err) throw new Error("XML inválido");
@@ -146,7 +146,7 @@ function parseMSProjectXML(text: string): TarefaImportada[] {
 }
 
 // ── Parser Excel (MS Project → Excel export) ──────────────────────────────────
-async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImportada[]> {
+export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImportada[]> {
   const xlsxMod = await import("xlsx");
   const XLSX = xlsxMod.default ?? xlsxMod;
   // cellDates: true → datas vêm como objetos Date em vez de serial numérico

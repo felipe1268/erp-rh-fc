@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 476,
+    titulo: "Revisões — Nova revisão agora exige upload de cronograma MS Project",
+    descricao: "Alterada a lógica de criação de revisão: ao invés de copiar atividades da revisão anterior, o modal agora exige o upload de um novo arquivo de cronograma (.xml ou .xlsx do MS Project). O arquivo é parseado, as atividades são salvas na nova revisão e ela é aprovada automaticamente, tornando-se o cronograma oficial em todos os módulos (Gantt, Avanço Semanal, REFIS, Caminho Crítico etc.). A Curva S mantém o histórico completo de todas as revisões para comparação com o Baseline.",
+    tipo: "funcionalidade",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 475,
     titulo: "Planejamento — Corrigido erro 'showImportarMoModal is not defined' na aba Revisões",
     descricao: "Corrigido ReferenceError ao abrir a aba Revisões do cronograma. O modal 'Importar Custos MO' havia sido colocado dentro do componente filho Revisoes(), mas usava variáveis de estado (showImportarMoModal, mesMoSelecionado, verificarMoQuery, executarTransferenciaMut) definidas no componente pai PlanejamentoDetalhe. Correção: o modal foi movido para o componente pai, onde todas as variáveis necessárias estão disponíveis.",
