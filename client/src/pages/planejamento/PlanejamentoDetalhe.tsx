@@ -29,7 +29,7 @@ import {
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer,
   TrendingDown, ArrowUpRight, ArrowDownRight, Circle, CalendarClock, Network,
-  Users, HardHat, CheckCircle,
+  Users, HardHat, CheckCircle, Calculator,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -2342,6 +2342,21 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     setLinhas(l => l.map((line, i) => i === idx ? { ...line, [field]: value } : line));
   }
 
+  function calcularPesosAutomaticos() {
+    setLinhas(current => {
+      // Usa somente atividades FOLHA (não grupo) com duração > 0
+      const folhas = current.filter((a: any) => !a.isGrupo && (a.duracaoDias ?? 0) > 0);
+      const totalDias = folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0);
+      if (totalDias === 0) return current;
+      return current.map((a: any) => {
+        if (a.isGrupo) return { ...a, pesoFinanceiro: 0 };
+        const dur = a.duracaoDias ?? 0;
+        const peso = totalDias > 0 ? +((dur / totalDias) * 100).toFixed(4) : 0;
+        return { ...a, pesoFinanceiro: peso };
+      });
+    });
+  }
+
   function toggleCollapse(eap: string) {
     setCollapsed(s => {
       const ns = new Set(s);
@@ -2440,6 +2455,17 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
           {editando ? (
             <>
               <Button variant="outline" size="sm" onClick={() => setEditando(false)}>Cancelar</Button>
+              <Button
+                variant="outline" size="sm"
+                className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
+                title="Calcula o peso de cada atividade folha proporcional à sua duração em dias"
+                onClick={() => {
+                  if (!confirm("Recalcular pesos automaticamente? Os pesos atuais serão substituídos.")) return;
+                  calcularPesosAutomaticos();
+                }}>
+                <Calculator className="h-3.5 w-3.5" />
+                Calcular Pesos
+              </Button>
               <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700"
                 disabled={salvarMutation.isPending}
                 onClick={() => salvarMutation.mutate({ revisaoId: revisaoAtiva.id, projetoId, atividades: linhas })}>

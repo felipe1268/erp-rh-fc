@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 494,
+    titulo: "Cronograma — botão Calcular Pesos automático por duração",
+    descricao: "Novo botão 'Calcular Pesos' no modo de edição: distribui automaticamente o Peso% de cada atividade folha proporcional à sua duração em dias (peso = duração / total × 100). Grupos recebem peso 0. O cálculo substitui os pesos existentes após confirmação.",
+    tipo: "nova-funcionalidade",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 493,
     titulo: "Cronograma — modo de edição com colunas ajustadas e datas legíveis",
     descricao: "Corrigido layout em modo de edição: inputs de data agora têm largura suficiente para mostrar o ano completo, coluna Dur. não trunca mais números grandes, e o espaçamento foi uniformizado. Tabela usa scroll horizontal com largura mínima de 900px no modo edição.",
