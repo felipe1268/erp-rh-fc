@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 479,
+    titulo: "Revisões — Herança de avanços ao criar nova revisão",
+    descricao: "Nova revisão agora herda automaticamente todos os avanços (percentuais por semana) da revisão anterior, cruzando pelo código EAP de cada atividade. 'O que está pronto, está pronto.' Corrigidos também: (1) limparCronograma apagava avanços de TODAS as revisões do projeto — agora só apaga os da revisão atual; (2) excluirRevisao não apagava os avanços da revisão deletada, deixando registros orfãos no banco.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 478,
     titulo: "Revisões — Cancelar/Excluir restrito a administradores",
     descricao: "Corrigido: prop isAdminMaster não estava sendo passada ao componente Revisoes, tornando os botões de cancelar e excluir invisíveis para todos. Agora os botões só aparecem para usuários com role admin ou admin_master. O backend também valida o role antes de executar a operação, garantindo que mesmo chamadas diretas à API sejam bloqueadas para não-admins.",

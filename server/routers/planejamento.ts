@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike } from "drizzle-orm";
+import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike, lt, ne } from "drizzle-orm";
 import {
   planejamentoProjetos,
   planejamentoRevisoes,
@@ -150,8 +150,9 @@ export const planejamentoRouter = router({
     .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      // Apaga apenas os avanços da REVISÃO atual — nunca de outras revisões
       await db.delete(planejamentoAvancos)
-        .where(eq(planejamentoAvancos.projetoId, input.projetoId));
+        .where(eq(planejamentoAvancos.revisaoId, input.revisaoId));
       await db.delete(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
       return { success: true };
@@ -285,11 +286,83 @@ export const planejamentoRouter = router({
         throw new Error("Apenas a revisão mais recente pode ser excluída. Exclua em ordem decrescente.");
       }
 
+      // Apaga avanços da revisão (evita registros orfãos)
+      await db.delete(planejamentoAvancos)
+        .where(eq(planejamentoAvancos.revisaoId, input.id));
       await db.delete(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.id));
       await db.delete(planejamentoRevisoes)
         .where(eq(planejamentoRevisoes.id, input.id));
       return { success: true };
+    }),
+
+  // ── Transferir avanços da revisão anterior para nova revisão (herança de progresso) ─
+  transferirAvancosParaNovaRevisao: protectedProcedure
+    .input(z.object({ novaRevisaoId: z.number(), projetoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      const [novaRevisao] = await db.select().from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.novaRevisaoId));
+      if (!novaRevisao) return { transferidas: 0 };
+
+      // Revisão aprovada imediatamente anterior (número menor, não cancelada)
+      const anteriores = await db.select().from(planejamentoRevisoes)
+        .where(and(
+          eq(planejamentoRevisoes.projetoId, input.projetoId),
+          lt(planejamentoRevisoes.numero, novaRevisao.numero!),
+          ne(planejamentoRevisoes.status, "cancelada"),
+        ))
+        .orderBy(desc(planejamentoRevisoes.numero));
+      if (!anteriores.length) return { transferidas: 0 };
+      const revisaoAnterior = anteriores[0];
+
+      // Atividades das duas revisões
+      const [atvsAnterior, atvsNova] = await Promise.all([
+        db.select().from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, revisaoAnterior.id)),
+        db.select().from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, input.novaRevisaoId)),
+      ]);
+
+      // Avanços da revisão anterior
+      const avancosAnteriores = await db.select().from(planejamentoAvancos)
+        .where(eq(planejamentoAvancos.revisaoId, revisaoAnterior.id))
+        .orderBy(asc(planejamentoAvancos.semana));
+      if (!avancosAnteriores.length) return { transferidas: 0 };
+
+      // Mapas eapCodigo → id por revisão
+      const eapToIdAnt = new Map<string, number>();
+      for (const a of atvsAnterior) if (a.eapCodigo) eapToIdAnt.set(a.eapCodigo, a.id);
+
+      const eapToIdNovo = new Map<string, number>();
+      for (const a of atvsNova) if (a.eapCodigo) eapToIdNovo.set(a.eapCodigo, a.id);
+
+      // Mapa: atividadeId anterior → atividadeId novo (mesma EAP)
+      const idAntToIdNovo = new Map<number, number>();
+      for (const [eap, idAnt] of eapToIdAnt.entries()) {
+        const idNovo = eapToIdNovo.get(eap);
+        if (idNovo) idAntToIdNovo.set(idAnt, idNovo);
+      }
+
+      // Constrói registros de avanço para a nova revisão
+      const novosAvancos = avancosAnteriores
+        .filter(av => idAntToIdNovo.has(av.atividadeId))
+        .map(av => ({
+          projetoId:           av.projetoId,
+          atividadeId:         idAntToIdNovo.get(av.atividadeId)!,
+          revisaoId:           input.novaRevisaoId,
+          semana:              av.semana,
+          percentualAcumulado: av.percentualAcumulado,
+          percentualSemanal:   av.percentualSemanal,
+          observacao:          av.observacao,
+          criadoPor:           av.criadoPor,
+        }));
+
+      if (!novosAvancos.length) return { transferidas: 0 };
+
+      await db.insert(planejamentoAvancos).values(novosAvancos);
+      return { transferidas: novosAvancos.length };
     }),
 
   // ── Atividades ────────────────────────────────────────────────────────────

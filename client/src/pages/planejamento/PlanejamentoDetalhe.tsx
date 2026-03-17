@@ -6508,9 +6508,19 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
     onSuccess: () => { utils.planejamento.getProjetoById.invalidate(); fecharModal(); },
   });
 
+  const transferirAvancosMut = trpc.planejamento.transferirAvancosParaNovaRevisao.useMutation({
+    onSuccess: (_, vars) => {
+      aprovarMutation.mutate({ id: vars.novaRevisaoId });
+    },
+    onError: (_, vars) => {
+      // Mesmo que a transferência falhe, aprovamos a revisão normalmente
+      aprovarMutation.mutate({ id: vars.novaRevisaoId });
+    },
+  });
+
   const salvarAtividadesMut = trpc.planejamento.salvarAtividades.useMutation({
     onSuccess: (_, vars) => {
-      aprovarMutation.mutate({ id: vars.revisaoId });
+      transferirAvancosMut.mutate({ novaRevisaoId: vars.revisaoId, projetoId });
     },
   });
 
@@ -6568,12 +6578,13 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
     }
   }
 
-  const isPending = criarMutation.isPending || salvarAtividadesMut.isPending || aprovarMutation.isPending;
+  const isPending = criarMutation.isPending || salvarAtividadesMut.isPending || transferirAvancosMut.isPending || aprovarMutation.isPending;
   const canSubmit = form.motivo.trim() && tarefas.length > 0 && !isPending;
 
   let statusMsg = "";
-  if (criarMutation.isPending)       statusMsg = "Criando revisão...";
-  else if (salvarAtividadesMut.isPending) statusMsg = "Salvando atividades...";
+  if (criarMutation.isPending)           statusMsg = "Criando revisão...";
+  else if (salvarAtividadesMut.isPending)    statusMsg = "Salvando atividades...";
+  else if (transferirAvancosMut.isPending)   statusMsg = "Transferindo avanços...";
   else if (aprovarMutation.isPending) statusMsg = "Ativando revisão...";
 
   return (
