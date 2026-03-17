@@ -182,27 +182,32 @@ export default function OrcamentoBdiIndicadores({
   //   Usa diretamente sem deduplicação (códigos já são únicos).
   const tributosChart = useMemo(() => {
     // --- Fonte 1 (PRIORITÁRIA): DI-xx em bdiLinhas (formato FC Engenharia) ---
-    // APENAS DI-02..DI-07 são tributos:
-    //   DI-02=PIS, DI-03=COFINS, DI-04=IRPJ, DI-05=CSLL, DI-06=CPRB, DI-07=ISS
-    // DI-01 (Adm Central), DI-08 (Risco/Imprevistos), DI-09 (Seguro), DI-10 (Comissionamento)
-    // são OUTRAS rubricas do BDI — NÃO são tributos e NÃO devem aparecer aqui.
+    // Tributos: DI-02=PIS, DI-03=COFINS, DI-04=IRPJ, DI-05=CSLL, DI-06=CPRB, DI-07=ISS
+    // DI-01/DI-08/DI-09/DI-10 são outras rubricas do BDI (não tributos).
+    // DI-06 (CPRB=0%) deve aparecer mesmo zerado: varia por projeto e região.
     const TRIBUTOS_DI = /^DI-0[2-7]$/;
+    const ORDEM_DI: Record<string, number> = {
+      "DI-02": 1, "DI-03": 2, "DI-04": 3, "DI-05": 4, "DI-06": 5, "DI-07": 6,
+    };
+    // Não filtra por percentual>0 para preservar DI-06 quando CPRB=0%
     const fromDI = bdiLinhas
-      .filter(l => TRIBUTOS_DI.test(String(l.codigo ?? "").trim()) && n(l.percentual) > 0);
+      .filter(l => TRIBUTOS_DI.test(String(l.codigo ?? "").trim()));
     if (fromDI.length > 0) {
       return fromDI
         .map(l => {
+          const codigo   = String(l.codigo ?? "").trim();
           const aliquota = +(n(l.percentual) * 100).toFixed(4);
-          // Prefere valorAbsoluto do banco (calculado pelo Excel com base correta);
-          // só recalcula se o Excel não gravou o valor (= 0 ou ausente).
+          // Usa valorAbsoluto do banco (calculado pelo Excel com a base correta do BDI).
+          // Só usa fallback (totalVenda × alíquota) se o valor não foi gravado.
           const valorDB = n(l.valorAbsoluto);
           return {
-            label:    `${l.codigo} - ${l.descricao ?? "?"}`,
+            label:    `${codigo} - ${l.descricao ?? "?"}`,
             aliquota,
-            valor: valorDB > 0 ? valorDB : (totalVenda > 0 ? (aliquota / 100) * totalVenda : 0),
+            valor:    valorDB > 0 ? valorDB : (totalVenda > 0 ? (aliquota / 100) * totalVenda : 0),
+            ordem:    ORDEM_DI[codigo] ?? 99,
           };
         })
-        .sort((a, b) => b.aliquota - a.aliquota);
+        .sort((a, b) => a.ordem - b.ordem);  // ordem sequencial da planilha
     }
 
     // --- Fonte 2 (fallback): bdiTributos (A.x/B.x aba "Tributos Fiscais") ---

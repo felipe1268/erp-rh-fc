@@ -2122,6 +2122,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 439,
+    titulo: "BDI Tributos — ordem sequencial (DI-02→DI-07) e DI-06 fixo mesmo com 0%",
+    descricao: "Ordenação por código DI (DI-02, DI-03, DI-04, DI-05, DI-06, DI-07) em vez de por alíquota decrescente. DI-06 (CPRB) agora sempre aparece na tabela mesmo quando alíquota=0%, pois o valor varia por projeto e região. Valores usam valorAbsoluto do banco (base correta do Excel); fallback para totalVenda×alíquota apenas se valorAbsoluto=0.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 438,
     titulo: "BDI Indiretos — qty=0 zerado; parser lê 'Total c/HE' da coluna correta",
     descricao: "Parser CI-01: regra definitiva — SOMENTE linhas com qty > 0 na célula QUANTIDADE geram custo. Célula em branco OU valor 0 = funcionário não alocado nesta obra → totalObra=0. Salário já vem pré-rateado pelo usuário (ex: 0,5 FTE → o próprio salário digitado já é 50% do total). Fix: antes, fix2(qty||1) convertia blank/0 para '1.00'. Agora armazena qty real. Tenta ler 'Total c/ HE' de row[20]/row[19] antes de calcular por sal×meses. Frontend: indiretosModal exclui linhas com quantidade=0 OU totalObra=0.",
