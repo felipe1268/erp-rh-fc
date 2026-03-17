@@ -251,7 +251,9 @@ export const planejamentoRouter = router({
 
   cancelarRevisao: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin) throw new Error("Apenas administradores podem cancelar revisões.");
       const db = await getDb();
       const [rev] = await db.select().from(planejamentoRevisoes)
         .where(eq(planejamentoRevisoes.id, input.id));
@@ -265,7 +267,9 @@ export const planejamentoRouter = router({
 
   excluirRevisao: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin) throw new Error("Apenas administradores podem excluir revisões.");
       const db = await getDb();
       const [rev] = await db.select().from(planejamentoRevisoes)
         .where(eq(planejamentoRevisoes.id, input.id));

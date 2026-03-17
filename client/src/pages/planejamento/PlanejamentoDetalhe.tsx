@@ -575,6 +575,7 @@ export default function PlanejamentoDetalhe() {
             revisoes={proj.revisoes ?? []}
             revisaoAtiva={revisaoAtiva}
             utils={utils}
+            isAdminMaster={isAdminMaster}
           />
         )}
         {aba === "refis" && (
@@ -6477,7 +6478,7 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REVISÕES
 // ═════════════════════════════════════════════════════════════════════════════
-function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
+function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: any) {
   const [modalAberto, setModalAberto] = useState(false);
   const [form, setForm] = useState({ motivo: "", responsavel: "", dataRevisao: new Date().toISOString().split("T")[0], observacao: "" });
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -6613,8 +6614,8 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
                 }`}>
                   {r.status}
                 </span>
-                {/* Cancelar: qualquer não-Baseline que não esteja já cancelada */}
-                {!r.isBaseline && r.status !== "cancelada" && (
+                {/* Cancelar: qualquer não-Baseline que não esteja já cancelada — só admin */}
+                {isAdminMaster && !r.isBaseline && r.status !== "cancelada" && (
                   <Button
                     size="sm" variant="ghost"
                     className="text-xs h-6 px-2 gap-1 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
@@ -6627,8 +6628,8 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
                     <XCircle className="h-3 w-3" /> Cancelar
                   </Button>
                 )}
-                {/* Excluir: apenas a revisão mais recente (não-Baseline) */}
-                {!r.isBaseline && r.id === idMaisRecente && (
+                {/* Excluir: apenas a revisão mais recente (não-Baseline) — só admin */}
+                {isAdminMaster && !r.isBaseline && r.id === idMaisRecente && (
                   confirmExcluirId === r.id ? (
                     <div className="flex items-center gap-1">
                       <span className="text-[10px] text-red-600 font-medium">Confirmar?</span>
@@ -6665,6 +6666,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
         <p>• Cada nova revisão exige upload de um novo cronograma (MS Project) e torna-se o cronograma oficial imediatamente.</p>
         <p>• A Curva S compara Baseline × todas as revisões × Realizado.</p>
         <p>• Todos os outros módulos (Gantt, Avanço, REFIS, Caminho Crítico etc.) usam sempre a revisão ativa.</p>
+        <p>• Cancelar e excluir revisões: disponível apenas para administradores. A exclusão segue ordem decrescente (somente a mais recente pode ser excluída).</p>
       </div>
 
       <Dialog open={modalAberto} onOpenChange={v => { if (!v) fecharModal(); else setModalAberto(true); }}>

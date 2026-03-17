@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 478,
+    titulo: "Revisões — Cancelar/Excluir restrito a administradores",
+    descricao: "Corrigido: prop isAdminMaster não estava sendo passada ao componente Revisoes, tornando os botões de cancelar e excluir invisíveis para todos. Agora os botões só aparecem para usuários com role admin ou admin_master. O backend também valida o role antes de executar a operação, garantindo que mesmo chamadas diretas à API sejam bloqueadas para não-admins.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 477,
     titulo: "Revisões — Cancelar e Excluir revisão do cronograma",
     descricao: "Adicionadas ações de cancelar e excluir revisões. Cancelar: disponível para qualquer revisão não-Baseline, altera status para 'cancelada'. Excluir: disponível apenas para a revisão mais recente (maior número), exige confirmação e remove a revisão + todas as suas atividades do banco. O Baseline nunca pode ser cancelado ou excluído. A exclusão obrigatoriamente segue ordem decrescente — só a última pode ser excluída.",
