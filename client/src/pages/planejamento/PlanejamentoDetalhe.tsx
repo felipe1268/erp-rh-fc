@@ -491,32 +491,32 @@ export default function PlanejamentoDetalhe() {
                 }}
                 onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
                 onClick={() => setAba(id)}
-                className={`group flex items-center justify-center gap-1 w-full px-2 py-1.5 text-xs font-medium border-b-2 whitespace-nowrap transition-all cursor-grab active:cursor-grabbing ${
+                className={`group flex items-center justify-center gap-1.5 w-full px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all duration-150 cursor-grab active:cursor-grabbing ${
                   isActive
-                    ? "border-blue-600 text-blue-600 bg-blue-50/40"
-                    : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-                } ${isDragged ? "opacity-40" : ""} ${isOver && dragIdx !== globalIdx ? "border-blue-400 bg-blue-50/60" : ""}`}
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-white/80"
+                } ${isDragged ? "opacity-40 scale-95" : ""} ${isOver && dragIdx !== globalIdx ? "ring-2 ring-blue-400 ring-inset" : ""}`}
               >
-                <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-30 shrink-0 transition-opacity" />
+                <GripVertical className={`h-3 w-3 opacity-0 group-hover:opacity-40 shrink-0 transition-opacity ${isActive ? "text-white/60" : ""}`} />
                 <t.Icon className="h-3.5 w-3.5 shrink-0" />
                 <span>{t.label}</span>
               </button>
             );
           };
           return (
-            <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden shadow-sm select-none bg-white">
+            <div className="mb-4 rounded-xl border border-slate-200 shadow-sm select-none bg-slate-100/70 p-1.5 space-y-1">
               {/* Linha 1 */}
-              <div className="flex border-b border-slate-100 bg-slate-50/60">
+              <div className="flex gap-1">
                 {tabOrder.slice(0, half).map((id, i) => (
-                  <div key={id} className="flex-1 flex justify-center">
+                  <div key={id} className="flex-1">
                     {renderTabBtn(id, i)}
                   </div>
                 ))}
               </div>
               {/* Linha 2 */}
-              <div className="flex">
+              <div className="flex gap-1">
                 {tabOrder.slice(half).map((id, i) => (
-                  <div key={id} className="flex-1 flex justify-center">
+                  <div key={id} className="flex-1">
                     {renderTabBtn(id, half + i)}
                   </div>
                 ))}

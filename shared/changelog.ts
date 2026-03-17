@@ -2725,6 +2725,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 506,
+    titulo: "Planejamento — Redesign das abas de navegação (layout fluido + aba ativa destacada)",
+    descricao: "O painel de abas do PlanejamentoDetalhe foi redesenhado: container com fundo cinza suave (slate-100/70) e padding interno p-1.5, separação entre abas com gap-1, abas individuais com rounded-lg e py-2 px-3 (mais espaçosas). Aba ativa recebe fundo azul sólido (bg-blue-600) e texto branco, com sombra leve — muito mais visível que o antigo border-bottom. Abas inativas ficam em cinza com hover branco suave. Arrastar abas mantido com animação scale-95 e ring-2 de destaque. Transições de 150ms para fluidez.",
+    tipo: "ux",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 505,
     titulo: "Planejamento — Regra de negócio: orçamento obrigatório antes de criar planejamento",
     descricao: "Implementada regra de fluxo: só é possível criar um planejamento se a obra já tiver um orçamento cadastrado e vinculado. Validação em 2 camadas: (1) Backend — `criarProjeto` verifica se a obra possui orçamento na tabela `orcamentos`; sem orçamento, lança erro 'PRECONDITION_FAILED' com mensagem clara. Também tornou `obraId` obrigatório no backend. (2) Frontend — o modal 'Novo Projeto' já filtrava obras disponíveis por aquelas com orçamento; agora adiciona banner âmbar explicativo quando nenhuma obra está disponível, desabilita o select e guia o usuário ao módulo de Orçamento. Isso protege o fluxo Obra → Orçamento → Planejamento e evita bugs de dados incompletos.",
