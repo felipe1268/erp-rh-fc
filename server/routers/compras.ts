@@ -1307,15 +1307,17 @@ Responda APENAS com um objeto JSON no formato:
             .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
         }
         const orcIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
-        let metas: { id: number; metaUnitTotal: string | null }[] = [];
+        // metaTotal = valor total orçado para a linha (já inclui qtd orçada × preço meta)
+        // Usar metaTotal e não metaUnitTotal × qtd_comprada: captura variação de preço E quantidade
+        let metas: { id: number; metaTotal: string | null }[] = [];
         if (orcIds.length > 0) {
-          metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
+          metas = await db.select({ id: orcamentoItens.id, metaTotal: orcamentoItens.metaTotal })
             .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIds));
         }
         const scToOrc: Record<number, number> = {};
         for (const s of scItens) if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
-        const orcToMeta: Record<number, number> = {};
-        for (const m of metas) orcToMeta[m.id] = n(m.metaUnitTotal);
+        const orcToMetaTotal: Record<number, number> = {};
+        for (const m of metas) orcToMetaTotal[m.id] = n(m.metaTotal);
 
         // Acumula totalComprado e totalMeta por OC
         const ocTotalComprado: Record<number, number> = {};
@@ -1325,11 +1327,11 @@ Responda APENAS com um objeto JSON no formato:
           if (!it.solicitacaoItemId) continue;
           const orcId = scToOrc[it.solicitacaoItemId];
           if (!orcId) continue;
-          const metaUnit = orcToMeta[orcId] ?? 0;
-          if (metaUnit === 0) continue;
+          const metaItemTotal = orcToMetaTotal[orcId] ?? 0;
+          if (metaItemTotal === 0) continue;
           const qty = n(it.quantidade);
           ocTotalComprado[ocId] = (ocTotalComprado[ocId] ?? 0) + n(it.precoUnitario) * qty;
-          ocTotalMeta[ocId]     = (ocTotalMeta[ocId]     ?? 0) + metaUnit * qty;
+          ocTotalMeta[ocId]     = (ocTotalMeta[ocId]     ?? 0) + metaItemTotal;
         }
         // Só conta sobra se a OC INTEIRA ficou abaixo do total orçado
         for (const ocId of Object.keys(ocTotalMeta)) {

@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 470,
+    titulo: "Realocação — Economia em Compras: corrigido uso de metaTotal (valor total orçado por linha)",
+    descricao: "Corrigido cálculo de 'Economia em Compras' no painel de saldo da página de Realocações. Erro anterior: usava metaUnitTotal × qtd_comprada, que comparava apenas preço unitário e ignorava variação de quantidade. Correção: passa a usar metaTotal (valor total orçado para cada linha do orçamento), que reflete tanto variação de preço quanto de quantidade. A OC inteira só gera economia se a soma total comprada for menor que a soma total orçada. Resultado para HOTEL DO PAPA / OC-2026-0001: passou de R$526,04 (incorreto) para R$0,00, pois o item 02.02.01.02.03 foi comprado em quantidade maior que o orçamento previa, estourando o total da OC em R$321,30.",
+    tipo: "correcao",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 469,
     titulo: "Realocação — Seletor de obra filtra apenas obras com orçamento vinculado",
     descricao: "O seletor de obra na página de Realocações agora exibe apenas as obras que possuem pelo menos um orçamento ativo vinculado. Obras sem orçamento são omitidas do dropdown pois não possuem DI-08 cadastrado e não fazem sentido no contexto de saldo/realocação. A filtragem é feita no frontend: orcamentos são consultados e os obraIds são usados como filtro na lista de obras.",
