@@ -2122,6 +2122,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 440,
+    titulo: "Recalculação CI-01 no banco — 1.064 linhas corrigidas sem re-importar",
+    descricao: "Recalculação direta no banco: total_obra = 0 quando quantidade=0, ou total_mes × meses_obra quando quantidade>0 (salário já pré-rateado). 57 linhas zeradas (cargos sem salário = sem alocação). 1.007 linhas com valor mantido. Regra permanente: toda correção de parser deve ter recalculação disponível sem re-importar. Re-importar é 100% seguro: só apaga tabelas do orçamento/BDI, nunca compras, OCs, financeiro ou outros módulos.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 439,
     titulo: "BDI Tributos — ordem sequencial (DI-02→DI-07) e DI-06 fixo mesmo com 0%",
     descricao: "Ordenação por código DI (DI-02, DI-03, DI-04, DI-05, DI-06, DI-07) em vez de por alíquota decrescente. DI-06 (CPRB) agora sempre aparece na tabela mesmo quando alíquota=0%, pois o valor varia por projeto e região. Valores usam valorAbsoluto do banco (base correta do Excel); fallback para totalVenda×alíquota apenas se valorAbsoluto=0.",
