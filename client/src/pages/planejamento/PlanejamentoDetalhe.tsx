@@ -2315,8 +2315,12 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 
   const salvarMutation = trpc.planejamento.salvarAtividades.useMutation({
     onSuccess: () => {
+      toast.success("Cronograma salvo com sucesso!");
       utils.planejamento.listarAtividades.invalidate();
       setEditando(false);
+    },
+    onError: (err) => {
+      toast.error(`Erro ao salvar cronograma: ${err.message}`);
     },
   });
 

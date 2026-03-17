@@ -440,30 +440,33 @@ export const planejamentoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      await db.delete(planejamentoAtividades)
-        .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+      const rows = input.atividades.map((a, i) => ({
+        revisaoId:           input.revisaoId,
+        projetoId:           input.projetoId,
+        eapCodigo:           a.eapCodigo ?? null,
+        nome:                a.nome ?? "",
+        nivel:               a.nivel ?? 1,
+        dataInicio:          a.dataInicio ?? null,
+        dataFim:             a.dataFim ?? null,
+        duracaoDias:         a.duracaoDias ?? 0,
+        predecessora:        a.predecessora ?? null,
+        pesoFinanceiro:      String(a.pesoFinanceiro ?? 0),
+        recursoPrincipal:    a.recursoPrincipal ?? null,
+        quantidadePlanejada: String(a.quantidadePlanejada ?? 0),
+        unidade:             a.unidade ?? null,
+        ordem:               a.ordem ?? i,
+        isGrupo:             a.isGrupo ?? false,
+      }));
 
-      if (input.atividades.length > 0) {
-        await db.insert(planejamentoAtividades).values(
-          input.atividades.map((a, i) => ({
-            revisaoId:           input.revisaoId,
-            projetoId:           input.projetoId,
-            eapCodigo:           a.eapCodigo ?? null,
-            nome:                a.nome,
-            nivel:               a.nivel ?? 1,
-            dataInicio:          a.dataInicio ?? null,
-            dataFim:             a.dataFim ?? null,
-            duracaoDias:         a.duracaoDias ?? 0,
-            predecessora:        a.predecessora ?? null,
-            pesoFinanceiro:      String(a.pesoFinanceiro ?? 0),
-            recursoPrincipal:    a.recursoPrincipal ?? null,
-            quantidadePlanejada: String(a.quantidadePlanejada ?? 0),
-            unidade:             a.unidade ?? null,
-            ordem:               a.ordem ?? i,
-            isGrupo:             a.isGrupo ?? false,
-          }))
-        );
-      }
+      await db.transaction(async (tx) => {
+        await tx.delete(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+        const CHUNK = 100;
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          await tx.insert(planejamentoAtividades).values(rows.slice(i, i + CHUNK));
+        }
+      });
+
       return { success: true };
     }),
 

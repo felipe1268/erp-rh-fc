@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 495,
+    titulo: "Cronograma — salvar em lotes + toast de sucesso/erro",
+    descricao: "Corrigido problema de save silencioso: agora exibe toast de sucesso ou mensagem de erro específica. A inserção de atividades passou a usar transação com lotes de 100 linhas para evitar timeout com projetos de 600+ atividades. Nome nulo agora convertido para string vazia para não quebrar validação.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 494,
     titulo: "Cronograma — botão Calcular Pesos automático por duração",
     descricao: "Novo botão 'Calcular Pesos' no modo de edição: distribui automaticamente o Peso% de cada atividade folha proporcional à sua duração em dias (peso = duração / total × 100). Grupos recebem peso 0. O cálculo substitui os pesos existentes após confirmação.",
