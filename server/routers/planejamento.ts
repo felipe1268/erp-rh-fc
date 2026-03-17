@@ -2064,4 +2064,313 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
 
       return { novaRevisaoId: novaRevisao.id };
     }),
+
+  // ── Gerar Cronograma a partir do Orçamento (IA) ───────────────────────────
+  gerarCronogramaDoOrcamento: protectedProcedure
+    .input(z.object({
+      projetoId:       z.number(),
+      revisaoId:       z.number(),
+      orcamentoMensal: z.number().positive(),
+      valorTotal:      z.number().positive(),
+      dataInicio:      z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      // 1. Obter o projeto e seu orçamento vinculado
+      const projeto = await db.select().from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.id, input.projetoId))
+        .then(r => r[0]);
+      if (!projeto) throw new Error("Projeto não encontrado.");
+      if (!projeto.orcamentoId) throw new Error("Este projeto não tem orçamento vinculado.");
+
+      // 2. Buscar itens do orçamento (apenas folhas com custo > 0)
+      const itens = await db.select({
+        eapCodigo:  orcamentoItens.eapCodigo,
+        descricao:  orcamentoItens.descricao,
+        unidade:    orcamentoItens.unidade,
+        quantidade: orcamentoItens.quantidade,
+        custoTotal: orcamentoItens.custoTotal,
+        tipo:       orcamentoItens.tipo,
+      })
+      .from(orcamentoItens)
+      .where(and(
+        eq(orcamentoItens.orcamentoId, projeto.orcamentoId),
+        sql`${orcamentoItens.custoTotal} > 0`,
+        sql`(${orcamentoItens.tipo} IS NULL OR ${orcamentoItens.tipo} != 'grupo')`,
+      ))
+      .orderBy(asc(orcamentoItens.eapCodigo));
+
+      if (itens.length === 0) throw new Error("O orçamento vinculado não tem itens cadastrados.");
+
+      // 3. Chamar IA para gerar o cronograma
+      const { invokeLLM } = await import("../_core/llm");
+
+      const listaItens = itens.map(i => {
+        const custo = parseFloat(String(i.custoTotal || 0));
+        const pct   = input.valorTotal > 0 ? ((custo / input.valorTotal) * 100).toFixed(2) : "0";
+        return `EAP:${i.eapCodigo || "?"} | ${i.descricao} | ${i.unidade || "vb"} | R$${custo.toFixed(2)} (${pct}% do total)`;
+      }).join("\n");
+
+      const valorFmt  = input.valorTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      const mensalFmt = input.orcamentoMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      const mesesEst  = Math.ceil(input.valorTotal / input.orcamentoMensal);
+
+      const prompt = `Você é um dos maiores especialistas em planejamento de obras de construção civil do Brasil, com domínio em:
+- Método do Caminho Crítico (CPM/PERT)
+- Linha de Balanço (LOB) e Last Planner System de Glenn Ballard
+- Metodologias de Harold Kerzner, Gregory Horine e Aldo Dórea Mattos
+- NBR 12.741, diretrizes do SINDUSCON e sequência construtiva da ABNT
+- Programação de obras residenciais, comerciais e industriais brasileiras
+
+MISSÃO: Gerar um cronograma de obra COMPLETO baseado nos itens do orçamento fornecidos.
+
+PARÂMETROS DA OBRA:
+- Valor total: ${valorFmt}
+- Desembolso máximo mensal: ${mensalFmt}
+- Prazo estimado: ~${mesesEst} meses
+- Data de início: ${input.dataInicio}
+
+ITENS DO ORÇAMENTO (EAP | Descrição | Unidade | Custo):
+${listaItens}
+
+REGRAS OBRIGATÓRIAS DE SEQUÊNCIA CONSTRUTIVA (respeitar rigorosamente):
+1. SERVIÇOS PRELIMINARES: mobilização, canteiro, tapumes, instalações provisórias (sempre primeiro)
+2. TERRAPLENAGEM: escavação, aterro, compactação, drenagem
+3. FUNDAÇÕES: estacas, blocos, vigas baldrames, radier, cortina de contenção
+4. ESTRUTURA: pilares → vigas → lajes (fôrmas, armação, concretagem, cura) — fase mais longa
+5. ALVENARIA E VEDAÇÃO: paredes externas e internas, shafts
+6. COBERTURA: estrutura de telhado, telhas, calhas, rufos, impermeabilização
+7. INSTALAÇÕES HIDROSSANITÁRIAS: prumadas, ramais, caixas sifonadas, reservatório
+8. INSTALAÇÕES ELÉTRICAS: eletrodutos, cabeamento, quadros, SPDA, telecomunicações
+9. INSTALAÇÕES ESPECIAIS: ar-condicionado, gás, elevadores (quando presentes)
+10. REVESTIMENTO INTERNO: chapisco, reboco, emboço (paredes e tetos) — iniciar após estrutura seca
+11. REVESTIMENTO EXTERNO: fachada, argamassa texturizada, pastilhas, pintura externa
+12. CONTRAPISO E IMPERMEABILIZAÇÃO: regularização, manta, membrana, rodapé embutido
+13. REVESTIMENTO DE PISOS: cerâmica, porcelanato, mármore, granitina, madeira
+14. REVESTIMENTO DE PAREDES (áreas molhadas): azulejo, porcelanato, boxe
+15. ESQUADRIAS: caixilhos de alumínio, portas de madeira, vidros, ferragens
+16. LOUÇAS E METAIS: bacias, pias, torneiras, duchas, chuveiros
+17. PINTURA: massa corrida, selador, látex/acrílica interna e externa, vernizes
+18. SERVIÇOS FINAIS: limpeza final, regulagens, vistoria, entrega
+
+REGRAS PARA DURAÇÃO (dias úteis):
+- Pequeno (< 1% do valor total): 5-10 dias
+- Médio (1-5%): 15-40 dias
+- Grande (5-15%): 45-90 dias
+- Major (> 15%): 90-150 dias
+- Serviços de estrutura e fundações: sempre 30-120 dias dependendo do porte
+- Instalações prediais: 20-60 dias
+- Acabamentos (piso, revestimento, pintura): 15-45 dias cada
+
+REGRAS PARA PESO FINANCEIRO:
+- A soma dos pesoFinanceiro de TODAS as atividades folha (isGrupo: false) deve totalizar EXATAMENTE 100
+- Distribuir proporcionalmente ao custo de cada item no orçamento
+- Grupos (isGrupo: true) têm pesoFinanceiro: 0
+
+REGRAS PARA PREDECESSORAS:
+- Use o eapCodigo da atividade predecessora (ex: "1.1" ou "2")
+- Respeite RIGOROSAMENTE a sequência construtiva
+- Múltiplas predecessoras: separar por vírgula (ex: "2.1,2.2")
+- Atividades que podem ser paralelas dentro da mesma fase: sem predecessoras entre si
+
+REGRAS DE EAP:
+- Grupos de fase (nivel 1, isGrupo: true): "1", "2", "3"... — sem atividade real, apenas agrupamento
+- Atividades folha (nivel 2, isGrupo: false): "1.1", "1.2", "2.1"... — atividade real a executar
+- Cada item do orçamento deve virar UMA atividade folha ou ser agrupado logicamente
+
+Agrupe os itens do orçamento nas fases construtivas correspondentes. Se o orçamento tiver itens de fase que não existem (ex: não tem elevador), ignore essa fase.
+
+Retorne APENAS um JSON válido, sem comentários, sem markdown:
+{
+  "atividades": [
+    {"eapCodigo":"1","nome":"SERVIÇOS PRELIMINARES","nivel":1,"isGrupo":true,"duracaoDias":0,"predecessora":"","pesoFinanceiro":0,"unidade":""},
+    {"eapCodigo":"1.1","nome":"Mobilização e canteiro de obras","nivel":2,"isGrupo":false,"duracaoDias":10,"predecessora":"","pesoFinanceiro":1.5,"unidade":"vb"},
+    ...
+  ]
+}`;
+
+      let atividadesGeradas: {
+        eapCodigo: string; nome: string; nivel: number; isGrupo: boolean;
+        duracaoDias: number; predecessora: string; pesoFinanceiro: number; unidade: string;
+      }[] = [];
+
+      try {
+        const result = await invokeLLM({
+          messages: [{ role: "user", content: prompt }],
+          maxTokens: 8192,
+        });
+        const text = typeof result.choices[0]?.message?.content === "string"
+          ? result.choices[0].message.content : "";
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed.atividades) && parsed.atividades.length > 0) {
+            atividadesGeradas = parsed.atividades;
+          }
+        }
+      } catch (e) {
+        console.error("[gerarCronograma] Erro IA:", e);
+        throw new Error("Falha ao gerar cronograma com IA. Tente novamente.");
+      }
+
+      if (atividadesGeradas.length === 0) throw new Error("A IA não retornou atividades válidas.");
+
+      // Normalizar pesos para somar 100
+      const folhas = atividadesGeradas.filter(a => !a.isGrupo);
+      const somaP = folhas.reduce((s, a) => s + (a.pesoFinanceiro || 0), 0);
+      if (somaP > 0 && Math.abs(somaP - 100) > 0.5) {
+        const fator = 100 / somaP;
+        atividadesGeradas = atividadesGeradas.map(a =>
+          a.isGrupo ? a : { ...a, pesoFinanceiro: parseFloat((a.pesoFinanceiro * fator).toFixed(4)) }
+        );
+      }
+
+      // 4. Distribuição mensal (algoritmo guloso com topologia)
+      const folhasSeq = atividadesGeradas.filter(a => !a.isGrupo);
+      const getCusto = (a: typeof folhasSeq[0]) => (a.pesoFinanceiro / 100) * input.valorTotal;
+
+      // Topological sort by predecessora
+      const byEap = new Map(folhasSeq.map(a => [a.eapCodigo, a]));
+      const inDeg = new Map(folhasSeq.map(a => [a.eapCodigo, 0]));
+      const adj   = new Map(folhasSeq.map(a => [a.eapCodigo, [] as string[]]));
+      folhasSeq.forEach(a => {
+        if (!a.predecessora) return;
+        a.predecessora.split(/[,;]/).map(s => s.trim()).filter(Boolean).forEach(pk => {
+          if (adj.has(pk)) { adj.get(pk)!.push(a.eapCodigo); inDeg.set(a.eapCodigo, (inDeg.get(a.eapCodigo) || 0) + 1); }
+        });
+      });
+      const q = folhasSeq.filter(a => (inDeg.get(a.eapCodigo) || 0) === 0);
+      const visited = new Set<string>();
+      const sequencia: typeof folhasSeq = [];
+      while (q.length > 0) {
+        const node = q.shift()!;
+        if (visited.has(node.eapCodigo)) continue;
+        visited.add(node.eapCodigo);
+        sequencia.push(node);
+        (adj.get(node.eapCodigo) || []).forEach(sk => {
+          inDeg.set(sk, (inDeg.get(sk) || 0) - 1);
+          if ((inDeg.get(sk) || 0) === 0) { const nxt = byEap.get(sk); if (nxt && !visited.has(sk)) q.push(nxt); }
+        });
+      }
+      folhasSeq.forEach(a => { if (!visited.has(a.eapCodigo)) sequencia.push(a); });
+
+      const predSet = new Map(folhasSeq.map(a => [a.eapCodigo, new Set(
+        (a.predecessora || "").split(/[,;]/).map(s => s.trim()).filter(Boolean)
+      )]));
+
+      const meses: { mes: number; atividades: { eapCodigo: string; nome: string; pesoFinanceiro: number; duracaoDias: number; custo: number }[]; custoTotal: number }[] = [];
+      let remaining = [...sequencia];
+      const completedEaps = new Set<string>();
+      let mesNum = 1;
+
+      while (remaining.length > 0) {
+        const mesAtivs: typeof sequencia = [];
+        let mesCusto = 0;
+        let progressed = false;
+
+        for (let i = 0; i < remaining.length; i++) {
+          const a = remaining[i];
+          const preds = predSet.get(a.eapCodigo) ?? new Set<string>();
+          if (![...preds].every(p => completedEaps.has(p))) continue;
+          const custo = getCusto(a);
+          if (mesCusto + custo <= input.orcamentoMensal || mesAtivs.length === 0) {
+            mesAtivs.push(a); mesCusto += custo; progressed = true;
+          }
+        }
+        if (!progressed && remaining.length > 0) { mesAtivs.push(remaining[0]); mesCusto = getCusto(remaining[0]); }
+
+        mesAtivs.forEach(a => { completedEaps.add(a.eapCodigo); remaining = remaining.filter(r => r.eapCodigo !== a.eapCodigo); });
+        meses.push({ mes: mesNum++, custoTotal: mesCusto, atividades: mesAtivs.map(a => ({ eapCodigo: a.eapCodigo, nome: a.nome, pesoFinanceiro: a.pesoFinanceiro, duracaoDias: a.duracaoDias, custo: getCusto(a) })) });
+        if (mesNum > 500) break;
+      }
+
+      return { atividades: atividadesGeradas, meses, totalMeses: meses.length, valorTotal: input.valorTotal, orcamentoMensal: input.orcamentoMensal, dataInicio: input.dataInicio };
+    }),
+
+  // ── Adotar Cronograma Gerado pela IA (cria atividades + datas) ────────────
+  adotarCronogramaGerado: protectedProcedure
+    .input(z.object({
+      projetoId:  z.number(),
+      revisaoId:  z.number(),
+      dataInicio: z.string(),
+      atividades: z.array(z.object({
+        eapCodigo:      z.string(),
+        nome:           z.string(),
+        nivel:          z.number(),
+        isGrupo:        z.boolean(),
+        duracaoDias:    z.number(),
+        predecessora:   z.string(),
+        pesoFinanceiro: z.number(),
+        unidade:        z.string(),
+        mes:            z.number(), // 0 = grupo sem mês direto
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      const revisaoAtual = await db.select().from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.revisaoId)).then(r => r[0]);
+      if (!revisaoAtual) throw new Error("Revisão não encontrada.");
+
+      const [novaRevisao] = await db.insert(planejamentoRevisoes).values({
+        projetoId:   input.projetoId,
+        numero:      (revisaoAtual.numero ?? 0) + 1,
+        descricao:   "Cronograma gerado por IA a partir do orçamento",
+        status:      "aprovada",
+        criadoPor:   ctx.user?.name || "Sistema",
+        isBaseline:  false,
+        consolidado: false,
+      } as any).returning({ id: planejamentoRevisoes.id });
+
+      if (!novaRevisao) throw new Error("Falha ao criar revisão.");
+
+      // Calcular datas por mês
+      const di = new Date(input.dataInicio + "T12:00:00");
+      const mesDatas = new Map<number, { start: Date; end: Date }>();
+      for (let m = 1; m <= 600; m++) {
+        const start = new Date(di); start.setMonth(start.getMonth() + (m - 1));
+        const end   = new Date(start); end.setMonth(end.getMonth() + 1); end.setDate(end.getDate() - 1);
+        mesDatas.set(m, { start, end });
+      }
+
+      const fmt = (d: Date) => d.toISOString().split("T")[0];
+
+      const rows = input.atividades.map((a, i) => {
+        let dataInicio: string | null = null;
+        let dataFim: string | null    = null;
+        if (!a.isGrupo && a.mes > 0) {
+          const md = mesDatas.get(a.mes);
+          if (md) {
+            dataInicio = fmt(md.start);
+            const end  = new Date(md.start); end.setDate(end.getDate() + Math.max(1, a.duracaoDias) - 1);
+            dataFim    = fmt(end > md.end ? md.end : end);
+          }
+        }
+        return {
+          revisaoId:      novaRevisao.id,
+          projetoId:      input.projetoId,
+          eapCodigo:      a.eapCodigo,
+          nome:           a.nome,
+          nivel:          a.nivel,
+          dataInicio,
+          dataFim,
+          duracaoDias:    a.isGrupo ? null : Math.max(1, a.duracaoDias),
+          predecessora:   a.predecessora || null,
+          pesoFinanceiro: a.isGrupo ? null : a.pesoFinanceiro,
+          unidade:        a.unidade || null,
+          ordem:          i,
+          isGrupo:        a.isGrupo,
+        };
+      });
+
+      const CHUNK = 100;
+      await db.transaction(async tx => {
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          await tx.insert(planejamentoAtividades).values(rows.slice(i, i + CHUNK) as any);
+        }
+      });
+
+      return { novaRevisaoId: novaRevisao.id, totalAtividades: rows.length };
+    }),
 });

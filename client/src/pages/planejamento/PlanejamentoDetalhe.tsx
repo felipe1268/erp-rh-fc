@@ -10223,50 +10223,73 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
 // ═════════════════════════════════════════════════════════════════════════════
 type SimAtiv = { id: number; nome: string; eapCodigo: string | null; pesoFinanceiro: number; duracaoDias: number; custo: number };
 type SimMes  = { mes: number; atividades: SimAtiv[]; custoTotal: number };
+type GeradoAtiv = { eapCodigo: string; nome: string; nivel: number; isGrupo: boolean; duracaoDias: number; predecessora: string; pesoFinanceiro: number; unidade: string };
+type GeradoMes  = { mes: number; atividades: { eapCodigo: string; nome: string; pesoFinanceiro: number; duracaoDias: number; custo: number }[]; custoTotal: number };
 
 function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils, onAdotado }: any) {
   const valorContrato  = parseFloat(proj?.valorContrato ?? "0") || 0;
   const dataInicioProj = atividades.find((a: any) => a.dataInicio)?.dataInicio ?? new Date().toISOString().split("T")[0];
 
-  const fmtR   = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const fmtR    = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const toMoney = (v: number) => v > 0 ? v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
   const parseMoney = (s: string) => parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
 
   const [orcamentoMensal, setOrcamentoMensal] = useState<string>(valorContrato > 0 ? toMoney(Math.round(valorContrato / 12)) : "");
   const [valorTotal,      setValorTotal]      = useState<string>(valorContrato > 0 ? toMoney(valorContrato) : "");
   const [dataInicio,      setDataInicio]      = useState<string>(dataInicioProj);
-  const [mesesEdit,       setMesesEdit]       = useState<SimMes[]>([]);
-  const [usouIA,          setUsouIA]          = useState(false);
-  const [simulado,        setSimulado]        = useState(false);
+
+  // Mode: existing activities
+  const [mesesEdit, setMesesEdit] = useState<SimMes[]>([]);
+  const [usouIA,    setUsouIA]    = useState(false);
+  const [simulado,  setSimulado]  = useState(false);
+
+  // Mode: generate from orçamento (IA)
+  const [atividadesGeradas, setAtividadesGeradas] = useState<GeradoAtiv[]>([]);
+  const [mesesGerados,      setMesesGerados]      = useState<GeradoMes[]>([]);
+  const [gerado,            setGerado]            = useState(false);
 
   const orcNum = parseMoney(orcamentoMensal);
   const valNum = parseMoney(valorTotal);
 
-  function handleMoneyChange(val: string, set: (s: string) => void) {
-    // Allow only digits, dots, commas — strip everything else
-    set(val.replace(/[^0-9.,]/g, ""));
-  }
-  function handleMoneyBlur(val: string, set: (s: string) => void) {
-    const n = parseMoney(val);
-    set(n > 0 ? toMoney(n) : "");
-  }
+  const folhas = (atividades as any[]).filter((a: any) => !a.isGrupo);
+  const semAtividades = folhas.length === 0;
 
+  function handleMoneyChange(val: string, set: (s: string) => void) { set(val.replace(/[^0-9.,]/g, "")); }
+  function handleMoneyBlur(val: string, set: (s: string) => void) { const n = parseMoney(val); set(n > 0 ? toMoney(n) : ""); }
+
+  // ── Mutation: simular (modo com atividades já existentes) ──
   const simularMut = trpc.planejamento.simularCronograma.useMutation({
     onSuccess: (data) => {
       setMesesEdit(data.meses as SimMes[]);
       setUsouIA(data.usouIA);
       setSimulado(true);
-      toast.success(`Simulação concluída: ${data.totalMeses} ${data.totalMeses === 1 ? "mês" : "meses"} para concluir a obra.${data.usouIA ? " (sequência sugerida por IA)" : ""}`);
+      toast.success(`Simulação concluída: ${data.totalMeses} ${data.totalMeses === 1 ? "mês" : "meses"}.${data.usouIA ? " (sequência definida por IA)" : ""}`);
     },
     onError: (err) => toast.error(err.message),
   });
 
   const adotarMut = trpc.planejamento.adotarSimulacao.useMutation({
-    onSuccess: () => {
-      toast.success("Cronograma adotado! Nova revisão criada com as datas calculadas.");
+    onSuccess: () => { toast.success("Cronograma adotado! Nova revisão criada."); onAdotado?.(); },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // ── Mutation: gerar do orçamento (modo sem atividades) ──
+  const gerarMut = (trpc.planejamento as any).gerarCronogramaDoOrcamento.useMutation({
+    onSuccess: (data: any) => {
+      setAtividadesGeradas(data.atividades || []);
+      setMesesGerados(data.meses || []);
+      setGerado(true);
+      toast.success(`Cronograma gerado por IA: ${data.totalMeses} ${data.totalMeses === 1 ? "mês" : "meses"}, ${(data.atividades || []).filter((a: any) => !a.isGrupo).length} atividades.`);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const adotarGeradoMut = (trpc.planejamento as any).adotarCronogramaGerado.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Cronograma adotado! Nova revisão criada com ${data.totalAtividades} atividades.`);
       onAdotado?.();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: any) => toast.error(err.message),
   });
 
   function moverAtividade(atividadeId: number, deMes: number, paraMes: number) {
@@ -10274,20 +10297,11 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
     setMesesEdit(prev => {
       const atv = prev.find(m => m.mes === deMes)?.atividades.find(a => a.id === atividadeId);
       if (!atv) return prev;
-      const novoCustoDestino = (prev.find(m => m.mes === paraMes)?.custoTotal ?? 0) + atv.custo;
-      if (novoCustoDestino > orcNum * 1.05) {
-        toast.error(`Mês ${paraMes} ficaria em ${fmtR(novoCustoDestino)}, ultrapassando o teto de ${fmtR(orcNum)}.`);
-        return prev;
-      }
+      const novoCusto = (prev.find(m => m.mes === paraMes)?.custoTotal ?? 0) + atv.custo;
+      if (novoCusto > orcNum * 1.05) { toast.error(`Mês ${paraMes} ficaria em ${fmtR(novoCusto)}, acima do teto.`); return prev; }
       return prev.map(m => {
-        if (m.mes === deMes) {
-          const novas = m.atividades.filter(a => a.id !== atividadeId);
-          return { ...m, atividades: novas, custoTotal: novas.reduce((s, a) => s + a.custo, 0) };
-        }
-        if (m.mes === paraMes) {
-          const novas = [...m.atividades, atv];
-          return { ...m, atividades: novas, custoTotal: novas.reduce((s, a) => s + a.custo, 0) };
-        }
+        if (m.mes === deMes) { const n = m.atividades.filter(a => a.id !== atividadeId); return { ...m, atividades: n, custoTotal: n.reduce((s, a) => s + a.custo, 0) }; }
+        if (m.mes === paraMes) { const n = [...m.atividades, atv]; return { ...m, atividades: n, custoTotal: n.reduce((s, a) => s + a.custo, 0) }; }
         return m;
       });
     });
@@ -10295,77 +10309,175 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
 
   function handleSimular() {
     if (!revisaoAtiva) return toast.error("Nenhuma revisão ativa encontrada.");
-    if (orcNum <= 0)   return toast.error("Informe o orçamento mensal.");
-    if (valNum <= 0)   return toast.error("Informe o valor total da obra.");
-    const folhas = atividades.filter((a: any) => !a.isGrupo);
-    if (folhas.length === 0) return toast.error("O cronograma não tem atividades folha cadastradas.");
+    if (orcNum <= 0) return toast.error("Informe o orçamento mensal.");
+    if (valNum <= 0) return toast.error("Informe o valor total da obra.");
     simularMut.mutate({ revisaoId: revisaoAtiva.id, projetoId, orcamentoMensal: orcNum, valorTotal: valNum, dataInicio });
+  }
+
+  function handleGerar() {
+    if (!revisaoAtiva) return toast.error("Nenhuma revisão ativa encontrada.");
+    if (orcNum <= 0) return toast.error("Informe o orçamento mensal.");
+    if (valNum <= 0) return toast.error("Informe o valor total da obra.");
+    gerarMut.mutate({ revisaoId: revisaoAtiva.id, projetoId, orcamentoMensal: orcNum, valorTotal: valNum, dataInicio });
   }
 
   function handleAdotar() {
     if (!revisaoAtiva || mesesEdit.length === 0) return;
-    if (!confirm(`Criar uma nova revisão com o cronograma simulado (${mesesEdit.length} meses)?\n\nAs datas de cada atividade serão recalculadas com base na distribuição mensal.`)) return;
-    adotarMut.mutate({
-      projetoId,
-      revisaoId:  revisaoAtiva.id,
-      dataInicio,
-      meses: mesesEdit.map(m => ({ mes: m.mes, atividadeIds: m.atividades.map(a => a.id) })),
-    });
+    if (!confirm(`Criar uma nova revisão com o cronograma simulado (${mesesEdit.length} meses)?`)) return;
+    adotarMut.mutate({ projetoId, revisaoId: revisaoAtiva.id, dataInicio, meses: mesesEdit.map(m => ({ mes: m.mes, atividadeIds: m.atividades.map(a => a.id) })) });
+  }
+
+  function handleAdotarGerado() {
+    if (!revisaoAtiva || atividadesGeradas.length === 0) return;
+    if (!confirm(`Criar uma nova revisão com o cronograma gerado pela IA (${mesesGerados.length} meses, ${atividadesGeradas.filter(a => !a.isGrupo).length} atividades)?\n\nIsso criará todas as atividades no seu cronograma com as datas calculadas.`)) return;
+
+    // Build atividades with assigned month
+    const eapToMes = new Map<string, number>();
+    mesesGerados.forEach(m => m.atividades.forEach(a => eapToMes.set(a.eapCodigo, m.mes)));
+
+    const atvsPayload = atividadesGeradas.map(a => ({
+      eapCodigo:      a.eapCodigo,
+      nome:           a.nome,
+      nivel:          a.nivel,
+      isGrupo:        a.isGrupo,
+      duracaoDias:    a.duracaoDias,
+      predecessora:   a.predecessora || "",
+      pesoFinanceiro: a.pesoFinanceiro,
+      unidade:        a.unidade || "",
+      mes:            eapToMes.get(a.eapCodigo) || 0,
+    }));
+
+    adotarGeradoMut.mutate({ projetoId, revisaoId: revisaoAtiva.id, dataInicio, atividades: atvsPayload });
   }
 
   const totalSimulado = mesesEdit.reduce((s, m) => s + m.custoTotal, 0);
+  const totalGerado   = mesesGerados.reduce((s, m) => s + m.custoTotal, 0);
+
+  // ── Render month cards (reusable for both modes) ──
+  function renderMonthCards(
+    meses: (SimMes | GeradoMes)[],
+    onMover?: (id: number, de: number, para: number) => void,
+    allMeses?: (SimMes | GeradoMes)[],
+  ) {
+    return meses.map(mes => {
+      const di_ = new Date(dataInicio + "T12:00:00");
+      di_.setMonth(di_.getMonth() + (mes.mes - 1));
+      const mesLabel = di_.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      const pct  = orcNum > 0 ? Math.min(100, (mes.custoTotal / orcNum) * 100) : 0;
+      const over = mes.custoTotal > orcNum * 1.01;
+      return (
+        <div key={mes.mes} className={`bg-white border rounded-xl overflow-hidden ${over ? "border-red-300" : "border-slate-200"}`}>
+          <div className={`flex items-center justify-between px-4 py-2.5 border-b ${over ? "bg-red-50 border-red-200" : "bg-slate-50 border-slate-200"}`}>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm text-slate-700">Mês {mes.mes} — {mesLabel}</span>
+              {over && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Acima do teto</span>}
+            </div>
+            <div className="text-right">
+              <p className={`text-sm font-bold ${over ? "text-red-600" : "text-slate-700"}`}>{fmtR(mes.custoTotal)}</p>
+              <p className="text-[10px] text-slate-400">{mes.atividades.length} atividade{mes.atividades.length !== 1 ? "s" : ""}</p>
+            </div>
+          </div>
+          <div className="h-1.5 bg-slate-100">
+            <div className={`h-full transition-all ${over ? "bg-red-400" : pct > 80 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${Math.min(100, pct)}%` }} />
+          </div>
+          <div className="p-3 flex flex-col gap-1.5">
+            {mes.atividades.map((atv: any) => (
+              <div key={atv.id || atv.eapCodigo} className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-slate-700 truncate">
+                    {atv.eapCodigo && <span className="text-slate-400 mr-1">{atv.eapCodigo}</span>}
+                    {atv.nome}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">{fmtR(atv.custo)} · {atv.pesoFinanceiro?.toFixed(2)}% · {atv.duracaoDias}d</p>
+                </div>
+                {onMover && atv.id && allMeses && (
+                  <select
+                    className="text-[10px] border border-slate-200 rounded px-1.5 py-1 bg-white text-slate-600 cursor-pointer shrink-0"
+                    value={mes.mes}
+                    onChange={e => onMover(atv.id, mes.mes, parseInt(e.target.value))}
+                  >
+                    {allMeses.map(m => <option key={m.mes} value={m.mes}>Mês {m.mes}</option>)}
+                  </select>
+                )}
+              </div>
+            ))}
+            {mes.atividades.length === 0 && <p className="text-xs text-slate-400 text-center py-3 italic">Nenhuma atividade neste mês</p>}
+          </div>
+        </div>
+      );
+    });
+  }
 
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
       <div className="flex items-start gap-4">
-        <div className="p-2.5 rounded-xl bg-violet-100 shrink-0">
-          <Calculator className="h-5 w-5 text-violet-700" />
+        <div className={`p-2.5 rounded-xl shrink-0 ${semAtividades ? "bg-violet-100" : "bg-violet-100"}`}>
+          {semAtividades ? <Brain className="h-5 w-5 text-violet-700" /> : <Calculator className="h-5 w-5 text-violet-700" />}
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-bold text-slate-800">Simulador de Cronograma por Orçamento Mensal</h2>
-            {usouIA && simulado && (
+            <h2 className="text-lg font-bold text-slate-800">
+              {semAtividades ? "Gerar Cronograma com IA a partir do Orçamento" : "Simulador de Cronograma por Orçamento Mensal"}
+            </h2>
+            {(usouIA && simulado) || (gerado) ? (
               <span className="inline-flex items-center gap-1 bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-                <Sparkles className="h-3 w-3" /> Sequência definida por IA
+                <Sparkles className="h-3 w-3" /> Gerado por IA
               </span>
-            )}
+            ) : null}
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Informe o valor máximo por mês. O sistema distribui as atividades respeitando a sequência lógica da obra.
-            Se não houver predecessoras, a IA sugere a ordem construtiva automaticamente.
+            {semAtividades
+              ? "Este cronograma ainda não tem atividades. A IA irá ler os itens do orçamento vinculado e gerar um cronograma completo respeitando a sequência construtiva e o seu desembolso mensal."
+              : "Informe o valor máximo por mês. O sistema distribui as atividades respeitando a sequência lógica da obra. Se não houver predecessoras, a IA sugere a ordem construtiva automaticamente."}
           </p>
         </div>
       </div>
 
+      {/* Banner explicativo para modo gerador */}
+      {semAtividades && !gerado && (
+        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <Sparkles className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-violet-800">Como funciona a geração com IA</p>
+              <p className="text-xs text-violet-600 mt-1 leading-relaxed">
+                A IA analisa cada item do orçamento, classifica-os nas fases construtivas corretas (terraplenagem → fundações → estrutura → alvenaria → instalações → revestimentos → acabamentos),
+                estima durações realistas para o porte da obra e define predecessores respeitando a lógica construtiva.
+                O resultado é um cronograma EAP completo pronto para ser adotado.
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {["CPM/PERT","Last Planner System","LOB","Harold Kerzner","Aldo Dórea Mattos","NBR 12.741"].map(tag => (
+                  <span key={tag} className="text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{tag}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Parâmetros */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-700">Parâmetros da Simulação</h3>
+        <h3 className="text-sm font-semibold text-slate-700">Parâmetros da {semAtividades ? "Geração" : "Simulação"}</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="text-xs font-medium text-slate-600 mb-1 block">Orçamento Mensal Máximo (R$) *</label>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">Desembolso Máximo Mensal (R$) *</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">R$</span>
-              <Input
-                placeholder="150.000,00"
-                value={orcamentoMensal}
+              <Input placeholder="150.000,00" value={orcamentoMensal}
                 onChange={e => handleMoneyChange(e.target.value, setOrcamentoMensal)}
                 onBlur={e => handleMoneyBlur(e.target.value, setOrcamentoMensal)}
-                className="text-sm pl-9"
-              />
+                className="text-sm pl-9" />
             </div>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 mb-1 block">Valor Total da Obra (R$) *</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">R$</span>
-              <Input
-                placeholder="1.800.000,00"
-                value={valorTotal}
+              <Input placeholder="1.800.000,00" value={valorTotal}
                 onChange={e => handleMoneyChange(e.target.value, setValorTotal)}
                 onBlur={e => handleMoneyBlur(e.target.value, setValorTotal)}
-                className="text-sm pl-9"
-              />
+                className="text-sm pl-9" />
             </div>
             {valorContrato > 0 && (
               <button className="text-[10px] text-blue-500 mt-1 hover:underline" onClick={() => setValorTotal(toMoney(valorContrato))}>
@@ -10379,14 +10491,13 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
               className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" />
           </div>
         </div>
-        {/* Preview instantâneo: aparece assim que os dois valores estão preenchidos */}
+
+        {/* Preview instantâneo */}
         {orcNum > 0 && valNum > 0 && (() => {
-          const mesesEst  = Math.ceil(valNum / orcNum);
-          const dtInicio  = dataInicio ? new Date(dataInicio + "T12:00:00") : new Date();
-          const dtFim     = new Date(dtInicio);
-          dtFim.setMonth(dtFim.getMonth() + mesesEst);
+          const mesesEst = Math.ceil(valNum / orcNum);
+          const dtInicio = dataInicio ? new Date(dataInicio + "T12:00:00") : new Date();
+          const dtFim    = new Date(dtInicio); dtFim.setMonth(dtFim.getMonth() + mesesEst);
           const fmtDt = (d: Date) => d.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
-          const numAtiv = atividades.filter((a: any) => !a.isGrupo).length;
           return (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-wrap gap-6 items-center">
               <div className="text-center min-w-[80px]">
@@ -10398,7 +10509,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                 <p className="text-sm font-semibold text-slate-700">{fmtDt(dtInicio)}</p>
                 <p className="text-[11px] text-slate-500">início</p>
               </div>
-              <div className="flex items-center gap-1 text-slate-300 text-xs">→</div>
+              <div className="text-slate-300 text-xs">→</div>
               <div className="text-center min-w-[90px]">
                 <p className="text-sm font-semibold text-slate-700">{fmtDt(dtFim)}</p>
                 <p className="text-[11px] text-slate-500">conclusão prevista</p>
@@ -10406,31 +10517,98 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
               <div className="h-10 w-px bg-slate-200 hidden sm:block" />
               <div className="text-center min-w-[80px]">
                 <p className="text-sm font-semibold text-slate-700">{fmtR(orcNum)}<span className="text-xs font-normal text-slate-400">/mês</span></p>
-                <p className="text-[11px] text-slate-500">{numAtiv} atividade{numAtiv !== 1 ? "s" : ""} a distribuir</p>
+                <p className="text-[11px] text-slate-500">{semAtividades ? "itens do orçamento como base" : `${folhas.length} atividade${folhas.length !== 1 ? "s" : ""} a distribuir`}</p>
               </div>
-              <p className="w-full text-[10px] text-slate-400">* Prévia baseada no orçamento informado. A simulação distribui as atividades respeitando predecessoras e sequência construtiva.</p>
             </div>
           );
         })()}
 
         <div className="flex items-center gap-3 pt-1 flex-wrap">
-          <Button onClick={handleSimular} disabled={simularMut.isPending} className="gap-2 bg-violet-600 hover:bg-violet-700">
-            {simularMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
-            {simularMut.isPending ? "Simulando... (IA ordenando atividades)" : "Simular Cronograma"}
-          </Button>
-          {simulado && (
-            <span className="text-xs text-slate-500">
-              <strong className="text-slate-700">{mesesEdit.length} meses</strong> ·{" "}
-              Custo distribuído: <strong className="text-slate-700">{fmtR(totalSimulado)}</strong>
-            </span>
+          {semAtividades ? (
+            <Button onClick={handleGerar} disabled={gerarMut.isPending} className="gap-2 bg-violet-600 hover:bg-violet-700">
+              {gerarMut.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando cronograma com IA...</>
+                : <><Sparkles className="h-4 w-4" /> Gerar Cronograma com IA</>}
+            </Button>
+          ) : (
+            <Button onClick={handleSimular} disabled={simularMut.isPending} className="gap-2 bg-violet-600 hover:bg-violet-700">
+              {simularMut.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Simulando...</>
+                : <><Calculator className="h-4 w-4" /> Simular Cronograma</>}
+            </Button>
           )}
+          {gerado && <span className="text-xs text-slate-500"><strong className="text-slate-700">{mesesGerados.length} meses</strong> · {atividadesGeradas.filter(a => !a.isGrupo).length} atividades · {fmtR(totalGerado)}</span>}
+          {simulado && <span className="text-xs text-slate-500"><strong className="text-slate-700">{mesesEdit.length} meses</strong> · {fmtR(totalSimulado)}</span>}
         </div>
       </div>
 
-      {/* Grade de meses editável */}
+      {/* ── Resultado: Gerado por IA (modo sem atividades) ── */}
+      {gerado && mesesGerados.length > 0 && (
+        <div className="space-y-4">
+          {/* Resumo EAP gerada */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-violet-500" /> EAP Gerada pela IA
+            </h3>
+            <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+              {atividadesGeradas.map((a, i) => (
+                <div key={i} className={`flex items-start gap-2 py-1 ${a.isGrupo ? "" : "pl-4"}`}>
+                  {a.isGrupo
+                    ? <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">{a.eapCodigo} {a.nome}</span>
+                    : <>
+                        <span className="text-[10px] text-slate-400 shrink-0 w-8">{a.eapCodigo}</span>
+                        <span className="text-xs text-slate-600 flex-1">{a.nome}</span>
+                        <span className="text-[10px] text-slate-400 shrink-0">{a.duracaoDias}d · {a.pesoFinanceiro.toFixed(1)}%</span>
+                        {a.predecessora && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shrink-0">← {a.predecessora}</span>}
+                      </>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* KPIs */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 text-center">
+              <p className="text-[10px] text-violet-500 font-semibold uppercase tracking-wide">Duração Total</p>
+              <p className="text-2xl font-bold text-violet-700 mt-0.5">{mesesGerados.length}</p>
+              <p className="text-[11px] text-violet-500">meses</p>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+              <p className="text-[10px] text-emerald-500 font-semibold uppercase tracking-wide">Custo Distribuído</p>
+              <p className="text-lg font-bold text-emerald-700 mt-0.5">{fmtR(totalGerado)}</p>
+              <p className="text-[11px] text-emerald-500">de {fmtR(valNum)}</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+              <p className="text-[10px] text-amber-500 font-semibold uppercase tracking-wide">Atividades</p>
+              <p className="text-lg font-bold text-amber-700 mt-0.5">{atividadesGeradas.filter(a => !a.isGrupo).length}</p>
+              <p className="text-[11px] text-amber-500">folhas criadas</p>
+            </div>
+          </div>
+
+          {/* Cards de meses */}
+          <div className="space-y-3">
+            {renderMonthCards(mesesGerados)}
+          </div>
+
+          {/* Adotar */}
+          <div className="flex flex-col items-end gap-1 pt-2 border-t border-slate-100">
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setGerado(false); setAtividadesGeradas([]); setMesesGerados([]); }}
+                className="text-xs gap-1">
+                Regenerar
+              </Button>
+              <Button onClick={handleAdotarGerado} disabled={adotarGeradoMut.isPending} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6">
+                {adotarGeradoMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando cronograma...</> : <><CheckCircle className="h-4 w-4" /> Adotar Cronograma Gerado</>}
+              </Button>
+            </div>
+            <p className="text-[11px] text-slate-400">Cria uma nova revisão com todas as atividades e datas calculadas pela IA.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Resultado: Simulado (modo com atividades existentes) ── */}
       {simulado && mesesEdit.length > 0 && (
         <div className="space-y-4">
-          {/* Resumo */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 text-center">
               <p className="text-[10px] text-violet-500 font-semibold uppercase tracking-wide">Duração Total</p>
@@ -10448,80 +10626,16 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
               <p className="text-[11px] text-amber-500">por mês</p>
             </div>
           </div>
-
           <p className="text-xs text-slate-500 flex items-center gap-1.5">
             <Edit3 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            Mova atividades entre meses pelo seletor em cada card. O sistema bloqueia se o destino ultrapassar 105% do teto.
+            Mova atividades entre meses pelo seletor. O sistema bloqueia se o destino ultrapassar 105% do teto.
           </p>
-
-          {/* Cards de meses */}
           <div className="space-y-3">
-            {mesesEdit.map(mes => {
-              const di_ = new Date(dataInicio + "T12:00:00");
-              di_.setMonth(di_.getMonth() + (mes.mes - 1));
-              const mesLabel = di_.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-              const pct  = orcNum > 0 ? Math.min(100, (mes.custoTotal / orcNum) * 100) : 0;
-              const over = mes.custoTotal > orcNum * 1.01;
-              return (
-                <div key={mes.mes} className={`bg-white border rounded-xl overflow-hidden ${over ? "border-red-300" : "border-slate-200"}`}>
-                  {/* Header */}
-                  <div className={`flex items-center justify-between px-4 py-2.5 border-b ${over ? "bg-red-50 border-red-200" : "bg-slate-50 border-slate-200"}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-slate-700">Mês {mes.mes} — {mesLabel}</span>
-                      {over && (
-                        <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3" /> Acima do teto
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-bold ${over ? "text-red-600" : "text-slate-700"}`}>{fmtR(mes.custoTotal)}</p>
-                      <p className="text-[10px] text-slate-400">{mes.atividades.length} atividade{mes.atividades.length !== 1 ? "s" : ""}</p>
-                    </div>
-                  </div>
-                  {/* Barra de progresso do mês */}
-                  <div className="h-1.5 bg-slate-100">
-                    <div className={`h-full transition-all ${over ? "bg-red-400" : pct > 80 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${Math.min(100, pct)}%` }} />
-                  </div>
-                  {/* Atividades */}
-                  <div className="p-3 flex flex-col gap-1.5">
-                    {mes.atividades.map(atv => (
-                      <div key={atv.id} className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-slate-700 truncate">
-                            {atv.eapCodigo && <span className="text-slate-400 mr-1">{atv.eapCodigo}</span>}
-                            {atv.nome}
-                          </p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">
-                            {fmtR(atv.custo)} · {atv.pesoFinanceiro.toFixed(2)}% · {atv.duracaoDias}d
-                          </p>
-                        </div>
-                        <select
-                          className="text-[10px] border border-slate-200 rounded px-1.5 py-1 bg-white text-slate-600 cursor-pointer shrink-0"
-                          value={mes.mes}
-                          onChange={e => moverAtividade(atv.id, mes.mes, parseInt(e.target.value))}
-                          title="Mover atividade para outro mês"
-                        >
-                          {mesesEdit.map(m => (
-                            <option key={m.mes} value={m.mes}>Mês {m.mes}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
-                    {mes.atividades.length === 0 && (
-                      <p className="text-xs text-slate-400 text-center py-3 italic">Nenhuma atividade neste mês</p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {renderMonthCards(mesesEdit, moverAtividade, mesesEdit)}
           </div>
-
-          {/* Adotar */}
           <div className="flex flex-col items-end gap-1 pt-2 border-t border-slate-100">
             <Button onClick={handleAdotar} disabled={adotarMut.isPending} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6">
-              {adotarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-              {adotarMut.isPending ? "Criando revisão..." : "Adotar como Cronograma Oficial"}
+              {adotarMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando revisão...</> : <><CheckCircle className="h-4 w-4" /> Adotar como Cronograma Oficial</>}
             </Button>
             <p className="text-[11px] text-slate-400">Cria uma nova revisão com as datas calculadas com base na distribuição acima.</p>
           </div>

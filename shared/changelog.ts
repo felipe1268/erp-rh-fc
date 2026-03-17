@@ -2725,6 +2725,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 509,
+    titulo: "Simulador — Gerar cronograma completo com IA a partir do orçamento",
+    descricao: "Quando o cronograma não tem atividades, o Simulador entra automaticamente no modo 'Gerar do Orçamento'. A IA recebe os itens da EAP do orçamento vinculado, classifica-os nas fases construtivas corretas (serviços preliminares → terraplenagem → fundações → estrutura → alvenaria → cobertura → instalações → revestimentos → acabamentos → entrega), estima durações realistas por porte/custo do serviço, define predecessores respeitando a lógica construtiva e atribui pesos financeiros proporcionais. Usa metodologias CPM/PERT, Last Planner System (Glenn Ballard), Linha de Balanço (LOB), Harold Kerzner e Aldo Dórea Mattos. Resultado: cronograma EAP completo com grupos e atividades folha distribuídas por meses, preview da EAP gerada com predecessores visíveis, botão 'Regenerar' e botão 'Adotar' que cria as atividades na revisão com as datas calculadas. Backends: gerarCronogramaDoOrcamento + adotarCronogramaGerado.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 508,
     titulo: "Mapa Funcionários — Correção do filtro por estado e getDb() sem await",
     descricao: "Corrigidos dois bugs no mapa interativo de funcionários: (1) getFuncionariosParaMapa usava getDb() sem await, então 'db' era uma Promise em vez do cliente Drizzle — db.select() falhava silenciosamente e retornava array vazio, causando '0 funcionários' em todos os estados; (2) filtro employeesInState comparava e.estado.toUpperCase() com a sigla de 2 letras (ex: 'SP'), mas o campo pode conter o nome completo ('São Paulo'). Adicionada função normalizeEstado() no frontend que converte nomes completos em siglas. Mesma normalização aplicada ao estadoDist no backend. O fluxo 3 níveis (Brasil → estado → cidade → pins) agora funciona corretamente.",
