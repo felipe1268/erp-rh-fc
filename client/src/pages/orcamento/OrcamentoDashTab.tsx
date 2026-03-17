@@ -125,13 +125,17 @@ export default function OrcamentoDashTab({
   [insumos]);
 
   // ── 5. Componentes do BDI por aba (pie) ─────────────────────────
+  // Usa SOMENTE linha B-02 de cada aba (total do BDI da aba).
+  // Somar todas as linhas causaria double-counting com os subcomponentes.
   const bdiByAba = useMemo(() => {
     const map: Record<string, number> = {};
-    bdiLinhas.forEach(l => {
-      const aba = (l.nomeAba as string) ?? "BDI";
-      const val = n(l.percentual);
-      if (val > 0) map[aba] = (map[aba] ?? 0) + val;
-    });
+    bdiLinhas
+      .filter(l => l.codigo === 'B-02')
+      .forEach(l => {
+        const aba = (l.nomeAba as string) ?? "BDI";
+        const val = n(l.percentual);
+        if (val > 0) map[aba] = val;
+      });
     return Object.entries(map)
       .map(([name, value]) => ({ name, value: +(value * 100).toFixed(3) }))
       .filter(d => d.value > 0)

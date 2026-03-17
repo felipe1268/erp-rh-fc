@@ -96,13 +96,18 @@ export default function OrcamentoBdiIndicadores({
   const despFinanc       = (detalhes?.despFinanc        ?? []) as any[];
 
   // ── Componentes do BDI por aba ──────────────────────────────────
+  // Usa SOMENTE a linha B-02 de cada aba (total do BDI daquela aba).
+  // Somar todas as linhas causaria double-counting: componentes (ISS, PIS, LC…)
+  // + o B-02 que já é a soma deles = valor absurdo (ex: 672%).
   const componentes = useMemo(() => {
     const map: Record<string, number> = {};
-    bdiLinhas.forEach(l => {
-      const aba = (l.nomeAba as string) ?? "BDI";
-      const val = n(l.percentual);
-      if (val > 0) map[aba] = (map[aba] ?? 0) + val;
-    });
+    bdiLinhas
+      .filter(l => l.codigo === 'B-02')
+      .forEach(l => {
+        const aba = (l.nomeAba as string) ?? "BDI";
+        const val = n(l.percentual);
+        if (val > 0) map[aba] = val; // B-02 já é o total — não somar
+      });
     return Object.entries(map)
       .map(([nome, pct]) => ({
         nome,
