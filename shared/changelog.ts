@@ -2725,6 +2725,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 505,
+    titulo: "Planejamento — Regra de negócio: orçamento obrigatório antes de criar planejamento",
+    descricao: "Implementada regra de fluxo: só é possível criar um planejamento se a obra já tiver um orçamento cadastrado e vinculado. Validação em 2 camadas: (1) Backend — `criarProjeto` verifica se a obra possui orçamento na tabela `orcamentos`; sem orçamento, lança erro 'PRECONDITION_FAILED' com mensagem clara. Também tornou `obraId` obrigatório no backend. (2) Frontend — o modal 'Novo Projeto' já filtrava obras disponíveis por aquelas com orçamento; agora adiciona banner âmbar explicativo quando nenhuma obra está disponível, desabilita o select e guia o usuário ao módulo de Orçamento. Isso protege o fluxo Obra → Orçamento → Planejamento e evita bugs de dados incompletos.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 504,
     titulo: "Cronograma — Corrigido erro de validação ao salvar atividades (quantidadePlanejada)",
     descricao: "O erro 'Invalid input: expected number, received string' ao salvar atividades do cronograma foi corrigido. A causa raiz era que colunas do tipo `numeric` no PostgreSQL retornam valores como strings no JavaScript (ex: '0', '5.25'), mas o schema Zod da mutation `salvarAtividades` esperava `number`. A correção usa `z.preprocess` em todos os campos numéricos da mutation (id, nivel, duracaoDias, pesoFinanceiro, quantidadePlanejada, ordem), convertendo automaticamente strings para número antes da validação. Isso torna o endpoint robusto para receber dados do banco ou do formulário.",

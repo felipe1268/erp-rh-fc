@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, Search, Loader2, CalendarRange, Building2, User, DollarSign,
   TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin, ArrowLeft, Pencil,
+  Info,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -478,6 +479,20 @@ export default function PlanejamentoLista() {
 
             <div className="grid grid-cols-1 gap-4 mt-1">
 
+              {/* Aviso: sem obras com orçamento */}
+              {obrasDisponiveis.length === 0 && (
+                <div className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  <Info className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" />
+                  <div>
+                    <p className="font-semibold mb-0.5">Nenhuma obra disponível para planejamento</p>
+                    <p className="text-amber-700 leading-relaxed">
+                      Para criar um planejamento, a obra precisa ter um <strong>orçamento cadastrado e vinculado</strong>.
+                      Acesse <strong>Orçamento</strong> no menu, cadastre o orçamento da obra e volte aqui.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Seleção da Obra */}
               <div>
                 <Label className="text-xs font-medium">Selecionar Obra *</Label>
@@ -485,11 +500,9 @@ export default function PlanejamentoLista() {
                   value={form.obraId}
                   onChange={e => setForm(f => ({ ...f, obraId: e.target.value }))}
                   className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                  disabled={obrasDisponiveis.length === 0}
                 >
                   <option value="">— Selecione uma obra —</option>
-                  {obrasDisponiveis.length === 0 && (
-                    <option disabled value="">Nenhuma obra com orçamento disponível</option>
-                  )}
                   {obrasDisponiveis.map((o: any) => (
                     <option key={o.id} value={o.id}>
                       {o.nome}{o.cliente ? ` · ${o.cliente}` : ""}

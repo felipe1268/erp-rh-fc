@@ -56,21 +56,43 @@ export const planejamentoRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
 
+      // Regra: obraId obrigatório para criar planejamento
+      if (!input.obraId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "É obrigatório vincular uma obra ao planejamento.",
+        });
+      }
+
+      // Regra: a obra DEVE ter orçamento cadastrado
+      const [orcamentoVinculado] = await db
+        .select({ id: orcamentos.id })
+        .from(orcamentos)
+        .where(and(
+          eq(orcamentos.companyId, input.companyId),
+          eq(orcamentos.obraId, input.obraId),
+        ))
+        .limit(1);
+      if (!orcamentoVinculado) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Não é possível criar um planejamento sem orçamento vinculado. Cadastre primeiro o orçamento da obra.",
+        });
+      }
+
       // Regra: 1 planejamento por obra
-      if (input.obraId) {
-        const [existe] = await db.select({ id: planejamentoProjetos.id })
-          .from(planejamentoProjetos)
-          .where(and(
-            eq(planejamentoProjetos.companyId, input.companyId),
-            eq(planejamentoProjetos.obraId, input.obraId),
-          ))
-          .limit(1);
-        if (existe) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "Esta obra já possui um planejamento cadastrado.",
-          });
-        }
+      const [existe] = await db.select({ id: planejamentoProjetos.id })
+        .from(planejamentoProjetos)
+        .where(and(
+          eq(planejamentoProjetos.companyId, input.companyId),
+          eq(planejamentoProjetos.obraId, input.obraId),
+        ))
+        .limit(1);
+      if (existe) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Esta obra já possui um planejamento cadastrado.",
+        });
       }
 
       const [projeto] = await db.insert(planejamentoProjetos).values({
