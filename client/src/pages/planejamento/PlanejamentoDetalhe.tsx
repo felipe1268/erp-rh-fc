@@ -2626,8 +2626,8 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               <th className="py-2 px-3 text-left">Atividade</th>
               <th className="py-2 px-3 text-left w-24">Início</th>
               <th className="py-2 px-3 text-left w-24">Fim</th>
-              <th className="py-2 px-3 text-right w-16">Dur.</th>
-              <th className="py-2 px-3 text-right w-16">Peso%</th>
+              <th className="py-2 px-2 text-right w-14 text-xs">Dur.</th>
+              <th className="py-2 px-2 text-right w-20 text-xs">Peso%</th>
               <th className="py-2 px-3 text-left w-28">Recurso</th>
               {!editando && <th className="py-2 px-3 text-right w-20">Avanço</th>}
               {editando && <th className="py-2 px-2 w-8"></th>}
@@ -2716,8 +2716,8 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                       </td>
                       <td className="py-1.5 px-3 text-slate-500">{fmtBR(a.dataInicio)}</td>
                       <td className="py-1.5 px-3 text-slate-500">{fmtBR(a.dataFim)}</td>
-                      <td className="py-1.5 px-3 text-right text-slate-500">{a.duracaoDias ?? 0}d</td>
-                      <td className="py-1.5 px-3 text-right text-slate-600">{n(a.pesoFinanceiro).toFixed(1)}%</td>
+                      <td className="py-1.5 px-2 text-right text-slate-500 text-xs">{a.duracaoDias ?? 0}d</td>
+                      <td className="py-1.5 px-2 text-right text-slate-600 text-xs tabular-nums">{n(a.pesoFinanceiro).toFixed(2)}%</td>
                       <td className="py-1.5 px-3 text-slate-500 truncate max-w-[100px]">{a.recursoPrincipal ?? "—"}</td>
                       <td className="py-1.5 px-3 text-right">
                         {!a.isGrupo && (

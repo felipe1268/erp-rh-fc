@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 492,
+    titulo: "Cronograma — coluna Peso% com fonte menor e 2 casas decimais",
+    descricao: "A coluna Peso% (e Dur.) na tabela do Cronograma agora usa texto menor (text-xs) e exibe o peso com 2 casas decimais (ex: 0.05%) para melhor leitura de valores pequenos.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 491,
     titulo: "Barra de Avanço Físico sincroniza com semana selecionada",
     descricao: "A barra 'Previsto' no topo da página agora acompanha a semana visualizada nas abas Avanço Semanal e REFIS. Ao navegar para semanas futuras (ex: Semana 18 = 67.8% previsto), a barra superior reflete o valor correto em vez de exibir sempre o previsto de hoje.",
