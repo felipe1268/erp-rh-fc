@@ -2750,7 +2750,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 
       {/* Tabela */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
-        <table className="text-xs" style={{ minWidth: editando ? 1180 : "100%", tableLayout: editando ? "fixed" : "auto" }}>
+        <table className="text-xs" style={{ width: "100%", minWidth: editando ? 900 : "auto", tableLayout: editando ? "fixed" : "auto" }}>
           <colgroup>
             {editando && <>
               <col style={{ width: 72 }} />
