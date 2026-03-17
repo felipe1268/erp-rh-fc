@@ -184,20 +184,25 @@ export default function OrcamentoDashTab({
   const margemPctDisplay = +(margemLucroPct * 100).toFixed(2);
   const bdiPctTotal      = +bdiPct.toFixed(2);
 
+  // Tributos fiscais: apenas DI-02..DI-07 (PIS, COFINS, IRPJ, CSLL, CPRB, ISS)
+  // DI-01 (Adm. Central), DI-08 (Risco/Imprevistos), DI-09 (Seguros), DI-10 (Comissionamento)
+  // NÃO são tributos — são despesas indiretas/administrativas do BDI.
+  const TRIBUTOS_DI = /^DI-0[2-7]$/;
   const tributosTotal = useMemo(() => {
     return bdiLinhas
-      .filter(l => /^DI-\d+$/.test(String(l.codigo ?? "").trim()))
+      .filter(l => TRIBUTOS_DI.test(String(l.codigo ?? "").trim()))
       .reduce((s, l) => s + n(l.percentual) * 100, 0);
   }, [bdiLinhas]);
 
   const tributosR$  = totalVenda * (tributosTotal / 100);
-  const overheadPct = +(Math.max(0, bdiPctTotal - margemPctDisplay - tributosTotal)).toFixed(2);
-  const overheadR$  = totalVenda * (overheadPct / 100);
+  // Despesas Indiretas (Adm., Riscos, Seguros, Comissionamento) = BDI − LC − Tributos
+  const despIndPct  = +(Math.max(0, bdiPctTotal - margemPctDisplay - tributosTotal)).toFixed(2);
+  const despIndR$   = totalVenda * (despIndPct / 100);
 
   const margemDonut = [
-    { name: "Margem LC",   value: margemPctDisplay,                fill: "#10b981" },
-    { name: "Tributos",    value: +tributosTotal.toFixed(2),       fill: "#ef4444" },
-    ...(overheadPct > 0.01 ? [{ name: "Overhead CI", value: overheadPct, fill: "#3b82f6" }] : []),
+    { name: "Margem LC",          value: margemPctDisplay,          fill: "#10b981" },
+    { name: "Tributos Fiscais",   value: +tributosTotal.toFixed(2), fill: "#ef4444" },
+    ...(despIndPct > 0.01 ? [{ name: "Adm., Riscos e Outros", value: despIndPct, fill: "#3b82f6" }] : []),
   ].filter(d => d.value > 0);
 
   const hasInsumos = insumos.length > 0;

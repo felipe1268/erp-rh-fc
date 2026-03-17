@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 446,
+    titulo: "BDI — Correção Tributos Fiscais no donut Margem vs. BDI",
+    descricao: "O donut 'Margem vs. BDI Total' exibia 'Tributos' = 18,93% por usar regex /^DI-\\d+$/ que capturava todos os DI-xx (inclusive DI-01 Adm. Central, DI-08 Riscos, DI-10 Comissionamento). Corrigido para /^DI-0[2-7]$/ capturando apenas os tributos fiscais reais: DI-02 PIS, DI-03 COFINS, DI-04 IRPJ, DI-05 CSLL, DI-06 CPRB, DI-07 ISS = 10,93%. A terceira fatia agora exibe 'Adm., Riscos e Outros' com o valor correto (BDI − LC − Tributos Fiscais). Label renomeado de 'Tributos' para 'Tributos Fiscais'. Variáveis overheadPct/overheadR$ renomeadas para despIndPct/despIndR$.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 445,
     titulo: "BDI — Correção fórmula break-even e adição de Lucro Líquido",
     descricao: "O 'Ponto de equilíbrio (break-even)' exibia incorretamente o totalCusto (custo direto), tratando o BDI inteiro como 'folga'. Fórmula corrigida: break-even = totalVenda − Lucro Bruto (LC), ou seja, a receita mínima que cobre custo direto + overhead + tributos com lucro zero. 'Folga acima do break-even' agora = Lucro Bruto (LC), que é o valor real acima do ponto de equilíbrio. Adicionado novo indicador 'Lucro Líquido (após tributos)' = Lucro Bruto − Carga Tributária, representando o ganho efetivo após impostos. Subtítulos explicativos adicionados a cada linha.",
