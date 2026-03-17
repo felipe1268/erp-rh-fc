@@ -2122,6 +2122,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 435,
+    titulo: "BDI — Waterfall reescrito em SVG puro (sem bug de posicionamento)",
+    descricao: "Gráfico 'Construção do Preço de Venda' substituído por SVG customizado: sem uso de stacked bars do Recharts (que posicionava a barra BDI incorretamente por acúmulo errado das bases). Novo SVG calcula yTop/yBot diretamente por proporção do valor máximo, garantindo que Custo Base, BDI e Preço Venda apareçam exatamente nas alturas corretas. Linha conectora pontilhada une os segmentos. Rótulo de valor acima e delta dentro da barra. Memória de importação: limite 512MB → 1024MB; buffer base64 liberado após XLSX.read; cada aba processada e descartada individualmente (BDI → Orçamento → Insumos → CPUs).",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",

@@ -363,49 +363,88 @@ export default function OrcamentoBdiIndicadores({
       </div>
 
       {/* ── 3. Waterfall — construção do preço ───────────────────── */}
-      {waterfall.length > 2 && (
-        <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-1">Construção do Preço de Venda (Waterfall)</p>
-          <p className="text-[10px] text-slate-500 mb-3">Como cada componente do BDI empilha sobre o custo base até chegar ao preço final</p>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={waterfall} margin={{ top: 0, right: 20, left: 20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-              <YAxis tickFormatter={v => `R$${(v/1e6).toFixed(2)}M`} tick={{ fontSize: 10 }} />
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0]?.payload;
+      {waterfall.length > 2 && (() => {
+        const maxVal = Math.max(...waterfall.map(d => d.total));
+        const chartH = 220;
+        const barW   = 90;
+        const gap    = 60;
+        const padL   = 20;
+        const padT   = 30;
+        const cols   = waterfall.length;
+        const totalW = padL + cols * barW + (cols - 1) * gap + 20;
+        const toY    = (v: number) => chartH - (v / maxVal) * chartH;
+
+        return (
+          <div className="rounded-xl border bg-white p-4">
+            <p className="text-sm font-semibold text-slate-700 mb-1">Construção do Preço de Venda</p>
+            <p className="text-[10px] text-slate-500 mb-3">Como cada componente do BDI empilha sobre o custo base até chegar ao preço final</p>
+            <div className="overflow-x-auto">
+              <svg width={totalW} height={chartH + padT + 30} style={{ display: "block", margin: "0 auto" }}>
+                {/* Grade horizontal */}
+                {[0, 0.25, 0.5, 0.75, 1].map(pct => {
+                  const y = padT + toY(pct * maxVal);
                   return (
-                    <div className="bg-white border rounded shadow px-3 py-2 text-xs">
-                      <p className="font-semibold mb-1">{d.label}</p>
-                      <p>Total acumulado: <b>{formatBRL(d.total)}</b></p>
-                      {d.base > 0 && <p>Incremento BDI: <b>{formatBRL(d.delta)}</b></p>}
-                    </div>
+                    <g key={pct}>
+                      <line x1={padL} x2={totalW - 10} y1={y} y2={y} stroke="#f0f0f0" strokeWidth={1} />
+                      <text x={padL - 4} y={y + 3} textAnchor="end" fontSize={8} fill="#94a3b8">
+                        {`R$${((pct * maxVal) / 1e6).toFixed(2)}M`}
+                      </text>
+                    </g>
                   );
-                }}
-              />
-              <Bar dataKey="base"  stackId="a" fillOpacity={0} stroke="none" />
-              <Bar dataKey="delta" stackId="a" radius={[3,3,0,0]}
-                label={{ position: "top", formatter: (v: number) => `R$${(v/1e6).toFixed(2)}M`, fontSize: 9, fill: "#64748b" }}
-              >
-                {waterfall.map((d, i) => <Cell key={i} fill={d.cor} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          {/* Legenda visual: mapa dos valores */}
-          <div className="flex items-center gap-4 mt-2 flex-wrap">
-            {waterfall.map((d, i) => (
-              <div key={i} className="flex items-center gap-1.5 text-[10px] text-slate-600">
-                <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ background: d.cor }} />
-                <span className="font-medium">{d.label}:</span>
-                <span>{formatBRL(d.total)}</span>
-                {d.base > 0 && <span className="text-slate-400">(+{formatBRL(d.delta)})</span>}
-              </div>
-            ))}
+                })}
+
+                {waterfall.map((d, i) => {
+                  const x     = padL + i * (barW + gap);
+                  const yBot  = padT + toY(d.base);
+                  const yTop  = padT + toY(d.total);
+                  const barHt = Math.max(4, yBot - yTop);
+                  const isLast = i === waterfall.length - 1;
+
+                  return (
+                    <g key={i}>
+                      {/* Linha conectora pontilhada ao próximo segmento */}
+                      {!isLast && d.base < waterfall[i + 1].base && (
+                        <line
+                          x1={x + barW} x2={x + barW + gap}
+                          y1={padT + toY(d.total)} y2={padT + toY(d.total)}
+                          stroke="#cbd5e1" strokeWidth={1} strokeDasharray="4 3"
+                        />
+                      )}
+                      {/* Barra */}
+                      <rect x={x} y={yTop} width={barW} height={barHt} fill={d.cor} rx={3} ry={3} />
+                      {/* Valor no topo da barra */}
+                      <text x={x + barW / 2} y={yTop - 5} textAnchor="middle" fontSize={9} fontWeight="600" fill="#334155">
+                        {`R$${(d.total / 1e6).toFixed(2)}M`}
+                      </text>
+                      {/* Incremento (delta) dentro da barra se houver espaço */}
+                      {d.base > 0 && barHt > 20 && (
+                        <text x={x + barW / 2} y={yTop + barHt / 2 + 4} textAnchor="middle" fontSize={8} fill="white" fontWeight="500">
+                          {`+R$${(d.delta / 1e6).toFixed(2)}M`}
+                        </text>
+                      )}
+                      {/* Label no eixo X */}
+                      <text x={x + barW / 2} y={chartH + padT + 16} textAnchor="middle" fontSize={10} fill="#64748b">
+                        {d.label}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+            {/* Legenda textual */}
+            <div className="flex items-center gap-4 mt-2 flex-wrap">
+              {waterfall.map((d, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                  <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ background: d.cor }} />
+                  <span className="font-medium">{d.label}:</span>
+                  <span>{formatBRL(d.total)}</span>
+                  {d.base > 0 && <span className="text-slate-400">(+{formatBRL(d.delta)})</span>}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── 4. Lucro × Tributos × Overhead ───────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
