@@ -2122,6 +2122,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 437,
+    titulo: "BDI Tributos — filtro corrigido: apenas DI-02..DI-07 (PIS/COFINS/IRPJ/CSLL/CPRB/ISS)",
+    descricao: "Filtro DI-\\d+ substituído por DI-0[2-7]: remove DI-01 (Adm Central), DI-08 (Risco/Imprevistos), DI-09 (Seguro) e DI-10 (Comissionamento) que são outras rubricas do BDI, não tributos. Valor Calculado agora usa valorAbsoluto do banco (gravado do Excel pela importação, base correta do BDI) ao invés de recalcular com totalVenda. Fallback para (alíquota/100)×totalVenda apenas se valorAbsoluto = 0.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 436,
     titulo: "BDI — Tributos: DI-xx agora é fonte primária, valor recalculado com totalVenda",
     descricao: "Inversão de prioridade: DI-xx (linhas DI-02..DI-07 da aba BDI, taxas efetivas usadas no cálculo) agora tem precedência sobre a aba 'Tributos Fiscais' (A.x/B.x). Elimina o problema de 30.43% causado pelo 'Adicional IRPJ A.4=15%' que nunca compõe o BDI operacional da FC Engenharia. Valor Calculado agora recalculado no frontend: (alíquota / 100) × totalVenda, eliminando os R$0.01/R$0.03 que vinham de fórmulas do Excel com base vazia. Na Fonte 2 (fallback bdiTributos), a deduplicação agora mantém a alíquota MENOR entre A.x e B.x. Texto 'Fonte:' no rodapé atualizado dinamicamente.",

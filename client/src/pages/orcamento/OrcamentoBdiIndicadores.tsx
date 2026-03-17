@@ -176,25 +176,30 @@ export default function OrcamentoBdiIndicadores({
   //
   // Fonte 2 — bdiLinhas DI-xx (aba BDI principal, formato DI-02..DI-07)
   //   Formato FC Engenharia: os tributos estão embutidos no BDI principal.
-  //   DI-01 = dedução ISS, DI-02 = PIS, DI-03 = COFINS, DI-04 = IRPJ,
-  //   DI-05 = CSLL, DI-06 = CPRB, DI-07 = ISS Municipal.
+  //   DI-01 = Adm Central (NÃO tributo), DI-02 = PIS, DI-03 = COFINS, DI-04 = IRPJ,
+  //   DI-05 = CSLL, DI-06 = CPRB, DI-07 = ISS Municipal,
+  //   DI-08..10 = Risco/Seguro/Comissão (NÃO tributos).
   //   Usa diretamente sem deduplicação (códigos já são únicos).
   const tributosChart = useMemo(() => {
     // --- Fonte 1 (PRIORITÁRIA): DI-xx em bdiLinhas (formato FC Engenharia) ---
-    // DI-02=PIS, DI-03=COFINS, DI-04=IRPJ, DI-05=CSLL, DI-06=CPRB, DI-07=ISS
-    // Estes são os percentuais REALMENTE usados no cálculo do BDI.
+    // APENAS DI-02..DI-07 são tributos:
+    //   DI-02=PIS, DI-03=COFINS, DI-04=IRPJ, DI-05=CSLL, DI-06=CPRB, DI-07=ISS
+    // DI-01 (Adm Central), DI-08 (Risco/Imprevistos), DI-09 (Seguro), DI-10 (Comissionamento)
+    // são OUTRAS rubricas do BDI — NÃO são tributos e NÃO devem aparecer aqui.
+    const TRIBUTOS_DI = /^DI-0[2-7]$/;
     const fromDI = bdiLinhas
-      .filter(l => /^DI-\d+$/.test(String(l.codigo ?? "").trim()) && n(l.percentual) > 0);
+      .filter(l => TRIBUTOS_DI.test(String(l.codigo ?? "").trim()) && n(l.percentual) > 0);
     if (fromDI.length > 0) {
       return fromDI
         .map(l => {
           const aliquota = +(n(l.percentual) * 100).toFixed(4);
+          // Prefere valorAbsoluto do banco (calculado pelo Excel com base correta);
+          // só recalcula se o Excel não gravou o valor (= 0 ou ausente).
+          const valorDB = n(l.valorAbsoluto);
           return {
             label:    `${l.codigo} - ${l.descricao ?? "?"}`,
             aliquota,
-            // valorAbsoluto do banco pode ser 0 (base vazia no Excel);
-            // recalcula com base no preço de venda real do projeto.
-            valor: totalVenda > 0 ? (aliquota / 100) * totalVenda : n(l.valorAbsoluto),
+            valor: valorDB > 0 ? valorDB : (totalVenda > 0 ? (aliquota / 100) * totalVenda : 0),
           };
         })
         .sort((a, b) => b.aliquota - a.aliquota);
