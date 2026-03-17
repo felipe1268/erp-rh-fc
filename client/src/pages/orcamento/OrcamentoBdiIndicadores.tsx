@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Line,
@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
-import { AlertTriangle, TrendingUp, TrendingDown, Info, Loader2 } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Info, Loader2, X } from "lucide-react";
 
 interface Props {
   orcamentoId: number;
@@ -36,8 +36,9 @@ const COLORS = [
 ];
 
 function KpiCard({
-  label, value, sub, color = "blue", alert,
-}: { label: string; value: string; sub?: string; color?: string; alert?: boolean }) {
+  label, value, sub, color = "blue", alert, alertMsg,
+}: { label: string; value: string; sub?: string; color?: string; alert?: boolean; alertMsg?: string }) {
+  const [open, setOpen] = useState(false);
   const colorMap: Record<string, string> = {
     blue:   "border-blue-200  bg-blue-50   text-blue-800",
     green:  "border-green-200 bg-green-50  text-green-800",
@@ -48,13 +49,31 @@ function KpiCard({
     red:    "border-red-200   bg-red-50    text-red-800",
   };
   return (
-    <div className={`rounded-xl border px-4 py-3 flex flex-col gap-0.5 relative ${colorMap[color] ?? colorMap.blue}`}>
-      {alert && (
-        <AlertTriangle className="absolute top-2 right-2 h-3.5 w-3.5 text-amber-500" />
+    <div className="flex flex-col gap-1">
+      <div
+        className={`rounded-xl border px-4 py-3 flex flex-col gap-0.5 relative ${colorMap[color] ?? colorMap.blue} ${alert && alertMsg ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+        onClick={() => { if (alert && alertMsg) setOpen(o => !o); }}
+        title={alert && alertMsg ? "Clique para ver o motivo do alerta" : undefined}
+      >
+        {alert && (
+          <AlertTriangle className="absolute top-2 right-2 h-3.5 w-3.5 text-amber-500" />
+        )}
+        <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{label}</p>
+        <p className="text-xl font-bold">{value}</p>
+        {sub && <p className="text-[10px] opacity-60">{sub}</p>}
+        {alert && alertMsg && (
+          <p className="text-[9px] text-amber-600 mt-0.5 font-medium">⚠ Clique para entender o alerta</p>
+        )}
+      </div>
+      {open && alertMsg && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 flex gap-2 items-start shadow-sm">
+          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <span className="flex-1">{alertMsg}</span>
+          <button onClick={() => setOpen(false)} className="shrink-0 text-amber-400 hover:text-amber-600">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       )}
-      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{label}</p>
-      <p className="text-xl font-bold">{value}</p>
-      {sub && <p className="text-[10px] opacity-60">{sub}</p>}
     </div>
   );
 }
@@ -274,6 +293,13 @@ export default function OrcamentoBdiIndicadores({
             sub={BENCHMARK_BDI.label}
             color={bdiStatus === "ok" ? "green" : bdiStatus === "alto" ? "rose" : "amber"}
             alert={bdiStatus !== "ok"}
+            alertMsg={
+              bdiStatus === "alto"
+                ? `BDI de ${bdiPct.toFixed(2)}% está ACIMA da faixa de referência do TCU para obras civis (${BENCHMARK_BDI.min}% a ${BENCHMARK_BDI.max}%). Isso pode indicar: custos indiretos elevados, carga tributária alta ou margem de lucro acima do mercado. Revise os componentes do BDI na planilha e verifique se há itens superestimados.`
+                : bdiStatus === "baixo"
+                ? `BDI de ${bdiPct.toFixed(2)}% está ABAIXO da faixa de referência do TCU para obras civis (${BENCHMARK_BDI.min}% a ${BENCHMARK_BDI.max}%). Um BDI muito baixo pode indicar subdimensionamento de custos indiretos, impostos não contemplados ou margem de lucro insuficiente, comprometendo a rentabilidade da obra.`
+                : undefined
+            }
           />
           {componentes.map((c, i) => (
             <KpiCard
