@@ -2725,6 +2725,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 503,
+    titulo: "Dashboard RH — Mapa interativo de funcionários (Brasil → Estado → Cidade → Rua)",
+    descricao: "O mapa estático de distribuição por estado foi substituído por um mapa totalmente interativo com drill-down em 3 níveis: Nível 1 (Brasil) — mapa SVG do Brasil com estados coloridos por densidade de funcionários; Nível 2 (Estado) — ao clicar em um estado, abre mapa Leaflet/OpenStreetMap com marcadores circulares por cidade, onde o tamanho do círculo é proporcional ao número de funcionários. Grade de cidades clicáveis abaixo do mapa para navegação rápida; Nível 3 (Cidade) — ao clicar em uma cidade, geocodifica endereços individuais dos funcionários via Nominatim (OpenStreetMap, gratuito) e plota pins personalizados nas ruas onde moram. Cada pin mostra nome, função, status e endereço completo no popup. Funcionários sem endereço cadastrado não aparecem. Cache em sessionStorage evita re-geocodificação. Novo endpoint tRPC `funcionariosParaMapa` no backend retorna endereços por empresa. BrazilMap recebeu prop `hideCard` para reutilização sem Card wrapper.",
+    tipo: "feature",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 502,
     titulo: "Cronograma — Layout do modo de edição reformulado",
     descricao: "Tabela de edição do cronograma completamente reformulada: colgroup com larguras fixas e coluna Atividade flexível (flex:1), minWidth ampliado para 1180px, inputs com h-7 e w-full para aproveitamento total do espaço, codificação visual de grupos (fundo amarelo/âmbar) mesmo no modo edição, placeholder do campo Pred. alterado para '—' (evitando confusão com valores reais), checkbox de grupo com tooltip explicativo via hover, e botão remover com hover vermelho mais visível.",

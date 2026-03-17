@@ -2578,6 +2578,29 @@ async function getDashCompetenciasAnual(companyId: number, ano?: number, company
   };
 }
 
+async function getFuncionariosParaMapa(companyId: number, companyIds?: number[]) {
+  const db = getDb();
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
+  const results = await db.select({
+    id: employees.id,
+    nome: employees.nome,
+    funcao: employees.funcao,
+    status: employees.status,
+    logradouro: employees.logradouro,
+    numero: employees.numero,
+    bairro: employees.bairro,
+    cidade: employees.cidade,
+    estado: employees.estado,
+    cep: employees.cep,
+  })
+  .from(employees)
+  .where(and(
+    inArray(employees.companyId, ids),
+    sql`(${employees.cidade} IS NOT NULL AND TRIM(${employees.cidade}) != '')`
+  ));
+  return results;
+}
+
 export const dashboardsRouter = router({
   funcionarios: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionarios(input.companyId, input.companyIds)),
   drillDown: protectedProcedure.input(z.object({ companyId: z.number(), filterType: z.string(), filterValue: z.string(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDrillDown(input.companyId, input.filterType, input.filterValue, input.companyIds)),
@@ -2602,4 +2625,5 @@ export const dashboardsRouter = router({
   documentos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashDocumentos(input.companyId, input.companyIds)),
   controleDocumentos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashControleDocumentos(input.companyId, input.companyIds)),
   competenciasAnual: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCompetenciasAnual(input.companyId, input.ano, input.companyIds)),
+  funcionariosParaMapa: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getFuncionariosParaMapa(input.companyId, input.companyIds)),
 });

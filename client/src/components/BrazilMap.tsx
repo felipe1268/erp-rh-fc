@@ -21,9 +21,10 @@ interface BrazilMapProps {
   data: { state: string; count: number; details?: string }[];
   onStateClick?: (state: string, name: string) => void;
   colorScheme?: "red" | "blue" | "green" | "purple";
+  hideCard?: boolean;
 }
 
-export default function BrazilMap({ title, icon, data, onStateClick, colorScheme = "blue" }: BrazilMapProps) {
+export default function BrazilMap({ title, icon, data, onStateClick, colorScheme = "blue", hideCard = false }: BrazilMapProps) {
   const [hoveredState, setHoveredState] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
@@ -63,16 +64,8 @@ export default function BrazilMap({ title, icon, data, onStateClick, colorScheme
 
   const totalCount = useMemo(() => data.reduce((sum, d) => sum + d.count, 0), [data]);
 
-  return (
-    <Card className="border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          {icon}
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-3">
-        <div className="flex flex-col lg:flex-row gap-4">
+  const inner = (
+    <div className="flex flex-col lg:flex-row gap-4">
           {/* Map */}
           <div className="flex-1 relative" style={{ minHeight: 300 }}>
             <ComposableMap
@@ -181,7 +174,19 @@ export default function BrazilMap({ title, icon, data, onStateClick, colorScheme
             </div>
           )}
         </div>
-      </CardContent>
+  );
+
+  if (hideCard) return inner;
+
+  return (
+    <Card className="border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          {icon}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3">{inner}</CardContent>
     </Card>
   );
 }

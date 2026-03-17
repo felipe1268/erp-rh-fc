@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL, getChartColors } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
-import BrazilMap from "@/components/BrazilMap";
+import MapaFuncionariosInterativo from "@/components/MapaFuncionariosInterativo";
 import DrillDownModal from "@/components/DrillDownModal";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -238,16 +238,9 @@ export default function DashFuncionarios() {
           />
         </div>
 
-        {/* Mapa do Brasil - Funcionários por Estado */}
-        <BrazilMap
-          title="Distribuição de Funcionários por Estado"
-          icon={<MapPin className="h-4 w-4 text-blue-500" />}
-          data={(data as any).estadoDist || []}
-          colorScheme="blue"
-          onStateClick={(state, name) => {
-            const count = (data as any).estadoDist?.find((s: any) => s.state === state)?.count || 0;
-            if (count > 0) openDrillDown(`Estado: ${name} (${state})`, "estado", state);
-          }}
+        {/* Mapa Interativo — Brasil → Estado → Cidade → Pins por rua */}
+        <MapaFuncionariosInterativo
+          stateDist={(data as any).estadoDist || []}
         />
 
         {/* Estado Civil */}
