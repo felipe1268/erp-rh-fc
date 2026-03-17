@@ -2725,6 +2725,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 508,
+    titulo: "Mapa Funcionários — Correção do filtro por estado e getDb() sem await",
+    descricao: "Corrigidos dois bugs no mapa interativo de funcionários: (1) getFuncionariosParaMapa usava getDb() sem await, então 'db' era uma Promise em vez do cliente Drizzle — db.select() falhava silenciosamente e retornava array vazio, causando '0 funcionários' em todos os estados; (2) filtro employeesInState comparava e.estado.toUpperCase() com a sigla de 2 letras (ex: 'SP'), mas o campo pode conter o nome completo ('São Paulo'). Adicionada função normalizeEstado() no frontend que converte nomes completos em siglas. Mesma normalização aplicada ao estadoDist no backend. O fluxo 3 níveis (Brasil → estado → cidade → pins) agora funciona corretamente.",
+    tipo: "bugfix",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 507,
     titulo: "Prev. Medição — Avanço Físico agora exibe todos os meses do cronograma",
     descricao: "Corrigido bug crítico: a tabela 'Previsão de Medição por Avanço Físico' só exibia o primeiro mês porque o range de meses era derivado dos itens cruzados por nome entre orçamento e cronograma (JOIN com correspondência exata de nome). Quando poucas atividades tinham nome idêntico ao item de orçamento, o range colapsava para 1 mês. Correção: o range de meses agora é derivado das datas de início/fim de TODAS as atividades folha do cronograma, independente de cruzamento com orçamento. O custo previsto (para cálculo de margem) ainda vem do cruzamento orçamento×cronograma para os meses que tiverem dados.",

@@ -27,6 +27,28 @@ const STATE_NAMES: Record<string, string> = {
   SC: "Santa Catarina", SE: "Sergipe", SP: "São Paulo", TO: "Tocantins",
 };
 
+const STATE_NAME_TO_CODE: Record<string, string> = {
+  "ACRE": "AC", "ALAGOAS": "AL", "AMAPÁ": "AP", "AMAZONAS": "AM",
+  "BAHIA": "BA", "CEARÁ": "CE", "DISTRITO FEDERAL": "DF",
+  "ESPÍRITO SANTO": "ES", "ESPIRITO SANTO": "ES", "GOIÁS": "GO", "GOIAS": "GO",
+  "MARANHÃO": "MA", "MARANHAO": "MA", "MATO GROSSO DO SUL": "MS",
+  "MATO GROSSO": "MT", "MINAS GERAIS": "MG", "PARÁ": "PA", "PARA": "PA",
+  "PARAÍBA": "PB", "PARAIBA": "PB", "PARANÁ": "PR", "PARANA": "PR",
+  "PERNAMBUCO": "PE", "PIAUÍ": "PI", "PIAUI": "PI",
+  "RIO DE JANEIRO": "RJ", "RIO GRANDE DO NORTE": "RN", "RIO GRANDE DO SUL": "RS",
+  "RONDÔNIA": "RO", "RONDONIA": "RO", "RORAIMA": "RR",
+  "SANTA CATARINA": "SC", "SÃO PAULO": "SP", "SAO PAULO": "SP",
+  "SERGIPE": "SE", "TOCANTINS": "TO",
+};
+
+function normalizeEstado(estado: string | null | undefined): string {
+  if (!estado) return "";
+  const trimmed = estado.trim();
+  const upper = trimmed.toUpperCase();
+  if (upper.length === 2) return upper;
+  return STATE_NAME_TO_CODE[upper] || upper;
+}
+
 const STATE_VIEW: Record<string, { center: [number, number]; zoom: number }> = {
   AC: { center: [-9.02, -70.81], zoom: 7 },
   AL: { center: [-9.57, -36.78], zoom: 8 },
@@ -304,7 +326,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
   const geocodingAbort = useRef(false);
 
   const employeesInState = useMemo(
-    () => (selectedState ? employees.filter(e => (e.estado || "").toUpperCase() === selectedState) : []),
+    () => (selectedState ? employees.filter(e => normalizeEstado(e.estado) === selectedState) : []),
     [employees, selectedState]
   );
 
@@ -326,7 +348,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
   const loadCityCoords = useCallback(async (state: string) => {
     const uniqueCities = [...new Set(
-      employees.filter(e => (e.estado || "").toUpperCase() === state && e.cidade).map(e => e.cidade!.trim())
+      employees.filter(e => normalizeEstado(e.estado) === state && e.cidade).map(e => e.cidade!.trim())
     )];
     const missingCities = uniqueCities.filter(c => !cityCoords.has(c));
     if (missingCities.length === 0) return;

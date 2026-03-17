@@ -199,7 +199,21 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     contratoDist: contratoDist.map(r => ({ label: r.tipo || "Não informado", value: Number(r.count) })),
     estadoCivilDist: estadoCivilDist.map(r => ({ label: r.estadoCivil || "Não informado", value: Number(r.count) })),
     cidadeDist: cidadeDist.map(r => ({ label: r.cidade || "Não informado", value: Number(r.count) })),
-    estadoDist: estadoDist.map(r => ({ state: (r.estado && r.estado.trim()) ? r.estado.toUpperCase() : 'Não informado', count: Number(r.count) })),
+    estadoDist: estadoDist.map(r => {
+      const raw = (r.estado || "").trim().toUpperCase();
+      const nameToCode: Record<string, string> = {
+        "ACRE":"AC","ALAGOAS":"AL","AMAPÁ":"AP","AMAZONAS":"AM","BAHIA":"BA",
+        "CEARÁ":"CE","DISTRITO FEDERAL":"DF","ESPÍRITO SANTO":"ES","ESPIRITO SANTO":"ES",
+        "GOIÁS":"GO","GOIAS":"GO","MARANHÃO":"MA","MARANHAO":"MA","MATO GROSSO DO SUL":"MS",
+        "MATO GROSSO":"MT","MINAS GERAIS":"MG","PARÁ":"PA","PARA":"PA","PARAÍBA":"PB",
+        "PARAIBA":"PB","PARANÁ":"PR","PARANA":"PR","PERNAMBUCO":"PE","PIAUÍ":"PI","PIAUI":"PI",
+        "RIO DE JANEIRO":"RJ","RIO GRANDE DO NORTE":"RN","RIO GRANDE DO SUL":"RS",
+        "RONDÔNIA":"RO","RONDONIA":"RO","RORAIMA":"RR","SANTA CATARINA":"SC",
+        "SÃO PAULO":"SP","SAO PAULO":"SP","SERGIPE":"SE","TOCANTINS":"TO",
+      };
+      const state = raw.length === 2 ? raw : (nameToCode[raw] || raw || 'Não informado');
+      return { state, count: Number(r.count) };
+    }),
     ageDist: ageDist.map(r => ({ faixa: r.faixa, sexo: r.sexo || "Outro", count: Number(r.count) })),
     tenureDist: tenureDist.map(r => ({ label: r.faixa, value: Number(r.count) })).sort((a, b) => ordemCrescente.indexOf(a.label) - ordemCrescente.indexOf(b.label)),
     turnover: { admissoes: admissoesMensal.map(r => ({ mes: r.mes, count: Number(r.count) })), demissoes: demissoesMensal.map(r => ({ mes: r.mes, count: Number(r.count) })) },
@@ -2579,7 +2593,7 @@ async function getDashCompetenciasAnual(companyId: number, ano?: number, company
 }
 
 async function getFuncionariosParaMapa(companyId: number, companyIds?: number[]) {
-  const db = getDb();
+  const db = await getDb();
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   const results = await db.select({
     id: employees.id,
