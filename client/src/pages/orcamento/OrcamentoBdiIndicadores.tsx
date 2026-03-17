@@ -114,6 +114,8 @@ export default function OrcamentoBdiIndicadores({
   const fd               = (detalhes?.fd                ?? []) as any[];
   const despFinanc       = (detalhes?.despFinanc        ?? []) as any[];
 
+  const [selectedCI, setSelectedCI] = useState<string | null>(null);
+
   // ── Componentes do BDI por aba ──────────────────────────────────
   // Usa SOMENTE a linha B-02 de cada aba (total do BDI daquela aba).
   // Somar todas as linhas causaria double-counting: componentes (ISS, PIS, LC…)
@@ -268,6 +270,20 @@ export default function OrcamentoBdiIndicadores({
         return numA - numB;
       });
   }, [bdiLinhas]);
+
+  // ── Linhas de detalhe do CI selecionado (modal) ──────────────────
+  const selectedCILinhas = useMemo(() => {
+    if (!selectedCI) return [];
+    return indiretos.filter(i =>
+      i.secao === selectedCI &&
+      !i.isHeader &&
+      i.tipoContrato !== 'SUBHDR'
+    );
+  }, [indiretos, selectedCI]);
+
+  const selectedCIInfo = useMemo(() =>
+    indiretosModal.find(d => d.label.startsWith(selectedCI ?? "\x00")),
+  [indiretosModal, selectedCI]);
 
   // ── Análise de sensibilidade ─────────────────────────────────────
   // Para cada componente: se aumentar 1pp, qual o impacto no preço?
@@ -638,34 +654,148 @@ export default function OrcamentoBdiIndicadores({
         </div>
       )}
 
-      {/* ── 7. Indiretos por Modalidade ───────────────────────────── */}
+      {/* ── 7. Indiretos por Componente CI ────────────────────────── */}
       {hasIndiretos && (
         <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Composição dos Custos Indiretos — CI-01 a CI-08</p>
+          <p className="text-sm font-semibold text-slate-700 mb-0.5">Composição dos Custos Indiretos — CI-01 a CI-08</p>
+          <p className="text-[10px] text-slate-400 mb-3">Clique em uma barra ou item da legenda para ver o detalhamento</p>
           <div className="flex flex-col md:flex-row gap-4 items-center">
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={indiretosModal} margin={{ top: 0, right: 20, left: 10, bottom: 20 }}>
+              <BarChart data={indiretosModal} margin={{ top: 0, right: 20, left: 10, bottom: 20 }} style={{ cursor: "pointer" }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" />
                 <YAxis tickFormatter={v => `R$${(v/1e3).toFixed(0)}k`} tick={{ fontSize: 10 }} />
                 <Tooltip content={<TooltipBRL fmt={formatBRL} />} />
-                <Bar dataKey="valor" name="Custo na Obra" fill="#8b5cf6" radius={[4,4,0,0]}>
-                  {indiretosModal.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                <Bar dataKey="valor" name="Custo na Obra" fill="#8b5cf6" radius={[4,4,0,0]}
+                  onClick={(data: any) => {
+                    const codigo = String(data.label ?? "").match(/^(CI-\d+)/)?.[1] ?? null;
+                    setSelectedCI(prev => prev === codigo ? null : codigo);
+                  }}>
+                  {indiretosModal.map((d, i) => (
+                    <Cell key={i}
+                      fill={selectedCI && d.label.startsWith(selectedCI) ? "#1e3a8a" : COLORS[i % COLORS.length]}
+                      opacity={selectedCI && !d.label.startsWith(selectedCI) ? 0.45 : 1}
+                    />
+                  ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <div className="flex flex-col gap-2 min-w-[180px]">
-              {indiretosModal.map((d, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: COLORS[i % COLORS.length] }} />
-                  <span className="flex-1 text-slate-600">{d.label}</span>
-                  <span className="font-semibold">{formatBRL(d.valor)}</span>
-                </div>
-              ))}
+            <div className="flex flex-col gap-1.5 min-w-[200px]">
+              {indiretosModal.map((d, i) => {
+                const codigo = d.label.match(/^(CI-\d+)/)?.[1] ?? "";
+                const active = selectedCI === codigo;
+                return (
+                  <div key={i}
+                    className={`flex items-center gap-2 text-xs rounded px-1.5 py-1 cursor-pointer transition-colors ${active ? "bg-blue-50 ring-1 ring-blue-300" : "hover:bg-slate-50"}`}
+                    onClick={() => setSelectedCI(prev => prev === codigo ? null : codigo)}>
+                    <span className="inline-block w-3 h-3 rounded-sm shrink-0"
+                      style={{ background: active ? "#1e3a8a" : COLORS[i % COLORS.length] }} />
+                    <span className="flex-1 text-slate-600">{d.label}</span>
+                    <span className="font-semibold">{formatBRL(d.valor)}</span>
+                  </div>
+                );
+              })}
               <div className="border-t pt-2 mt-1 text-xs">
                 <span className="text-slate-500">Total indiretos: </span>
                 <span className="font-bold">{formatBRL(indiretosModal.reduce((s,d)=>s+d.valor,0))}</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal detalhe CI selecionado ──────────────────────────── */}
+      {selectedCI && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+          onClick={() => setSelectedCI(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 bg-slate-700 text-white rounded-t-xl shrink-0">
+              <div>
+                <p className="font-bold text-sm">{selectedCI} — {selectedCIInfo?.label.replace(/^CI-\d+ – /, "") ?? ""}</p>
+                <p className="text-xs text-slate-300">
+                  Total: <span className="font-semibold">{formatBRL(selectedCIInfo?.valor ?? 0)}</span>
+                  {" · "}{selectedCILinhas.length} {selectedCILinhas.length === 1 ? "linha" : "linhas"}
+                </p>
+              </div>
+              <button onClick={() => setSelectedCI(null)} className="hover:text-slate-300 ml-4">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-auto flex-1">
+              {selectedCILinhas.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-10">Nenhum detalhe disponível.</p>
+              ) : selectedCI === "CI-01" ? (
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className="bg-slate-100 text-slate-600">
+                      <th className="px-3 py-2 text-left font-semibold border-b">Descrição</th>
+                      <th className="px-3 py-2 text-center font-semibold border-b">Modalidade</th>
+                      <th className="px-3 py-2 text-center font-semibold border-b">Tipo</th>
+                      <th className="px-3 py-2 text-right font-semibold border-b">Qtd</th>
+                      <th className="px-3 py-2 text-right font-semibold border-b">Salário Base</th>
+                      <th className="px-3 py-2 text-right font-semibold border-b">13°+Férias</th>
+                      <th className="px-3 py-2 text-right font-semibold border-b">Total/Mês</th>
+                      <th className="px-3 py-2 text-right font-semibold border-b bg-yellow-50">Total/Obra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedCILinhas.map((row: any, i: number) => (
+                      <tr key={row.id ?? i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
+                        <td className="px-3 py-1.5 text-slate-700">{row.descricao ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-center text-slate-500">{row.modalidade ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-center text-slate-500 uppercase text-[10px]">{row.tipoContrato ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-right font-mono">{n(row.quantidade) > 0 ? n(row.quantidade) : "—"}</td>
+                        <td className="px-3 py-1.5 text-right font-mono">{n(row.salarioBase) > 0 ? formatBRL(n(row.salarioBase)) : "—"}</td>
+                        <td className="px-3 py-1.5 text-right font-mono">{n(row.decimoTerceiroFerias) > 0 ? formatBRL(n(row.decimoTerceiroFerias)) : "—"}</td>
+                        <td className="px-3 py-1.5 text-right font-mono">{n(row.totalMes) > 0 ? formatBRL(n(row.totalMes)) : "—"}</td>
+                        <td className="px-3 py-1.5 text-right font-mono font-semibold bg-yellow-50">{n(row.totalObra) > 0 ? formatBRL(n(row.totalObra)) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-300 bg-slate-100">
+                      <td colSpan={7} className="px-3 py-2 text-right font-semibold text-slate-700 text-xs">Total {selectedCI}:</td>
+                      <td className="px-3 py-2 text-right font-bold font-mono text-xs bg-yellow-100">
+                        {formatBRL(selectedCILinhas.reduce((s: number, r: any) => s + n(r.totalObra), 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              ) : (
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className="bg-slate-100 text-slate-600">
+                      <th className="px-3 py-2 text-left font-semibold border-b">Código</th>
+                      <th className="px-3 py-2 text-left font-semibold border-b">Descrição</th>
+                      <th className="px-3 py-2 text-center font-semibold border-b">Unidade</th>
+                      <th className="px-3 py-2 text-right font-semibold border-b">Qtd</th>
+                      <th className="px-3 py-2 text-right font-semibold border-b">Meses</th>
+                      <th className="px-3 py-2 text-right font-semibold border-b bg-yellow-50">Total/Obra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedCILinhas.map((row: any, i: number) => (
+                      <tr key={row.id ?? i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
+                        <td className="px-3 py-1.5 font-mono text-slate-400">{row.codigo ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-slate-700">{row.descricao ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-center text-slate-500">{row.unidade ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-right font-mono">{n(row.quantidade) > 0 ? n(row.quantidade) : "—"}</td>
+                        <td className="px-3 py-1.5 text-right font-mono">{row.mesesObra ? n(row.mesesObra) : "—"}</td>
+                        <td className="px-3 py-1.5 text-right font-mono font-semibold bg-yellow-50">{n(row.totalObra) > 0 ? formatBRL(n(row.totalObra)) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-300 bg-slate-100">
+                      <td colSpan={5} className="px-3 py-2 text-right font-semibold text-slate-700 text-xs">Total {selectedCI}:</td>
+                      <td className="px-3 py-2 text-right font-bold font-mono text-xs bg-yellow-100">
+                        {formatBRL(selectedCILinhas.reduce((s: number, r: any) => s + n(r.totalObra), 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
             </div>
           </div>
         </div>
