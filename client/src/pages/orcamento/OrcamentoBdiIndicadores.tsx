@@ -489,46 +489,8 @@ export default function OrcamentoBdiIndicadores({
         );
       })()}
 
-      {/* ── 4. Lucro × Tributos × Overhead ───────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-1">Destino do BDI</p>
-          <p className="text-[10px] text-slate-500 mb-3">
-            Do BDI total ({bdiPct.toFixed(2)}%), como está distribuído entre lucro, impostos e overhead
-          </p>
-          <div className="flex items-center gap-4">
-            <ResponsiveContainer width={170} height={170}>
-              <PieChart>
-                <Pie data={distribuicaoBdi} cx="50%" cy="50%" outerRadius={75}
-                     dataKey="value" label={({ name, value }) => `${value}%`}
-                     labelLine fontSize={10}>
-                  {distribuicaoBdi.map((d, i) => <Cell key={i} fill={d.fill} />)}
-                </Pie>
-                <Tooltip formatter={(v: any) => [`${v}%`]} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-col gap-2 flex-1">
-              {distribuicaoBdi.map((d, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ background: d.fill }} />
-                  <span className="text-xs text-slate-600 flex-1">{d.name}</span>
-                  <span className="text-sm font-bold">{d.value}%</span>
-                </div>
-              ))}
-              <div className="pt-2 border-t mt-1">
-                <p className="text-[10px] text-slate-500">
-                  De cada R$ 100 do contrato:
-                </p>
-                <p className="text-[10px] text-green-600 font-medium mt-0.5">
-                  Lucro: R$ {(totalLcPct).toFixed(2)} · Impostos: R$ {totalTributosPct.toFixed(2)} · Overhead: R$ {overheadPct.toFixed(2)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Análise financeira: Lucro vs Custo financeiro */}
-        <div className="rounded-xl border bg-white p-4">
+      {/* ── 4. Indicadores Financeiros do Contrato ────────────────── */}
+      <div className="rounded-xl border bg-white p-4">
           <p className="text-sm font-semibold text-slate-700 mb-2">Indicadores Financeiros do Contrato</p>
           <div className="space-y-3">
             <div className="flex justify-between items-center py-2 border-b">
@@ -560,7 +522,6 @@ export default function OrcamentoBdiIndicadores({
               </span>
             </div>
           </div>
-        </div>
       </div>
 
       {/* ── 5. Tributos Detalhados ────────────────────────────────── */}

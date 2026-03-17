@@ -175,9 +175,21 @@ export default function OrcamentoDashTab({
   // ── 8. Margem de Lucro radial ────────────────────────────────────
   const margemPctDisplay = +(margemLucroPct * 100).toFixed(2);
   const bdiPctTotal      = +bdiPct.toFixed(2);
+
+  // Tributos extraídos das linhas DI-xx de orcamento_bdi
+  const tributosTotal = useMemo(() => {
+    return bdiLinhas
+      .filter(l => /^DI-\d+$/.test(String(l.codigo ?? "").trim()))
+      .reduce((s, l) => s + n(l.percentual) * 100, 0);
+  }, [bdiLinhas]);
+  const tributosR$ = totalVenda * (tributosTotal / 100);
+  const overheadPct = Math.max(0, bdiPctTotal - margemPctDisplay - +tributosTotal.toFixed(4));
+  const overheadR$  = totalVenda * (overheadPct / 100);
+
   const radialData = [
-    { name: "Margem LC",  value: margemPctDisplay, fill: "#10b981" },
-    { name: "Outros BDI", value: +(bdiPctTotal - margemPctDisplay).toFixed(2), fill: "#3b82f6" },
+    { name: "Margem LC",  value: margemPctDisplay,             fill: "#10b981" },
+    { name: "Tributos",   value: +tributosTotal.toFixed(2),    fill: "#ef4444" },
+    { name: "Overhead",   value: +overheadPct.toFixed(2),      fill: "#3b82f6" },
   ].filter(d => d.value > 0);
 
   const hasInsumos = insumos.length > 0;
@@ -416,17 +428,31 @@ export default function OrcamentoDashTab({
                   <Tooltip formatter={(v: any) => [`${v}%`]} />
                 </RadialBarChart>
               </ResponsiveContainer>
-              <div className="flex flex-col gap-3 text-center">
-                <div>
+              <div className="flex flex-col gap-3">
+                <div className="text-center">
                   <p className="text-[10px] text-slate-500">Lucro (LC)</p>
                   <p className="text-2xl font-bold text-emerald-600">{margemPctDisplay}%</p>
                   <p className="text-xs text-slate-500">{formatBRL(totalVenda * margemLucroPct)}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] text-slate-500">Encargos / outros</p>
-                  <p className="text-lg font-bold text-blue-600">
-                    {Math.max(0, bdiPctTotal - margemPctDisplay).toFixed(2)}%
-                  </p>
+                <div className="border-t pt-2 space-y-2">
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className="flex items-center gap-1.5 text-slate-500">
+                      <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-500 shrink-0" />
+                      Tributos
+                    </span>
+                    <span className="font-bold text-red-600">{tributosTotal.toFixed(2)}%</span>
+                    <span className="font-semibold text-slate-700 text-right">{formatBRL(tributosR$)}</span>
+                  </div>
+                  {overheadPct > 0.01 && (
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="flex items-center gap-1.5 text-slate-500">
+                        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-500 shrink-0" />
+                        Overhead CI
+                      </span>
+                      <span className="font-bold text-blue-600">{overheadPct.toFixed(2)}%</span>
+                      <span className="font-semibold text-slate-700 text-right">{formatBRL(overheadR$)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
