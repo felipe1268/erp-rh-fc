@@ -611,12 +611,25 @@ export default function OrcamentoBdiIndicadores({
         <div className="rounded-xl border bg-white p-4">
           <p className="text-sm font-semibold text-slate-700 mb-0.5">Composição dos Custos Indiretos — CI-01 a CI-08</p>
           <p className="text-[10px] text-slate-400 mb-3">Clique em uma barra ou item da legenda para ver o detalhamento</p>
-          <div className="flex flex-col md:flex-row gap-4 items-center">
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={indiretosModal} margin={{ top: 0, right: 20, left: 10, bottom: 20 }} style={{ cursor: "pointer" }}>
+          <div className="flex flex-col md:flex-row gap-4 items-start">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart
+                data={indiretosModal.map(d => ({ ...d, codigo: d.label.match(/^(CI-\d+)/)?.[1] ?? d.label }))}
+                margin={{ top: 10, right: 20, left: 10, bottom: 8 }}
+                style={{ cursor: "pointer" }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" />
-                <YAxis tickFormatter={v => `R$${(v/1e3).toFixed(0)}k`} tick={{ fontSize: 10 }} />
+                <XAxis
+                  dataKey="codigo"
+                  tick={{ fontSize: 11, fontWeight: 600, fill: "#475569" }}
+                  tickLine={false}
+                  axisLine={{ stroke: "#e2e8f0" }}
+                />
+                <YAxis
+                  tickFormatter={v => v >= 1e6 ? `R$${(v/1e6).toFixed(1)}M` : `R$${(v/1e3).toFixed(0)}k`}
+                  tick={{ fontSize: 10 }}
+                  width={70}
+                />
                 <Tooltip content={<TooltipBRL fmt={formatBRL} />} />
                 <Bar dataKey="valor" name="Custo na Obra" fill="#8b5cf6" radius={[4,4,0,0]}
                   onClick={(data: any) => {
@@ -632,23 +645,28 @@ export default function OrcamentoBdiIndicadores({
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <div className="flex flex-col gap-1.5 min-w-[200px]">
+            <div className="flex flex-col gap-1 min-w-[240px] max-w-[280px]">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1 px-1.5">Legenda — clique para detalhar</p>
               {indiretosModal.map((d, i) => {
                 const codigo = d.label.match(/^(CI-\d+)/)?.[1] ?? "";
+                const descricao = d.label.replace(/^CI-\d+ – /, "");
                 const active = selectedCI === codigo;
                 return (
                   <div key={i}
-                    className={`flex items-center gap-2 text-xs rounded px-1.5 py-1 cursor-pointer transition-colors ${active ? "bg-blue-50 ring-1 ring-blue-300" : "hover:bg-slate-50"}`}
+                    className={`flex items-center gap-2 text-xs rounded px-2 py-1.5 cursor-pointer transition-colors ${active ? "bg-blue-50 ring-1 ring-blue-300" : "hover:bg-slate-50"}`}
                     onClick={() => setSelectedCI(prev => prev === codigo ? null : codigo)}>
-                    <span className="inline-block w-3 h-3 rounded-sm shrink-0"
+                    <span className="inline-block w-3 h-3 rounded-sm shrink-0 mt-0.5"
                       style={{ background: active ? "#1e3a8a" : COLORS[i % COLORS.length] }} />
-                    <span className="flex-1 text-slate-600">{d.label}</span>
-                    <span className="font-semibold">{formatBRL(d.valor)}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-bold text-slate-700">{codigo}</span>
+                      <span className="text-slate-500 ml-1 truncate block text-[10px] leading-tight">{descricao}</span>
+                    </div>
+                    <span className="font-semibold text-slate-700 shrink-0">{formatBRL(d.valor)}</span>
                   </div>
                 );
               })}
-              <div className="border-t pt-2 mt-1 text-xs">
-                <span className="text-slate-500">Total indiretos: </span>
+              <div className="border-t pt-2 mt-1 px-1.5 flex justify-between text-xs">
+                <span className="text-slate-500">Total indiretos:</span>
                 <span className="font-bold">{formatBRL(indiretosModal.reduce((s,d)=>s+d.valor,0))}</span>
               </div>
             </div>
