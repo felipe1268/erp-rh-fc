@@ -168,25 +168,29 @@ export default function OrcamentoBdiIndicadores({
   }, [componentes, totalCusto, totalVenda, valorNegociado]);
 
   // ── Tributos detalhados ──────────────────────────────────────────
-  // REGRAS DE LIMPEZA:
-  // 1. Deduplica grupos A.x e B.x (mesma planilha listada duas vezes no template).
-  //    Mantém apenas o maior valor encontrado para cada sufixo numérico.
-  // 2. Exclui grupos C.x (ICMS, CPMF) e D.x (IPI) — impostos de mercadoria,
-  //    não aplicáveis a empresas de serviços de construção civil.
+  // ESTRATÉGIA DE LEITURA (duas fontes possíveis):
+  //
+  // Fonte 1 — bdiTributos (aba "Tributos Fiscais", formato A.x / B.x)
+  //   Presente em planilhas com aba separada de tributos.
+  //   Aplica deduplicação A.x↔B.x e exclui C.x (ICMS/CPMF) e D.x (IPI).
+  //
+  // Fonte 2 — bdiLinhas DI-xx (aba BDI principal, formato DI-02..DI-07)
+  //   Formato FC Engenharia: os tributos estão embutidos no BDI principal.
+  //   DI-01 = dedução ISS, DI-02 = PIS, DI-03 = COFINS, DI-04 = IRPJ,
+  //   DI-05 = CSLL, DI-06 = CPRB, DI-07 = ISS Municipal.
+  //   Usa diretamente sem deduplicação (códigos já são únicos).
   const tributosChart = useMemo(() => {
-    const seen = new Map<string, { label: string; aliquota: number; valor: number }>();
-    tributos
-      .filter(t => !t.isHeader && n(t.aliquota) > 0)
-      .forEach(t => {
+    // --- Fonte 1: bdiTributos (A.x/B.x) ---
+    const fromTributos = tributos.filter(t => !t.isHeader && n(t.aliquota) > 0);
+    if (fromTributos.length > 0) {
+      const seen = new Map<string, { label: string; aliquota: number; valor: number }>();
+      fromTributos.forEach(t => {
         const codigo = (t.codigo ?? "").trim();
-        // Exclui grupos C e D (ICMS, IPI, CPMF — não aplicáveis a serviços)
         if (/^[CD]\./i.test(codigo)) return;
-        // Sufixo numérico: "A.7" → "7", "B.7" → "7" (mesmo tributo, grupos diferentes)
         const sufixo = codigo.replace(/^[A-Z]\./, "");
         const aliquota = +(n(t.aliquota) * 100).toFixed(4);
         const valor = n(t.valorCalculado);
         const entrada = seen.get(sufixo);
-        // Mantém grupo A preferencialmente; se B aparecer depois, só substitui se maior
         if (!entrada || aliquota > entrada.aliquota) {
           seen.set(sufixo, {
             label: (codigo ? `${codigo} - ` : "") + (t.descricao ?? "?"),
@@ -195,10 +199,19 @@ export default function OrcamentoBdiIndicadores({
           });
         }
       });
-    return [...seen.values()]
-      .filter(t => t.aliquota > 0)
+      return [...seen.values()].filter(t => t.aliquota > 0).sort((a, b) => b.aliquota - a.aliquota);
+    }
+
+    // --- Fonte 2: DI-xx em bdiLinhas (formato FC Engenharia) ---
+    return bdiLinhas
+      .filter(l => /^DI-\d+$/.test(String(l.codigo ?? "").trim()) && n(l.percentual) > 0)
+      .map(l => ({
+        label:    `${l.codigo} - ${l.descricao ?? "?"}`,
+        aliquota: +(n(l.percentual) * 100).toFixed(4),
+        valor:    n(l.valorAbsoluto),
+      }))
       .sort((a, b) => b.aliquota - a.aliquota);
-  }, [tributos]);
+  }, [tributos, bdiLinhas]);
 
   // ── Taxa de Comercialização (LC) detalhada ────────────────────────
   const lcChart = useMemo(() => {
@@ -358,7 +371,7 @@ export default function OrcamentoBdiIndicadores({
             <BarChart data={waterfall} margin={{ top: 0, right: 20, left: 20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-              <YAxis tickFormatter={v => `R$${(v/1e6).toFixed(1)}M`} tick={{ fontSize: 10 }} />
+              <YAxis tickFormatter={v => `R$${(v/1e6).toFixed(2)}M`} tick={{ fontSize: 10 }} />
               <Tooltip
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
@@ -366,18 +379,31 @@ export default function OrcamentoBdiIndicadores({
                   return (
                     <div className="bg-white border rounded shadow px-3 py-2 text-xs">
                       <p className="font-semibold mb-1">{d.label}</p>
-                      <p>Total: <b>{formatBRL(d.total)}</b></p>
-                      {d.base > 0 && <p>Incremento: <b>{formatBRL(d.delta)}</b></p>}
+                      <p>Total acumulado: <b>{formatBRL(d.total)}</b></p>
+                      {d.base > 0 && <p>Incremento BDI: <b>{formatBRL(d.delta)}</b></p>}
                     </div>
                   );
                 }}
               />
-              <Bar dataKey="base"  stackId="a" fill="transparent" stroke="none" />
-              <Bar dataKey="delta" stackId="a" radius={[3,3,0,0]}>
+              <Bar dataKey="base"  stackId="a" fillOpacity={0} stroke="none" />
+              <Bar dataKey="delta" stackId="a" radius={[3,3,0,0]}
+                label={{ position: "top", formatter: (v: number) => `R$${(v/1e6).toFixed(2)}M`, fontSize: 9, fill: "#64748b" }}
+              >
                 {waterfall.map((d, i) => <Cell key={i} fill={d.cor} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          {/* Legenda visual: mapa dos valores */}
+          <div className="flex items-center gap-4 mt-2 flex-wrap">
+            {waterfall.map((d, i) => (
+              <div key={i} className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ background: d.cor }} />
+                <span className="font-medium">{d.label}:</span>
+                <span>{formatBRL(d.total)}</span>
+                {d.base > 0 && <span className="text-slate-400">(+{formatBRL(d.delta)})</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -460,8 +486,10 @@ export default function OrcamentoBdiIndicadores({
         <div className="rounded-xl border bg-white p-4">
           <p className="text-sm font-semibold text-slate-700 mb-1">Tributos — Detalhamento por Imposto</p>
           <p className="text-[10px] text-slate-500 mb-1">
-            Alíquotas da planilha BDI · Total: {tributosChart.reduce((s,t)=>s+t.aliquota,0).toFixed(3)}%
-            · ICMS, IPI e CPMF (impostos de mercadoria) excluídos automaticamente — não aplicáveis a serviços de construção civil
+            Alíquotas extraídas da planilha BDI · Total: {tributosChart.reduce((s,t)=>s+t.aliquota,0).toFixed(3)}%
+            {tributos.filter(t => !t.isHeader && n(t.aliquota) > 0).length > 0
+              ? " · Fonte: aba Tributos Fiscais (grupos A/B) · ICMS, IPI e CPMF excluídos automaticamente"
+              : " · Fonte: linhas DI-xx da aba BDI principal"}
           </p>
           <div className="flex flex-col md:flex-row gap-4">
             <ResponsiveContainer width="100%" height={Math.max(180, tributosChart.length * 38)}>

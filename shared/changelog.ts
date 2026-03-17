@@ -2104,6 +2104,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 434,
+    titulo: "BDI — Tributos DI-xx e waterfall corrigidos",
+    descricao: "Tributos agora lidos corretamente no formato FC Engenharia (DI-02=PIS 0.65%, DI-03=COFINS 3%, DI-04=IRPJ 1.20%, DI-05=CSLL 1.08%, DI-07=ISS 5% → total ~10.93%). Sistema agora suporta dois formatos: aba 'Tributos Fiscais' com grupos A.x/B.x (com deduplicação) OU linhas DI-xx embutidas na aba BDI principal. Waterfall corrigido: barra base usa fillOpacity=0 (verdadeiramente transparente), adicionados rótulos de valor e legenda textual abaixo do gráfico.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 433,
     titulo: "BDI — Alerta interativo: clique no card para ver o motivo",
     descricao: "Cards de KPI do BDI com alerta vermelho/amarelo agora são clicáveis: ao clicar, exibe mensagem explicando o motivo do alerta (BDI acima ou abaixo da faixa TCU), com texto contextual, ícone e botão de fechar. Também incluída nota na seção de Tributos explicando a exclusão automática de ICMS, IPI e CPMF.",
