@@ -1616,14 +1616,18 @@ export const orcamentoRouter = router({
       forceReplace:   z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
-      console.log(`[Importar] Iniciando — arquivo: ${input.fileName}, tamanho base64: ${input.fileBase64.length} chars, companyId: ${input.companyId}, obraId: ${input.obraId ?? 'sem obra'}`);
+      const memMB = () => { const m = process.memoryUsage(); return `RSS:${Math.round(m.rss/1024/1024)}MB Heap:${Math.round(m.heapUsed/1024/1024)}/${Math.round(m.heapTotal/1024/1024)}MB`; };
+      console.log(`[Importar] Iniciando — arquivo: ${input.fileName}, base64: ${input.fileBase64.length} chars, mem: ${memMB()}`);
       try {
       const XLSX = await import('xlsx');
+      const XLSX_OPTS = { type: 'buffer' as const, cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false };
 
-      // Decodificar base64
-      const buffer = Buffer.from(input.fileBase64, 'base64');
-      console.log(`[Importar] Buffer decodificado: ${buffer.length} bytes`);
-      const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
+      // Decodificar base64 e ler workbook — buffer liberado imediatamente após
+      let buffer: Buffer | null = Buffer.from(input.fileBase64, 'base64');
+      console.log(`[Importar] Buffer: ${buffer.length} bytes, mem: ${memMB()}`);
+      const wb = XLSX.read(buffer, XLSX_OPTS);
+      buffer = null; // libera buffer
+      console.log(`[Importar] Workbook carregado — abas: ${wb.SheetNames.join(', ')}, mem: ${memMB()}`);
 
       // Localizar abas obrigatórias
       const orcTab = wb.SheetNames.find(n =>
@@ -1631,33 +1635,39 @@ export const orcamentoRouter = router({
         n.toLowerCase().includes('orcamento') ||
         n.toLowerCase().includes('orçamento')
       );
-      const bdiTab = wb.SheetNames.find(n => n.toLowerCase() === 'bdi');
+      const bdiTab  = wb.SheetNames.find(n => n.toLowerCase() === 'bdi');
+      const insumosTab = wb.SheetNames.find(n => n.toLowerCase() === 'insumos');
+      const cpusTab = wb.SheetNames.find(n => n === 'CPUs' || n === 'Cpus' || n.toLowerCase() === 'cpus');
 
       if (!orcTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "Orçamento" não encontrada. A planilha deve ter uma aba chamada "Orçamento".' });
 
-      const dataOrc = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], { header: 1, defval: '' }) as any[][];
+      // ── Processar BDI primeiro (necessário para cálculo de venda) ──
+      console.log(`[Importar] Lendo aba BDI...`);
       const dataBdi = bdiTab ? (XLSX.utils.sheet_to_json(wb.Sheets[bdiTab], { header: 1, defval: '' }) as any[][]) : [];
+      if (bdiTab) delete wb.Sheets[bdiTab]; // libera memória
+      const { bdiPercentual, totalVendaBdi, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
+
+      // ── Processar EAP/Orçamento ──
+      console.log(`[Importar] Lendo aba Orçamento (${orcTab})...`);
+      const dataOrc = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], { header: 1, defval: '' }) as any[][];
+      delete wb.Sheets[orcTab]; // libera memória
 
       // Metadados
       const meta = extrairMetadados(dataOrc);
-
-      // BDI primeiro — necessário para calcular venda dos itens
-      // totalVendaBdi = PV-2 da planilha BDI (valor autoritativo já calculado pelo Excel,
-      //   considera apenas custo direto, excluindo indiretos que constam na EAP)
-      const { bdiPercentual, totalVendaBdi, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
 
       // Itens da EAP — venda calculada via fórmula ABNT/TCU por item
       const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual, input.colMapping);
       if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
-      // Insumos (aba "Insumos" se existir)
-      const insumosTab = wb.SheetNames.find(n => n.toLowerCase() === 'insumos');
+      // ── Insumos ──
+      console.log(`[Importar] Lendo aba Insumos... (${insumosTab ?? 'não encontrada'})`);
       const insumosItens = insumosTab
         ? parsearAbaInsumos(XLSX.utils.sheet_to_json(wb.Sheets[insumosTab], { header: 1, defval: '' }) as any[][], input.companyId)
         : [];
+      if (insumosTab) delete wb.Sheets[insumosTab]; // libera memória
 
-      // CPUs — Composições de Preços Unitários (aba "CPUs" se existir)
-      const cpusTab = wb.SheetNames.find(n => n === 'CPUs' || n === 'Cpus' || n.toLowerCase() === 'cpus');
+      // ── CPUs ──
+      console.log(`[Importar] Lendo aba CPUs... (${cpusTab ?? 'não encontrada'})`);
       const cpusParsed = cpusTab
         ? parsearAbaCPUs(XLSX.utils.sheet_to_json(wb.Sheets[cpusTab], { header: 1, defval: '' }) as any[][], input.companyId)
         : { composicoes: [], linhasInsumos: [] };
