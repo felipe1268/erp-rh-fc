@@ -445,21 +445,29 @@ export default function OrcamentoDashTab({
       {abcCurva.length > 0 && (
         <div className="rounded-xl border bg-white p-4">
 
-          {/* Cabeçalho */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          {/* Cabeçalho + pills de classe */}
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
             <div>
               <p className="text-sm font-semibold text-slate-800">Curva ABC de Pareto — Top 30 Insumos</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Concentração de custo por insumo · ordenado do mais representativo ao menor</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Barras = participação individual &nbsp;·&nbsp; Linha = % acumulado do custo total
+              </p>
             </div>
-            <div className="flex items-center gap-3 text-[11px] shrink-0">
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm bg-indigo-500" />
-                <span className="text-slate-600">% individual (eixo esq.)</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block w-5 h-0 border-t-2 border-rose-500" />
-                <span className="text-slate-600">% acumulado (eixo dir.)</span>
-              </span>
+            <div className="flex gap-2 shrink-0 flex-wrap">
+              {[
+                { label: "A", count: abcStats.classA.length, pct: abcStats.pctA, custo: abcStats.classA.reduce((s,d)=>s+d.custo,0), bar: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
+                { label: "B", count: abcStats.classB.length, pct: abcStats.pctB, custo: abcStats.classB.reduce((s,d)=>s+d.custo,0), bar: "#0369a1", bg: "#f0f9ff", border: "#bae6fd", text: "#0369a1" },
+                { label: "C", count: abcStats.classC.length, pct: abcStats.pctC, custo: abcStats.classC.reduce((s,d)=>s+d.custo,0), bar: "#64748b", bg: "#f8fafc", border: "#e2e8f0", text: "#64748b" },
+              ].map(c => (
+                <div key={c.label} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 8, padding: "6px 12px", minWidth: 100 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+                    <span style={{ background: c.bar, color: "#fff", borderRadius: 3, fontSize: 9, fontWeight: 800, padding: "1px 5px", letterSpacing: "0.05em" }}>CLASSE {c.label}</span>
+                    <span style={{ fontSize: 10, color: c.text, fontWeight: 600 }}>{c.count} itens</span>
+                  </div>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: c.text, lineHeight: 1, margin: "2px 0 1px" }}>{c.pct.toFixed(2)}%</p>
+                  <p style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>{formatBRL(c.custo)}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -553,50 +561,55 @@ export default function OrcamentoDashTab({
             </ComposedChart>
           </ResponsiveContainer>
 
-          {/* Rodapé com legenda de classes */}
-          <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-3">
-            {[
-              {
-                classe: "A",
-                count: abcStats.classA.length,
-                pct: abcStats.pctA,
-                custo: abcStats.classA.reduce((s,d)=>s+d.custo,0),
-                color: "text-blue-700",
-                bg: "bg-blue-50",
-                border: "border-blue-100",
-                desc: "Alta prioridade · controle contínuo",
-              },
-              {
-                classe: "B",
-                count: abcStats.classB.length,
-                pct: abcStats.pctB,
-                custo: abcStats.classB.reduce((s,d)=>s+d.custo,0),
-                color: "text-sky-600",
-                bg: "bg-sky-50",
-                border: "border-sky-100",
-                desc: "Média prioridade · revisão periódica",
-              },
-              {
-                classe: "C",
-                count: abcStats.classC.length,
-                pct: abcStats.pctC,
-                custo: abcStats.classC.reduce((s,d)=>s+d.custo,0),
-                color: "text-slate-500",
-                bg: "bg-slate-50",
-                border: "border-slate-200",
-                desc: "Baixa prioridade · gestão simplificada",
-              },
-            ].map(c => (
-              <div key={c.classe} className={`rounded-lg border ${c.border} ${c.bg} px-3 py-2.5`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[10px] font-bold uppercase tracking-widest ${c.color}`}>Classe {c.classe}</span>
-                  <span className={`text-[10px] font-semibold ${c.color}`}>{c.count} insumo{c.count !== 1 ? "s" : ""}</span>
-                </div>
-                <p className={`text-lg font-extrabold leading-none ${c.color}`}>{c.pct.toFixed(2)}%</p>
-                <p className="text-[11px] font-semibold text-slate-600 mt-0.5">{formatBRL(c.custo)}</p>
-                <p className="text-[10px] text-slate-400 mt-1 leading-tight">{c.desc}</p>
-              </div>
-            ))}
+          {/* Ranking de insumos — tabela profissional */}
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Ranking de insumos por custo
+            </p>
+            <div className="space-y-1">
+              {abcCurva.slice(0, 12).map((d) => {
+                const classe = d.acc <= 80 ? "A" : d.acc <= 95 ? "B" : "C";
+                const maxPct = abcCurva[0]?.pctVal ?? 1;
+                const barW = Math.round((d.pctVal / maxPct) * 100);
+                const classCfg: Record<string, { badge: string; bar: string; pct: string }> = {
+                  A: { badge: "#1d4ed8", bar: "#3b82f6", pct: "#1d4ed8" },
+                  B: { badge: "#0369a1", bar: "#7dd3fc", pct: "#0369a1" },
+                  C: { badge: "#64748b", bar: "#cbd5e1", pct: "#475569" },
+                };
+                const cfg = classCfg[classe];
+                return (
+                  <div
+                    key={d.idx}
+                    style={{ display: "grid", gridTemplateColumns: "24px 1fr 90px 110px 32px", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 6 }}
+                    className="hover:bg-slate-50 transition-colors"
+                  >
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textAlign: "right" }}>#{d.idx}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 2 }}>
+                        {d.label}
+                      </p>
+                      <div style={{ height: 4, background: "#f1f5f9", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${barW}%`, background: cfg.bar, borderRadius: 2, transition: "width 0.3s" }} />
+                      </div>
+                    </div>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: cfg.pct, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                      {d.pctVal.toFixed(2)}%
+                    </p>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "#334155", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                      {formatBRL(d.custo)}
+                    </p>
+                    <span style={{ background: cfg.badge, color: "#fff", borderRadius: 3, fontSize: 9, fontWeight: 800, padding: "1px 4px", textAlign: "center" }}>
+                      {classe}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {abcCurva.length > 12 && (
+              <p className="text-[10px] text-slate-400 text-center mt-2">
+                + {abcCurva.length - 12} insumos adicionais · ver gráfico acima para visão completa
+              </p>
+            )}
           </div>
         </div>
       )}
