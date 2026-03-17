@@ -307,6 +307,20 @@ export default function OrcamentoBdiIndicadores({
   const totalTributosPct = tributosChart.reduce((s, t) => s + t.aliquota, 0);
   const totalLcPct       = lcChart.reduce((s, t) => s + t.pct, 0) || margemLucroPct * 100;
   const overheadPct      = Math.max(0, bdiPct - totalTributosPct - totalLcPct);
+
+  // ── Indicadores financeiros ───────────────────────────────────────
+  // Lucro Bruto (LC) = totalVenda × margemLC%
+  const lucroLC        = totalVenda * margemLucroPct;
+  // Tributos = totalVenda × aliquota% (impostos calculados sobre a receita)
+  const tributosAbsR$  = totalVenda * totalTributosPct / 100;
+  // Break-even = receita mínima onde lucro = 0
+  //   = totalCusto + overhead + tributos calculados na própria receita de equilíbrio
+  //   = totalVenda - LucroLC  (equivalente: toda receita exceto a margem de lucro)
+  const breakEven      = totalVenda - lucroLC;
+  // Folga acima do break-even = Lucro Bruto (o que supera todos os custos + tributos)
+  const folgaBreakEven = lucroLC;
+  // Lucro Líquido = Lucro Bruto − Tributos (o que a empresa efetivamente embolsa)
+  const lucroLiquido   = lucroLC - tributosAbsR$;
   const distribuicaoBdi  = [
     { name: "Lucro (LC)",  value: +totalLcPct.toFixed(2),       fill: "#10b981" },
     { name: "Tributos",    value: +totalTributosPct.toFixed(2),  fill: "#ef4444" },
@@ -494,7 +508,16 @@ export default function OrcamentoBdiIndicadores({
             </div>
             <div className="flex justify-between items-center py-2 border-b">
               <span className="text-xs text-slate-600">Carga tributária estimada</span>
-              <span className="font-bold text-red-600">{formatBRL(totalVenda * totalTributosPct / 100)}</span>
+              <span className="font-bold text-red-600">{formatBRL(tributosAbsR$)}</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b">
+              <span className="flex flex-col gap-0.5">
+                <span className="text-xs text-slate-600">Lucro líquido (após tributos)</span>
+                <span className="text-[10px] text-slate-400">Lucro Bruto − Carga Tributária</span>
+              </span>
+              <span className={`font-bold ${lucroLiquido >= 0 ? "text-emerald-700" : "text-red-500"}`}>
+                {formatBRL(lucroLiquido)}
+              </span>
             </div>
             {valorNegociado > 0 && (
               <div className="flex justify-between items-center py-2 border-b">
@@ -503,13 +526,19 @@ export default function OrcamentoBdiIndicadores({
               </div>
             )}
             <div className="flex justify-between items-center py-2 border-b">
-              <span className="text-xs text-slate-600">Ponto de equilíbrio (break-even)</span>
-              <span className="font-bold text-slate-700">{formatBRL(totalCusto)}</span>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-xs text-slate-600">Ponto de equilíbrio (break-even)</span>
+                <span className="text-[10px] text-slate-400">Receita mínima: cobre custo + overhead + tributos (lucro = 0)</span>
+              </span>
+              <span className="font-bold text-slate-700">{formatBRL(breakEven)}</span>
             </div>
             <div className="flex justify-between items-center py-2">
-              <span className="text-xs text-slate-600">Folga acima do break-even</span>
-              <span className={`font-bold ${totalVenda > totalCusto ? "text-green-600" : "text-red-500"}`}>
-                {formatBRL(totalVenda - totalCusto)}
+              <span className="flex flex-col gap-0.5">
+                <span className="text-xs text-slate-600">Folga acima do break-even</span>
+                <span className="text-[10px] text-slate-400">= Lucro Bruto (LC) · margem acima do ponto de equilíbrio</span>
+              </span>
+              <span className={`font-bold ${folgaBreakEven >= 0 ? "text-green-600" : "text-red-500"}`}>
+                {formatBRL(folgaBreakEven)}
               </span>
             </div>
           </div>

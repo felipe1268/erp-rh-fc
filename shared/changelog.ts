@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 445,
+    titulo: "BDI — Correção fórmula break-even e adição de Lucro Líquido",
+    descricao: "O 'Ponto de equilíbrio (break-even)' exibia incorretamente o totalCusto (custo direto), tratando o BDI inteiro como 'folga'. Fórmula corrigida: break-even = totalVenda − Lucro Bruto (LC), ou seja, a receita mínima que cobre custo direto + overhead + tributos com lucro zero. 'Folga acima do break-even' agora = Lucro Bruto (LC), que é o valor real acima do ponto de equilíbrio. Adicionado novo indicador 'Lucro Líquido (após tributos)' = Lucro Bruto − Carga Tributária, representando o ganho efetivo após impostos. Subtítulos explicativos adicionados a cada linha.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 444,
     titulo: "OrcamentoDashTab — Refactor: gráficos em % e correção Margem vs BDI",
     descricao: "Todos os gráficos da aba Dashboard do Orçamento agora exibem apenas percentuais (%). RadialBarChart quebrado (exibia '29999999999999' por erro de ponto flutuante) substituído por PieChart donut limpo mostrando Margem LC, Tributos e Overhead CI. EAP Nível 1 e Top 15 Insumos convertidos para eixo X em %. Tipos de Insumo convertido para %. Botão '▼ Ver valores em R$' nos cards de Custo, Margem e Tipos de Insumo. Valores R$ disponíveis no tooltip (hover) em todos os gráficos. Imports não utilizados (RadialBarChart, RadialBar, Legend, LineChart, Area) removidos.",
