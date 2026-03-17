@@ -480,6 +480,19 @@ export const planejamentoRouter = router({
         .orderBy(asc(planejamentoAvancos.semana), asc(planejamentoAvancos.atividadeId));
     }),
 
+  // Retorna todas as semanas que têm qualquer avanço registrado no projeto (qualquer revisão)
+  listarSemanasComAvanco: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db
+        .selectDistinct({ semana: planejamentoAvancos.semana })
+        .from(planejamentoAvancos)
+        .where(eq(planejamentoAvancos.projetoId, input.projetoId))
+        .orderBy(asc(planejamentoAvancos.semana));
+      return rows.map(r => r.semana);
+    }),
+
   salvarAvanco: protectedProcedure
     .input(z.object({
       projetoId:           z.number(),

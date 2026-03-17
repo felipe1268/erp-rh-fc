@@ -3211,6 +3211,12 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   const fileRef   = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
+  // Semanas que têm avanço em QUALQUER revisão (para manter o verde independente de mudança de revisão)
+  const { data: semanasGlobaisComAvanco = [] } = trpc.planejamento.listarSemanasComAvanco.useQuery(
+    { projetoId },
+    { enabled: !!projetoId }
+  );
+
   useEffect(() => {
     if (!pickerOpen) return;
     function handleClick(e: MouseEvent) {
@@ -3488,10 +3494,10 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
               className="border border-input rounded-md px-3 py-1.5 text-xs bg-background flex items-center gap-2 min-w-[260px] justify-between hover:bg-slate-50"
             >
               <span className="flex items-center gap-1.5 truncate">
-                {semanasComDados[semanaAtual] !== undefined
+                {semanasGlobaisComAvanco.includes(semanaAtual)
                   ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                   : <span className="w-3.5 h-3.5 shrink-0" />}
-                <span className={semanasComDados[semanaAtual] !== undefined ? "text-emerald-700 font-medium" : ""}>
+                <span className={semanasGlobaisComAvanco.includes(semanaAtual) ? "text-emerald-700 font-medium" : ""}>
                   {labelSemana(semanaAtual, semanas.indexOf(semanaAtual))}
                 </span>
                 {semanasComDados[semanaAtual] !== undefined && (
@@ -3506,10 +3512,11 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
             {pickerOpen && (
               <div className="absolute top-full mt-1 left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-xl max-h-80 overflow-y-auto min-w-[320px]">
                 {semanas.map((s, i) => {
-                  const pct      = semanasComDados[s];
-                  const temDados = pct !== undefined;
-                  const isAtual  = s === semanaAtual;
-                  const isCurrent = isCurrentWeek(s);
+                  const pct        = semanasComDados[s];
+                  const temDados   = pct !== undefined;
+                  const temGlobal  = semanasGlobaisComAvanco.includes(s);
+                  const isAtual    = s === semanaAtual;
+                  const isCurrent  = isCurrentWeek(s);
                   return (
                     <button
                       key={s}
@@ -3517,10 +3524,10 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
                       onClick={() => { setSemanaAtual(s); setAvancoLocal({}); setImportStatus(null); setPickerOpen(false); }}
                       className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left transition-colors
                         ${isAtual ? "bg-blue-50" : isCurrent ? "bg-red-50" : "hover:bg-slate-50"}
-                        ${temDados ? "text-emerald-800" : isCurrent ? "text-red-700" : "text-slate-700"}`}
+                        ${temGlobal ? "text-emerald-800" : isCurrent ? "text-red-700" : "text-slate-700"}`}
                     >
                       <span className="flex items-center gap-2">
-                        {temDados
+                        {temGlobal
                           ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                           : isCurrent
                             ? <span className="w-3.5 h-3.5 shrink-0 rounded-full bg-red-500 flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-white" /></span>
