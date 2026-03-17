@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 489,
+    titulo: "Curva S — tooltip em ordem sequencial: Baseline → Rev. anteriores → Atual",
+    descricao: "Tooltip agora exibe as linhas em ordem cronológica correta: Baseline, revisões anteriores ativas (Rev 01, Rev 02...), Revisão Atual, Realizado e Tendência.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 488,
     titulo: "Curva S — desvio da Baseline exibido no tooltip",
     descricao: "Tooltip customizado agora mostra: Baseline, Revisão Atual, Realizado, Tendência e dois desvios calculados: 'Desvio Atual vs Baseline' e 'Realizado vs Baseline', com cor verde (adiantado) ou vermelha (atrasado).",

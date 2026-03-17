@@ -3226,18 +3226,26 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
                 const desvBaseVsPlan = base != null && plan != null ? plan - base : null;
                 const desvBaseVsReal = base != null && real != null ? real - base : null;
                 const [y, m, d] = String(label).split("-");
-                const extras = payload.filter((p: any) =>
-                  !["baseline","planejada","realizada","tendencia"].includes(p.dataKey));
+                // Revisões anteriores em ordem cronológica (pelo índice em revisoesAnteriores)
+                const revsNoTooltip = revisoesAnteriores
+                  .filter((r: any) => revsVisiveis.has(r.revisaoId))
+                  .map((r: any, idx: number) => ({
+                    label: r.descricao,
+                    color: REV_COLORS[idx % REV_COLORS.length],
+                    value: get(`rev_${r.revisaoId}`),
+                  }))
+                  .filter((r: any) => r.value != null);
                 return (
-                  <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-[200px]">
+                  <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-[210px]">
                     <p className="font-semibold text-slate-700 mb-2">{semanaLabel[label] ?? label} ({d}/{m}/{y})</p>
-                    {base   != null && <p style={{ color: "#1e40af" }}>Baseline : <strong>{n(base).toFixed(1)}%</strong></p>}
-                    {plan   != null && <p style={{ color: "#ef4444" }}>Revisão Atual : <strong>{n(plan).toFixed(1)}%</strong></p>}
-                    {real   != null && <p style={{ color: "#22c55e" }}>Realizado : <strong>{n(real).toFixed(1)}%</strong></p>}
-                    {tend   != null && <p style={{ color: "#16a34a" }}>Tendência : <strong>{n(tend).toFixed(1)}%</strong></p>}
-                    {extras.map((p: any) => (
-                      <p key={p.dataKey} style={{ color: p.color }}>{p.name} : <strong>{n(p.value).toFixed(1)}%</strong></p>
+                    {/* Ordem sequencial: Baseline → Rev. anteriores → Revisão Atual → Realizado → Tendência */}
+                    {base != null && <p style={{ color: "#1e40af" }}>Baseline : <strong>{n(base).toFixed(1)}%</strong></p>}
+                    {revsNoTooltip.map((r: any) => (
+                      <p key={r.label} style={{ color: r.color }}>{r.label} : <strong>{n(r.value).toFixed(1)}%</strong></p>
                     ))}
+                    {plan != null && <p style={{ color: "#ef4444" }}>Revisão Atual : <strong>{n(plan).toFixed(1)}%</strong></p>}
+                    {real != null && <p style={{ color: "#22c55e" }}>Realizado : <strong>{n(real).toFixed(1)}%</strong></p>}
+                    {tend != null && <p style={{ color: "#16a34a" }}>Tendência : <strong>{n(tend).toFixed(1)}%</strong></p>}
                     {(desvBaseVsPlan != null || desvBaseVsReal != null) && (
                       <div className="mt-2 pt-2 border-t border-slate-100 space-y-0.5">
                         {desvBaseVsPlan != null && (
