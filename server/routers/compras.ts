@@ -1286,7 +1286,10 @@ Responda APENAS com um objeto JSON no formato:
       const di08Usado = allDebitos.reduce((s, r) => s + n(r.valor), 0);
       const di08Disponivel = Math.max(0, di08Total - di08Usado);
 
-      // ── 2. Sobras das compras abaixo da meta ──────────────────────────
+      // ── 2. Sobras das compras: comparação pelo total da OC (não item a item) ─
+      // Regra: se a OC inteira ficou abaixo do total orçado → economia.
+      // Se a soma final furou a meta → zero (itens que ficaram baratos não compensam
+      // os que furaram). Evita contabilizar sobras parciais em OCs que no total excederam.
       const ocsConds: any[] = [
         eq(comprasOrdens.companyId, input.companyId),
         inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
@@ -1314,14 +1317,23 @@ Responda APENAS com um objeto JSON no formato:
         const orcToMeta: Record<number, number> = {};
         for (const m of metas) orcToMeta[m.id] = n(m.metaUnitTotal);
 
+        // Acumula totalComprado e totalMeta por OC
+        const ocTotalComprado: Record<number, number> = {};
+        const ocTotalMeta: Record<number, number> = {};
         for (const it of ocItens) {
+          const ocId = it.ordemId;
           if (!it.solicitacaoItemId) continue;
           const orcId = scToOrc[it.solicitacaoItemId];
           if (!orcId) continue;
           const metaUnit = orcToMeta[orcId] ?? 0;
           if (metaUnit === 0) continue;
           const qty = n(it.quantidade);
-          const sobra = (metaUnit - n(it.precoUnitario)) * qty;
+          ocTotalComprado[ocId] = (ocTotalComprado[ocId] ?? 0) + n(it.precoUnitario) * qty;
+          ocTotalMeta[ocId]     = (ocTotalMeta[ocId]     ?? 0) + metaUnit * qty;
+        }
+        // Só conta sobra se a OC INTEIRA ficou abaixo do total orçado
+        for (const ocId of Object.keys(ocTotalMeta)) {
+          const sobra = (ocTotalMeta[+ocId] ?? 0) - (ocTotalComprado[+ocId] ?? 0);
           if (sobra > 0.01) totalSobras += sobra;
         }
       }
