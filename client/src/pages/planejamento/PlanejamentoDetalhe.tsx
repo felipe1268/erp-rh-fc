@@ -4418,7 +4418,30 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     let sinalRestante = sinalTotal;
     let pctAcumAnterior = 0;
 
-    const rows = dadosMensais.map((d: any) => {
+    // Range de meses vem de TODAS as atividades folha com datas (não apenas as que cruzam com orçamento)
+    const datasIni = folhas.filter((a: any) => a.dataInicio).map((a: any) => a.dataInicio as string).sort();
+    const datasFim = folhas.filter((a: any) => a.dataFim).map((a: any) => a.dataFim as string).sort();
+    const priData = datasIni[0]?.substring(0, 7) ?? dadosMensais[0]?.mes ?? null;
+    const ultData = datasFim[datasFim.length - 1]?.substring(0, 7) ?? dadosMensais[dadosMensais.length - 1]?.mes ?? null;
+    if (!priData || !ultData) return [];
+
+    // Mapa de custo por mês vindo do cruzamento com orçamento (para coluna "Custo Prev.")
+    const custoByMes: Record<string, number> = {};
+    dadosMensais.forEach((d: any) => { custoByMes[d.mes] = d.custo ?? 0; });
+
+    // Monta estrutura de meses baseada em TODAS as atividades
+    const mesesAll = mesesRange(priData, ultData).map(mes => {
+      const dt = new Date(mes + "-15");
+      return {
+        mes,
+        nomeMes: dt.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+        nomeMesCurto: dt.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+        custo: custoByMes[mes] ?? 0,
+        venda: 0,
+      };
+    });
+
+    const rows = mesesAll.map((d: any) => {
       const [ano, m] = d.mes.split("-").map(Number);
       const lastDay = new Date(ano, m, 0).getDate();
       const corte = Math.min(cfgDiaCorte, lastDay);

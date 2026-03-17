@@ -2725,6 +2725,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 507,
+    titulo: "Prev. Medição — Avanço Físico agora exibe todos os meses do cronograma",
+    descricao: "Corrigido bug crítico: a tabela 'Previsão de Medição por Avanço Físico' só exibia o primeiro mês porque o range de meses era derivado dos itens cruzados por nome entre orçamento e cronograma (JOIN com correspondência exata de nome). Quando poucas atividades tinham nome idêntico ao item de orçamento, o range colapsava para 1 mês. Correção: o range de meses agora é derivado das datas de início/fim de TODAS as atividades folha do cronograma, independente de cruzamento com orçamento. O custo previsto (para cálculo de margem) ainda vem do cruzamento orçamento×cronograma para os meses que tiverem dados.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 506,
     titulo: "Planejamento — Redesign das abas de navegação (layout fluido + aba ativa destacada)",
     descricao: "O painel de abas do PlanejamentoDetalhe foi redesenhado: container com fundo cinza suave (slate-100/70) e padding interno p-1.5, separação entre abas com gap-1, abas individuais com rounded-lg e py-2 px-3 (mais espaçosas). Aba ativa recebe fundo azul sólido (bg-blue-600) e texto branco, com sombra leve — muito mais visível que o antigo border-bottom. Abas inativas ficam em cinza com hover branco suave. Arrastar abas mantido com animação scale-95 e ring-2 de destaque. Transições de 150ms para fluidez.",
