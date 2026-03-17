@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 465,
+    titulo: "Compras — Cancelar aprovação de cotação (retornar ao Mapa de Cotação)",
+    descricao: "Novo botão 'Cancelar Aprovação' na tela de detalhe de cotação, visível apenas para o Administrador Master quando a cotação está 'Aprovada'. Ao confirmar (com justificativa obrigatória), a ação remove a(s) OC(s) gerada(s) (e seus itens), reverte o status da cotação para 'Pendente' e reverte o status da Solicitação de Compra vinculada para 'cotacao'. OCs com status 'entregue', 'recebida' ou 'parcialmente_recebida' não podem ser revertidas — o sistema bloqueia com mensagem explicativa. Nova mutation cancelarAprovacaoCotacao adicionada ao router de compras com validação de role admin_master no servidor.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",

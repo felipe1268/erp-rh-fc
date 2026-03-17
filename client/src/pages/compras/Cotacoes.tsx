@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -277,12 +278,16 @@ export default function Cotacoes() {
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0");
   const [, navigate] = useLocation();
+  const { user } = useAuth();
+  const isAdminMaster = user?.role === "admin_master";
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [abaAtiva, setAbaAtiva] = useState<"detalhes" | "mapa">("detalhes");
+  const [showCancelarAprovacao, setShowCancelarAprovacao] = useState(false);
+  const [justificativaCancelar, setJustificativaCancelar] = useState("");
 
   const [form, setForm] = useState({
     descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "",
@@ -378,6 +383,16 @@ export default function Cotacoes() {
   });
   const uploadAnexo = trpc.compras.uploadAnexoFornecedor.useMutation({
     onSuccess: () => { toast.success("Arquivo enviado!"); setShowAnexoInput(null); mapaQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const cancelarAprovacao = trpc.compras.cancelarAprovacaoCotacao.useMutation({
+    onSuccess: (d) => {
+      toast.success(`Aprovação cancelada. ${d.ocsRemovidas} OC(s) removida(s). Cotação voltou para Pendente.`);
+      setShowCancelarAprovacao(false);
+      setJustificativaCancelar("");
+      detalheQ.refetch();
+      q.refetch();
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -634,6 +649,12 @@ export default function Cotacoes() {
                     <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
                       className="border-blue-200 text-blue-600 hover:bg-blue-50 gap-2">
                       <FileText className="h-4 w-4" /> Ver Contrato
+                    </Button>
+                  )}
+                  {detalheFullscreen.status === "aprovada" && isAdminMaster && (
+                    <Button variant="outline" onClick={() => { setJustificativaCancelar(""); setShowCancelarAprovacao(true); }}
+                      className="border-orange-200 text-orange-600 hover:bg-orange-50 gap-2">
+                      <Undo2 className="h-4 w-4" /> Cancelar Aprovação
                     </Button>
                   )}
                 </div>
@@ -1548,6 +1569,51 @@ export default function Cotacoes() {
           })() : null}
         </DialogContent>
       </Dialog>
+
+      {/* ── Cancelar Aprovação ── */}
+      <Dialog open={showCancelarAprovacao} onOpenChange={(o) => { if (!o) setShowCancelarAprovacao(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-700">
+              <Undo2 className="h-5 w-5" /> Cancelar Aprovação da Cotação
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              Esta ação irá remover a(s) OC(s) gerada(s) e retornar a cotação ao status <strong>Pendente</strong>.
+              A ação não pode ser desfeita. Confirme apenas se tiver certeza.
+            </div>
+            <div>
+              <Label htmlFor="just-cancelar" className="text-sm font-medium text-gray-700">Justificativa *</Label>
+              <Textarea
+                id="just-cancelar"
+                value={justificativaCancelar}
+                onChange={(e) => setJustificativaCancelar(e.target.value)}
+                placeholder="Descreva o motivo do cancelamento..."
+                className="mt-1.5 resize-none"
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setShowCancelarAprovacao(false)}>
+                Voltar
+              </Button>
+              <Button
+                disabled={justificativaCancelar.trim().length < 3 || cancelarAprovacao.isPending}
+                onClick={() => {
+                  if (!showDetalhe) return;
+                  cancelarAprovacao.mutate({ cotacaoId: showDetalhe, companyId, justificativa: justificativaCancelar.trim() });
+                }}
+                className="bg-orange-600 hover:bg-orange-500 text-white gap-2"
+              >
+                {cancelarAprovacao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+                Confirmar Cancelamento
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
     </DashboardLayout>
   );

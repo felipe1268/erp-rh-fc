@@ -1589,6 +1589,49 @@ Responda APENAS com um objeto JSON no formato:
       return oc;
     }),
 
+  cancelarAprovacaoCotacao: protectedProcedure
+    .input(z.object({
+      cotacaoId:    z.number(),
+      companyId:    z.number(),
+      justificativa: z.string().min(3, "Informe a justificativa"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if ((ctx.user as any)?.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Administrador Master pode cancelar uma aprovação de cotação." });
+      }
+      const db = await getDb();
+
+      const [cot] = await db.select().from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
+      );
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada." });
+      if (cot.status !== "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação não está aprovada." });
+
+      // Busca OCs vinculadas
+      const ocs = await db.select().from(comprasOrdens).where(eq(comprasOrdens.cotacaoId, input.cotacaoId));
+      for (const oc of ocs) {
+        if (["entregue", "recebida", "parcialmente_recebida"].includes(oc.status ?? "")) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: `OC ${oc.numeroOc} já foi ${oc.status} e não pode ser revertida.` });
+        }
+        await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+        await db.delete(comprasOrdens).where(eq(comprasOrdens.id, oc.id));
+      }
+
+      // Reverte cotação → pendente
+      await db.update(comprasCotacoes)
+        .set({ status: "pendente" })
+        .where(eq(comprasCotacoes.id, input.cotacaoId));
+
+      // Reverte solicitação → cotacao (se houver vínculo)
+      if (cot.solicitacaoId) {
+        await db.update(comprasSolicitacoes)
+          .set({ status: "cotacao", atualizadoEm: new Date().toISOString() })
+          .where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+      }
+
+      return { ok: true, ocsRemovidas: ocs.length };
+    }),
+
   criarOrdemManual: protectedProcedure
     .input(z.object({
       companyId: z.number(),
