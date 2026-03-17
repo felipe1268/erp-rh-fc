@@ -318,8 +318,9 @@ export default function OrcamentoBdiIndicadores({
   // ── Indicadores financeiros ───────────────────────────────────────
   // Lucro Bruto (LC) = totalVenda × margemLC% (L-01 da planilha)
   const lucroLC        = totalVenda * margemLucroPct;
-  // Tributos = totalVenda × aliquota% (impostos calculados sobre a receita)
-  const tributosAbsR$  = totalVenda * totalTributosPct / 100;
+  // Tributos = soma dos valorAbsoluto de cada DI-xx (base calculada pelo Excel, não totalVenda × alíquota%).
+  // Usar totalVenda × pct daria valor errado quando a base do BDI ≠ preço negociado.
+  const tributosAbsR$  = tributosChart.reduce((s, t) => s + t.valor, 0);
   // Break-even = receita mínima onde lucro = 0
   //   = totalVenda - LucroLC (toda receita exceto a margem de lucro bruto)
   const breakEven      = totalVenda - lucroLC;

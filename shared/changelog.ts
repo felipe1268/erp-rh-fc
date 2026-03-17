@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 461,
+    titulo: "Bugfix — Carga Tributária R$ alinhada com tabela de detalhe (base Excel, não totalVenda × alíquota)",
+    descricao: "Corrigido inconsistência no card 'Carga Tributária' dos Indicadores Financeiros: antes, o valor em R$ era calculado como totalVenda × alíquota%, o que divergia da tabela de detalhe quando a base do BDI ≠ preço negociado (ex: orcamento 'onda da Luciana' mostrava R$201K no card vs R$124K na tabela). Agora tributosAbsR$ = soma dos valorAbsoluto de cada DI-xx, idêntico ao total exibido na tabela 'Tributos — Detalhamento por Imposto'. O orcamento do 'papa' continua correto pois os dois métodos coincidem quando base BDI = preço de venda.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 460,
     titulo: "Curva ABC — clique em item expande painel de análise detalhada do insumo",
     descricao: "Cada linha do ranking ABC agora é clicável: ao clicar, expande um painel abaixo com análise completa do insumo — descrição completa, código, tipo, unidade, quantidade total usada na obra, preço unitário base, preço unitário com encargos, custo total destacado e % acumulado. Painel colapsável com chevron animado; a cor do painel acompanha a classe ABC do item (azul A, azul-claro B, cinza C).",
