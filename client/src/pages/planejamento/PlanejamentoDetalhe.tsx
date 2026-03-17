@@ -2619,16 +2619,16 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 
       {/* Tabela */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="text-xs" style={{ minWidth: editando ? 900 : "100%" }}>
           <thead>
             <tr className="bg-slate-700 text-white">
-              <th className="py-2 px-3 text-left w-24">EAP</th>
+              <th className="py-2 px-2 text-left w-20">EAP</th>
               <th className="py-2 px-3 text-left">Atividade</th>
-              <th className="py-2 px-3 text-left w-24">Início</th>
-              <th className="py-2 px-3 text-left w-24">Fim</th>
-              <th className="py-2 px-2 text-right w-14 text-xs">Dur.</th>
+              <th className="py-2 px-2 text-left w-32">Início</th>
+              <th className="py-2 px-2 text-left w-32">Fim</th>
+              <th className="py-2 px-2 text-right w-16 text-xs">Dur.</th>
               <th className="py-2 px-2 text-right w-20 text-xs">Peso%</th>
-              <th className="py-2 px-3 text-left w-28">Recurso</th>
+              <th className="py-2 px-2 text-left w-24">Recurso</th>
               {!editando && <th className="py-2 px-3 text-right w-20">Avanço</th>}
               {editando && <th className="py-2 px-2 w-8"></th>}
             </tr>
@@ -2655,38 +2655,38 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                   className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"} ${a.isGrupo ? "font-semibold" : ""} ${atrasada ? "bg-red-50/50" : ""}`}>
                   {editando ? (
                     <>
-                      <td className="py-1 px-2">
+                      <td className="py-1 px-1">
                         <Input value={a.eapCodigo ?? ""} onChange={e => updateLinha(idx, "eapCodigo", e.target.value)}
-                          className="h-6 text-xs w-20 font-mono" placeholder="1.1" />
+                          className="h-6 text-xs w-16 font-mono" placeholder="1.1" />
                       </td>
-                      <td className="py-1 px-2">
+                      <td className="py-1 px-1">
                         <div className="flex items-center gap-1">
                           <input type="checkbox" checked={!!a.isGrupo} onChange={e => updateLinha(idx, "isGrupo", e.target.checked)}
-                            title="É grupo/resumo" className="h-3 w-3" />
+                            title="É grupo/resumo" className="h-3 w-3 shrink-0" />
                           <Input value={a.nome} onChange={e => updateLinha(idx, "nome", e.target.value)}
-                            className="h-6 text-xs flex-1" placeholder="Nome da atividade" />
+                            className="h-6 text-xs flex-1 min-w-[140px]" placeholder="Nome da atividade" />
                         </div>
                       </td>
-                      <td className="py-1 px-2">
+                      <td className="py-1 px-1">
                         <Input type="date" value={a.dataInicio ?? ""} onChange={e => updateLinha(idx, "dataInicio", e.target.value)}
-                          className="h-6 text-xs w-28" />
+                          className="h-6 text-xs w-32" />
                       </td>
-                      <td className="py-1 px-2">
+                      <td className="py-1 px-1">
                         <Input type="date" value={a.dataFim ?? ""} onChange={e => updateLinha(idx, "dataFim", e.target.value)}
-                          className="h-6 text-xs w-28" />
+                          className="h-6 text-xs w-32" />
                       </td>
-                      <td className="py-1 px-2">
+                      <td className="py-1 px-1">
                         <Input type="number" value={a.duracaoDias ?? 0} onChange={e => updateLinha(idx, "duracaoDias", parseInt(e.target.value))}
                           className="h-6 text-xs w-14 text-right" />
                       </td>
-                      <td className="py-1 px-2">
+                      <td className="py-1 px-1">
                         <Input type="number" step="0.01" value={a.pesoFinanceiro ?? 0}
                           onChange={e => updateLinha(idx, "pesoFinanceiro", parseFloat(e.target.value))}
                           className="h-6 text-xs w-16 text-right" />
                       </td>
-                      <td className="py-1 px-2">
+                      <td className="py-1 px-1">
                         <Input value={a.recursoPrincipal ?? ""} onChange={e => updateLinha(idx, "recursoPrincipal", e.target.value)}
-                          className="h-6 text-xs w-24" placeholder="Equipe" />
+                          className="h-6 text-xs w-20" placeholder="Equipe" />
                       </td>
                       <td className="py-1 px-1">
                         <button onClick={() => removerLinha(idx)}
