@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 452,
+    titulo: "BDI — Indicadores Financeiros: exibe % acima do R$ em cada linha",
+    descricao: "Cada indicador financeiro (Lucro Bruto, Carga Tributária, Lucro Líquido, Break-even, Folga) agora exibe o percentual correspondente em cinza acima do valor em R$. Lucro Bruto = margemLC%; Carga Tributária = totalTributosPct; Lucro Líquido = L-02%; Break-even = breakEven/totalVenda; Folga = folgaBreakEven/totalVenda. Formato: XX.XXXX% acima do R$ principal.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 451,
     titulo: "BDI — Gráfico Tributos: labels curtas no eixo Y sem sobreposição",
     descricao: "O gráfico 'Tributos — Detalhamento por Imposto' exibia labels compridas (ex: 'DI-03 - COFINS - Financiamento da Seguridade Social') que quebravam em 3 linhas e se sobrepunham. Adicionado campo shortLabel = 'DI-03 · COFINS' extraindo apenas a sigla do tributo. YAxis agora usa shortLabel (width=145, fontSize=11). Altura por barra aumentada de 38 para 52px. Tooltip mostra o nome completo ao passar o mouse. Fallback (Fonte 2) também recebe shortLabel.",
