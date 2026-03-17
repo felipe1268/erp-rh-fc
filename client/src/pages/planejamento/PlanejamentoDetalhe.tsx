@@ -10177,6 +10177,40 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
               className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" />
           </div>
         </div>
+        {/* Preview instantâneo: aparece assim que os dois valores estão preenchidos */}
+        {orcNum > 0 && valNum > 0 && (() => {
+          const mesesEst  = Math.ceil(valNum / orcNum);
+          const dtInicio  = dataInicio ? new Date(dataInicio + "T12:00:00") : new Date();
+          const dtFim     = new Date(dtInicio);
+          dtFim.setMonth(dtFim.getMonth() + mesesEst);
+          const fmtDt = (d: Date) => d.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+          const numAtiv = atividades.filter((a: any) => !a.isGrupo).length;
+          return (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-wrap gap-6 items-center">
+              <div className="text-center min-w-[80px]">
+                <p className="text-2xl font-bold text-violet-700">{mesesEst}</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">{mesesEst === 1 ? "mês estimado" : "meses estimados"}</p>
+              </div>
+              <div className="h-10 w-px bg-slate-200 hidden sm:block" />
+              <div className="text-center min-w-[90px]">
+                <p className="text-sm font-semibold text-slate-700">{fmtDt(dtInicio)}</p>
+                <p className="text-[11px] text-slate-500">início</p>
+              </div>
+              <div className="flex items-center gap-1 text-slate-300 text-xs">→</div>
+              <div className="text-center min-w-[90px]">
+                <p className="text-sm font-semibold text-slate-700">{fmtDt(dtFim)}</p>
+                <p className="text-[11px] text-slate-500">conclusão prevista</p>
+              </div>
+              <div className="h-10 w-px bg-slate-200 hidden sm:block" />
+              <div className="text-center min-w-[80px]">
+                <p className="text-sm font-semibold text-slate-700">{fmtR(orcNum)}<span className="text-xs font-normal text-slate-400">/mês</span></p>
+                <p className="text-[11px] text-slate-500">{numAtiv} atividade{numAtiv !== 1 ? "s" : ""} a distribuir</p>
+              </div>
+              <p className="w-full text-[10px] text-slate-400">* Prévia baseada no orçamento informado. A simulação distribui as atividades respeitando predecessoras e sequência construtiva.</p>
+            </div>
+          );
+        })()}
+
         <div className="flex items-center gap-3 pt-1 flex-wrap">
           <Button onClick={handleSimular} disabled={simularMut.isPending} className="gap-2 bg-violet-600 hover:bg-violet-700">
             {simularMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
