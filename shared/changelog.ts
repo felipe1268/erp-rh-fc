@@ -2176,6 +2176,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 441,
+    titulo: "Banco — Remoção de orçamentos duplicados gerados por re-importações",
+    descricao: "Detectados e removidos 2 pares de registros duplicados em orcamentos: CUSTO_783_01_2026_R02 (id=15, criado em 13/03) e CUSTO_747_09_2025_R05-FASE4 (id=18, criado em 13/03) eram cópias exatas dos registros mais recentes (id=35 e id=36, criados em 16/03 durante o processo de recálculo BDI). Cada duplicata carregava ~900 linhas em bdi_indiretos, ~100 em orcamento_bdi, ~46 em bdi_tributos e ~2500 em orcamento_itens. Todos os registros filhos dos IDs antigos foram apagados em transação atômica e os orçamentos-pai marcados como deleted_at. Resultado: 4 orçamentos ativos sem duplicatas (755, 783_01, 747_05, 780_01).",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",
