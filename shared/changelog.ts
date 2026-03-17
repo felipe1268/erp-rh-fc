@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 499,
+    titulo: "Simulador — correção da sugestão de IA + prompt estruturado",
+    descricao: "Corrigido erro na chamada ao Gemini: thinkingBudget:0 incompatível com gemini-2.5-flash foi removido. Modelo trocado para gemini-2.0-flash com suporte nativo a JSON Schema (responseMimeType + responseSchema), eliminando falhas de parsing. Prompt aprimorado com as 16 fases típicas da construção civil brasileira para sequenciamento mais preciso.",
+    tipo: "correcao",
+    modulos: "Planejamento / Simulador",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 498,
     titulo: "Simulador de Cronograma por Orçamento Mensal",
     descricao: "Nova aba 'Simulador' no módulo Planejamento: o usuário informa o orçamento mensal máximo e o sistema distribui as atividades mês a mês respeitando o teto. Se não houver predecessoras definidas, a IA sugere a sequência construtiva automaticamente (fundação → estrutura → alvenaria → etc.). A grade de meses é editável: o usuário pode mover atividades entre meses com validação de orçamento em tempo real. Botão 'Adotar como Cronograma Oficial' cria uma nova revisão com as datas recalculadas.",
