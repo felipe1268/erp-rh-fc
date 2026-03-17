@@ -319,15 +319,6 @@ export default function OrcamentoBdiIndicadores({
     : bdiPct > BENCHMARK_BDI.max ? "alto"
     : "ok";
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span>Carregando dados do BDI...</span>
-      </div>
-    );
-  }
-
   const hasTributos = tributosChart.length > 0;
   const hasLc       = lcChart.length > 0;
   const hasIndiretos = indiretosModal.length > 0;
@@ -409,9 +400,9 @@ export default function OrcamentoBdiIndicadores({
       {waterfall.length > 2 && (() => {
         const maxVal = Math.max(...waterfall.map(d => d.total));
         const chartH = 220;
-        const barW   = 90;
-        const gap    = 60;
-        const padL   = 20;
+        const barW   = 130;
+        const gap    = 50;
+        const padL   = 55;
         const padT   = 30;
         const cols   = waterfall.length;
         const totalW = padL + cols * barW + (cols - 1) * gap + 20;
@@ -456,13 +447,13 @@ export default function OrcamentoBdiIndicadores({
                       {/* Barra */}
                       <rect x={x} y={yTop} width={barW} height={barHt} fill={d.cor} rx={3} ry={3} />
                       {/* Valor no topo da barra */}
-                      <text x={x + barW / 2} y={yTop - 5} textAnchor="middle" fontSize={9} fontWeight="600" fill="#334155">
-                        {`R$${(d.total / 1e6).toFixed(2)}M`}
+                      <text x={x + barW / 2} y={yTop - 5} textAnchor="middle" fontSize={8} fontWeight="600" fill="#334155">
+                        {formatBRL(d.total)}
                       </text>
                       {/* Incremento (delta) dentro da barra se houver espaço */}
                       {d.base > 0 && barHt > 20 && (
                         <text x={x + barW / 2} y={yTop + barHt / 2 + 4} textAnchor="middle" fontSize={8} fill="white" fontWeight="500">
-                          {`+R$${(d.delta / 1e6).toFixed(2)}M`}
+                          {`+${formatBRL(d.delta)}`}
                         </text>
                       )}
                       {/* Label no eixo X */}
@@ -809,7 +800,7 @@ export default function OrcamentoBdiIndicadores({
       )}
 
       {/* Sem dados de BDI */}
-      {!hasTributos && !hasLc && !hasIndiretos && bdiLinhas.length === 0 && (
+      {!isLoading && !hasTributos && !hasLc && !hasIndiretos && bdiLinhas.length === 0 && (
         <div className="rounded-xl border bg-amber-50 border-amber-200 p-6 text-center">
           <AlertTriangle className="h-8 w-8 text-amber-400 mx-auto mb-2" />
           <p className="font-semibold text-amber-800">Dados do BDI não importados</p>
