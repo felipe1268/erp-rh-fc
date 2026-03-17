@@ -25,27 +25,7 @@ export default defineConfig({
     target: 'es2020',
     minify: 'esbuild',
     reportCompressedSize: false,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return undefined;
-          // React e todo o ecossistema que depende dele ficam juntos
-          if (
-            id.includes("/react/") ||
-            id.includes("/react-dom/") ||
-            id.includes("/@radix-ui/") ||
-            id.includes("/lucide-react/") ||
-            id.includes("/@tanstack/react-query") ||
-            id.includes("/@trpc/")
-          ) return "vendor-react";
-          // Pesados independentes
-          if (id.includes("/recharts/") || id.includes("/d3-") || id.includes("/react-simple-maps/")) return "charts";
-          if (id.includes("/xlsx/") || id.includes("/jspdf/") || id.includes("/pdfmake/")) return "documents";
-          // Resto dos node_modules
-          return "vendor";
-        },
-      },
-    },
+    rollupOptions: {},
     chunkSizeWarningLimit: 800,
   },
   server: {
