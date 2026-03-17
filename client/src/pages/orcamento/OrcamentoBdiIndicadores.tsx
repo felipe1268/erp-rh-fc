@@ -149,14 +149,35 @@ export default function OrcamentoBdiIndicadores({
   }, [componentes, totalCusto, totalVenda, valorNegociado]);
 
   // ── Tributos detalhados ──────────────────────────────────────────
+  // REGRAS DE LIMPEZA:
+  // 1. Deduplica grupos A.x e B.x (mesma planilha listada duas vezes no template).
+  //    Mantém apenas o maior valor encontrado para cada sufixo numérico.
+  // 2. Exclui grupos C.x (ICMS, CPMF) e D.x (IPI) — impostos de mercadoria,
+  //    não aplicáveis a empresas de serviços de construção civil.
   const tributosChart = useMemo(() => {
-    return tributos
+    const seen = new Map<string, { label: string; aliquota: number; valor: number }>();
+    tributos
       .filter(t => !t.isHeader && n(t.aliquota) > 0)
-      .map(t => ({
-        label:    (t.codigo ? `${t.codigo} - ` : "") + (t.descricao ?? "?"),
-        aliquota: +(n(t.aliquota) * 100).toFixed(4),
-        valor:    n(t.valorCalculado),
-      }))
+      .forEach(t => {
+        const codigo = (t.codigo ?? "").trim();
+        // Exclui grupos C e D (ICMS, IPI, CPMF — não aplicáveis a serviços)
+        if (/^[CD]\./i.test(codigo)) return;
+        // Sufixo numérico: "A.7" → "7", "B.7" → "7" (mesmo tributo, grupos diferentes)
+        const sufixo = codigo.replace(/^[A-Z]\./, "");
+        const aliquota = +(n(t.aliquota) * 100).toFixed(4);
+        const valor = n(t.valorCalculado);
+        const entrada = seen.get(sufixo);
+        // Mantém grupo A preferencialmente; se B aparecer depois, só substitui se maior
+        if (!entrada || aliquota > entrada.aliquota) {
+          seen.set(sufixo, {
+            label: (codigo ? `${codigo} - ` : "") + (t.descricao ?? "?"),
+            aliquota,
+            valor,
+          });
+        }
+      });
+    return [...seen.values()]
+      .filter(t => t.aliquota > 0)
       .sort((a, b) => b.aliquota - a.aliquota);
   }, [tributos]);
 
@@ -173,10 +194,14 @@ export default function OrcamentoBdiIndicadores({
   }, [taxaComercio]);
 
   // ── Indiretos por modalidade ──────────────────────────────────────
+  // Filtra artefatos de parsing como "mês" que vêm de linhas de cabeçalho
+  const INDIRETOS_FILTRO = /^m[êe]s$/i;
   const indiretosModal = useMemo(() => {
     const map: Record<string, number> = {};
     indiretos.filter(i => !i.isHeader).forEach(i => {
       const mod = i.modalidade?.trim() || i.tipoContrato?.trim() || "Outros";
+      // Ignora artefatos de parsing (ex: "mês" capturado de cabeçalho da planilha)
+      if (INDIRETOS_FILTRO.test(mod) || mod.length < 2) return;
       map[mod] = (map[mod] ?? 0) + n(i.totalObra);
     });
     return Object.entries(map)
@@ -408,8 +433,9 @@ export default function OrcamentoBdiIndicadores({
       {hasTributos && (
         <div className="rounded-xl border bg-white p-4">
           <p className="text-sm font-semibold text-slate-700 mb-1">Tributos — Detalhamento por Imposto</p>
-          <p className="text-[10px] text-slate-500 mb-3">
-            Alíquotas aplicadas sobre o preço de venda · Total: {tributosChart.reduce((s,t)=>s+t.aliquota,0).toFixed(3)}%
+          <p className="text-[10px] text-slate-500 mb-1">
+            Alíquotas da planilha BDI · Total: {tributosChart.reduce((s,t)=>s+t.aliquota,0).toFixed(3)}%
+            · ICMS, IPI e CPMF (impostos de mercadoria) excluídos automaticamente — não aplicáveis a serviços de construção civil
           </p>
           <div className="flex flex-col md:flex-row gap-4">
             <ResponsiveContainer width="100%" height={Math.max(180, tributosChart.length * 38)}>
