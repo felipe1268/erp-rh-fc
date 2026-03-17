@@ -41,7 +41,15 @@ export default function ComprasRealocacao() {
 
   // ── Queries — todas usam o mesmo obraIdNum ──────────────────────────
   const { data: obras } = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
-  const obraAtual = obras?.find((o: any) => String(o.id) === obraFiltro);
+  const { data: orcamentosData } = trpc.orcamento.list.useQuery({ companyId }, { enabled: !!companyId });
+
+  // Apenas obras que possuem pelo menos 1 orçamento ativo vinculado
+  const obraIdsComOrcamento = new Set(
+    (orcamentosData ?? []).filter((o: any) => o.obraId != null).map((o: any) => o.obraId)
+  );
+  const obrasComOrcamento = (obras ?? []).filter((o: any) => obraIdsComOrcamento.has(o.id));
+
+  const obraAtual = obrasComOrcamento.find((o: any) => String(o.id) === obraFiltro);
 
   const { data: realocacoesData, isLoading: loadingRealoc, refetch: refetchRealoc } =
     trpc.purchase.listarRealocacoes.useQuery(
@@ -121,7 +129,7 @@ export default function ComprasRealocacao() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas as obras (consolidado)</SelectItem>
-                  {(obras ?? []).map((o: any) => (
+                  {obrasComOrcamento.map((o: any) => (
                     <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                   ))}
                 </SelectContent>

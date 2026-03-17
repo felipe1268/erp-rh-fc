@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 469,
+    titulo: "Realocação — Seletor de obra filtra apenas obras com orçamento vinculado",
+    descricao: "O seletor de obra na página de Realocações agora exibe apenas as obras que possuem pelo menos um orçamento ativo vinculado. Obras sem orçamento são omitidas do dropdown pois não possuem DI-08 cadastrado e não fazem sentido no contexto de saldo/realocação. A filtragem é feita no frontend: orcamentos são consultados e os obraIds são usados como filtro na lista de obras.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 468,
     titulo: "Realocação — Fluxo independente por obra (seletor único global)",
     descricao: "Refatoração completa da página de Realocações para modelo obra-cêntrico. Substituídos três filtros separados (filtroObraRisco, filtroObraSaldo, obraId do dialog) por UM único seletor de obra no cabeçalho da página. Todas as seções (painel saldo DI-08, aba Realocação de Verba, aba Reserva de Risco) passam a usar o mesmo obraFiltro global. Aviso visual exibido quando 'Todas as obras' está selecionado para evitar interpretações erradas do consolidado. Dialog de Nova Realocação pré-preenche a obra do filtro global (ou bloqueia criação se nenhuma obra estiver selecionada). Barra de progresso do DI-08 agora muda de cor: verde → laranja (>70%) → vermelho (>90%).",
