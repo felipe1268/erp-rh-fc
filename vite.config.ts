@@ -28,15 +28,21 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("react-dom") || id.includes("react/")) return "react-core";
-            if (id.includes("@tanstack/react-query") || id.includes("@trpc")) return "trpc-query";
-            if (id.includes("@radix-ui") || id.includes("lucide-react") || id.includes("tailwind")) return "ui-lib";
-            if (id.includes("date-fns") || id.includes("zod") || id.includes("superjson")) return "utils";
-            if (id.includes("recharts") || id.includes("d3-") || id.includes("react-simple-maps")) return "charts";
-            if (id.includes("xlsx") || id.includes("pdf") || id.includes("jspdf")) return "documents";
-            return "vendor";
-          }
+          if (!id.includes("node_modules")) return undefined;
+          // React e todo o ecossistema que depende dele ficam juntos
+          if (
+            id.includes("/react/") ||
+            id.includes("/react-dom/") ||
+            id.includes("/@radix-ui/") ||
+            id.includes("/lucide-react/") ||
+            id.includes("/@tanstack/react-query") ||
+            id.includes("/@trpc/")
+          ) return "vendor-react";
+          // Pesados independentes
+          if (id.includes("/recharts/") || id.includes("/d3-") || id.includes("/react-simple-maps/")) return "charts";
+          if (id.includes("/xlsx/") || id.includes("/jspdf/") || id.includes("/pdfmake/")) return "documents";
+          // Resto dos node_modules
+          return "vendor";
         },
       },
     },
