@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 467,
+    titulo: "Realocação de Verba — Saldo Disponível filtrado por Obra",
+    descricao: "Corrigido o painel 'Saldo Disponível para Realocação': adicionado seletor de obra no cabeçalho do painel. O DI-08 e as economias em compras agora são filtrados pela obra selecionada, pois cada obra tem sua própria reserva independente. O modo 'Todas as obras' continua mostrando o total consolidado. Backend atualizado: getSaldosRealocacaoGeral agora aceita obraId opcional.",
+    tipo: "correcao",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 466,
     titulo: "Realocação de Verba — Painel Saldo Disponível (DI-08 + Economia em Compras)",
     descricao: "Adicionado painel 'Saldo Disponível para Realocação' no topo da página de Realocações, visível antes das abas. O painel exibe 4 cards: (1) DI-08 Orçado — total da reserva 'Taxa de risco, Imprevistos e Pós Obra' consolidado por obra; (2) DI-08 Utilizado — soma de todos os débitos realizados da reserva; (3) Economia em Compras — soma das sobras de OCs aprovadas abaixo da meta de orçamento; (4) Total Disponível — soma do DI-08 disponível com as economias em compras, destacado em verde escuro. Inclui barra de progresso de utilização do DI-08. Nova query getSaldosRealocacaoGeral no backend (compras router), sem dependência de obra ou cotação específica.",

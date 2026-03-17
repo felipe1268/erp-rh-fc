@@ -1248,17 +1248,20 @@ Responda APENAS com um objeto JSON no formato:
     }),
 
   getSaldosRealocacaoGeral: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
 
-      // ── 1. DI-08 por obra (latest orcamento por obra) ──────────────────
+      // ── 1. DI-08: pega o latest orcamento por obra ─────────────────────
       const orcs = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId })
         .from(orcamentos)
-        .where(eq(orcamentos.companyId, input.companyId))
+        .where(and(
+          eq(orcamentos.companyId, input.companyId),
+          input.obraId ? eq(orcamentos.obraId, input.obraId) : undefined,
+        ))
         .orderBy(desc(orcamentos.id));
 
-      // latest per obra
+      // latest per obra (ignora orçamentos sem obraId)
       const latestPerObra = new Map<number, number>();
       for (const o of orcs) {
         if (o.obraId && !latestPerObra.has(o.obraId)) latestPerObra.set(o.obraId, o.id);
@@ -1273,10 +1276,10 @@ Responda APENAS com um objeto JSON no formato:
       }
       const di08Total = di08Rows.reduce((s, r) => s + n(r.valorAbsoluto), 0);
 
-      // débitos de risco por orcamentoId
-      let allDebitos: { orcamentoId: number | null; valor: string | null }[] = [];
+      // débitos de risco
+      let allDebitos: { valor: string | null }[] = [];
       if (latestOrcIds.length > 0) {
-        allDebitos = await db.select({ orcamentoId: comprasRiscoDebitos.orcamentoId, valor: comprasRiscoDebitos.valor })
+        allDebitos = await db.select({ valor: comprasRiscoDebitos.valor })
           .from(comprasRiscoDebitos)
           .where(inArray(comprasRiscoDebitos.orcamentoId, latestOrcIds));
       }
@@ -1284,12 +1287,12 @@ Responda APENAS com um objeto JSON no formato:
       const di08Disponivel = Math.max(0, di08Total - di08Usado);
 
       // ── 2. Sobras das compras abaixo da meta ──────────────────────────
-      const ocs = await db.select({ id: comprasOrdens.id })
-        .from(comprasOrdens)
-        .where(and(
-          eq(comprasOrdens.companyId, input.companyId),
-          inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
-        ));
+      const ocsConds: any[] = [
+        eq(comprasOrdens.companyId, input.companyId),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
+      ];
+      if (input.obraId) ocsConds.push(eq(comprasOrdens.obraId, input.obraId));
+      const ocs = await db.select({ id: comprasOrdens.id }).from(comprasOrdens).where(and(...ocsConds));
 
       let totalSobras = 0;
       if (ocs.length > 0) {

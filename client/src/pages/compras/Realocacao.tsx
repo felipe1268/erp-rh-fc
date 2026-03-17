@@ -30,6 +30,7 @@ export default function ComprasRealocacao() {
   const [valor, setValor] = useState("");
   const [motivo, setMotivo] = useState("");
   const [filtroObraRisco, setFiltroObraRisco] = useState("all");
+  const [filtroObraSaldo, setFiltroObraSaldo] = useState("all");
   const [desfazerModal, setDesfazerModal] = useState<{ id: number; valor: number; numeroCotacao: string | null } | null>(null);
   const [justificativa, setJustificativa] = useState("");
 
@@ -46,8 +47,9 @@ export default function ComprasRealocacao() {
     { enabled: !!companyId }
   );
 
+  const obraIdSaldo = filtroObraSaldo !== "all" ? parseInt(filtroObraSaldo) : undefined;
   const { data: saldos, isLoading: loadingSaldos } = trpc.compras.getSaldosRealocacaoGeral.useQuery(
-    { companyId },
+    { companyId, obraId: obraIdSaldo },
     { enabled: !!companyId }
   );
 
@@ -93,10 +95,26 @@ export default function ComprasRealocacao() {
 
         {/* ── Painel: Saldo Disponível para Realocação ───────────────── */}
         <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Wallet className="h-5 w-5 text-emerald-600" />
-            <h2 className="text-sm font-semibold text-emerald-800 uppercase tracking-wider">Saldo Disponível para Realocação</h2>
-            {loadingSaldos && <Loader2 className="h-4 w-4 animate-spin text-emerald-500 ml-1" />}
+          <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-emerald-600" />
+              <h2 className="text-sm font-semibold text-emerald-800 uppercase tracking-wider">Saldo Disponível para Realocação</h2>
+              {loadingSaldos && <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-emerald-700 font-medium">Obra:</span>
+              <Select value={filtroObraSaldo} onValueChange={setFiltroObraSaldo}>
+                <SelectTrigger className="h-7 text-xs w-52 bg-white border-emerald-200">
+                  <SelectValue placeholder="Todas as obras" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as obras</SelectItem>
+                  {(obras ?? []).map((o: any) => (
+                    <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {/* DI-08 Total orçado */}
