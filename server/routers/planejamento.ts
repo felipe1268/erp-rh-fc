@@ -827,6 +827,61 @@ export const planejamentoRouter = router({
       return { curvaPlanejada, curvaBaseline, curvaRealizada, curvaTendencia };
     }),
 
+  // Retorna a curva planejada de cada revisão aprovada do projeto (para toggles na Curva S)
+  getCurvasTodasRevisoes: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const revisoes = await db.select().from(planejamentoRevisoes)
+        .where(and(
+          eq(planejamentoRevisoes.projetoId, input.projetoId),
+          eq(planejamentoRevisoes.status, "aprovada"),
+        ))
+        .orderBy(asc(planejamentoRevisoes.numero));
+
+      function gerarCurva(ativs: any[]) {
+        const folhas = ativs.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
+        if (!folhas.length) return [];
+        const pesoBruto = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+        const usarIgual = pesoBruto === 0;
+        const pesoTotal = usarIgual ? folhas.length : pesoBruto;
+        const dates: Map<string, number> = new Map();
+        folhas.forEach((a: any) => {
+          const inicio  = new Date(a.dataInicio);
+          const fim     = new Date(a.dataFim);
+          const dur     = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (7 * 86400000)));
+          const pAtiv   = usarIgual ? 1 : n(a.pesoFinanceiro);
+          const semPeso = pAtiv / dur / pesoTotal * 100;
+          let cur = new Date(inicio);
+          for (let i = 0; i < dur; i++) {
+            const key = cur.toISOString().split("T")[0];
+            dates.set(key, (dates.get(key) ?? 0) + semPeso);
+            cur = new Date(cur.getTime() + 7 * 86400000);
+          }
+        });
+        const sorted = [...dates.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+        let acum = 0;
+        return sorted.map(([semana, val]) => {
+          acum = Math.min(100, acum + val);
+          return { semana, acumulado: +acum.toFixed(2) };
+        });
+      }
+
+      const resultado = await Promise.all(revisoes.map(async rev => {
+        const ativs = await db.select().from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, rev.id));
+        return {
+          revisaoId:  rev.id,
+          numero:     rev.numero,
+          descricao:  rev.descricao ?? `Rev. ${String(rev.numero).padStart(2, "0")}`,
+          isBaseline: rev.isBaseline,
+          curva:      gerarCurva(ativs),
+        };
+      }));
+
+      return resultado;
+    }),
+
   // ── Cronograma de Compras ──────────────────────────────────────────────────
   listarCompras: protectedProcedure
     .input(z.object({ projetoId: z.number(), revisao: z.number().optional() }))

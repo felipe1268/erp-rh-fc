@@ -558,7 +558,7 @@ export default function PlanejamentoDetalhe() {
           />
         )}
         {aba === "curva-s" && (
-          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} proj={proj} avancoAtual={avancoAtual} fPct={fPct} />
+          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} />
         )}
         {aba === "avanco" && (
           <AvancoSemanal
@@ -3087,7 +3087,27 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: CURVA S
 // ═════════════════════════════════════════════════════════════════════════════
-function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
+// Paleta de cores para revisões anteriores (distintas, mas secundárias)
+const REV_COLORS = ["#7c3aed","#0891b2","#d97706","#be185d","#0d9488","#ea580c","#9333ea","#0284c7"];
+
+function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, revisaoAtiva }: any) {
+  // Revisões anteriores com toggles
+  const { data: todasRevisoes = [] } = trpc.planejamento.getCurvasTodasRevisoes.useQuery(
+    { projetoId }, { enabled: !!projetoId }
+  );
+  // Revisões intermediárias (aprovadas, não é a atual nem a baseline)
+  const revisoesAnteriores = useMemo(() =>
+    todasRevisoes.filter((r: any) =>
+      r.revisaoId !== revisaoAtiva?.id && !r.isBaseline && r.curva.length > 0
+    ), [todasRevisoes, revisaoAtiva]);
+
+  const [revsVisiveis, setRevsVisiveis] = useState<Set<number>>(new Set());
+  const toggleRev = (id: number) => setRevsVisiveis(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
   const merged = useMemo(() => {
     if (!curvaData) return [];
     const map: Record<string, any> = {};
@@ -3099,15 +3119,18 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
     add(curvaData.curvaPlanejada, "planejada");
     add(curvaData.curvaRealizada, "realizada");
     add(curvaData.curvaTendencia, "tendencia");
+    // Adiciona curvas das revisões visíveis
+    revisoesAnteriores.forEach((r: any) => {
+      if (revsVisiveis.has(r.revisaoId)) {
+        add(r.curva, `rev_${r.revisaoId}`);
+      }
+    });
     return Object.values(map).sort((a, b) => a.semana.localeCompare(b.semana));
-  }, [curvaData]);
+  }, [curvaData, revisoesAnteriores, revsVisiveis]);
 
-  // Mapa: data ISO → "Sem 01", "Sem 02", etc.
   const semanaLabel = useMemo(() => {
     const m: Record<string, string> = {};
-    merged.forEach((p, i) => {
-      m[p.semana] = `Sem ${String(i + 1).padStart(2, "0")}`;
-    });
+    merged.forEach((p, i) => { m[p.semana] = `Sem ${String(i + 1).padStart(2, "0")}`; });
     return m;
   }, [merged]);
 
@@ -3133,7 +3156,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
 
   return (
     <div className="space-y-4">
-      {/* Legenda */}
+      {/* Legenda fixa */}
       <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
         {[
           { color: "#1e40af", dash: false, width: 2, label: "Baseline (Rev 00)" },
@@ -3147,6 +3170,33 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
             <span className="text-slate-600">{l.label}</span>
           </div>
         ))}
+        {/* Separador + toggles de revisões anteriores */}
+        {revisoesAnteriores.length > 0 && (
+          <>
+            <div className="w-px bg-slate-200 self-stretch mx-1" />
+            <span className="text-slate-400 self-center">Revisões anteriores:</span>
+            {revisoesAnteriores.map((r: any, idx: number) => {
+              const color = REV_COLORS[idx % REV_COLORS.length];
+              const ativo = revsVisiveis.has(r.revisaoId);
+              return (
+                <button
+                  key={r.revisaoId}
+                  type="button"
+                  onClick={() => toggleRev(r.revisaoId)}
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] transition-all
+                    ${ativo
+                      ? "border-transparent text-white"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
+                  style={ativo ? { backgroundColor: color, borderColor: color } : {}}
+                >
+                  <svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4"
+                    stroke={ativo ? "white" : color} strokeWidth="2" strokeDasharray="3 2" /></svg>
+                  {r.descricao}
+                </button>
+              );
+            })}
+          </>
+        )}
       </div>
 
       {/* Gráfico */}
@@ -3155,7 +3205,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
           Curva S — Avanço Físico Acumulado
         </p>
         <p className="text-xs text-slate-400 mb-3">
-          Realizado atual: <strong style={{ color: "#4169E1" }}>{fPct(avancoAtual)}</strong>
+          Realizado atual: <strong style={{ color: "#22c55e" }}>{fPct(avancoAtual)}</strong>
           {proj.dataTerminoContratual && ` · Prazo: ${proj.dataTerminoContratual}`}
         </p>
         <ResponsiveContainer width="100%" height={360}>
@@ -3168,17 +3218,32 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
             <Tooltip formatter={(v: any) => `${n(v).toFixed(1)}%`}
               labelFormatter={l => {
                 const [y, m, d] = String(l).split("-");
-                const dataBR = `${d}/${m}/${y}`;
-                return `${semanaLabel[l] ?? l} (${dataBR})`;
+                return `${semanaLabel[l] ?? l} (${d}/${m}/${y})`;
               }} />
-            {/* Linha "hoje" */}
             {semanas.includes(hoje) && (
               <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
             )}
+            {/* Linhas fixas */}
             <Line type="monotone" dataKey="baseline"  name="Baseline"       stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls />
             <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls />
             <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} connectNulls />
             <Line type="monotone" dataKey="tendencia" name="Tendência"      stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
+            {/* Linhas de revisões anteriores (quando ativas) */}
+            {revisoesAnteriores.map((r: any, idx: number) =>
+              revsVisiveis.has(r.revisaoId) ? (
+                <Line
+                  key={r.revisaoId}
+                  type="monotone"
+                  dataKey={`rev_${r.revisaoId}`}
+                  name={r.descricao}
+                  stroke={REV_COLORS[idx % REV_COLORS.length]}
+                  strokeWidth={1.5}
+                  strokeDasharray="6 3"
+                  dot={false}
+                  connectNulls
+                />
+              ) : null
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -3187,9 +3252,10 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
       <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 text-xs text-slate-600 space-y-1">
         <p className="font-semibold text-slate-700 mb-2">Como interpretar</p>
         <p>🔵 <strong>Baseline</strong>: Plano original congelado (Rev 00). Referência imutável.</p>
-        <p>🟠 <strong>Revisão Atual</strong>: Cronograma vigente aprovado.</p>
+        <p>🔴 <strong>Revisão Atual</strong>: Cronograma vigente aprovado.</p>
         <p>🟢 <strong>Realizado</strong>: Progresso físico lançado semanalmente. Acima da revisão = adiantado.</p>
-        <p>🟣 <strong>Tendência</strong>: Projeção baseada no ritmo atual. Indica data estimada de conclusão.</p>
+        <p>🟢 <strong>Tendência</strong>: Projeção baseada no ritmo atual. Indica data estimada de conclusão.</p>
+        {revisoesAnteriores.length > 0 && <p>⚙️ <strong>Revisões anteriores</strong>: Ative os botões acima para comparar cronogramas de revisões anteriores.</p>}
       </div>
     </div>
   );
