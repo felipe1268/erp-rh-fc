@@ -1599,7 +1599,7 @@ export default function Cotacoes() {
                 Voltar
               </Button>
               <Button
-                disabled={justificativaCancelar.trim().length < 3 || cancelarAprovacao.isPending}
+                disabled={justificativaCancelar.trim().length < 1 || cancelarAprovacao.isPending}
                 onClick={() => {
                   if (!showDetalhe) return;
                   cancelarAprovacao.mutate({ cotacaoId: showDetalhe, companyId, justificativa: justificativaCancelar.trim() });

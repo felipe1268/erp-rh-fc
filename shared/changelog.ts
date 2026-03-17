@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 472,
+    titulo: "Cotações — Diagnóstico: Cancelar Aprovação — log de role + mínimo de 1 char",
+    descricao: "Adicionado log no servidor para depurar a mutation cancelarAprovacaoCotacao: exibe cotacaoId, companyId e role do usuário ao chamar o endpoint. Reduzido mínimo de caracteres para justificativa de 3 para 1 (frontend e backend) para eliminar possível bloqueio de UX. O log permite identificar se o erro é de role incorreto, companyId inválido ou outra causa.",
+    tipo: "correcao",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 471,
     titulo: "Cotações — Corrigido erro ao excluir cotação com OC vinculada",
     descricao: "Corrigido o erro 'Failed query: delete from compras_cotacoes' ao tentar excluir cotações que possuíam OC gerada. A função excluirCotacao agora faz cascata completa na ordem correta: (1) deleta itens das OCs vinculadas; (2) deleta as OCs; (3) reverte status da SC para 'pendente'; (4) deleta respostas e participantes (fornecedores) da cotação; (5) deleta itens da cotação; (6) deleta a cotação. Anteriormente a função só deletava os itens da cotação e tentava deletar a cotação diretamente, quebrando a FK constraint de compras_ordens.cotacao_id.",

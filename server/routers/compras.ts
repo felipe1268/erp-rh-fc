@@ -1727,10 +1727,12 @@ Responda APENAS com um objeto JSON no formato:
     .input(z.object({
       cotacaoId:    z.number(),
       companyId:    z.number(),
-      justificativa: z.string().min(3, "Informe a justificativa"),
+      justificativa: z.string().min(1, "Informe a justificativa"),
     }))
     .mutation(async ({ input, ctx }) => {
-      if ((ctx.user as any)?.role !== "admin_master") {
+      const userRole = (ctx.user as any)?.role;
+      console.log(`[CancelarAprovacao] cotacaoId=${input.cotacaoId} companyId=${input.companyId} userRole=${userRole}`);
+      if (userRole !== "admin_master") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Administrador Master pode cancelar uma aprovação de cotação." });
       }
       const db = await getDb();
