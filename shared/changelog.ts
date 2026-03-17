@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 451,
+    titulo: "BDI — Gráfico Tributos: labels curtas no eixo Y sem sobreposição",
+    descricao: "O gráfico 'Tributos — Detalhamento por Imposto' exibia labels compridas (ex: 'DI-03 - COFINS - Financiamento da Seguridade Social') que quebravam em 3 linhas e se sobrepunham. Adicionado campo shortLabel = 'DI-03 · COFINS' extraindo apenas a sigla do tributo. YAxis agora usa shortLabel (width=145, fontSize=11). Altura por barra aumentada de 38 para 52px. Tooltip mostra o nome completo ao passar o mouse. Fallback (Fonte 2) também recebe shortLabel.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 450,
     titulo: "Dashboard — Top 15 Insumos: maior valor no topo do gráfico",
     descricao: "O gráfico horizontal 'Top 15 Insumos — Participação no Custo (%)' exibia os insumos em ordem crescente (menor no topo, maior na base). Removido o .reverse() que invertia a ordenação após o .sort() descendente. Agora o insumo de maior custo aparece sempre no topo do gráfico, facilitando a leitura imediata.",

@@ -202,8 +202,12 @@ export default function OrcamentoBdiIndicadores({
           // Usa valorAbsoluto do banco (calculado pelo Excel com a base correta do BDI).
           // Só usa fallback (totalVenda × alíquota) se o valor não foi gravado.
           const valorDB = n(l.valorAbsoluto);
+          const fullDesc = String(l.descricao ?? "?");
+          // Sigla curta = primeira "palavra" antes do " - " (ex: "PIS", "COFINS", "IRPJ")
+          const sigla    = fullDesc.split(/\s*[-–]\s*/)[0]?.trim() ?? fullDesc.slice(0, 10);
           return {
-            label:    `${codigo} - ${l.descricao ?? "?"}`,
+            label:      `${codigo} - ${fullDesc}`,
+            shortLabel: `${codigo} · ${sigla}`,
             aliquota,
             valor:    valorDB > 0 ? valorDB : (totalVenda > 0 ? (aliquota / 100) * totalVenda : 0),
             ordem:    ORDEM_DI[codigo] ?? 99,
@@ -218,7 +222,7 @@ export default function OrcamentoBdiIndicadores({
     // com o "Adicional IRPJ" (A.4 = 15%) que normalmente não faz parte do BDI operacional.
     const fromTributos = tributos.filter(t => !t.isHeader && n(t.aliquota) > 0);
     if (fromTributos.length > 0) {
-      const seen = new Map<string, { label: string; aliquota: number; valor: number }>();
+      const seen = new Map<string, { label: string; shortLabel: string; aliquota: number; valor: number }>();
       fromTributos.forEach(t => {
         const codigo = (t.codigo ?? "").trim();
         if (/^[CD]\./i.test(codigo)) return;
@@ -227,8 +231,11 @@ export default function OrcamentoBdiIndicadores({
         const entrada = seen.get(sufixo);
         // Mantém a alíquota MENOR (evita duplicar IRPJ regular com o Adicional)
         if (!entrada || aliquota < entrada.aliquota) {
+          const fullLabel = (codigo ? `${codigo} - ` : "") + (t.descricao ?? "?");
+          const sigla = (t.descricao ?? "").split(/\s*[-–]\s*/)[0]?.trim().slice(0, 12) ?? codigo;
           seen.set(sufixo, {
-            label: (codigo ? `${codigo} - ` : "") + (t.descricao ?? "?"),
+            label: fullLabel,
+            shortLabel: codigo ? `${codigo} · ${sigla}` : sigla,
             aliquota,
             valor: totalVenda > 0 ? (aliquota / 100) * totalVenda : n(t.valorCalculado),
           });
@@ -561,13 +568,24 @@ export default function OrcamentoBdiIndicadores({
               : " · Fonte: aba Tributos Fiscais (grupos A/B) · ICMS, IPI e CPMF excluídos automaticamente"}
           </p>
           <div className="flex flex-col md:flex-row gap-4">
-            <ResponsiveContainer width="100%" height={Math.max(180, tributosChart.length * 38)}>
-              <BarChart data={tributosChart} layout="vertical" margin={{ top: 0, right: 60, left: 8, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={Math.max(200, tributosChart.length * 52)}>
+              <BarChart data={tributosChart} layout="vertical" margin={{ top: 4, right: 60, left: 8, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                 <XAxis type="number" tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-                <YAxis dataKey="label" type="category" width={180} tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: any, name: string) => name === "aliquota" ? [`${v}%`, "Alíquota"] : [formatBRL(v), "Valor"]} />
-                <Bar dataKey="aliquota" name="aliquota" fill="#ef4444" radius={[0,3,3,0]} barSize={16} />
+                <YAxis
+                  dataKey="shortLabel"
+                  type="category"
+                  width={145}
+                  tick={{ fontSize: 11, fill: "#475569" }}
+                />
+                <Tooltip
+                  formatter={(v: any, name: string) => name === "aliquota" ? [`${v}%`, "Alíquota"] : [formatBRL(v), "Valor"]}
+                  labelFormatter={(label: string) => {
+                    const item = tributosChart.find((t: any) => t.shortLabel === label);
+                    return item?.label ?? label;
+                  }}
+                />
+                <Bar dataKey="aliquota" name="aliquota" fill="#ef4444" radius={[0,3,3,0]} barSize={22} />
               </BarChart>
             </ResponsiveContainer>
           </div>
