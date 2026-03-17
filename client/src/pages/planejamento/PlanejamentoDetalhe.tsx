@@ -157,6 +157,7 @@ export default function PlanejamentoDetalhe() {
   const { user } = useAuth();
   const { selectedCompany } = useCompany();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
+  const [semanaVisualizacao, setSemanaVisualizacao] = useState<string | null>(null);
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
   const [overIdx, setOverIdx]   = useState<number | null>(null);
@@ -316,15 +317,15 @@ export default function PlanejamentoDetalhe() {
     return Math.min(100, ponderado);
   }, [atividades, avancosMap]);
 
-  // Previsto para hoje (último ponto da curvaPlanejada com semana <= hoje)
+  // Previsto acumulado: usa semana visualizada pela aba ativa; cai em hoje se não há aba semanal ativa
   const avancoPrevistoDia = useMemo(() => {
     if (!curvaData?.curvaPlanejada?.length) return null;
-    const hoje = new Date().toISOString().split("T")[0];
+    const ref = semanaVisualizacao ?? new Date().toISOString().split("T")[0];
     const passados = (curvaData.curvaPlanejada as { semana: string; acumulado: number }[])
-      .filter(p => p.semana <= hoje);
+      .filter(p => p.semana <= ref);
     if (passados.length === 0) return 0;
     return passados[passados.length - 1].acumulado;
-  }, [curvaData]);
+  }, [curvaData, semanaVisualizacao]);
 
   if (loadingProj) return (
     <DashboardLayout>
@@ -567,6 +568,7 @@ export default function PlanejamentoDetalhe() {
             atividades={atividades}
             avancos={avancos}
             utils={utils}
+            onSemanaChange={setSemanaVisualizacao}
           />
         )}
         {aba === "revisoes" && (
@@ -594,6 +596,7 @@ export default function PlanejamentoDetalhe() {
             isAdminMaster={isAdminMaster}
             initialSemana={refisInitSemana}
             onInitialSemanaConsumed={() => setRefisInitSemana(null)}
+            onSemanaChange={setSemanaVisualizacao}
           />
         )}
         {aba === "lob" && (
@@ -3308,8 +3311,9 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: AVANÇO SEMANAL
 // ═════════════════════════════════════════════════════════════════════════════
-function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: any) {
-  const [semanaAtual, setSemanaAtual] = useState(() => toMonday(new Date()));
+function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, onSemanaChange }: any) {
+  const [semanaAtual, setSemanaAtualRaw] = useState(() => toMonday(new Date()));
+  const setSemanaAtual = (s: string) => { setSemanaAtualRaw(s); onSemanaChange?.(s); };
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
   const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [importando, setImportando] = useState(false);
@@ -7010,8 +7014,9 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_, isAdminMaster, initialSemana, onInitialSemanaConsumed }: any) {
-  const [semana, setSemana] = useState(() => toMonday(new Date()));
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_, isAdminMaster, initialSemana, onInitialSemanaConsumed, onSemanaChange }: any) {
+  const [semana, setSemanaRaw] = useState(() => toMonday(new Date()));
+  const setSemana = (s: string) => { setSemanaRaw(s); onSemanaChange?.(s); };
   const [obs, setObs] = useState("");
   const [collapsedGrupos, setCollapsedGrupos] = useState<Set<string | number>>(new Set());
 

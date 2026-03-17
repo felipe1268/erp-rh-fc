@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 491,
+    titulo: "Barra de Avanço Físico sincroniza com semana selecionada",
+    descricao: "A barra 'Previsto' no topo da página agora acompanha a semana visualizada nas abas Avanço Semanal e REFIS. Ao navegar para semanas futuras (ex: Semana 18 = 67.8% previsto), a barra superior reflete o valor correto em vez de exibir sempre o previsto de hoje.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 490,
     titulo: "Avanço Semanal — Realizado Acumulado não zera em semanas futuras",
     descricao: "Corrigido: ao navegar para semanas futuras sem avanço registrado, o 'Realizado (Acum.)' e a coluna '% Acumulado' agora exibem o avanço mais recente registrado para cada atividade (qualquer semana ≤ semana selecionada), em vez de zerar.",
