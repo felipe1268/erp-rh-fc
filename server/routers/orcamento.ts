@@ -807,21 +807,31 @@ function parsearAbaIndiretos(rows: any[][], companyId: number, orcamentoId: numb
       // ── CI-01: Mão de obra — col mapping original ─────────────────────────
       // Só processa se col[0] for dígito (linha real, não sub-header)
       if (!c0.match(/^\d+$/)) continue;
-      const qty       = toNum(row[9]);
+
+      // Quantidade: SOMENTE linhas com valor numérico > 0 na célula de quantidade estão alocadas.
+      // Célula em branco OU valor 0 = funcionário NÃO está alocado nesta obra → custo = R$0.
+      const rawQty    = row[9];
+      const qty       = toNum(rawQty);   // '' → 0, 0 → 0, 0.5 → 0.5, 1 → 1
       const meses     = toNum(row[11]);
       const sal       = toNum(row[12]);
       const bonus     = toNum(row[13]);
       const decTer    = toNum(row[14]);
       const vh        = toNum(row[15]);
-      const totalMes  = toNum(row[16]) || toNum(row[17]) || (sal + bonus);
-      const totalObra = totalMes * (meses || 1);
+      // "Total c/ HE" é a última coluna de dados (aprox. row[19..20]).
+      // Prioriza o valor calculado pelo Excel que inclui HE e encargos.
+      const totalHE   = toNum(row[20]) || toNum(row[19]);
+      const totalMes  = totalHE > 0 ? totalHE
+                        : (toNum(row[16]) || toNum(row[17]) || (sal + bonus));
+      // Regra de negócio: qty=0 explícito → funcionário NÃO está alocado nesta obra → custo=0.
+      // Salário já vem pré-rateado pelo usuário (ex: 0,5 FTE → salário já é 50% do valor total).
+      const totalObra = qty === 0 ? 0 : totalMes * (meses || 1);
       linhas.push({
         orcamentoId, companyId, secao, isHeader: false,
         codigo:               c3.substring(0, 30),
         descricao:            c4.substring(0, 255),
         modalidade:           String(row[7] || '').trim().substring(0, 50),
         tipoContrato:         String(row[8] || '').trim().substring(0, 30),
-        quantidade:           fix2(qty || 1),
+        quantidade:           fix2(qty),   // armazena qty real (0 = não alocado nesta obra)
         mesesObra:            fix2(meses),
         salarioBase:          fix2(sal),
         bonusMensal:          fix2(bonus),

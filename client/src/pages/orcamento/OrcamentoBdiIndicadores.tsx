@@ -250,12 +250,16 @@ export default function OrcamentoBdiIndicadores({
   const INDIRETOS_FILTRO = /^m[êe]s$/i;
   const indiretosModal = useMemo(() => {
     const map: Record<string, number> = {};
-    indiretos.filter(i => !i.isHeader).forEach(i => {
-      const mod = i.modalidade?.trim() || i.tipoContrato?.trim() || "Outros";
-      // Ignora artefatos de parsing (ex: "mês" capturado de cabeçalho da planilha)
-      if (INDIRETOS_FILTRO.test(mod) || mod.length < 2) return;
-      map[mod] = (map[mod] ?? 0) + n(i.totalObra);
-    });
+    indiretos
+      .filter(i => !i.isHeader)
+      // Regra: qty=0 explícito → não alocado nesta obra → ignorar
+      .filter(i => n(i.quantidade) > 0 && n(i.totalObra) > 0)
+      .forEach(i => {
+        const mod = i.modalidade?.trim() || i.tipoContrato?.trim() || "Outros";
+        // Ignora artefatos de parsing (ex: "mês" capturado de cabeçalho da planilha)
+        if (INDIRETOS_FILTRO.test(mod) || mod.length < 2) return;
+        map[mod] = (map[mod] ?? 0) + n(i.totalObra);
+      });
     return Object.entries(map)
       .map(([label, valor]) => ({ label, valor }))
       .filter(d => d.valor > 0)
