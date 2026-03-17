@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -2869,10 +2870,19 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                             {a.nome}
                           </span>
                           {atrasada && (
-                            <AlertTriangle
-                              className="h-3 w-3 text-red-500 ml-1 shrink-0 cursor-help"
-                              title={`⚠️ Atividade atrasada\nData de fim: ${fmtBR(a.dataFim)}\nAvanço atual: ${avanco.toFixed(1)}%\nEsta atividade deveria ter sido concluída mas ainda não atingiu 100%.`}
-                            />
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertTriangle className="h-3 w-3 text-red-500 ml-1 shrink-0 cursor-pointer" />
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-[220px] text-xs">
+                                  <p className="font-semibold text-red-600 mb-1">⚠️ Atividade atrasada</p>
+                                  <p>Data de fim: <span className="font-medium">{fmtBR(a.dataFim)}</span></p>
+                                  <p>Avanço atual: <span className="font-medium">{avanco.toFixed(1)}%</span></p>
+                                  <p className="mt-1 text-slate-500">Esta atividade deveria estar concluída mas ainda não atingiu 100%.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           )}
                         </div>
                       </td>
