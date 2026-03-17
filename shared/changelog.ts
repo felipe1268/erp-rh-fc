@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 444,
+    titulo: "OrcamentoDashTab — Refactor: gráficos em % e correção Margem vs BDI",
+    descricao: "Todos os gráficos da aba Dashboard do Orçamento agora exibem apenas percentuais (%). RadialBarChart quebrado (exibia '29999999999999' por erro de ponto flutuante) substituído por PieChart donut limpo mostrando Margem LC, Tributos e Overhead CI. EAP Nível 1 e Top 15 Insumos convertidos para eixo X em %. Tipos de Insumo convertido para %. Botão '▼ Ver valores em R$' nos cards de Custo, Margem e Tipos de Insumo. Valores R$ disponíveis no tooltip (hover) em todos os gráficos. Imports não utilizados (RadialBarChart, RadialBar, Legend, LineChart, Area) removidos.",
+    tipo: "melhoria",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",
