@@ -262,7 +262,11 @@ export default function OrcamentoBdiIndicadores({
         valor: n(l.valorAbsoluto),
       }))
       .filter(d => d.valor > 0)
-      .sort((a, b) => b.valor - a.valor);
+      .sort((a, b) => {
+        const numA = parseInt(a.label.match(/CI-(\d+)/)?.[1] ?? "99");
+        const numB = parseInt(b.label.match(/CI-(\d+)/)?.[1] ?? "99");
+        return numA - numB;
+      });
   }, [bdiLinhas]);
 
   // ── Análise de sensibilidade ─────────────────────────────────────
