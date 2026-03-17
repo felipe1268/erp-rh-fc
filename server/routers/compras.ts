@@ -1034,8 +1034,13 @@ Responda APENAS com um objeto JSON no formato:
     .mutation(async ({ input }) => {
       const db = await getDb();
 
+      // 0. Buscar a cotação para pegar solicitacaoId (revertida ao final)
+      const [cot] = await db.select({ solicitacaoId: comprasCotacoes.solicitacaoId })
+        .from(comprasCotacoes)
+        .where(eq(comprasCotacoes.id, input.id));
+
       // 1. Encontrar OCs vinculadas a esta cotação
-      const ocs = await db.select({ id: comprasOrdens.id, solicitacaoId: comprasOrdens.solicitacaoId })
+      const ocs = await db.select({ id: comprasOrdens.id })
         .from(comprasOrdens)
         .where(eq(comprasOrdens.cotacaoId, input.id));
 
@@ -1047,14 +1052,13 @@ Responda APENAS com um objeto JSON no formato:
 
         // 3. Deletar as OCs
         await db.delete(comprasOrdens).where(inArray(comprasOrdens.id, ocIds));
+      }
 
-        // 4. Reverter SC(s) para "pendente" (sem cotação ativa)
-        const scIds = ocs.map(o => o.solicitacaoId).filter(Boolean) as number[];
-        if (scIds.length > 0) {
-          await db.update(comprasSolicitacoes)
-            .set({ status: "pendente" })
-            .where(inArray(comprasSolicitacoes.id, scIds));
-        }
+      // 4. Reverter SC para "pendente" (usando solicitacaoId da cotação)
+      if (cot?.solicitacaoId) {
+        await db.update(comprasSolicitacoes)
+          .set({ status: "pendente" })
+          .where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
       }
 
       // 5. Deletar respostas e participantes da cotação
