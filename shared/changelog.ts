@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 460,
+    titulo: "Curva ABC — clique em item expande painel de análise detalhada do insumo",
+    descricao: "Cada linha do ranking ABC agora é clicável: ao clicar, expande um painel abaixo com análise completa do insumo — descrição completa, código, tipo, unidade, quantidade total usada na obra, preço unitário base, preço unitário com encargos, custo total destacado e % acumulado. Painel colapsável com chevron animado; a cor do painel acompanha a classe ABC do item (azul A, azul-claro B, cinza C).",
+    tipo: "feature",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 459,
     titulo: "Indicadores Financeiros — redesign dos cards: R$ como valor principal, % como badge colorido",
     descricao: "Redesenhados os 6 cards de Indicadores Financeiros do Contrato para hierarquia visual correta: R$ em text-xl font-extrabold como valor primário; % como badge colorido (pill branca sobre fundo da cor) no canto superior direito do card; borda esquerda colorida (border-l-4) por tipo; label e descrição em tipografia menor. Antes: % em text-3xl dominava o card e o R$ era minúsculo (text-xs). Agora: proporção adequada entre os dois valores.",

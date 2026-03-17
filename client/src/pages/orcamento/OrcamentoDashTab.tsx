@@ -83,6 +83,9 @@ export default function OrcamentoDashTab({
   const [detailCard, setDetailCard] = useState<string | null>(null);
   const toggleDetail = (id: string) => setDetailCard(p => p === id ? null : id);
 
+  /* ABC: linha expandida */
+  const [expandedAbcIdx, setExpandedAbcIdx] = useState<number | null>(null);
+
   // ── 1. Composição do Custo (donut) ──────────────────────────────
   const custoOutros = Math.max(0, totalCusto - totalMat - totalMdo);
   const custoDonut = useMemo(() => [
@@ -155,11 +158,20 @@ export default function OrcamentoDashTab({
     return sorted.slice(0, 30).map((ins, idx) => {
       acc += n(ins.percentualTotal) * 100;
       return {
-        idx:   idx + 1,
-        label: ins.descricao?.slice(0, 18) ?? `#${idx + 1}`,
-        custo: n(ins.custoTotal),
+        idx:    idx + 1,
+        label:  ins.descricao?.slice(0, 18) ?? `#${idx + 1}`,
+        custo:  n(ins.custoTotal),
         pctVal: +(n(ins.percentualTotal) * 100).toFixed(2),
-        acc:   +acc.toFixed(2),
+        acc:    +acc.toFixed(2),
+        // campos completos para o painel de detalhe
+        descricaoFull:        ins.descricao ?? "—",
+        codigo:               ins.codigo ?? "—",
+        tipo:                 ins.tipo ?? "—",
+        unidade:              ins.unidade ?? "—",
+        quantidadeTotal:      n(ins.quantidadeTotal),
+        precoUnitBase:        n(ins.precoUnitBase),
+        precoUnitComEncargos: n(ins.precoUnitComEncargos),
+        curvaAbc:             ins.curvaAbc ?? "—",
       };
     });
   }, [insumos]);
@@ -488,54 +500,115 @@ export default function OrcamentoDashTab({
             </div>
 
             {/* Gráfico horizontal — barra + % + R$ visíveis diretamente */}
-            <div className="space-y-1.5">
+            <div className="space-y-0.5">
               {top20.map((d) => {
-                const barPct = (d.pctVal / maxPct) * 100;
-                const color  = classColor(d.acc);
-                const bg     = classBg(d.acc);
-                const tag    = classTag(d.acc);
+                const barPct   = (d.pctVal / maxPct) * 100;
+                const color    = classColor(d.acc);
+                const bg       = classBg(d.acc);
+                const tag      = classTag(d.acc);
+                const isOpen   = expandedAbcIdx === d.idx;
                 return (
-                  <div
-                    key={d.idx}
-                    className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors"
-                    style={{ background: "transparent" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = bg; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
-                  >
-                    {/* Rank */}
-                    <span style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", width: 20, textAlign: "right", flexShrink: 0 }}>
-                      {d.idx}
-                    </span>
+                  <div key={d.idx}>
+                    {/* ── Linha principal ── */}
+                    <div
+                      className="flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-pointer transition-all select-none"
+                      style={{ background: isOpen ? bg : "transparent" }}
+                      onClick={() => setExpandedAbcIdx(p => p === d.idx ? null : d.idx)}
+                      onMouseEnter={e => { if (!isOpen) (e.currentTarget as HTMLDivElement).style.background = bg; }}
+                      onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+                      title="Clique para ver detalhes"
+                    >
+                      {/* Rank */}
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", width: 20, textAlign: "right", flexShrink: 0 }}>
+                        {d.idx}
+                      </span>
 
-                    {/* Nome + barra */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 11, fontWeight: 600, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 3, lineHeight: 1 }}>
-                        {d.label}
-                      </p>
-                      <div style={{ height: 6, background: "#f1f5f9", borderRadius: 3, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: 3 }} />
+                      {/* Nome + barra */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 11, fontWeight: 600, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 3, lineHeight: 1 }}>
+                          {d.label}
+                        </p>
+                        <div style={{ height: 6, background: "#f1f5f9", borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${barPct}%`, background: color, borderRadius: 3 }} />
+                        </div>
                       </div>
+
+                      {/* % individual */}
+                      <span style={{ fontSize: 14, fontWeight: 800, color, width: 52, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                        {d.pctVal.toFixed(2)}%
+                      </span>
+
+                      {/* R$ */}
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#334155", width: 106, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                        {formatBRL(d.custo)}
+                      </span>
+
+                      {/* Badge classe */}
+                      <span style={{ background: color, color: "#fff", borderRadius: 3, fontSize: 9, fontWeight: 800, padding: "1px 5px", flexShrink: 0 }}>
+                        {tag}
+                      </span>
+
+                      {/* Acumulado */}
+                      <span style={{ fontSize: 9, color: "#94a3b8", width: 38, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                        ∑{d.acc.toFixed(0)}%
+                      </span>
+
+                      {/* Chevron */}
+                      <span style={{ fontSize: 10, color: "#94a3b8", width: 12, flexShrink: 0, transition: "transform 0.15s", transform: isOpen ? "rotate(180deg)" : "none", display: "inline-block" }}>
+                        ▾
+                      </span>
                     </div>
 
-                    {/* % individual — destaque principal */}
-                    <span style={{ fontSize: 14, fontWeight: 800, color, width: 52, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                      {d.pctVal.toFixed(2)}%
-                    </span>
+                    {/* ── Painel de análise detalhada ── */}
+                    {isOpen && (
+                      <div
+                        className="mx-2 mb-2 rounded-lg border-l-4 p-3 text-[11px]"
+                        style={{ borderLeftColor: color, background: bg, borderTopLeftRadius: 0 }}
+                      >
+                        {/* Nome completo */}
+                        <p className="font-semibold text-slate-800 text-xs mb-2 leading-snug">{d.descricaoFull}</p>
 
-                    {/* R$ */}
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#334155", width: 106, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                      {formatBRL(d.custo)}
-                    </span>
+                        {/* Grid de métricas */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                          <div className="bg-white/70 rounded p-2">
+                            <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Código</p>
+                            <p className="font-bold text-slate-700 mt-0.5">{d.codigo}</p>
+                          </div>
+                          <div className="bg-white/70 rounded p-2">
+                            <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Tipo</p>
+                            <p className="font-bold text-slate-700 mt-0.5">{d.tipo}</p>
+                          </div>
+                          <div className="bg-white/70 rounded p-2">
+                            <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Unidade</p>
+                            <p className="font-bold text-slate-700 mt-0.5">{d.unidade || "—"}</p>
+                          </div>
+                          <div className="bg-white/70 rounded p-2">
+                            <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Classe ABC</p>
+                            <p className="font-extrabold mt-0.5" style={{ color }}>{d.curvaAbc} — {d.pctVal.toFixed(2)}% do custo</p>
+                          </div>
+                        </div>
 
-                    {/* Badge classe */}
-                    <span style={{ background: color, color: "#fff", borderRadius: 3, fontSize: 9, fontWeight: 800, padding: "1px 5px", flexShrink: 0 }}>
-                      {tag}
-                    </span>
-
-                    {/* Acumulado (aparece no hover) */}
-                    <span style={{ fontSize: 9, color: "#94a3b8", width: 38, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                      ∑{d.acc.toFixed(0)}%
-                    </span>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div className="bg-white/70 rounded p-2">
+                            <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Quantidade Total</p>
+                            <p className="font-bold text-slate-700 mt-0.5">{d.quantidadeTotal > 0 ? d.quantidadeTotal.toLocaleString("pt-BR", { maximumFractionDigits: 4 }) : "—"} {d.unidade}</p>
+                          </div>
+                          <div className="bg-white/70 rounded p-2">
+                            <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Preço Unit. Base</p>
+                            <p className="font-bold text-slate-700 mt-0.5">{d.precoUnitBase > 0 ? formatBRL(d.precoUnitBase) : "—"}</p>
+                          </div>
+                          <div className="bg-white/70 rounded p-2">
+                            <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Preço Unit. c/ Enc.</p>
+                            <p className="font-bold text-slate-700 mt-0.5">{d.precoUnitComEncargos > 0 ? formatBRL(d.precoUnitComEncargos) : "—"}</p>
+                          </div>
+                          <div className="rounded p-2" style={{ background: color + "22" }}>
+                            <p className="text-[9px] uppercase tracking-wide font-semibold" style={{ color }}>Custo Total</p>
+                            <p className="font-extrabold text-sm mt-0.5" style={{ color }}>{formatBRL(d.custo)}</p>
+                            <p className="text-[9px] text-slate-500 mt-0.5">∑ acumulado: {d.acc.toFixed(1)}%</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
