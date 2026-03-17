@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 477,
+    titulo: "Revisões — Cancelar e Excluir revisão do cronograma",
+    descricao: "Adicionadas ações de cancelar e excluir revisões. Cancelar: disponível para qualquer revisão não-Baseline, altera status para 'cancelada'. Excluir: disponível apenas para a revisão mais recente (maior número), exige confirmação e remove a revisão + todas as suas atividades do banco. O Baseline nunca pode ser cancelado ou excluído. A exclusão obrigatoriamente segue ordem decrescente — só a última pode ser excluída.",
+    tipo: "funcionalidade",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 476,
     titulo: "Revisões — Nova revisão agora exige upload de cronograma MS Project",
     descricao: "Alterada a lógica de criação de revisão: ao invés de copiar atividades da revisão anterior, o modal agora exige o upload de um novo arquivo de cronograma (.xml ou .xlsx do MS Project). O arquivo é parseado, as atividades são salvas na nova revisão e ela é aprovada automaticamente, tornando-se o cronograma oficial em todos os módulos (Gantt, Avanço Semanal, REFIS, Caminho Crítico etc.). A Curva S mantém o histórico completo de todas as revisões para comparação com o Baseline.",

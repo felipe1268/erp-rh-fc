@@ -249,6 +249,45 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  cancelarRevisao: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [rev] = await db.select().from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.id));
+      if (!rev) throw new Error("Revisão não encontrada.");
+      if (rev.isBaseline) throw new Error("O Baseline não pode ser cancelado.");
+      await db.update(planejamentoRevisoes)
+        .set({ status: "cancelada" })
+        .where(eq(planejamentoRevisoes.id, input.id));
+      return { success: true };
+    }),
+
+  excluirRevisao: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [rev] = await db.select().from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.id));
+      if (!rev) throw new Error("Revisão não encontrada.");
+      if (rev.isBaseline) throw new Error("O Baseline não pode ser excluído.");
+
+      // Garante que só a revisão de maior número pode ser excluída
+      const todasNaoProjeto = await db.select().from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.projetoId, rev.projetoId!))
+        .orderBy(desc(planejamentoRevisoes.numero));
+      const naoBaselines = todasNaoProjeto.filter(r => !r.isBaseline);
+      if (!naoBaselines.length || naoBaselines[0].id !== input.id) {
+        throw new Error("Apenas a revisão mais recente pode ser excluída. Exclua em ordem decrescente.");
+      }
+
+      await db.delete(planejamentoAtividades)
+        .where(eq(planejamentoAtividades.revisaoId, input.id));
+      await db.delete(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.id));
+      return { success: true };
+    }),
+
   // ── Atividades ────────────────────────────────────────────────────────────
   listarAtividades: protectedProcedure
     .input(z.object({ revisaoId: z.number() }))

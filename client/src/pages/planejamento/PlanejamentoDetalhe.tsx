@@ -6485,6 +6485,23 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [parsendo, setParsendo] = useState(false);
   const fileRefRev = useRef<HTMLInputElement>(null);
+  const [confirmExcluirId, setConfirmExcluirId] = useState<number | null>(null);
+
+  // ID da revisão mais recente que não é Baseline (pode ser excluída)
+  const idMaisRecente = useMemo(() => {
+    const naoBaselines = [...revisoes].filter((r: any) => !r.isBaseline).sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0));
+    return naoBaselines[0]?.id ?? null;
+  }, [revisoes]);
+
+  const cancelarMutation = trpc.planejamento.cancelarRevisao.useMutation({
+    onSuccess: () => utils.planejamento.getProjetoById.invalidate(),
+    onError: (e) => alert(e.message),
+  });
+
+  const excluirMutation = trpc.planejamento.excluirRevisao.useMutation({
+    onSuccess: () => { utils.planejamento.getProjetoById.invalidate(); setConfirmExcluirId(null); },
+    onError: (e) => { alert(e.message); setConfirmExcluirId(null); },
+  });
 
   const aprovarMutation = trpc.planejamento.aprovarRevisao.useMutation({
     onSuccess: () => { utils.planejamento.getProjetoById.invalidate(); fecharModal(); },
@@ -6589,9 +6606,50 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils }: any) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${r.status === "aprovada" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                  r.status === "aprovada" ? "bg-emerald-100 text-emerald-700"
+                  : r.status === "cancelada" ? "bg-red-100 text-red-600"
+                  : "bg-amber-100 text-amber-700"
+                }`}>
                   {r.status}
                 </span>
+                {/* Cancelar: qualquer não-Baseline que não esteja já cancelada */}
+                {!r.isBaseline && r.status !== "cancelada" && (
+                  <Button
+                    size="sm" variant="ghost"
+                    className="text-xs h-6 px-2 gap-1 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                    disabled={cancelarMutation.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Cancelar a Rev. ${String(r.numero).padStart(2,"0")}? O sistema voltará a usar a revisão anterior como oficial.`))
+                        cancelarMutation.mutate({ id: r.id });
+                    }}
+                  >
+                    <XCircle className="h-3 w-3" /> Cancelar
+                  </Button>
+                )}
+                {/* Excluir: apenas a revisão mais recente (não-Baseline) */}
+                {!r.isBaseline && r.id === idMaisRecente && (
+                  confirmExcluirId === r.id ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-red-600 font-medium">Confirmar?</span>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-red-700 hover:bg-red-50"
+                        disabled={excluirMutation.isPending}
+                        onClick={() => excluirMutation.mutate({ id: r.id })}>
+                        {excluirMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Sim"}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-slate-500"
+                        onClick={() => setConfirmExcluirId(null)}>Não</Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm" variant="ghost"
+                      className="text-xs h-6 px-2 gap-1 text-red-500 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => setConfirmExcluirId(r.id)}
+                    >
+                      <Trash2 className="h-3 w-3" /> Excluir
+                    </Button>
+                  )
+                )}
               </div>
             </div>
             {r.motivo && <p className="text-xs text-slate-500 mt-2 pl-10">Motivo: {r.motivo}</p>}
