@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
-import { AlertTriangle, TrendingUp, TrendingDown, Info, Loader2, X } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Info, Loader2, X, ArrowLeft } from "lucide-react";
 
 interface Props {
   orcamentoId: number;
@@ -656,25 +656,34 @@ export default function OrcamentoBdiIndicadores({
         </div>
       )}
 
-      {/* ── Modal detalhe CI selecionado ──────────────────────────── */}
+      {/* ── Modal detalhe CI selecionado — FULLSCREEN ─────────────── */}
       {selectedCI && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
-          onClick={() => setSelectedCI(null)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col"
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3 bg-slate-700 text-white rounded-t-xl shrink-0">
-              <div>
-                <p className="font-bold text-sm">{selectedCI} — {selectedCIInfo?.label.replace(/^CI-\d+ – /, "") ?? ""}</p>
-                <p className="text-xs text-slate-300">
-                  Total: <span className="font-semibold">{formatBRL(selectedCIInfo?.valor ?? 0)}</span>
-                  {" · "}{selectedCILinhas.length} {selectedCILinhas.length === 1 ? "linha" : "linhas"}
-                </p>
-              </div>
-              <button onClick={() => setSelectedCI(null)} className="hover:text-slate-300 ml-4">
-                <X className="h-5 w-5" />
-              </button>
+        <div className="fixed inset-0 z-50 bg-white flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-slate-700 text-white shrink-0 shadow">
+            <button
+              onClick={() => setSelectedCI(null)}
+              className="flex items-center gap-1.5 text-sm font-medium hover:text-slate-300 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </button>
+            <div className="text-center">
+              <p className="font-bold text-sm">{selectedCI} — {selectedCIInfo?.label.replace(/^CI-\d+ – /, "") ?? ""}</p>
+              <p className="text-xs text-slate-300">
+                Total: <span className="font-semibold">{formatBRL(selectedCIInfo?.valor ?? 0)}</span>
+                {" · "}{selectedCILinhas.length} {selectedCILinhas.length === 1 ? "linha" : "linhas"}
+              </p>
             </div>
-            <div className="overflow-auto flex-1">
+            <button
+              onClick={() => setSelectedCI(null)}
+              className="flex items-center gap-1.5 text-sm hover:text-slate-300 transition-colors"
+            >
+              <X className="h-5 w-5" />
+              <span className="sr-only">Fechar</span>
+            </button>
+          </div>
+          <div className="overflow-auto flex-1">
               {selectedCILinhas.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-10">Nenhum detalhe disponível.</p>
               ) : selectedCI === "CI-01" ? (
@@ -748,7 +757,6 @@ export default function OrcamentoBdiIndicadores({
                   </tfoot>
                 </table>
               )}
-            </div>
           </div>
         </div>
       )}
