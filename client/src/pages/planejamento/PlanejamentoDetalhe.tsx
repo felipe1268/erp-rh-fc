@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger as UiTooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -2750,20 +2750,35 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 
       {/* Tabela */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
-        <table className="text-xs" style={{ minWidth: editando ? 900 : "100%" }}>
+        <table className="text-xs" style={{ minWidth: editando ? 1180 : "100%", tableLayout: editando ? "fixed" : "auto" }}>
+          <colgroup>
+            {editando && <>
+              <col style={{ width: 72 }} />
+              <col />
+              <col style={{ width: 118 }} />
+              <col style={{ width: 118 }} />
+              <col style={{ width: 56 }} />
+              <col style={{ width: 88 }} />
+              <col style={{ width: 68 }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 28 }} />
+            </>}
+          </colgroup>
           <thead>
             <tr className="bg-slate-700 text-white">
-              <th className="py-2 px-2 text-left w-20">EAP</th>
-              <th className="py-2 px-3 text-left">Atividade</th>
-              <th className="py-2 px-2 text-left w-28">Início</th>
-              <th className="py-2 px-2 text-left w-28">Fim</th>
-              <th className="py-2 px-2 text-right w-14 text-xs">Dur.</th>
-              <th className="py-2 px-2 text-center w-20 text-xs">Pred.</th>
-              {!editando && <th className="py-2 px-2 text-center w-20 text-xs">Suc.</th>}
-              <th className="py-2 px-2 text-right w-16 text-xs">Peso%</th>
-              <th className="py-2 px-2 text-left w-20">Recurso</th>
-              {!editando && <th className="py-2 px-3 text-right w-20">Avanço</th>}
-              {editando && <th className="py-2 px-2 w-8"></th>}
+              <th className="py-2 px-2 text-left text-[11px]">EAP</th>
+              <th className="py-2 px-2 text-left text-[11px]">
+                {editando ? "☑ Atividade / Grupo" : "Atividade"}
+              </th>
+              <th className="py-2 px-2 text-left text-[11px]">Início</th>
+              <th className="py-2 px-2 text-left text-[11px]">Fim</th>
+              <th className="py-2 px-2 text-right text-[11px]">Dur.</th>
+              <th className="py-2 px-2 text-center text-[11px]">Pred.</th>
+              {!editando && <th className="py-2 px-2 text-center w-20 text-[11px]">Suc.</th>}
+              <th className="py-2 px-2 text-right text-[11px]">Peso%</th>
+              <th className="py-2 px-2 text-left text-[11px]">Recurso</th>
+              {!editando && <th className="py-2 px-3 text-right w-20 text-[11px]">Avanço</th>}
+              {editando && <th className="py-2 px-1 w-7"></th>}
             </tr>
           </thead>
           <tbody>
@@ -2786,7 +2801,9 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               // MS-Project style row color
               const nivel = a.nivel ?? 1;
               const rowBg = editando
-                ? "bg-white"
+                ? a.isGrupo
+                  ? (a.nivel ?? 1) === 1 ? "bg-yellow-50 border-l-4 border-l-yellow-400" : "bg-amber-50/60 border-l-4 border-l-amber-300"
+                  : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
                 : atrasada
                   ? "bg-red-50"
                   : a.isGrupo && nivel === 1
@@ -2804,49 +2821,57 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                     <>
                       <td className="py-1 px-1">
                         <Input value={a.eapCodigo ?? ""} onChange={e => updateLinha(idx, "eapCodigo", e.target.value)}
-                          className="h-6 text-xs w-16 font-mono" placeholder="1.1" />
+                          className="h-7 text-xs w-full font-mono" placeholder="1.1.1" />
                       </td>
                       <td className="py-1 px-1">
-                        <div className="flex items-center gap-1">
-                          <input type="checkbox" checked={!!a.isGrupo} onChange={e => updateLinha(idx, "isGrupo", e.target.checked)}
-                            title="É grupo/resumo" className="h-3 w-3 shrink-0" />
+                        <div className="flex items-center gap-1.5">
+                          <UiTooltipProvider delayDuration={300}>
+                            <UiTooltip>
+                              <UiTooltipTrigger asChild>
+                                <input type="checkbox" checked={!!a.isGrupo} onChange={e => updateLinha(idx, "isGrupo", e.target.checked)}
+                                  className="h-3.5 w-3.5 shrink-0 accent-amber-500 cursor-pointer" />
+                              </UiTooltipTrigger>
+                              <UiTooltipContent side="top" className="text-xs">Marcar como grupo/resumo</UiTooltipContent>
+                            </UiTooltip>
+                          </UiTooltipProvider>
                           <Input value={a.nome} onChange={e => updateLinha(idx, "nome", e.target.value)}
-                            className="h-6 text-xs flex-1 min-w-[140px]" placeholder="Nome da atividade" />
+                            className={`h-7 text-xs w-full ${a.isGrupo ? "font-semibold bg-yellow-50" : ""}`}
+                            placeholder="Nome da atividade" />
                         </div>
                       </td>
                       <td className="py-1 px-1">
                         <Input type="date" value={a.dataInicio ?? ""} onChange={e => updateLinha(idx, "dataInicio", e.target.value)}
-                          className="h-6 text-xs w-32" />
+                          className="h-7 text-xs w-full" />
                       </td>
                       <td className="py-1 px-1">
                         <Input type="date" value={a.dataFim ?? ""} onChange={e => updateLinha(idx, "dataFim", e.target.value)}
-                          className="h-6 text-xs w-32" />
+                          className="h-7 text-xs w-full" />
                       </td>
                       <td className="py-1 px-1">
-                        <Input type="number" value={a.duracaoDias ?? 0} onChange={e => updateLinha(idx, "duracaoDias", parseInt(e.target.value) || 0)}
-                          className="h-6 text-xs w-14 text-right" />
+                        <Input type="number" min={0} value={a.duracaoDias ?? 0} onChange={e => updateLinha(idx, "duracaoDias", parseInt(e.target.value) || 0)}
+                          className="h-7 text-xs w-full text-center" />
                       </td>
                       <td className="py-1 px-1">
                         <Input
                           value={a.predecessora ?? ""}
                           onChange={e => updateLinha(idx, "predecessora", e.target.value)}
-                          className="h-6 text-xs w-20 font-mono"
-                          placeholder="1.1;1.2"
-                          title="EAP das atividades predecessoras, separadas por ;"
+                          className="h-7 text-xs w-full font-mono text-center"
+                          placeholder="—"
+                          title="EAP das predecessoras separadas por ;"
                         />
                       </td>
                       <td className="py-1 px-1">
-                        <Input type="number" step="0.01" value={a.pesoFinanceiro ?? 0}
+                        <Input type="number" step="0.01" min={0} max={100} value={a.pesoFinanceiro ?? 0}
                           onChange={e => updateLinha(idx, "pesoFinanceiro", parseFloat(e.target.value))}
-                          className="h-6 text-xs w-16 text-right" />
+                          className="h-7 text-xs w-full text-right" />
                       </td>
                       <td className="py-1 px-1">
                         <Input value={a.recursoPrincipal ?? ""} onChange={e => updateLinha(idx, "recursoPrincipal", e.target.value)}
-                          className="h-6 text-xs w-20" placeholder="Equipe" />
+                          className="h-7 text-xs w-full" placeholder="Equipe" />
                       </td>
-                      <td className="py-1 px-1">
+                      <td className="py-1 px-1 text-center">
                         <button onClick={() => removerLinha(idx)}
-                          className="p-0.5 rounded hover:bg-red-50 text-red-400">
+                          className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors">
                           <Minus className="h-3.5 w-3.5" />
                         </button>
                       </td>
@@ -2870,19 +2895,19 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                             {a.nome}
                           </span>
                           {atrasada && (
-                            <TooltipProvider delayDuration={200}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
+                            <UiTooltipProvider delayDuration={200}>
+                              <UiTooltip>
+                                <UiTooltipTrigger asChild>
                                   <AlertTriangle className="h-3 w-3 text-red-500 ml-1 shrink-0 cursor-pointer" />
-                                </TooltipTrigger>
-                                <TooltipContent side="right" className="max-w-[220px] text-xs">
+                                </UiTooltipTrigger>
+                                <UiTooltipContent side="right" className="max-w-[220px] text-xs">
                                   <p className="font-semibold text-red-600 mb-1">⚠️ Atividade atrasada</p>
                                   <p>Data de fim: <span className="font-medium">{fmtBR(a.dataFim)}</span></p>
                                   <p>Avanço atual: <span className="font-medium">{avanco.toFixed(1)}%</span></p>
                                   <p className="mt-1 text-slate-500">Esta atividade deveria estar concluída mas ainda não atingiu 100%.</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                                </UiTooltipContent>
+                              </UiTooltip>
+                            </UiTooltipProvider>
                           )}
                         </div>
                       </td>
