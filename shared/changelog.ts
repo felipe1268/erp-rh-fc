@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 468,
+    titulo: "Realocação — Fluxo independente por obra (seletor único global)",
+    descricao: "Refatoração completa da página de Realocações para modelo obra-cêntrico. Substituídos três filtros separados (filtroObraRisco, filtroObraSaldo, obraId do dialog) por UM único seletor de obra no cabeçalho da página. Todas as seções (painel saldo DI-08, aba Realocação de Verba, aba Reserva de Risco) passam a usar o mesmo obraFiltro global. Aviso visual exibido quando 'Todas as obras' está selecionado para evitar interpretações erradas do consolidado. Dialog de Nova Realocação pré-preenche a obra do filtro global (ou bloqueia criação se nenhuma obra estiver selecionada). Barra de progresso do DI-08 agora muda de cor: verde → laranja (>70%) → vermelho (>90%).",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 467,
     titulo: "Realocação de Verba — Saldo Disponível filtrado por Obra",
     descricao: "Corrigido o painel 'Saldo Disponível para Realocação': adicionado seletor de obra no cabeçalho do painel. O DI-08 e as economias em compras agora são filtrados pela obra selecionada, pois cada obra tem sua própria reserva independente. O modo 'Todas as obras' continua mostrando o total consolidado. Backend atualizado: getSaldosRealocacaoGeral agora aceita obraId opcional.",

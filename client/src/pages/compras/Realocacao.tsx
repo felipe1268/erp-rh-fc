@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, TrendingUp } from "lucide-react";
+import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, HardHat } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -23,41 +23,51 @@ export default function ComprasRealocacao() {
   const { selectedCompany } = useCompany();
   const { user } = useAuth();
   const companyId = selectedCompany?.id ?? 0;
+
+  // ── ÚNICO seletor de obra — controla TODA a página ──
+  const [obraFiltro, setObraFiltro] = useState("all");
+  const obraIdNum = obraFiltro !== "all" ? parseInt(obraFiltro) : undefined;
+
+  // estados do dialog Nova Realocação
   const [showNova, setShowNova] = useState(false);
-  const [obraId, setObraId] = useState("");
   const [origem, setOrigem] = useState("");
   const [destino, setDestino] = useState("");
   const [valor, setValor] = useState("");
   const [motivo, setMotivo] = useState("");
-  const [filtroObraRisco, setFiltroObraRisco] = useState("all");
-  const [filtroObraSaldo, setFiltroObraSaldo] = useState("all");
+
+  // modal desfazer débito
   const [desfazerModal, setDesfazerModal] = useState<{ id: number; valor: number; numeroCotacao: string | null } | null>(null);
   const [justificativa, setJustificativa] = useState("");
 
+  // ── Queries — todas usam o mesmo obraIdNum ──────────────────────────
   const { data: obras } = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const obraAtual = obras?.find((o: any) => String(o.id) === obraFiltro);
 
-  const { data, isLoading, refetch } = trpc.purchase.listarRealocacoes.useQuery(
-    { companyId, obraId: obraId ? parseInt(obraId) : undefined },
-    { enabled: !!companyId }
-  );
+  const { data: realocacoesData, isLoading: loadingRealoc, refetch: refetchRealoc } =
+    trpc.purchase.listarRealocacoes.useQuery(
+      { companyId, obraId: obraIdNum },
+      { enabled: !!companyId }
+    );
 
-  const obraIdFiltro = filtroObraRisco && filtroObraRisco !== "all" ? parseInt(filtroObraRisco) : undefined;
-  const { data: debitosRisco, isLoading: loadingRisco, refetch: refetchRisco } = trpc.compras.listarDebitosRisco.useQuery(
-    { companyId, obraId: obraIdFiltro },
-    { enabled: !!companyId }
-  );
+  const { data: debitosData, isLoading: loadingDebitos, refetch: refetchDebitos } =
+    trpc.compras.listarDebitosRisco.useQuery(
+      { companyId, obraId: obraIdNum },
+      { enabled: !!companyId }
+    );
 
-  const obraIdSaldo = filtroObraSaldo !== "all" ? parseInt(filtroObraSaldo) : undefined;
-  const { data: saldos, isLoading: loadingSaldos } = trpc.compras.getSaldosRealocacaoGeral.useQuery(
-    { companyId, obraId: obraIdSaldo },
-    { enabled: !!companyId }
-  );
+  const { data: saldos, isLoading: loadingSaldos } =
+    trpc.compras.getSaldosRealocacaoGeral.useQuery(
+      { companyId, obraId: obraIdNum },
+      { enabled: !!companyId }
+    );
 
+  // ── Mutations ──────────────────────────────────────────────────────
   const criarMut = trpc.purchase.criarRealocacao.useMutation({
     onSuccess: () => {
       toast.success("Realocação registrada!");
-      setShowNova(false); setOrigem(""); setDestino(""); setValor(""); setMotivo("");
-      refetch();
+      setShowNova(false);
+      setOrigem(""); setDestino(""); setValor(""); setMotivo("");
+      refetchRealoc();
     },
     onError: () => toast.error("Erro ao criar realocação"),
   });
@@ -69,46 +79,48 @@ export default function ComprasRealocacao() {
       toast.success(`Débito revertido! ${fmt(d.valorRestituido)} devolvidos à reserva.`);
       setDesfazerModal(null);
       setJustificativa("");
-      refetchRisco();
+      refetchDebitos();
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const realocacoes = data ?? [];
+  const realocacoes = realocacoesData ?? [];
   const totalRealocado = realocacoes.reduce((s: number, r: any) => s + Number(r.valorRealocado), 0);
-
-  const debitos = debitosRisco ?? [];
+  const debitos = debitosData ?? [];
   const totalDebitado = debitos.reduce((s: number, d: any) => s + Number(d.valor), 0);
+
+  const naoTemObra = obraFiltro === "all";
+  const pctDi08 = (saldos?.di08Total ?? 0) > 0
+    ? Math.min(100, ((saldos?.di08Usado ?? 0) / (saldos?.di08Total ?? 1)) * 100)
+    : 0;
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-purple-100 rounded-lg">
-            <ArrowLeftRight className="h-6 w-6 text-purple-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Realocações</h1>
-            <p className="text-sm text-gray-500">Histórico de realocações de verba e débitos da reserva de risco</p>
-          </div>
-        </div>
 
-        {/* ── Painel: Saldo Disponível para Realocação ───────────────── */}
-        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-emerald-600" />
-              <h2 className="text-sm font-semibold text-emerald-800 uppercase tracking-wider">Saldo Disponível para Realocação</h2>
-              {loadingSaldos && <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />}
+        {/* ── Cabeçalho + seletor de obra ───────────────────────────── */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <ArrowLeftRight className="h-6 w-6 text-purple-600" />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-emerald-700 font-medium">Obra:</span>
-              <Select value={filtroObraSaldo} onValueChange={setFiltroObraSaldo}>
-                <SelectTrigger className="h-7 text-xs w-52 bg-white border-emerald-200">
-                  <SelectValue placeholder="Todas as obras" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Realocações</h1>
+              <p className="text-sm text-gray-500">Realocações de verba e reserva de risco — por obra</p>
+            </div>
+          </div>
+
+          {/* Seletor único de obra */}
+          <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm min-w-72">
+            <HardHat className="h-5 w-5 text-amber-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-0.5">Obra selecionada</p>
+              <Select value={obraFiltro} onValueChange={setObraFiltro}>
+                <SelectTrigger className="h-7 text-sm border-0 p-0 shadow-none focus:ring-0 font-semibold text-gray-800">
+                  <SelectValue placeholder="Selecione uma obra" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas as obras</SelectItem>
+                  <SelectItem value="all">Todas as obras (consolidado)</SelectItem>
                   {(obras ?? []).map((o: any) => (
                     <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                   ))}
@@ -116,9 +128,29 @@ export default function ComprasRealocacao() {
               </Select>
             </div>
           </div>
+        </div>
+
+        {/* ── Aviso quando "Todas as obras" ─────────────────────────── */}
+        {naoTemObra && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3 text-sm text-amber-800">
+            <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0" />
+            <span>Você está vendo o <strong>consolidado de todas as obras</strong>. Para analisar ou registrar movimentos de uma obra específica, selecione-a acima.</span>
+          </div>
+        )}
+
+        {/* ── Painel: Saldo Disponível ──────────────────────────────── */}
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Wallet className="h-5 w-5 text-emerald-600" />
+            <h2 className="text-sm font-semibold text-emerald-800 uppercase tracking-wider">
+              Saldo Disponível{obraAtual ? ` — ${obraAtual.nome}` : " (Todas as obras)"}
+            </h2>
+            {loadingSaldos && <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />}
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {/* DI-08 Total orçado */}
-            <div className="bg-white rounded-xl border border-emerald-100 p-4 shadow-sm">
+            {/* DI-08 Orçado */}
+            <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-1">
                 <ShieldAlert className="h-4 w-4 text-blue-500" />
                 <p className="text-xs text-gray-500 font-medium">DI-08 — Orçado</p>
@@ -137,7 +169,7 @@ export default function ComprasRealocacao() {
               <p className="text-[10px] text-gray-400 mt-0.5">Débitos realizados da reserva</p>
             </div>
 
-            {/* Sobras de compras */}
+            {/* Economia em Compras */}
             <div className="bg-white rounded-xl border border-teal-100 p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-1">
                 <PackageSearch className="h-4 w-4 text-teal-500" />
@@ -147,7 +179,7 @@ export default function ComprasRealocacao() {
               <p className="text-[10px] text-gray-400 mt-0.5">OCs aprovadas abaixo da meta</p>
             </div>
 
-            {/* Total disponível — destaque */}
+            {/* Total Disponível */}
             <div className="bg-emerald-600 rounded-xl p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle className="h-4 w-4 text-emerald-100" />
@@ -163,18 +195,21 @@ export default function ComprasRealocacao() {
             <div className="mt-4">
               <div className="flex justify-between text-xs text-gray-500 mb-1">
                 <span>Utilização DI-08</span>
-                <span>{(((saldos?.di08Usado ?? 0) / (saldos?.di08Total ?? 1)) * 100).toFixed(1)}% utilizado</span>
+                <span className={pctDi08 >= 90 ? "text-red-600 font-semibold" : pctDi08 >= 70 ? "text-orange-600" : ""}>
+                  {pctDi08.toFixed(1)}% utilizado
+                </span>
               </div>
               <div className="h-2 bg-emerald-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-orange-400 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, ((saldos?.di08Usado ?? 0) / (saldos?.di08Total ?? 1)) * 100)}%` }}
+                  className={`h-full rounded-full transition-all ${pctDi08 >= 90 ? "bg-red-500" : pctDi08 >= 70 ? "bg-orange-400" : "bg-emerald-500"}`}
+                  style={{ width: `${pctDi08}%` }}
                 />
               </div>
             </div>
           )}
         </div>
 
+        {/* ── Tabs (usam o mesmo filtro de obra) ───────────────────── */}
         <Tabs defaultValue="risco">
           <TabsList className="mb-4">
             <TabsTrigger value="verba" className="gap-2">
@@ -185,7 +220,7 @@ export default function ComprasRealocacao() {
             </TabsTrigger>
           </TabsList>
 
-          {/* ── ABA 1: REALOCAÇÃO DE VERBA ─────────────────────────────── */}
+          {/* ── ABA 1: REALOCAÇÃO DE VERBA ─── */}
           <TabsContent value="verba" className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="grid grid-cols-2 gap-4 flex-1 mr-4">
@@ -218,14 +253,19 @@ export default function ComprasRealocacao() {
             </div>
 
             <Card>
-              <CardHeader><CardTitle>Histórico de Realocações de Verba</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>
+                  Histórico de Realocações de Verba
+                  {obraAtual && <span className="ml-2 text-sm font-normal text-gray-500">— {obraAtual.nome}</span>}
+                </CardTitle>
+              </CardHeader>
               <CardContent>
-                {isLoading ? (
+                {loadingRealoc ? (
                   <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
                 ) : realocacoes.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <ArrowLeftRight className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                    <p>Nenhuma realocação registrada.</p>
+                    <p>Nenhuma realocação registrada{obraAtual ? ` para ${obraAtual.nome}` : ""}.</p>
                   </div>
                 ) : (
                   <Table>
@@ -261,7 +301,7 @@ export default function ComprasRealocacao() {
             </Card>
           </TabsContent>
 
-          {/* ── ABA 2: RESERVA DE RISCO ─────────────────────────────── */}
+          {/* ── ABA 2: RESERVA DE RISCO ─── */}
           <TabsContent value="risco" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="border-orange-200 bg-orange-50">
@@ -290,28 +330,18 @@ export default function ComprasRealocacao() {
 
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <CardTitle>Histórico de Débitos — Reserva de Risco BDI (DI-08)</CardTitle>
-                  <div className="w-52">
-                    <Select value={filtroObraRisco} onValueChange={setFiltroObraRisco}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todas as obras" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas as obras</SelectItem>
-                        {(obras ?? []).map((o: any) => (
-                          <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <CardTitle>
+                  Histórico de Débitos — Reserva de Risco BDI (DI-08)
+                  {obraAtual && <span className="ml-2 text-sm font-normal text-gray-500">— {obraAtual.nome}</span>}
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                {loadingRisco ? (
+                {loadingDebitos ? (
                   <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
                 ) : debitos.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <ShieldAlert className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                    <p>Nenhum débito de reserva de risco registrado.</p>
+                    <p>Nenhum débito registrado{obraAtual ? ` para ${obraAtual.nome}` : ""}.</p>
                   </div>
                 ) : (
                   <Table>
@@ -359,21 +389,26 @@ export default function ComprasRealocacao() {
           </TabsContent>
         </Tabs>
 
-        {/* Dialog Nova Realocação */}
+        {/* ── Dialog Nova Realocação ────────────────────────────────── */}
         <Dialog open={showNova} onOpenChange={setShowNova}>
           <DialogContent>
-            <DialogHeader><DialogTitle>Nova Realocação de Verba</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Nova Realocação de Verba</DialogTitle>
+            </DialogHeader>
             <div className="space-y-4">
+              {/* Obra — pré-selecionada pelo filtro global */}
               <div>
-                <Label>Obra</Label>
-                <Select value={obraId} onValueChange={setObraId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
-                  <SelectContent>
-                    {(obras ?? []).map((o: any) => (
-                      <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Obra <span className="text-red-500">*</span></Label>
+                {obraAtual ? (
+                  <div className="mt-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 flex items-center gap-2">
+                    <HardHat className="h-4 w-4 text-amber-500" />
+                    {obraAtual.nome}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Selecione uma obra no topo da página antes de registrar uma realocação.
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -396,12 +431,16 @@ export default function ComprasRealocacao() {
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setShowNova(false)}>Cancelar</Button>
                 <Button className="bg-purple-600 hover:bg-purple-700"
-                  disabled={!obraId || !valor || !motivo.trim() || criarMut.isPending}
+                  disabled={!obraAtual || !valor || !motivo.trim() || criarMut.isPending}
                   onClick={() => criarMut.mutate({
-                    companyId, obraId: parseInt(obraId),
-                    origemEapItemNome: origem, destinoEapItemNome: destino,
-                    valorRealocado: Number(valor), motivo,
-                    usuarioId: user?.id ?? 0, usuarioNome: user?.nome,
+                    companyId,
+                    obraId: obraAtual!.id,
+                    origemEapItemNome: origem,
+                    destinoEapItemNome: destino,
+                    valorRealocado: Number(valor),
+                    motivo,
+                    usuarioId: user?.id ?? 0,
+                    usuarioNome: user?.nome,
                   })}>
                   {criarMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                   Confirmar Realocação
@@ -411,7 +450,7 @@ export default function ComprasRealocacao() {
           </DialogContent>
         </Dialog>
 
-        {/* Modal: Desfazer Débito de Risco — somente Admin Master */}
+        {/* ── Modal Desfazer Débito de Risco ────────────────────────── */}
         <Dialog open={!!desfazerModal} onOpenChange={(o) => { if (!o) { setDesfazerModal(null); setJustificativa(""); } }}>
           <DialogContent>
             <DialogHeader>
@@ -424,22 +463,17 @@ export default function ComprasRealocacao() {
                 <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">
                   <p>Você está prestes a reverter o débito de <strong>{fmt(desfazerModal.valor)}</strong>
                   {desfazerModal.numeroCotacao ? ` da cotação #${desfazerModal.numeroCotacao}` : ""}.</p>
-                  <p className="mt-1">O valor será restituído à Reserva de Risco (DI-08). Esta ação é irreversível pelo sistema — ficará registrada no audit trail.</p>
+                  <p className="mt-1">O valor será restituído à Reserva de Risco (DI-08). Esta ação é irreversível pelo sistema.</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">
-                    Justificativa <span className="text-red-600">*</span>
-                  </Label>
+                  <Label className="text-sm font-medium">Justificativa <span className="text-red-600">*</span></Label>
                   <Textarea
                     className="mt-1"
-                    placeholder="Descreva o motivo da reversão (ex: débito lançado indevidamente, cotação cancelada)..."
+                    placeholder="Descreva o motivo da reversão..."
                     value={justificativa}
                     onChange={e => setJustificativa(e.target.value)}
                     rows={4}
                   />
-                  {justificativa.trim().length === 0 && (
-                    <p className="text-xs text-red-500 mt-1">Justificativa obrigatória</p>
-                  )}
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => { setDesfazerModal(null); setJustificativa(""); }}>Cancelar</Button>
@@ -456,6 +490,7 @@ export default function ComprasRealocacao() {
             )}
           </DialogContent>
         </Dialog>
+
       </div>
     </DashboardLayout>
   );
