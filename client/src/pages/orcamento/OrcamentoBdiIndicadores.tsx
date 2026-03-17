@@ -250,26 +250,20 @@ export default function OrcamentoBdiIndicadores({
       .sort((a, b) => b.pct - a.pct);
   }, [taxaComercio]);
 
-  // ── Indiretos por modalidade ──────────────────────────────────────
-  // Filtra artefatos de parsing como "mês" que vêm de linhas de cabeçalho
-  const INDIRETOS_FILTRO = /^m[êe]s$/i;
+  // ── Indiretos por componente CI (CI-01 a CI-08) ──────────────────
+  // Usa valorAbsoluto de orcamento_bdi para cada componente CI.
+  // Fonte correta: orcamento_bdi (linhas CI-01..CI-08), NÃO bdi_indiretos.totalObra
+  // (que reflete salários brutos individuais e soma errada ~R$1,4M).
   const indiretosModal = useMemo(() => {
-    const map: Record<string, number> = {};
-    indiretos
-      .filter(i => !i.isHeader)
-      // Regra: qty=0 explícito → não alocado nesta obra → ignorar
-      .filter(i => n(i.quantidade) > 0 && n(i.totalObra) > 0)
-      .forEach(i => {
-        const mod = i.modalidade?.trim() || i.tipoContrato?.trim() || "Outros";
-        // Ignora artefatos de parsing (ex: "mês" capturado de cabeçalho da planilha)
-        if (INDIRETOS_FILTRO.test(mod) || mod.length < 2) return;
-        map[mod] = (map[mod] ?? 0) + n(i.totalObra);
-      });
-    return Object.entries(map)
-      .map(([label, valor]) => ({ label, valor }))
+    return bdiLinhas
+      .filter(l => /^CI-\d+$/.test(String(l.codigo ?? "").trim()))
+      .map(l => ({
+        label: `${l.codigo} – ${(l.descricao ?? "").substring(0, 28)}`,
+        valor: n(l.valorAbsoluto),
+      }))
       .filter(d => d.valor > 0)
       .sort((a, b) => b.valor - a.valor);
-  }, [indiretos]);
+  }, [bdiLinhas]);
 
   // ── Análise de sensibilidade ─────────────────────────────────────
   // Para cada componente: se aumentar 1pp, qual o impacto no preço?
@@ -643,7 +637,7 @@ export default function OrcamentoBdiIndicadores({
       {/* ── 7. Indiretos por Modalidade ───────────────────────────── */}
       {hasIndiretos && (
         <div className="rounded-xl border bg-white p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Indiretos — Custo de Pessoal por Modalidade de Contrato</p>
+          <p className="text-sm font-semibold text-slate-700 mb-3">Composição dos Custos Indiretos — CI-01 a CI-08</p>
           <div className="flex flex-col md:flex-row gap-4 items-center">
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={indiretosModal} margin={{ top: 0, right: 20, left: 10, bottom: 20 }}>
