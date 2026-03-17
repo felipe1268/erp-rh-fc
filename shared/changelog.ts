@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 482,
+    titulo: "Curva S — Revisão Atual em vermelho e linha mais grossa",
+    descricao: "A linha 'Revisão Atual' na Curva S agora é vermelha (#ef4444) e mais grossa (strokeWidth 3.5), destacando-se visualmente das demais. A legenda também foi atualizada para refletir a nova cor e espessura.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 481,
     titulo: "Hotfix — Projeto não carregava após Rev. 480",
     descricao: "A coluna 'diferencas' adicionada na Rev. 480 não estava sendo criada no banco da empresa (Neon), pois o mecanismo de sincronização automática não detectou o tipo 'text'. Corrigido com: (1) hook de startup que adiciona a coluna via ALTER TABLE IF NOT EXISTS diretamente no banco Neon, (2) fallback no getProjetoById que usa SQL simples (sem diferencas) caso o SELECT com a nova coluna falhe — garantindo que o projeto sempre carregue.",
