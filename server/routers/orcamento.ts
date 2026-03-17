@@ -1539,7 +1539,7 @@ export const orcamentoRouter = router({
     .mutation(async ({ input }) => {
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
-      const wb = XLSX.read(buffer, { type: 'buffer' });
+      const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
 
       const isOrc = (n: string) => { const l = n.toLowerCase(); return l.includes('orçamento') || l.includes('orcamento') || l === 'orc'; };
       const orcTab = wb.SheetNames.find(isOrc);
@@ -1623,7 +1623,7 @@ export const orcamentoRouter = router({
       // Decodificar base64
       const buffer = Buffer.from(input.fileBase64, 'base64');
       console.log(`[Importar] Buffer decodificado: ${buffer.length} bytes`);
-      const wb = XLSX.read(buffer, { type: 'buffer' });
+      const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
 
       // Localizar abas obrigatórias
       const orcTab = wb.SheetNames.find(n =>
@@ -1881,7 +1881,7 @@ export const orcamentoRouter = router({
 
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
-      const wb = XLSX.read(buffer, { type: 'buffer' });
+      const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
 
       // Localizar aba de orçamento
       const orcTab = wb.SheetNames.find(n =>
@@ -2175,7 +2175,7 @@ export const orcamentoRouter = router({
 
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
-      const wb = XLSX.read(buffer, { type: 'buffer' });
+      const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
 
       const cid = input.companyId;
       const oid = input.orcamentoId;
@@ -3142,7 +3142,7 @@ export const orcamentoRouter = router({
       // Importação dinâmica do xlsx (igual às outras procedures)
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
-      const wb = XLSX.read(buffer, { type: 'buffer' });
+      const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
 
       const insTab = wb.SheetNames.find((n: string) => n.toLowerCase() === 'insumos');
       if (!insTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "Insumos" não encontrada na planilha.' });
@@ -3226,7 +3226,7 @@ export const orcamentoRouter = router({
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco indisponível.' });
       const { default: XLSX } = await import('xlsx');
       const buf = Buffer.from(input.fileBase64, 'base64');
-      const wb  = XLSX.read(buf, { type: 'buffer' });
+      const wb  = XLSX.read(buf, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
 
       // Busca aba de CPUs (composições)
       const cpusTab = wb.SheetNames.find(n =>
@@ -3964,7 +3964,7 @@ export const orcamentoRouter = router({
       // Ler arquivo
       const buf = Buffer.from(input.fileBase64, 'base64');
       const XLSX = await import('xlsx');
-      const wb = XLSX.read(buf, { type: 'buffer', cellDates: true });
+      const wb = XLSX.read(buf, { type: 'buffer', cellDates: true, cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
       // Procura aba de orçamento (Orçamento, Orcamento, custo, planilha)
       const abaOrc = wb.SheetNames.find(n =>
         /orçamento|orcamento|custo|planilha/i.test(n)
@@ -4087,7 +4087,7 @@ export const orcamentoRouter = router({
       // Parsear planilha META (metaPerc=0: lemos os preços como são, sem redução adicional)
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
-      const wb = XLSX.read(buffer, { type: 'buffer' });
+      const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
 
       const orcTab = wb.SheetNames.find(n =>
         n.toLowerCase().replace(/[^a-z]/g, '').startsWith('or') ||
