@@ -119,14 +119,19 @@ export default function OrcamentoBdiIndicadores({
   }, [bdiLinhas, totalVenda]);
 
   // ── Waterfall de composição do preço ──────────────────────────────
-  // Mostra a construção: custo base → cada comp. BDI → preço de venda
+  // Custo Base → BDI (incremento real = totalVenda - totalCusto) → Preço Venda
+  // Para múltiplas abas, cada aba recebe uma fatia proporcional ao seu B-02%.
   const waterfall = useMemo(() => {
     const base = totalCusto;
+    const totalBdiR$ = Math.max(0, totalVenda - totalCusto);
+    const totalAbaPct = componentes.reduce((s, c) => s + c.pct, 0);
+
     const rows: { label: string; inicio: number; fim: number; cor: string }[] = [];
     rows.push({ label: "Custo Base", inicio: 0, fim: base, cor: "#f59e0b" });
     let acum = base;
     componentes.forEach((c, i) => {
-      const delta = c.valorR$;
+      // Incremento proporcional: garante que a soma feche exatamente em totalVenda
+      const delta = totalAbaPct > 0 ? (c.pct / totalAbaPct) * totalBdiR$ : 0;
       rows.push({ label: c.nome?.slice(0, 16) ?? `C${i}`, inicio: acum, fim: acum + delta, cor: COLORS[(i + 1) % COLORS.length] });
       acum += delta;
     });
