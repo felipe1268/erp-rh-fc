@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 471,
+    titulo: "Cotações — Corrigido erro ao excluir cotação com OC vinculada",
+    descricao: "Corrigido o erro 'Failed query: delete from compras_cotacoes' ao tentar excluir cotações que possuíam OC gerada. A função excluirCotacao agora faz cascata completa na ordem correta: (1) deleta itens das OCs vinculadas; (2) deleta as OCs; (3) reverte status da SC para 'pendente'; (4) deleta respostas e participantes (fornecedores) da cotação; (5) deleta itens da cotação; (6) deleta a cotação. Anteriormente a função só deletava os itens da cotação e tentava deletar a cotação diretamente, quebrando a FK constraint de compras_ordens.cotacao_id.",
+    tipo: "correcao",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 470,
     titulo: "Realocação — Economia em Compras: corrigido uso de metaTotal (valor total orçado por linha)",
     descricao: "Corrigido cálculo de 'Economia em Compras' no painel de saldo da página de Realocações. Erro anterior: usava metaUnitTotal × qtd_comprada, que comparava apenas preço unitário e ignorava variação de quantidade. Correção: passa a usar metaTotal (valor total orçado para cada linha do orçamento), que reflete tanto variação de preço quanto de quantidade. A OC inteira só gera economia se a soma total comprada for menor que a soma total orçada. Resultado para HOTEL DO PAPA / OC-2026-0001: passou de R$526,04 (incorreto) para R$0,00, pois o item 02.02.01.02.03 foi comprado em quantidade maior que o orçamento previa, estourando o total da OC em R$321,30.",

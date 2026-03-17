@@ -1033,8 +1033,40 @@ Responda APENAS com um objeto JSON no formato:
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+
+      // 1. Encontrar OCs vinculadas a esta cotação
+      const ocs = await db.select({ id: comprasOrdens.id, solicitacaoId: comprasOrdens.solicitacaoId })
+        .from(comprasOrdens)
+        .where(eq(comprasOrdens.cotacaoId, input.id));
+
+      if (ocs.length > 0) {
+        const ocIds = ocs.map(o => o.id);
+
+        // 2. Deletar itens das OCs
+        await db.delete(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocIds));
+
+        // 3. Deletar as OCs
+        await db.delete(comprasOrdens).where(inArray(comprasOrdens.id, ocIds));
+
+        // 4. Reverter SC(s) para "pendente" (sem cotação ativa)
+        const scIds = ocs.map(o => o.solicitacaoId).filter(Boolean) as number[];
+        if (scIds.length > 0) {
+          await db.update(comprasSolicitacoes)
+            .set({ status: "pendente" })
+            .where(inArray(comprasSolicitacoes.id, scIds));
+        }
+      }
+
+      // 5. Deletar respostas e participantes da cotação
+      await db.delete(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, input.id));
+      await db.delete(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, input.id));
+
+      // 6. Deletar itens da cotação
       await db.delete(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
+
+      // 7. Deletar a cotação
       await db.delete(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
+
       return { ok: true };
     }),
 
