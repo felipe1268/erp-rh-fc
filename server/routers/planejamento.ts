@@ -1806,17 +1806,14 @@ export const planejamentoRouter = router({
         rows.forEach(a => { if (!visited.has(a.id)) sequencia.push(a); });
 
       } else {
-        // Sem predecessoras: pedir sequência à IA
-        const apiKey = process.env.GOOGLE_API_KEY;
-        if (!apiKey) {
-          sequencia = rows;
-        } else {
-          try {
-            const listaAtiv = rows.map(a =>
-              `{"id":${a.id},"eap":"${a.eapCodigo || "-"}","nome":"${a.nome.replace(/"/g, "'")}"}`
-            ).join(",\n");
+        // Sem predecessoras: pedir sequência à IA (Claude)
+        try {
+          const { invokeLLM } = await import("../_core/llm");
+          const listaAtiv = rows.map(a =>
+            `{"id":${a.id},"eap":"${a.eapCodigo || "-"}","nome":"${a.nome.replace(/"/g, "'")}"}`
+          ).join(",\n");
 
-            const prompt = `Você é um especialista em construção civil brasileiro com domínio em planejamento de obras.
+          const prompt = `Você é um especialista em construção civil brasileiro com domínio em planejamento de obras.
 
 Abaixo está uma lista de atividades de uma obra de construção civil. Analise os nomes e códigos EAP de cada atividade e ordene-as em sequência construtiva lógica, respeitando a ordem natural da construção civil brasileira:
 
@@ -1843,54 +1840,31 @@ Atividades da obra (JSON):
 Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada atividade deve aparecer exatamente uma vez. Formato obrigatório:
 {"ordem":[id1,id2,id3,...]}`;
 
-            const body = {
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                maxOutputTokens: 4096,
-                temperature: 0.0,
-                responseMimeType: "application/json",
-                responseSchema: {
-                  type: "object",
-                  properties: {
-                    ordem: {
-                      type: "array",
-                      items: { type: "integer" },
-                      description: "IDs das atividades em ordem de execução construtiva",
-                    },
-                  },
-                  required: ["ordem"],
-                },
-              },
-            };
+          const result = await invokeLLM({
+            messages: [{ role: "user", content: prompt }],
+            maxTokens: 4096,
+          });
 
-            const res = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-              { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
-            );
+          const text = typeof result.choices[0]?.message?.content === "string"
+            ? result.choices[0].message.content
+            : "";
 
-            if (res.ok) {
-              const data: any = await res.json();
-              const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-              if (text) {
-                const parsed = JSON.parse(text);
-                if (Array.isArray(parsed.ordem) && parsed.ordem.length > 0) {
-                  const idOrder = parsed.ordem as number[];
-                  const rowMap = new Map(rows.map(r => [r.id, r]));
-                  const sorted: typeof rows = [];
-                  idOrder.forEach(id => { const r = rowMap.get(id); if (r) sorted.push(r); });
-                  rows.forEach(r => { if (!sorted.find(s => s.id === r.id)) sorted.push(r); });
-                  sequencia = sorted;
-                } else { sequencia = rows; }
-              } else { sequencia = rows; }
-            } else {
-              const errBody = await res.text().catch(() => "");
-              console.error("[Simulador] Gemini error:", res.status, errBody);
-              sequencia = rows;
-            }
-          } catch (e) {
-            console.error("[Simulador] Erro ao chamar IA:", e);
-            sequencia = rows;
-          }
+          if (text) {
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            const clean = jsonMatch ? jsonMatch[0] : text;
+            const parsed = JSON.parse(clean);
+            if (Array.isArray(parsed.ordem) && parsed.ordem.length > 0) {
+              const idOrder = parsed.ordem as number[];
+              const rowMap = new Map(rows.map(r => [r.id, r]));
+              const sorted: typeof rows = [];
+              idOrder.forEach(id => { const r = rowMap.get(id); if (r) sorted.push(r); });
+              rows.forEach(r => { if (!sorted.find(s => s.id === r.id)) sorted.push(r); });
+              sequencia = sorted;
+            } else { sequencia = rows; }
+          } else { sequencia = rows; }
+        } catch (e) {
+          console.error("[Simulador] Erro ao chamar IA:", e);
+          sequencia = rows;
         }
       }
 

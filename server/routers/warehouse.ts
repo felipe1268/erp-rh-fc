@@ -508,8 +508,7 @@ export const warehouseRouter = router({
     }))
     .mutation(async ({ input }) => {
       try {
-        const apiKey = process.env.GOOGLE_API_KEY;
-        if (!apiKey) throw new Error("GOOGLE_API_KEY não configurada");
+        const { invokeAnthropicVision } = await import("../_core/llm");
 
         const catList = (input.categorias ?? []).join(", ") || "Ferramentas, Materiais de construção, EPIs, Elétrico, Hidráulico, Outros";
         const unidList = (input.unidades ?? []).join(", ") || "un, kg, m, m², L, cx, sc, rolo, barra, pç";
@@ -524,40 +523,19 @@ Unidades disponíveis: ${unidList}
 Responda SOMENTE com JSON válido (sem markdown, sem explicações):
 {"nome":"nome técnico do produto","categoria":"categoria das disponíveis","unidade":"unidade das disponíveis","observacoes":"especificações breves ou vazio"}`;
 
-        // Use Gemini native API — suporta inline base64 com garantia
-        const body = {
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: input.mimeType, data: input.base64 } },
-              { text: prompt },
-            ],
-          }],
-          generationConfig: {
-            maxOutputTokens: 1024,
-            temperature: 0.1,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-        };
+        const text = await invokeAnthropicVision({
+          prompt,
+          base64: input.base64,
+          mimeType: input.mimeType,
+          maxTokens: 1024,
+        });
 
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
-        );
-
-        if (!res.ok) {
-          const errText = await res.text();
-          console.error("[sugerirCadastroItem] Gemini error:", errText.slice(0, 400));
-          throw new Error(`Gemini ${res.status}: ${errText.slice(0, 200)}`);
-        }
-
-        const data: any = await res.json();
-        const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
         console.log("[sugerirCadastroItem] Resposta:", text.slice(0, 300));
 
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         const clean = jsonMatch ? jsonMatch[0] : text.replace(/```json|```/g, "").trim();
         if (!clean) {
-          console.warn("[sugerirCadastroItem] Resposta vazia do Gemini.");
+          console.warn("[sugerirCadastroItem] Resposta vazia da IA.");
           return { nome: "", categoria: "", unidade: "un", observacoes: "" };
         }
         const parsed = JSON.parse(clean);
