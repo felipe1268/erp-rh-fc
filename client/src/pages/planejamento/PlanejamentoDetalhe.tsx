@@ -3139,7 +3139,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
           { color: "#1d4ed8", dash: false, width: 2, label: "Baseline (Rev 00)" },
           { color: "#ef4444", dash: false, width: 4, label: "Revisão Atual" },
           { color: "#4169E1", dash: false, width: 2, label: "Realizado" },
-          { color: "#7c3aed", dash: true,  width: 2, label: "Tendência (projeção)" },
+          { color: "#16a34a", dash: true,  width: 2, label: "Tendência (projeção)" },
         ].map((l, i) => (
           <div key={i} className="flex items-center gap-1.5">
             <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5"
@@ -3178,7 +3178,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
             <Line type="monotone" dataKey="baseline"  name="Baseline"       stroke="#1d4ed8" strokeWidth={2}   dot={false} connectNulls />
             <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls />
             <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#4169E1" strokeWidth={2}   dot={{ r: 4 }} connectNulls />
-            <Line type="monotone" dataKey="tendencia" name="Tendência"      stroke="#7c3aed" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
+            <Line type="monotone" dataKey="tendencia" name="Tendência"      stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>
       </div>

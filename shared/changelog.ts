@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 483,
+    titulo: "Curva S — Tendência em verde",
+    descricao: "Linha de Tendência (projeção) alterada de roxo para verde (#16a34a) na Curva S. Legenda atualizada.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 482,
     titulo: "Curva S — Revisão Atual em vermelho e linha mais grossa",
     descricao: "A linha 'Revisão Atual' na Curva S agora é vermelha (#ef4444) e mais grossa (strokeWidth 3.5), destacando-se visualmente das demais. A legenda também foi atualizada para refletir a nova cor e espessura.",
