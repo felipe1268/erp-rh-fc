@@ -3401,8 +3401,25 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
     return m;
   }, [avancos, semanaAtual]);
 
+  // Avanço mais recente por atividade (qualquer semana ≤ semanaAtual)
+  // Usado como fallback quando a semana selecionada não tem registro (ex: semana futura)
+  const avancoMaisRecente = useMemo(() => {
+    const m: Record<number, number> = {};
+    const latestSem: Record<number, string> = {};
+    avancos
+      .filter((av: any) => av.semana <= semanaAtual)
+      .forEach((av: any) => {
+        const id = av.atividadeId;
+        if (!latestSem[id] || av.semana > latestSem[id]) {
+          latestSem[id] = av.semana;
+          m[id] = n(av.percentualAcumulado);
+        }
+      });
+    return m;
+  }, [avancos, semanaAtual]);
+
   const getAvanco = (id: number) =>
-    avancoLocal[id] !== undefined ? avancoLocal[id] : (avancoExistente[id] ?? 0);
+    avancoLocal[id] !== undefined ? avancoLocal[id] : (avancoExistente[id] ?? avancoMaisRecente[id] ?? 0);
 
   // Atividades pendentes: na semana + previsto > 0 + realizado = 0
   const folhasPendentes = useMemo(() => {
@@ -3456,7 +3473,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
   }, [folhas, semanaAtual]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
-  // Prioriza avancoLocal (edições não salvas / import) sobre avancoExistente (banco)
+  // Prioriza avancoLocal > avancoExistente (semana exata) > avancoMaisRecente (semana mais recente ≤ atual)
   // Fallback para peso igual (1/n) quando nenhuma atividade tem peso financeiro
   const realizadoAcum = useMemo(() => {
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
@@ -3464,12 +3481,14 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils }: 
     const denom     = semPeso ? (folhas.length || 1) : pesoTotal;
     let soma = 0;
     folhas.forEach((a: any) => {
-      const val  = avancoLocal[a.id] !== undefined ? avancoLocal[a.id] : (avancoExistente[a.id] ?? 0);
+      const val  = avancoLocal[a.id] !== undefined
+        ? avancoLocal[a.id]
+        : (avancoExistente[a.id] ?? avancoMaisRecente[a.id] ?? 0);
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
       soma += (val * peso) / denom;
     });
     return +soma.toFixed(1);
-  }, [folhas, avancoExistente, avancoLocal]);
+  }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal]);
 
   const delta = +(realizadoAcum - previsto).toFixed(1);
 

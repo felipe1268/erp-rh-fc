@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 490,
+    titulo: "Avanço Semanal — Realizado Acumulado não zera em semanas futuras",
+    descricao: "Corrigido: ao navegar para semanas futuras sem avanço registrado, o 'Realizado (Acum.)' e a coluna '% Acumulado' agora exibem o avanço mais recente registrado para cada atividade (qualquer semana ≤ semana selecionada), em vez de zerar.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 489,
     titulo: "Curva S — tooltip em ordem sequencial: Baseline → Rev. anteriores → Atual",
     descricao: "Tooltip agora exibe as linhas em ordem cronológica correta: Baseline, revisões anteriores ativas (Rev 01, Rev 02...), Revisão Atual, Realizado e Tendência.",
