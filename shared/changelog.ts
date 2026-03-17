@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 497,
+    titulo: "Visão Geral — corrigido 'selectedCompany is not defined'",
+    descricao: "Corrigido ReferenceError ao clicar em 'Ver detalhes' em Atividades em Atraso: o componente VisaoGeral é uma função separada e precisava chamar useCompany() para ter acesso a selectedCompany, que é usada no cabeçalho do relatório imprimível.",
+    tipo: "correcao",
+    modulos: "Planejamento / Visão Geral",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 496,
     titulo: "EPIs — corrigido erro ao cadastrar novo EPI",
     descricao: "Corrigido bug 'Cannot read properties of undefined (reading id)' ao cadastrar EPI: o insert precisava de .returning() para devolver o ID inserido no PostgreSQL/Drizzle, pois sem ele o array de resultado vinha vazio.",

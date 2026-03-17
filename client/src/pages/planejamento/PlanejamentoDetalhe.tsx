@@ -1169,6 +1169,7 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
 // ABA: VISÃO GERAL
 // ═════════════════════════════════════════════════════════════════════════════
 function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, user, onEditarProjeto, onVerRefisCompleto }: any) {
+  const { selectedCompany } = useCompany();
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
   const totalAtiv   = atividades.filter((a: any) => !a.isGrupo).length;
