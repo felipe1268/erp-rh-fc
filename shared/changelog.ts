@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 466,
+    titulo: "Realocação de Verba — Painel Saldo Disponível (DI-08 + Economia em Compras)",
+    descricao: "Adicionado painel 'Saldo Disponível para Realocação' no topo da página de Realocações, visível antes das abas. O painel exibe 4 cards: (1) DI-08 Orçado — total da reserva 'Taxa de risco, Imprevistos e Pós Obra' consolidado por obra; (2) DI-08 Utilizado — soma de todos os débitos realizados da reserva; (3) Economia em Compras — soma das sobras de OCs aprovadas abaixo da meta de orçamento; (4) Total Disponível — soma do DI-08 disponível com as economias em compras, destacado em verde escuro. Inclui barra de progresso de utilização do DI-08. Nova query getSaldosRealocacaoGeral no backend (compras router), sem dependência de obra ou cotação específica.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 465,
     titulo: "Compras — Cancelar aprovação de cotação (retornar ao Mapa de Cotação)",
     descricao: "Novo botão 'Cancelar Aprovação' na tela de detalhe de cotação, visível apenas para o Administrador Master quando a cotação está 'Aprovada'. Ao confirmar (com justificativa obrigatória), a ação remove a(s) OC(s) gerada(s) (e seus itens), reverte o status da cotação para 'Pendente' e reverte o status da Solicitação de Compra vinculada para 'cotacao'. OCs com status 'entregue', 'recebida' ou 'parcialmente_recebida' não podem ser revertidas — o sistema bloqueia com mensagem explicativa. Nova mutation cancelarAprovacaoCotacao adicionada ao router de compras com validação de role admin_master no servidor.",

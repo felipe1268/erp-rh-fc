@@ -1247,6 +1247,91 @@ Responda APENAS com um objeto JSON no formato:
       return { ok: true, url };
     }),
 
+  getSaldosRealocacaoGeral: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      // ── 1. DI-08 por obra (latest orcamento por obra) ──────────────────
+      const orcs = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId })
+        .from(orcamentos)
+        .where(eq(orcamentos.companyId, input.companyId))
+        .orderBy(desc(orcamentos.id));
+
+      // latest per obra
+      const latestPerObra = new Map<number, number>();
+      for (const o of orcs) {
+        if (o.obraId && !latestPerObra.has(o.obraId)) latestPerObra.set(o.obraId, o.id);
+      }
+      const latestOrcIds = [...latestPerObra.values()];
+
+      let di08Rows: { orcamentoId: number; valorAbsoluto: string | null }[] = [];
+      if (latestOrcIds.length > 0) {
+        di08Rows = await db.select({ orcamentoId: orcamentoBdi.orcamentoId, valorAbsoluto: orcamentoBdi.valorAbsoluto })
+          .from(orcamentoBdi)
+          .where(and(inArray(orcamentoBdi.orcamentoId, latestOrcIds), eq(orcamentoBdi.codigo, "DI-08")));
+      }
+      const di08Total = di08Rows.reduce((s, r) => s + n(r.valorAbsoluto), 0);
+
+      // débitos de risco por orcamentoId
+      let allDebitos: { orcamentoId: number | null; valor: string | null }[] = [];
+      if (latestOrcIds.length > 0) {
+        allDebitos = await db.select({ orcamentoId: comprasRiscoDebitos.orcamentoId, valor: comprasRiscoDebitos.valor })
+          .from(comprasRiscoDebitos)
+          .where(inArray(comprasRiscoDebitos.orcamentoId, latestOrcIds));
+      }
+      const di08Usado = allDebitos.reduce((s, r) => s + n(r.valor), 0);
+      const di08Disponivel = Math.max(0, di08Total - di08Usado);
+
+      // ── 2. Sobras das compras abaixo da meta ──────────────────────────
+      const ocs = await db.select({ id: comprasOrdens.id })
+        .from(comprasOrdens)
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
+        ));
+
+      let totalSobras = 0;
+      if (ocs.length > 0) {
+        const ocItens = await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)));
+        const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+        let scItens: { id: number; orcamentoItemId: number | null }[] = [];
+        if (scItemIds.length > 0) {
+          scItens = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId })
+            .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+        }
+        const orcIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
+        let metas: { id: number; metaUnitTotal: string | null }[] = [];
+        if (orcIds.length > 0) {
+          metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
+            .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIds));
+        }
+        const scToOrc: Record<number, number> = {};
+        for (const s of scItens) if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+        const orcToMeta: Record<number, number> = {};
+        for (const m of metas) orcToMeta[m.id] = n(m.metaUnitTotal);
+
+        for (const it of ocItens) {
+          if (!it.solicitacaoItemId) continue;
+          const orcId = scToOrc[it.solicitacaoItemId];
+          if (!orcId) continue;
+          const metaUnit = orcToMeta[orcId] ?? 0;
+          if (metaUnit === 0) continue;
+          const qty = n(it.quantidade);
+          const sobra = (metaUnit - n(it.precoUnitario)) * qty;
+          if (sobra > 0.01) totalSobras += sobra;
+        }
+      }
+
+      return {
+        di08Total,
+        di08Usado,
+        di08Disponivel,
+        totalSobras,
+        totalDisponivel: di08Disponivel + totalSobras,
+      };
+    }),
+
   buscarSaldosRealocacao: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional(), cotacaoId: z.number().optional(), deficit: z.number() }))
     .query(async ({ input }) => {

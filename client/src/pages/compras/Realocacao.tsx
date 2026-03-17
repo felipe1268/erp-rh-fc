@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock } from "lucide-react";
+import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -43,6 +43,11 @@ export default function ComprasRealocacao() {
   const obraIdFiltro = filtroObraRisco && filtroObraRisco !== "all" ? parseInt(filtroObraRisco) : undefined;
   const { data: debitosRisco, isLoading: loadingRisco, refetch: refetchRisco } = trpc.compras.listarDebitosRisco.useQuery(
     { companyId, obraId: obraIdFiltro },
+    { enabled: !!companyId }
+  );
+
+  const { data: saldos, isLoading: loadingSaldos } = trpc.compras.getSaldosRealocacaoGeral.useQuery(
+    { companyId },
     { enabled: !!companyId }
   );
 
@@ -84,6 +89,72 @@ export default function ComprasRealocacao() {
             <h1 className="text-2xl font-bold text-gray-900">Realocações</h1>
             <p className="text-sm text-gray-500">Histórico de realocações de verba e débitos da reserva de risco</p>
           </div>
+        </div>
+
+        {/* ── Painel: Saldo Disponível para Realocação ───────────────── */}
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Wallet className="h-5 w-5 text-emerald-600" />
+            <h2 className="text-sm font-semibold text-emerald-800 uppercase tracking-wider">Saldo Disponível para Realocação</h2>
+            {loadingSaldos && <Loader2 className="h-4 w-4 animate-spin text-emerald-500 ml-1" />}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* DI-08 Total orçado */}
+            <div className="bg-white rounded-xl border border-emerald-100 p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <ShieldAlert className="h-4 w-4 text-blue-500" />
+                <p className="text-xs text-gray-500 font-medium">DI-08 — Orçado</p>
+              </div>
+              <p className="text-base font-bold text-blue-700">{fmt(saldos?.di08Total ?? 0)}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">Taxa de risco, Imprevistos e Pós Obra</p>
+            </div>
+
+            {/* DI-08 Utilizado */}
+            <div className="bg-white rounded-xl border border-orange-100 p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingDown className="h-4 w-4 text-orange-500" />
+                <p className="text-xs text-gray-500 font-medium">DI-08 — Utilizado</p>
+              </div>
+              <p className="text-base font-bold text-orange-600">{fmt(saldos?.di08Usado ?? 0)}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">Débitos realizados da reserva</p>
+            </div>
+
+            {/* Sobras de compras */}
+            <div className="bg-white rounded-xl border border-teal-100 p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <PackageSearch className="h-4 w-4 text-teal-500" />
+                <p className="text-xs text-gray-500 font-medium">Economia em Compras</p>
+              </div>
+              <p className="text-base font-bold text-teal-700">{fmt(saldos?.totalSobras ?? 0)}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">OCs aprovadas abaixo da meta</p>
+            </div>
+
+            {/* Total disponível — destaque */}
+            <div className="bg-emerald-600 rounded-xl p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle className="h-4 w-4 text-emerald-100" />
+                <p className="text-xs text-emerald-100 font-medium">Total Disponível</p>
+              </div>
+              <p className="text-xl font-extrabold text-white">{fmt(saldos?.totalDisponivel ?? 0)}</p>
+              <p className="text-[10px] text-emerald-200 mt-0.5">DI-08 disponível + economias</p>
+            </div>
+          </div>
+
+          {/* Barra de progresso DI-08 */}
+          {(saldos?.di08Total ?? 0) > 0 && (
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>Utilização DI-08</span>
+                <span>{(((saldos?.di08Usado ?? 0) / (saldos?.di08Total ?? 1)) * 100).toFixed(1)}% utilizado</span>
+              </div>
+              <div className="h-2 bg-emerald-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-orange-400 rounded-full transition-all"
+                  style={{ width: `${Math.min(100, ((saldos?.di08Usado ?? 0) / (saldos?.di08Total ?? 1)) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <Tabs defaultValue="risco">
