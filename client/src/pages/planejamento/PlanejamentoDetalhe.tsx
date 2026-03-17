@@ -3136,9 +3136,9 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
       {/* Legenda */}
       <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
         {[
-          { color: "#1d4ed8", dash: false, width: 2, label: "Baseline (Rev 00)" },
+          { color: "#1e40af", dash: false, width: 2, label: "Baseline (Rev 00)" },
           { color: "#ef4444", dash: false, width: 4, label: "Revisão Atual" },
-          { color: "#4169E1", dash: false, width: 2, label: "Realizado" },
+          { color: "#f97316", dash: false, width: 2, label: "Realizado" },
           { color: "#16a34a", dash: true,  width: 2, label: "Tendência (projeção)" },
         ].map((l, i) => (
           <div key={i} className="flex items-center gap-1.5">
@@ -3175,9 +3175,9 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct }: any) {
             {semanas.includes(hoje) && (
               <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
             )}
-            <Line type="monotone" dataKey="baseline"  name="Baseline"       stroke="#1d4ed8" strokeWidth={2}   dot={false} connectNulls />
+            <Line type="monotone" dataKey="baseline"  name="Baseline"       stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls />
             <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls />
-            <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#4169E1" strokeWidth={2}   dot={{ r: 4 }} connectNulls />
+            <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#f97316" strokeWidth={2}   dot={{ r: 4 }} connectNulls />
             <Line type="monotone" dataKey="tendencia" name="Tendência"      stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>

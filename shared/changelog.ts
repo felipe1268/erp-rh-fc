@@ -2392,6 +2392,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 485,
+    titulo: "Curva S — cores totalmente distintas em cada linha",
+    descricao: "Baseline: azul escuro (#1e40af), Revisão Atual: vermelho (#ef4444) mantido, Realizado: laranja (#f97316), Tendência: verde (#16a34a). Legenda atualizada.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 484,
     titulo: "Avanço Semanal — semanas com avanço permanecem verdes ao trocar de revisão",
     descricao: "O marcador verde no seletor de semanas agora consulta avanços de TODAS as revisões do projeto (não só a revisão atual). Assim, semanas onde já houve progresso registrado nunca perdem o indicador verde ao criar ou trocar de revisão.",
