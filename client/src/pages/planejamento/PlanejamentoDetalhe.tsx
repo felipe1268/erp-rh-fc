@@ -422,14 +422,14 @@ export default function PlanejamentoDetalhe() {
               {temPrevisto && (
                 <div className="mb-2">
                   <div className="flex items-center gap-3">
-                    <span className="text-[11px] font-medium w-16 shrink-0" style={{ color: "#B8860B" }}>Previsto</span>
-                    <div className="flex-1 rounded-full h-2.5 overflow-hidden" style={{ background: "#FFF8DC" }}>
+                    <span className="text-[11px] font-medium w-16 shrink-0" style={{ color: "#9A7408" }}>Previsto</span>
+                    <div className="flex-1 rounded-full h-2.5 overflow-hidden" style={{ background: "#F5E9C0" }}>
                       <div
                         className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, previsto!)}%`, background: "#C9A000" }}
+                        style={{ width: `${Math.min(100, previsto!)}%`, background: "#D4AF37" }}
                       />
                     </div>
-                    <span className="text-xs font-bold w-12 text-right shrink-0" style={{ color: "#B8860B" }}>
+                    <span className="text-xs font-bold w-12 text-right shrink-0" style={{ color: "#9A7408" }}>
                       {fPct(previsto!)}
                     </span>
                   </div>
