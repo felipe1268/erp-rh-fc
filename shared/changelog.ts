@@ -2203,6 +2203,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 463,
+    titulo: "Indicadores Financeiros — Folga (B-E) substituída por ROI do Contrato",
+    descricao: "Card 'Folga (acima B-E)' removido por ser redundante com Lucro Bruto. Substituído por 'ROI do Contrato' (Lucro Líquido ÷ Custo Total × 100) — indica o retorno financeiro real sobre cada R$ investido na obra, com badge de % em roxo/vermelho conforme positivo/negativo.",
+    tipo: "feature",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 462,
     titulo: "Indicadores Financeiros — nova ordem dos cards e tooltips explicativos ao hover",
     descricao: "Cards reordenados: linha 1 = Lucro Bruto | Lucro Líquido | Break-even (sequência lógica de resultado); linha 2 = Markup | Carga Tributária | Folga (acima B-E). Cada card agora exibe um tooltip dark ao passar o mouse mostrando o cálculo exato (fórmula e explicação do indicador).",

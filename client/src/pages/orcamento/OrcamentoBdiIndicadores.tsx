@@ -324,8 +324,6 @@ export default function OrcamentoBdiIndicadores({
   // Break-even = receita mínima onde lucro = 0
   //   = totalVenda - LucroLC (toda receita exceto a margem de lucro bruto)
   const breakEven      = totalVenda - lucroLC;
-  // Folga acima do break-even = Lucro Bruto (o que supera todos os custos + tributos)
-  const folgaBreakEven = lucroLC;
   // Lucro Líquido = L-02 da planilha BDI (já calculado pela planilha, após deduções como
   // comissionamento e outros ajustes internos). NÃO é Lucro Bruto − Tributos fiscais.
   const l02Line        = bdiLinhas.find((l: any) => l.codigo === 'L-02');
@@ -622,27 +620,33 @@ export default function OrcamentoBdiIndicadores({
             </div>
           </div>
 
-          {/* Folga acima do break-even */}
-          <div className={`relative group rounded-lg border-l-4 border p-3 flex flex-col gap-0.5 cursor-default ${folgaBreakEven >= 0 ? "border-l-teal-500 border-teal-100 bg-teal-50/30" : "border-l-red-500 border-red-100 bg-red-50/30"}`}>
-            <div className="flex items-center justify-between">
-              <span className={`text-[10px] uppercase tracking-widest font-bold ${folgaBreakEven >= 0 ? "text-teal-700" : "text-red-700"}`}>Folga (acima B-E)</span>
-              <span className={`text-[11px] font-bold text-white rounded px-1.5 py-0.5 leading-none ${folgaBreakEven >= 0 ? "bg-teal-500" : "bg-red-500"}`}>
-                {totalVenda > 0 ? ((folgaBreakEven / totalVenda) * 100).toFixed(2) : "0.00"}%
-              </span>
-            </div>
-            <span className={`text-xl font-extrabold leading-tight mt-0.5 ${folgaBreakEven >= 0 ? "text-teal-800" : "text-red-700"}`}>
-              {formatBRL(folgaBreakEven)}
-            </span>
-            <span className="text-[10px] text-slate-400">= Lucro Bruto (LC)</span>
-            <div className="absolute bottom-full left-0 mb-2 z-20 w-64 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
-              <div className="bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg leading-relaxed">
-                <p className="font-semibold mb-1 text-teal-300">📐 Cálculo</p>
-                <p>= Lucro Bruto (LC)</p>
-                <p className="text-slate-400 mt-1">Quanto o contrato supera o ponto de equilíbrio financeiro. Equivale ao Lucro Bruto — é a "gordura" acima dos custos mínimos.</p>
+          {/* ROI do Contrato */}
+          {(() => {
+            const roiPct = totalCusto > 0 ? (lucroLiquido / totalCusto) * 100 : 0;
+            const isPos  = roiPct >= 0;
+            return (
+              <div className={`relative group rounded-lg border-l-4 border p-3 flex flex-col gap-0.5 cursor-default ${isPos ? "border-l-violet-500 border-violet-100 bg-violet-50/30" : "border-l-red-500 border-red-100 bg-red-50/30"}`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] uppercase tracking-widest font-bold ${isPos ? "text-violet-700" : "text-red-700"}`}>ROI do Contrato</span>
+                  <span className={`text-[11px] font-bold text-white rounded px-1.5 py-0.5 leading-none ${isPos ? "bg-violet-500" : "bg-red-500"}`}>
+                    {roiPct.toFixed(2)}%
+                  </span>
+                </div>
+                <span className={`text-xl font-extrabold leading-tight mt-0.5 ${isPos ? "text-violet-800" : "text-red-700"}`}>
+                  {formatBRL(lucroLiquido)}
+                </span>
+                <span className="text-[10px] text-slate-400">retorno sobre custo investido</span>
+                <div className="absolute bottom-full left-0 mb-2 z-20 w-64 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+                  <div className="bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg leading-relaxed">
+                    <p className="font-semibold mb-1 text-violet-300">📐 Cálculo</p>
+                    <p>Lucro Líquido ÷ Custo Total × 100</p>
+                    <p className="text-slate-400 mt-1">Retorno financeiro efetivo sobre cada R$ de custo investido na obra. ROI de 15% significa que para cada R$1,00 gasto a empresa lucra R$0,15 líquido.</p>
+                  </div>
+                  <div className="w-2.5 h-2.5 bg-slate-800 rotate-45 ml-4 -mt-1.5" />
+                </div>
               </div>
-              <div className="w-2.5 h-2.5 bg-slate-800 rotate-45 ml-4 -mt-1.5" />
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Desconto negociado (condicional) */}
           {valorNegociado > 0 && (
