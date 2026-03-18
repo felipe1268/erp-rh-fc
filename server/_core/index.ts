@@ -103,6 +103,8 @@ async function startServer() {
         const { sql } = await import("drizzle-orm");
         await db.execute(sql`ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS diferencas TEXT`);
         console.log("[ColFix] planejamento_revisoes.diferencas OK");
+        await db.execute(sql`ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS module_access TEXT`);
+        console.log("[ColFix] user_groups.module_access OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     // Rev.547: migração aviso prévio — adiciona dataBaixa e move concluidos auto-marcados → aguardando_pagamento

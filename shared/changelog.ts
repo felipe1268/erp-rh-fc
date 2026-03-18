@@ -3220,6 +3220,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 557,
+    titulo: "Grupos de Acesso — Correção: grupos criados não apareciam na lista",
+    descricao: "Corrigido bug crítico onde grupos de acesso eram criados com sucesso (toast confirmava) mas a lista permanecia vazia. Causa raiz: a coluna module_access não existia na tabela user_groups no banco Neon — a query SELECT falhava silenciosamente ao tentar ler essa coluna inexistente e retornava lista vazia. Solução: coluna adicionada diretamente no banco e criado mecanismo de ColFix no startup (ALTER TABLE IF NOT EXISTS) para garantir que nunca ocorra novamente.",
+    tipo: "correcao",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 556,
     titulo: "REFIS e Avanço Semanal — Alinhamento de cálculos e correção da Curva S",
     descricao: "Corrigidas divergências entre Avanço Semanal e REFIS: (1) previsto do Avanço Semanal agora usa T12:00:00 no parse de datas, eliminando bug de timezone e alinhando com o cálculo do REFIS; (2) Curva S realizada recalculada corretamente — era calculada com média de percentualSemanal (errado), agora usa o acumulado ponderado por atividade com pesoFinanceiro, idêntico ao algoritmo do avancoRealAtual do REFIS; (3) Cards KPI do REFIS (Avanço Semanal Previsto/Realizado, SPI, Desvio Físico) redesenhados com layout melhorado, barras de progresso e subtítulos informativos.",
