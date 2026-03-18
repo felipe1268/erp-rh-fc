@@ -434,15 +434,16 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
     setLoadingCities(true);
     setCityLoadProgress({ done: 0, total: missingCities.length });
-    const newCoords = new Map(cityCoords);
     for (let i = 0; i < missingCities.length; i++) {
       const city = missingCities[i];
       const coords = await geocodeCidade(city, state);
-      if (coords) newCoords.set(city, coords);
+      if (coords) {
+        // Atualizar incrementalmente — assim que cada cidade é geocodificada, o mapa já pode usá-la
+        setCityCoords(prev => { const next = new Map(prev); next.set(city, coords); return next; });
+      }
       setCityLoadProgress({ done: i + 1, total: missingCities.length });
       if (i < missingCities.length - 1) await sleep(800);
     }
-    setCityCoords(newCoords);
     setLoadingCities(false);
   }, [employees, cityCoords]);
 
@@ -472,6 +473,37 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
     const results: GeocodedEmployee[] = [];
 
+    // Helper: resolve city center coords (CITY_COORDS → geocodeCidade → state center)
+    const resolveCityCenter = async (cityName: string | null, estado: string): Promise<[number, number] | null> => {
+      const normalState = normalizeEstado(estado);
+      if (cityName) {
+        // Check CITY_COORDS first (sem chamada de API)
+        const normalizado = Object.keys(CITY_COORDS).find(
+          c => c.toLowerCase().trim() === cityName.toLowerCase().trim()
+        );
+        if (normalizado) return CITY_COORDS[normalizado];
+        // Depois tenta API Nominatim
+        const via = await geocodeCidade(cityName, normalState);
+        if (via) return via;
+      }
+      // Fallback: centro do estado
+      const sv = STATE_VIEW[normalState];
+      return sv ? sv.center : null;
+    };
+
+    const cityName = city === SEM_CIDADE_KEY ? null : city;
+    const anyEmp = emps[0];
+    const estadoRef = anyEmp?.estado ?? "";
+
+    // Resolve o centro da cidade antecipadamente para usar como fallback
+    let cityCenter: [number, number] | null = null;
+    // Se já temos em cityCoords, usar imediatamente (sem esperar API)
+    if (cityName && cityCoords.has(cityName)) {
+      cityCenter = cityCoords.get(cityName)!;
+    } else {
+      cityCenter = await resolveCityCenter(cityName, estadoRef);
+    }
+
     // 1) Geocode employees with logradouro/cep (exact)
     for (let i = 0; i < withAddress.length; i++) {
       if (geocodingAbort.current) break;
@@ -485,7 +517,12 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
           .filter(Boolean).join(", ");
       }
       const coords = addr ? await geocodeAddress(addr) : null;
-      if (coords) results.push({ ...e, lat: coords[0], lng: coords[1], isApprox: false });
+      if (coords) {
+        results.push({ ...e, lat: coords[0], lng: coords[1], isApprox: false });
+      } else if (cityCenter) {
+        // Endereço não geocodificado → posição aproximada no centro da cidade
+        results.push({ ...e, lat: cityCenter[0] + jitter(), lng: cityCenter[1] + jitter(), isApprox: true });
+      }
       setGeocodedEmployees([...results]);
       setGeocodingProgress({ done: i + 1, total: withAddress.length + (withCityOnly.length > 0 ? 1 : 0) });
       if (i < withAddress.length - 1) await sleep(1050);
@@ -493,26 +530,13 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
     // 2) Employees with only city/state — place at city center with jitter (approximate)
     if (!geocodingAbort.current && withCityOnly.length > 0) {
-      const cityName = city === SEM_CIDADE_KEY ? null : city;
-      const estado = withCityOnly[0]?.estado ?? "";
-      const normalState = normalizeEstado(estado);
-      let centerCoords: [number, number] | null = null;
-
-      if (cityName) {
-        centerCoords = await geocodeCidade(cityName, normalState);
-      } else {
-        // No city — fall back to state center
-        const sv = STATE_VIEW[normalState];
-        if (sv) centerCoords = sv.center;
-      }
-
-      if (centerCoords) {
+      if (cityCenter) {
         for (const e of withCityOnly) {
           if (geocodingAbort.current) break;
           results.push({
             ...e,
-            lat: centerCoords[0] + jitter(),
-            lng: centerCoords[1] + jitter(),
+            lat: cityCenter[0] + jitter(),
+            lng: cityCenter[1] + jitter(),
             isApprox: true,
           });
         }
@@ -522,7 +546,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     }
 
     setGeocoding(false);
-  }, [citiesInState]);
+  }, [citiesInState, cityCoords]);
 
   const goBack = () => {
     if (level === 3) {
@@ -545,9 +569,21 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     if (selectedCity === SEM_CIDADE_KEY) {
       return stateView ? { center: stateView.center, zoom: 9 } : null;
     }
-    if (!cityCoords.has(selectedCity)) return null;
-    const [lat, lng] = cityCoords.get(selectedCity)!;
-    return { center: [lat, lng] as [number, number], zoom: 13 };
+    // 1ª opção: coordenadas já geocodificadas por loadCityCoords
+    if (cityCoords.has(selectedCity)) {
+      const [lat, lng] = cityCoords.get(selectedCity)!;
+      return { center: [lat, lng] as [number, number], zoom: 13 };
+    }
+    // 2ª opção: tabela local CITY_COORDS (sem API)
+    const normalizado = Object.keys(CITY_COORDS).find(
+      c => c.toLowerCase().trim() === selectedCity.toLowerCase().trim()
+    );
+    if (normalizado) {
+      const [lat, lng] = CITY_COORDS[normalizado];
+      return { center: [lat, lng] as [number, number], zoom: 13 };
+    }
+    // 3ª opção: centro do estado como fallback
+    return stateView ? { center: stateView.center, zoom: 10 } : null;
   }, [selectedCity, cityCoords, stateView]);
 
   function toggleStatus(value: string) {
@@ -784,6 +820,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
             <div className="rounded-lg overflow-hidden border border-slate-200" style={{ height: 440 }}>
               <MapContainer
+                key={selectedCity ?? "city"}
                 center={cityView?.center || stateView?.center || [-15.78, -47.93]}
                 zoom={cityView?.zoom || 12}
                 style={{ height: "100%", width: "100%" }}

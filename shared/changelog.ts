@@ -2851,6 +2851,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 516,
+    titulo: "MapaFuncionariosInterativo — Correção de localização e PINs ausentes",
+    descricao: "Três bugs corrigidos: (1) cityView agora usa fallback triplo: cityCoords (geocodificado) → CITY_COORDS (tabela local, sem API) → centro do estado, eliminando o problema de 'mapa perdido' que exibia o centro do estado em vez da cidade selecionada. (2) loadCityCoords agora atualiza cityCoords incrementalmente a cada cidade geocodificada (setCityCoords funcional), não só no final — usuário que clica rápido na lista já tem coordenadas disponíveis. (3) handleCityClick: se geocodeAddress falha para funcionário com logradouro/CEP (endereço não encontrado no Nominatim), o funcionário é posicionado no centro da cidade com marcador aproximado em vez de desaparecer. cityCenter é resolvido antecipadamente com fallback CITY_COORDS → geocodeCidade → estado. MapContainer nível 3 recebeu key={selectedCity} para forçar remount ao trocar de cidade.",
+    tipo: "bugfix",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",
