@@ -3199,6 +3199,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
         <div className="ml-auto flex items-center gap-3 text-[10px] text-slate-500">
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: "#1e293b" }} /> Grupo</span>
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: "#1A3461" }} /> Atividade</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: "#7c3aed" }} /> ◆ Marco</span>
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm bg-emerald-500" /> Concluída</span>
           <span className="flex items-center gap-1"><span className="inline-block w-2 h-3 rounded-sm bg-red-500" /> Hoje</span>
         </div>
@@ -3246,6 +3247,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
         {/* Body rows */}
         {visibleAtiv.map((a: any) => {
           const isGrupo   = !!a.isGrupo;
+          const isMarco   = !!a.isMarco;
           const nivel      = a.nivel ?? 1;
           const avanc      = avMap[a.id] ?? 0;
           const isCollapsed = collapsed.has(a.eapCodigo ?? "");
@@ -3263,9 +3265,9 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
           const barW    = hasBar ? Math.max(endX - barX, 4) : 0;
           const fillW   = barW * (avanc / 100);
 
-          const barColor  = isGrupo ? "#1e293b" : "#1A3461";
-          const fillColor = avanc >= 100 ? "#10b981" : "#3b82f6";
-          const barH      = isGrupo ? 10 : 14;
+          const barColor  = isGrupo ? "#1e293b" : isMarco ? "#7c3aed" : "#1A3461";
+          const fillColor = avanc >= 100 ? "#10b981" : isMarco ? "#a855f7" : "#3b82f6";
+          const barH      = isGrupo ? 10 : isMarco ? 12 : 14;
           const barTop    = (ROW_H - barH) / 2;
 
           return (
@@ -3276,7 +3278,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
               {/* Left sticky label */}
               <div style={{ width: LEFT_W, minWidth: LEFT_W, height: ROW_H }}
                 className={`sticky left-0 z-10 border-b border-r border-slate-100 flex items-center px-2 gap-1 shrink-0 transition-colors
-                  ${isGrupo ? "bg-slate-50" : isHovered ? "bg-blue-50/60" : "bg-white"}`}>
+                  ${isGrupo ? "bg-slate-50" : isMarco ? (isHovered ? "bg-purple-50" : "bg-purple-50/40") : isHovered ? "bg-blue-50/60" : "bg-white"}`}>
                 {/* Indent */}
                 <div style={{ width: (nivel - 1) * 10 }} className="shrink-0" />
                 {/* Toggle button */}
@@ -3289,17 +3291,17 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
                   <div className="h-4 w-4 shrink-0" />
                 )}
                 {/* EAP badge */}
-                <span className={`text-[8px] font-mono shrink-0 px-1 rounded leading-4 ${isGrupo ? "bg-slate-200 text-slate-600" : "bg-blue-50 text-blue-600"}`}>
+                <span className={`text-[8px] font-mono shrink-0 px-1 rounded leading-4 ${isGrupo ? "bg-slate-200 text-slate-600" : isMarco ? "bg-purple-100 text-purple-700" : "bg-blue-50 text-blue-600"}`}>
                   {a.eapCodigo ?? "—"}
                 </span>
                 {/* Name */}
-                <span className={`text-[11px] truncate flex-1 ${isGrupo ? "font-semibold text-slate-700" : "text-slate-600"}`}
+                <span className={`text-[11px] truncate flex-1 ${isGrupo ? "font-semibold text-slate-700" : isMarco ? "text-purple-800 font-medium" : "text-slate-600"}`}
                   title={a.nome}>
-                  {a.nome}
+                  {isMarco && <span className="mr-0.5 text-purple-500">◆</span>}{a.nome}
                 </span>
                 {/* Progress badge */}
                 {!isGrupo && avanc > 0 && (
-                  <span className={`text-[9px] font-bold shrink-0 ${avanc >= 100 ? "text-emerald-600" : "text-blue-600"}`}>
+                  <span className={`text-[9px] font-bold shrink-0 ${avanc >= 100 ? "text-emerald-600" : isMarco ? "text-purple-600" : "text-blue-600"}`}>
                     {avanc.toFixed(0)}%
                   </span>
                 )}
