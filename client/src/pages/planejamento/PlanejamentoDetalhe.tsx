@@ -11654,8 +11654,21 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                                     type="text" inputMode="decimal"
                                     value={p.valor}
                                     placeholder="0,00"
-                                    onChange={e => atualizarParcela(p.id, "valor", e.target.value.replace(/[^0-9,.]/g, ""))}
-                                    onBlur={e => { const n2 = parseMoney(e.target.value); atualizarParcela(p.id, "valor", n2 > 0 ? toMoney(n2) : ""); }}
+                                    onChange={e => {
+                                      const raw = e.target.value.replace(/[^0-9,.]/g, "");
+                                      atualizarParcela(p.id, "valor", raw);
+                                    }}
+                                    onBlur={e => {
+                                      const n2 = parseMoney(e.target.value);
+                                      atualizarParcela(p.id, "valor", n2 > 0 ? toMoney(n2) : "");
+                                    }}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") {
+                                        const n2 = parseMoney((e.target as HTMLInputElement).value);
+                                        atualizarParcela(p.id, "valor", n2 > 0 ? toMoney(n2) : "");
+                                        (e.target as HTMLInputElement).blur();
+                                      }
+                                    }}
                                     className="w-full border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
                                   />
                                 </div>
@@ -11678,7 +11691,14 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                     {parcelasIntermed.length > 0 && (
                       <div className="px-3 pb-3 flex justify-end">
                         <button
-                          onClick={() => setSimAntecipacaoOk(true)}
+                          onClick={() => {
+                            // Garante que todos os valores estejam formatados antes de simular
+                            setParcelasIntermed(prev => prev.map(p => {
+                              const n2 = parseMoney(p.valor);
+                              return { ...p, valor: n2 > 0 ? toMoney(n2) : p.valor };
+                            }));
+                            setSimAntecipacaoOk(true);
+                          }}
                           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm"
                         >
                           <TrendingUp className="h-4 w-4" />
