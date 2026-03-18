@@ -40,9 +40,10 @@ const TIPO_LABELS: Record<string, { label: string; color: string; bg: string }> 
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  em_andamento: { label: "Em Andamento", color: "text-blue-700", bg: "bg-blue-100", icon: Timer },
-  concluido: { label: "Concluído", color: "text-green-700", bg: "bg-green-100", icon: CheckCircle2 },
-  cancelado: { label: "Cancelado", color: "text-red-700", bg: "bg-red-100", icon: XCircle },
+  em_andamento:         { label: "Em Andamento",         color: "text-blue-700",   bg: "bg-blue-100",   icon: Timer },
+  aguardando_pagamento: { label: "Aguardando Baixa",      color: "text-amber-700",  bg: "bg-amber-100",  icon: Timer },
+  concluido:            { label: "Concluído",             color: "text-green-700",  bg: "bg-green-100",  icon: CheckCircle2 },
+  cancelado:            { label: "Cancelado",             color: "text-red-700",    bg: "bg-red-100",    icon: XCircle },
 };
 
 const REDUCAO_LABELS: Record<string, string> = {
@@ -107,6 +108,10 @@ export default function AvisoPrevio() {
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Status revertido para Em Andamento!"); },
     onError: (err) => { toast.error(err.message || "Erro ao reverter status"); },
   });
+  const darBaixa = trpc.avisoPrevio.avisoPrevio.darBaixa.useMutation({
+    onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Baixa registrada! Funcionário efetivamente desligado e enviado ao financeiro."); },
+    onError: (err) => { toast.error(err.message || "Erro ao dar baixa"); },
+  });
 
   // Cálculo automático via useEffect
   const [calculoLoading, setCalculoLoading] = useState(false);
@@ -169,16 +174,18 @@ export default function AvisoPrevio() {
   const stats = useMemo(() => {
     const list = allAvisosForStats as any[];
     const emAndamentoList = list.filter(a => a.status === "em_andamento");
-    const concluidosList = list.filter(a => a.status === "concluido");
-    const canceladosList = list.filter(a => a.status === "cancelado");
+    const aguardandoList  = list.filter(a => a.status === "aguardando_pagamento");
+    const concluidosList  = list.filter(a => a.status === "concluido");
+    const canceladosList  = list.filter(a => a.status === "cancelado");
     return {
       total: list.length,
       emAndamento: emAndamentoList.length,
+      aguardandoPagamento: aguardandoList.length,
       concluidos: concluidosList.length,
       cancelados: canceladosList.length,
-      // Custo total = apenas em andamento (cancelados/concluídos não entram na previsão)
       valorTotal: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
       valorEmAndamento: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
+      valorAguardando: aguardandoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
       valorConcluidos: concluidosList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
     };
   }, [allAvisosForStats]);
@@ -238,8 +245,16 @@ export default function AvisoPrevio() {
     setShowDialog(true);
   };
 
-  const handleConcluir = (id: number) => {
-    updateAviso.mutate({ id, status: "concluido", dataConclusao: new Date().toISOString().split("T")[0] });
+  const handleEncerrarPeriodo = (id: number) => {
+    if (confirm("Encerrar período do aviso prévio? O funcionário ficará como 'Aguardando Baixa' até a conferência de descontos e envio ao financeiro.")) {
+      updateAviso.mutate({ id, status: "aguardando_pagamento" });
+    }
+  };
+
+  const handleDarBaixa = (id: number) => {
+    if (confirm("Confirmar baixa deste aviso prévio?\n\nAo dar baixa:\n• O funcionário é marcado como efetivamente desligado\n• O processo é enviado ao financeiro para pagamento\n• Esta ação indica que todos os descontos foram conferidos\n\nDeseja continuar?")) {
+      darBaixa.mutate({ id });
+    }
   };
 
   const handleCancelar = (id: number) => {
@@ -292,6 +307,18 @@ export default function AvisoPrevio() {
                   <p className="text-xs text-blue-600/70 mt-1 font-medium">{formatMoeda(stats.valorEmAndamento)}</p>
                 </div>
                 <Timer className="h-8 w-8 text-blue-400" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-amber-500" onClick={() => setStatusFilter("aguardando_pagamento")}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase font-medium">Aguardando Baixa</p>
+                  <p className="text-2xl font-bold text-amber-600">{fmtNum(stats.aguardandoPagamento)}</p>
+                  <p className="text-xs text-amber-600/70 mt-1 font-medium">{formatMoeda(stats.valorAguardando)}</p>
+                </div>
+                <Timer className="h-8 w-8 text-amber-400" />
               </div>
             </CardContent>
           </Card>
@@ -356,6 +383,7 @@ export default function AvisoPrevio() {
             <SelectContent>
               <SelectItem value="todos">Todos os Status</SelectItem>
               <SelectItem value="em_andamento">Em Andamento</SelectItem>
+              <SelectItem value="aguardando_pagamento">Aguardando Baixa</SelectItem>
               <SelectItem value="concluido">Concluídos</SelectItem>
               <SelectItem value="cancelado">Cancelados</SelectItem>
             </SelectContent>
@@ -433,7 +461,7 @@ export default function AvisoPrevio() {
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Editar" onClick={() => handleEdit(a)}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Concluir" onClick={() => handleConcluir(a.id)}>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title="Encerrar Período" onClick={() => handleEncerrarPeriodo(a.id)}>
                                   <CheckCircle2 className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Cancelar" onClick={() => handleCancelar(a.id)}>
@@ -441,9 +469,28 @@ export default function AvisoPrevio() {
                                 </Button>
                               </>
                             )}
+                            {a.status === "aguardando_pagamento" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
+                                  title="Dar Baixa — confirmar descontos e enviar ao financeiro"
+                                  onClick={() => handleDarBaixa(a.id)}
+                                  disabled={darBaixa.isPending}
+                                >
+                                  Dar Baixa
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-slate-500" title="Reverter para Em Andamento" onClick={() => {
+                                  if (confirm('Reverter para Em Andamento?')) revertConcluido.mutate({ id: a.id });
+                                }}>
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
                             {a.status === "concluido" && (
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title="Reverter para Em Andamento" onClick={() => {
-                                if (confirm('Tem certeza que deseja reverter o status de Concluído para Em Andamento?')) {
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-slate-500" title="Reverter para Em Andamento" onClick={() => {
+                                if (confirm('Reverter status de Concluído para Em Andamento?')) {
                                   revertConcluido.mutate({ id: a.id });
                                 }
                               }}>

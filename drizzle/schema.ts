@@ -2502,6 +2502,7 @@ export const terminationNotices = pgTable("termination_notices", {
         deletedBy: varchar({ length: 255 }),
         deletedByUserId: integer(),
         revertidoManualmente: smallint().default(0),
+        dataBaixa: date({ mode: 'string' }),
 },
 (table) => [
         index("tn_company").on(table.companyId),

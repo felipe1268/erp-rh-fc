@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 547,
+    titulo: "Aviso Prévio: novo fluxo 'Aguardando Baixa' — conclusão manual obrigatória",
+    descricao: "Corrige comportamento incorreto onde o sistema marcava automaticamente 26 avisos como 'Concluído' após fim do período, sem confirmação de pagamento. Novo fluxo: ao fim do período o aviso vai para 'Aguardando Baixa' (amber); somente o usuário pode clicar 'Dar Baixa' (após conferir descontos) para marcar como 'Concluído' e enviar ao financeiro. Inclui: novo card/filtro 'Aguardando Baixa', botão 'Dar Baixa' na tabela, mutation darBaixa no backend, coluna dataBaixa para rastrear confirmação, e migração automática dos registros incorretamente marcados.",
+    tipo: "feature",
+    modulos: "Aviso Prévio",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 546,
     titulo: "Fix: salvar Início Faturamento — formato YYYY-MM incompatível com coluna date",
     descricao: "O input type='month' enviava o valor 'YYYY-MM' (ex: '2026-01') que o PostgreSQL rejeita em colunas date. Correção: no servidor, valores com 7 chars recebem '-01' (primeiro dia do mês). No cliente, ao carregar config existente, o valor ISO retornado do banco é truncado para 'YYYY-MM' compatível com o input month.",

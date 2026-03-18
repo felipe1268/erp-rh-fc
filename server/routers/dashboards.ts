@@ -1391,11 +1391,12 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
   if (!db) return null;
   const anoRef = ano || new Date().getFullYear();
 
-  // Auto-conclude: mark as 'concluido' any aviso where dataFim < today and status is still 'em_andamento'
+  // Auto: when notice period ends, move to 'aguardando_pagamento' (NOT 'concluido').
+  // 'concluido' is only set by explicit user "Dar Baixa" after payment review.
   // SKIP avisos that were manually reverted (revertidoManualmente = 1)
   const today = new Date().toISOString().split('T')[0];
   await db.update(terminationNotices)
-    .set({ status: 'concluido', dataConclusao: today, updatedAt: sql`NOW()` })
+    .set({ status: 'aguardando_pagamento', updatedAt: sql`NOW()` })
     .where(and(
       companyWhere(terminationNotices, companyId, companyIds),
       eq(terminationNotices.status, 'em_andamento'),
@@ -1447,6 +1448,7 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
   const total = filteredNotices.length;
   const emAndamento = filteredNotices.filter(n => n.status === 'em_andamento').length;
   const concluidos = filteredNotices.filter(n => n.status === 'concluido').length;
+  const aguardandoPagamento = filteredNotices.filter(n => n.status === 'aguardando_pagamento').length;
   const cancelados = filteredNotices.filter(n => n.status === 'cancelado').length;
   const empregadorTrabalhado = filteredNotices.filter(n => n.tipo === 'empregador_trabalhado').length;
   const empregadorIndenizado = filteredNotices.filter(n => n.tipo === 'empregador_indenizado').length;
@@ -1622,7 +1624,7 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
   ];
 
   return {
-    total, emAndamento, concluidos, cancelados,
+    total, emAndamento, concluidos, aguardandoPagamento, cancelados,
     empregadorTrabalhado, empregadorIndenizado, empregadoTrabalhado, empregadoIndenizado,
     valorTotalEstimado, valorEmAndamento, valorConcluido, valorCancelado,
     reducao2h, reducao7dias, semReducao,

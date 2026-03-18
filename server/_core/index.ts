@@ -105,6 +105,20 @@ async function startServer() {
         console.log("[ColFix] planejamento_revisoes.diferencas OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
+    // Rev.547: migração aviso prévio — adiciona dataBaixa e move concluidos auto-marcados → aguardando_pagamento
+    (async () => {
+      try {
+        const { Pool } = await import("pg");
+        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        await pool.query(`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "dataBaixa" date`);
+        const r = await pool.query(`UPDATE termination_notices SET status='aguardando_pagamento', "updatedAt"=NOW() WHERE status='concluido' AND "dataBaixa" IS NULL AND "deletedAt" IS NULL`);
+        await pool.end();
+        if (r.rowCount && r.rowCount > 0)
+          console.log(`[AvisoPrevioMigration] ${r.rowCount} aviso(s) movido(s) de 'concluido' → 'aguardando_pagamento'`);
+        else
+          console.log("[AvisoPrevioMigration] Nenhum aviso a migrar (coluna dataBaixa OK)");
+      } catch (e: any) { console.warn("[AvisoPrevioMigration] Aviso:", e?.message ?? e); }
+    })();
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
     // Iniciar job de verificação de prazos de rescisão (Art. 477 §6º CLT)

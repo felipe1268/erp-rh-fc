@@ -348,11 +348,12 @@ export const avisoPrevioFeriasRouter = router({
       .query(async ({ input }) => {
         const db = (await getDb())!;
 
-        // Auto-conclude: mark as 'concluido' any aviso where dataFim < today and status is still 'em_andamento'
+        // Auto: when notice period ends, move to 'aguardando_pagamento' (NOT 'concluido').
+        // 'concluido' is only set by explicit user action ("Dar Baixa") after payment review.
         // SKIP avisos that were manually reverted (revertidoManualmente = 1)
         const today = new Date().toISOString().split('T')[0];
         await db.update(terminationNotices)
-          .set({ status: 'concluido', dataConclusao: today, updatedAt: sql`NOW()` })
+          .set({ status: 'aguardando_pagamento', updatedAt: sql`NOW()` })
           .where(and(
             companyFilter(terminationNotices.companyId, input),
             eq(terminationNotices.status, 'em_andamento'),
@@ -1194,14 +1195,52 @@ export const avisoPrevioFeriasRouter = router({
         return { recalculados, erros, total: avisos.length };
       }),
 
-    /** Reverter status de Concluído para Em Andamento */
+    /** Dar baixa no aviso: confirma pagamento e marca como Concluído.
+     *  Só pode ser feito pelo usuário após conferência de descontos. */
+    darBaixa: protectedProcedure
+      .input(z.object({ id: z.number(), observacoes: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, input.id));
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+        if (aviso.status !== 'aguardando_pagamento')
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas avisos "Aguardando Pagamento" podem receber baixa' });
+
+        const hoje = new Date().toISOString().split('T')[0];
+        const obs = input.observacoes
+          ? `${aviso.observacoes ? aviso.observacoes + '\n' : ''}[Baixa em ${hoje} por ${ctx.user.name}]: ${input.observacoes}`
+          : aviso.observacoes ?? null;
+
+        await db.update(terminationNotices).set({
+          status: 'concluido',
+          dataConclusao: hoje,
+          dataBaixa: hoje,
+          observacoes: obs,
+          updatedAt: sql`NOW()`,
+        } as any).where(eq(terminationNotices.id, input.id));
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'DAR_BAIXA_AVISO_PREVIO',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.id,
+          details: `Baixa dada por ${ctx.user.name} em ${hoje}. Funcionário efetivamente desligado e enviado ao financeiro.`,
+        });
+
+        return { success: true };
+      }),
+
+    /** Reverter status de Aguardando Pagamento ou Concluído de volta para Em Andamento */
     revertConcluido: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, input.id));
         if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
-        if (aviso.status !== 'concluido') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas avisos com status Concluído podem ser revertidos' });
+        if (aviso.status !== 'concluido' && aviso.status !== 'aguardando_pagamento')
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas avisos Concluídos ou Aguardando Pagamento podem ser revertidos' });
         
         await db.update(terminationNotices).set({
           status: 'em_andamento',
@@ -1210,7 +1249,6 @@ export const avisoPrevioFeriasRouter = router({
           updatedAt: sql`NOW()`,
         } as any).where(eq(terminationNotices.id, input.id));
         
-        // Registrar auditoria
         await createAuditLog({
           userId: ctx.user.id,
           userName: ctx.user.name ?? 'Sistema',
@@ -1218,7 +1256,7 @@ export const avisoPrevioFeriasRouter = router({
           module: 'aviso_previo',
           entityType: 'terminationNotices',
           entityId: input.id,
-          details: `Status revertido de Concluído para Em Andamento por ${ctx.user.name}`,
+          details: `Status revertido de ${aviso.status} para Em Andamento por ${ctx.user.name}`,
         });
         
         return { success: true };
