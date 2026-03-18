@@ -10822,49 +10822,6 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const [eapViewMode,   setEapViewMode]   = useState<"table" | "cards" | "gantt" | "curva-s">("table");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Progresso fake para geração por IA ────────────────────────────────────
-  const [gerandoPct,  setGerandoPct]  = useState(0);
-  const [gerandoStep, setGerandoStep] = useState("");
-  const gerandoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const GERANDO_STEPS = [
-    { at: 0,  label: "Lendo estrutura do orçamento..." },
-    { at: 15, label: "Preservando EAP exata do upload..." },
-    { at: 30, label: "IA analisando sequência construtiva..." },
-    { at: 50, label: "Definindo durações e predecessoras..." },
-    { at: 68, label: "Estabelecendo caminho crítico..." },
-    { at: 82, label: "Calculando distribuição de desembolso..." },
-    { at: 93, label: "Quase pronto..." },
-  ];
-
-  useEffect(() => {
-    if (gerarMut.isPending) {
-      setGerandoPct(0);
-      setGerandoStep(GERANDO_STEPS[0].label);
-      let cur = 0;
-      gerandoIntervalRef.current = setInterval(() => {
-        setGerandoPct(prev => {
-          // Desacelera conforme se aproxima de 95
-          const step = prev < 50 ? 2.8 : prev < 75 ? 1.6 : prev < 88 ? 0.8 : 0.2;
-          cur = Math.min(prev + step, 95);
-          // Atualiza mensagem de etapa
-          const stepLabel = [...GERANDO_STEPS].reverse().find(s => cur >= s.at);
-          if (stepLabel) setGerandoStep(stepLabel.label);
-          return cur;
-        });
-      }, 700);
-    } else {
-      if (gerandoIntervalRef.current) clearInterval(gerandoIntervalRef.current);
-      if (gerandoPct > 0) {
-        setGerandoPct(100);
-        setGerandoStep("Cronograma gerado!");
-        const t = setTimeout(() => { setGerandoPct(0); setGerandoStep(""); }, 1200);
-        return () => clearTimeout(t);
-      }
-    }
-    return () => { if (gerandoIntervalRef.current) clearInterval(gerandoIntervalRef.current); };
-  }, [gerarMut.isPending]);
-
   const orcNum = parseMoney(orcamentoMensal);
   const valNum = parseMoney(valorTotal);
 
@@ -10917,6 +10874,47 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
     },
     onError: (err: any) => toast.error(err.message),
   });
+
+  // ── Progresso fake para geração por IA (deve ficar APÓS gerarMut) ─────────
+  const [gerandoPct,  setGerandoPct]  = useState(0);
+  const [gerandoStep, setGerandoStep] = useState("");
+  const gerandoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const GERANDO_STEPS = [
+    { at: 0,  label: "Lendo estrutura do orçamento..." },
+    { at: 15, label: "Preservando EAP exata do upload..." },
+    { at: 30, label: "IA analisando sequência construtiva..." },
+    { at: 50, label: "Definindo durações e predecessoras..." },
+    { at: 68, label: "Estabelecendo caminho crítico..." },
+    { at: 82, label: "Calculando distribuição de desembolso..." },
+    { at: 93, label: "Quase pronto..." },
+  ];
+
+  useEffect(() => {
+    if (gerarMut.isPending) {
+      setGerandoPct(0);
+      setGerandoStep(GERANDO_STEPS[0].label);
+      let cur = 0;
+      gerandoIntervalRef.current = setInterval(() => {
+        setGerandoPct(prev => {
+          const step = prev < 50 ? 2.8 : prev < 75 ? 1.6 : prev < 88 ? 0.8 : 0.2;
+          cur = Math.min(prev + step, 95);
+          const stepLabel = [...GERANDO_STEPS].reverse().find(s => cur >= s.at);
+          if (stepLabel) setGerandoStep(stepLabel.label);
+          return cur;
+        });
+      }, 700);
+    } else {
+      if (gerandoIntervalRef.current) clearInterval(gerandoIntervalRef.current);
+      if (gerandoPct > 0) {
+        setGerandoPct(100);
+        setGerandoStep("Cronograma gerado!");
+        const t = setTimeout(() => { setGerandoPct(0); setGerandoStep(""); }, 1200);
+        return () => clearTimeout(t);
+      }
+    }
+    return () => { if (gerandoIntervalRef.current) clearInterval(gerandoIntervalRef.current); };
+  }, [gerarMut.isPending]);
 
   const chatMut = (trpc.planejamento as any).chatSimuladorCronograma.useMutation({
     onSuccess: (data: any) => {
