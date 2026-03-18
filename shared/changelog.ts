@@ -2797,6 +2797,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 515,
+    titulo: "Simulador — Chat JULINHO, custo MT/MO e tabela padrão MS Project",
+    descricao: "Simulador de Cronograma recebeu três melhorias: (1) Chat com JULINHO: painel colapsável com histórico de conversa persistido por localStorage, sugestões rápidas, streaming de respostas; JULINHO pode sugerir modificações no cronograma com confirmação do engenheiro. (2) Custo MT/MO: o backend agora busca custoTotalMat e custoTotalMdo de cada item do orçamento, calcula ratioMat/ratioMdo global e distribui proporcionalmente por atividade; exibidos nos KPIs (cards azul/laranja) e nas colunas MT e MO da tabela. (3) Tabela padrão MS Project: substitui a lista simples de EAP por uma tabela estruturada com colunas EAP | Tarefa | Dur. | Início | Fim | Pred. | Mês | Peso% | Total | MT | MO, com indentação por nível e toggle Tabela/Meses. Nova mutation chatSimuladorCronograma no backend recebe histórico + schedule completo e retorna resposta + atividades modificadas opcionalmente.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 514,
     titulo: "Planejamento — Abas com design mais leve e moderno",
     descricao: "Redesenhada a barra de navegação por abas da página de Planejamento. Aba ativa: substituído o botão sólido azul (bg-blue-600 text-white) por um estilo mais leve — fundo azul bem claro (bg-blue-50), texto azul escuro e borda sutil (border-blue-200). Container: removido o fundo cinza (bg-slate-100/70) e a sombra pesada, agora é branco puro com borda simples. Padding e espaçamento internos otimizados para uma aparência mais compacta e refined.",

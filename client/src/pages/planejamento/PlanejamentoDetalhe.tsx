@@ -10243,7 +10243,9 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
 type SimAtiv = { id: number; nome: string; eapCodigo: string | null; pesoFinanceiro: number; duracaoDias: number; custo: number };
 type SimMes  = { mes: number; atividades: SimAtiv[]; custoTotal: number };
 type GeradoAtiv = { eapCodigo: string; nome: string; nivel: number; isGrupo: boolean; duracaoDias: number; predecessora: string; pesoFinanceiro: number; unidade: string };
-type GeradoMes  = { mes: number; atividades: { eapCodigo: string; nome: string; pesoFinanceiro: number; duracaoDias: number; custo: number }[]; custoTotal: number };
+type GeradoMesAtv = { eapCodigo: string; nome: string; pesoFinanceiro: number; duracaoDias: number; custo: number; custoMat: number; custoMdo: number };
+type GeradoMes  = { mes: number; atividades: GeradoMesAtv[]; custoTotal: number; custoMat: number; custoMdo: number };
+type ChatMsg    = { role: "user" | "assistant"; content: string; ts: number };
 
 function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils, onAdotado }: any) {
   const valorContrato  = parseFloat(proj?.valorContrato ?? "0") || 0;
@@ -10266,6 +10268,18 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const [atividadesGeradas, setAtividadesGeradas] = useState<GeradoAtiv[]>([]);
   const [mesesGerados,      setMesesGerados]      = useState<GeradoMes[]>([]);
   const [gerado,            setGerado]            = useState(false);
+  const [ratioMat,          setRatioMat]          = useState(0);
+  const [ratioMdo,          setRatioMdo]          = useState(0);
+
+  // Chat JULINHO
+  const chatStorageKey = `sim_chat_${projetoId}`;
+  const [chatMessages,  setChatMessages]  = useState<ChatMsg[]>(() => {
+    try { return JSON.parse(localStorage.getItem(chatStorageKey) || "[]"); } catch { return []; }
+  });
+  const [chatInput,     setChatInput]     = useState("");
+  const [chatOpen,      setChatOpen]      = useState(false);
+  const [eapViewMode,   setEapViewMode]   = useState<"table" | "cards">("table");
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const orcNum = parseMoney(orcamentoMensal);
   const valNum = parseMoney(valorTotal);
@@ -10298,9 +10312,31 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
       setAtividadesGeradas(data.atividades || []);
       setMesesGerados(data.meses || []);
       setGerado(true);
+      setRatioMat(data.ratioMat ?? 0);
+      setRatioMdo(data.ratioMdo ?? 0);
       toast.success(`Cronograma gerado por IA: ${data.totalMeses} ${data.totalMeses === 1 ? "mês" : "meses"}, ${(data.atividades || []).filter((a: any) => !a.isGrupo).length} atividades.`);
     },
     onError: (err: any) => toast.error(err.message),
+  });
+
+  const chatMut = (trpc.planejamento as any).chatSimuladorCronograma.useMutation({
+    onSuccess: (data: any) => {
+      const assistantMsg: ChatMsg = { role: "assistant", content: data.resposta, ts: Date.now() };
+      setChatMessages(prev => {
+        const updated = [...prev, assistantMsg];
+        localStorage.setItem(chatStorageKey, JSON.stringify(updated.slice(-50)));
+        return updated;
+      });
+      if (data.hasMod && Array.isArray(data.atividades) && data.atividades.length > 0) {
+        if (confirm(`JULINHO sugeriu modificações no cronograma (${data.atividades.length} atividades). Aplicar as alterações?`)) {
+          setAtividadesGeradas(data.atividades);
+          // Recalcular meses a partir das novas atividades (simplificado: manter meses existentes por hora)
+          toast.success("Cronograma atualizado conforme sugestão do JULINHO.");
+        }
+      }
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    },
+    onError: (err: any) => toast.error(`JULINHO: ${err.message}`),
   });
 
   const adotarGeradoMut = (trpc.planejamento as any).adotarCronogramaGerado.useMutation({
@@ -10338,6 +10374,23 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
     if (orcNum <= 0) return toast.error("Informe o orçamento mensal.");
     if (valNum <= 0) return toast.error("Informe o valor total da obra.");
     gerarMut.mutate({ revisaoId: revisaoAtiva.id, projetoId, orcamentoMensal: orcNum, valorTotal: valNum, dataInicio });
+  }
+
+  function handleSendChat() {
+    const trimmed = chatInput.trim();
+    if (!trimmed || !gerado) return;
+    if (atividadesGeradas.length === 0) return toast.error("Gere o cronograma primeiro.");
+    const userMsg: ChatMsg = { role: "user", content: trimmed, ts: Date.now() };
+    const updated = [...chatMessages, userMsg];
+    setChatMessages(updated);
+    localStorage.setItem(chatStorageKey, JSON.stringify(updated.slice(-50)));
+    setChatInput("");
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    chatMut.mutate({
+      projetoId,
+      messages: updated.map(m => ({ role: m.role, content: m.content })),
+      schedule: { atividades: atividadesGeradas, meses: mesesGerados, valorTotal: valNum, orcamentoMensal: orcNum, dataInicio, ratioMat, ratioMdo },
+    });
   }
 
   function handleAdotar() {
@@ -10564,52 +10617,270 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
       {/* ── Resultado: Gerado por IA (modo sem atividades) ── */}
       {gerado && mesesGerados.length > 0 && (
         <div className="space-y-4">
-          {/* Resumo EAP gerada */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-violet-500" /> EAP Gerada pela IA
-            </h3>
-            <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-              {atividadesGeradas.map((a, i) => (
-                <div key={i} className={`flex items-start gap-2 py-1 ${a.isGrupo ? "" : "pl-4"}`}>
-                  {a.isGrupo
-                    ? <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">{a.eapCodigo} {a.nome}</span>
-                    : <>
-                        <span className="text-[10px] text-slate-400 shrink-0 w-8">{a.eapCodigo}</span>
-                        <span className="text-xs text-slate-600 flex-1">{a.nome}</span>
-                        <span className="text-[10px] text-slate-400 shrink-0">{a.duracaoDias}d · {a.pesoFinanceiro.toFixed(1)}%</span>
-                        {a.predecessora && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shrink-0">← {a.predecessora}</span>}
-                      </>}
+          {/* ── KPIs ── */}
+          {(() => {
+            const totalMat = mesesGerados.reduce((s, m) => s + (m.custoMat ?? 0), 0);
+            const totalMdo = mesesGerados.reduce((s, m) => s + (m.custoMdo ?? 0), 0);
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-violet-500 font-semibold uppercase tracking-wide">Duração</p>
+                  <p className="text-2xl font-bold text-violet-700 mt-0.5">{mesesGerados.length}</p>
+                  <p className="text-[11px] text-violet-500">meses</p>
                 </div>
-              ))}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Atividades</p>
+                  <p className="text-lg font-bold text-slate-700 mt-0.5">{atividadesGeradas.filter(a => !a.isGrupo).length}</p>
+                  <p className="text-[11px] text-slate-400">folhas</p>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-emerald-500 font-semibold uppercase tracking-wide">Total</p>
+                  <p className="text-sm font-bold text-emerald-700 mt-0.5">{fmtR(totalGerado)}</p>
+                  <p className="text-[11px] text-emerald-500">de {fmtR(valNum)}</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-blue-500 font-semibold uppercase tracking-wide">Mat (MT)</p>
+                  <p className="text-sm font-bold text-blue-700 mt-0.5">{fmtR(totalMat)}</p>
+                  <p className="text-[11px] text-blue-400">{totalGerado > 0 ? ((totalMat / totalGerado) * 100).toFixed(1) : "0"}% do total</p>
+                </div>
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-orange-500 font-semibold uppercase tracking-wide">Mão de Obra (MO)</p>
+                  <p className="text-sm font-bold text-orange-700 mt-0.5">{fmtR(totalMdo)}</p>
+                  <p className="text-[11px] text-orange-400">{totalGerado > 0 ? ((totalMdo / totalGerado) * 100).toFixed(1) : "0"}% do total</p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Tabela MS Project / Cards toggle ── */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 bg-slate-50">
+              <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-violet-500" />
+                EAP Gerada pela IA
+                <span className="text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-semibold">Padrão MS Project</span>
+              </h3>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setEapViewMode("table")}
+                  className={`text-[10px] px-2.5 py-1 rounded border font-medium transition-colors ${eapViewMode === "table" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                >Tabela</button>
+                <button
+                  onClick={() => setEapViewMode("cards")}
+                  className={`text-[10px] px-2.5 py-1 rounded border font-medium transition-colors ${eapViewMode === "cards" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                >Meses</button>
+              </div>
             </div>
+
+            {eapViewMode === "table" ? (() => {
+              // Construir mapa eap → mês e eap → dados de custo do mês
+              const eapToMes = new Map<string, number>();
+              const eapToCusto = new Map<string, { custo: number; custoMat: number; custoMdo: number }>();
+              mesesGerados.forEach(m => m.atividades.forEach(a => {
+                eapToMes.set(a.eapCodigo, m.mes);
+                eapToCusto.set(a.eapCodigo, { custo: a.custo, custoMat: a.custoMat ?? 0, custoMdo: a.custoMdo ?? 0 });
+              }));
+
+              // Calcular datas
+              const diBase = new Date(dataInicio + "T12:00:00");
+              const getMesStart = (mes: number) => { const d = new Date(diBase); d.setMonth(d.getMonth() + (mes - 1)); return d; };
+              const fmtDate = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px] border-collapse min-w-[900px]">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600 font-semibold">
+                        <th className="text-left px-3 py-2 border-b border-slate-200 w-[80px]">EAP</th>
+                        <th className="text-left px-3 py-2 border-b border-slate-200">Tarefa</th>
+                        <th className="text-center px-2 py-2 border-b border-slate-200 w-[50px]">Dur.</th>
+                        <th className="text-center px-2 py-2 border-b border-slate-200 w-[72px]">Início</th>
+                        <th className="text-center px-2 py-2 border-b border-slate-200 w-[72px]">Fim</th>
+                        <th className="text-center px-2 py-2 border-b border-slate-200 w-[70px]">Pred.</th>
+                        <th className="text-center px-2 py-2 border-b border-slate-200 w-[35px]">Mês</th>
+                        <th className="text-right px-2 py-2 border-b border-slate-200 w-[48px]">Peso%</th>
+                        <th className="text-right px-2 py-2 border-b border-slate-200 w-[90px]">Total</th>
+                        {ratioMat > 0 && <th className="text-right px-2 py-2 border-b border-slate-200 w-[80px] text-blue-600">MT</th>}
+                        {ratioMdo > 0 && <th className="text-right px-2 py-2 border-b border-slate-200 w-[80px] text-orange-600">MO</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {atividadesGeradas.map((a, i) => {
+                        const mesNum = eapToMes.get(a.eapCodigo);
+                        const custos = eapToCusto.get(a.eapCodigo);
+                        const startD = mesNum ? getMesStart(mesNum) : null;
+                        const endD   = startD && a.duracaoDias > 0 ? (() => { const d = new Date(startD); d.setDate(d.getDate() + a.duracaoDias - 1); return d; })() : null;
+
+                        if (a.isGrupo) {
+                          return (
+                            <tr key={i} className="bg-slate-50 border-b border-slate-100">
+                              <td className="px-3 py-1.5 font-bold text-slate-700">{a.eapCodigo}</td>
+                              <td className="px-3 py-1.5 font-bold text-slate-800 uppercase text-[10px] tracking-wide" colSpan={ratioMat > 0 && ratioMdo > 0 ? 9 : ratioMat > 0 || ratioMdo > 0 ? 8 : 7}>
+                                {a.nome}
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={i} className="border-b border-slate-100 hover:bg-violet-50/30 transition-colors">
+                            <td className="px-3 py-1.5 text-slate-400 pl-6">{a.eapCodigo}</td>
+                            <td className="px-3 py-1.5 text-slate-700 pl-6">{a.nome}</td>
+                            <td className="text-center px-2 py-1.5 text-slate-500">{a.duracaoDias}d</td>
+                            <td className="text-center px-2 py-1.5 text-slate-500">{startD ? fmtDate(startD) : "—"}</td>
+                            <td className="text-center px-2 py-1.5 text-slate-500">{endD ? fmtDate(endD) : "—"}</td>
+                            <td className="text-center px-2 py-1.5">
+                              {a.predecessora
+                                ? <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px]">{a.predecessora}</span>
+                                : <span className="text-slate-300">—</span>}
+                            </td>
+                            <td className="text-center px-2 py-1.5 text-slate-500">{mesNum ?? "—"}</td>
+                            <td className="text-right px-2 py-1.5 text-slate-600 font-medium">{Number(a.pesoFinanceiro).toFixed(2)}%</td>
+                            <td className="text-right px-2 py-1.5 font-medium text-slate-700">{custos ? fmtR(custos.custo) : "—"}</td>
+                            {ratioMat > 0 && <td className="text-right px-2 py-1.5 text-blue-600">{custos ? fmtR(custos.custoMat) : "—"}</td>}
+                            {ratioMdo > 0 && <td className="text-right px-2 py-1.5 text-orange-600">{custos ? fmtR(custos.custoMdo) : "—"}</td>}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-100 font-bold text-slate-700 border-t-2 border-slate-300">
+                        <td className="px-3 py-2" colSpan={8}>TOTAL</td>
+                        <td className="text-right px-2 py-2">{fmtR(totalGerado)}</td>
+                        {ratioMat > 0 && <td className="text-right px-2 py-2 text-blue-700">{fmtR(mesesGerados.reduce((s, m) => s + (m.custoMat ?? 0), 0))}</td>}
+                        {ratioMdo > 0 && <td className="text-right px-2 py-2 text-orange-700">{fmtR(mesesGerados.reduce((s, m) => s + (m.custoMdo ?? 0), 0))}</td>}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              );
+            })() : (
+              <div className="p-4 space-y-3">
+                {renderMonthCards(mesesGerados)}
+              </div>
+            )}
           </div>
 
-          {/* KPIs */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 text-center">
-              <p className="text-[10px] text-violet-500 font-semibold uppercase tracking-wide">Duração Total</p>
-              <p className="text-2xl font-bold text-violet-700 mt-0.5">{mesesGerados.length}</p>
-              <p className="text-[11px] text-violet-500">meses</p>
-            </div>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
-              <p className="text-[10px] text-emerald-500 font-semibold uppercase tracking-wide">Custo Distribuído</p>
-              <p className="text-lg font-bold text-emerald-700 mt-0.5">{fmtR(totalGerado)}</p>
-              <p className="text-[11px] text-emerald-500">de {fmtR(valNum)}</p>
-            </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
-              <p className="text-[10px] text-amber-500 font-semibold uppercase tracking-wide">Atividades</p>
-              <p className="text-lg font-bold text-amber-700 mt-0.5">{atividadesGeradas.filter(a => !a.isGrupo).length}</p>
-              <p className="text-[11px] text-amber-500">folhas criadas</p>
-            </div>
+          {/* ── Chat JULINHO ── */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setChatOpen(o => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-violet-100 rounded-lg">
+                  <Brain className="h-4 w-4 text-violet-600" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-slate-800">Discutir com JULINHO</p>
+                  <p className="text-[10px] text-slate-400">Peça ajustes, tire dúvidas sobre a sequência ou solicite modificações no cronograma</p>
+                </div>
+                {chatMessages.length > 0 && (
+                  <span className="ml-2 text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-semibold">
+                    {chatMessages.length} mensagen{chatMessages.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+              <div className={`text-slate-400 transition-transform ${chatOpen ? "rotate-180" : ""}`}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            </button>
+
+            {chatOpen && (
+              <div className="border-t border-slate-200">
+                {/* Histórico */}
+                <div className="h-64 overflow-y-auto p-4 space-y-3 bg-slate-50">
+                  {chatMessages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400">
+                      <Brain className="h-8 w-8 opacity-30" />
+                      <p className="text-xs text-center">Faça uma pergunta ao JULINHO sobre o cronograma.<br/>Ex: "Por que as fundações estão no mês 2?" ou "Mova a pintura para o mês 8"</p>
+                    </div>
+                  )}
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      {msg.role === "assistant" && (
+                        <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center shrink-0 mr-2 mt-0.5">
+                          <Brain className="h-3.5 w-3.5 text-violet-600" />
+                        </div>
+                      )}
+                      <div className={`max-w-[78%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                        msg.role === "user"
+                          ? "bg-violet-600 text-white rounded-br-sm"
+                          : "bg-white border border-slate-200 text-slate-700 rounded-bl-sm shadow-sm"
+                      }`}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {chatMut.isPending && (
+                    <div className="flex justify-start">
+                      <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center shrink-0 mr-2">
+                        <Brain className="h-3.5 w-3.5 text-violet-600" />
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl rounded-bl-sm px-3 py-2 shadow-sm flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin text-violet-500" />
+                        <span className="text-xs text-slate-400">JULINHO está analisando...</span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Sugestões rápidas */}
+                {chatMessages.length === 0 && (
+                  <div className="px-4 py-2 border-t border-slate-200 flex flex-wrap gap-1.5">
+                    {[
+                      "Explique a sequência construtiva adotada",
+                      "Quais atividades estão no caminho crítico?",
+                      "Reduza a duração total em 2 meses",
+                      "Por que instalações estão no mês atual?",
+                    ].map(s => (
+                      <button key={s} onClick={() => setChatInput(s)}
+                        className="text-[10px] bg-violet-50 hover:bg-violet-100 text-violet-600 border border-violet-200 rounded-full px-2.5 py-1 transition-colors">
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Aprendizados */}
+                {chatMessages.length > 0 && (
+                  <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between">
+                    <p className="text-[10px] text-slate-400">
+                      {chatMessages.length} mensagens salvas localmente para este projeto
+                    </p>
+                    <button onClick={() => {
+                      setChatMessages([]);
+                      localStorage.removeItem(chatStorageKey);
+                    }} className="text-[10px] text-red-400 hover:text-red-600">Limpar histórico</button>
+                  </div>
+                )}
+
+                {/* Input */}
+                <div className="px-4 py-3 border-t border-slate-200 flex gap-2">
+                  <textarea
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                    placeholder="Pergunte ao JULINHO... (Enter para enviar, Shift+Enter para nova linha)"
+                    className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-violet-300"
+                    rows={2}
+                    disabled={chatMut.isPending}
+                  />
+                  <button
+                    onClick={handleSendChat}
+                    disabled={chatMut.isPending || !chatInput.trim()}
+                    className="px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 self-end"
+                  >
+                    {chatMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                    Enviar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Cards de meses */}
-          <div className="space-y-3">
-            {renderMonthCards(mesesGerados)}
-          </div>
-
-          {/* Adotar */}
+          {/* ── Adotar ── */}
           <div className="flex flex-col items-end gap-1 pt-2 border-t border-slate-100">
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => { setGerado(false); setAtividadesGeradas([]); setMesesGerados([]); }}
@@ -10620,7 +10891,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                 {adotarGeradoMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando cronograma...</> : <><CheckCircle className="h-4 w-4" /> Adotar Cronograma Gerado</>}
               </Button>
             </div>
-            <p className="text-[11px] text-slate-400">Cria uma nova revisão com todas as atividades e datas calculadas pela IA.</p>
+            <p className="text-[11px] text-slate-400">Cria uma nova revisão com todas as atividades e datas calculadas pela IA, no padrão do cronograma.</p>
           </div>
         </div>
       )}

@@ -2086,12 +2086,14 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
 
       // 2. Buscar itens do orçamento (apenas folhas com custo > 0)
       const itens = await db.select({
-        eapCodigo:  orcamentoItens.eapCodigo,
-        descricao:  orcamentoItens.descricao,
-        unidade:    orcamentoItens.unidade,
-        quantidade: orcamentoItens.quantidade,
-        custoTotal: orcamentoItens.custoTotal,
-        tipo:       orcamentoItens.tipo,
+        eapCodigo:     orcamentoItens.eapCodigo,
+        descricao:     orcamentoItens.descricao,
+        unidade:       orcamentoItens.unidade,
+        quantidade:    orcamentoItens.quantidade,
+        custoTotal:    orcamentoItens.custoTotal,
+        custoTotalMat: orcamentoItens.custoTotalMat,
+        custoTotalMdo: orcamentoItens.custoTotalMdo,
+        tipo:          orcamentoItens.tipo,
       })
       .from(orcamentoItens)
       .where(and(
@@ -2103,13 +2105,24 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
 
       if (itens.length === 0) throw new Error("O orçamento vinculado não tem itens cadastrados.");
 
+      // Calcular ratios Mat/MdO globais a partir do orçamento
+      const totalMatOrc = itens.reduce((s, i) => s + parseFloat(String(i.custoTotalMat || 0)), 0);
+      const totalMdoOrc = itens.reduce((s, i) => s + parseFloat(String(i.custoTotalMdo || 0)), 0);
+      const totalGeral  = itens.reduce((s, i) => s + parseFloat(String(i.custoTotal    || 0)), 0);
+      const ratioMat    = totalGeral > 0 ? totalMatOrc / totalGeral : 0;
+      const ratioMdo    = totalGeral > 0 ? totalMdoOrc / totalGeral : 0;
+
       // 3. Chamar IA para gerar o cronograma
       const { invokeLLM } = await import("../_core/llm");
 
       const listaItens = itens.map(i => {
-        const custo = parseFloat(String(i.custoTotal || 0));
-        const pct   = input.valorTotal > 0 ? ((custo / input.valorTotal) * 100).toFixed(2) : "0";
-        return `EAP:${i.eapCodigo || "?"} | ${i.descricao} | ${i.unidade || "vb"} | R$${custo.toFixed(2)} (${pct}% do total)`;
+        const custo    = parseFloat(String(i.custoTotal    || 0));
+        const custoMat = parseFloat(String(i.custoTotalMat || 0));
+        const custoMdo = parseFloat(String(i.custoTotalMdo || 0));
+        const pct      = input.valorTotal > 0 ? ((custo / input.valorTotal) * 100).toFixed(2) : "0";
+        const matStr   = custoMat > 0 ? ` MT:R$${custoMat.toFixed(2)}` : "";
+        const mdoStr   = custoMdo > 0 ? ` MO:R$${custoMdo.toFixed(2)}` : "";
+        return `EAP:${i.eapCodigo || "?"} | ${i.descricao} | ${i.unidade || "vb"} | R$${custo.toFixed(2)} (${pct}% do total)${matStr}${mdoStr}`;
       }).join("\n");
 
       const valorFmt  = input.valorTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -2285,7 +2298,7 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
         (a.predecessora || "").split(/[,;]/).map(s => s.trim()).filter(Boolean)
       )]));
 
-      const meses: { mes: number; atividades: { eapCodigo: string; nome: string; pesoFinanceiro: number; duracaoDias: number; custo: number }[]; custoTotal: number }[] = [];
+      const meses: { mes: number; atividades: { eapCodigo: string; nome: string; pesoFinanceiro: number; duracaoDias: number; custo: number; custoMat: number; custoMdo: number }[]; custoTotal: number; custoMat: number; custoMdo: number }[] = [];
       let remaining = [...sequencia];
       const completedEaps = new Set<string>();
       let mesNum = 1;
@@ -2307,11 +2320,19 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
         if (!progressed && remaining.length > 0) { mesAtivs.push(remaining[0]); mesCusto = getCusto(remaining[0]); }
 
         mesAtivs.forEach(a => { completedEaps.add(a.eapCodigo); remaining = remaining.filter(r => r.eapCodigo !== a.eapCodigo); });
-        meses.push({ mes: mesNum++, custoTotal: mesCusto, atividades: mesAtivs.map(a => ({ eapCodigo: a.eapCodigo, nome: a.nome, pesoFinanceiro: a.pesoFinanceiro, duracaoDias: a.duracaoDias, custo: getCusto(a) })) });
+        const mesAtvsData = mesAtivs.map(a => {
+          const custo    = getCusto(a);
+          const custoMat = parseFloat((custo * ratioMat).toFixed(2));
+          const custoMdo = parseFloat((custo * ratioMdo).toFixed(2));
+          return { eapCodigo: a.eapCodigo, nome: a.nome, pesoFinanceiro: a.pesoFinanceiro, duracaoDias: a.duracaoDias, custo, custoMat, custoMdo };
+        });
+        const mesCustoMat = mesAtvsData.reduce((s, a) => s + a.custoMat, 0);
+        const mesCustoMdo = mesAtvsData.reduce((s, a) => s + a.custoMdo, 0);
+        meses.push({ mes: mesNum++, custoTotal: mesCusto, custoMat: mesCustoMat, custoMdo: mesCustoMdo, atividades: mesAtvsData });
         if (mesNum > 500) break;
       }
 
-      return { atividades: atividadesGeradas, meses, totalMeses: meses.length, valorTotal: input.valorTotal, orcamentoMensal: input.orcamentoMensal, dataInicio: input.dataInicio };
+      return { atividades: atividadesGeradas, meses, totalMeses: meses.length, valorTotal: input.valorTotal, orcamentoMensal: input.orcamentoMensal, dataInicio: input.dataInicio, ratioMat, ratioMdo };
     }),
 
   // ── Adotar Cronograma Gerado pela IA (cria atividades + datas) ────────────
@@ -2398,5 +2419,111 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
       });
 
       return { novaRevisaoId: novaRevisao.id, totalAtividades: rows.length };
+    }),
+
+  // ── Chat JULINHO no Simulador de Cronograma ────────────────────────────────
+  chatSimuladorCronograma: protectedProcedure
+    .input(z.object({
+      projetoId:  z.number(),
+      messages:   z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() })),
+      schedule: z.object({
+        atividades:      z.array(z.any()),
+        meses:           z.array(z.any()),
+        valorTotal:      z.number(),
+        orcamentoMensal: z.number(),
+        dataInicio:      z.string(),
+        ratioMat:        z.number().optional(),
+        ratioMdo:        z.number().optional(),
+      }),
+    }))
+    .mutation(async ({ input }) => {
+      const { invokeLLM } = await import("../_core/llm");
+
+      function extractFirstJson(text: string): string | null {
+        const start = text.indexOf("{");
+        if (start === -1) return null;
+        let depth = 0;
+        for (let i = start; i < text.length; i++) {
+          if (text[i] === "{") depth++;
+          else if (text[i] === "}") { depth--; if (depth === 0) return text.slice(start, i + 1); }
+        }
+        return null;
+      }
+
+      const folhas = (input.schedule.atividades as any[]).filter((a: any) => !a.isGrupo);
+      const grupos = (input.schedule.atividades as any[]).filter((a: any) => a.isGrupo);
+
+      const eapToMes = new Map<string, number>();
+      (input.schedule.meses as any[]).forEach((m: any) => m.atividades.forEach((a: any) => eapToMes.set(a.eapCodigo, m.mes)));
+
+      const tabelaEAP = [
+        "EAP | Nome | Dur(d) | Mês | Peso% | Custo | Mat | MdO | Predecessora",
+        ...grupos.map((a: any) => `${a.eapCodigo} | **${a.nome}** | grupo`),
+        ...folhas.map((a: any) => {
+          const custo = (a.pesoFinanceiro / 100) * input.schedule.valorTotal;
+          const mat   = parseFloat((custo * (input.schedule.ratioMat || 0)).toFixed(2));
+          const mdo   = parseFloat((custo * (input.schedule.ratioMdo || 0)).toFixed(2));
+          return `${a.eapCodigo} | ${a.nome} | ${a.duracaoDias}d | Mês${eapToMes.get(a.eapCodigo) ?? "?"} | ${Number(a.pesoFinanceiro).toFixed(2)}% | R$${custo.toFixed(2)} | R$${mat.toFixed(2)} | R$${mdo.toFixed(2)} | ${a.predecessora || "-"}`;
+        }),
+      ].join("\n");
+
+      const systemPrompt = `Você é JULINHO, especialista sênior em planejamento e controle de obras de construção civil no Brasil. Você está ajudando o engenheiro a refinar o cronograma gerado pela IA.
+
+CRONOGRAMA ATUAL:
+- Valor total: R$${input.schedule.valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+- Desembolso máximo mensal: R$${input.schedule.orcamentoMensal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+- Início: ${input.schedule.dataInicio}
+- ${input.schedule.meses.length} meses · ${folhas.length} atividades folha
+
+EAP COMPLETA:
+${tabelaEAP}
+
+SUAS CAPACIDADES:
+1. Responder perguntas sobre o cronograma, sequência construtiva, dependências
+2. Sugerir ajustes de duração, predecessoras, distribuição mensal
+3. Explicar decisões tomadas pela IA na sequência
+
+SE o engenheiro pedir para modificar o cronograma (ex: "mova X para o mês Y", "aumente duração de X", "coloque X depois de Y"), retorne uma resposta no seguinte formato JSON:
+{
+  "resposta": "Texto explicando a modificação feita e o motivo técnico.",
+  "atividades": [ ... lista COMPLETA de atividades modificadas com todos os campos ... ]
+}
+
+Se for apenas uma conversa ou pergunta (sem modificação de schedule), responda em texto puro, SEM JSON.
+
+REGRAS TÉCNICAS:
+- Respeitar sempre a sequência construtiva brasileira (NBR 12.741, SINDUSCON)
+- Duração mínima: 5 dias para qualquer atividade folha
+- Predecessoras via eapCodigo (ex: "2.1,2.2")
+- pesoFinanceiro: soma das folhas = 100
+- Seja direto e técnico, tutear o engenheiro`;
+
+      let rawText = "";
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...input.messages.map(m => ({ role: m.role as any, content: m.content })),
+          ],
+          maxTokens: 4000,
+        });
+        rawText = typeof result.choices[0]?.message?.content === "string"
+          ? result.choices[0].message.content : "";
+      } catch (e: any) {
+        throw new Error(`Falha ao chamar JULINHO: ${e?.message ?? "erro desconhecido"}`);
+      }
+
+      // Tentar parsear se vier JSON com atividades modificadas
+      const jsonStr = extractFirstJson(rawText);
+      if (jsonStr) {
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.resposta && Array.isArray(parsed.atividades) && parsed.atividades.length > 0) {
+            return { resposta: parsed.resposta, atividades: parsed.atividades, hasMod: true };
+          }
+        } catch { /* resposta em texto puro */ }
+      }
+
+      return { resposta: rawText.trim(), atividades: null, hasMod: false };
     }),
 });
