@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 529,
+    titulo: "SimuladorCronograma — Parcelas Intermediárias: simulação de antecipação de prazo",
+    descricao: "Novo painel 'Antecipação por Parcelas Intermediárias' no SimuladorCronograma (modo IA), disponível após a geração do cronograma. Lógica: quando o cliente realiza um pagamento extra além da parcela mensal base em determinado mês, a construtora dispõe de mais caixa e pode executar volume maior de serviços, 'puxando' trabalho de meses futuros para o mês do pagamento extra e reduzindo a duração total da obra. Interface: botão 'Adicionar Parcela' gera uma linha com seletor de mês (usando labels de calendário: mar/26, abr/26...) e campo de valor extra; múltiplas parcelas em meses diferentes/iguais são suportadas; botão 'Simular Antecipação do Prazo' dispara o cálculo. Algoritmo greedy: para cada mês (1 a n), cap_efetiva = desembolso_base + extra_intermediário_nesse_mês; executa min(cap_efetiva, trabalho_restante); conta quantos meses são necessários até trabalho_restante=0. Resultado: 4 cards (prazo original / meses economizados / novo prazo / total de aportes extras), barra comparativa animada mostrando encurtamento, tabela mês a mês com badge EXTRA nos meses com parcela, coluna de utilização com barra de progresso colorida por cor (azul=mês com extra, roxo=normal), totalizadores no footer. Rev. 529.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 528,
     titulo: "MapaFuncionariosInterativo — Correção definitiva coordenadas Potim, SP",
     descricao: "Terceira correção das coordenadas de Potim no CITY_COORDS. As coordenadas da Rev. 523 (-22.8292, -45.1549) estavam incorretas: a longitude -45.1549 é 0.0357° a LESTE de Guaratinguetá (-45.1906), colocando o marcador 'posição aproximada' no lado oposto da cidade (área do Parque Ecológico do Taboão). Confirmado via geocoder OSM/Nominatim: Potim está a OESTE-SUDOESTE de Guaratinguetá. Coordenadas corrigidas para (-22.8377, -45.2565) — resultado direto do Nominatim para 'Potim, São Paulo, Brasil', posicionando o centro aproximado corretamente no município. Também atualizado o prefixo do cache de geocodificação (geo: → geo2:) para invalidar todos os resultados anteriormente armazenados no sessionStorage do browser, forçando regeodificação limpa na próxima abertura do mapa. Rev. 528.",

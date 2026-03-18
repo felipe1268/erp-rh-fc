@@ -10754,6 +10754,12 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const [pctDissidio,    setPctDissidio]    = useState("5,00");
   const [simAjusteAtivo, setSimAjusteAtivo] = useState(false);
 
+  // Parcelas Intermediárias
+  type ParcelaIntermed = { id: number; mes: number; valor: string };
+  const [parcelasIntermed,  setParcelasIntermed]  = useState<ParcelaIntermed[]>([]);
+  const [proxParcelaId,     setProxParcelaId]     = useState(1);
+  const [simAntecipacaoOk,  setSimAntecipacaoOk]  = useState(false);
+
   // Chat JULINHO
   const chatStorageKey = `sim_chat_${projetoId}`;
   const [chatMessages,  setChatMessages]  = useState<ChatMsg[]>(() => {
@@ -11376,6 +11382,292 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                         * Projeção estimada com base nos percentuais informados. O reajuste aplica sobre todos os custos a partir do mês 13 (composto a cada 12 meses).
                         O dissídio aplica apenas sobre os custos de <strong>mão de obra</strong> a partir do mês seguinte ao mês de maio de cada ano.
                         Valores para fins de planejamento — consulte seu advogado/contador para efeitos contratuais.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Painel: Parcelas Intermediárias do Cliente ── */}
+          {gerado && mesesGerados.length > 0 && (() => {
+            const diBase = new Date(dataInicio + "T12:00:00");
+            const n      = mesesGerados.length;
+            const getMesLabel = (i: number) => {
+              const d = new Date(diBase); d.setMonth(diBase.getMonth() + (i - 1));
+              return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+            };
+
+            const adicionarParcela = () => {
+              setParcelasIntermed(prev => [...prev, { id: proxParcelaId, mes: 1, valor: "" }]);
+              setProxParcelaId(id => id + 1);
+              setSimAntecipacaoOk(false);
+            };
+            const removerParcela = (id: number) => {
+              setParcelasIntermed(prev => prev.filter(p => p.id !== id));
+              setSimAntecipacaoOk(false);
+            };
+            const atualizarParcela = (id: number, field: "mes" | "valor", val: string | number) => {
+              setParcelasIntermed(prev => prev.map(p => p.id === id ? { ...p, [field]: val } : p));
+              setSimAntecipacaoOk(false);
+            };
+
+            // Cálculo da simulação de antecipação
+            const extraCapMap = new Map<number, number>();
+            for (const p of parcelasIntermed) {
+              const v = parseMoney(p.valor); if (v > 0) extraCapMap.set(p.mes, (extraCapMap.get(p.mes) ?? 0) + v);
+            }
+            const totalExtra = parcelasIntermed.reduce((s, p) => s + (parseMoney(p.valor) || 0), 0);
+
+            let remaining = totalGerado;
+            const novosMeses: { mes: number; custo: number; cap: number; extra: number }[] = [];
+            let mesAtual = 1;
+            const maxMeses = n + 6;
+            while (remaining > 0.01 && mesAtual <= maxMeses) {
+              const extra = extraCapMap.get(mesAtual) ?? 0;
+              const cap   = orcNum + extra;
+              const custo = Math.min(cap, remaining);
+              novosMeses.push({ mes: mesAtual, custo, cap, extra });
+              remaining -= custo;
+              mesAtual++;
+            }
+            const novoN = novosMeses.length;
+            const economizados = n - novoN;
+
+            const dataFimOriginal = (() => {
+              const d = new Date(diBase); d.setMonth(d.getMonth() + n - 1);
+              return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+            })();
+            const dataFimNova = (() => {
+              const d = new Date(diBase); d.setMonth(d.getMonth() + novoN - 1);
+              return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+            })();
+
+            return (
+              <div className="rounded-2xl border border-blue-300 bg-gradient-to-br from-blue-50 to-indigo-50 overflow-hidden shadow-sm">
+                {/* Header */}
+                <div className="flex items-center gap-2 px-5 py-3.5 border-b border-blue-200 bg-blue-100/60">
+                  <TrendingUp className="h-5 w-5 text-blue-600 shrink-0" />
+                  <h3 className="text-sm font-bold text-blue-900">Antecipação por Parcelas Intermediárias</h3>
+                  <span className="ml-auto text-[10px] bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full font-semibold">Simulador de Prazo</span>
+                </div>
+
+                <div className="p-5 space-y-4">
+                  {/* Explicação */}
+                  <div className="flex items-start gap-3 bg-white border border-blue-200 rounded-xl px-4 py-3">
+                    <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <Calculator className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-blue-900">Como funciona</p>
+                      <p className="text-xs text-blue-700 mt-0.5 leading-relaxed">
+                        Quando o cliente realiza um pagamento intermediário além da parcela mensal padrão (<strong>{fmtR(orcNum)}/mês</strong>),
+                        a construtora dispõe de mais caixa naquele mês e pode executar um volume maior de serviços.
+                        Isso "puxa" trabalho de meses futuros para o mês do pagamento extra, reduzindo a duração total da obra.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Lista de parcelas */}
+                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                      <p className="text-xs font-semibold text-slate-600">Pagamentos Extras do Cliente</p>
+                      <button
+                        onClick={adicionarParcela}
+                        className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg px-3 py-1.5 transition-colors"
+                      >
+                        <span className="text-base leading-none">+</span> Adicionar Parcela
+                      </button>
+                    </div>
+
+                    {parcelasIntermed.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <p className="text-sm text-slate-400">Nenhuma parcela extra cadastrada.</p>
+                        <p className="text-xs text-slate-300 mt-1">Clique em "Adicionar Parcela" para simular um pagamento extra do cliente.</p>
+                      </div>
+                    ) : (
+                      <div className="p-3 space-y-2">
+                        {parcelasIntermed.map(p => (
+                          <div key={p.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                            <div className="flex-1 grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1">Mês do pagamento</label>
+                                <select
+                                  value={p.mes}
+                                  onChange={e => atualizarParcela(p.id, "mes", parseInt(e.target.value))}
+                                  className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                >
+                                  {Array.from({ length: n }, (_, i) => i + 1).map(m => (
+                                    <option key={m} value={m}>Mês {m} — {getMesLabel(m)}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide block mb-1">Valor extra (R$)</label>
+                                <div className="relative">
+                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">R$</span>
+                                  <input
+                                    type="text" inputMode="decimal"
+                                    value={p.valor}
+                                    placeholder="0,00"
+                                    onChange={e => atualizarParcela(p.id, "valor", e.target.value.replace(/[^0-9,.]/g, ""))}
+                                    onBlur={e => { const n2 = parseMoney(e.target.value); atualizarParcela(p.id, "valor", n2 > 0 ? toMoney(n2) : ""); }}
+                                    className="w-full border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <button onClick={() => removerParcela(p.id)} className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0 text-lg font-bold leading-none">×</button>
+                          </div>
+                        ))}
+
+                        {/* Totalizador das parcelas */}
+                        {parcelasIntermed.length > 0 && totalExtra > 0 && (
+                          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 mt-1">
+                            <span className="text-xs text-blue-700 font-semibold">Total de pagamentos extras:</span>
+                            <span className="text-sm font-bold text-blue-800">{fmtR(totalExtra)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {parcelasIntermed.length > 0 && (
+                      <div className="px-3 pb-3 flex justify-end">
+                        <button
+                          onClick={() => setSimAntecipacaoOk(true)}
+                          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm"
+                        >
+                          <TrendingUp className="h-4 w-4" />
+                          Simular Antecipação do Prazo
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Resultado da simulação de antecipação ── */}
+                  {simAntecipacaoOk && parcelasIntermed.length > 0 && totalExtra > 0 && (
+                    <div className="space-y-4">
+                      {/* Cards resumo */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Prazo Original</p>
+                          <p className="text-3xl font-extrabold text-slate-700 mt-1">{n}</p>
+                          <p className="text-[11px] text-slate-400">meses · {dataFimOriginal}</p>
+                        </div>
+                        {economizados > 0 ? (
+                          <>
+                            <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 text-center">
+                              <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Meses Economizados</p>
+                              <p className="text-3xl font-extrabold text-emerald-700 mt-1">−{economizados}</p>
+                              <p className="text-[11px] text-emerald-500">antecipação de prazo</p>
+                            </div>
+                            <div className="bg-blue-50 border border-blue-300 rounded-xl p-4 text-center">
+                              <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide">Novo Prazo</p>
+                              <p className="text-3xl font-extrabold text-blue-700 mt-1">{novoN}</p>
+                              <p className="text-[11px] text-blue-500">meses · {dataFimNova}</p>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center sm:col-span-2">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Resultado</p>
+                            <p className="text-sm font-bold text-slate-600 mt-1">Sem alteração no prazo</p>
+                            <p className="text-[11px] text-slate-400">Os meses já estão no limite máximo.</p>
+                          </div>
+                        )}
+                        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center">
+                          <p className="text-[10px] font-semibold text-violet-500 uppercase tracking-wide">Aporte Extra Total</p>
+                          <p className="text-sm font-extrabold text-violet-700 mt-1">{fmtR(totalExtra)}</p>
+                          <p className="text-[11px] text-violet-400">{parcelasIntermed.length} parcela{parcelasIntermed.length !== 1 ? "s" : ""}</p>
+                        </div>
+                      </div>
+
+                      {/* Barra comparativa de timeline */}
+                      {economizados > 0 && (
+                        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+                          <p className="text-xs font-semibold text-slate-600">Comparativo de Cronograma</p>
+                          <div className="space-y-2">
+                            <div>
+                              <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                                <span>Original</span><span>{n} meses · {dataFimOriginal}</span>
+                              </div>
+                              <div className="h-5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-slate-400 rounded-full" style={{ width: "100%" }} />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                                <span>Com parcelas intermediárias</span><span>{novoN} meses · {dataFimNova}</span>
+                              </div>
+                              <div className="h-5 bg-slate-100 rounded-full overflow-hidden relative">
+                                <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${(novoN / n) * 100}%` }} />
+                                <div className="absolute right-0 top-0 h-full flex items-center pr-1">
+                                  <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">−{economizados} meses</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tabela mês a mês com marcação das parcelas extra */}
+                      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                          <p className="text-xs font-semibold text-slate-600">Cronograma Acelerado — Mês a Mês</p>
+                          <p className="text-[10px] text-slate-400">Distribuição com pagamentos extras</p>
+                        </div>
+                        <div className="overflow-x-auto" style={{ maxHeight: 320, overflowY: "auto" }}>
+                          <table className="w-full text-[11px] border-collapse">
+                            <thead className="sticky top-0 z-10">
+                              <tr className="bg-slate-50 text-slate-500 font-semibold">
+                                <th className="text-left px-3 py-2 border-b border-slate-200">Mês</th>
+                                <th className="text-right px-3 py-2 border-b border-slate-200">Cap. Base</th>
+                                <th className="text-right px-3 py-2 border-b border-slate-200">Parcela Extra</th>
+                                <th className="text-right px-3 py-2 border-b border-slate-200">Cap. Total</th>
+                                <th className="text-right px-3 py-2 border-b border-slate-200">Executado</th>
+                                <th className="text-left px-3 py-2 border-b border-slate-200 w-[80px]">Utilização</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {novosMeses.map((m, i) => {
+                                const lbl = getMesLabel(m.mes);
+                                const utilizPct = m.cap > 0 ? (m.custo / m.cap) * 100 : 0;
+                                return (
+                                  <tr key={i} className={`border-b border-slate-100 ${m.extra > 0 ? "bg-blue-50/60" : i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                                    <td className="px-3 py-1.5 font-medium text-slate-700">
+                                      {lbl}
+                                      {m.extra > 0 && <span className="ml-1 text-[9px] bg-blue-100 text-blue-700 px-1 rounded font-semibold">EXTRA</span>}
+                                    </td>
+                                    <td className="px-3 py-1.5 text-right text-slate-400">{fmtR(orcNum)}</td>
+                                    <td className={`px-3 py-1.5 text-right font-semibold ${m.extra > 0 ? "text-blue-700" : "text-slate-300"}`}>{m.extra > 0 ? fmtR(m.extra) : "—"}</td>
+                                    <td className={`px-3 py-1.5 text-right font-semibold ${m.extra > 0 ? "text-blue-900" : "text-slate-600"}`}>{fmtR(m.cap)}</td>
+                                    <td className="px-3 py-1.5 text-right text-slate-700 font-medium">{fmtR(m.custo)}</td>
+                                    <td className="px-3 py-1.5">
+                                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full ${m.extra > 0 ? "bg-blue-500" : "bg-violet-400"}`} style={{ width: `${utilizPct}%` }} />
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-slate-100 font-bold text-slate-700 sticky bottom-0">
+                                <td className="px-3 py-2">TOTAL</td>
+                                <td className="px-3 py-2 text-right text-slate-500">{fmtR(orcNum * novoN)}</td>
+                                <td className="px-3 py-2 text-right text-blue-700">{totalExtra > 0 ? fmtR(totalExtra) : "—"}</td>
+                                <td className="px-3 py-2 text-right">{fmtR(orcNum * novoN + totalExtra)}</td>
+                                <td className="px-3 py-2 text-right text-violet-700">{fmtR(totalGerado)}</td>
+                                <td className="px-3 py-2" />
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 italic">
+                        * A simulação considera que o pagamento extra do cliente gera disponibilidade financeira imediata para execução de serviços adicionais naquele mês,
+                        reduzindo o trabalho restante dos meses seguintes. Valores sujeitos a negociação contratual.
                       </p>
                     </div>
                   )}
