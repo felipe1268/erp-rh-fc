@@ -2138,7 +2138,7 @@ export const appRouter = router({
     // Listar todos os membros de todos os grupos
     listAllMembers: protectedProcedure.query(async () => {
       const { Pool } = await import("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL });
       try {
         const result = await pool.query(`SELECT "groupId", "userId" FROM user_group_members`);
         return result.rows;

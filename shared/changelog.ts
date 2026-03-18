@@ -3175,6 +3175,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 555,
+    titulo: "Grupos de Acesso — Correção definitiva: NEON_DATABASE_URL na causa raiz",
+    descricao: "Identificada e corrigida a causa raiz do bug de 'Nenhum grupo criado ainda': as funções listUserGroups, getUserGroupById, createUserGroup e updateUserGroup criadas na Rev. 552 instanciavam pg.Pool com process.env.DATABASE_URL, mas o servidor usa NEON_DATABASE_URL como variável primária (ENV.databaseUrl = NEON_DATABASE_URL ?? DATABASE_URL). Com DATABASE_URL vazio/ausente, o Pool criava conexão nula e as queries falhavam silenciosamente. Todas as instâncias foram corrigidas para usar ENV.databaseUrl em db.ts e process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL em routers.ts.",
+    tipo: "bugfix",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 554,
     titulo: "Mapa de Funcionários — 'Por Estado' como padrão + botão de geolocalização global",
     descricao: "Alterado o modo de abertura padrão do Mapa de Funcionários de 'Mapa Geral' para 'Por Estado', que exibe o mapa SVG do Brasil com distribuição por estados. Adicionado botão 'Ver todos os funcionários no mapa com geolocalização' centralizado abaixo do mapa SVG, que ao ser clicado ativa o modo Mapa Geral (Leaflet) exibindo todos os funcionários da empresa plotados por geolocalização independente do estado ou cidade.",

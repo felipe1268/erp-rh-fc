@@ -2562,7 +2562,7 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
 // ============================================================
 
 export async function listUserGroups() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: ENV.databaseUrl });
   try {
     const result = await pool.query(`
       SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
@@ -2582,7 +2582,7 @@ export async function listUserGroups() {
 }
 
 export async function getUserGroupById(id: number) {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: ENV.databaseUrl });
   try {
     const result = await pool.query(`
       SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
@@ -2603,7 +2603,7 @@ export async function getUserGroupById(id: number) {
 }
 
 export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number }) {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: ENV.databaseUrl });
   try {
     const result = await pool.query(
       `INSERT INTO user_groups
@@ -2636,7 +2636,7 @@ export async function updateUserGroup(id: number, data: { nome?: string; descric
   if (sets.length === 0) return;
   sets.push(`updated_at = now()`);
   vals.push(id);
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: ENV.databaseUrl });
   try {
     await pool.query(`UPDATE user_groups SET ${sets.join(', ')} WHERE id = $${idx}`, vals);
   } finally { await pool.end(); }
