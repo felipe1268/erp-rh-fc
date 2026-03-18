@@ -3337,6 +3337,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 574,
+    titulo: "Gantt — Grupos 100% concluídos ficam verdes (consistência com gráfico de barras)",
+    descricao: "Corrigida inconsistência visual: o gráfico 'Avanço Físico por Grupo' no REFIS mostrava grupos como 100% concluídos, mas o Gantt não os exibia em verde. A raiz do problema era que o Gantt só calculava progresso de atividades folha (avMap) e grupos sempre retornavam 0. Solução: adicionado groupAvMap que computa a média simples dos percentuais acumulados das atividades-folha descendentes de cada grupo. Agora a flag isDone se aplica a grupos, marcos e folhas — qualquer item com avanço agregado >= 100% exibe: barra verde-escura (#059669), fundo da linha verde-claro, badge EAP verde e nome em emerald. Além disso, o badge de progresso (%) agora também aparece nos grupos quando têm progresso > 0, em cinza quando parcial e em verde quando 100%.",
+    tipo: "bugfix",
+    modulos: "Planejamento / Gantt",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 573,
     titulo: "REFIS — Gráficos da Curva S reformulados (visual profissional para impressão)",
     descricao: "Redesenhados os dois gráficos da Curva S no REFIS (Físico e Financeiro) para visual mais proporcional e imprimível: (1) header escuro (slate-700) com legenda integrada incluindo linha tracejada SVG para Tendência; (2) faixa de KPIs acima do gráfico — Físico: 3 cards (Previsto / Realizado / Desvio); Financeiro: 4 cards (Contrato Total / Previsto / Realizado / Desvio); (3) altura aumentada de 240px para 320px; (4) eixo X com rótulos rotacionados -35° e intervalo calculado automaticamente quando há mais de 8 pontos; (5) eixo Y sem bordas (axisLine/tickLine=false), mais limpo; (6) grade apenas horizontal (vertical=false); (7) linhas de referência horizontais mostrando valores atuais de previsto e realizado com label; (8) tooltip estruturado com data da semana e desvio colorido; (9) cor da linha 'Realizado' alterada para verde-esmeralda (#10b981) — padrão do sistema; (10) formatador dinâmico do eixo Y financeiro (K / M conforme a escala).",

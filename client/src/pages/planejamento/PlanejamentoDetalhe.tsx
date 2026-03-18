@@ -3059,12 +3059,26 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
   const HEADER_H = 46;
   const LEFT_W = 310;
 
-  // avanço map (latest per atividade)
+  // avanço map (latest per atividade — folhas)
   const avMap = useMemo(() => {
     const m: Record<number, number> = {};
     avancos.forEach((av: any) => { m[av.atividadeId] = n(av.percentualAcumulado); });
     return m;
   }, [avancos]);
+
+  // avanço agregado de grupos (média simples das folhas descendentes)
+  const groupAvMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    atividades.filter((a: any) => a.isGrupo && a.eapCodigo).forEach((g: any) => {
+      const leaves = atividades.filter((a: any) =>
+        !a.isGrupo && a.eapCodigo && a.eapCodigo.startsWith(g.eapCodigo + ".")
+      );
+      if (leaves.length === 0) return;
+      const total = leaves.reduce((s: number, l: any) => s + (avMap[l.id] ?? 0), 0);
+      m[g.id] = total / leaves.length;
+    });
+    return m;
+  }, [atividades, avMap]);
 
   // Project date range
   const { minDate, maxDate } = useMemo(() => {
@@ -3253,7 +3267,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
           const isGrupo   = !!a.isGrupo;
           const isMarco   = !!a.isMarco;
           const nivel      = a.nivel ?? 1;
-          const avanc      = avMap[a.id] ?? 0;
+          const avanc      = isGrupo ? (groupAvMap[a.id] ?? 0) : (avMap[a.id] ?? 0);
           const isCollapsed = collapsed.has(a.eapCodigo ?? "");
           const hasChildren = atividades.some((b: any) =>
             b.eapCodigo && a.eapCodigo &&
@@ -3269,7 +3283,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
           const barW    = hasBar ? Math.max(endX - barX, 4) : 0;
           const fillW   = barW * (avanc / 100);
 
-          const isDone    = !isGrupo && avanc >= 100;
+          const isDone    = avanc >= 100;
           const barColor  = isDone ? "#059669" : isGrupo ? "#1e293b" : isMarco ? "#7c3aed" : "#1A3461";
           const fillColor = isDone ? "#10b981" : isMarco ? "#a855f7" : "#3b82f6";
           const barH      = isGrupo ? 10 : isMarco ? 12 : 14;
@@ -3283,7 +3297,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
               {/* Left sticky label */}
               <div style={{ width: LEFT_W, minWidth: LEFT_W, height: ROW_H }}
                 className={`sticky left-0 z-10 border-b border-r border-slate-100 flex items-center px-2 gap-1 shrink-0 transition-colors
-                  ${isGrupo ? "bg-slate-50" : isDone ? (isHovered ? "bg-emerald-100" : "bg-emerald-50/70") : isMarco ? (isHovered ? "bg-purple-50" : "bg-purple-50/40") : isHovered ? "bg-blue-50/60" : "bg-white"}`}>
+                  ${isDone ? (isHovered ? "bg-emerald-100" : "bg-emerald-50/70") : isGrupo ? "bg-slate-50" : isMarco ? (isHovered ? "bg-purple-50" : "bg-purple-50/40") : isHovered ? "bg-blue-50/60" : "bg-white"}`}>
                 {/* Indent */}
                 <div style={{ width: (nivel - 1) * 10 }} className="shrink-0" />
                 {/* Toggle button */}
@@ -3296,17 +3310,17 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
                   <div className="h-4 w-4 shrink-0" />
                 )}
                 {/* EAP badge */}
-                <span className={`text-[8px] font-mono shrink-0 px-1 rounded leading-4 ${isGrupo ? "bg-slate-200 text-slate-600" : isDone ? "bg-emerald-100 text-emerald-700" : isMarco ? "bg-purple-100 text-purple-700" : "bg-blue-50 text-blue-600"}`}>
+                <span className={`text-[8px] font-mono shrink-0 px-1 rounded leading-4 ${isDone ? "bg-emerald-100 text-emerald-700" : isGrupo ? "bg-slate-200 text-slate-600" : isMarco ? "bg-purple-100 text-purple-700" : "bg-blue-50 text-blue-600"}`}>
                   {a.eapCodigo ?? "—"}
                 </span>
                 {/* Name */}
-                <span className={`text-[11px] truncate flex-1 ${isGrupo ? "font-semibold text-slate-700" : isDone ? "text-emerald-800 font-medium" : isMarco ? "text-purple-800 font-medium" : "text-slate-600"}`}
+                <span className={`text-[11px] truncate flex-1 ${isDone ? (isGrupo ? "font-semibold text-emerald-800" : "text-emerald-800 font-medium") : isGrupo ? "font-semibold text-slate-700" : isMarco ? "text-purple-800 font-medium" : "text-slate-600"}`}
                   title={a.nome}>
                   {isMarco && <span className="mr-0.5 text-purple-500">◆</span>}{a.nome}
                 </span>
                 {/* Progress badge */}
-                {!isGrupo && avanc > 0 && (
-                  <span className={`text-[9px] font-bold shrink-0 ${avanc >= 100 ? "text-emerald-600" : isMarco ? "text-purple-600" : "text-blue-600"}`}>
+                {avanc > 0 && (
+                  <span className={`text-[9px] font-bold shrink-0 ${avanc >= 100 ? "text-emerald-600" : isGrupo ? "text-slate-500" : isMarco ? "text-purple-600" : "text-blue-600"}`}>
                     {avanc.toFixed(0)}%
                   </span>
                 )}
@@ -3314,7 +3328,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
 
               {/* Right Gantt area */}
               <div style={{ width: totalWidth, minWidth: totalWidth, height: ROW_H, position: "relative" }}
-                className={`border-b border-slate-100 shrink-0 ${isGrupo ? "bg-slate-50/40" : isDone ? (isHovered ? "bg-emerald-50/40" : "bg-emerald-50/20") : isHovered ? "bg-blue-50/20" : ""}`}>
+                className={`border-b border-slate-100 shrink-0 ${isDone ? (isHovered ? "bg-emerald-50/40" : "bg-emerald-50/20") : isGrupo ? "bg-slate-50/40" : isHovered ? "bg-blue-50/20" : ""}`}>
                 {/* Month grid lines */}
                 {monthCells.map((m, i) => (
                   <div key={i} style={{ position: "absolute", left: m.x, top: 0, bottom: 0, width: 1 }}
