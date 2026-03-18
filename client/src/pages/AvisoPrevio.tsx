@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
@@ -20,6 +21,7 @@ import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
   CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer, RefreshCw, RotateCcw,
+  UserX, ShieldAlert,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
@@ -65,6 +67,17 @@ export default function AvisoPrevio() {
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
 
+  // Modal "Dar Baixa"
+  const [darBaixaModal, setDarBaixaModal] = useState<{ open: boolean; avisoId: number | null; funcionarioNome: string }>({ open: false, avisoId: null, funcionarioNome: '' });
+  const [darBaixaForm, setDarBaixaForm] = useState({
+    observacoes: '',
+    desligarFuncionario: false,
+    categoriaDesligamento: '',
+    motivoDesligamento: '',
+    incluirListaNegra: false,
+    motivoListaNegra: '',
+  });
+
   // Form state
   const [form, setForm] = useState<any>({});
   const [calculoPreview, setCalculoPreview] = useState<any>(null);
@@ -109,7 +122,17 @@ export default function AvisoPrevio() {
     onError: (err) => { toast.error(err.message || "Erro ao reverter status"); },
   });
   const darBaixa = trpc.avisoPrevio.avisoPrevio.darBaixa.useMutation({
-    onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Baixa registrada! Funcionário efetivamente desligado e enviado ao financeiro."); },
+    onSuccess: (res: any) => {
+      refetch();
+      utils.obras.efetivoPorObra.invalidate();
+      utils.employees.list.invalidate();
+      const msg = res?.desligouFuncionario
+        ? "Baixa registrada e funcionário desligado com sucesso!"
+        : "Baixa registrada! Processo enviado ao financeiro.";
+      toast.success(msg);
+      setDarBaixaModal({ open: false, avisoId: null, funcionarioNome: '' });
+      setDarBaixaForm({ observacoes: '', desligarFuncionario: false, categoriaDesligamento: '', motivoDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' });
+    },
     onError: (err) => { toast.error(err.message || "Erro ao dar baixa"); },
   });
 
@@ -251,10 +274,30 @@ export default function AvisoPrevio() {
     }
   };
 
-  const handleDarBaixa = (id: number) => {
-    if (confirm("Confirmar baixa deste aviso prévio?\n\nAo dar baixa:\n• O funcionário é marcado como efetivamente desligado\n• O processo é enviado ao financeiro para pagamento\n• Esta ação indica que todos os descontos foram conferidos\n\nDeseja continuar?")) {
-      darBaixa.mutate({ id });
+  const handleDarBaixa = (id: number, funcionarioNome: string) => {
+    setDarBaixaForm({ observacoes: '', desligarFuncionario: false, categoriaDesligamento: '', motivoDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' });
+    setDarBaixaModal({ open: true, avisoId: id, funcionarioNome });
+  };
+
+  const handleConfirmarBaixa = () => {
+    if (!darBaixaModal.avisoId) return;
+    if (darBaixaForm.desligarFuncionario && !darBaixaForm.categoriaDesligamento) {
+      toast.error("Selecione a categoria do desligamento.");
+      return;
     }
+    if (darBaixaForm.incluirListaNegra && !darBaixaForm.motivoListaNegra.trim()) {
+      toast.error("Informe o motivo da inclusão na blacklist.");
+      return;
+    }
+    darBaixa.mutate({
+      id: darBaixaModal.avisoId,
+      observacoes: darBaixaForm.observacoes || undefined,
+      desligarFuncionario: darBaixaForm.desligarFuncionario,
+      categoriaDesligamento: darBaixaForm.categoriaDesligamento || undefined,
+      motivoDesligamento: darBaixaForm.motivoDesligamento || undefined,
+      incluirListaNegra: darBaixaForm.incluirListaNegra,
+      motivoListaNegra: darBaixaForm.motivoListaNegra || undefined,
+    });
   };
 
   const handleCancelar = (id: number) => {
@@ -476,7 +519,7 @@ export default function AvisoPrevio() {
                                   variant="default"
                                   className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
                                   title="Dar Baixa — confirmar descontos e enviar ao financeiro"
-                                  onClick={() => handleDarBaixa(a.id)}
+                                  onClick={() => handleDarBaixa(a.id, a.funcionarioNome ?? a.employeeName ?? '')}
                                   disabled={darBaixa.isPending}
                                 >
                                   Dar Baixa
@@ -1191,6 +1234,136 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
       </div>
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {/* Modal: Dar Baixa no Aviso Prévio */}
+      <Dialog open={darBaixaModal.open} onOpenChange={(v) => { if (!darBaixa.isPending) setDarBaixaModal(s => ({ ...s, open: v })); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-700">
+              <CheckCircle2 className="h-5 w-5" />
+              Dar Baixa no Aviso Prévio
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {darBaixaModal.funcionarioNome && (
+              <p className="text-sm text-slate-600">
+                Funcionário: <span className="font-semibold text-slate-800">{darBaixaModal.funcionarioNome}</span>
+              </p>
+            )}
+            <p className="text-sm text-slate-500">
+              Ao confirmar, o aviso prévio será marcado como <span className="font-semibold text-green-700">Concluído</span> e o processo será enviado ao financeiro para pagamento.
+            </p>
+
+            {/* Observações */}
+            <div>
+              <label className="text-xs font-medium text-slate-700">Observações <span className="text-slate-400">(opcional)</span></label>
+              <Textarea
+                className="mt-1 text-sm"
+                rows={2}
+                placeholder="Alguma observação sobre esta baixa..."
+                value={darBaixaForm.observacoes}
+                onChange={e => setDarBaixaForm(f => ({ ...f, observacoes: e.target.value }))}
+              />
+            </div>
+
+            {/* Desligar funcionário */}
+            <div className="border rounded-lg p-3 bg-slate-50 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-red-600"
+                  checked={darBaixaForm.desligarFuncionario}
+                  onChange={e => setDarBaixaForm(f => ({ ...f, desligarFuncionario: e.target.checked, categoriaDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' }))}
+                />
+                <span className="flex items-center gap-1 text-sm font-medium text-slate-700">
+                  <UserX className="h-4 w-4 text-red-500" />
+                  Desligar funcionário agora
+                </span>
+              </label>
+
+              {darBaixaForm.desligarFuncionario && (
+                <div className="space-y-3 pl-6 border-l-2 border-red-200">
+                  <div>
+                    <label className="text-xs font-medium text-red-700">Categoria do desligamento *</label>
+                    <Select value={darBaixaForm.categoriaDesligamento || 'none'} onValueChange={v => setDarBaixaForm(f => ({ ...f, categoriaDesligamento: v === 'none' ? '' : v }))}>
+                      <SelectTrigger className="mt-1 bg-white border-red-300 text-sm">
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Selecione...</SelectItem>
+                        <SelectItem value="Término de contrato">Término de contrato</SelectItem>
+                        <SelectItem value="Fim do período de experiência">Fim do período de experiência (Art. 479/480 CLT)</SelectItem>
+                        <SelectItem value="Rescisão antecipada - empregador">Rescisão antecipada pelo empregador (Art. 479 CLT)</SelectItem>
+                        <SelectItem value="Rescisão antecipada - empregado">Rescisão antecipada pelo empregado (Art. 480 CLT)</SelectItem>
+                        <SelectItem value="Justa causa">Justa causa</SelectItem>
+                        <SelectItem value="Pedido de demissão">Pedido de demissão</SelectItem>
+                        <SelectItem value="Acordo mútuo">Acordo mútuo (Art. 484-A CLT)</SelectItem>
+                        <SelectItem value="Fim de obra">Fim de obra</SelectItem>
+                        <SelectItem value="Baixo desempenho">Baixo desempenho</SelectItem>
+                        <SelectItem value="Indisciplina">Indisciplina</SelectItem>
+                        <SelectItem value="Outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Motivo / Observações do desligamento <span className="text-slate-400">(opcional)</span></label>
+                    <Textarea
+                      className="mt-1 text-sm"
+                      rows={2}
+                      placeholder="Detalhes adicionais sobre o desligamento..."
+                      value={darBaixaForm.motivoDesligamento}
+                      onChange={e => setDarBaixaForm(f => ({ ...f, motivoDesligamento: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Blacklist */}
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-red-700"
+                      checked={darBaixaForm.incluirListaNegra}
+                      onChange={e => setDarBaixaForm(f => ({ ...f, incluirListaNegra: e.target.checked, motivoListaNegra: '' }))}
+                    />
+                    <span className="flex items-center gap-1 text-sm font-medium text-red-700">
+                      <ShieldAlert className="h-4 w-4" />
+                      Incluir na Blacklist
+                    </span>
+                  </label>
+
+                  {darBaixaForm.incluirListaNegra && (
+                    <div>
+                      <label className="text-xs font-medium text-red-700">Motivo da blacklist *</label>
+                      <Textarea
+                        className="mt-1 text-sm border-red-300"
+                        rows={2}
+                        placeholder="Informe o motivo para inclusão na lista negra..."
+                        value={darBaixaForm.motivoListaNegra}
+                        onChange={e => setDarBaixaForm(f => ({ ...f, motivoListaNegra: e.target.value }))}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDarBaixaModal(s => ({ ...s, open: false }))} disabled={darBaixa.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleConfirmarBaixa}
+              disabled={darBaixa.isPending}
+            >
+              {darBaixa.isPending ? "Processando..." : "Confirmar Baixa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
           <PrintFooterLGPD />
     </DashboardLayout>
   );

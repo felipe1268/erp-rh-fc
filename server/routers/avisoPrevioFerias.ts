@@ -1198,7 +1198,16 @@ export const avisoPrevioFeriasRouter = router({
     /** Dar baixa no aviso: confirma pagamento e marca como Concluído.
      *  Só pode ser feito pelo usuário após conferência de descontos. */
     darBaixa: protectedProcedure
-      .input(z.object({ id: z.number(), observacoes: z.string().optional() }))
+      .input(z.object({
+        id: z.number(),
+        observacoes: z.string().optional(),
+        // Desligamento integrado
+        desligarFuncionario: z.boolean().optional(),
+        categoriaDesligamento: z.string().optional(),
+        motivoDesligamento: z.string().optional(),
+        incluirListaNegra: z.boolean().optional(),
+        motivoListaNegra: z.string().optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, input.id));
@@ -1206,11 +1215,20 @@ export const avisoPrevioFeriasRouter = router({
         if (aviso.status !== 'aguardando_pagamento')
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas avisos "Aguardando Pagamento" podem receber baixa' });
 
+        // Validar campos de desligamento
+        if (input.desligarFuncionario) {
+          if (!input.categoriaDesligamento?.trim())
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'A categoria do desligamento é obrigatória.' });
+          if (input.incluirListaNegra && !input.motivoListaNegra?.trim())
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'O motivo da inclusão na blacklist é obrigatório.' });
+        }
+
         const hoje = new Date().toISOString().split('T')[0];
         const obs = input.observacoes
           ? `${aviso.observacoes ? aviso.observacoes + '\n' : ''}[Baixa em ${hoje} por ${ctx.user.name}]: ${input.observacoes}`
           : aviso.observacoes ?? null;
 
+        // 1. Marcar aviso como concluído
         await db.update(terminationNotices).set({
           status: 'concluido',
           dataConclusao: hoje,
@@ -1219,6 +1237,51 @@ export const avisoPrevioFeriasRouter = router({
           updatedAt: sql`NOW()`,
         } as any).where(eq(terminationNotices.id, input.id));
 
+        // 2. Desligar funcionário (se solicitado)
+        let desligouFuncionario = false;
+        if (input.desligarFuncionario && aviso.employeeId) {
+          const novoStatus = input.incluirListaNegra ? 'Lista_Negra' : 'Desligado';
+          const empUpdate: any = {
+            status: novoStatus,
+            categoriaDesligamento: input.categoriaDesligamento,
+            motivoDesligamento: input.motivoDesligamento || null,
+            dataDesligamentoEfetiva: hoje,
+            desligadoPor: ctx.user.name ?? 'Sistema',
+            desligadoUserId: ctx.user.id,
+          };
+          if (input.incluirListaNegra) {
+            empUpdate.listaNegra = 1;
+            empUpdate.motivoListaNegra = input.motivoListaNegra;
+            empUpdate.listaNegraPor = ctx.user.name ?? 'Sistema';
+            empUpdate.listaNegraUserId = ctx.user.id;
+            empUpdate.dataListaNegra = hoje;
+          }
+          await db.update(employees).set(empUpdate).where(eq(employees.id, aviso.employeeId));
+
+          // Auto-desalocação de obra
+          try {
+            const [aloc] = await db.select({ id: obraFuncionarios.id })
+              .from(obraFuncionarios)
+              .where(and(eq(obraFuncionarios.employeeId, aviso.employeeId), eq(obraFuncionarios.isActive, 1)));
+            if (aloc) {
+              await db.update(obraFuncionarios)
+                .set({ isActive: 0, dataDesligamento: hoje } as any)
+                .where(eq(obraFuncionarios.id, aloc.id));
+            }
+          } catch (e) { console.error('[darBaixa] Erro ao desalocar obra:', e); }
+
+          desligouFuncionario = true;
+          await createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name ?? 'Sistema',
+            action: 'DESLIGAR_FUNCIONARIO',
+            module: 'aviso_previo',
+            entityType: 'employee',
+            entityId: aviso.employeeId,
+            details: `Funcionário desligado via "Dar Baixa" do aviso prévio #${input.id}. Status: ${novoStatus}. Categoria: ${input.categoriaDesligamento}${input.incluirListaNegra ? '. Incluído na Blacklist.' : ''}`,
+          });
+        }
+
         await createAuditLog({
           userId: ctx.user.id,
           userName: ctx.user.name ?? 'Sistema',
@@ -1226,10 +1289,10 @@ export const avisoPrevioFeriasRouter = router({
           module: 'aviso_previo',
           entityType: 'terminationNotices',
           entityId: input.id,
-          details: `Baixa dada por ${ctx.user.name} em ${hoje}. Funcionário efetivamente desligado e enviado ao financeiro.`,
+          details: `Baixa dada por ${ctx.user.name} em ${hoje}.${desligouFuncionario ? ` Funcionário desligado (${input.incluirListaNegra ? 'Lista Negra' : 'Desligado'}).` : ''} Enviado ao financeiro.`,
         });
 
-        return { success: true };
+        return { success: true, desligouFuncionario };
       }),
 
     /** Reverter status de Aguardando Pagamento ou Concluído de volta para Em Andamento */
