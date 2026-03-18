@@ -10324,7 +10324,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
       const assistantMsg: ChatMsg = { role: "assistant", content: data.resposta, ts: Date.now() };
       setChatMessages(prev => {
         const updated = [...prev, assistantMsg];
-        localStorage.setItem(chatStorageKey, JSON.stringify(updated.slice(-50)));
+        localStorage.setItem(chatStorageKey, JSON.stringify(updated));
         return updated;
       });
       if (data.hasMod && Array.isArray(data.atividades) && data.atividades.length > 0) {
@@ -10383,7 +10383,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
     const userMsg: ChatMsg = { role: "user", content: trimmed, ts: Date.now() };
     const updated = [...chatMessages, userMsg];
     setChatMessages(updated);
-    localStorage.setItem(chatStorageKey, JSON.stringify(updated.slice(-50)));
+    localStorage.setItem(chatStorageKey, JSON.stringify(updated));
     setChatInput("");
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     chatMut.mutate({

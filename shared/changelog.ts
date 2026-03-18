@@ -2851,6 +2851,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 518,
+    titulo: "JULINHO — Limite de mensagens removido",
+    descricao: "Removido o limite de 50 mensagens do histórico de conversa com JULINHO no Simulador de Cronograma. Agora todo o histórico é salvo no localStorage sem truncamento (.slice(-50) removido de handleSendChat e do callback onSuccess do chatMut). O backend já enviava todas as mensagens ao Claude sem limite — a restrição era apenas no armazenamento local.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 517,
     titulo: "MapaFuncionariosInterativo — Filtros não resetam mais o mapa",
     descricao: "toggleStatus removeu o reset para nível 1 (setLevel(1)/setSelectedState(null)/setSelectedCity(null)). Ao clicar em um filtro de status, o mapa permanece na tela atual: nível 1 atualiza automaticamente a distribuição por estado, nível 2 atualiza os clusters de cidades, nível 3 re-geocodifica os funcionários da cidade com o novo filtro após 900ms (aguarda o tRPC re-buscar com o novo statusFiltros). Implementado via handleCityClickRef + statusFiltrosKeyRef para evitar chamadas obsoletas e re-geocodificação duplicada na montagem.",
