@@ -271,8 +271,20 @@ export default function PlanejamentoDetalhe() {
     return aprovadas[aprovadas.length - 1] ?? proj.revisoes[0] ?? null;
   }, [proj]);
 
-  const baselineRev = useMemo(() =>
-    proj?.revisoes?.find((r: any) => r.isBaseline) ?? null, [proj]);
+  const baselineRev = useMemo(() => {
+    if (!proj?.revisoes) return null;
+    // 1ª prioridade: revisão explicitamente marcada como baseline
+    const explicit = proj.revisoes.find((r: any) => r.isBaseline);
+    if (explicit) return explicit;
+    // 2ª prioridade: primeira revisão aprovada (Rev 00) — desde que seja diferente da ativa
+    const aprovadas = proj.revisoes
+      .filter((r: any) => r.status === "aprovada")
+      .sort((a: any, b: any) => a.numero - b.numero);
+    const primeira = aprovadas[0] ?? null;
+    // Se só existe uma revisão, não há sentido em plotar baseline separada
+    if (!primeira || primeira.id === revisaoAtiva?.id) return null;
+    return primeira;
+  }, [proj, revisaoAtiva]);
 
   const { data: atividades = [], isLoading: loadingAtiv } = trpc.planejamento.listarAtividades.useQuery(
     { revisaoId: revisaoAtiva?.id ?? 0 },
@@ -310,10 +322,12 @@ export default function PlanejamentoDetalhe() {
 
   const avancoAtual = useMemo(() => {
     if (!atividades.length) return 0;
-    const folhas = atividades.filter((a: any) => !a.isGrupo);
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length;
+    const folhas    = atividades.filter((a: any) => !a.isGrupo);
+    const pesoBruto = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso   = pesoBruto === 0;
+    const pesoTotal = semPeso ? folhas.length || 1 : pesoBruto;
     const ponderado = folhas.reduce((s: number, a: any) => {
-      const peso = n(a.pesoFinanceiro) || 1;
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
       return s + (avancosMap[a.id] ?? 0) * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);

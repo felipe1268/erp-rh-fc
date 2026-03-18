@@ -3220,6 +3220,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 560,
+    titulo: "Curva S — Correção da Baseline e do Realizado",
+    descricao: "Corrigidos 4 bugs na Curva S: (1) Baseline invisível — quando não havia revisão marcada como baseline, o sistema usava a revisão ativa como baseline, gerando duas linhas idênticas sobrepostas (azul escondida sob a vermelha). Agora: só exibe baseline quando é uma revisão diferente da ativa; fallback automático para a primeira revisão aprovada (Rev 00) quando nenhuma está marcada como isBaseline; (2) Curva Realizada com peso errado — usava `n(pesoFinanceiro) || 1` (força peso mínimo=1 para atividades com peso=0), mesmo bug corrigido no REFIS na Rev.558. Agora usa `usarIgualCurva ? 1 : n(pesoFinanceiro)` consistente com REFIS e Avanço Semanal; (3) avancoAtual no cliente (subtítulo 'Realizado atual') também tinha o mesmo `|| 1` que foi corrigido; (4) salvarAvanco agora inclui revisaoId no WHERE de verificação de registro existente, evitando que avanços de revisões diferentes se sobreponham.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 559,
     titulo: "Grupos de Acesso — Redesign completo da interface",
     descricao: "Novo layout master-detail: sidebar esquerda com lista de grupos e painel direito com abas (Informações / Permissões / Membros). Novos recursos: (1) Seleção múltipla com checkboxes para excluir vários grupos de uma vez; (2) Botão 'Remover grupos duplicados' que elimina automaticamente grupos com nomes iguais, mantendo o primeiro cadastrado; (3) Permissões de telas agora exibidas inline com seções recolhíveis e barra de salvamento fixa; (4) Barra de status mostra se há alterações não salvas em permissões; (5) Design moderno com header escuro, avatares coloridos, tags de status e melhor organização visual.",

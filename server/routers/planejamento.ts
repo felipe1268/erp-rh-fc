@@ -533,7 +533,8 @@ export const planejamentoRouter = router({
       const db = await getDb();
       const existing = await db.select().from(planejamentoAvancos).where(and(
         eq(planejamentoAvancos.atividadeId, input.atividadeId),
-        eq(planejamentoAvancos.semana, input.semana),
+        eq(planejamentoAvancos.revisaoId,   input.revisaoId),
+        eq(planejamentoAvancos.semana,      input.semana),
       ));
 
       if (existing.length > 0) {
@@ -801,7 +802,11 @@ export const planejamentoRouter = router({
       }
 
       const curvaPlanejada = gerarCurvaPlanejada(atividades);
-      const curvaBaseline  = gerarCurvaPlanejada(baseline);
+      // Só gera baseline quando é uma revisão diferente da atual;
+      // se baselineId === revisaoId não faz sentido plotar duas linhas idênticas.
+      const curvaBaseline  = input.baselineId !== input.revisaoId
+        ? gerarCurvaPlanejada(baseline)
+        : [];
 
       // Curva realizada — acumulado ponderado por atividade (idêntico ao REFIS)
       // Para cada semana com avanços, calcula o acumulado ponderado real
@@ -827,7 +832,7 @@ export const planejamentoRouter = router({
           });
         let soma = 0;
         folhasParaCurva.forEach(a => {
-          const peso = usarIgualCurva ? 1 : n(a.pesoFinanceiro) || 1;
+          const peso = usarIgualCurva ? 1 : n(a.pesoFinanceiro);
           soma += (latestMap[a.id]?.val ?? 0) * (peso / pesoTotalCurva);
         });
         return { semana, acumulado: +Math.min(100, soma).toFixed(2) };
