@@ -13,12 +13,11 @@ import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useModuleConfig } from "@/contexts/ModuleConfigContext";
-import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -82,7 +81,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -297,7 +296,6 @@ export default function Configuracoes() {
 
   const allTabs = [
     { key: "modulos" as TabKey, label: "Módulos do Sistema", icon: ToggleRight, minRole: "admin" },
-    { key: "painel" as TabKey, label: "Painel de Controle", icon: LayoutDashboard, minRole: "user" },
     { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin" },
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin" },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user" },
@@ -438,11 +436,6 @@ export default function Configuracoes() {
         {/* TAB: Módulos do Sistema */}
         {activeTab === "modulos" && (
           <ModulosTab companyId={companyId} isMaster={isMaster} />
-        )}
-
-        {/* TAB: Painel de Controle (Menu Configurável) */}
-        {activeTab === "painel" && (
-          <MenuConfigPanel />
         )}
 
         {/* TAB: Regras de Ouro */}

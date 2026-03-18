@@ -3220,6 +3220,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 566,
+    titulo: "Configurações — Painel de Controle removido",
+    descricao: "A aba 'Painel de Controle' (menu drag-and-drop) foi removida da tela de Configurações. A gestão de visibilidade dos módulos é feita pela aba Módulos do Sistema, tornando o Painel de Controle redundante.",
+    tipo: "remocao",
+    modulos: "Configurações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 565,
     titulo: "Avanço Semanal — Limpar por semana específica",
     descricao: "O botão 'Limpar Avanços' agora exibe um painel de confirmação com dois escopos: (1) Só a semana selecionada — limpa apenas os avanços da semana atual exibida no seletor, mostrando o número e intervalo de datas no botão; (2) Todas as semanas — comportamento anterior que apaga tudo. Backend: adicionada mutation limparAvancosSemana recebendo projetoId + semana. Ambas as opções invalidam listarAvancos e listarSemanasComAvanco após execução.",
