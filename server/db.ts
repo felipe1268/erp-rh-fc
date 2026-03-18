@@ -2562,84 +2562,68 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
 // ============================================================
 
 export async function listUserGroups() {
-  const pool = new Pool({ connectionString: ENV.databaseUrl });
-  try {
-    const result = await pool.query(`
-      SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
-             ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
-             ug.module_access AS "moduleAccess",
-             ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
-             COUNT(ugm.id)::int AS "memberCount"
-      FROM user_groups ug
-      LEFT JOIN user_group_members ugm ON ugm."groupId" = ug.id
-      GROUP BY ug.id
-      ORDER BY ug.nome
-    `);
-    return result.rows as any[];
-  } finally {
-    await pool.end();
-  }
+  const db = await getDb();
+  if (!db) return [];
+  const exec = await db.execute(sql`
+    SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
+           ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
+           ug.module_access AS "moduleAccess",
+           ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
+           (SELECT COUNT(*)::int FROM user_group_members ugm WHERE ugm."groupId" = ug.id) AS "memberCount"
+    FROM user_groups ug
+    ORDER BY ug.nome
+  `) as any;
+  return (exec?.rows ?? exec ?? []) as any[];
 }
 
 export async function getUserGroupById(id: number) {
-  const pool = new Pool({ connectionString: ENV.databaseUrl });
-  try {
-    const result = await pool.query(`
-      SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
-             ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
-             ug.module_access AS "moduleAccess",
-             ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
-             COUNT(ugm.id)::int AS "memberCount"
-      FROM user_groups ug
-      LEFT JOIN user_group_members ugm ON ugm."groupId" = ug.id
-      WHERE ug.id = $1
-      GROUP BY ug.id
-      LIMIT 1
-    `, [id]);
-    return (result.rows[0] as any) ?? null;
-  } finally {
-    await pool.end();
-  }
+  const db = await getDb();
+  if (!db) return null;
+  const exec = await db.execute(sql`
+    SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
+           ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
+           ug.module_access AS "moduleAccess",
+           ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
+           (SELECT COUNT(*)::int FROM user_group_members ugm WHERE ugm."groupId" = ug.id) AS "memberCount"
+    FROM user_groups ug
+    WHERE ug.id = ${id}
+    LIMIT 1
+  `) as any;
+  const rows = (exec?.rows ?? exec ?? []) as any[];
+  return rows[0] ?? null;
 }
 
 export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number }) {
-  const pool = new Pool({ connectionString: ENV.databaseUrl });
-  try {
-    const result = await pool.query(
-      `INSERT INTO user_groups
-        (nome, descricao, cor, icone, "somenteVisualizacao", "ocultarDadosSensiveis", created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, now(), now())
-       RETURNING id`,
-      [data.nome, data.descricao ?? null, data.cor ?? '#6b7280', data.icone ?? 'Users',
-       data.somenteVisualizacao ?? 1, data.ocultarDadosSensiveis ?? 1]
-    );
-    return { id: Number(result.rows[0].id) };
-  } finally {
-    await pool.end();
-  }
+  const db = await getDb();
+  if (!db) throw new Error("DB indisponível");
+  const nome = data.nome;
+  const descricao = data.descricao ?? null;
+  const cor = data.cor ?? '#6b7280';
+  const icone = data.icone ?? 'Users';
+  const somenteViz = data.somenteVisualizacao ?? 1;
+  const ocultarDados = data.ocultarDadosSensiveis ?? 1;
+  const exec = await db.execute(sql`
+    INSERT INTO user_groups
+      (nome, descricao, cor, icone, "somenteVisualizacao", "ocultarDadosSensiveis", created_at, updated_at)
+    VALUES (${nome}, ${descricao}, ${cor}, ${icone}, ${somenteViz}, ${ocultarDados}, now(), now())
+    RETURNING id
+  `) as any;
+  const rows = (exec?.rows ?? exec ?? []) as any[];
+  return { id: Number(rows[0].id) };
 }
 
 export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; ativo?: number }) {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
-  // Build SET clause manually to handle camelCase columns with quotes
-  const sets: string[] = [];
-  const vals: any[] = [];
-  let idx = 1;
-  if (data.nome !== undefined)                { sets.push(`nome = $${idx++}`);                    vals.push(data.nome); }
-  if (data.descricao !== undefined)           { sets.push(`descricao = $${idx++}`);               vals.push(data.descricao); }
-  if (data.cor !== undefined)                 { sets.push(`cor = $${idx++}`);                     vals.push(data.cor); }
-  if (data.icone !== undefined)               { sets.push(`icone = $${idx++}`);                   vals.push(data.icone); }
-  if (data.somenteVisualizacao !== undefined) { sets.push(`"somenteVisualizacao" = $${idx++}`);   vals.push(data.somenteVisualizacao); }
-  if (data.ocultarDadosSensiveis !== undefined){ sets.push(`"ocultarDadosSensiveis" = $${idx++}`);vals.push(data.ocultarDadosSensiveis); }
-  if (data.ativo !== undefined)               { sets.push(`ativo = $${idx++}`);                   vals.push(data.ativo); }
-  if (sets.length === 0) return;
-  sets.push(`updated_at = now()`);
-  vals.push(id);
-  const pool = new Pool({ connectionString: ENV.databaseUrl });
-  try {
-    await pool.query(`UPDATE user_groups SET ${sets.join(', ')} WHERE id = $${idx}`, vals);
-  } finally { await pool.end(); }
+  const setObj: Record<string, any> = { updatedAt: sql`now()` };
+  if (data.nome !== undefined)                 setObj.nome = data.nome;
+  if (data.descricao !== undefined)            setObj.descricao = data.descricao;
+  if (data.cor !== undefined)                  setObj.cor = data.cor;
+  if (data.icone !== undefined)                setObj.icone = data.icone;
+  if (data.somenteVisualizacao !== undefined)  setObj.somenteVisualizacao = data.somenteVisualizacao;
+  if (data.ocultarDadosSensiveis !== undefined) setObj.ocultarDadosSensiveis = data.ocultarDadosSensiveis;
+  if (data.ativo !== undefined)                setObj.ativo = data.ativo;
+  await db.update(userGroups).set(setObj).where(eq(userGroups.id, id));
 }
 
 export async function deleteUserGroup(id: number) {

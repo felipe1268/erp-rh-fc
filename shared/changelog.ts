@@ -3176,8 +3176,8 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 555,
-    titulo: "Grupos de Acesso — Correção definitiva: NEON_DATABASE_URL na causa raiz",
-    descricao: "Identificada e corrigida a causa raiz do bug de 'Nenhum grupo criado ainda': as funções listUserGroups, getUserGroupById, createUserGroup e updateUserGroup criadas na Rev. 552 instanciavam pg.Pool com process.env.DATABASE_URL, mas o servidor usa NEON_DATABASE_URL como variável primária (ENV.databaseUrl = NEON_DATABASE_URL ?? DATABASE_URL). Com DATABASE_URL vazio/ausente, o Pool criava conexão nula e as queries falhavam silenciosamente. Todas as instâncias foram corrigidas para usar ENV.databaseUrl em db.ts e process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL em routers.ts.",
+    titulo: "Grupos de Acesso — Correção definitiva da query SQL e conexão com banco",
+    descricao: "Duas causas raiz identificadas e corrigidas: (1) A coluna 'id' de user_groups não tem restrição PRIMARY KEY no banco, então a query com 'GROUP BY ug.id' e SELECT de outras colunas violava a regra de agrupamento do PostgreSQL — a query falhava com erro silencioso e retornava vazio. Corrigido usando subquery correlacionada para o COUNT. (2) As funções listUserGroups, getUserGroupById, createUserGroup e updateUserGroup criavam raw pg.Pool com process.env.DATABASE_URL (que pode estar vazio), em vez de usar getDb() + db.execute(sql`...`) que é o padrão comprovado de toda a codebase. Todas as funções convertidas para usar getDb(). Grupo ADM MASTER, Segurança do Trabalho e TST agora aparecem corretamente na aba Grupos de Acesso.",
     tipo: "bugfix",
     modulos: "Administração",
     criadoPor: "Sistema",
