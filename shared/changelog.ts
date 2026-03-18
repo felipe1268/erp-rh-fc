@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 525,
+    titulo: "MapaFuncionariosInterativo — Geocodificação multi-estratégia com rate-limiter",
+    descricao: "Correção da geocodificação imprecisa de endereços: (1) substituição do query livre do Nominatim por geocodificação estruturada (parâmetros street/city/state separados), que é significativamente mais precisa para endereços brasileiros; (2) conversão automática da sigla do estado (SP, RJ…) para nome completo (São Paulo, Rio de Janeiro…) que o Nominatim entende melhor; (3) até 5 estratégias de fallback por funcionário: estruturado com número → estruturado sem número → texto livre sem bairro → CEP estruturado → CEP texto livre; (4) rate-limiter global (waitForGeoRate) garante ≥1100ms entre chamadas reais à API do Nominatim, impedindo bloqueio por excesso de requisições; (5) cache sessionStorage compartilhado entre todos os métodos via geocacheKey. Resultado: eliminação de 'Posição aproximada' para funcionários com endereço completo como 'Rua Itapemirim, 466, Aparecida, SP'. Rev. 525.",
+    tipo: "bugfix",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 524,
     titulo: "MapaFuncionariosInterativo — Mapa Geral com drill-down por cidade",
     descricao: "No modo Mapa Geral, clicar em um círculo de cidade agora geocodifica cada funcionário pelo endereço real (logradouro, número, bairro, cidade, CEP) e exibe pins individuais no mapa — igual ao comportamento do modo Por Estado / nível cidade. Pins com endereço exato são posicionados no local real; pins sem endereço ficam com jitter no centro da cidade. Barra de progresso e contagem de geocodificação durante o processo. Botão 'Voltar ao mapa geral' no header. Chips abaixo do mapa também acionam o drill-down. Tooltip no hover dos círculos mostra nome da cidade e contagem. Rev. 524.",

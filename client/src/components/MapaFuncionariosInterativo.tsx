@@ -281,6 +281,14 @@ type Level = 1 | 2 | 3;
 
 const geocacheKey = (addr: string) => `geo:${addr}`;
 
+// Global rate-limiter: ensures ≥1100ms between real Nominatim API calls
+let _lastGeoCall = 0;
+async function waitForGeoRate() {
+  const gap = Date.now() - _lastGeoCall;
+  if (gap < 1100) await sleep(1100 - gap);
+  _lastGeoCall = Date.now();
+}
+
 async function geocodeAddress(address: string): Promise<[number, number] | null> {
   const key = geocacheKey(address);
   const cached = sessionStorage.getItem(key);
@@ -289,6 +297,7 @@ async function geocodeAddress(address: string): Promise<[number, number] | null>
     return [lat, lng];
   }
   try {
+    await waitForGeoRate();
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=br`;
     const res = await fetch(url, { headers: { "User-Agent": "ERP-GestaoIntegrada/1.0" } });
     if (!res.ok) return null;
@@ -301,6 +310,87 @@ async function geocodeAddress(address: string): Promise<[number, number] | null>
   } catch {
     return null;
   }
+}
+
+// Structured Nominatim query (more reliable than free-text for Brazilian addresses)
+async function geocodeStructured(params: {
+  street?: string;
+  city?: string;
+  state?: string;
+  postalcode?: string;
+}): Promise<[number, number] | null> {
+  const cacheKey = geocacheKey("struct:" + JSON.stringify(params));
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) {
+    const [lat, lng] = JSON.parse(cached);
+    return [lat, lng];
+  }
+  try {
+    await waitForGeoRate();
+    const q = new URLSearchParams({ format: "json", limit: "1", countrycodes: "br" });
+    if (params.street) q.set("street", params.street);
+    if (params.city) q.set("city", params.city);
+    if (params.state) q.set("state", params.state);
+    if (params.postalcode) q.set("postalcode", params.postalcode);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${q}`, {
+      headers: { "User-Agent": "ERP-GestaoIntegrada/1.0" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.length) return null;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    sessionStorage.setItem(cacheKey, JSON.stringify([lat, lng]));
+    return [lat, lng];
+  } catch {
+    return null;
+  }
+}
+
+// Multi-strategy geocoder: tries structured queries first, then free-text fallbacks
+// Rate limiting is handled globally by waitForGeoRate() inside each geocode function
+async function geocodeEmployeeAddress(e: {
+  logradouro: string | null;
+  numero: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  cep: string | null;
+}): Promise<[number, number] | null> {
+  const stateCode = normalizeEstado(e.estado);
+  const stateFullName = STATE_NAMES[stateCode] || e.estado || "";
+  const city = e.cidade?.trim() || "";
+
+  if (e.logradouro) {
+    // Strategy 1: structured — street+number, city, state full name (most precise)
+    const streetWithNum = [e.logradouro.trim(), e.numero?.trim()].filter(Boolean).join(" ");
+    const r1 = await geocodeStructured({ street: streetWithNum, city: city || undefined, state: stateFullName || undefined });
+    if (r1) return r1;
+
+    // Strategy 2: structured — street without number (handles inexact numbering in OSM)
+    if (e.numero) {
+      const r2 = await geocodeStructured({ street: e.logradouro.trim(), city: city || undefined, state: stateFullName || undefined });
+      if (r2) return r2;
+    }
+
+    // Strategy 3: free-text without bairro, state full name (bairro often confuses Nominatim)
+    const freeText = [e.logradouro.trim(), e.numero?.trim(), city, stateFullName, "Brasil"].filter(Boolean).join(", ");
+    const r3 = await geocodeAddress(freeText);
+    if (r3) return r3;
+  }
+
+  if (e.cep) {
+    const cepClean = e.cep.replace(/\D/g, "");
+    // Strategy 4: structured — postalcode alone
+    const r4 = await geocodeStructured({ postalcode: cepClean });
+    if (r4) return r4;
+
+    // Strategy 5: free-text — CEP + state
+    const r5 = await geocodeAddress(cepClean + ", " + stateFullName + ", Brasil");
+    if (r5) return r5;
+  }
+
+  return null;
 }
 
 async function geocodeCidade(cidade: string, estado: string): Promise<[number, number] | null> {
@@ -598,15 +688,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     for (let i = 0; i < withAddress.length; i++) {
       if (geocodingAbort.current) break;
       const e = withAddress[i];
-      let addr = "";
-      if (e.logradouro) {
-        addr = [e.logradouro, e.numero, e.bairro, e.cidade, e.estado, "Brasil"]
-          .filter(Boolean).join(", ");
-      } else if (e.cep) {
-        addr = ["CEP " + e.cep, e.cidade, e.estado, "Brasil"]
-          .filter(Boolean).join(", ");
-      }
-      const coords = addr ? await geocodeAddress(addr) : null;
+      const coords = await geocodeEmployeeAddress(e);
       if (coords) {
         results.push({ ...e, lat: coords[0], lng: coords[1], isApprox: false });
       } else if (cityCenter) {
@@ -614,7 +696,6 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
       }
       setGeocodedEmployees([...results]);
       setGeocodingProgress({ done: i + 1, total: withAddress.length + (withCityOnly.length > 0 ? 1 : 0) });
-      if (i < withAddress.length - 1) await sleep(1050);
     }
 
     if (!geocodingAbort.current && withCityOnly.length > 0) {
@@ -745,13 +826,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     for (let i = 0; i < withAddress.length; i++) {
       if (geocodingAbort.current) break;
       const e = withAddress[i];
-      let addr = "";
-      if (e.logradouro) {
-        addr = [e.logradouro, e.numero, e.bairro, e.cidade, e.estado, "Brasil"].filter(Boolean).join(", ");
-      } else if (e.cep) {
-        addr = ["CEP " + e.cep, e.cidade, e.estado, "Brasil"].filter(Boolean).join(", ");
-      }
-      const coords = addr ? await geocodeAddress(addr) : null;
+      const coords = await geocodeEmployeeAddress(e);
       if (coords) {
         results.push({ ...e, lat: coords[0], lng: coords[1], isApprox: false });
       } else if (cityCenter) {
@@ -759,7 +834,6 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
       }
       setGeocodedEmployees([...results]);
       setGeocodingProgress({ done: i + 1, total: withAddress.length + (withCityOnly.length > 0 ? 1 : 0) });
-      if (i < withAddress.length - 1) await sleep(1050);
     }
 
     if (!geocodingAbort.current && withCityOnly.length > 0 && cityCenter) {
