@@ -276,14 +276,12 @@ export default function PlanejamentoDetalhe() {
     // 1ª prioridade: revisão explicitamente marcada como baseline
     const explicit = proj.revisoes.find((r: any) => r.isBaseline);
     if (explicit) return explicit;
-    // 2ª prioridade: primeira revisão aprovada (Rev 00) — desde que seja diferente da ativa
+    // 2ª prioridade: primeira revisão aprovada (Rev 00)
+    // Retorna mesmo quando é a mesma que a ativa — o backend decide o que plotar
     const aprovadas = proj.revisoes
       .filter((r: any) => r.status === "aprovada")
       .sort((a: any, b: any) => a.numero - b.numero);
-    const primeira = aprovadas[0] ?? null;
-    // Se só existe uma revisão, não há sentido em plotar baseline separada
-    if (!primeira || primeira.id === revisaoAtiva?.id) return null;
-    return primeira;
+    return aprovadas[0] ?? null;
   }, [proj, revisaoAtiva]);
 
   const { data: atividades = [], isLoading: loadingAtiv } = trpc.planejamento.listarAtividades.useQuery(
@@ -333,11 +331,17 @@ export default function PlanejamentoDetalhe() {
     return Math.min(100, ponderado);
   }, [atividades, avancosMap]);
 
-  // Previsto acumulado: usa semana visualizada pela aba ativa; cai em hoje se não há aba semanal ativa
+  // Previsto acumulado: usa curvaPlanejada se houver revisão diferente da baseline,
+  // senão usa curvaBaseline (que é o único plano disponível quando só há uma revisão).
   const avancoPrevistoDia = useMemo(() => {
-    if (!curvaData?.curvaPlanejada?.length) return null;
+    const curva = curvaData?.curvaPlanejada?.length
+      ? curvaData.curvaPlanejada
+      : curvaData?.curvaBaseline?.length
+        ? curvaData.curvaBaseline
+        : null;
+    if (!curva) return null;
     const ref = semanaVisualizacao ?? new Date().toISOString().split("T")[0];
-    const passados = (curvaData.curvaPlanejada as { semana: string; acumulado: number }[])
+    const passados = (curva as { semana: string; acumulado: number }[])
       .filter(p => p.semana <= ref);
     if (passados.length === 0) return 0;
     return passados[passados.length - 1].acumulado;
@@ -3449,19 +3453,23 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
     </div>
   );
 
-  const semanas = merged.map(p => p.semana);
-  const hoje    = new Date().toISOString().split("T")[0];
+  const semanas       = merged.map(p => p.semana);
+  const hoje          = new Date().toISOString().split("T")[0];
+  const hasBaseline   = merged.some(p => p.baseline   != null);
+  const hasPlanejada  = merged.some(p => p.planejada  != null);
+  const hasRealizada  = merged.some(p => p.realizada  != null);
+  const hasTendencia  = merged.some(p => p.tendencia  != null);
 
   return (
     <div className="space-y-4">
-      {/* Legenda fixa */}
+      {/* Legenda dinâmica */}
       <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
         {[
-          { color: "#1e40af", dash: false, width: 2, label: "Baseline (Rev 00)" },
-          { color: "#ef4444", dash: false, width: 4, label: "Revisão Atual" },
-          { color: "#22c55e", dash: false, width: 3, label: "Realizado" },
-          { color: "#16a34a", dash: true,  width: 2, label: "Tendência (projeção)" },
-        ].map((l, i) => (
+          { key: "baseline",  show: hasBaseline,  color: "#1e40af", dash: false, width: 2, label: "Baseline (Rev 00)" },
+          { key: "planejada", show: hasPlanejada, color: "#ef4444", dash: false, width: 4, label: "Revisão Atual" },
+          { key: "realizada", show: true,          color: "#22c55e", dash: false, width: 3, label: "Realizado" },
+          { key: "tendencia", show: hasTendencia, color: "#16a34a", dash: true,  width: 2, label: "Tendência (projeção)" },
+        ].filter(l => l.show).map((l, i) => (
           <div key={i} className="flex items-center gap-1.5">
             <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5"
               stroke={l.color} strokeWidth={l.width} strokeDasharray={l.dash ? "4 2" : "0"} /></svg>
@@ -7640,8 +7648,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   // Curva S filtrada até semana selecionada (max 16 pontos) com tendência
   const curvaFiltrada = useMemo(() => {
-    if (!curvaData?.curvaPlanejada) return [];
-    const plan = (curvaData.curvaPlanejada as any[]).filter((p: any) => p.semana <= semana).slice(-16);
+    const planSrc = curvaData?.curvaPlanejada?.length ? curvaData.curvaPlanejada : curvaData?.curvaBaseline;
+    if (!planSrc) return [];
+    const plan = (planSrc as any[]).filter((p: any) => p.semana <= semana).slice(-16);
     const real = (curvaData.curvaRealizada as any[] ?? []).filter((p: any) => p.semana <= semana);
     const tend = (curvaData.curvaTendencia as any[] ?? []).filter((p: any) => p.semana <= semana);
     const realMap2: Record<string, number> = {};
@@ -7665,8 +7674,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   // Curva S financeira (R$) — planejado × realizado sobre o contrato
   const curvaFinanceira = useMemo(() => {
-    if (!curvaData?.curvaPlanejada || totalContrato === 0) return [];
-    const plan = (curvaData.curvaPlanejada as any[]).filter((p: any) => p.semana <= semana).slice(-16);
+    const planSrc2 = curvaData?.curvaPlanejada?.length ? curvaData.curvaPlanejada : curvaData?.curvaBaseline;
+    if (!planSrc2 || totalContrato === 0) return [];
+    const plan = (planSrc2 as any[]).filter((p: any) => p.semana <= semana).slice(-16);
     const real = (curvaData.curvaRealizada as any[] ?? []).filter((p: any) => p.semana <= semana);
     const tend = (curvaData.curvaTendencia as any[] ?? []).filter((p: any) => p.semana <= semana);
     const realMap2: Record<string, number> = {};

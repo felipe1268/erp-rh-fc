@@ -827,11 +827,12 @@ export const planejamentoRouter = router({
         });
       }
 
-      const curvaPlanejada = gerarCurvaPlanejada(atividades);
-      // Só gera baseline quando é uma revisão diferente da atual;
-      // se baselineId === revisaoId não faz sentido plotar duas linhas idênticas.
-      const curvaBaseline  = input.baselineId !== input.revisaoId
-        ? gerarCurvaPlanejada(baseline)
+      // Baseline: sempre gerada (é o plano original imutável — Rev 00)
+      const curvaBaseline = gerarCurvaPlanejada(baseline);
+      // "Revisão Atual" só faz sentido quando é DIFERENTE da baseline;
+      // se há só uma revisão, a curva planejada é idêntica e mostramos apenas a baseline (azul).
+      const curvaPlanejada = input.baselineId !== input.revisaoId
+        ? gerarCurvaPlanejada(atividades)
         : [];
 
       // Curva realizada — acumulado ponderado por atividade (idêntico ao REFIS)

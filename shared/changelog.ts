@@ -3310,6 +3310,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 568,
+    titulo: "Curva S — Correção: Baseline não aparecia quando havia só uma revisão",
+    descricao: "Bug corrigido: quando o projeto tem apenas uma revisão (Baseline Rev 00 = revisão ativa), a Curva S mostrava a linha vermelha 'Revisão Atual' em vez da linha azul 'Baseline (Rev 00)'. Causa raiz: backend retornava curvaBaseline=[] quando baselineId===revisaoId; frontend detectava baseline como null quando era a própria revisão ativa. Correção: backend sempre gera curvaBaseline; curvaPlanejada ('Revisão Atual') só é gerada quando há uma revisão diferente da baseline. Frontend: baselineRev retorna a Rev 00 mesmo quando é a ativa; avancoPrevistoDia e curvaFiltrada/curvaFinanceira usam curvaBaseline como fallback quando curvaPlanejada está vazia. Legenda do gráfico agora é dinâmica — só exibe itens que têm dados reais.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 567,
     titulo: "Cronograma — Marcos (Milestones)",
     descricao: "Adicionado suporte completo a marcos (milestones) no cronograma: (1) Banco: coluna isMarco (boolean) adicionada a planejamento_atividades com ColFix automático no startup. (2) Backend: isMarco persistido em salvarAtividades; nova mutation toggleMarco para ativar/desativar marco sem entrar em modo de edição. (3) Importação XML: detecta <Milestone>1</Milestone>; importação XLSX: detecta colunas Milestone/Marco ou duração zero com ini=fim. (4) Pré-visualização de importação: coluna Marco ◆ com checkbox editável. (5) Tabela de atividades (view mode): linha com fundo roxo e badge ◆ Marco para marcadas; botão ◆ aparece no hover para toggle rápido. (6) Tabela de atividades (edit mode): checkbox ◆ ao lado do checkbox Grupo para marcar/desmarcar marco.",
