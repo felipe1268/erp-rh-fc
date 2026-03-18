@@ -10822,6 +10822,49 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const [eapViewMode,   setEapViewMode]   = useState<"table" | "cards" | "gantt" | "curva-s">("table");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // ── Progresso fake para geração por IA ────────────────────────────────────
+  const [gerandoPct,  setGerandoPct]  = useState(0);
+  const [gerandoStep, setGerandoStep] = useState("");
+  const gerandoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const GERANDO_STEPS = [
+    { at: 0,  label: "Analisando orçamento e atividades..." },
+    { at: 18, label: "Estruturando EAP e grupos de trabalho..." },
+    { at: 38, label: "Distribuindo custos por mês..." },
+    { at: 58, label: "Calculando curvas de desembolso..." },
+    { at: 75, label: "Otimizando distribuição temporal..." },
+    { at: 88, label: "Finalizando cronograma..." },
+    { at: 96, label: "Quase pronto..." },
+  ];
+
+  useEffect(() => {
+    if (gerarMut.isPending) {
+      setGerandoPct(0);
+      setGerandoStep(GERANDO_STEPS[0].label);
+      let cur = 0;
+      gerandoIntervalRef.current = setInterval(() => {
+        setGerandoPct(prev => {
+          // Desacelera conforme se aproxima de 95
+          const step = prev < 50 ? 2.8 : prev < 75 ? 1.6 : prev < 88 ? 0.8 : 0.2;
+          cur = Math.min(prev + step, 95);
+          // Atualiza mensagem de etapa
+          const stepLabel = [...GERANDO_STEPS].reverse().find(s => cur >= s.at);
+          if (stepLabel) setGerandoStep(stepLabel.label);
+          return cur;
+        });
+      }, 700);
+    } else {
+      if (gerandoIntervalRef.current) clearInterval(gerandoIntervalRef.current);
+      if (gerandoPct > 0) {
+        setGerandoPct(100);
+        setGerandoStep("Cronograma gerado!");
+        const t = setTimeout(() => { setGerandoPct(0); setGerandoStep(""); }, 1200);
+        return () => clearTimeout(t);
+      }
+    }
+    return () => { if (gerandoIntervalRef.current) clearInterval(gerandoIntervalRef.current); };
+  }, [gerarMut.isPending]);
+
   const orcNum = parseMoney(orcamentoMensal);
   const valNum = parseMoney(valorTotal);
 
@@ -11170,6 +11213,27 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
           {gerado && <span className="text-xs text-slate-500"><strong className="text-slate-700">{mesesGerados.length} meses</strong> · {atividadesGeradas.filter(a => !a.isGrupo).length} atividades · {fmtR(totalGerado)}</span>}
           {simulado && <span className="text-xs text-slate-500"><strong className="text-slate-700">{mesesEdit.length} meses</strong> · {fmtR(totalSimulado)}</span>}
         </div>
+
+        {/* ── Barra de progresso da geração por IA ── */}
+        {gerandoPct > 0 && (
+          <div className="mt-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-violet-600 font-medium animate-pulse">{gerandoStep}</span>
+              <span className="text-[11px] text-slate-400 tabular-nums">{Math.round(gerandoPct)}%</span>
+            </div>
+            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-700 ease-out"
+                style={{
+                  width: `${gerandoPct}%`,
+                  background: gerandoPct >= 100
+                    ? "linear-gradient(90deg, #10b981, #059669)"
+                    : "linear-gradient(90deg, #7c3aed, #a855f7, #c084fc)",
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Resultado: Gerado por IA (modo sem atividades) ── */}

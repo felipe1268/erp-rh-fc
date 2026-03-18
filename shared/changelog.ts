@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 537,
+    titulo: "Simulador: barra de progresso animada durante geração do cronograma por IA",
+    descricao: "Adicionada barra de progresso visual abaixo do botão 'Gerar Cronograma com IA' para reduzir ansiedade durante o processamento (que pode levar 20-40s). Implementação com progresso fake animado: incrementa 2,8%/tick até 50%, desacelera para 1,6% até 75%, 0,8% até 88% e 0,2% até 95% — para de crescer antes de chegar a 100%, pois não há como saber quando a IA vai responder. Ao completar, pula para 100% com cor verde e mensagem 'Cronograma gerado!', some após 1,2s. Sete mensagens de etapa rotativas: 'Analisando orçamento...', 'Estruturando EAP...', 'Distribuindo custos por mês...', 'Calculando curvas de desembolho...', 'Otimizando distribuição temporal...', 'Finalizando cronograma...', 'Quase pronto...'. Barra usa gradiente violeta animado (cor do módulo) → verde ao concluir. Rev. 537.",
+    tipo: "feature",
+    modulos: "Planejamento / Simulador",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 536,
     titulo: "Simulador: cálculo de antecipação corrigido — R$1 já não diz 4 meses economizados",
     descricao: "Bug crítico de lógica no Simulador de Parcelas Intermediárias. O código comparava n = mesesGerados.length (cronograma gerado pela IA com distribuição irregular de custos — ex: 23 meses) com novoN = resultado do algoritmo greedy com orcNum uniforme (ex: 19 meses). A diferença de 4 meses era apenas divergência de base, não real antecipação. Qualquer aporte — até R$1 — mostrava falsamente '−4 meses'. Correção: adicionada etapa de BASELINE greedy sem extras (mesmo algoritmo, mesmos parâmetros, sem parcelasIntermed) para computar baseN = prazo base do greedy. Agora economizados = baseN − novoN. Quando R$1 não antecipa nenhum mês, baseN = novoN e economizados = 0 (Sem alteração no prazo). dataFimOriginal, KPI Prazo Original e barra comparativa todos atualizados para usar baseN. Rev. 536.",
