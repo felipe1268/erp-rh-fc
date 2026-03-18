@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 531,
+    titulo: "CurvaSSimulador — Redesign elegante, mouse liberado, responsividade corrigida",
+    descricao: "Redesign completo do componente CurvaSSimulador com três correções críticas e nova estética. (1) Responsividade: removidos os atributos HTML width=960 height=480 do SVG — com apenas viewBox + CSS width:100%/height:auto, o navegador agora computa a altura proporcional corretamente ao reduzir o zoom, sem área fantasma. (2) Mouse liberado: o tooltip SVG (que capturava pointer events dentro do SVG e criava conflito) foi substituído por um div HTML absolutamente posicionado sobre o container (position:relative), com pointer-events:none, posicionado via getBoundingClientRect em coordenadas de tela; todos os elementos decorativos do SVG recebem pointer-events:none explícito, restando apenas o rect transparente de hit detection. (3) Curva S garantida em 100%: o último ponto sempre retorna pct=100 fixo, eliminando a possibilidade de o último dot ficar em 99.98% por arredondamento. Nova estética: KPI strip compacto de 4 colunas com divisor vertical em vez de cards separados; gradiente tricolor na área (violet escuro → violet claro → transparente); linha com 3 stops de gradiente; barras mensais com gradiente indigo; tooltip com efeito vidro fosco (backdrop-blur, border violet-200, sombra violet); tabela ocultada por padrão com toggle 'Ver tabela detalhada ▼'. Rev. 531.",
+    tipo: "improvement",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 530,
     titulo: "LEI DE OURO — SimuladorCronograma: total dos meses = valorTotal exato (sem diferença de centavos)",
     descricao: "Correção definitiva do bug onde o total exibido no SimuladorCronograma (soma dos meses) diferia do valorTotal do orçamento (ex: R$1.839.998,84 vs R$1.840.000,00). Causa raiz dupla: (1) Backend — operação mesCustoCents/100 para cada mês gera float com erro de representação binária; ao somar 25 floats o erro se acumula; (2) Frontend — totalGerado = mesesGerados.reduce((s,m) => s+m.custoTotal, 0) soma esses floats errados. Solução backend: após construir todos os meses, somam-se os custoTotal em centavos inteiros (Math.round(x*100)); se houver diferença de ±N centavos em relação ao totalCentsTarget, o último mês absorve o ajuste (único ponto de correção); assert de log é disparado caso a lei ainda seja violada após o ajuste. Solução frontend: novo estado totalGeradoExato armazena data.valorTotal (número inteiro exato) retornado pela API no onSuccess; const totalGerado passa a usar totalGeradoExato quando disponível, nunca o reduce() de floats. Ambas as correções garantem que nenhum cronograma gerado pela IA jamais exiba total diferente do contrato. Rev. 530.",

@@ -10406,9 +10406,11 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
   dataInicio: string;
   fmtR: (v: number) => string;
 }) {
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
-  const svgRef   = useRef<SVGSVGElement>(null);
+  const [hoveredIdx,  setHoveredIdx]  = useState<number | null>(null);
+  const [showTable,   setShowTable]   = useState(false);
+  const [tipPos,      setTipPos]      = useState<{ left: number; top: number; right?: boolean } | null>(null);
+  const svgRef       = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const n = mesesGerados.length;
   if (n === 0) return <div className="p-6 text-center text-sm text-slate-400">Nenhum mês gerado.</div>;
@@ -10420,307 +10422,339 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
   };
 
   let acum = 0;
-  const pontos = mesesGerados.map(m => {
+  const pontos = mesesGerados.map((m, idx) => {
     acum += m.custoTotal;
+    const isLast = idx === mesesGerados.length - 1;
     return {
       mes: m.mes, label: getMesLabel(m.mes),
       mensal: m.custoTotal, acum,
-      pct: totalGerado > 0 ? (acum / totalGerado) * 100 : 0,
+      pct: isLast ? 100 : (totalGerado > 0 ? Math.min(100, (acum / totalGerado) * 100) : 0),
     };
   });
 
-  const W = 960, H = 480;
-  const PAD_L = 68, PAD_R = 28, PAD_T = 36, PAD_B = 72;
-  const BAR_ZONE = 64; // espaço para as barras mensais abaixo da curva
-  const innerW   = W - PAD_L - PAD_R;
-  const lineH    = H - PAD_T - PAD_B - BAR_ZONE;
-  const baseLineY = PAD_T + lineH;
-  const barBaseY  = PAD_T + lineH + BAR_ZONE;
+  // ── SVG geometry ──────────────────────────────────────────────────────────
+  const VW = 960, VH = 420;
+  const PL = 56, PR = 20, PT = 24, PB = 56;
+  const BAR_H = 52;
+  const innerW  = VW - PL - PR;
+  const lineH   = VH - PT - PB - BAR_H;
+  const baseY   = PT + lineH;        // where curve meets bars
+  const xAxisY  = PT + lineH + BAR_H; // x-axis line
 
   const xStep = n > 1 ? innerW / (n - 1) : innerW;
-  const toX   = (i: number) => PAD_L + (n > 1 ? i * xStep : innerW / 2);
-  const toY   = (pct: number) => PAD_T + lineH - (pct / 100) * lineH;
+  const toX   = (i: number) => PL + (n > 1 ? i * xStep : innerW / 2);
+  const toY   = (pct: number) => PT + lineH - (pct / 100) * lineH;
 
-  // Catmull-Rom → cubic Bezier para curva suave
-  const catmullToBezier = (pts: { x: number; y: number }[]) => {
-    if (pts.length <= 1) return `M ${pts[0].x} ${pts[0].y}`;
-    let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[Math.max(0, i - 1)];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[Math.min(pts.length - 1, i + 2)];
-      const alpha = 0.5;
-      const cp1x = p1.x + (p2.x - p0.x) * alpha / 3;
-      const cp1y = p1.y + (p2.y - p0.y) * alpha / 3;
-      const cp2x = p2.x - (p3.x - p1.x) * alpha / 3;
-      const cp2y = p2.y - (p3.y - p1.y) * alpha / 3;
-      d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  // Catmull-Rom → cubic Bezier
+  const catmull = (raw: { x: number; y: number }[]) => {
+    if (raw.length <= 1) return `M ${raw[0].x} ${raw[0].y}`;
+    let d = `M ${raw[0].x.toFixed(1)} ${raw[0].y.toFixed(1)}`;
+    for (let i = 0; i < raw.length - 1; i++) {
+      const p0 = raw[Math.max(0, i - 1)], p1 = raw[i];
+      const p2 = raw[i + 1], p3 = raw[Math.min(raw.length - 1, i + 2)];
+      const α = 0.5;
+      const cx1 = p1.x + (p2.x - p0.x) * α / 3, cy1 = p1.y + (p2.y - p0.y) * α / 3;
+      const cx2 = p2.x - (p3.x - p1.x) * α / 3, cy2 = p2.y - (p3.y - p1.y) * α / 3;
+      d += ` C ${cx1.toFixed(1)} ${cy1.toFixed(1)},${cx2.toFixed(1)} ${cy2.toFixed(1)},${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
     }
     return d;
   };
 
-  const pts       = pontos.map((p, i) => ({ x: toX(i), y: toY(p.pct) }));
-  const linePath  = catmullToBezier(pts);
-  const lastPt    = pts[pts.length - 1];
-  const firstPt   = pts[0];
-  const areaPath  = `${linePath} L ${lastPt.x.toFixed(2)} ${baseLineY} L ${firstPt.x.toFixed(2)} ${baseLineY} Z`;
+  const pts      = pontos.map((p, i) => ({ x: toX(i), y: toY(p.pct) }));
+  const linePath = catmull(pts);
+  const areaPath = `${linePath} L ${pts[pts.length - 1].x.toFixed(1)} ${baseY} L ${pts[0].x.toFixed(1)} ${baseY} Z`;
 
   const maxMensal = Math.max(...pontos.map(p => p.mensal), 1);
-  const barW      = Math.max(5, Math.min(22, xStep * 0.60));
-  const toBarH    = (v: number) => (v / maxMensal) * (BAR_ZONE - 8);
+  const barW      = Math.max(4, Math.min(18, xStep * 0.55));
+  const toBarH    = (v: number) => (v / maxMensal) * (BAR_H - 6);
 
-  const yTicks     = [0, 25, 50, 75, 100];
-  const xTickStep  = n <= 14 ? 1 : n <= 28 ? 2 : n <= 42 ? 3 : 4;
-
+  const xStep2    = n <= 14 ? 1 : n <= 28 ? 2 : n <= 42 ? 3 : 4;
+  const yTicks    = [0, 25, 50, 75, 100];
   const picoMes   = pontos.reduce((mx, p) => p.mensal > mx.mensal ? p : mx, pontos[0]);
-  const primLabel = pontos[0].label;
-  const ultLabel  = pontos[pontos.length - 1].label;
 
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const mx = (e.clientX - rect.left) * (W / rect.width);
+  // Mouse handler — tooltip is HTML, positioned via getBoundingClientRect
+  const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svgEl  = svgRef.current;
+    const conEl  = containerRef.current;
+    if (!svgEl || !conEl) return;
+    const svgRect = svgEl.getBoundingClientRect();
+    const conRect = conEl.getBoundingClientRect();
+    const scaleX  = VW / svgRect.width;
+    const svgX    = (e.clientX - svgRect.left) * scaleX;
     let ni = 0, nd = Infinity;
-    pts.forEach((p, i) => { const d = Math.abs(p.x - mx); if (d < nd) { nd = d; ni = i; } });
+    pts.forEach((p, i) => { const d = Math.abs(p.x - svgX); if (d < nd) { nd = d; ni = i; } });
     setHoveredIdx(ni);
-    if (tableRef.current) {
-      const row = tableRef.current.querySelector(`[data-idx="${ni}"]`) as HTMLElement | null;
-      row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
+    // compute tooltip position relative to container
+    const scaleY  = VH / svgRect.height;
+    const px = svgRect.left + toX(ni) / scaleX - conRect.left;
+    const py = svgRect.top  + toY(pontos[ni].pct) / scaleY - conRect.top;
+    const tipRight = px > conRect.width * 0.60;
+    setTipPos({ left: px, top: py, right: tipRight });
   };
 
-  const hP       = hoveredIdx !== null ? pontos[hoveredIdx] : null;
-  const hX       = hoveredIdx !== null ? toX(hoveredIdx) : null;
-  const hY       = hoveredIdx !== null ? toY(pontos[hoveredIdx].pct) : null;
-  const tipRight = hoveredIdx !== null && hX !== null && hX > W * 0.62;
+  const hP = hoveredIdx !== null ? pontos[hoveredIdx] : null;
+  const hX = hoveredIdx !== null ? toX(hoveredIdx) : null;
+  const hY = hoveredIdx !== null ? toY(pontos[hoveredIdx].pct) : null;
 
   return (
-    <div className="p-5 space-y-5">
-      {/* ── Cabeçalho destaque ── */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-base font-bold text-slate-800 tracking-tight">Curva S — Desembolso Planejado Acumulado</p>
-          <p className="text-[11px] text-violet-500 mt-0.5">Baseline preliminar · Passe o mouse sobre o gráfico para analisar</p>
-        </div>
-        <div className="flex gap-3 text-[10px] text-slate-400 items-center">
-          <span className="flex items-center gap-1.5">
-            <span style={{ display: "inline-block", width: 28, height: 3, background: "linear-gradient(90deg,#7c3aed,#a855f7)", borderRadius: 9 }} />
-            % Acumulado
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span style={{ display: "inline-block", width: 12, height: 12, background: "#bfdbfe", borderRadius: 3 }} />
-            Desembolso mensal
-          </span>
-        </div>
+    <div className="space-y-0">
+      {/* ── KPI strip ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-100 border-b border-slate-100">
+        {[
+          { label: "TOTAL CONTRATO", value: fmtR(totalGerado), sub: null, color: "text-violet-700" },
+          { label: "PERÍODO",        value: `${pontos[0].label} → ${pontos[n-1].label}`, sub: `${n} meses`, color: "text-slate-700" },
+          { label: "PICO MENSAL",    value: fmtR(picoMes.mensal), sub: picoMes.label, color: "text-blue-600" },
+          { label: "MÉDIA MENSAL",   value: fmtR(totalGerado / n), sub: `distribuição ${n} meses`, color: "text-emerald-600" },
+        ].map((k, i) => (
+          <div key={i} className="px-4 py-3">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{k.label}</p>
+            <p className={`text-sm font-extrabold mt-0.5 leading-tight ${k.color}`}>{k.value}</p>
+            {k.sub && <p className="text-[10px] text-slate-400 mt-0.5">{k.sub}</p>}
+          </div>
+        ))}
       </div>
 
-      {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white px-4 py-3">
-          <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wide">Total Contrato</p>
-          <p className="text-lg font-extrabold text-violet-800 mt-0.5 leading-tight">{fmtR(totalGerado)}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-4 py-3">
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Período</p>
-          <p className="text-sm font-bold text-slate-700 mt-0.5 leading-tight">{primLabel} → {ultLabel}</p>
-          <p className="text-[10px] text-slate-400">{n} mese{n !== 1 ? "s" : ""}</p>
-        </div>
-        <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white px-4 py-3">
-          <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wide">Pico Mensal</p>
-          <p className="text-sm font-bold text-blue-700 mt-0.5 leading-tight">{fmtR(picoMes.mensal)}</p>
-          <p className="text-[10px] text-blue-400">{picoMes.label}</p>
-        </div>
-        <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white px-4 py-3">
-          <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Média Mensal</p>
-          <p className="text-sm font-bold text-emerald-700 mt-0.5 leading-tight">{fmtR(totalGerado / n)}</p>
-          <p className="text-[10px] text-emerald-400">distribuição {n} meses</p>
-        </div>
-      </div>
-
-      {/* ── SVG Chart ── */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ padding: "4px 0 0" }}>
+      {/* ── Chart area (relative container for HTML tooltip) ── */}
+      <div ref={containerRef} className="relative select-none" style={{ lineHeight: 0 }}>
+        {/* SVG — NO width/height attributes, only viewBox. CSS drives size. */}
         <svg
           ref={svgRef}
-          width={W} height={H}
-          viewBox={`0 0 ${W} ${H}`}
-          style={{ width: "100%", height: "auto", cursor: "crosshair", display: "block" }}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={() => setHoveredIdx(null)}
+          viewBox={`0 0 ${VW} ${VH}`}
+          style={{ width: "100%", height: "auto", display: "block", cursor: "crosshair" }}
+          onMouseMove={handleSvgMouseMove}
+          onMouseLeave={() => { setHoveredIdx(null); setTipPos(null); }}
         >
           <defs>
-            <linearGradient id="csGrad2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.30" />
-              <stop offset="60%" stopColor="#a855f7" stopOpacity="0.10" />
-              <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.01" />
+            <linearGradient id="cs3Area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#7c3aed" stopOpacity="0.22" />
+              <stop offset="55%"  stopColor="#a855f7" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
             </linearGradient>
-            <linearGradient id="csLineGrad" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#6d28d9" />
+            <linearGradient id="cs3Line" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%"   stopColor="#5b21b6" />
+              <stop offset="50%"  stopColor="#7c3aed" />
               <stop offset="100%" stopColor="#a855f7" />
             </linearGradient>
-            <filter id="glow">
-              <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <linearGradient id="cs3Bar" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#6366f1" stopOpacity="0.7" />
+              <stop offset="100%" stopColor="#818cf8" stopOpacity="0.3" />
+            </linearGradient>
+            <linearGradient id="cs3BarHov" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#4f46e5" />
+              <stop offset="100%" stopColor="#6366f1" stopOpacity="0.7" />
+            </linearGradient>
+            <filter id="cs3Glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
               <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-            <filter id="cardShadow">
-              <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#7c3aed" floodOpacity="0.18" />
             </filter>
           </defs>
 
-          {/* Y grid & labels */}
+          {/* ─ Y grid lines & labels ─ */}
           {yTicks.map(t => (
-            <g key={t}>
-              <line x1={PAD_L} y1={toY(t)} x2={W - PAD_R} y2={toY(t)}
-                stroke={t === 50 ? "#ddd6fe" : "#f1f5f9"}
-                strokeWidth={t === 0 || t === 100 ? 1.5 : t === 50 ? 2 : 1}
-                strokeDasharray={t === 50 ? "6 3" : t === 25 || t === 75 ? "3 3" : ""} />
-              <text x={PAD_L - 8} y={toY(t) + 4} textAnchor="end" fontSize={11} fill={t === 50 ? "#7c3aed" : "#94a3b8"} fontWeight={t === 50 ? "700" : "400"}>{t}%</text>
+            <g key={t} style={{ pointerEvents: "none" }}>
+              <line
+                x1={PL} y1={toY(t)} x2={VW - PR} y2={toY(t)}
+                stroke={t === 50 ? "#ddd6fe" : t === 0 || t === 100 ? "#e2e8f0" : "#f1f5f9"}
+                strokeWidth={t === 50 ? 1.5 : 1}
+                strokeDasharray={t === 50 ? "5 4" : t > 0 && t < 100 ? "3 4" : ""}
+              />
+              <text x={PL - 7} y={toY(t) + 4} textAnchor="end" fontSize={10}
+                fill={t === 50 ? "#8b5cf6" : "#b4bfcf"}
+                fontWeight={t === 50 ? "600" : "400"}>
+                {t}%
+              </text>
             </g>
           ))}
 
-          {/* X labels */}
-          {pontos.filter((_, i) => i % xTickStep === 0).map((p) => {
-            const i = pontos.indexOf(p);
+          {/* ─ X axis labels ─ */}
+          {pontos.filter((_, i) => i % xStep2 === 0).map((p, _) => {
+            const i2 = pontos.indexOf(p);
             return (
-              <text key={i} x={toX(i)} y={barBaseY + 16} textAnchor="middle" fontSize={10} fill="#94a3b8">{p.label}</text>
+              <text key={i2} x={toX(i2)} y={xAxisY + 14} textAnchor="middle" fontSize={9.5}
+                fill="#b4bfcf" style={{ pointerEvents: "none" }}>
+                {p.label}
+              </text>
             );
           })}
 
-          {/* Monthly bars */}
+          {/* ─ Monthly bars ─ */}
           {pontos.map((p, i) => {
             const bh  = toBarH(p.mensal);
             const hov = hoveredIdx === i;
             return (
               <rect key={i}
-                x={toX(i) - barW / 2} y={barBaseY - bh}
-                width={barW} height={bh} rx={2}
-                fill={hov ? "#60a5fa" : "#bfdbfe"}
-                opacity={hov ? 1 : 0.8}
+                x={toX(i) - barW / 2} y={xAxisY - bh}
+                width={barW} height={bh} rx={barW > 8 ? 3 : 2}
+                fill={hov ? "url(#cs3BarHov)" : "url(#cs3Bar)"}
+                style={{ pointerEvents: "none" }}
               />
             );
           })}
 
-          {/* Separator line between bars and curve area */}
-          <line x1={PAD_L} y1={baseLineY} x2={W - PAD_R} y2={baseLineY} stroke="#e2e8f0" strokeWidth="1" />
+          {/* ─ Separator ─ */}
+          <line x1={PL} y1={baseY} x2={VW - PR} y2={baseY}
+            stroke="#e2e8f0" strokeWidth="1" style={{ pointerEvents: "none" }} />
 
-          {/* Area fill */}
-          <path d={areaPath} fill="url(#csGrad2)" />
+          {/* ─ Area fill ─ */}
+          <path d={areaPath} fill="url(#cs3Area)" style={{ pointerEvents: "none" }} />
 
-          {/* Smooth line */}
-          <path d={linePath} fill="none" stroke="url(#csLineGrad)" strokeWidth="3.5" strokeLinejoin="round" strokeLinecap="round" />
+          {/* ─ Curve line ─ */}
+          <path d={linePath} fill="none" stroke="url(#cs3Line)"
+            strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"
+            style={{ pointerEvents: "none" }} />
 
-          {/* Data points */}
+          {/* ─ Data dots ─ */}
           {pontos.map((p, i) => {
             const hov = hoveredIdx === i;
+            const r   = hov ? 7 : n <= 30 ? 4.5 : 2.5;
             return (
-              <circle key={i}
-                cx={toX(i)} cy={toY(p.pct)}
-                r={hov ? 8 : n <= 30 ? 5 : 3}
-                fill={hov ? "#4c1d95" : "#7c3aed"}
-                stroke="white" strokeWidth={hov ? 2.5 : 2}
-                filter={hov ? "url(#glow)" : ""}
+              <circle key={i} cx={toX(i)} cy={toY(p.pct)}
+                r={r} fill={hov ? "#4c1d95" : "#7c3aed"}
+                stroke="white" strokeWidth={hov ? 2 : 1.5}
+                filter={hov ? "url(#cs3Glow)" : ""}
+                style={{ pointerEvents: "none" }}
               />
             );
           })}
 
-          {/* Hover crosshair */}
+          {/* ─ Hover crosshair ─ */}
           {hoveredIdx !== null && hX !== null && hY !== null && (
-            <>
-              <line x1={hX} y1={PAD_T} x2={hX} y2={barBaseY} stroke="#7c3aed" strokeWidth="1.2" strokeDasharray="4 3" opacity="0.55" />
-              <line x1={PAD_L} y1={hY} x2={W - PAD_R} y2={hY} stroke="#7c3aed" strokeWidth="1" strokeDasharray="4 3" opacity="0.35" />
-            </>
+            <g style={{ pointerEvents: "none" }}>
+              <line x1={hX} y1={PT} x2={hX} y2={xAxisY}
+                stroke="#7c3aed" strokeWidth="1" strokeDasharray="4 3" opacity="0.45" />
+              <line x1={PL} y1={hY} x2={VW - PR} y2={hY}
+                stroke="#7c3aed" strokeWidth="1" strokeDasharray="4 3" opacity="0.3" />
+            </g>
           )}
 
-          {/* Hover tooltip */}
-          {hP && hX !== null && hY !== null && (() => {
-            const TW = 214, TH = 96, pad = 14;
-            const tx = tipRight ? hX - TW - pad : hX + pad;
-            const ty = Math.min(Math.max(hY - TH / 2, PAD_T + 4), baseLineY - TH - 4);
-            return (
-              <g filter="url(#cardShadow)">
-                <rect x={tx} y={ty} width={TW} height={TH} rx={9}
-                  fill="white" stroke="#ddd6fe" strokeWidth="1.5" />
-                {/* Title bar */}
-                <rect x={tx} y={ty} width={TW} height={24} rx={9} fill="#7c3aed" />
-                <rect x={tx} y={ty + 15} width={TW} height={9} fill="#7c3aed" />
-                <text x={tx + TW / 2} y={ty + 16} textAnchor="middle" fontSize={12} fontWeight="700" fill="white">{hP.label}</text>
-                {/* Content */}
-                <text x={tx + 12} y={ty + 39} fontSize={10} fill="#64748b">Desembolso</text>
-                <text x={tx + TW - 12} y={ty + 39} fontSize={10} fill="#0f172a" textAnchor="end" fontWeight="600">{fmtR(hP.mensal)}</text>
-                <text x={tx + 12} y={ty + 56} fontSize={10} fill="#64748b">Acumulado</text>
-                <text x={tx + TW - 12} y={ty + 56} fontSize={10} fill="#6d28d9" textAnchor="end" fontWeight="700">{fmtR(hP.acum)}</text>
-                <text x={tx + 12} y={ty + 73} fontSize={10} fill="#64748b">% do Total</text>
-                <text x={tx + TW - 12} y={ty + 73} fontSize={13} fill="#4c1d95" textAnchor="end" fontWeight="800">{hP.pct.toFixed(1)}%</text>
-                {/* Progress bar inside tooltip */}
-                <rect x={tx + 12} y={ty + 81} width={TW - 24} height={5} rx={2.5} fill="#ede9fe" />
-                <rect x={tx + 12} y={ty + 81} width={(TW - 24) * hP.pct / 100} height={5} rx={2.5} fill="#7c3aed" />
-              </g>
-            );
-          })()}
+          {/* ─ Axes ─ */}
+          <g style={{ pointerEvents: "none" }}>
+            <line x1={PL} y1={PT} x2={PL} y2={xAxisY} stroke="#d1d5db" strokeWidth="1.5" />
+            <line x1={PL} y1={xAxisY} x2={VW - PR} y2={xAxisY} stroke="#d1d5db" strokeWidth="1.5" />
+          </g>
 
-          {/* Axes */}
-          <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={barBaseY} stroke="#cbd5e1" strokeWidth="2" />
-          <line x1={PAD_L} y1={barBaseY} x2={W - PAD_R} y2={barBaseY} stroke="#cbd5e1" strokeWidth="2" />
-
-          {/* Y axis label */}
-          <text x={16} y={PAD_T + lineH / 2} textAnchor="middle" fontSize={10} fill="#94a3b8"
-            transform={`rotate(-90, 16, ${PAD_T + lineH / 2})`}>% Acumulado</text>
+          {/* ─ Transparent hit area (captures mouse, avoids phantom height) ─ */}
+          <rect x={PL} y={PT} width={innerW} height={VH - PT - PB + BAR_H}
+            fill="transparent" />
         </svg>
+
+        {/* ── HTML Tooltip (outside SVG = no pointer capture) ── */}
+        {hP && tipPos && (
+          <div
+            style={{
+              position: "absolute",
+              left: tipPos.right ? tipPos.left - 220 : tipPos.left + 14,
+              top:  Math.max(4, tipPos.top - 56),
+              width: 210,
+              pointerEvents: "none",
+              zIndex: 50,
+            }}
+            className="bg-white/95 backdrop-blur-sm border border-violet-200 rounded-2xl shadow-xl shadow-violet-200/50 overflow-hidden"
+          >
+            {/* Title */}
+            <div className="bg-gradient-to-r from-violet-700 to-purple-500 px-4 py-2">
+              <p className="text-white text-xs font-bold tracking-wide">{hP.label}</p>
+            </div>
+            {/* Body */}
+            <div className="px-4 py-3 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-500">Desembolso</span>
+                <span className="text-[11px] font-semibold text-slate-800">{fmtR(hP.mensal)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-500">Acumulado</span>
+                <span className="text-[11px] font-bold text-violet-700">{fmtR(hP.acum)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-500">% do Total</span>
+                <span className="text-sm font-extrabold text-violet-900">{hP.pct.toFixed(1)}%</span>
+              </div>
+              {/* Mini progress bar */}
+              <div className="mt-1 h-1.5 bg-violet-100 rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-purple-400 transition-all"
+                  style={{ width: `${hP.pct}%` }} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Interactive table */}
-      <div ref={tableRef} className="overflow-y-auto border border-slate-200 rounded-xl" style={{ maxHeight: 340 }}>
-        <table className="w-full text-[11px] border-collapse">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-slate-100 text-slate-500 font-semibold">
-              <th className="text-left px-3 py-2 border-b border-slate-200">Mês</th>
-              <th className="text-right px-3 py-2 border-b border-slate-200">Desembolso Mensal</th>
-              <th className="text-right px-3 py-2 border-b border-slate-200">Acumulado</th>
-              <th className="text-right px-3 py-2 border-b border-slate-200">% Acum.</th>
-              <th className="text-left px-3 py-2 border-b border-slate-200 w-[130px]">Progresso</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pontos.map((p, i) => {
-              const isHov = hoveredIdx === i;
-              return (
-                <tr key={i} data-idx={i}
-                  className={`border-b border-slate-100 cursor-pointer transition-colors ${isHov ? "bg-violet-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/40"} hover:bg-violet-50/60`}
-                  onMouseEnter={() => setHoveredIdx(i)}
-                  onMouseLeave={() => setHoveredIdx(null)}>
-                  <td className={`px-3 py-1.5 font-medium ${isHov ? "text-violet-700" : "text-slate-700"}`}>{p.label}</td>
-                  <td className={`px-3 py-1.5 text-right ${isHov ? "font-semibold text-blue-700" : "text-slate-500"}`}>{fmtR(p.mensal)}</td>
-                  <td className={`px-3 py-1.5 text-right font-medium ${isHov ? "text-violet-800" : "text-violet-700"}`}>{fmtR(p.acum)}</td>
-                  <td className="px-3 py-1.5 text-right">
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isHov ? "bg-violet-200 text-violet-800" : "bg-violet-100 text-violet-600"}`}>
-                      {p.pct.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${isHov ? "bg-violet-600" : "bg-violet-400"}`}
-                        style={{ width: `${p.pct}%` }} />
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr className="bg-slate-100 font-bold text-slate-700 sticky bottom-0">
-              <td className="px-3 py-2">TOTAL</td>
-              <td className="px-3 py-2 text-right">{fmtR(totalGerado)}</td>
-              <td className="px-3 py-2 text-right text-violet-700">{fmtR(totalGerado)}</td>
-              <td className="px-3 py-2 text-right">
-                <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">100%</span>
-              </td>
-              <td className="px-3 py-2">
-                <div className="h-2 bg-emerald-400 rounded-full" />
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+      {/* ── Legend + table toggle ── */}
+      <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100">
+        <div className="flex items-center gap-4 text-[10px] text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <span style={{ display: "inline-block", width: 24, height: 3, background: "linear-gradient(90deg,#5b21b6,#a855f7)", borderRadius: 9 }} />
+            % Acumulado
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span style={{ display: "inline-block", width: 10, height: 10, background: "linear-gradient(180deg,rgba(99,102,241,.7),rgba(129,140,248,.3))", borderRadius: 2 }} />
+            Desembolso mensal
+          </span>
+        </div>
+        <button
+          onClick={() => setShowTable(t => !t)}
+          className="flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 hover:text-violet-800 transition-colors"
+        >
+          {showTable ? "Ocultar tabela" : "Ver tabela detalhada"}
+          <span className="text-xs">{showTable ? "▲" : "▼"}</span>
+        </button>
       </div>
+
+      {/* ── Collapsible detail table ── */}
+      {showTable && (
+        <div className="overflow-y-auto border-t border-slate-100" style={{ maxHeight: 320 }}>
+          <table className="w-full text-[11px] border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                <th className="text-left px-3 py-2">Mês</th>
+                <th className="text-right px-3 py-2">Desembolso</th>
+                <th className="text-right px-3 py-2">Acumulado</th>
+                <th className="text-right px-3 py-2">% Acum.</th>
+                <th className="text-left px-3 py-2 w-24">Progresso</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pontos.map((p, i) => {
+                const isHov = hoveredIdx === i;
+                return (
+                  <tr key={i} data-idx={i}
+                    className={`border-b border-slate-100 cursor-default ${isHov ? "bg-violet-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
+                    onMouseEnter={() => setHoveredIdx(i)}
+                    onMouseLeave={() => setHoveredIdx(null)}>
+                    <td className={`px-3 py-1.5 font-medium ${isHov ? "text-violet-700" : "text-slate-700"}`}>{p.label}</td>
+                    <td className={`px-3 py-1.5 text-right ${isHov ? "font-semibold text-indigo-700" : "text-slate-500"}`}>{fmtR(p.mensal)}</td>
+                    <td className={`px-3 py-1.5 text-right font-medium ${isHov ? "text-violet-800" : "text-violet-700"}`}>{fmtR(p.acum)}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isHov ? "bg-violet-200 text-violet-800" : "bg-violet-100 text-violet-600"}`}>
+                        {p.pct.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-purple-400"
+                          style={{ width: `${p.pct}%` }} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-violet-50 font-bold text-slate-700 sticky bottom-0 border-t border-violet-200">
+                <td className="px-3 py-2 text-violet-800">TOTAL</td>
+                <td className="px-3 py-2 text-right">{fmtR(totalGerado)}</td>
+                <td className="px-3 py-2 text-right text-violet-700">{fmtR(totalGerado)}</td>
+                <td className="px-3 py-2 text-right">
+                  <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">100%</span>
+                </td>
+                <td className="px-3 py-2">
+                  <div className="h-1.5 bg-gradient-to-r from-emerald-400 to-emerald-300 rounded-full" />
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
