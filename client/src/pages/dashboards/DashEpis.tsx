@@ -1,7 +1,7 @@
 import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
 import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import DashChart, { DashKpi } from "@/components/DashChart";
+import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
@@ -89,6 +89,7 @@ export default function DashEpis() {
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todos");
   const [obraFiltro, setObraFiltro] = useState<string>("todos");
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedMotivo, setSelectedMotivo] = useState<string | null>(null);
 
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
@@ -518,7 +519,7 @@ export default function DashEpis() {
             {/* ============================================================ */}
             {data.porMotivo && Object.keys(data.porMotivo).length > 0 && (
               <DashChart
-                title="Todas as Entregas por Motivo"
+                title="Todas as Entregas por Motivo — clique em uma fatia para ver detalhes"
                 type="doughnut"
                 labels={Object.keys(data.porMotivo)}
                 datasets={[{
@@ -527,8 +528,74 @@ export default function DashEpis() {
                   backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[3], CHART_PALETTE[2], CHART_PALETTE[1], CHART_PALETTE[4], CHART_PALETTE[6]],
                 }]}
                 height={260}
+                onChartClick={(info: ChartClickInfo) =>
+                  setSelectedMotivo(prev => prev === info.label ? null : info.label)
+                }
               />
             )}
+
+            {/* ============================================================ */}
+            {/* PAINEL DETALHE: Entregas filtradas por motivo */}
+            {/* ============================================================ */}
+            {selectedMotivo && data?.entregasDetalhe && (() => {
+              const rows = (data.entregasDetalhe as any[]).filter(r => r.motivo === selectedMotivo);
+              const totalQtd = rows.reduce((s: number, r: any) => s + r.quantidade, 0);
+              const totalVal = rows.reduce((s: number, r: any) => s + (r.valorCobrado || 0), 0);
+              return (
+                <Card className="border-blue-200 bg-blue-50/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
+                      <ClipboardList className="h-4 w-4 text-blue-500 shrink-0" />
+                      <span>Detalhes — Motivo:</span>
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">{selectedMotivo}</Badge>
+                      <span className="text-muted-foreground font-normal">{rows.length} entrega{rows.length !== 1 ? 's' : ''} · {totalQtd} unidade{totalQtd !== 1 ? 's' : ''}</span>
+                      {totalVal > 0 && <span className="text-muted-foreground font-normal">· {fmtBRL(totalVal)}</span>}
+                      <Button
+                        variant="ghost" size="sm"
+                        className="ml-auto h-6 px-2 text-xs text-muted-foreground"
+                        onClick={() => setSelectedMotivo(null)}
+                      >
+                        <X className="h-3 w-3 mr-1" /> Fechar
+                      </Button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {rows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">Nenhuma entrega encontrada para este motivo.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b text-left">
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">Funcionário</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">Função</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">EPI / Item</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">Obra</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-center">Qtd</th>
+                              <th className="py-2 font-medium text-muted-foreground text-right">Data</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((r: any, i: number) => (
+                              <tr key={i} className="border-b border-border/50 hover:bg-blue-50/50 transition-colors">
+                                <td className="py-2 pr-3 font-medium">{r.funcionario}</td>
+                                <td className="py-2 pr-3 text-muted-foreground text-xs">{r.funcao || '—'}</td>
+                                <td className="py-2 pr-3">{r.epi}</td>
+                                <td className="py-2 pr-3 text-xs text-muted-foreground">{r.obra || '—'}</td>
+                                <td className="py-2 pr-3 text-center">
+                                  <Badge variant="secondary">{r.quantidade}</Badge>
+                                </td>
+                                <td className="py-2 text-right text-muted-foreground text-xs">{fmtDate(r.data)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* ============================================================ */}
             {/* TABELA: Resumo por Categoria */}

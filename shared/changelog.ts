@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 548,
+    titulo: "Dashboard EPIs: clique no gráfico 'Entregas por Motivo' expande detalhes",
+    descricao: "Ao clicar em qualquer fatia do gráfico rosca 'Todas as Entregas por Motivo', um painel se expande abaixo exibindo a tabela completa das entregas daquele motivo: funcionário, função, EPI/item, obra, quantidade e data. Clicar novamente na mesma fatia fecha o painel. Implementado via onChartClick existente no DashChart + campo entregasDetalhe adicionado à resposta da API de EPIs.",
+    tipo: "feature",
+    modulos: "Dashboard EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 547,
     titulo: "Aviso Prévio: novo fluxo 'Aguardando Baixa' — conclusão manual obrigatória",
     descricao: "Corrige comportamento incorreto onde o sistema marcava automaticamente 26 avisos como 'Concluído' após fim do período, sem confirmação de pagamento. Novo fluxo: ao fim do período o aviso vai para 'Aguardando Baixa' (amber); somente o usuário pode clicar 'Dar Baixa' (após conferir descontos) para marcar como 'Concluído' e enviar ao financeiro. Inclui: novo card/filtro 'Aguardando Baixa', botão 'Dar Baixa' na tabela, mutation darBaixa no backend, coluna dataBaixa para rastrear confirmação, e migração automática dos registros incorretamente marcados.",

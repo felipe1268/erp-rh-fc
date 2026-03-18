@@ -1021,6 +1021,24 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
     porCategoria,
     custoPorObraList,
     porMotivo,
+    entregasDetalhe: allDel.map(del => {
+      const motivo = del.motivoTroca || del.motivo || 'Entrega regular';
+      const label = motivo === 'mau_uso' ? 'Mau uso' : motivo === 'perda' ? 'Perda' : motivo === 'furto' ? 'Furto' : motivo === 'extravio' ? 'Extravio' : motivo === 'desgaste_normal' ? 'desgaste_normal' : motivo === 'desgaste' ? 'Desgaste' : motivo;
+      const emp = empMap.get(del.employeeId || 0);
+      const epi = allEpis.find(e => e.id === del.epiId);
+      const obraId = del.employeeId ? epiEmpObraMap.get(del.employeeId) : null;
+      const obra = obraId ? obraMap.get(obraId) : null;
+      return {
+        funcionario: emp?.nome || 'Não identificado',
+        funcao: emp?.funcao || '',
+        epi: epi?.nome || 'EPI não encontrado',
+        data: del.dataEntrega,
+        quantidade: del.quantidade,
+        motivo: label,
+        obra: obra || null,
+        valorCobrado: del.valorCobrado ? parseFloat(String(del.valorCobrado)) : null,
+      };
+    }),
     // Novas análises
     itemMaisUtilizado: itemMaisUtilizado ? { nome: itemMaisUtilizado.nome, ca: itemMaisUtilizado.ca, qtd: itemMaisUtilizado.qtd, categoria: itemMaisUtilizado.categoria } : null,
     itemMenosUtilizado: itemMenosUtilizado ? { nome: itemMenosUtilizado.nome, ca: itemMenosUtilizado.ca, qtd: itemMenosUtilizado.qtd, categoria: itemMenosUtilizado.categoria } : null,
