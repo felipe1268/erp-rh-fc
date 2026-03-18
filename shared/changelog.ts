@@ -3175,6 +3175,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 552,
+    titulo: "Grupos de Acesso — Correção crítica de queries e member count",
+    descricao: "Corrigido bug crítico que impedia a listagem de grupos de usuários na aba Grupos de Acesso: listUserGroups e getUserGroupById foram reescritas usando pg.Pool direto (ao invés de db.execute Drizzle) para garantir retorno correto de result.rows. A query agora inclui LEFT JOIN com user_group_members retornando memberCount diretamente do banco. Corrigido o endpoint listAllMembers que usava colunas snake_case erradas (group_id/user_id) em vez de camelCase (groupId/userId). No frontend, o cálculo de memberCount na sidebar foi corrigido para usar g.memberCount do backend ao invés de filtrar allUsers localmente (u.groupIds não existe no response de listUsers).",
+    tipo: "bugfix",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",

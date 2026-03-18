@@ -2137,11 +2137,14 @@ export const appRouter = router({
     }),
     // Listar todos os membros de todos os grupos
     listAllMembers: protectedProcedure.query(async () => {
-      const { getDb } = await import("./db");
-      const db = await getDb();
-      if (!db) return [];
-      const rows = await db.execute(sql`SELECT group_id as groupId, user_id as userId FROM user_group_members`);
-      return (rows as any).rows || rows;
+      const { Pool } = await import("pg");
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      try {
+        const result = await pool.query(`SELECT "groupId", "userId" FROM user_group_members`);
+        return result.rows;
+      } finally {
+        await pool.end();
+      }
     }),
     // Grupos de um usuário
     getUserGroups: protectedProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {

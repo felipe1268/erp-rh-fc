@@ -2562,45 +2562,61 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
 // ============================================================
 
 export async function listUserGroups() {
-  const db = await getDb();
-  if (!db) return [];
-  const result = await db.execute(sql`
-    SELECT id, nome, descricao, cor, icone, ativo,
-           "somenteVisualizacao", "ocultarDadosSensiveis",
-           module_access AS "moduleAccess", created_at AS "createdAt", updated_at AS "updatedAt"
-    FROM user_groups
-    ORDER BY nome
-  `);
-  return result.rows as any[];
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const result = await pool.query(`
+      SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
+             ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
+             ug.module_access AS "moduleAccess",
+             ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
+             COUNT(ugm.id)::int AS "memberCount"
+      FROM user_groups ug
+      LEFT JOIN user_group_members ugm ON ugm."groupId" = ug.id
+      GROUP BY ug.id
+      ORDER BY ug.nome
+    `);
+    return result.rows as any[];
+  } finally {
+    await pool.end();
+  }
 }
 
 export async function getUserGroupById(id: number) {
-  const db = await getDb();
-  if (!db) return null;
-  const result = await db.execute(sql`
-    SELECT id, nome, descricao, cor, icone, ativo,
-           "somenteVisualizacao", "ocultarDadosSensiveis",
-           module_access AS "moduleAccess", created_at AS "createdAt", updated_at AS "updatedAt"
-    FROM user_groups
-    WHERE id = ${id}
-    LIMIT 1
-  `);
-  return (result.rows[0] as any) ?? null;
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const result = await pool.query(`
+      SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
+             ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
+             ug.module_access AS "moduleAccess",
+             ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
+             COUNT(ugm.id)::int AS "memberCount"
+      FROM user_groups ug
+      LEFT JOIN user_group_members ugm ON ugm."groupId" = ug.id
+      WHERE ug.id = $1
+      GROUP BY ug.id
+      LIMIT 1
+    `, [id]);
+    return (result.rows[0] as any) ?? null;
+  } finally {
+    await pool.end();
+  }
 }
 
 export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number }) {
-  const db = await getDb();
-  if (!db) throw new Error("DB indisponível");
-  // Usando SQL raw para evitar bug do Drizzle com colunas camelCase e defaultNow()
-  const result = await db.execute(sql`
-    INSERT INTO user_groups
-      (nome, descricao, cor, icone, "somenteVisualizacao", "ocultarDadosSensiveis", created_at, updated_at)
-    VALUES
-      (${data.nome}, ${data.descricao ?? null}, ${data.cor ?? '#6b7280'}, ${data.icone ?? 'Users'},
-       ${data.somenteVisualizacao ?? 1}, ${data.ocultarDadosSensiveis ?? 1}, now(), now())
-    RETURNING id
-  `);
-  return { id: Number((result.rows[0] as any).id) };
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const result = await pool.query(
+      `INSERT INTO user_groups
+        (nome, descricao, cor, icone, "somenteVisualizacao", "ocultarDadosSensiveis", created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now(), now())
+       RETURNING id`,
+      [data.nome, data.descricao ?? null, data.cor ?? '#6b7280', data.icone ?? 'Users',
+       data.somenteVisualizacao ?? 1, data.ocultarDadosSensiveis ?? 1]
+    );
+    return { id: Number(result.rows[0].id) };
+  } finally {
+    await pool.end();
+  }
 }
 
 export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; ativo?: number }) {

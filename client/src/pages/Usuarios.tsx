@@ -400,12 +400,18 @@ export default function Usuarios() {
     onError:   e => toast.error(e.message),
   });
   const addMemberMut = trpc.userGroups.addMember.useMutation({
-    onSuccess: () => utils.userGroups.list.invalidate(),
-    onError:   e => toast.error(e.message),
+    onSuccess: () => {
+      utils.userGroups.list.invalidate();
+      if (selectedGroup) utils.userGroups.getMembers.invalidate({ groupId: selectedGroup.id });
+    },
+    onError: e => toast.error(e.message),
   });
   const removeMemberMut = trpc.userGroups.removeMember.useMutation({
-    onSuccess: () => utils.userGroups.list.invalidate(),
-    onError:   e => toast.error(e.message),
+    onSuccess: () => {
+      utils.userGroups.list.invalidate();
+      if (selectedGroup) utils.userGroups.getMembers.invalidate({ groupId: selectedGroup.id });
+    },
+    onError: e => toast.error(e.message),
   });
 
   // Query membros do grupo selecionado
@@ -811,7 +817,7 @@ export default function Usuarios() {
                     </div>
                   )}
                   {filteredGroups.map((g: any) => {
-                    const memberCount = (allUsers as any[]).filter(u => u.groupIds?.includes?.(g.id)).length;
+                    const memberCount = g.memberCount ?? 0;
                     const modCount = Object.keys(g.moduleAccess||{}).length;
                     const isSel = selectedGroup?.id === g.id && gPanel === "detail";
                     return (
