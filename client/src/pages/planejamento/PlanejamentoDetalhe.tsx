@@ -10429,9 +10429,9 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
     };
   });
 
-  const W = 760, H = 320;
-  const PAD_L = 60, PAD_R = 20, PAD_T = 30, PAD_B = 64;
-  const BAR_ZONE = 44; // espaço para as barras mensais acima do eixo X
+  const W = 960, H = 480;
+  const PAD_L = 68, PAD_R = 28, PAD_T = 36, PAD_B = 72;
+  const BAR_ZONE = 64; // espaço para as barras mensais abaixo da curva
   const innerW   = W - PAD_L - PAD_R;
   const lineH    = H - PAD_T - PAD_B - BAR_ZONE;
   const baseLineY = PAD_T + lineH;
@@ -10467,11 +10467,15 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
   const areaPath  = `${linePath} L ${lastPt.x.toFixed(2)} ${baseLineY} L ${firstPt.x.toFixed(2)} ${baseLineY} Z`;
 
   const maxMensal = Math.max(...pontos.map(p => p.mensal), 1);
-  const barW      = Math.max(4, Math.min(18, xStep * 0.55));
-  const toBarH    = (v: number) => (v / maxMensal) * (BAR_ZONE - 6);
+  const barW      = Math.max(5, Math.min(22, xStep * 0.60));
+  const toBarH    = (v: number) => (v / maxMensal) * (BAR_ZONE - 8);
 
   const yTicks     = [0, 25, 50, 75, 100];
-  const xTickStep  = n <= 12 ? 1 : n <= 24 ? 2 : n <= 36 ? 3 : 4;
+  const xTickStep  = n <= 14 ? 1 : n <= 28 ? 2 : n <= 42 ? 3 : 4;
+
+  const picoMes   = pontos.reduce((mx, p) => p.mensal > mx.mensal ? p : mx, pontos[0]);
+  const primLabel = pontos[0].label;
+  const ultLabel  = pontos[pontos.length - 1].label;
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -10480,56 +10484,86 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
     let ni = 0, nd = Infinity;
     pts.forEach((p, i) => { const d = Math.abs(p.x - mx); if (d < nd) { nd = d; ni = i; } });
     setHoveredIdx(ni);
-    // Scroll table row into view
     if (tableRef.current) {
       const row = tableRef.current.querySelector(`[data-idx="${ni}"]`) as HTMLElement | null;
       row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   };
 
-  const hP   = hoveredIdx !== null ? pontos[hoveredIdx] : null;
-  const hX   = hoveredIdx !== null ? toX(hoveredIdx) : null;
-  const hY   = hoveredIdx !== null ? toY(pontos[hoveredIdx].pct) : null;
+  const hP       = hoveredIdx !== null ? pontos[hoveredIdx] : null;
+  const hX       = hoveredIdx !== null ? toX(hoveredIdx) : null;
+  const hY       = hoveredIdx !== null ? toY(pontos[hoveredIdx].pct) : null;
   const tipRight = hoveredIdx !== null && hX !== null && hX > W * 0.62;
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+    <div className="p-5 space-y-5">
+      {/* ── Cabeçalho destaque ── */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-sm font-semibold text-slate-700">Curva S — Desembolso Planejado Acumulado</p>
-          <p className="text-[11px] text-violet-600">Baseline preliminar · Passe o mouse sobre o gráfico para analisar</p>
+          <p className="text-base font-bold text-slate-800 tracking-tight">Curva S — Desembolso Planejado Acumulado</p>
+          <p className="text-[11px] text-violet-500 mt-0.5">Baseline preliminar · Passe o mouse sobre o gráfico para analisar</p>
         </div>
-        <div className="flex gap-3 text-[9px] text-slate-400">
-          <span className="flex items-center gap-1">
-            <span style={{ display: "inline-block", width: 24, height: 3, background: "#7c3aed", borderRadius: 9 }} />
+        <div className="flex gap-3 text-[10px] text-slate-400 items-center">
+          <span className="flex items-center gap-1.5">
+            <span style={{ display: "inline-block", width: 28, height: 3, background: "linear-gradient(90deg,#7c3aed,#a855f7)", borderRadius: 9 }} />
             % Acumulado
           </span>
-          <span className="flex items-center gap-1">
-            <span style={{ display: "inline-block", width: 10, height: 10, background: "#bfdbfe", borderRadius: 2 }} />
+          <span className="flex items-center gap-1.5">
+            <span style={{ display: "inline-block", width: 12, height: 12, background: "#bfdbfe", borderRadius: 3 }} />
             Desembolso mensal
           </span>
         </div>
       </div>
 
-      {/* SVG Chart */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white px-4 py-3">
+          <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wide">Total Contrato</p>
+          <p className="text-lg font-extrabold text-violet-800 mt-0.5 leading-tight">{fmtR(totalGerado)}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-4 py-3">
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Período</p>
+          <p className="text-sm font-bold text-slate-700 mt-0.5 leading-tight">{primLabel} → {ultLabel}</p>
+          <p className="text-[10px] text-slate-400">{n} mese{n !== 1 ? "s" : ""}</p>
+        </div>
+        <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white px-4 py-3">
+          <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wide">Pico Mensal</p>
+          <p className="text-sm font-bold text-blue-700 mt-0.5 leading-tight">{fmtR(picoMes.mensal)}</p>
+          <p className="text-[10px] text-blue-400">{picoMes.label}</p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white px-4 py-3">
+          <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Média Mensal</p>
+          <p className="text-sm font-bold text-emerald-700 mt-0.5 leading-tight">{fmtR(totalGerado / n)}</p>
+          <p className="text-[10px] text-emerald-400">distribuição {n} meses</p>
+        </div>
+      </div>
+
+      {/* ── SVG Chart ── */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ padding: "4px 0 0" }}>
         <svg
           ref={svgRef}
           width={W} height={H}
           viewBox={`0 0 ${W} ${H}`}
-          style={{ maxWidth: "100%", cursor: "crosshair", display: "block" }}
+          style={{ width: "100%", height: "auto", cursor: "crosshair", display: "block" }}
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setHoveredIdx(null)}
         >
           <defs>
             <linearGradient id="csGrad2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.22" />
+              <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.30" />
+              <stop offset="60%" stopColor="#a855f7" stopOpacity="0.10" />
               <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.01" />
             </linearGradient>
+            <linearGradient id="csLineGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#6d28d9" />
+              <stop offset="100%" stopColor="#a855f7" />
+            </linearGradient>
             <filter id="glow">
-              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feGaussianBlur stdDeviation="2.5" result="blur" />
               <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="cardShadow">
+              <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#7c3aed" floodOpacity="0.18" />
             </filter>
           </defs>
 
@@ -10537,10 +10571,10 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
           {yTicks.map(t => (
             <g key={t}>
               <line x1={PAD_L} y1={toY(t)} x2={W - PAD_R} y2={toY(t)}
-                stroke={t === 50 ? "#ede9fe" : "#f1f5f9"}
-                strokeWidth={t === 0 || t === 100 ? 1.5 : t === 50 ? 1.5 : 1}
-                strokeDasharray={t === 50 ? "5 3" : ""} />
-              <text x={PAD_L - 5} y={toY(t) + 3.5} textAnchor="end" fontSize={9} fill={t === 50 ? "#7c3aed" : "#94a3b8"} fontWeight={t === 50 ? "600" : "400"}>{t}%</text>
+                stroke={t === 50 ? "#ddd6fe" : "#f1f5f9"}
+                strokeWidth={t === 0 || t === 100 ? 1.5 : t === 50 ? 2 : 1}
+                strokeDasharray={t === 50 ? "6 3" : t === 25 || t === 75 ? "3 3" : ""} />
+              <text x={PAD_L - 8} y={toY(t) + 4} textAnchor="end" fontSize={11} fill={t === 50 ? "#7c3aed" : "#94a3b8"} fontWeight={t === 50 ? "700" : "400"}>{t}%</text>
             </g>
           ))}
 
@@ -10548,7 +10582,7 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
           {pontos.filter((_, i) => i % xTickStep === 0).map((p) => {
             const i = pontos.indexOf(p);
             return (
-              <text key={i} x={toX(i)} y={barBaseY + 14} textAnchor="middle" fontSize={8} fill="#94a3b8">{p.label}</text>
+              <text key={i} x={toX(i)} y={barBaseY + 16} textAnchor="middle" fontSize={10} fill="#94a3b8">{p.label}</text>
             );
           })}
 
@@ -10573,7 +10607,7 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
           <path d={areaPath} fill="url(#csGrad2)" />
 
           {/* Smooth line */}
-          <path d={linePath} fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={linePath} fill="none" stroke="url(#csLineGrad)" strokeWidth="3.5" strokeLinejoin="round" strokeLinecap="round" />
 
           {/* Data points */}
           {pontos.map((p, i) => {
@@ -10581,9 +10615,9 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
             return (
               <circle key={i}
                 cx={toX(i)} cy={toY(p.pct)}
-                r={hov ? 6 : n <= 30 ? 3.5 : 2}
-                fill={hov ? "#5b21b6" : "#7c3aed"}
-                stroke="white" strokeWidth={hov ? 2 : 1.5}
+                r={hov ? 8 : n <= 30 ? 5 : 3}
+                fill={hov ? "#4c1d95" : "#7c3aed"}
+                stroke="white" strokeWidth={hov ? 2.5 : 2}
                 filter={hov ? "url(#glow)" : ""}
               />
             );
@@ -10599,39 +10633,38 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
 
           {/* Hover tooltip */}
           {hP && hX !== null && hY !== null && (() => {
-            const TW = 182, TH = 82, pad = 12;
+            const TW = 214, TH = 96, pad = 14;
             const tx = tipRight ? hX - TW - pad : hX + pad;
             const ty = Math.min(Math.max(hY - TH / 2, PAD_T + 4), baseLineY - TH - 4);
             return (
-              <g>
-                <rect x={tx} y={ty} width={TW} height={TH} rx={7}
-                  fill="white" stroke="#ede9fe" strokeWidth="1.5"
-                  style={{ filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.12))" }} />
+              <g filter="url(#cardShadow)">
+                <rect x={tx} y={ty} width={TW} height={TH} rx={9}
+                  fill="white" stroke="#ddd6fe" strokeWidth="1.5" />
                 {/* Title bar */}
-                <rect x={tx} y={ty} width={TW} height={20} rx={7} fill="#7c3aed" />
-                <rect x={tx} y={ty + 13} width={TW} height={7} fill="#7c3aed" />
-                <text x={tx + TW / 2} y={ty + 13.5} textAnchor="middle" fontSize={10} fontWeight="700" fill="white">{hP.label}</text>
+                <rect x={tx} y={ty} width={TW} height={24} rx={9} fill="#7c3aed" />
+                <rect x={tx} y={ty + 15} width={TW} height={9} fill="#7c3aed" />
+                <text x={tx + TW / 2} y={ty + 16} textAnchor="middle" fontSize={12} fontWeight="700" fill="white">{hP.label}</text>
                 {/* Content */}
-                <text x={tx + 10} y={ty + 34} fontSize={9} fill="#64748b">Desembolso</text>
-                <text x={tx + TW - 10} y={ty + 34} fontSize={9} fill="#0f172a" textAnchor="end" fontWeight="600">{fmtR(hP.mensal)}</text>
-                <text x={tx + 10} y={ty + 49} fontSize={9} fill="#64748b">Acumulado</text>
-                <text x={tx + TW - 10} y={ty + 49} fontSize={9} fill="#6d28d9" textAnchor="end" fontWeight="700">{fmtR(hP.acum)}</text>
-                <text x={tx + 10} y={ty + 64} fontSize={9} fill="#64748b">% do Total</text>
-                <text x={tx + TW - 10} y={ty + 64} fontSize={11} fill="#4c1d95" textAnchor="end" fontWeight="800">{hP.pct.toFixed(1)}%</text>
+                <text x={tx + 12} y={ty + 39} fontSize={10} fill="#64748b">Desembolso</text>
+                <text x={tx + TW - 12} y={ty + 39} fontSize={10} fill="#0f172a" textAnchor="end" fontWeight="600">{fmtR(hP.mensal)}</text>
+                <text x={tx + 12} y={ty + 56} fontSize={10} fill="#64748b">Acumulado</text>
+                <text x={tx + TW - 12} y={ty + 56} fontSize={10} fill="#6d28d9" textAnchor="end" fontWeight="700">{fmtR(hP.acum)}</text>
+                <text x={tx + 12} y={ty + 73} fontSize={10} fill="#64748b">% do Total</text>
+                <text x={tx + TW - 12} y={ty + 73} fontSize={13} fill="#4c1d95" textAnchor="end" fontWeight="800">{hP.pct.toFixed(1)}%</text>
                 {/* Progress bar inside tooltip */}
-                <rect x={tx + 10} y={ty + 70} width={TW - 20} height={4} rx={2} fill="#ede9fe" />
-                <rect x={tx + 10} y={ty + 70} width={(TW - 20) * hP.pct / 100} height={4} rx={2} fill="#7c3aed" />
+                <rect x={tx + 12} y={ty + 81} width={TW - 24} height={5} rx={2.5} fill="#ede9fe" />
+                <rect x={tx + 12} y={ty + 81} width={(TW - 24) * hP.pct / 100} height={5} rx={2.5} fill="#7c3aed" />
               </g>
             );
           })()}
 
           {/* Axes */}
-          <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={barBaseY} stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1={PAD_L} y1={barBaseY} x2={W - PAD_R} y2={barBaseY} stroke="#cbd5e1" strokeWidth="1.5" />
+          <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={barBaseY} stroke="#cbd5e1" strokeWidth="2" />
+          <line x1={PAD_L} y1={barBaseY} x2={W - PAD_R} y2={barBaseY} stroke="#cbd5e1" strokeWidth="2" />
 
           {/* Y axis label */}
-          <text x={14} y={PAD_T + lineH / 2} textAnchor="middle" fontSize={8} fill="#94a3b8"
-            transform={`rotate(-90, 14, ${PAD_T + lineH / 2})`}>% Acumulado</text>
+          <text x={16} y={PAD_T + lineH / 2} textAnchor="middle" fontSize={10} fill="#94a3b8"
+            transform={`rotate(-90, 16, ${PAD_T + lineH / 2})`}>% Acumulado</text>
         </svg>
       </div>
 

@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 526,
+    titulo: "CurvaSSimulador — Gráfico ampliado, KPI cards e visual mais impactante",
+    descricao: "Redesign visual do componente CurvaSSimulador na aba Curva S do SimuladorCronograma: (1) dimensões do SVG aumentadas de W=760×H=320 para W=960×H=480, quase dobrando a área da linha acumulada (lineH passou de 182px para 308px); (2) SVG agora usa width:100%/height:auto para preencher toda a largura disponível sem scroll horizontal; (3) adicionados 4 KPI cards em row acima do gráfico: Total Contrato (roxo), Período com nº de meses (cinza), Pico Mensal (azul), Média Mensal (verde); (4) linha da curva S passou de stroke #7c3aed 2.5px para gradiente linear #6d28d9→#a855f7 com 3.5px — muito mais vibrante; (5) pontos de dados ampliados (r=5 vs r=3.5, r=8 hover vs r=6); (6) cabeçalho com fonte maior (text-base font-bold) e legenda com swatch gradient; (7) tooltip ampliado (TW=214×TH=96) com filtro drop-shadow nativo SVG; (8) fontes dos eixos aumentadas (Y: 9→11px, X: 8→10px); (9) área de preenchimento com gradiente 3 stops mais vívido; (10) grade horizontal com 25%/75% em tracejado fino e 50% destacada em ddd6fe; (11) BAR_ZONE aumentado de 44→64px para barras mensais mais visíveis. Rev. 526.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 525,
     titulo: "MapaFuncionariosInterativo — Geocodificação multi-estratégia com rate-limiter",
     descricao: "Correção da geocodificação imprecisa de endereços: (1) substituição do query livre do Nominatim por geocodificação estruturada (parâmetros street/city/state separados), que é significativamente mais precisa para endereços brasileiros; (2) conversão automática da sigla do estado (SP, RJ…) para nome completo (São Paulo, Rio de Janeiro…) que o Nominatim entende melhor; (3) até 5 estratégias de fallback por funcionário: estruturado com número → estruturado sem número → texto livre sem bairro → CEP estruturado → CEP texto livre; (4) rate-limiter global (waitForGeoRate) garante ≥1100ms entre chamadas reais à API do Nominatim, impedindo bloqueio por excesso de requisições; (5) cache sessionStorage compartilhado entre todos os métodos via geocacheKey. Resultado: eliminação de 'Posição aproximada' para funcionários com endereço completo como 'Rua Itapemirim, 466, Aparecida, SP'. Rev. 525.",
