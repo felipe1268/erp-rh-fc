@@ -2577,18 +2577,16 @@ export async function getUserGroupById(id: number) {
 export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number }) {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
-  const agora = new Date().toISOString();
-  const result = await db.insert(userGroups).values({
-    nome: data.nome,
-    descricao: data.descricao ?? null,
-    cor: data.cor ?? '#6b7280',
-    icone: data.icone ?? 'Users',
-    somenteVisualizacao: data.somenteVisualizacao ?? 1,
-    ocultarDadosSensiveis: data.ocultarDadosSensiveis ?? 1,
-    createdAt: agora,
-    updatedAt: agora,
-  } as any).returning();
-  return { id: Number(result[0].id) };
+  // Usando SQL raw para evitar bug do Drizzle com colunas camelCase e defaultNow()
+  const result = await db.execute(sql`
+    INSERT INTO user_groups
+      (nome, descricao, cor, icone, "somenteVisualizacao", "ocultarDadosSensiveis", created_at, updated_at)
+    VALUES
+      (${data.nome}, ${data.descricao ?? null}, ${data.cor ?? '#6b7280'}, ${data.icone ?? 'Users'},
+       ${data.somenteVisualizacao ?? 1}, ${data.ocultarDadosSensiveis ?? 1}, now(), now())
+    RETURNING id
+  `);
+  return { id: Number((result.rows[0] as any).id) };
 }
 
 export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; ativo?: number }) {

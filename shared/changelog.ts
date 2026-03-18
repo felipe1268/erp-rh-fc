@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 544,
+    titulo: "Fix definitivo: criar Grupo de Acesso — SQL raw contorna bug do Drizzle",
+    descricao: "A tentativa anterior (Rev.543) de passar createdAt/updatedAt explicitamente não resolveu porque o Drizzle continuou gerando 'default' para essas colunas. Causa raiz identificada: colunas camelCase ('somenteVisualizacao', 'ocultarDadosSensiveis') no banco exigem aspas duplas no SQL, e o Drizzle não gerava os defaults corretamente com .defaultNow(). Solução: substituição do db.insert(userGroups).values() por db.execute(sql`INSERT INTO user_groups (nome, descricao, cor, icone, \"somenteVisualizacao\", \"ocultarDadosSensiveis\", created_at, updated_at) VALUES (...) RETURNING id`) — SQL raw testado e validado no banco.",
+    tipo: "bugfix",
+    modulos: "Usuários",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 543,
     titulo: "Fix: criar Grupo de Acesso falhava com SQL malformado",
     descricao: "Drizzle ORM não gerava 'default' para created_at/updated_at no VALUES clause do INSERT em user_groups (bug de geração de SQL com .defaultNow().notNull()). Corrigido passando os timestamps explicitamente no insert: createdAt e updatedAt recebem new Date().toISOString() na função createUserGroup em server/db.ts.",
