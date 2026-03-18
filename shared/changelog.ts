@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 532,
+    titulo: "Dashboard RH — Cidades case-insensitive: 'Potim' + 'POTIM' agrupados corretamente",
+    descricao: "Correção do agrupamento de cidades no Dashboard RH: o banco de dados armazenava algumas cidades em maiúsculas ('POTIM') e outras em title case ('Potim'), resultando em duas linhas separadas na distribuição por cidade. Três pontos corrigidos: (1) SQL cidadeDist: query alterada para usar INITCAP(LOWER(cidade)) tanto no SELECT quanto no GROUP BY, normalizando 'POTIM' → 'Potim' diretamente no banco; (2) JavaScript map aggregation: função normalizaCidade aplicada antes de usar a cidade como chave do objeto de contagem, convertendo qualquer variação de caixa para Title Case usando replace(/\\b\\w/g, toUpperCase); (3) SQL filtro de cidade: comparação alterada de cidade = filterValue (exata) para LOWER(cidade) = LOWER(filterValue), garantindo que o clique num filtro de cidade encontre todos os funcionários independente de como a cidade foi cadastrada. Rev. 532.",
+    tipo: "bugfix",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 531,
     titulo: "CurvaSSimulador — Redesign elegante, mouse liberado, responsividade corrigida",
     descricao: "Redesign completo do componente CurvaSSimulador com três correções críticas e nova estética. (1) Responsividade: removidos os atributos HTML width=960 height=480 do SVG — com apenas viewBox + CSS width:100%/height:auto, o navegador agora computa a altura proporcional corretamente ao reduzir o zoom, sem área fantasma. (2) Mouse liberado: o tooltip SVG (que capturava pointer events dentro do SVG e criava conflito) foi substituído por um div HTML absolutamente posicionado sobre o container (position:relative), com pointer-events:none, posicionado via getBoundingClientRect em coordenadas de tela; todos os elementos decorativos do SVG recebem pointer-events:none explícito, restando apenas o rect transparente de hit detection. (3) Curva S garantida em 100%: o último ponto sempre retorna pct=100 fixo, eliminando a possibilidade de o último dot ficar em 99.98% por arredondamento. Nova estética: KPI strip compacto de 4 colunas com divisor vertical em vez de cards separados; gradiente tricolor na área (violet escuro → violet claro → transparente); linha com 3 stops de gradiente; barras mensais com gradiente indigo; tooltip com efeito vidro fosco (backdrop-blur, border violet-200, sombra violet); tabela ocultada por padrão com toggle 'Ver tabela detalhada ▼'. Rev. 531.",

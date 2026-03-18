@@ -75,9 +75,10 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     db.select({ estadoCivil: employees.estadoCivil, count: sql<number>`count(*)` })
       .from(employees).where(activeWhere).groupBy(employees.estadoCivil),
 
-    // 8. Por cidade (top 10)
-    db.select({ cidade: employees.cidade, count: sql<number>`count(*)` })
-      .from(employees).where(activeWhere).groupBy(employees.cidade)
+    // 8. Por cidade (top 10) — normalizado: INITCAP(LOWER()) para ignorar maiúsculas/minúsculas
+    db.select({ cidade: sql<string>`INITCAP(LOWER(${employees.cidade}))`, count: sql<number>`count(*)` })
+      .from(employees).where(activeWhere)
+      .groupBy(sql`INITCAP(LOWER(${employees.cidade}))`)
       .orderBy(sql`count(*) desc`).limit(10),
 
     // 9. Pirâmide etária
@@ -1261,7 +1262,8 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
       if (filterValue === 'Não informado') {
         whereClause = and(whereClause, sql`(${employees.cidade} IS NULL OR ${employees.cidade} = '')`);
       } else {
-        whereClause = and(whereClause, sql`${employees.cidade} = ${filterValue}`);
+        // Case-insensitive: "Potim" = "POTIM" = "potim"
+        whereClause = and(whereClause, sql`LOWER(${employees.cidade}) = LOWER(${filterValue})`);
       }
       break;
     case 'estado':
@@ -1965,7 +1967,11 @@ async function getDashPerfilTempoCasa(companyId: number, companyIds?: number[]) 
     const uf = (emp.estado && emp.estado.trim()) ? emp.estado.toUpperCase() : 'Não informado';
     d.estado[uf] = (d.estado[uf] || 0) + 1;
 
-    const cid = emp.cidade || 'Não informado';
+    // Normaliza cidade: "POTIM" e "Potim" → "Potim" (case-insensitive grouping)
+    const cidRaw = (emp.cidade || '').trim();
+    const cid = cidRaw
+      ? cidRaw.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())
+      : 'Não informado';
     d.cidade[cid] = (d.cidade[cid] || 0) + 1;
 
     const fn = emp.funcao || 'Não informado';
