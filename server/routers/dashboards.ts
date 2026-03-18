@@ -12,6 +12,36 @@ import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizz
 import { parseBRL } from "../utils/parseBRL";
 import { invokeLLM } from "../_core/llm";
 
+/** Chave de agrupamento de cidades: minúsculo + sem acentos */
+const cidadeNormKey = (s: string) =>
+  s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+/** Title case preservando acentos: "GUARATINGUETÁ" → "Guaratinguetá" */
+const cidadeDisplay = (s: string) =>
+  s.trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+/** Dado dois nomes para a mesma cidade, prefere o que contém acentos */
+const preferAccented = (a: string, b: string) => {
+  const hasAcc = (x: string) => x !== x.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return (hasAcc(b) && !hasAcc(a)) ? b : a;
+};
+/** Mescla uma lista {label, value} de cidades por chave normalizada (sem acento, sem caixa) */
+function mergeCidadesAccent(rows: { label: string; value: number }[]): { label: string; value: number }[] {
+  const keyMap = new Map<string, { display: string; value: number }>();
+  for (const r of rows) {
+    const key     = cidadeNormKey(r.label);
+    const display = cidadeDisplay(r.label);
+    const existing = keyMap.get(key);
+    if (existing) {
+      existing.value += r.value;
+      existing.display = preferAccented(existing.display, display);
+    } else {
+      keyMap.set(key, { display, value: r.value });
+    }
+  }
+  return [...keyMap.values()]
+    .map(({ display, value }) => ({ label: display, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
 // Helper: resolve company filter for single or multi-company (CONSTRUTORAS) queries
 function resolveIds(companyId: number, companyIds?: number[]): number[] {
   return companyIds && companyIds.length > 0 ? companyIds : [companyId];
@@ -199,7 +229,7 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     funcaoDist: funcaoDist.map(r => ({ label: r.funcao || "Não informado", value: Number(r.count) })),
     contratoDist: contratoDist.map(r => ({ label: r.tipo || "Não informado", value: Number(r.count) })),
     estadoCivilDist: estadoCivilDist.map(r => ({ label: r.estadoCivil || "Não informado", value: Number(r.count) })),
-    cidadeDist: cidadeDist.map(r => ({ label: r.cidade || "Não informado", value: Number(r.count) })),
+    cidadeDist: mergeCidadesAccent(cidadeDist.map(r => ({ label: r.cidade || "Não informado", value: Number(r.count) }))),
     estadoDist: estadoDist.map(r => {
       const raw = (r.estado || "").trim().toUpperCase();
       const nameToCode: Record<string, string> = {
@@ -1262,8 +1292,16 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
       if (filterValue === 'Não informado') {
         whereClause = and(whereClause, sql`(${employees.cidade} IS NULL OR ${employees.cidade} = '')`);
       } else {
-        // Case-insensitive: "Potim" = "POTIM" = "potim"
-        whereClause = and(whereClause, sql`LOWER(${employees.cidade}) = LOWER(${filterValue})`);
+        // Sem acento + sem caixa: "Guaratinguetá" = "Guaratingueta" = "GUARATINGUETA"
+        whereClause = and(whereClause, sql`
+          LOWER(TRANSLATE(COALESCE(${employees.cidade},''),
+            'áàãâäéèêëíìîïóòõôöúùûüçÁÀÃÂÄÉÈÊËÍÌÎÏÓÒÕÔÖÚÙÛÜÇ',
+            'aaaaaaeeeeiiiiooooouuuucAAAAEEEEIIIIOOOOOUUUUC'))
+          =
+          LOWER(TRANSLATE(${filterValue},
+            'áàãâäéèêëíìîïóòõôöúùûüçÁÀÃÂÄÉÈÊËÍÌÎÏÓÒÕÔÖÚÙÛÜÇ',
+            'aaaaaaeeeeiiiiooooouuuucAAAAEEEEIIIIOOOOOUUUUC'))
+        `);
       }
       break;
     case 'estado':
@@ -1967,12 +2005,26 @@ async function getDashPerfilTempoCasa(companyId: number, companyIds?: number[]) 
     const uf = (emp.estado && emp.estado.trim()) ? emp.estado.toUpperCase() : 'Não informado';
     d.estado[uf] = (d.estado[uf] || 0) + 1;
 
-    // Normaliza cidade: "POTIM" e "Potim" → "Potim" (case-insensitive grouping)
+    // Normaliza cidade: sem acento + title-case. Usa normKey para unir "Guaratinguetá"+"Guaratingueta"
     const cidRaw = (emp.cidade || '').trim();
-    const cid = cidRaw
-      ? cidRaw.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())
-      : 'Não informado';
-    d.cidade[cid] = (d.cidade[cid] || 0) + 1;
+    if (cidRaw) {
+      const key = cidadeNormKey(cidRaw);
+      const display = cidadeDisplay(cidRaw);
+      // Procura chave existente (sem acento) para somar ao grupo correto
+      const existingKey = Object.keys(d.cidade).find(k => cidadeNormKey(k) === key);
+      if (existingKey) {
+        d.cidade[existingKey] = (d.cidade[existingKey] || 0) + 1;
+        // Upgrade display: se o novo nome tem acento e o existente não, renomeia a chave
+        if (preferAccented(existingKey, display) !== existingKey) {
+          d.cidade[display] = d.cidade[existingKey];
+          delete d.cidade[existingKey];
+        }
+      } else {
+        d.cidade[display] = (d.cidade[display] || 0) + 1;
+      }
+    } else {
+      d.cidade['Não informado'] = (d.cidade['Não informado'] || 0) + 1;
+    }
 
     const fn = emp.funcao || 'Não informado';
     d.funcao[fn] = (d.funcao[fn] || 0) + 1;

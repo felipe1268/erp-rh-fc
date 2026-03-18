@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 535,
+    titulo: "Cidades com/sem acento agrupadas: 'Guaratinguetá' + 'Guaratingueta' → entrada única",
+    descricao: "Extensão da normalização de cidades para cobrir variações de acento além de caixa. Três camadas corrigidas: (1) Frontend MapaFuncionariosInterativo: adicionadas funções normCidadeKey (lowercase + NFD sem combining marks) e preferAccentedDisplay (prefere o nome com acento quando há conflito). cityGroups e citiesInState agora usam dois-passes — passo 1 determina o melhor nome de exibição por chave normalizada, passo 2 agrupa usando esse displayName como chave do Map. loadAllCityCoords e loadCityCoords igualmente ajustados. (2) Backend JS (dashboards.ts): loop de acumulação d.cidade agora usa cidadeNormKey para encontrar a chave existente no objeto antes de incrementar, e troca o key pelo nome acentuado quando encontra versão melhor. (3) Backend SQL filtro de cidade: substituído LOWER(cidade) = LOWER(filterValue) por TRANSLATE com tabela de 68 caracteres acentuados → não acentuados, cobrindo todo o alfabeto português, garantindo que o clique em 'Guaratinguetá' retorna funcionários cadastrados como 'Guaratingueta' e vice-versa. Rev. 535.",
+    tipo: "bugfix",
+    modulos: "Dashboard RH / Mapa Interativo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 534,
     titulo: "Sidebar sempre exibe o módulo correto em rotas dinâmicas",
     descricao: "Correção crítica de UX: a barra lateral exibia o menu do módulo RH & DP enquanto o usuário estava em Planejamento (ou qualquer outra rota dinâmica como /planejamento/123, /orcamento/lista/5). Causa: o ModuleContext fazia lookup exato de location no ROUTE_MODULE_MAP — '/planejamento' estava mapeado, mas '/planejamento/123' não, portanto routeModule retornava undefined e o módulo ficava preso no anterior. Solução: detecção em duas etapas — (1) match exato como antes; (2) longest-prefix match iterando todas as chaves do ROUTE_MODULE_MAP e buscando a chave mais longa que seja prefixo da localização atual. Isso garante que '/planejamento/123' detecta o módulo 'planejamento', '/orcamento/lista/5' detecta 'orcamento', e assim por diante, sem necessidade de registrar manualmente cada variante dinâmica no mapa. Rev. 534.",

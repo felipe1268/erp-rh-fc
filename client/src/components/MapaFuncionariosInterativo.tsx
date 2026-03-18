@@ -77,10 +77,22 @@ function normalizeEstado(estado: string | null | undefined): string {
   return STATE_NAME_TO_CODE[upper] || upper;
 }
 
-// Normaliza cidades para Title Case: "POTIM" | "potim" → "Potim"
+// Chave de agrupamento: sem acentos, minúsculo — "Guaratinguetá" e "Guaratingueta" → mesmo grupo
+function normCidadeKey(cidade: string | null | undefined): string {
+  if (!cidade) return "";
+  return cidade.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+// Nome para exibição: Title Case preservando acentos — "GUARATINGUETÁ" → "Guaratinguetá"
 function normalizeCidade(cidade: string | null | undefined): string {
   if (!cidade) return "";
   return cidade.trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Entre dois nomes para a mesma cidade, prefere o que tem acentos
+function preferAccentedDisplay(a: string, b: string): string {
+  const hasAcc = (s: string) => s !== s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return (hasAcc(b) && !hasAcc(a)) ? b : a;
 }
 
 const STATE_VIEW: Record<string, { center: [number, number]; zoom: number }> = {
@@ -549,12 +561,21 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
   const SEM_CIDADE_KEY = "__sem_cidade__";
 
   const citiesInState = useMemo<Map<string, Employee[]>>(() => {
+    // Passo 1: determina o melhor nome de exibição para cada chave normalizada (sem acento)
+    const keyToDisplay = new Map<string, string>();
+    for (const e of employeesInState) {
+      const key = normCidadeKey(e.cidade);
+      if (!key) continue;
+      const display = normalizeCidade(e.cidade);
+      keyToDisplay.set(key, keyToDisplay.has(key) ? preferAccentedDisplay(keyToDisplay.get(key)!, display) : display);
+    }
+    // Passo 2: agrupa usando displayName como chave do Map
     const m = new Map<string, Employee[]>();
     for (const e of employeesInState) {
-      const c = normalizeCidade(e.cidade);
-      const key = c || SEM_CIDADE_KEY;
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(e);
+      const key = normCidadeKey(e.cidade);
+      const displayKey = key ? (keyToDisplay.get(key) ?? normalizeCidade(e.cidade)) : SEM_CIDADE_KEY;
+      if (!m.has(displayKey)) m.set(displayKey, []);
+      m.get(displayKey)!.push(e);
     }
     return m;
   }, [employeesInState]);
@@ -564,15 +585,26 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     [citiesInState, selectedCity]
   );
 
-  // ── All city groups for Mapa Geral (normalizado: title-case) ──
+  // ── All city groups for Mapa Geral (sem acento + title-case + dois-passes) ──
   const cityGroups = useMemo(() => {
+    // Passo 1: melhor nome de exibição por chave normalizada (sem acento)
+    const keyToDisplay = new Map<string, string>();
+    for (const e of employees) {
+      if (!e.cidade) continue;
+      const key = normCidadeKey(e.cidade);
+      if (!key) continue;
+      const display = normalizeCidade(e.cidade);
+      keyToDisplay.set(key, keyToDisplay.has(key) ? preferAccentedDisplay(keyToDisplay.get(key)!, display) : display);
+    }
+    // Passo 2: agrupa usando displayName como chave
     const m = new Map<string, Employee[]>();
     for (const e of employees) {
       if (!e.cidade) continue;
-      const city = normalizeCidade(e.cidade);
-      if (!city) continue;
-      if (!m.has(city)) m.set(city, []);
-      m.get(city)!.push(e);
+      const key = normCidadeKey(e.cidade);
+      if (!key) continue;
+      const displayKey = keyToDisplay.get(key)!;
+      if (!m.has(displayKey)) m.set(displayKey, []);
+      m.get(displayKey)!.push(e);
     }
     return m;
   }, [employees]);
@@ -584,15 +616,18 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
   // ── Load coords for all cities (Mapa Geral) ──
   const loadAllCityCoords = useCallback(async () => {
-    const pairs: [string, string][] = [];
-    const seen = new Set<string>();
+    // Usa as mesmas chaves de exibição do cityGroups (passo 1: normCidadeKey → melhor display)
+    const keyToDisplay = new Map<string, string>();
+    const keyToState  = new Map<string, string>();
     for (const e of employees) {
       if (!e.cidade) continue;
-      const city = normalizeCidade(e.cidade);
-      if (!city || seen.has(city)) continue;
-      seen.add(city);
-      pairs.push([city, normalizeEstado(e.estado)]);
+      const key     = normCidadeKey(e.cidade);
+      if (!key) continue;
+      const display = normalizeCidade(e.cidade);
+      keyToDisplay.set(key, keyToDisplay.has(key) ? preferAccentedDisplay(keyToDisplay.get(key)!, display) : display);
+      if (!keyToState.has(key)) keyToState.set(key, normalizeEstado(e.estado));
     }
+    const pairs: [string, string][] = [...keyToDisplay.entries()].map(([key, display]) => [display, keyToState.get(key) || ""]);
     const toGeocode = pairs.filter(
       ([city]) => !cityCordsRef.current.has(city) && !geocodingCitiesRef.current.has(city)
     );
@@ -621,9 +656,16 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
   // ── Estado mode: load city coords for a single state ──
   const loadCityCoords = useCallback(async (state: string) => {
-    const uniqueCities = [...new Set(
-      employees.filter(e => normalizeEstado(e.estado) === state && e.cidade).map(e => normalizeCidade(e.cidade))
-    )].filter(Boolean) as string[];
+    // Deduplica por chave sem acento, mantendo melhor display com acento
+    const keyToDisplay = new Map<string, string>();
+    for (const e of employees) {
+      if (!e.cidade || normalizeEstado(e.estado) !== state) continue;
+      const key = normCidadeKey(e.cidade);
+      if (!key) continue;
+      const display = normalizeCidade(e.cidade);
+      keyToDisplay.set(key, keyToDisplay.has(key) ? preferAccentedDisplay(keyToDisplay.get(key)!, display) : display);
+    }
+    const uniqueCities = [...keyToDisplay.values()];
     const missingCities = uniqueCities.filter(c => !cityCordsRef.current.has(c) && !geocodingCitiesRef.current.has(c));
     if (missingCities.length === 0) return;
 
