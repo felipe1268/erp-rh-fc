@@ -8454,101 +8454,209 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* BLOCO 3A — Curva S Física */}
       {curvaFiltrada.length > 1 && (
         <div className="refis-block refis-break-before bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3A(v => !v)}>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+          <div className="bg-slate-700 border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3A(v => !v)}>
+            <p className="text-xs font-bold uppercase tracking-wider text-white">
               Curva S Física — Avanço Acumulado (%)
             </p>
-            <div className="flex gap-3 text-xs text-slate-500 flex-wrap items-center">
-              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
-              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#1A3461" }} /> Realizado</span>
-              <span className="flex items-center gap-1.5"><span className="inline-block w-6 border-t-2 border-dashed" style={{ borderColor: "#9b59b6" }} /> Tendência</span>
+            <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#10b981" }} /> Realizado</span>
+              <span className="flex items-center gap-1.5">
+                <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#9b59b6" strokeWidth="2" strokeDasharray="4 2" /></svg>
+                Tendência
+              </span>
               <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3A ? "rotate-180" : ""}`} />
             </div>
           </div>
-          {!colBloco3A && (<><div className="px-4 py-3" style={{ height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={curvaFiltrada} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} width={36} />
-                <Tooltip
-                  formatter={(v: any, name: string) => [
-                    `${Number(v).toFixed(1)}%`,
-                    name === "previsto" ? "Previsto" : name === "realizado" ? "Realizado" : "Tendência"
-                  ]}
-                  labelFormatter={(l: string) => `Semana ${l}`}
-                />
-                <Line type="monotone" dataKey="previsto"  stroke="#FFB800" strokeWidth={2} dot={false} name="previsto" />
-                <Line type="monotone" dataKey="realizado" stroke="#1A3461" strokeWidth={2.5} dot={{ r: 3 }} connectNulls name="realizado" />
-                <Line type="monotone" dataKey="tendencia" stroke="#9b59b6" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
-                <ReferenceLine y={avancoPrevisto}  stroke="#FFB800" strokeDasharray="4 4" />
-                <ReferenceLine y={avancoRealAtual} stroke="#1A3461" strokeDasharray="4 4" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          {/* Linha de resumo de desvio */}
-          <div className="border-t border-slate-100 px-5 py-2.5 flex flex-wrap gap-6 text-xs">
-            <div><span className="text-slate-400 mr-1">Acumulado Previsto:</span><span className="font-semibold text-amber-700">{fPct_(avancoPrevisto)}</span></div>
-            <div><span className="text-slate-400 mr-1">Acumulado Realizado:</span><span className="font-semibold text-blue-800">{fPct_(avancoRealAtual)}</span></div>
-            <div>
-              <span className="text-slate-400 mr-1">Desvio:</span>
-              <span className={`font-bold ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
-              </span>
-            </div>
-          </div>
-          </>)}
+          {!colBloco3A && (
+            <>
+              {/* KPI strip */}
+              <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
+                <div className="px-5 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Acumulado Previsto</p>
+                  <p className="text-lg font-bold text-amber-600">{fPct_(avancoPrevisto)}</p>
+                </div>
+                <div className="px-5 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Acumulado Realizado</p>
+                  <p className="text-lg font-bold text-emerald-700">{fPct_(avancoRealAtual)}</p>
+                </div>
+                <div className="px-5 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Desvio Físico</p>
+                  <p className={`text-lg font-bold ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
+                  </p>
+                </div>
+              </div>
+              {/* Chart */}
+              <div className="px-5 py-4" style={{ height: 320 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={curvaFiltrada} margin={{ top: 12, right: 40, bottom: curvaFiltrada.length > 8 ? 40 : 20, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      angle={curvaFiltrada.length > 8 ? -35 : 0}
+                      textAnchor={curvaFiltrada.length > 8 ? "end" : "middle"}
+                      height={curvaFiltrada.length > 8 ? 50 : 28}
+                      interval={Math.max(0, Math.floor(curvaFiltrada.length / 12) - 1)}
+                      axisLine={{ stroke: "#e2e8f0" }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      domain={[0, 100]}
+                      tickFormatter={v => `${v}%`}
+                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      width={42}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      content={({ payload, label }: any) => {
+                        if (!payload?.length) return null;
+                        const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
+                        const prev = get("previsto"); const real = get("realizado"); const tend = get("tendencia");
+                        const desvio = prev != null && real != null ? (real as number) - (prev as number) : null;
+                        const row = curvaFiltrada.find((r: any) => r.label === label);
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[170px]">
+                            <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">
+                              {label}{row?.semana ? ` · ${String(row.semana).split("-").reverse().join("/")}` : ""}
+                            </p>
+                            {prev  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#FFB800" }}>Previsto</span><strong>{Number(prev).toFixed(1)}%</strong></p>}
+                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#10b981" }}>Realizado</span><strong>{Number(real).toFixed(1)}%</strong></p>}
+                            {tend  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#9b59b6" }}>Tendência</span><strong>{Number(tend).toFixed(1)}%</strong></p>}
+                            {desvio != null && (
+                              <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                <span>Desvio</span><span>{desvio >= 0 ? "+" : ""}{desvio.toFixed(1)}%</span>
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    <ReferenceLine y={avancoPrevisto}  stroke="#FFB800" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: `${avancoPrevisto.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#B8860B", fontWeight: 700 }} />
+                    <ReferenceLine y={avancoRealAtual} stroke="#10b981" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: `${avancoRealAtual.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#059669", fontWeight: 700 }} />
+                    <Line type="monotone" dataKey="previsto"  stroke="#FFB800" strokeWidth={2.5} dot={false} name="previsto" />
+                    <Line type="monotone" dataKey="realizado" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: "#10b981", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls name="realizado" />
+                    <Line type="monotone" dataKey="tendencia" stroke="#9b59b6" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* BLOCO 3B — Curva S Financeira */}
-      {curvaFinanceira.length > 1 && !modoMascara && (
+      {curvaFinanceira.length > 1 && !modoMascara && (() => {
+        const prevAcumFin  = totalContrato * avancoPrevisto  / 100;
+        const realAcumFin  = totalContrato * avancoRealAtual / 100;
+        const desvioFin    = realAcumFin - prevAcumFin;
+        const maxFin       = Math.max(...curvaFinanceira.map((r: any) => r.previsto ?? 0), ...curvaFinanceira.map((r: any) => r.realizado ?? 0), ...curvaFinanceira.map((r: any) => r.tendencia ?? 0));
+        const finTickFmt   = (v: number) => maxFin >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : maxFin >= 1_000 ? `${(v/1_000).toFixed(0)}k` : v.toFixed(0);
+        return (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3B(v => !v)}>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+          <div className="bg-slate-700 border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3B(v => !v)}>
+            <p className="text-xs font-bold uppercase tracking-wider text-white">
               Curva S Financeira — Faturamento Acumulado (R$)
             </p>
-            <div className="flex gap-3 text-xs text-slate-500 flex-wrap items-center">
-              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
-              <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 rounded" style={{ background: "#1A3461" }} /> Realizado</span>
-              <span className="flex items-center gap-1.5"><span className="inline-block w-6 border-t-2 border-dashed" style={{ borderColor: "#9b59b6" }} /> Tendência</span>
+            <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#10b981" }} /> Realizado</span>
+              <span className="flex items-center gap-1.5">
+                <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#9b59b6" strokeWidth="2" strokeDasharray="4 2" /></svg>
+                Tendência
+              </span>
               <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3B ? "rotate-180" : ""}`} />
             </div>
           </div>
-          {!colBloco3B && (<><div className="px-4 py-3" style={{ height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={curvaFinanceira} margin={{ top: 5, right: 20, bottom: 5, left: 55 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis tickFormatter={v => `${(v/1000000).toFixed(1)}M`} tick={{ fontSize: 10 }} width={55} />
-                <Tooltip
-                  formatter={(v: any, name: string) => [
-                    v != null ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—",
-                    name === "previsto" ? "Previsto" : name === "realizado" ? "Realizado" : "Tendência"
-                  ]}
-                  labelFormatter={(l: string) => `Semana ${l}`}
-                />
-                <Line type="monotone" dataKey="previsto"  stroke="#FFB800" strokeWidth={2} dot={false} name="previsto" />
-                <Line type="monotone" dataKey="realizado" stroke="#1A3461" strokeWidth={2.5} dot={{ r: 3 }} connectNulls name="realizado" />
-                <Line type="monotone" dataKey="tendencia" stroke="#9b59b6" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="border-t border-slate-100 px-5 py-2.5 flex flex-wrap gap-6 text-xs">
-            <div><span className="text-slate-400 mr-1">Contrato Total:</span><span className="font-semibold text-slate-700">{fmt(totalContrato)}</span></div>
-            <div><span className="text-slate-400 mr-1">Previsto Acumulado:</span><span className="font-semibold text-amber-700">{fmt(totalContrato * avancoPrevisto / 100)}</span></div>
-            <div><span className="text-slate-400 mr-1">Realizado Acumulado:</span><span className="font-semibold text-blue-800">{fmt(totalContrato * avancoRealAtual / 100)}</span></div>
-            <div>
-              <span className="text-slate-400 mr-1">Desvio Financeiro:</span>
-              <span className={`font-bold ${(totalContrato * avancoRealAtual / 100) >= (totalContrato * avancoPrevisto / 100) ? "text-emerald-600" : "text-red-600"}`}>
-                {(totalContrato * (avancoRealAtual - avancoPrevisto) / 100) >= 0 ? "+" : ""}
-                {fmt(totalContrato * (avancoRealAtual - avancoPrevisto) / 100)}
-              </span>
-            </div>
-          </div>
-          </>)}
+          {!colBloco3B && (
+            <>
+              {/* KPI strip */}
+              <div className="grid grid-cols-4 divide-x divide-slate-100 border-b border-slate-100">
+                <div className="px-4 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Contrato Total</p>
+                  <p className="text-base font-bold text-slate-700">{fmt(totalContrato)}</p>
+                </div>
+                <div className="px-4 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Previsto Acumulado</p>
+                  <p className="text-base font-bold text-amber-600">{fmt(prevAcumFin)}</p>
+                </div>
+                <div className="px-4 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Realizado Acumulado</p>
+                  <p className="text-base font-bold text-emerald-700">{fmt(realAcumFin)}</p>
+                </div>
+                <div className="px-4 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Desvio Financeiro</p>
+                  <p className={`text-base font-bold ${desvioFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desvioFin >= 0 ? "+" : ""}{fmt(desvioFin)}
+                  </p>
+                </div>
+              </div>
+              {/* Chart */}
+              <div className="px-5 py-4" style={{ height: 320 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={curvaFinanceira} margin={{ top: 12, right: 40, bottom: curvaFinanceira.length > 8 ? 40 : 20, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      angle={curvaFinanceira.length > 8 ? -35 : 0}
+                      textAnchor={curvaFinanceira.length > 8 ? "end" : "middle"}
+                      height={curvaFinanceira.length > 8 ? 50 : 28}
+                      interval={Math.max(0, Math.floor(curvaFinanceira.length / 12) - 1)}
+                      axisLine={{ stroke: "#e2e8f0" }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={finTickFmt}
+                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      width={58}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      content={({ payload, label }: any) => {
+                        if (!payload?.length) return null;
+                        const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
+                        const prev = get("previsto"); const real = get("realizado"); const tend = get("tendencia");
+                        const desvio = prev != null && real != null ? (real as number) - (prev as number) : null;
+                        const row = curvaFinanceira.find((r: any) => r.label === label);
+                        const brl = (v: any) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[200px]">
+                            <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">
+                              {label}{row?.semana ? ` · ${String(row.semana).split("-").reverse().join("/")}` : ""}
+                            </p>
+                            {prev  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#FFB800" }}>Previsto</span><strong>{brl(prev)}</strong></p>}
+                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#10b981" }}>Realizado</span><strong>{brl(real)}</strong></p>}
+                            {tend  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#9b59b6" }}>Tendência</span><strong>{brl(tend)}</strong></p>}
+                            {desvio != null && (
+                              <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                <span>Desvio</span><span>{desvio >= 0 ? "+" : ""}{brl(desvio)}</span>
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    <ReferenceLine y={prevAcumFin}  stroke="#FFB800" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: finTickFmt(prevAcumFin),  position: "right", fontSize: 9, fill: "#B8860B", fontWeight: 700 }} />
+                    <ReferenceLine y={realAcumFin}  stroke="#10b981" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: finTickFmt(realAcumFin), position: "right", fontSize: 9, fill: "#059669", fontWeight: 700 }} />
+                    <Line type="monotone" dataKey="previsto"  stroke="#FFB800" strokeWidth={2.5} dot={false} name="previsto" />
+                    <Line type="monotone" dataKey="realizado" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: "#10b981", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls name="realizado" />
+                    <Line type="monotone" dataKey="tendencia" stroke="#9b59b6" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 4 — AVANÇO POR GRUPO (Pavimento) — gráfico de barras horizontal

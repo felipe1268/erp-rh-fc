@@ -3337,6 +3337,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 573,
+    titulo: "REFIS — Gráficos da Curva S reformulados (visual profissional para impressão)",
+    descricao: "Redesenhados os dois gráficos da Curva S no REFIS (Físico e Financeiro) para visual mais proporcional e imprimível: (1) header escuro (slate-700) com legenda integrada incluindo linha tracejada SVG para Tendência; (2) faixa de KPIs acima do gráfico — Físico: 3 cards (Previsto / Realizado / Desvio); Financeiro: 4 cards (Contrato Total / Previsto / Realizado / Desvio); (3) altura aumentada de 240px para 320px; (4) eixo X com rótulos rotacionados -35° e intervalo calculado automaticamente quando há mais de 8 pontos; (5) eixo Y sem bordas (axisLine/tickLine=false), mais limpo; (6) grade apenas horizontal (vertical=false); (7) linhas de referência horizontais mostrando valores atuais de previsto e realizado com label; (8) tooltip estruturado com data da semana e desvio colorido; (9) cor da linha 'Realizado' alterada para verde-esmeralda (#10b981) — padrão do sistema; (10) formatador dinâmico do eixo Y financeiro (K / M conforme a escala).",
+    tipo: "melhoria",
+    modulos: "Planejamento / REFIS",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 572,
     titulo: "Gantt — Barras verdes para atividades 100% concluídas",
     descricao: "Atividades com 100% de avanço acumulado agora são exibidas em verde no Gantt: (1) a barra inteira muda para verde-escuro (#059669) em vez do azul-marinho padrão; (2) o fundo da linha na coluna de nome exibe tint verde-claro (emerald-50); (3) o badge EAP e o nome da atividade ficam em verde-escuro (emerald); (4) o grid direito do Gantt também recebe fundo verde-translúcido. A legenda 'Concluída' já existia no toolbar. Grupos nunca recebem o tratamento verde (apenas atividades folha e marcos). Lógica via flag isDone = !isGrupo && avanc >= 100 no componente GanttCronograma.",
