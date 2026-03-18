@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 542,
+    titulo: "Botão 'Cancelar' durante geração de cronograma por IA",
+    descricao: "Adicionado botão 'Cancelar' (outline vermelho) ao lado do botão 'Gerando cronograma com IA...' durante o processamento: (1) Aparece apenas quando gerarMut.isPending=true e desaparece ao concluir; (2) Ao clicar: limpa o intervalo de progresso, zera gerandoPct/gerandoStep imediatamente, e reseta o estado da mutation via gerarMut.reset(); (3) gerandoCanceladoRef evita que o efeito [isPending] mostre 'Cronograma gerado!' após o cancelamento — a barra some instantaneamente sem o flash verde de conclusão.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 541,
     titulo: "Reajuste Contratual — sempre visível + coeficientes de mercado (INCC/IPCA/IGP-M)",
     descricao: "Análise de Reajuste Contratual agora aparece para TODOS os cronogramas gerados (não só quando n>12 meses): (1) Para obras >12 meses: banner âmbar com texto 'Obra acima de 12 meses', reajuste efetivamente incide a partir do mês 13; (2) Para obras ≤12 meses: banner cinza 'Análise preventiva' — permite simular o impacto caso o prazo se estenda; (3) Presets do reajuste substituídos por índices de mercado reais: INCC 4,90% / IPCA 5,10% / IGP-M 7,90% com referência 'mai/25 (FGV/IBGE)'; (4) Presets do dissídio atualizados com histórico SINDUSCON-SP: 2023→5% / 2024→6% / 2025→7% (estimativa); (5) nota de rodapé em cada campo com fonte dos dados.",

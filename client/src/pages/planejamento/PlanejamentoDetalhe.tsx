@@ -10884,6 +10884,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const [gerandoPct,  setGerandoPct]  = useState(0);
   const [gerandoStep, setGerandoStep] = useState("");
   const gerandoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gerandoCanceladoRef = useRef(false);
 
   const GERANDO_STEPS = [
     { at: 0,  label: "Lendo estrutura do orçamento..." },
@@ -10895,8 +10896,17 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
     { at: 93, label: "Quase pronto..." },
   ];
 
+  const handleCancelarGeracao = () => {
+    gerandoCanceladoRef.current = true;
+    if (gerandoIntervalRef.current) clearInterval(gerandoIntervalRef.current);
+    setGerandoPct(0);
+    setGerandoStep("");
+    gerarMut.reset();
+  };
+
   useEffect(() => {
     if (gerarMut.isPending) {
+      gerandoCanceladoRef.current = false;
       setGerandoPct(0);
       setGerandoStep(GERANDO_STEPS[0].label);
       let cur = 0;
@@ -10911,12 +10921,13 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
       }, 700);
     } else {
       if (gerandoIntervalRef.current) clearInterval(gerandoIntervalRef.current);
-      if (gerandoPct > 0) {
+      if (!gerandoCanceladoRef.current && gerandoPct > 0) {
         setGerandoPct(100);
         setGerandoStep("Cronograma gerado!");
         const t = setTimeout(() => { setGerandoPct(0); setGerandoStep(""); }, 1200);
         return () => clearTimeout(t);
       }
+      gerandoCanceladoRef.current = false;
     }
     return () => { if (gerandoIntervalRef.current) clearInterval(gerandoIntervalRef.current); };
   }, [gerarMut.isPending]);
@@ -11211,6 +11222,12 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
               {simularMut.isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Simulando...</>
                 : <><Calculator className="h-4 w-4" /> Simular Cronograma</>}
+            </Button>
+          )}
+          {gerarMut.isPending && (
+            <Button variant="outline" size="sm" onClick={handleCancelarGeracao}
+              className="gap-1.5 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400">
+              <X className="h-3.5 w-3.5" /> Cancelar
             </Button>
           )}
           {gerado && <span className="text-xs text-slate-500"><strong className="text-slate-700">{mesesGerados.length} meses</strong> · {atividadesGeradas.filter(a => !a.isGrupo).length} atividades · {fmtR(totalGerado)}</span>}
