@@ -491,20 +491,20 @@ export default function PlanejamentoDetalhe() {
                 }}
                 onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
                 onClick={() => setAba(id)}
-                className={`group flex items-center justify-center gap-1.5 w-full px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all duration-150 cursor-grab active:cursor-grabbing ${
+                className={`group flex items-center justify-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all duration-150 cursor-grab active:cursor-grabbing ${
                   isActive
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-white/80"
-                } ${isDragged ? "opacity-40 scale-95" : ""} ${isOver && dragIdx !== globalIdx ? "ring-2 ring-blue-400 ring-inset" : ""}`}
+                    ? "text-blue-700 bg-blue-50 border border-blue-200/80"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-transparent"
+                } ${isDragged ? "opacity-40 scale-95" : ""} ${isOver && dragIdx !== globalIdx ? "ring-2 ring-blue-300 ring-inset" : ""}`}
               >
-                <GripVertical className={`h-3 w-3 opacity-0 group-hover:opacity-40 shrink-0 transition-opacity ${isActive ? "text-white/60" : ""}`} />
+                <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-30 shrink-0 transition-opacity" />
                 <t.Icon className="h-3.5 w-3.5 shrink-0" />
                 <span>{t.label}</span>
               </button>
             );
           };
           return (
-            <div className="mb-4 rounded-xl border border-slate-200 shadow-sm select-none bg-slate-100/70 p-1.5 space-y-1">
+            <div className="mb-4 rounded-xl border border-slate-200 select-none bg-white p-1 space-y-0.5">
               {/* Linha 1 */}
               <div className="flex gap-1">
                 {tabOrder.slice(0, half).map((id, i) => (

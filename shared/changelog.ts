@@ -2797,6 +2797,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 514,
+    titulo: "Planejamento — Abas com design mais leve e moderno",
+    descricao: "Redesenhada a barra de navegação por abas da página de Planejamento. Aba ativa: substituído o botão sólido azul (bg-blue-600 text-white) por um estilo mais leve — fundo azul bem claro (bg-blue-50), texto azul escuro e borda sutil (border-blue-200). Container: removido o fundo cinza (bg-slate-100/70) e a sombra pesada, agora é branco puro com borda simples. Padding e espaçamento internos otimizados para uma aparência mais compacta e refined.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 513,
     titulo: "Mapa de Funcionários — Filtro de status + geocoding com fallback para centro da cidade",
     descricao: "Adicionados dois melhorias ao Mapa Interativo de Funcionários: (1) Filtro de status por chips no topo do mapa — todos os status possíveis (Ativo, Férias, Afastado, Licença, Aviso Prévio, Disp. Aviso, Recluso, Desligado, Lista Negra) podem ser ligados/desligados individualmente. Padrão: Desligados e Lista Negra ocultados. Filtro é aplicado no backend via parâmetro statusFiltros. (2) Correção do geocoding no Nível 3: funcionários sem logradouro e sem CEP, mas com cidade/estado cadastrados, agora aparecem no mapa com posição aproximada (centro da cidade + jitter de ±200m para não sobrepor). Marcadores aproximados ficam semi-transparentes e mostram 'Posição aproximada (centro da cidade)' no popup. O rodapé do mapa exibe contagem separada: exatos, aproximados e sem dados.",
