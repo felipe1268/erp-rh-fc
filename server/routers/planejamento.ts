@@ -749,6 +749,18 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  limparAvancosSemana: protectedProcedure
+    .input(z.object({ projetoId: z.number(), semana: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(planejamentoAvancos)
+        .where(and(
+          eq(planejamentoAvancos.projetoId, input.projetoId),
+          eq(planejamentoAvancos.semana, input.semana),
+        ));
+      return { success: true };
+    }),
+
   // ── Curva S ───────────────────────────────────────────────────────────────
   getCurvaS: protectedProcedure
     .input(z.object({ projetoId: z.number(), revisaoId: z.number(), baselineId: z.number() }))

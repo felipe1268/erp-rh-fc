@@ -3220,6 +3220,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 565,
+    titulo: "Avanço Semanal — Limpar por semana específica",
+    descricao: "O botão 'Limpar Avanços' agora exibe um painel de confirmação com dois escopos: (1) Só a semana selecionada — limpa apenas os avanços da semana atual exibida no seletor, mostrando o número e intervalo de datas no botão; (2) Todas as semanas — comportamento anterior que apaga tudo. Backend: adicionada mutation limparAvancosSemana recebendo projetoId + semana. Ambas as opções invalidam listarAvancos e listarSemanasComAvanco após execução.",
+    tipo: "funcionalidade",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 564,
     titulo: "Usuários — Admin Master exibe grupo corretamente",
     descricao: "Removido bloqueio que impedia usuários Admin Master de ter grupo visível na lista e no detalhe. getUserGroupLabel não descarta mais a role admin_master. A seção Grupo de Acesso no detalhe do usuário agora é exibida para todos os roles, permitindo atribuir e visualizar o grupo de Admin Master normalmente.",

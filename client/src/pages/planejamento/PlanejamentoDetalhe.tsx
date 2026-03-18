@@ -3835,6 +3835,16 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   const limparMutation = trpc.planejamento.limparAvancos.useMutation({
     onSuccess: () => {
       utils.planejamento.listarAvancos.invalidate();
+      utils.planejamento.listarSemanasComAvanco.invalidate();
+      setAvancoLocal({});
+      setConfirmLimpar(false);
+    },
+  });
+
+  const limparSemanaMutation = trpc.planejamento.limparAvancosSemana.useMutation({
+    onSuccess: () => {
+      utils.planejamento.listarAvancos.invalidate();
+      utils.planejamento.listarSemanasComAvanco.invalidate();
       setAvancoLocal({});
       setConfirmLimpar(false);
     },
@@ -4014,29 +4024,42 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       )}
 
       {/* ── Confirmação de limpeza ──────────────────────────────────────────── */}
-      {confirmLimpar && (
-        <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <div className="flex items-center gap-2 text-sm text-red-700">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>
-              Isso apagará <strong>todos os avanços lançados</strong> deste projeto (todas as semanas). Não pode ser desfeito.
-            </span>
+      {confirmLimpar && (() => {
+        const mon = new Date(semanaAtual + "T12:00:00");
+        const sun = new Date(mon.getTime() + 6 * 86400000);
+        const fmtBR = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+        const semLabel = `${semanaNum}ª sem. (${fmtBR(mon)} – ${fmtBR(sun)})`;
+        return (
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-red-700">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>Qual escopo deseja limpar? <span className="text-red-500 text-xs">(não pode ser desfeito)</span></span>
+            </div>
+            <div className="flex gap-2 shrink-0 flex-wrap">
+              <Button size="sm" variant="outline" onClick={() => setConfirmLimpar(false)}>
+                Cancelar
+              </Button>
+              <Button size="sm" variant="outline"
+                className="border-red-300 text-red-600 hover:bg-red-100 gap-1.5"
+                disabled={limparSemanaMutation.isPending}
+                onClick={() => limparSemanaMutation.mutate({ projetoId, semana: semanaAtual })}>
+                {limparSemanaMutation.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <XCircle className="h-3.5 w-3.5" />}
+                Só {semLabel}
+              </Button>
+              <Button size="sm" className="bg-red-600 hover:bg-red-700 gap-1.5"
+                disabled={limparMutation.isPending}
+                onClick={() => limparMutation.mutate({ projetoId })}>
+                {limparMutation.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <XCircle className="h-3.5 w-3.5" />}
+                Todas as semanas
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2 shrink-0">
-            <Button size="sm" variant="outline" onClick={() => setConfirmLimpar(false)}>
-              Cancelar
-            </Button>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700 gap-1.5"
-              disabled={limparMutation.isPending}
-              onClick={() => limparMutation.mutate({ projetoId })}>
-              {limparMutation.isPending
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <XCircle className="h-3.5 w-3.5" />}
-              Confirmar Limpeza
-            </Button>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Feedback do import ──────────────────────────────────────────────── */}
       {importStatus && (
