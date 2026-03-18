@@ -262,10 +262,20 @@ export default function Usuarios() {
   const usersQuery        = trpc.userManagement.listUsers.useQuery();
   const allCompaniesQuery = trpc.companies.list.useQuery();
   const groupsQuery       = trpc.userGroups.list.useQuery();
+  const allMembersQuery   = trpc.userGroups.listAllMembers.useQuery();
   const utils             = trpc.useUtils();
 
   const allUsers   = usersQuery.data ?? [];
   const allGroups  = groupsQuery.data ?? [];
+
+  // Mapa userId → groupId (fonte única de verdade sobre memberships)
+  const userGroupIdMap = useMemo(() => {
+    const map: Record<number, number> = {};
+    for (const row of (allMembersQuery.data ?? [])) {
+      map[(row as any).userId] = (row as any).groupId;
+    }
+    return map;
+  }, [allMembersQuery.data]);
 
   // ──────────────────────────────────────────────
   // TAB USUÁRIOS — estado
@@ -319,7 +329,10 @@ export default function Usuarios() {
     onSuccess: () => utils.userManagement.listUsers.invalidate(),
   });
   const setGroupsMut = trpc.userGroups.setUserGroups.useMutation({
-    onSuccess: () => utils.userManagement.listUsers.invalidate(),
+    onSuccess: () => {
+      utils.userManagement.listUsers.invalidate();
+      utils.userGroups.listAllMembers.invalidate();
+    },
   });
 
   const openUser = (u: any) => {
@@ -330,9 +343,9 @@ export default function Usuarios() {
     setEditPwd("");
     setEditRole(u.role || "user");
     setEditCos(u.companyIds || []);
-    // Grupos do usuário — via allUsers (memberOf)
-    const mem = (allGroups as any[]).filter(g => (g as any)._memberIds?.includes(u.id)).map(g => g.id);
-    setEditGroupIds(mem);
+    // Grupo do usuário — lê de userGroupIdMap (fonte: listAllMembers)
+    const gid = userGroupIdMap[u.id];
+    setEditGroupIds(gid ? [gid] : []);
     setUPanel("detail");
   };
 
@@ -354,12 +367,12 @@ export default function Usuarios() {
     });
   }, [allUsers, uSearch]);
 
-  // Grupo do usuário (display)
+  // Grupo do usuário (display) — lê de userGroupIdMap (fonte única: listAllMembers)
   const getUserGroupLabel = (u: any) => {
     if (u.role === "admin_master") return null;
-    const mem = (allGroups as any[]).filter(g => g.members?.some((m: any) => m.userId === u.id || m.id === u.id));
-    if (mem.length === 0) return null;
-    return mem.map(g => g.nome).join(", ");
+    const gid = userGroupIdMap[u.id];
+    if (!gid) return null;
+    return (allGroups as any[]).find(g => g.id === gid)?.nome ?? null;
   };
 
   // ──────────────────────────────────────────────
@@ -725,18 +738,26 @@ export default function Usuarios() {
                         <div className="rounded-xl border p-4 space-y-3">
                           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                             <ShieldCheck className="h-3.5 w-3.5" /> Grupo de Acesso
+                            <span className="text-[10px] font-normal text-slate-400 ml-1">(apenas 1 por usuário)</span>
                           </h3>
                           {allGroups.length === 0 ? (
                             <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
                               <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                              <span>Crie grupos na aba "Grupos de Acesso" e atribua aqui.</span>
+                              <span>Crie grupos em Grupos de Acesso e atribua aqui.</span>
                             </div>
                           ) : (
                             <div className="space-y-1.5">
+                              {/* Opção "Sem grupo" */}
+                              <label className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${editGroupIds.length === 0 ? "bg-slate-50 border-slate-300 ring-1 ring-slate-200" : "bg-secondary/5 border-border hover:bg-secondary/20"}`}>
+                                <input type="radio" name="editGroup" checked={editGroupIds.length === 0}
+                                  onChange={() => setEditGroupIds([])} />
+                                <ShieldAlert className="h-3.5 w-3.5 text-orange-400 shrink-0" />
+                                <span className="text-sm text-slate-500">Nenhum grupo</span>
+                              </label>
                               {(allGroups as any[]).map(g => (
                                 <label key={g.id} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${editGroupIds.includes(g.id)?"bg-blue-50 border-blue-400 ring-1 ring-blue-200":"bg-secondary/5 border-border hover:bg-secondary/20"}`}>
-                                  <input type="checkbox" className="rounded" checked={editGroupIds.includes(g.id)}
-                                    onChange={e=>setEditGroupIds(e.target.checked?[...editGroupIds,g.id]:editGroupIds.filter(id=>id!==g.id))} />
+                                  <input type="radio" name="editGroup" checked={editGroupIds.includes(g.id)}
+                                    onChange={() => setEditGroupIds([g.id])} />
                                   <div className="h-3 w-3 rounded-full shrink-0" style={{background:g.cor||"#6b7280"}} />
                                   <div className="flex-1 min-w-0">
                                     <span className="text-sm font-medium">{g.nome}</span>
@@ -746,11 +767,6 @@ export default function Usuarios() {
                                 </label>
                               ))}
                             </div>
-                          )}
-                          {editGroupIds.length === 0 && allGroups.length > 0 && (
-                            <p className="text-xs text-orange-600 flex items-center gap-1.5">
-                              <ShieldAlert className="h-3.5 w-3.5" /> Sem grupo — os acessos individuais serão aplicados (se configurados).
-                            </p>
                           )}
                         </div>
                       )}
