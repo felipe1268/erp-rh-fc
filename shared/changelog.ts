@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 543,
+    titulo: "Fix: criar Grupo de Acesso falhava com SQL malformado",
+    descricao: "Drizzle ORM não gerava 'default' para created_at/updated_at no VALUES clause do INSERT em user_groups (bug de geração de SQL com .defaultNow().notNull()). Corrigido passando os timestamps explicitamente no insert: createdAt e updatedAt recebem new Date().toISOString() na função createUserGroup em server/db.ts.",
+    tipo: "bugfix",
+    modulos: "Usuários",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 542,
     titulo: "Botão 'Cancelar' durante geração de cronograma por IA",
     descricao: "Adicionado botão 'Cancelar' (outline vermelho) ao lado do botão 'Gerando cronograma com IA...' durante o processamento: (1) Aparece apenas quando gerarMut.isPending=true e desaparece ao concluir; (2) Ao clicar: limpa o intervalo de progresso, zera gerandoPct/gerandoStep imediatamente, e reseta o estado da mutation via gerarMut.reset(); (3) gerandoCanceladoRef evita que o efeito [isPending] mostre 'Cronograma gerado!' após o cancelamento — a barra some instantaneamente sem o flash verde de conclusão.",

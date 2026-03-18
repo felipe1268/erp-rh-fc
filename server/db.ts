@@ -2577,6 +2577,7 @@ export async function getUserGroupById(id: number) {
 export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number }) {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
+  const agora = new Date().toISOString();
   const result = await db.insert(userGroups).values({
     nome: data.nome,
     descricao: data.descricao ?? null,
@@ -2584,7 +2585,9 @@ export async function createUserGroup(data: { nome: string; descricao?: string; 
     icone: data.icone ?? 'Users',
     somenteVisualizacao: data.somenteVisualizacao ?? 1,
     ocultarDadosSensiveis: data.ocultarDadosSensiveis ?? 1,
-  }).returning();
+    createdAt: agora,
+    updatedAt: agora,
+  } as any).returning();
   return { id: Number(result[0].id) };
 }
 
