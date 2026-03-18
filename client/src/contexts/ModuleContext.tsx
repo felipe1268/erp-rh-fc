@@ -138,9 +138,22 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, mod);
   };
 
-  // Auto-detect module from route if navigating to a module-specific page
+  // Auto-detect module from route (exact match first, then longest-prefix match).
+  // Rotas dinâmicas como /planejamento/123 precisam do prefixo /planejamento.
   useEffect(() => {
-    const routeModule = ROUTE_MODULE_MAP[location];
+    // 1. tentativa: match exato
+    let routeModule = ROUTE_MODULE_MAP[location] as ModuleId | undefined;
+
+    // 2. tentativa: longest prefix match (cobre /planejamento/123, /orcamento/lista/5, etc.)
+    if (!routeModule) {
+      let bestLen = 0;
+      for (const [route, mod] of Object.entries(ROUTE_MODULE_MAP)) {
+        if (location.startsWith(route + "/") || location === route) {
+          if (route.length > bestLen) { bestLen = route.length; routeModule = mod as ModuleId; }
+        }
+      }
+    }
+
     if (routeModule && routeModule !== "all" && routeModule !== activeModule) {
       setActiveModule(routeModule);
     }

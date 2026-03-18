@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 534,
+    titulo: "Sidebar sempre exibe o módulo correto em rotas dinâmicas",
+    descricao: "Correção crítica de UX: a barra lateral exibia o menu do módulo RH & DP enquanto o usuário estava em Planejamento (ou qualquer outra rota dinâmica como /planejamento/123, /orcamento/lista/5). Causa: o ModuleContext fazia lookup exato de location no ROUTE_MODULE_MAP — '/planejamento' estava mapeado, mas '/planejamento/123' não, portanto routeModule retornava undefined e o módulo ficava preso no anterior. Solução: detecção em duas etapas — (1) match exato como antes; (2) longest-prefix match iterando todas as chaves do ROUTE_MODULE_MAP e buscando a chave mais longa que seja prefixo da localização atual. Isso garante que '/planejamento/123' detecta o módulo 'planejamento', '/orcamento/lista/5' detecta 'orcamento', e assim por diante, sem necessidade de registrar manualmente cada variante dinâmica no mapa. Rev. 534.",
+    tipo: "bugfix",
+    modulos: "Navegação / Layout",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 533,
     titulo: "Simulador: JSON repair + cronograma persiste + expand/collapse EAP",
     descricao: "Três correções no Simulador de Cronograma. (1) Erro JSON truncado: quando a IA retorna resposta maior que o limite de tokens, o JSON fica incompleto. Adicionada função repairTruncatedJson que extrai todos os objetos de atividade COMPLETOS antes do corte, construindo um JSON válido com as atividades recuperadas; o extractFirstJson original é tentado primeiro e o repair entra apenas como fallback. (2) Cronograma some ao trocar de aba: estado atividadesGeradas, mesesGerados, gerado, totalGeradoExato, ratioMat e ratioMdo agora persistem em localStorage com chave sim_schedule_{projetoId}; ao gerar, os dados são salvos; ao reabrir a aba, são restaurados automaticamente. (3) Expand/collapse dos grupos EAP: cada linha de grupo (isGrupo: true) da tabela MS Project recebeu ícone ▼/▶ e onClick que chama toggleEapGroup; a função isEapHidden verifica se algum ancestral do eapCodigo está em collapsedGroups e oculta a linha; clicar no grupo recolhe todos os seus filhos de uma vez. Rev. 533.",
