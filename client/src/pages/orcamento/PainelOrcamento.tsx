@@ -60,9 +60,9 @@ const CUSTOM_TOOLTIP = ({ active, payload, label }: any) => {
   );
 };
 
-function KpiCard({ title, value, sub, icon: Icon, iconBg, iconColor, trend }: any) {
+function KpiCard({ title, value, sub, icon: Icon, iconBg, iconColor, trend, clickable }: any) {
   return (
-    <Card>
+    <Card className={clickable ? "cursor-pointer hover:shadow-md hover:border-blue-300 transition-all" : ""}>
       <CardContent className="pt-4 pb-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
@@ -165,12 +165,15 @@ export default function PainelOrcamento() {
         {/* ── KPIs ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
           <div className="col-span-2">
-            <KpiCard
-              title="Orçamentos" icon={FolderOpen}
-              value={isLoading ? "..." : String(total)}
-              sub="cadastrados na empresa"
-              iconBg="bg-blue-50" iconColor="text-blue-600"
-            />
+            <Link href="/orcamento/lista" className="block">
+              <KpiCard
+                title="Orçamentos" icon={FolderOpen}
+                value={isLoading ? "..." : String(total)}
+                sub="cadastrados na empresa"
+                iconBg="bg-blue-50" iconColor="text-blue-600"
+                clickable
+              />
+            </Link>
           </div>
           <div className="col-span-2">
             <KpiCard
