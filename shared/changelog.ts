@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 540,
+    titulo: "Parcelas Intermediárias — Botão 'Aprovar e Regerar com IA' + suporte a aportes no greedy",
+    descricao: "Implementação completa do fluxo de aprovação de parcelas intermediárias no SimuladorCronograma: (1) Servidor: gerarCronogramaDoOrcamento agora aceita parcelas[] opcionais ({mes, valor}); o algoritmo greedy passa a usar tetoCents = orcMensalCents + extraCapCents[mesNum], permitindo que meses com aporte extra executem mais atividades; (2) Cliente: botão 'Aprovar e Regerar com IA' aparece abaixo do resultado da simulação quando há meses economizados (economizados>0) — normaliza os valores das parcelas (parseMoney), filtra valores inválidos e chama gerarMut.mutate() com o campo parcelas; botão desabilitado durante processamento com spinner; (3) Melhoria no input 'Valor extra (R$)': onKeyDown com Enter formata e blur o campo; botão Simular normaliza todos os valores antes do cálculo; (4) Lógica: a IA continua definindo duracaoDias+predecessora (sequência construtiva não muda), apenas o capital disponível por mês muda no greedy — resultado é um cronograma comprimido real com alocação correta de atividades por predecessora.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",

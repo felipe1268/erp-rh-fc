@@ -2073,6 +2073,8 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
       orcamentoMensal: z.number().positive(),
       valorTotal:      z.number().positive(),
       dataInicio:      z.string(),
+      // Parcelas intermediárias: aporte extra de capital por mês (opcional)
+      parcelas:        z.array(z.object({ mes: z.number().int().positive(), valor: z.number().positive() })).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2371,6 +2373,15 @@ Retorne SOMENTE este JSON (sem markdown, sem comentários, sem texto extra):
         (a.predecessora || "").split(/[,;]/).map(s => s.trim()).filter(Boolean)
       )]));
 
+      // Mapa de capital extra por mês (parcelas intermediárias aprovadas), em centavos
+      const extraCapCentsMap = new Map<number, number>();
+      if (input.parcelas && input.parcelas.length > 0) {
+        input.parcelas.forEach(p => {
+          extraCapCentsMap.set(p.mes, (extraCapCentsMap.get(p.mes) ?? 0) + Math.round(p.valor * 100));
+        });
+        console.log(`[gerarCronograma] Parcelas intermediárias: ${input.parcelas.length} aportes, total extra = R$ ${(input.parcelas.reduce((s, p) => s + p.valor, 0)).toFixed(2)}`);
+      }
+
       const meses: { mes: number; atividades: { eapCodigo: string; nome: string; pesoFinanceiro: number; duracaoDias: number; custo: number; custoMat: number; custoMdo: number }[]; custoTotal: number; custoMat: number; custoMdo: number }[] = [];
       let remaining = [...sequencia];
       const completedEaps = new Set<string>();
@@ -2382,13 +2393,15 @@ Retorne SOMENTE este JSON (sem markdown, sem comentários, sem texto extra):
         const mesAtivs: typeof sequencia = [];
         let mesCustoCents = 0; // acumula em centavos inteiros — sem erro de ponto flutuante
         let progressed = false;
+        // Teto deste mês = orçamento base + aporte extra (se houver)
+        const tetoCents = orcMensalCents + (extraCapCentsMap.get(mesNum) ?? 0);
 
         for (let i = 0; i < remaining.length; i++) {
           const a = remaining[i];
           const preds = predSet.get(a.eapCodigo) ?? new Set<string>();
           if (![...preds].every(p => completedEaps.has(p))) continue;
           const cents = custoCentsMap.get(a.eapCodigo) ?? 0;
-          if (mesCustoCents + cents <= orcMensalCents || mesAtivs.length === 0) {
+          if (mesCustoCents + cents <= tetoCents || mesAtivs.length === 0) {
             mesAtivs.push(a); mesCustoCents += cents; progressed = true;
           }
         }

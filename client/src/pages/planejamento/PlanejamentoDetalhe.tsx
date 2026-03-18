@@ -11832,6 +11832,54 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                         * A simulação considera que o pagamento extra do cliente gera disponibilidade financeira imediata para execução de serviços adicionais naquele mês,
                         reduzindo o trabalho restante dos meses seguintes. Valores sujeitos a negociação contratual.
                       </p>
+
+                      {/* ── Botão Aprovar e Regerar ── */}
+                      {economizados > 0 && (
+                        <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-emerald-900">Simulação aprovada?</p>
+                            <p className="text-xs text-emerald-700 mt-0.5">
+                              Clique em <strong>Aprovar e Regerar com IA</strong> para que o sistema recalcule o cronograma completo
+                              considerando {parcelasIntermed.length === 1 ? "o aporte" : "os aportes"} de {fmtR(totalExtra)} —
+                              o prazo passará de <strong>{baseN}</strong> para <strong>{novoN} meses</strong>.
+                            </p>
+                          </div>
+                          <button
+                            disabled={gerarMut.isPending}
+                            onClick={() => {
+                              if (!revisaoAtiva) return toast.error("Nenhuma revisão ativa encontrada.");
+                              if (orcNum <= 0)   return toast.error("Informe o orçamento mensal.");
+                              if (valNum <= 0)   return toast.error("Informe o valor total da obra.");
+                              // Normaliza parcelas antes de enviar
+                              const parcelasNorm = parcelasIntermed
+                                .map(p => ({ mes: typeof p.mes === "number" ? p.mes : parseInt(String(p.mes)), valor: parseMoney(p.valor) }))
+                                .filter(p => p.valor > 0 && p.mes > 0);
+                              if (parcelasNorm.length === 0) return toast.error("Nenhuma parcela válida para enviar.");
+                              gerarMut.mutate({
+                                revisaoId:       revisaoAtiva.id,
+                                projetoId,
+                                orcamentoMensal: orcNum,
+                                valorTotal:      valNum,
+                                dataInicio,
+                                parcelas:        parcelasNorm,
+                              } as any);
+                            }}
+                            className="shrink-0 flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-bold text-sm px-6 py-3 rounded-xl transition-colors shadow-sm whitespace-nowrap"
+                          >
+                            {gerarMut.isPending ? (
+                              <>
+                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                Analisando com IA...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4" />
+                                Aprovar e Regerar com IA
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
