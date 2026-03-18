@@ -3049,6 +3049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 538,
+    titulo: "Cronograma IA — Preservação da EAP exata do orçamento",
+    descricao: "Reescrita conceitual do gerador de cronograma por IA (gerarCronogramaDoOrcamento). Correção do erro fundamental onde a IA criava uma nova EAP do zero (inventando grupos, renomeando atividades, adicionando/removendo itens). Novo comportamento: (1) servidor busca TODOS os itens do orçamento — grupos (tipo='grupo') e folhas (custoTotal>0) — preservando EAP codes, nomes e hierarquia exatos do upload; (2) prompt reformulado com REGRAS ABSOLUTAS: não criar atividades, não remover, não alterar nomes ou EAPs — IA define APENAS duracaoDias + predecessora para cada folha; (3) server-side merge: grupos recebem isGrupo=true/duracaoDias=0/predecessora=''; folhas recebem pesoFinanceiro calculado pelo ratio custo/totalGeral do próprio orçamento (não pela IA); (4) algoritmo de distribuição mensal guloso downstream inalterado. Barra de progresso atualizada com mensagens descrevendo o novo fluxo.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",

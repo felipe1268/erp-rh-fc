@@ -2084,12 +2084,11 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
       if (!projeto) throw new Error("Projeto não encontrado.");
       if (!projeto.orcamentoId) throw new Error("Este projeto não tem orçamento vinculado.");
 
-      // 2. Buscar itens do orçamento (apenas folhas com custo > 0)
-      const itens = await db.select({
+      // 2. Buscar TODOS os itens do orçamento (grupos + folhas) — preserva EAP exata do upload
+      const todosItens = await db.select({
         eapCodigo:     orcamentoItens.eapCodigo,
         descricao:     orcamentoItens.descricao,
         unidade:       orcamentoItens.unidade,
-        quantidade:    orcamentoItens.quantidade,
         custoTotal:    orcamentoItens.custoTotal,
         custoTotalMat: orcamentoItens.custoTotalMat,
         custoTotalMdo: orcamentoItens.custoTotalMdo,
@@ -2098,107 +2097,106 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
       .from(orcamentoItens)
       .where(and(
         eq(orcamentoItens.orcamentoId, projeto.orcamentoId),
-        sql`${orcamentoItens.custoTotal} > 0`,
-        sql`(${orcamentoItens.tipo} IS NULL OR ${orcamentoItens.tipo} != 'grupo')`,
+        or(
+          eq(orcamentoItens.tipo, 'grupo'),
+          sql`${orcamentoItens.custoTotal} > 0`,
+        ),
       ))
       .orderBy(asc(orcamentoItens.eapCodigo));
 
-      if (itens.length === 0) throw new Error("O orçamento vinculado não tem itens cadastrados.");
+      if (todosItens.length === 0) throw new Error("O orçamento vinculado não tem itens cadastrados.");
 
-      // Calcular ratios Mat/MdO globais a partir do orçamento
-      const totalMatOrc = itens.reduce((s, i) => s + parseFloat(String(i.custoTotalMat || 0)), 0);
-      const totalMdoOrc = itens.reduce((s, i) => s + parseFloat(String(i.custoTotalMdo || 0)), 0);
-      const totalGeral  = itens.reduce((s, i) => s + parseFloat(String(i.custoTotal    || 0)), 0);
+      // Separar grupos e folhas
+      const gruposOrc  = todosItens.filter(i => i.tipo === 'grupo');
+      const folhasOrc  = todosItens.filter(i => i.tipo !== 'grupo' && parseFloat(String(i.custoTotal || 0)) > 0);
+
+      if (folhasOrc.length === 0) throw new Error("O orçamento não tem atividades folha com custo > 0.");
+
+      // Calcular ratios Mat/MdO globais a partir das folhas
+      const totalMatOrc = folhasOrc.reduce((s, i) => s + parseFloat(String(i.custoTotalMat || 0)), 0);
+      const totalMdoOrc = folhasOrc.reduce((s, i) => s + parseFloat(String(i.custoTotalMdo || 0)), 0);
+      const totalGeral  = folhasOrc.reduce((s, i) => s + parseFloat(String(i.custoTotal    || 0)), 0);
       const ratioMat    = totalGeral > 0 ? totalMatOrc / totalGeral : 0;
       const ratioMdo    = totalGeral > 0 ? totalMdoOrc / totalGeral : 0;
 
-      // 3. Chamar IA para gerar o cronograma
+      // 3. Chamar IA — APENAS para definir duracaoDias + predecessora de cada folha
       const { invokeLLM } = await import("../_core/llm");
 
-      const listaItens = itens.map(i => {
+      // Monta lista somente das folhas (grupos não precisam de duração/predecessora)
+      const listaParaIA = folhasOrc.map(i => {
         const custo    = parseFloat(String(i.custoTotal    || 0));
         const custoMat = parseFloat(String(i.custoTotalMat || 0));
         const custoMdo = parseFloat(String(i.custoTotalMdo || 0));
-        const pct      = input.valorTotal > 0 ? ((custo / input.valorTotal) * 100).toFixed(2) : "0";
-        const matStr   = custoMat > 0 ? ` MT:R$${custoMat.toFixed(2)}` : "";
-        const mdoStr   = custoMdo > 0 ? ` MO:R$${custoMdo.toFixed(2)}` : "";
-        return `EAP:${i.eapCodigo || "?"} | ${i.descricao} | ${i.unidade || "vb"} | R$${custo.toFixed(2)} (${pct}% do total)${matStr}${mdoStr}`;
+        const pct      = totalGeral > 0 ? ((custo / totalGeral) * 100).toFixed(2) : "0";
+        const matStr   = custoMat > 0 ? ` MAT:R$${custoMat.toFixed(2)}` : "";
+        const mdoStr   = custoMdo > 0 ? ` MDO:R$${custoMdo.toFixed(2)}` : "";
+        return `EAP:${i.eapCodigo} | ${i.descricao} | R$${custo.toFixed(2)} (${pct}%)${matStr}${mdoStr}`;
       }).join("\n");
 
       const valorFmt  = input.valorTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
       const mensalFmt = input.orcamentoMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
       const mesesEst  = Math.ceil(input.valorTotal / input.orcamentoMensal);
 
-      const prompt = `Você é um dos maiores especialistas em planejamento de obras de construção civil do Brasil, com domínio em:
-- Método do Caminho Crítico (CPM/PERT)
-- Linha de Balanço (LOB) e Last Planner System de Glenn Ballard
-- Metodologias de Harold Kerzner, Gregory Horine e Aldo Dórea Mattos
-- NBR 12.741, diretrizes do SINDUSCON e sequência construtiva da ABNT
-- Programação de obras residenciais, comerciais e industriais brasileiras
+      const prompt = `Você é um especialista sênior em planejamento e cronograma de obras de construção civil, com domínio em:
+- Método do Caminho Crítico (CPM/PERT) — Harold Kerzner, Gregory Horine, Aldo Dórea Mattos
+- Last Planner System (Glenn Ballard) e Linha de Balanço (LOB)
+- Sequência construtiva conforme ABNT, NBR 12.741 e SINDUSCON-SP
+- Planejamento de obras residenciais, comerciais e industriais no Brasil
 
-MISSÃO: Gerar um cronograma de obra COMPLETO baseado nos itens do orçamento fornecidos.
+MISSÃO ESTRITA: Você receberá a lista EXATA de atividades do orçamento da obra. Para cada atividade folha, defina SOMENTE:
+  1. duracaoDias: duração estimada em dias corridos
+  2. predecessora: código(s) EAP da(s) atividade(s) que devem terminar antes desta iniciar (separar por vírgula se múltiplas; vazio "" se não houver)
+
+REGRAS ABSOLUTAS — VIOLÁ-LAS INVALIDA O CRONOGRAMA:
+- NÃO crie atividades que não estão na lista
+- NÃO remova atividades da lista
+- NÃO altere nomes, descrições ou códigos EAP
+- Retorne EXATAMENTE ${folhasOrc.length} objetos — um para cada EAP da lista abaixo, na mesma ordem
+- Os EAP codes das predecessoras devem referenciar SOMENTE códigos presentes nesta mesma lista
 
 PARÂMETROS DA OBRA:
-- Valor total: ${valorFmt}
-- Desembolso máximo mensal: ${mensalFmt}
+- Valor total do contrato: ${valorFmt}
+- Desembolso máximo mensal: ${mensalFmt} (ritmo financeiro de execução)
 - Prazo estimado: ~${mesesEst} meses
 - Data de início: ${input.dataInicio}
 
-ITENS DO ORÇAMENTO (EAP | Descrição | Unidade | Custo):
-${listaItens}
+REGRAS DE DURAÇÃO (dias corridos):
+- Atividade de gestão/mobilização permanente: 300–400 dias (duração total da obra)
+- Serviços de estrutura/fundação/concreto: 20–90 dias conforme porte
+- Instalações prediais (elétrica, hidráulica, esgoto): 8–30 dias por andar/fase
+- Revestimentos, acabamentos, pintura: 8–25 dias por fase
+- Item pequeno (< 0,5% do valor): 5–10 dias
+- Item médio (0,5–3%): 10–30 dias
+- Item grande (3–10%): 30–60 dias
+- Item major (> 10%): 60–150 dias
 
-REGRAS OBRIGATÓRIAS DE SEQUÊNCIA CONSTRUTIVA (respeitar rigorosamente):
-1. SERVIÇOS PRELIMINARES: mobilização, canteiro, tapumes, instalações provisórias (sempre primeiro)
-2. TERRAPLENAGEM: escavação, aterro, compactação, drenagem
-3. FUNDAÇÕES: estacas, blocos, vigas baldrames, radier, cortina de contenção
-4. ESTRUTURA: pilares → vigas → lajes (fôrmas, armação, concretagem, cura) — fase mais longa
-5. ALVENARIA E VEDAÇÃO: paredes externas e internas, shafts
-6. COBERTURA: estrutura de telhado, telhas, calhas, rufos, impermeabilização
-7. INSTALAÇÕES HIDROSSANITÁRIAS: prumadas, ramais, caixas sifonadas, reservatório
-8. INSTALAÇÕES ELÉTRICAS: eletrodutos, cabeamento, quadros, SPDA, telecomunicações
-9. INSTALAÇÕES ESPECIAIS: ar-condicionado, gás, elevadores (quando presentes)
-10. REVESTIMENTO INTERNO: chapisco, reboco, emboço (paredes e tetos) — iniciar após estrutura seca
-11. REVESTIMENTO EXTERNO: fachada, argamassa texturizada, pastilhas, pintura externa
-12. CONTRAPISO E IMPERMEABILIZAÇÃO: regularização, manta, membrana, rodapé embutido
-13. REVESTIMENTO DE PISOS: cerâmica, porcelanato, mármore, granitina, madeira
-14. REVESTIMENTO DE PAREDES (áreas molhadas): azulejo, porcelanato, boxe
-15. ESQUADRIAS: caixilhos de alumínio, portas de madeira, vidros, ferragens
-16. LOUÇAS E METAIS: bacias, pias, torneiras, duchas, chuveiros
-17. PINTURA: massa corrida, selador, látex/acrílica interna e externa, vernizes
-18. SERVIÇOS FINAIS: limpeza final, regulagens, vistoria, entrega
+REGRAS DE SEQUÊNCIA CONSTRUTIVA (predecessoras):
+Respeite rigorosamente a lógica física da construção:
+1. Serviços preliminares e canteiro → sempre iniciam sem predecessora (início da obra)
+2. Terraplenagem/escavação → após canteiro
+3. Fundações (estacas, blocos, baldrame, radier) → após escavação
+4. Estrutura (pilares→vigas→lajes, concretagem) → após fundações
+5. Alvenaria/vedação → após estrutura do pavimento correspondente
+6. Cobertura → após estrutura do último pavimento
+7. Instalações elétricas/hidráulicas embutidas → paralelas com alvenaria (mesma fase)
+8. Instalações aparentes/terminais → após revestimentos
+9. Revestimento interno (chapisco/reboco) → após alvenaria seca
+10. Impermeabilização/contrapiso → após estrutura + revestimentos molhados
+11. Piso/cerâmica/porcelanato → após contrapiso
+12. Esquadrias → após revestimento externo
+13. Louças/metais/acessórios → após revestimento de paredes
+14. Pintura final → após todos os revestimentos
+15. Limpeza/entrega → última fase
+- Atividades no mesmo pavimento podem ser paralelas se fisicamente possíveis
+- Atividades em pavimentos diferentes do mesmo tipo podem iniciar com defasagem de 1–2 semanas
 
-REGRAS PARA DURAÇÃO (dias úteis):
-- Pequeno (< 1% do valor total): 5-10 dias
-- Médio (1-5%): 15-40 dias
-- Grande (5-15%): 45-90 dias
-- Major (> 15%): 90-150 dias
-- Serviços de estrutura e fundações: sempre 30-120 dias dependendo do porte
-- Instalações prediais: 20-60 dias
-- Acabamentos (piso, revestimento, pintura): 15-45 dias cada
+LISTA EXATA DAS ATIVIDADES DO ORÇAMENTO (${folhasOrc.length} atividades folha — retorne todas):
+${listaParaIA}
 
-REGRAS PARA PESO FINANCEIRO:
-- A soma dos pesoFinanceiro de TODAS as atividades folha (isGrupo: false) deve totalizar EXATAMENTE 100
-- Distribuir proporcionalmente ao custo de cada item no orçamento
-- Grupos (isGrupo: true) têm pesoFinanceiro: 0
-
-REGRAS PARA PREDECESSORAS:
-- Use o eapCodigo da atividade predecessora (ex: "1.1" ou "2")
-- Respeite RIGOROSAMENTE a sequência construtiva
-- Múltiplas predecessoras: separar por vírgula (ex: "2.1,2.2")
-- Atividades que podem ser paralelas dentro da mesma fase: sem predecessoras entre si
-
-REGRAS DE EAP:
-- Grupos de fase (nivel 1, isGrupo: true): "1", "2", "3"... — sem atividade real, apenas agrupamento
-- Atividades folha (nivel 2, isGrupo: false): "1.1", "1.2", "2.1"... — atividade real a executar
-- Cada item do orçamento deve virar UMA atividade folha ou ser agrupado logicamente
-
-Agrupe os itens do orçamento nas fases construtivas correspondentes. Se o orçamento tiver itens de fase que não existem (ex: não tem elevador), ignore essa fase.
-
-Retorne APENAS um JSON válido, sem comentários, sem markdown:
+Retorne SOMENTE este JSON (sem markdown, sem comentários, sem texto extra):
 {
   "atividades": [
-    {"eapCodigo":"1","nome":"SERVIÇOS PRELIMINARES","nivel":1,"isGrupo":true,"duracaoDias":0,"predecessora":"","pesoFinanceiro":0,"unidade":""},
-    {"eapCodigo":"1.1","nome":"Mobilização e canteiro de obras","nivel":2,"isGrupo":false,"duracaoDias":10,"predecessora":"","pesoFinanceiro":1.5,"unidade":"vb"},
+    {"eapCodigo":"EAP_EXATO_DO_ITEM","duracaoDias":NUMERO_INTEIRO,"predecessora":"EAP_PRED_OU_VAZIO"},
     ...
   ]
 }`;
@@ -2288,17 +2286,37 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
         throw new Error(`Falha ao interpretar resposta da IA: ${e?.message ?? "JSON inválido"}`);
       }
 
-      if (atividadesGeradas.length === 0) throw new Error("A IA não retornou atividades válidas.");
-
-      // Normalizar pesos para somar 100
-      const folhas = atividadesGeradas.filter(a => !a.isGrupo);
-      const somaP = folhas.reduce((s, a) => s + (a.pesoFinanceiro || 0), 0);
-      if (somaP > 0 && Math.abs(somaP - 100) > 0.5) {
-        const fator = 100 / somaP;
-        atividadesGeradas = atividadesGeradas.map(a =>
-          a.isGrupo ? a : { ...a, pesoFinanceiro: parseFloat((a.pesoFinanceiro * fator).toFixed(4)) }
+      // ── MERGE: funde resposta da IA com estrutura EXATA do orçamento ─────────
+      // A IA retorna só {eapCodigo, duracaoDias, predecessora} das folhas.
+      // Grupos e pesoFinanceiro vêm 100% do orçamento — a IA não toca nisso.
+      {
+        const aiMap = new Map<string, { duracaoDias: number; predecessora: string }>(
+          atividadesGeradas.map(a => [a.eapCodigo, { duracaoDias: a.duracaoDias, predecessora: a.predecessora }])
         );
+        atividadesGeradas = todosItens.map(item => {
+          const isGrupo = item.tipo === 'grupo';
+          const custo   = parseFloat(String(item.custoTotal || 0));
+          const nivel   = (item.eapCodigo || "").split('.').length;
+          if (isGrupo) {
+            return { eapCodigo: item.eapCodigo, nome: item.descricao ?? "", nivel, isGrupo: true, duracaoDias: 0, predecessora: "", pesoFinanceiro: 0, unidade: "" };
+          }
+          const ai = aiMap.get(item.eapCodigo);
+          return {
+            eapCodigo:       item.eapCodigo,
+            nome:            item.descricao ?? "",
+            nivel,
+            isGrupo:         false,
+            duracaoDias:     ai?.duracaoDias ?? 10,
+            predecessora:    ai?.predecessora ?? "",
+            pesoFinanceiro:  totalGeral > 0 ? (custo / totalGeral) * 100 : 0,
+            unidade:         item.unidade || "vb",
+          };
+        });
+        const folhasMerge = atividadesGeradas.filter(a => !a.isGrupo);
+        console.log(`[gerarCronograma] Merge EAP: ${todosItens.length} total (${gruposOrc.length} grupos, ${folhasMerge.length} folhas). IA retornou ${aiMap.size} folhas.`);
       }
+
+      if (atividadesGeradas.length === 0) throw new Error("A IA não retornou atividades válidas.");
 
       // 4. Distribuição mensal (algoritmo guloso com topologia)
       const folhasSeq = atividadesGeradas.filter(a => !a.isGrupo);

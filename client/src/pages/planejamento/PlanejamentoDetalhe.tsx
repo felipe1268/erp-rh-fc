@@ -10828,13 +10828,13 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const gerandoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const GERANDO_STEPS = [
-    { at: 0,  label: "Analisando orçamento e atividades..." },
-    { at: 18, label: "Estruturando EAP e grupos de trabalho..." },
-    { at: 38, label: "Distribuindo custos por mês..." },
-    { at: 58, label: "Calculando curvas de desembolso..." },
-    { at: 75, label: "Otimizando distribuição temporal..." },
-    { at: 88, label: "Finalizando cronograma..." },
-    { at: 96, label: "Quase pronto..." },
+    { at: 0,  label: "Lendo estrutura do orçamento..." },
+    { at: 15, label: "Preservando EAP exata do upload..." },
+    { at: 30, label: "IA analisando sequência construtiva..." },
+    { at: 50, label: "Definindo durações e predecessoras..." },
+    { at: 68, label: "Estabelecendo caminho crítico..." },
+    { at: 82, label: "Calculando distribuição de desembolso..." },
+    { at: 93, label: "Quase pronto..." },
   ];
 
   useEffect(() => {
