@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 536,
+    titulo: "Simulador: cálculo de antecipação corrigido — R$1 já não diz 4 meses economizados",
+    descricao: "Bug crítico de lógica no Simulador de Parcelas Intermediárias. O código comparava n = mesesGerados.length (cronograma gerado pela IA com distribuição irregular de custos — ex: 23 meses) com novoN = resultado do algoritmo greedy com orcNum uniforme (ex: 19 meses). A diferença de 4 meses era apenas divergência de base, não real antecipação. Qualquer aporte — até R$1 — mostrava falsamente '−4 meses'. Correção: adicionada etapa de BASELINE greedy sem extras (mesmo algoritmo, mesmos parâmetros, sem parcelasIntermed) para computar baseN = prazo base do greedy. Agora economizados = baseN − novoN. Quando R$1 não antecipa nenhum mês, baseN = novoN e economizados = 0 (Sem alteração no prazo). dataFimOriginal, KPI Prazo Original e barra comparativa todos atualizados para usar baseN. Rev. 536.",
+    tipo: "bugfix",
+    modulos: "Planejamento / Simulador",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 535,
     titulo: "Cidades com/sem acento agrupadas: 'Guaratinguetá' + 'Guaratingueta' → entrada única",
     descricao: "Extensão da normalização de cidades para cobrir variações de acento além de caixa. Três camadas corrigidas: (1) Frontend MapaFuncionariosInterativo: adicionadas funções normCidadeKey (lowercase + NFD sem combining marks) e preferAccentedDisplay (prefere o nome com acento quando há conflito). cityGroups e citiesInState agora usam dois-passes — passo 1 determina o melhor nome de exibição por chave normalizada, passo 2 agrupa usando esse displayName como chave do Map. loadAllCityCoords e loadCityCoords igualmente ajustados. (2) Backend JS (dashboards.ts): loop de acumulação d.cidade agora usa cidadeNormKey para encontrar a chave existente no objeto antes de incrementar, e troca o key pelo nome acentuado quando encontra versão melhor. (3) Backend SQL filtro de cidade: substituído LOWER(cidade) = LOWER(filterValue) por TRANSLATE com tabela de 68 caracteres acentuados → não acentuados, cobrindo todo o alfabeto português, garantindo que o clique em 'Guaratinguetá' retorna funcionários cadastrados como 'Guaratingueta' e vice-versa. Rev. 535.",

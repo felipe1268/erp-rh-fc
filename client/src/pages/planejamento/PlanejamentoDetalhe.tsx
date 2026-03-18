@@ -11489,10 +11489,17 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
             }
             const totalExtra = parcelasIntermed.reduce((s, p) => s + (parseMoney(p.valor) || 0), 0);
 
+            // BASELINE sem extras: usa o mesmo algoritmo greedy para comparação justa.
+            // NÃO usa mesesGerados.length (cronograma da IA tem distribuição irregular)
+            // → isso evitava falso "4 meses economizados" mesmo com R$1 de aporte.
+            const maxMeses = Math.max(n, Math.ceil(totalGerado / orcNum)) + 6;
+            let baseRem = totalGerado; let baseN = 0;
+            { let m = 1; while (baseRem > 0.01 && m <= maxMeses) { baseRem -= Math.min(orcNum, baseRem); baseN++; m++; } }
+
+            // Greedy COM extras
             let remaining = totalGerado;
             const novosMeses: { mes: number; custo: number; cap: number; extra: number }[] = [];
             let mesAtual = 1;
-            const maxMeses = n + 6;
             while (remaining > 0.01 && mesAtual <= maxMeses) {
               const extra = extraCapMap.get(mesAtual) ?? 0;
               const cap   = orcNum + extra;
@@ -11502,10 +11509,10 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
               mesAtual++;
             }
             const novoN = novosMeses.length;
-            const economizados = n - novoN;
+            const economizados = baseN - novoN; // comparação correta: baseline greedy vs com extras
 
             const dataFimOriginal = (() => {
-              const d = new Date(diBase); d.setMonth(d.getMonth() + n - 1);
+              const d = new Date(diBase); d.setMonth(d.getMonth() + baseN - 1);
               return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
             })();
             const dataFimNova = (() => {
@@ -11621,7 +11628,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Prazo Original</p>
-                          <p className="text-3xl font-extrabold text-slate-700 mt-1">{n}</p>
+                          <p className="text-3xl font-extrabold text-slate-700 mt-1">{baseN}</p>
                           <p className="text-[11px] text-slate-400">meses · {dataFimOriginal}</p>
                         </div>
                         {economizados > 0 ? (
@@ -11658,7 +11665,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                           <div className="space-y-2">
                             <div>
                               <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
-                                <span>Original</span><span>{n} meses · {dataFimOriginal}</span>
+                                <span>Original</span><span>{baseN} meses · {dataFimOriginal}</span>
                               </div>
                               <div className="h-5 bg-slate-100 rounded-full overflow-hidden">
                                 <div className="h-full bg-slate-400 rounded-full" style={{ width: "100%" }} />
@@ -11669,7 +11676,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                                 <span>Com parcelas intermediárias</span><span>{novoN} meses · {dataFimNova}</span>
                               </div>
                               <div className="h-5 bg-slate-100 rounded-full overflow-hidden relative">
-                                <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${(novoN / n) * 100}%` }} />
+                                <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${(novoN / baseN) * 100}%` }} />
                                 <div className="absolute right-0 top-0 h-full flex items-center pr-1">
                                   <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">−{economizados} meses</span>
                                 </div>
