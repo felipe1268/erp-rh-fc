@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 550,
+    titulo: "EPIs: foto do catálogo com o dobro do tamanho (w-20 h-20)",
+    descricao: "Thumbnail das fotos na listagem de EPIs ampliado de 40×40px (w-10 h-10) para 80×80px (w-20 h-20), facilitando a identificação visual rápida dos itens. Placeholder sem foto também aumentado proporcionalmente.",
+    tipo: "melhoria",
+    modulos: "EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 549,
     titulo: "Fix ícone de EPI: jardineira/macacão agora exibe ícone de roupa corretamente",
     descricao: "A função getEpiIcon exibia óculos para jardineiras porque nomes longos de EPIs contêm 'faces' (ex: 'em ambas as faces') e 'solda' (ex: 'solda eletrônica'), que disparavam as regras de óculos/solda antes das regras de vestuário. Correção: jardineira e macacão adicionados com verificação ANTES das demais regras; regra de face alterada de n.includes('face') para n.includes('protetor de face') para evitar falsos positivos em descrições de roupas.",

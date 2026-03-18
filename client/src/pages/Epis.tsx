@@ -2021,11 +2021,11 @@ export default function Epis() {
                             </td>
                             <td className="p-3 text-center">
                               {epi.fotoUrl ? (
-                                <img src={epi.fotoUrl} alt={epi.nome} className="w-10 h-10 object-contain rounded mx-auto border bg-white"
+                                <img src={epi.fotoUrl} alt={epi.nome} className="w-20 h-20 object-contain rounded mx-auto border bg-white"
                                   onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                               ) : (
-                                <div className="w-10 h-10 rounded border bg-slate-50 flex items-center justify-center mx-auto">
-                                  <ImagePlus className="h-4 w-4 text-slate-300" />
+                                <div className="w-20 h-20 rounded border bg-slate-50 flex items-center justify-center mx-auto">
+                                  <ImagePlus className="h-6 w-6 text-slate-300" />
                                 </div>
                               )}
                             </td>
