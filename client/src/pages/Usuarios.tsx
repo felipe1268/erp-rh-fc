@@ -369,7 +369,6 @@ export default function Usuarios() {
 
   // Grupo do usuário (display) — lê de userGroupIdMap (fonte única: listAllMembers)
   const getUserGroupLabel = (u: any) => {
-    if (u.role === "admin_master") return null;
     const gid = userGroupIdMap[u.id];
     if (!gid) return null;
     return (allGroups as any[]).find(g => g.id === gid)?.nome ?? null;
@@ -736,8 +735,7 @@ export default function Usuarios() {
                       )}
 
                       {/* Grupo de Acesso */}
-                      {editRole !== "admin_master" && (
-                        <div className="rounded-xl border p-4 space-y-3">
+                      <div className="rounded-xl border p-4 space-y-3">
                           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                             <ShieldCheck className="h-3.5 w-3.5" /> Grupo de Acesso
                             <span className="text-[10px] font-normal text-slate-400 ml-1">(apenas 1 por usuário)</span>
@@ -771,14 +769,6 @@ export default function Usuarios() {
                             </div>
                           )}
                         </div>
-                      )}
-
-                      {editRole === "admin_master" && (
-                        <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-xl border border-purple-200">
-                          <Crown className="h-4 w-4 text-purple-600 shrink-0" />
-                          <span className="text-sm text-purple-700">Admin Master tem acesso irrestrito a todos os módulos.</span>
-                        </div>
-                      )}
 
                       <div className="flex gap-3 pt-2 border-t">
                         <Button onClick={handleSaveUser} disabled={updateUserMut.isPending||setGroupsMut.isPending} className="gap-1.5 bg-blue-600 hover:bg-blue-700">

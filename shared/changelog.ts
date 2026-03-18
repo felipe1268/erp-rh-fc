@@ -3220,6 +3220,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 564,
+    titulo: "Usuários — Admin Master exibe grupo corretamente",
+    descricao: "Removido bloqueio que impedia usuários Admin Master de ter grupo visível na lista e no detalhe. getUserGroupLabel não descarta mais a role admin_master. A seção Grupo de Acesso no detalhe do usuário agora é exibida para todos os roles, permitindo atribuir e visualizar o grupo de Admin Master normalmente.",
+    tipo: "correcao",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 563,
     titulo: "Usuários (aba Grupos) — Dropdown filtra usuários já alocados",
     descricao: "No dropdown 'Adicionar usuário...' da aba Grupos de Acesso dentro de Usuários, usuários que já pertencem a qualquer grupo não aparecem mais como opção. Antes o filtro só excluía membros do grupo atual, permitindo selecionar pessoas já em outros grupos. Agora usa userGroupIdMap para filtrar todos os que já têm grupo. Também adicionado listAllMembers.invalidate() nos handlers de addMember e removeMember para que o mapa seja atualizado em tempo real após cada mudança de membership.",
