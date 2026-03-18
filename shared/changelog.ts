@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 533,
+    titulo: "Simulador: JSON repair + cronograma persiste + expand/collapse EAP",
+    descricao: "Três correções no Simulador de Cronograma. (1) Erro JSON truncado: quando a IA retorna resposta maior que o limite de tokens, o JSON fica incompleto. Adicionada função repairTruncatedJson que extrai todos os objetos de atividade COMPLETOS antes do corte, construindo um JSON válido com as atividades recuperadas; o extractFirstJson original é tentado primeiro e o repair entra apenas como fallback. (2) Cronograma some ao trocar de aba: estado atividadesGeradas, mesesGerados, gerado, totalGeradoExato, ratioMat e ratioMdo agora persistem em localStorage com chave sim_schedule_{projetoId}; ao gerar, os dados são salvos; ao reabrir a aba, são restaurados automaticamente. (3) Expand/collapse dos grupos EAP: cada linha de grupo (isGrupo: true) da tabela MS Project recebeu ícone ▼/▶ e onClick que chama toggleEapGroup; a função isEapHidden verifica se algum ancestral do eapCodigo está em collapsedGroups e oculta a linha; clicar no grupo recolhe todos os seus filhos de uma vez. Rev. 533.",
+    tipo: "bugfix",
+    modulos: "Planejamento / Simulador",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 532,
     titulo: "Dashboard RH — Cidades case-insensitive: 'Potim' + 'POTIM' agrupados corretamente",
     descricao: "Correção do agrupamento de cidades no Dashboard RH: o banco de dados armazenava algumas cidades em maiúsculas ('POTIM') e outras em title case ('Potim'), resultando em duas linhas separadas na distribuição por cidade. Três pontos corrigidos: (1) SQL cidadeDist: query alterada para usar INITCAP(LOWER(cidade)) tanto no SELECT quanto no GROUP BY, normalizando 'POTIM' → 'Potim' diretamente no banco; (2) JavaScript map aggregation: função normalizaCidade aplicada antes de usar a cidade como chave do objeto de contagem, convertendo qualquer variação de caixa para Title Case usando replace(/\\b\\w/g, toUpperCase); (3) SQL filtro de cidade: comparação alterada de cidade = filterValue (exata) para LOWER(cidade) = LOWER(filterValue), garantindo que o clique num filtro de cidade encontre todos os funcionários independente de como a cidade foi cadastrada. Rev. 532.",

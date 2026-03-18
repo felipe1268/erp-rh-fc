@@ -10776,13 +10776,30 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const [usouIA,    setUsouIA]    = useState(false);
   const [simulado,  setSimulado]  = useState(false);
 
-  // Mode: generate from orçamento (IA)
-  const [atividadesGeradas, setAtividadesGeradas] = useState<GeradoAtiv[]>([]);
-  const [mesesGerados,      setMesesGerados]      = useState<GeradoMes[]>([]);
-  const [gerado,            setGerado]            = useState(false);
-  const [totalGeradoExato,  setTotalGeradoExato]  = useState(0); // LEI DE OURO: usar valorTotal da API, nunca reduce() de floats
-  const [ratioMat,          setRatioMat]          = useState(0);
-  const [ratioMdo,          setRatioMdo]          = useState(0);
+  // Mode: generate from orçamento (IA) — persiste em localStorage por projeto
+  const scheduleStorageKey = `sim_schedule_${projetoId}`;
+  const loadSchedule = () => {
+    try { return JSON.parse(localStorage.getItem(scheduleStorageKey) ?? "null"); } catch { return null; }
+  };
+  const savedSchedule = loadSchedule();
+  const [atividadesGeradas, setAtividadesGeradas] = useState<GeradoAtiv[]>(savedSchedule?.atividadesGeradas ?? []);
+  const [mesesGerados,      setMesesGerados]      = useState<GeradoMes[]>(savedSchedule?.mesesGerados ?? []);
+  const [gerado,            setGerado]            = useState<boolean>(savedSchedule?.gerado ?? false);
+  const [totalGeradoExato,  setTotalGeradoExato]  = useState<number>(savedSchedule?.totalGeradoExato ?? 0);
+  const [ratioMat,          setRatioMat]          = useState<number>(savedSchedule?.ratioMat ?? 0);
+  const [ratioMdo,          setRatioMdo]          = useState<number>(savedSchedule?.ratioMdo ?? 0);
+  // Expand/collapse grupos EAP (eapCodigo dos grupos colapsados)
+  const [collapsedGroups,   setCollapsedGroups]   = useState<Set<string>>(new Set());
+  const toggleEapGroup = (code: string) =>
+    setCollapsedGroups(prev => { const next = new Set(prev); next.has(code) ? next.delete(code) : next.add(code); return next; });
+  const isEapHidden = (a: GeradoAtiv) => {
+    if (a.isGrupo) return false;
+    const parts = a.eapCodigo.split('.');
+    for (let n = parts.length - 1; n >= 1; n--) {
+      if (collapsedGroups.has(parts.slice(0, n).join('.'))) return true;
+    }
+    return false;
+  };
 
   // Reajuste / Dissídio
   const [pctReajuste,    setPctReajuste]    = useState("8,00");
@@ -10833,15 +10850,27 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   // ── Mutation: gerar do orçamento (modo sem atividades) ──
   const gerarMut = (trpc.planejamento as any).gerarCronogramaDoOrcamento.useMutation({
     onSuccess: (data: any) => {
-      setAtividadesGeradas(data.atividades || []);
-      setMesesGerados(data.meses || []);
+      const atv  = data.atividades || [];
+      const mes  = data.meses || [];
+      const rMat = data.ratioMat ?? 0;
+      const rMdo = data.ratioMdo ?? 0;
+      const vTot = typeof data.valorTotal === "number" ? data.valorTotal : 0;
+      setAtividadesGeradas(atv);
+      setMesesGerados(mes);
       setGerado(true);
-      setRatioMat(data.ratioMat ?? 0);
-      setRatioMdo(data.ratioMdo ?? 0);
+      setRatioMat(rMat);
+      setRatioMdo(rMdo);
       // LEI DE OURO: armazena o valorTotal EXATO retornado pela API (inteiro em memória)
       // Nunca use reduce() sobre os custoTotal dos meses — acumula erro de ponto flutuante
-      setTotalGeradoExato(typeof data.valorTotal === "number" ? data.valorTotal : 0);
-      toast.success(`Cronograma gerado por IA: ${data.totalMeses} ${data.totalMeses === 1 ? "mês" : "meses"}, ${(data.atividades || []).filter((a: any) => !a.isGrupo).length} atividades.`);
+      setTotalGeradoExato(vTot);
+      // Persiste cronograma no localStorage para sobreviver a troca de aba / refresh
+      try {
+        localStorage.setItem(scheduleStorageKey, JSON.stringify({
+          atividadesGeradas: atv, mesesGerados: mes, gerado: true,
+          totalGeradoExato: vTot, ratioMat: rMat, ratioMdo: rMdo,
+        }));
+      } catch {}
+      toast.success(`Cronograma gerado por IA: ${data.totalMeses} ${data.totalMeses === 1 ? "mês" : "meses"}, ${atv.filter((a: any) => !a.isGrupo).length} atividades.`);
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -11772,15 +11801,25 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                     </thead>
                     <tbody>
                       {atividadesGeradas.map((a, i) => {
+                        if (isEapHidden(a)) return null;
                         const mesNum = eapToMes.get(a.eapCodigo);
                         const custos = eapToCusto.get(a.eapCodigo);
                         const startD = mesNum ? getMesStart(mesNum) : null;
                         const endD   = startD && a.duracaoDias > 0 ? (() => { const d = new Date(startD); d.setDate(d.getDate() + a.duracaoDias - 1); return d; })() : null;
 
                         if (a.isGrupo) {
+                          const collapsed = collapsedGroups.has(a.eapCodigo);
                           return (
-                            <tr key={i} className="bg-slate-50 border-b border-slate-100">
-                              <td className="px-3 py-1.5 font-bold text-slate-700">{a.eapCodigo}</td>
+                            <tr key={i}
+                              className="bg-slate-100 border-b border-slate-200 cursor-pointer hover:bg-slate-200/70 select-none transition-colors"
+                              onClick={() => toggleEapGroup(a.eapCodigo)}
+                              title={collapsed ? "Expandir grupo" : "Recolher grupo"}>
+                              <td className="px-3 py-1.5 font-bold text-slate-600 whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="text-slate-400 text-[10px]">{collapsed ? "▶" : "▼"}</span>
+                                  {a.eapCodigo}
+                                </span>
+                              </td>
                               <td className="px-3 py-1.5 font-bold text-slate-800 uppercase text-[10px] tracking-wide" colSpan={ratioMat > 0 && ratioMdo > 0 ? 9 : ratioMat > 0 || ratioMdo > 0 ? 8 : 7}>
                                 {a.nome}
                               </td>

@@ -2212,15 +2212,46 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
       function extractFirstJson(text: string): string | null {
         const start = text.indexOf("{");
         if (start === -1) return null;
-        let depth = 0;
+        let depth = 0; let inStr = false; let esc = false;
         for (let i = start; i < text.length; i++) {
+          if (esc) { esc = false; continue; }
+          if (text[i] === '\\' && inStr) { esc = true; continue; }
+          if (text[i] === '"') { inStr = !inStr; continue; }
+          if (inStr) continue;
           if (text[i] === "{") depth++;
-          else if (text[i] === "}") {
-            depth--;
-            if (depth === 0) return text.slice(start, i + 1);
-          }
+          else if (text[i] === "}") { depth--; if (depth === 0) return text.slice(start, i + 1); }
         }
         return null; // JSON não fechado (resposta truncada)
+      }
+
+      // Quando a IA trunca a resposta, tenta salvar as atividades já geradas antes do corte.
+      // Extrai todos os objetos de atividade COMPLETOS da resposta parcial.
+      function repairTruncatedJson(text: string): string | null {
+        const arrIdx = text.indexOf('"atividades"');
+        if (arrIdx === -1) return null;
+        const arrStart = text.indexOf('[', arrIdx);
+        if (arrStart === -1) return null;
+        const activities: string[] = [];
+        let i = arrStart + 1;
+        while (i < text.length) {
+          while (i < text.length && /[\s,]/.test(text[i])) i++;
+          if (i >= text.length || text[i] !== '{') break;
+          let depth = 0; let inS = false; let es = false; let objEnd = -1;
+          for (let j = i; j < text.length; j++) {
+            if (es) { es = false; continue; }
+            if (text[j] === '\\' && inS) { es = true; continue; }
+            if (text[j] === '"') { inS = !inS; continue; }
+            if (inS) continue;
+            if (text[j] === '{') depth++;
+            else if (text[j] === '}') { depth--; if (depth === 0) { objEnd = j; break; } }
+          }
+          if (objEnd === -1) break; // objeto incompleto = corte aqui
+          activities.push(text.slice(i, objEnd + 1));
+          i = objEnd + 1;
+        }
+        if (activities.length === 0) return null;
+        console.log(`[repairJson] Resposta truncada — salvando ${activities.length} atividades completas`);
+        return `{"atividades":[${activities.join(',')}]}`;
       }
 
       let rawText = "";
@@ -2237,14 +2268,18 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
       }
 
       try {
-        const jsonStr = extractFirstJson(rawText);
+        // Tenta JSON completo primeiro; se truncado, repara extraindo atividades completas
+        let jsonStr = extractFirstJson(rawText) ?? repairTruncatedJson(rawText);
         if (!jsonStr) {
-          console.error("[gerarCronograma] Resposta sem JSON:", rawText.slice(0, 300));
-          throw new Error("A IA não retornou JSON válido.");
+          console.error("[gerarCronograma] Resposta sem JSON recuperável:", rawText.slice(0, 400));
+          throw new Error("A IA não retornou JSON válido. Tente novamente ou reduza o escopo do orçamento.");
         }
         const parsed = JSON.parse(jsonStr);
         if (Array.isArray(parsed.atividades) && parsed.atividades.length > 0) {
           atividadesGeradas = parsed.atividades;
+          if (atividadesGeradas.length > 0 && !extractFirstJson(rawText)) {
+            console.warn(`[gerarCronograma] Resposta truncada — ${atividadesGeradas.length} atividades recuperadas pelo repair`);
+          }
         } else {
           console.error("[gerarCronograma] JSON sem campo 'atividades':", jsonStr.slice(0, 300));
         }
