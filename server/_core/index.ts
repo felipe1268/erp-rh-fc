@@ -109,6 +109,8 @@ async function startServer() {
         console.log("[ColFix] planejamento_atividades.is_marco OK");
         await db.execute(sql`ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT`);
         console.log("[ColFix] module_config.disabled_pages OK");
+        await db.execute(sql`ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS consolidado BOOLEAN DEFAULT FALSE`);
+        console.log("[ColFix] planejamento_revisoes.consolidado OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     // Rev.547: migração aviso prévio — adiciona dataBaixa e move concluidos auto-marcados → aguardando_pagamento

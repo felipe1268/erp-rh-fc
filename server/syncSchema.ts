@@ -26,7 +26,7 @@ function drizzleTypeToSql(col: any): string | null {
   if (ct === "PgInteger" || ct === "PgInt")  return "INTEGER";
   if (ct === "PgSmallInt")                   return "SMALLINT";
   if (ct === "PgBigInt")                     return "BIGINT";
-  if (ct === "PgBoolean")                    return "BOOLEAN";
+  if (ct === "PgBoolean" || ct.toLowerCase().includes("bool"))  return "BOOLEAN";
   if (ct === "PgText")                       return "TEXT";
   if (ct === "PgReal")                       return "REAL";
   if (ct === "PgDoublePrecision")            return "DOUBLE PRECISION";

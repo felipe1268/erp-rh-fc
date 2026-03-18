@@ -3337,6 +3337,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 570,
+    titulo: "Bugfix: Curva S em branco — coluna consolidado ausente no banco Neon",
+    descricao: "Corrigido bug crítico que impedia a exibição da Curva S em todos os projetos. A coluna 'consolidado' (BOOLEAN) estava ausente da tabela planejamento_revisoes no banco Neon porque o syncSchema não detectava colunas boolean (columnType 'PgBoolean' não coincidia com o runtime da versão do Drizzle instalada). Sem essa coluna, a query getProjetoById falhava silenciosamente, tornando revisaoAtiva = null e desabilitando a query getCurvaS no frontend — resultando no estado vazio 'Sem dados suficientes'. Correções: (1) ColFix adicionado no startup para garantir a coluna via ALTER TABLE ADD COLUMN IF NOT EXISTS; (2) SQL de fallback em getProjetoById corrigido para usar 'false as consolidado' em vez de referenciar a coluna diretamente, tornando-o robusto mesmo sem a coluna; (3) syncSchema atualizado para detectar tipos boolean com verificação mais ampla (includes 'bool').",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 556,
     titulo: "REFIS e Avanço Semanal — Alinhamento de cálculos e correção da Curva S",
     descricao: "Corrigidas divergências entre Avanço Semanal e REFIS: (1) previsto do Avanço Semanal agora usa T12:00:00 no parse de datas, eliminando bug de timezone e alinhando com o cálculo do REFIS; (2) Curva S realizada recalculada corretamente — era calculada com média de percentualSemanal (errado), agora usa o acumulado ponderado por atividade com pesoFinanceiro, idêntico ao algoritmo do avancoRealAtual do REFIS; (3) Cards KPI do REFIS (Avanço Semanal Previsto/Realizado, SPI, Desvio Físico) redesenhados com layout melhorado, barras de progresso e subtítulos informativos.",
