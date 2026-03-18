@@ -3337,6 +3337,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 572,
+    titulo: "Gantt — Barras verdes para atividades 100% concluídas",
+    descricao: "Atividades com 100% de avanço acumulado agora são exibidas em verde no Gantt: (1) a barra inteira muda para verde-escuro (#059669) em vez do azul-marinho padrão; (2) o fundo da linha na coluna de nome exibe tint verde-claro (emerald-50); (3) o badge EAP e o nome da atividade ficam em verde-escuro (emerald); (4) o grid direito do Gantt também recebe fundo verde-translúcido. A legenda 'Concluída' já existia no toolbar. Grupos nunca recebem o tratamento verde (apenas atividades folha e marcos). Lógica via flag isDone = !isGrupo && avanc >= 100 no componente GanttCronograma.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 571,
     titulo: "Planejamento — Toggles de sub-páginas (abas do projeto) completos",
     descricao: "Corrigido: o módulo Planejamento exibia apenas 'Projetos' na lista de funcionalidades da tela de Módulos, deixando de fora todas as abas de projeto (Visão Geral, Cronograma, Gantt, Linha de Balanços, Crono. Financeiro, Curva S, Avanço Semanal, Caminho Crítico, Cronograma de Compras, Prev. Medição, Prog. Semanal, Diagrama de Rede, Revisões, REFIS e IA Gestora). Adicionadas 15 entradas em MODULE_PAGES para a seção 'Abas do Projeto' usando paths genéricos /planejamento?tab=X. Atualizado isPageEnabled no ModuleConfigContext para fazer pattern-match nas rotas dinâmicas /planejamento/{id}?tab=X, verificando também a forma genérica /planejamento?tab=X armazenada no banco — assim o toggle de uma aba se aplica a todos os projetos, não apenas ao projeto de ID específico.",
