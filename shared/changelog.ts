@@ -3220,6 +3220,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 561,
+    titulo: "Grupos de Acesso — Busca de usuários em tempo real + regra 1 grupo por usuário",
+    descricao: "Aba Membros reformulada: (1) Campo de busca unificado no topo da aba filtra simultaneamente Membros Atuais e lista de disponíveis ao digitar nome ou login — busca limpa ao trocar de grupo; (2) Regra de 1 grupo por usuário aplicada no backend — ao adicionar um usuário já alocado em outro grupo, ele é movido automaticamente (removido do grupo anterior e inserido no novo); (3) Usuários já em outro grupo aparecem com badge laranja 'em: [Nome do Grupo]' e botão 'Mover' (âmbar) em vez de 'Adicionar' (verde), deixando claro o impacto da ação antes de confirmá-la.",
+    tipo: "melhoria",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 560,
     titulo: "Curva S — Correção da Baseline e do Realizado",
     descricao: "Corrigidos 4 bugs na Curva S: (1) Baseline invisível — quando não havia revisão marcada como baseline, o sistema usava a revisão ativa como baseline, gerando duas linhas idênticas sobrepostas (azul escondida sob a vermelha). Agora: só exibe baseline quando é uma revisão diferente da ativa; fallback automático para a primeira revisão aprovada (Rev 00) quando nenhuma está marcada como isBaseline; (2) Curva Realizada com peso errado — usava `n(pesoFinanceiro) || 1` (força peso mínimo=1 para atividades com peso=0), mesmo bug corrigido no REFIS na Rev.558. Agora usa `usarIgualCurva ? 1 : n(pesoFinanceiro)` consistente com REFIS e Avanço Semanal; (3) avancoAtual no cliente (subtítulo 'Realizado atual') também tinha o mesmo `|| 1` que foi corrigido; (4) salvarAvanco agora inclui revisaoId no WHERE de verificação de registro existente, evitando que avanços de revisões diferentes se sobreponham.",

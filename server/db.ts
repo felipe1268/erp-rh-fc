@@ -2667,11 +2667,9 @@ export async function getUserGroupMemberships(userId: number) {
 export async function addUserToGroup(groupId: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
-  // Verificar se já existe
-  const existing = await db.select().from(userGroupMembers).where(
-    and(eq(userGroupMembers.groupId, groupId), eq(userGroupMembers.userId, userId))
-  );
-  if (existing.length > 0) return;
+  // Regra: cada usuário só pode pertencer a 1 grupo.
+  // Remove de qualquer grupo atual antes de inserir no novo.
+  await db.delete(userGroupMembers).where(eq(userGroupMembers.userId, userId));
   await db.insert(userGroupMembers).values({ groupId, userId });
 }
 

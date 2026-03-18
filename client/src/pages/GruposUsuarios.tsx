@@ -319,6 +319,18 @@ export default function GruposUsuarios() {
     return map;
   }, [allMembersQuery.data]);
 
+  // Map userId → { groupId, groupName } para regra de 1 grupo por usuário
+  const userToGroupMap = useMemo(() => {
+    const map: Record<number, { groupId: number; groupName: string }> = {};
+    for (const row of (allMembersQuery.data ?? [])) {
+      const gid = (row as any).groupId;
+      const uid = (row as any).userId;
+      const gName = groups.find((g: any) => g.id === gid)?.nome ?? "Grupo desconhecido";
+      map[uid] = { groupId: gid, groupName: gName };
+    }
+    return map;
+  }, [allMembersQuery.data, groups]);
+
   const filteredGroups = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     if (!term) return groups;
@@ -351,6 +363,7 @@ export default function GruposUsuarios() {
     setEditSomenteVis(g.somenteVisualizacao);
     setEditOcultarDados(g.ocultarDadosSensiveis);
     setShowNewForm(false);
+    setMemberSearch("");
   };
 
   // Permission helpers
@@ -894,9 +907,41 @@ export default function GruposUsuarios() {
                 )}
 
                 {/* ── Tab: Membros ─────────────────────────────────────── */}
-                {activeTab === "membros" && (
-                  <div className="p-6 max-w-2xl space-y-5">
-                    {/* Current members */}
+                {activeTab === "membros" && (() => {
+                  const currentMembers = allUsers.filter((u: any) => memberIds.has(u.id));
+                  const availableUsers = allUsers.filter((u: any) => !memberIds.has(u.id));
+                  const term = memberSearch.toLowerCase().trim();
+                  const filteredCurrent = term
+                    ? currentMembers.filter((u: any) =>
+                        (u.name || "").toLowerCase().includes(term) ||
+                        (u.username || "").toLowerCase().includes(term))
+                    : currentMembers;
+                  const filteredAvailable = term
+                    ? availableUsers.filter((u: any) =>
+                        (u.name || "").toLowerCase().includes(term) ||
+                        (u.username || "").toLowerCase().includes(term))
+                    : availableUsers;
+                  return (
+                  <div className="p-6 max-w-2xl space-y-4">
+                    {/* ── Busca unificada ── */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Digite o nome ou login do usuário para filtrar..."
+                        value={memberSearch}
+                        onChange={e => setMemberSearch(e.target.value)}
+                        className="pl-9 text-sm"
+                        autoFocus
+                      />
+                      {memberSearch && (
+                        <button
+                          onClick={() => setMemberSearch("")}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >✕</button>
+                      )}
+                    </div>
+
+                    {/* ── Membros Atuais ── */}
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
                         <div className="flex items-center gap-2">
@@ -909,9 +954,11 @@ export default function GruposUsuarios() {
                         <div className="py-8 text-center text-sm text-slate-400">Carregando membros...</div>
                       ) : memberIds.size === 0 ? (
                         <div className="py-8 text-center text-sm text-slate-400">Nenhum membro neste grupo ainda</div>
+                      ) : filteredCurrent.length === 0 ? (
+                        <div className="py-6 text-center text-sm text-slate-400">Nenhum membro encontrado para "{memberSearch}"</div>
                       ) : (
                         <div className="divide-y">
-                          {allUsers.filter((u: any) => memberIds.has(u.id)).map((u: any) => (
+                          {filteredCurrent.map((u: any) => (
                             <div key={u.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors">
                               <div className="flex items-center gap-2.5">
                                 <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -936,50 +983,69 @@ export default function GruposUsuarios() {
                       )}
                     </div>
 
-                    {/* Add members */}
+                    {/* ── Adicionar / Mover Membros ── */}
                     {isAdmin && (
                       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                         <div className="flex items-center gap-2 px-4 py-3 border-b bg-slate-50">
                           <UserPlus className="h-4 w-4 text-slate-500" />
-                          <span className="text-sm font-semibold text-slate-700">Adicionar Membros</span>
+                          <span className="text-sm font-semibold text-slate-700">
+                            {filteredAvailable.length > 0 ? "Adicionar / Mover para este grupo" : "Usuários disponíveis"}
+                          </span>
+                          {filteredAvailable.length > 0 && (
+                            <span className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{filteredAvailable.length}</span>
+                          )}
                         </div>
-                        <div className="p-4 space-y-3">
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <Input placeholder="Buscar usuário por nome ou login..." value={memberSearch} onChange={e => setMemberSearch(e.target.value)} className="pl-9 text-sm" />
-                          </div>
-                          <div className="max-h-64 overflow-y-auto divide-y rounded-lg border">
-                            {filteredUsersForMembers.filter((u: any) => !memberIds.has(u.id)).length === 0 ? (
-                              <div className="py-6 text-center text-sm text-slate-400">
-                                {memberSearch ? "Nenhum usuário encontrado" : "Todos os usuários já são membros"}
-                              </div>
-                            ) : (
-                              filteredUsersForMembers.filter((u: any) => !memberIds.has(u.id)).map((u: any) => (
-                                <div key={u.id} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 transition-colors">
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-7 w-7 rounded-full bg-slate-300 flex items-center justify-center text-white text-xs font-bold">
+                        <div className="max-h-72 overflow-y-auto divide-y">
+                          {filteredAvailable.length === 0 ? (
+                            <div className="py-6 text-center text-sm text-slate-400">
+                              {memberSearch
+                                ? "Nenhum usuário encontrado para esta busca"
+                                : "Todos os usuários já são membros deste grupo"}
+                            </div>
+                          ) : (
+                            filteredAvailable.map((u: any) => {
+                              const jaNoGrupo = userToGroupMap[u.id];
+                              const isMove = !!jaNoGrupo;
+                              return (
+                                <div key={u.id} className={`flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 transition-colors ${isMove ? "bg-amber-50/40" : ""}`}>
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${isMove ? "bg-amber-500" : "bg-slate-400"}`}>
                                       {(u.name || "?").charAt(0).toUpperCase()}
                                     </div>
-                                    <div>
-                                      <div className="text-sm font-medium text-slate-700">{u.name}</div>
-                                      {u.username && <div className="text-xs text-slate-400">@{u.username}</div>}
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium text-slate-800 truncate">{u.name}</div>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {u.username && <span className="text-xs text-slate-400">@{u.username}</span>}
+                                        {isMove && (
+                                          <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                                            em: {jaNoGrupo.groupName}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                   <button
                                     onClick={() => addMemberMut.mutate({ groupId: selectedGroup.id, userId: u.id })}
-                                    className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 hover:bg-green-50 px-2.5 py-1 rounded-lg border border-green-200 transition-colors"
+                                    disabled={addMemberMut.isPending}
+                                    className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border transition-colors shrink-0 ml-2 disabled:opacity-50
+                                      ${isMove
+                                        ? "text-amber-700 hover:text-amber-900 hover:bg-amber-100 border-amber-300"
+                                        : "text-green-600 hover:text-green-800 hover:bg-green-50 border-green-200"}`}
                                   >
-                                    <UserPlus className="h-3.5 w-3.5" /> Adicionar
+                                    {isMove
+                                      ? <><UserPlus className="h-3.5 w-3.5" /> Mover</>
+                                      : <><UserPlus className="h-3.5 w-3.5" /> Adicionar</>}
                                   </button>
                                 </div>
-                              ))
-                            )}
-                          </div>
+                              );
+                            })
+                          )}
                         </div>
                       </div>
                     )}
                   </div>
-                )}
+                  );
+                })()}
 
               </div>
             </div>
