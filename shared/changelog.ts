@@ -3337,6 +3337,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 571,
+    titulo: "Planejamento — Toggles de sub-páginas (abas do projeto) completos",
+    descricao: "Corrigido: o módulo Planejamento exibia apenas 'Projetos' na lista de funcionalidades da tela de Módulos, deixando de fora todas as abas de projeto (Visão Geral, Cronograma, Gantt, Linha de Balanços, Crono. Financeiro, Curva S, Avanço Semanal, Caminho Crítico, Cronograma de Compras, Prev. Medição, Prog. Semanal, Diagrama de Rede, Revisões, REFIS e IA Gestora). Adicionadas 15 entradas em MODULE_PAGES para a seção 'Abas do Projeto' usando paths genéricos /planejamento?tab=X. Atualizado isPageEnabled no ModuleConfigContext para fazer pattern-match nas rotas dinâmicas /planejamento/{id}?tab=X, verificando também a forma genérica /planejamento?tab=X armazenada no banco — assim o toggle de uma aba se aplica a todos os projetos, não apenas ao projeto de ID específico.",
+    tipo: "bugfix",
+    modulos: "Planejamento, Configurações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 570,
     titulo: "Bugfix: Curva S em branco — coluna consolidado ausente no banco Neon",
     descricao: "Corrigido bug crítico que impedia a exibição da Curva S em todos os projetos. A coluna 'consolidado' (BOOLEAN) estava ausente da tabela planejamento_revisoes no banco Neon porque o syncSchema não detectava colunas boolean (columnType 'PgBoolean' não coincidia com o runtime da versão do Drizzle instalada). Sem essa coluna, a query getProjetoById falhava silenciosamente, tornando revisaoAtiva = null e desabilitando a query getCurvaS no frontend — resultando no estado vazio 'Sem dados suficientes'. Correções: (1) ColFix adicionado no startup para garantir a coluna via ALTER TABLE ADD COLUMN IF NOT EXISTS; (2) SQL de fallback em getProjetoById corrigido para usar 'false as consolidado' em vez de referenciar a coluna diretamente, tornando-o robusto mesmo sem a coluna; (3) syncSchema atualizado para detectar tipos boolean com verificação mais ampla (includes 'bool').",

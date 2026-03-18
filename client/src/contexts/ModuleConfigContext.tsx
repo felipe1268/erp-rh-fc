@@ -54,7 +54,14 @@ export function ModuleConfigProvider({ children }: { children: ReactNode }) {
 
   const isPageEnabled = (path: string): boolean => {
     if (!companyId) return true;
-    return !disabledPagesSet.has(path);
+    if (disabledPagesSet.has(path)) return false;
+    // Dynamic planejamento project tabs: /planejamento/{id}?tab=X
+    // Store as /planejamento?tab=X (without project ID) so the toggle applies to ALL projects
+    const planTabMatch = path.match(/^\/planejamento\/\d+(\?tab=.+)$/);
+    if (planTabMatch) {
+      if (disabledPagesSet.has(`/planejamento${planTabMatch[1]}`)) return false;
+    }
+    return true;
   };
 
   return (
