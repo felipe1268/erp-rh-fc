@@ -2797,6 +2797,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 511,
+    titulo: "Mapa de Funcionários — Bug: 0 funcionários no nível estado corrigido",
+    descricao: "Corrigidos dois bugs no mapa interativo: (1) Backend: getFuncionariosParaMapa usava 'employees.nome' (campo inexistente) em vez de 'employees.nomeCompleto', e filtrava apenas funcionários com 'cidade IS NOT NULL' — excluindo todos que têm estado mas sem cidade cadastrada. Agora seleciona employees.nomeCompleto e aceita qualquer funcionário com pelo menos um campo de endereço (estado, cidade, logradouro ou cep) preenchido. (2) Frontend: criado grupo especial 'Endereço sem cidade cadastrada' (chave __sem_cidade__) no nível 2 — exibido como botão âmbar abaixo das cidades normais, com contagem. Ao clicar, leva ao nível 3 geocodificando os funcionários pelo logradouro+estado ou CEP+estado. Breadcrumb e título do nível 3 exibem 'Endereço sem cidade' em vez do código interno. Corrigido também o bug de 'null' na string de geocodificação CEP (usava template string com valor null).",
+    tipo: "bugfix",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 510,
     titulo: "Cronograma — Indicador de soma do Peso% e coluna Peso% corrigida",
     descricao: "Adicionado indicador visual acima da tabela do cronograma mostrando a soma acumulada de todos os pesos financeiros das atividades folha. O badge muda de cor: verde quando a soma está próxima de 100% (±0,1%), âmbar quando está abaixo e vermelho quando ultrapassa 100%. Em modo de edição, o indicador reflete os valores digitados em tempo real. Corrigida a exibição da coluna Peso%: header recebeu `min-w-[64px]` e `whitespace-nowrap` para evitar que a coluna seja comprimida pelo layout automático da tabela; célula recebeu `whitespace-nowrap` para garantir que o valor completo (ex: '5.10%') seja sempre exibido sem corte.",

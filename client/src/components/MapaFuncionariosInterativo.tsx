@@ -330,13 +330,15 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     [employees, selectedState]
   );
 
+  const SEM_CIDADE_KEY = "__sem_cidade__";
+
   const citiesInState = useMemo<Map<string, Employee[]>>(() => {
     const m = new Map<string, Employee[]>();
     for (const e of employeesInState) {
       const c = (e.cidade || "").trim();
-      if (!c) continue;
-      if (!m.has(c)) m.set(c, []);
-      m.get(c)!.push(e);
+      const key = c || SEM_CIDADE_KEY;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(e);
     }
     return m;
   }, [employeesInState]);
@@ -396,7 +398,8 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
         addr = [e.logradouro, e.numero, e.bairro, e.cidade, e.estado, "Brasil"]
           .filter(Boolean).join(", ");
       } else if (e.cep) {
-        addr = `CEP ${e.cep}, ${e.cidade}, ${e.estado}, Brasil`;
+        addr = ["CEP " + e.cep, e.cidade, e.estado, "Brasil"]
+          .filter(Boolean).join(", ");
       }
       const coords = addr ? await geocodeAddress(addr) : null;
       if (coords) results.push({ ...e, lat: coords[0], lng: coords[1] });
@@ -420,12 +423,19 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     }
   };
 
+  const SEM_CIDADE_LABEL = "Endereço sem cidade";
+
   const stateView = selectedState ? STATE_VIEW[selectedState] : null;
   const cityView = useMemo(() => {
-    if (!selectedCity || !cityCoords.has(selectedCity)) return null;
+    if (!selectedCity) return null;
+    if (selectedCity === SEM_CIDADE_KEY) {
+      // Use state center for employees without city
+      return stateView ? { center: stateView.center, zoom: 9 } : null;
+    }
+    if (!cityCoords.has(selectedCity)) return null;
     const [lat, lng] = cityCoords.get(selectedCity)!;
     return { center: [lat, lng] as [number, number], zoom: 13 };
-  }, [selectedCity, cityCoords]);
+  }, [selectedCity, cityCoords, stateView]);
 
   return (
     <Card className="border-border">
@@ -444,7 +454,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
             )}
             {level === 3 && selectedCity && (
               <>
-                {selectedCity}
+                {selectedCity === SEM_CIDADE_KEY ? SEM_CIDADE_LABEL : selectedCity}
                 <Badge variant="secondary" className="text-xs">
                   {employeesInCity.length} funcionário{employeesInCity.length !== 1 ? "s" : ""}
                 </Badge>
@@ -481,7 +491,9 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
           {level === 3 && selectedCity && (
             <>
               <span>›</span>
-              <span className="text-blue-600 font-medium">{selectedCity}</span>
+              <span className="text-blue-600 font-medium">
+                {selectedCity === SEM_CIDADE_KEY ? SEM_CIDADE_LABEL : selectedCity}
+              </span>
             </>
           )}
         </div>
@@ -521,6 +533,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
                 {[...citiesInState.entries()].map(([city, emps]) => {
+                  if (city === SEM_CIDADE_KEY) return null;
                   const coords = cityCoords.get(city);
                   if (!coords) return null;
                   return (
@@ -537,18 +550,54 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
               </MapContainer>
             </div>
             {/* City legend */}
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-              {[...citiesInState.entries()].sort((a, b) => b[1].length - a[1].length).map(([city, emps]) => (
-                <button
-                  key={city}
-                  onClick={() => handleCityClick(city)}
-                  className="flex items-center justify-between gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
-                >
-                  <span className="truncate font-medium text-slate-700">{city}</span>
-                  <Badge variant="secondary" className="text-[10px] shrink-0">{emps.length}</Badge>
-                </button>
-              ))}
-            </div>
+            {(() => {
+              const semCidade = citiesInState.get(SEM_CIDADE_KEY);
+              const regularCities = [...citiesInState.entries()]
+                .filter(([c]) => c !== SEM_CIDADE_KEY)
+                .sort((a, b) => b[1].length - a[1].length);
+              return (
+                <>
+                  {regularCities.length > 0 && (
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                      {regularCities.map(([city, emps]) => (
+                        <button
+                          key={city}
+                          onClick={() => handleCityClick(city)}
+                          className="flex items-center justify-between gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
+                        >
+                          <span className="truncate font-medium text-slate-700">{city}</span>
+                          <Badge variant="secondary" className="text-[10px] shrink-0">{emps.length}</Badge>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {semCidade && semCidade.length > 0 && (
+                    <div className="mt-2">
+                      <button
+                        onClick={() => handleCityClick(SEM_CIDADE_KEY)}
+                        className="w-full flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 hover:border-amber-300 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <MapPin className="h-3 w-3 text-amber-500 shrink-0" />
+                          <span className="font-medium text-amber-800">
+                            Endereço sem cidade cadastrada
+                          </span>
+                          <span className="text-[10px] text-amber-600">
+                            — geocodificar por logradouro/CEP
+                          </span>
+                        </div>
+                        <Badge className="text-[10px] shrink-0 bg-amber-200 text-amber-800 hover:bg-amber-200">{semCidade.length}</Badge>
+                      </button>
+                    </div>
+                  )}
+                  {regularCities.length === 0 && (!semCidade || semCidade.length === 0) && !loadingEmps && !loadingCities && (
+                    <div className="mt-3 text-xs text-slate-400 text-center py-4">
+                      Nenhum funcionário com endereço cadastrado neste estado.
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 

@@ -2597,7 +2597,7 @@ async function getFuncionariosParaMapa(companyId: number, companyIds?: number[])
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   const results = await db.select({
     id: employees.id,
-    nome: employees.nome,
+    nome: employees.nomeCompleto,
     funcao: employees.funcao,
     status: employees.status,
     logradouro: employees.logradouro,
@@ -2610,7 +2610,13 @@ async function getFuncionariosParaMapa(companyId: number, companyIds?: number[])
   .from(employees)
   .where(and(
     inArray(employees.companyId, ids),
-    sql`(${employees.cidade} IS NOT NULL AND TRIM(${employees.cidade}) != '')`
+    sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+    sql`(
+      (${employees.estado} IS NOT NULL AND TRIM(${employees.estado}) != '')
+      OR (${employees.cidade} IS NOT NULL AND TRIM(${employees.cidade}) != '')
+      OR (${employees.logradouro} IS NOT NULL AND TRIM(${employees.logradouro}) != '')
+      OR (${employees.cep} IS NOT NULL AND TRIM(${employees.cep}) != '')
+    )`
   ));
   return results;
 }
