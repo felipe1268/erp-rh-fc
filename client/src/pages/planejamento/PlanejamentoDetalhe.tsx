@@ -7398,12 +7398,19 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     return ((r - ini) / (fim - ini)) * 100;
   }
 
+  // Helper: denominator e peso por atividade — idêntico ao AvancoSemanal
+  function calcPesoTotal(folhas: any[]): { pesoTotal: number; semPeso: boolean } {
+    const soma = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso = soma === 0;
+    return { pesoTotal: semPeso ? (folhas.length || 1) : soma, semPeso };
+  }
+
   // Calcula avanço previsto ponderado para a semana a partir do cronograma
   const avancoPrevisto = useMemo(() => {
-    const folhas   = atividades.filter((a: any) => !a.isGrupo);
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
+    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = n(a.pesoFinanceiro) || 1;
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
       return s + prevIndRef(a, semana) * (peso / pesoTotal);
     }, 0));
   }, [atividades, semana]);
@@ -7414,10 +7421,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntes) return 0;
-    const folhas   = atividades.filter((a: any) => !a.isGrupo);
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
+    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = n(a.pesoFinanceiro) || 1;
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
       return s + prevIndRef(a, semAntes) * (peso / pesoTotal);
     }, 0));
   }, [atividades, semAntes]);
@@ -7433,9 +7440,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       }
     });
     const folhas = atividades.filter((a: any) => !a.isGrupo);
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length;
+    const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = n(a.pesoFinanceiro) || 1;
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
       return s + (m[a.id] ?? 0) * (peso / pesoTotal);
     }, 0));
   }, [atividades, avancos, semana]);
@@ -7450,9 +7457,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       }
     });
     const folhas = atividades.filter((a: any) => !a.isGrupo);
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length;
+    const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = n(a.pesoFinanceiro) || 1;
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
       return s + (m[a.id] ?? 0) * (peso / pesoTotal);
     }, 0));
   }, [atividades, avancos, semAntes]);

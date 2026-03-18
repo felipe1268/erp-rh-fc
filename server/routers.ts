@@ -2064,6 +2064,33 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'DELETE', module: 'usuarios', entityType: 'user_group', entityId: input.id, details: `Grupo excluído` });
       return { success: true };
     }),
+    deleteMany: protectedProcedure.input(z.object({ ids: z.array(z.number()) })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode excluir grupos' });
+      for (const id of input.ids) {
+        await deleteUserGroup(id);
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'DELETE', module: 'usuarios', entityType: 'user_group', entityId: 0, details: `${input.ids.length} grupos excluídos em lote: [${input.ids.join(', ')}]` });
+      return { deleted: input.ids.length };
+    }),
+    deleteDuplicates: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode excluir grupos' });
+      const groups = await listUserGroups();
+      const seen = new Map<string, number>();
+      const toDelete: number[] = [];
+      for (const g of groups) {
+        const key = (g.nome || '').trim().toLowerCase();
+        if (seen.has(key)) {
+          toDelete.push(g.id);
+        } else {
+          seen.set(key, g.id);
+        }
+      }
+      for (const id of toDelete) {
+        await deleteUserGroup(id);
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'DELETE', module: 'usuarios', entityType: 'user_group', entityId: 0, details: `${toDelete.length} grupos duplicados removidos` });
+      return { deleted: toDelete.length };
+    }),
     // Permissões do grupo
     getPermissions: protectedProcedure.input(z.object({ groupId: z.number() })).query(async ({ input }) => {
       const perms = await getGroupPermissions(input.groupId);
