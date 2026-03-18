@@ -1325,6 +1325,32 @@ export const avisoPrevioFeriasRouter = router({
         return { success: true };
       }),
 
+    /** Reverter TODOS os avisos Concluídos para Aguardando Baixa de uma empresa */
+    revertAllConcluidos: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const result = await db.update(terminationNotices).set({
+          status: 'aguardando_pagamento',
+          dataConclusao: null,
+          updatedAt: sql`NOW()`,
+        } as any).where(and(
+          eq(terminationNotices.companyId, input.companyId),
+          eq(terminationNotices.status, 'concluido'),
+          isNull(terminationNotices.deletedAt),
+        ));
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'REVERT_ALL_CONCLUIDOS',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.companyId,
+          details: `Todos os avisos concluídos revertidos para Aguardando Baixa por ${ctx.user.name}`,
+        });
+        return { success: true };
+      }),
+
     /** Gerar dados para PDF do Aviso Prévio */
     gerarPdf: protectedProcedure
       .input(z.object({ id: z.number() }))

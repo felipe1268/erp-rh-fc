@@ -121,6 +121,15 @@ export default function AvisoPrevio() {
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Status revertido para Em Andamento!"); },
     onError: (err) => { toast.error(err.message || "Erro ao reverter status"); },
   });
+  const revertAllConcluidos = trpc.avisoPrevio.avisoPrevio.revertAllConcluidos.useMutation({
+    onSuccess: () => {
+      refetch();
+      utils.obras.efetivoPorObra.invalidate();
+      toast.success("Todos os avisos foram reativados — aguardando baixa manual.");
+      setStatusFilter("aguardando_pagamento");
+    },
+    onError: (err) => { toast.error(err.message || "Erro ao reativar avisos"); },
+  });
   const darBaixa = trpc.avisoPrevio.avisoPrevio.darBaixa.useMutation({
     onSuccess: (res: any) => {
       refetch();
@@ -432,6 +441,52 @@ export default function AvisoPrevio() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Banner: Aguardando Baixa */}
+        {statusFilter === "aguardando_pagamento" && (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <div className="mt-0.5 shrink-0">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-amber-900 text-sm">Funcionários aguardando pagamento das verbas rescisórias</p>
+              <p className="text-amber-800 text-xs mt-1 leading-relaxed">
+                Estes colaboradores já cumpriram integralmente o período de aviso prévio e <strong>não estão mais em atividade</strong>.
+                Estão aguardando o pagamento das verbas rescisórias pelo financeiro. Após a confirmação do pagamento de cada um,
+                dê baixa manualmente utilizando o botão <strong>"Dar Baixa"</strong> — o processo seguirá o fluxo de desligamento configurado.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Banner: Concluídos — oferecer reativação em massa */}
+        {statusFilter === "concluido" && stats.concluidos > 0 && (
+          <div className="flex items-start gap-3 rounded-xl border border-rose-300 bg-rose-50 p-4">
+            <div className="mt-0.5 shrink-0">
+              <AlertTriangle className="h-5 w-5 text-rose-600" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-rose-900 text-sm">
+                {stats.concluidos} aviso{stats.concluidos !== 1 ? 's' : ''} marcado{stats.concluidos !== 1 ? 's' : ''} como Concluído incorretamente
+              </p>
+              <p className="text-rose-800 text-xs mt-1 leading-relaxed">
+                Estes colaboradores <strong>não tiveram a baixa registrada</strong> — foram marcados como concluídos antes da confirmação do pagamento.
+                Reative-os para <strong>"Aguardando Baixa"</strong> e então dê baixa manualmente em cada um após o pagamento ser confirmado.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (confirm(`Reativar ${stats.concluidos} aviso${stats.concluidos !== 1 ? 's' : ''} para "Aguardando Baixa"?\n\nIsso permitirá dar baixa manualmente em cada um.`)) {
+                  revertAllConcluidos.mutate({ companyId });
+                }
+              }}
+              disabled={revertAllConcluidos.isPending}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors whitespace-nowrap"
+            >
+              {revertAllConcluidos.isPending ? 'Reativando...' : `Reativar ${stats.concluidos} aviso${stats.concluidos !== 1 ? 's' : ''}`}
+            </button>
+          </div>
+        )}
 
         {/* Table */}
         <Card>

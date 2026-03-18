@@ -3175,6 +3175,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 553,
+    titulo: "Aviso Prévio — Banners de aviso e reativação em massa de Concluídos",
+    descricao: "Adicionado aviso/banner informativo na aba 'Aguardando Baixa' explicando que os colaboradores já cumpriram o aviso prévio e não estão mais em atividade, aguardando pagamento das verbas rescisórias, e que o usuário deve dar baixa manualmente em cada um. Adicionado banner de alerta vermelho na aba 'Concluídos' quando há avisos marcados incorretamente como concluídos, com botão 'Reativar N avisos' que realiza a reativação em massa para o status 'Aguardando Baixa' via nova mutation revertAllConcluidos no backend — com audit log e redirect automático ao filtro correto após a operação.",
+    tipo: "melhoria",
+    modulos: "RH/DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 552,
     titulo: "Grupos de Acesso — Correção crítica de queries e member count",
     descricao: "Corrigido bug crítico que impedia a listagem de grupos de usuários na aba Grupos de Acesso: listUserGroups e getUserGroupById foram reescritas usando pg.Pool direto (ao invés de db.execute Drizzle) para garantir retorno correto de result.rows. A query agora inclui LEFT JOIN com user_group_members retornando memberCount diretamente do banco. Corrigido o endpoint listAllMembers que usava colunas snake_case erradas (group_id/user_id) em vez de camelCase (groupId/userId). No frontend, o cálculo de memberCount na sidebar foi corrigido para usar g.memberCount do backend ao invés de filtrar allUsers localmente (u.groupIds não existe no response de listUsers).",
