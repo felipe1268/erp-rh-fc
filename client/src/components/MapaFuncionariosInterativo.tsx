@@ -77,6 +77,12 @@ function normalizeEstado(estado: string | null | undefined): string {
   return STATE_NAME_TO_CODE[upper] || upper;
 }
 
+// Normaliza cidades para Title Case: "POTIM" | "potim" → "Potim"
+function normalizeCidade(cidade: string | null | undefined): string {
+  if (!cidade) return "";
+  return cidade.trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
 const STATE_VIEW: Record<string, { center: [number, number]; zoom: number }> = {
   AC: { center: [-9.02, -70.81], zoom: 7 },
   AL: { center: [-9.57, -36.78], zoom: 8 },
@@ -545,7 +551,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
   const citiesInState = useMemo<Map<string, Employee[]>>(() => {
     const m = new Map<string, Employee[]>();
     for (const e of employeesInState) {
-      const c = (e.cidade || "").trim();
+      const c = normalizeCidade(e.cidade);
       const key = c || SEM_CIDADE_KEY;
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(e);
@@ -558,12 +564,13 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     [citiesInState, selectedCity]
   );
 
-  // ── All city groups for Mapa Geral ──
+  // ── All city groups for Mapa Geral (normalizado: title-case) ──
   const cityGroups = useMemo(() => {
     const m = new Map<string, Employee[]>();
     for (const e of employees) {
       if (!e.cidade) continue;
-      const city = e.cidade.trim();
+      const city = normalizeCidade(e.cidade);
+      if (!city) continue;
       if (!m.has(city)) m.set(city, []);
       m.get(city)!.push(e);
     }
@@ -581,8 +588,8 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     const seen = new Set<string>();
     for (const e of employees) {
       if (!e.cidade) continue;
-      const city = e.cidade.trim();
-      if (seen.has(city)) continue;
+      const city = normalizeCidade(e.cidade);
+      if (!city || seen.has(city)) continue;
       seen.add(city);
       pairs.push([city, normalizeEstado(e.estado)]);
     }
@@ -615,8 +622,8 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
   // ── Estado mode: load city coords for a single state ──
   const loadCityCoords = useCallback(async (state: string) => {
     const uniqueCities = [...new Set(
-      employees.filter(e => normalizeEstado(e.estado) === state && e.cidade).map(e => e.cidade!.trim())
-    )];
+      employees.filter(e => normalizeEstado(e.estado) === state && e.cidade).map(e => normalizeCidade(e.cidade))
+    )].filter(Boolean) as string[];
     const missingCities = uniqueCities.filter(c => !cityCordsRef.current.has(c) && !geocodingCitiesRef.current.has(c));
     if (missingCities.length === 0) return;
 
