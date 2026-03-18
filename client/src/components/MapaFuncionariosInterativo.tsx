@@ -17,6 +17,34 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
+// ── Status definitions ────────────────────────────────────────────────────────
+const ALL_STATUS_OPTIONS = [
+  { value: "Ativo",             label: "Ativo",           bg: "#dcfce7", fg: "#166534" },
+  { value: "Ferias",            label: "Férias",          bg: "#dbeafe", fg: "#1e40af" },
+  { value: "Afastado",          label: "Afastado",        bg: "#ede9fe", fg: "#7c3aed" },
+  { value: "Licenca",           label: "Licença",         bg: "#cffafe", fg: "#0c5460" },
+  { value: "Aviso",             label: "Aviso Prévio",    bg: "#fee2e2", fg: "#b91c1c" },
+  { value: "AvisoDispensado",   label: "Disp. Aviso",     bg: "#fed7aa", fg: "#9a3412" },
+  { value: "Recluso",           label: "Recluso",         bg: "#f3f4f6", fg: "#374151" },
+  { value: "Desligado",         label: "Desligado",       bg: "#fef2f2", fg: "#991b1b" },
+  { value: "Lista_Negra",       label: "Lista Negra",     bg: "#1e293b", fg: "#f8fafc" },
+] as const;
+
+const DEFAULT_STATUS_VISIVEIS = ALL_STATUS_OPTIONS
+  .map(s => s.value)
+  .filter(v => v !== "Desligado" && v !== "Lista_Negra");
+
+function statusStyle(status: string | null) {
+  const s = ALL_STATUS_OPTIONS.find(o => o.value === (status || "Ativo"));
+  return s ? { backgroundColor: s.bg, color: s.fg } : { backgroundColor: "#f1f5f9", color: "#475569" };
+}
+
+function statusLabel(status: string | null) {
+  const s = ALL_STATUS_OPTIONS.find(o => o.value === (status || ""));
+  return s ? s.label : (status || "—");
+}
+
+// ── State / city data ─────────────────────────────────────────────────────────
 const STATE_NAMES: Record<string, string> = {
   AC: "Acre", AL: "Alagoas", AM: "Amazonas", AP: "Amapá", BA: "Bahia",
   CE: "Ceará", DF: "Distrito Federal", ES: "Espírito Santo", GO: "Goiás",
@@ -58,138 +86,180 @@ const STATE_VIEW: Record<string, { center: [number, number]; zoom: number }> = {
   CE: { center: [-5.20, -39.53], zoom: 7 },
   DF: { center: [-15.78, -47.93], zoom: 10 },
   ES: { center: [-19.19, -40.34], zoom: 8 },
-  GO: { center: [-15.93, -49.69], zoom: 7 },
-  MA: { center: [-5.00, -45.50], zoom: 6 },
-  MG: { center: [-18.51, -44.55], zoom: 6 },
-  MS: { center: [-20.51, -54.62], zoom: 6 },
+  GO: { center: [-15.83, -49.84], zoom: 7 },
+  MA: { center: [-4.97, -45.30], zoom: 6 },
+  MG: { center: [-18.51, -44.56], zoom: 6 },
+  MS: { center: [-20.51, -54.54], zoom: 6 },
   MT: { center: [-12.64, -55.42], zoom: 6 },
-  PA: { center: [-3.42, -52.23], zoom: 5 },
-  PB: { center: [-7.24, -36.82], zoom: 8 },
+  PA: { center: [-3.79, -52.48], zoom: 6 },
+  PB: { center: [-7.12, -36.72], zoom: 8 },
   PE: { center: [-8.38, -37.86], zoom: 7 },
   PI: { center: [-7.72, -42.73], zoom: 7 },
-  PR: { center: [-24.89, -51.55], zoom: 7 },
-  RJ: { center: [-22.25, -43.00], zoom: 8 },
+  PR: { center: [-25.25, -52.02], zoom: 7 },
+  RJ: { center: [-22.25, -42.95], zoom: 8 },
   RN: { center: [-5.81, -36.59], zoom: 8 },
   RO: { center: [-10.83, -63.34], zoom: 6 },
-  RR: { center: [2.03, -61.33], zoom: 6 },
-  RS: { center: [-30.18, -53.42], zoom: 6 },
-  SC: { center: [-27.45, -50.95], zoom: 7 },
+  RR: { center: [2.06, -61.38], zoom: 6 },
+  RS: { center: [-30.03, -53.36], zoom: 6 },
+  SC: { center: [-27.33, -50.22], zoom: 7 },
   SE: { center: [-10.57, -37.45], zoom: 8 },
-  SP: { center: [-22.25, -48.56], zoom: 7 },
-  TO: { center: [-10.18, -48.33], zoom: 6 },
+  SP: { center: [-22.25, -48.80], zoom: 7 },
+  TO: { center: [-10.18, -48.33], zoom: 7 },
 };
 
 const CITY_COORDS: Record<string, [number, number]> = {
   "São Paulo": [-23.5505, -46.6333],
-  "Campinas": [-22.9056, -47.0608],
-  "Guarulhos": [-23.4543, -46.5333],
-  "São Bernardo do Campo": [-23.6939, -46.5650],
-  "Santo André": [-23.6639, -46.5383],
-  "Osasco": [-23.5329, -46.7917],
-  "São José dos Campos": [-23.1794, -45.8864],
-  "Sorocaba": [-23.5015, -47.4526],
-  "Ribeirão Preto": [-21.1699, -47.8107],
-  "Santos": [-23.9608, -46.3336],
-  "Mauá": [-23.6678, -46.4608],
-  "Diadema": [-23.6861, -46.6228],
-  "Jundiaí": [-23.1864, -46.8983],
-  "Piracicaba": [-22.7253, -47.6492],
-  "Bauru": [-22.3246, -49.0667],
-  "São José do Rio Preto": [-20.8167, -49.3833],
-  "Mogi das Cruzes": [-23.5228, -46.1869],
-  "Carapicuíba": [-23.5242, -46.8358],
-  "Itaquaquecetuba": [-23.4869, -46.3497],
-  "Suzano": [-23.5428, -46.3106],
-  "Sumaré": [-22.8228, -47.2669],
-  "Barueri": [-23.5044, -46.8758],
-  "Taboão da Serra": [-23.6081, -46.7575],
-  "Cajamar": [-23.3583, -46.8781],
-  "Santana de Parnaíba": [-23.4436, -46.9178],
   "Rio de Janeiro": [-22.9068, -43.1729],
-  "Belo Horizonte": [-19.9167, -43.9345],
-  "Curitiba": [-25.4297, -49.2711],
-  "Porto Alegre": [-30.0277, -51.2287],
-  "Recife": [-8.0578, -34.8829],
-  "Fortaleza": [-3.7172, -38.5434],
   "Salvador": [-12.9714, -38.5014],
+  "Fortaleza": [-3.7172, -38.5434],
+  "Belo Horizonte": [-19.9167, -43.9345],
   "Manaus": [-3.1190, -60.0217],
-  "Belém": [-1.4558, -48.5044],
-  "Goiânia": [-16.6868, -49.2648],
-  "Florianópolis": [-27.5969, -48.5495],
-  "Natal": [-5.7945, -35.2111],
+  "Curitiba": [-25.4284, -49.2733],
+  "Recife": [-8.0576, -34.8829],
+  "Goiânia": [-16.6869, -49.2648],
+  "Porto Alegre": [-30.0346, -51.2177],
+  "Belém": [-1.4558, -48.4902],
+  "Guarulhos": [-23.4543, -46.5338],
+  "Campinas": [-22.9099, -47.0626],
+  "São Luís": [-2.5391, -44.2829],
+  "São Gonçalo": [-22.8269, -43.0539],
   "Maceió": [-9.6658, -35.7350],
-  "São Luís": [-2.5297, -44.3028],
-  "João Pessoa": [-7.1195, -34.8450],
+  "Duque de Caxias": [-22.7856, -43.3117],
+  "Natal": [-5.7945, -35.2110],
   "Teresina": [-5.0892, -42.8019],
   "Campo Grande": [-20.4697, -54.6201],
+  "Nova Iguaçu": [-22.7594, -43.4514],
+  "São Bernardo do Campo": [-23.6939, -46.5650],
+  "Osasco": [-23.5322, -46.7919],
+  "Santo André": [-23.6639, -46.5383],
+  "João Pessoa": [-7.1195, -34.8450],
+  "Jaboatão dos Guararapes": [-8.1128, -35.0025],
+  "Contagem": [-19.9322, -44.0536],
+  "São José dos Campos": [-23.1794, -45.8869],
+  "Uberlândia": [-18.9186, -48.2772],
+  "Sorocaba": [-23.5015, -47.4526],
+  "Ribeirao Preto": [-21.1767, -47.8208],
+  "Ribeirão Preto": [-21.1767, -47.8208],
   "Cuiabá": [-15.5989, -56.0949],
-  "Macapá": [0.0349, -51.0694],
-  "Porto Velho": [-8.7612, -63.9004],
-  "Boa Vista": [2.8235, -60.6758],
-  "Palmas": [-10.2491, -48.3243],
-  "Rio Branco": [-9.9754, -67.8249],
   "Aracaju": [-10.9472, -37.0731],
+  "Feira de Santana": [-12.2661, -38.9661],
+  "Joinville": [-26.3044, -48.8455],
+  "Juiz de Fora": [-21.7642, -43.3503],
+  "Londrina": [-23.3045, -51.1696],
+  "Aparecida de Goiânia": [-16.8239, -49.2447],
+  "Ananindeua": [-1.3656, -48.3722],
+  "Niterói": [-22.8833, -43.1036],
+  "Porto Velho": [-8.7612, -63.9004],
+  "São João de Meriti": [-22.8021, -43.3747],
+  "Caxias do Sul": [-29.1678, -51.1794],
+  "Mogi das Cruzes": [-23.5222, -46.1875],
+  "Santos": [-23.9535, -46.3336],
+  "Mauá": [-23.6678, -46.4614],
+  "Betim": [-19.9678, -44.1983],
+  "São José do Rio Preto": [-20.8197, -49.3794],
+  "Carapicuíba": [-23.5228, -46.8358],
+  "Olinda": [-8.0089, -34.8553],
+  "Diadema": [-23.6861, -46.6228],
+  "Campina Grande": [-7.2306, -35.8817],
+  "Jundiaí": [-23.1864, -46.8964],
+  "Belford Roxo": [-22.7636, -43.3997],
+  "Maringá": [-23.4273, -51.9375],
+  "Macapá": [0.0349, -51.0694],
+  "Florianópolis": [-27.5954, -48.5480],
+  "Piracicaba": [-22.7338, -47.6476],
+  "Bauru": [-22.3154, -49.0608],
   "Vitória": [-20.3155, -40.3128],
+  "São Vicente": [-23.9608, -46.3883],
+  "Serra": [-20.1283, -40.3078],
+  "Camaçari": [-12.6981, -38.3244],
+  "Montes Claros": [-16.7361, -43.8614],
+  "Cariacica": [-20.2638, -40.4197],
+  "Vila Velha": [-20.3297, -40.2919],
+  "Anápolis": [-16.3281, -48.9536],
+  "Pelotas": [-31.7654, -52.3376],
+  "Canoas": [-29.9186, -51.1836],
+  "São Leopoldo": [-29.7608, -51.1481],
+  "Suzano": [-23.5420, -46.3102],
+  "Boa Vista": [2.8235, -60.6758],
+  "Itaquaquecetuba": [-23.4867, -46.3480],
+  "Barreiras": [-12.1522, -44.9906],
+  "Blumenau": [-26.9194, -49.0661],
+  "Rio Branco": [-9.9754, -67.8249],
   "Macaé": [-22.3705, -41.7869],
   "Caruaru": [-8.2763, -35.9753],
   "Petrolina": [-9.3982, -40.5019],
   "Juazeiro do Norte": [-7.2130, -39.3150],
   "Sobral": [-3.6864, -40.3500],
-  "Feira de Santana": [-12.2661, -38.9661],
   "Vitória da Conquista": [-14.8661, -40.8394],
   "Caucaia": [-3.7358, -38.6533],
   "Maracanaú": [-3.8758, -38.6258],
-  "Uberlândia": [-18.9186, -48.2772],
-  "Contagem": [-19.9322, -44.0536],
-  "Juiz de Fora": [-21.7642, -43.3503],
-  "Montes Claros": [-16.7361, -43.8614],
   "Uberaba": [-19.7486, -47.9386],
-  "Betim": [-19.9678, -44.1983],
-  "Aparecida de Goiânia": [-16.8239, -49.2447],
-  "Anápolis": [-16.3281, -48.9536],
-  "Rio Verde": [-17.7981, -50.9278],
-  "Londrina": [-23.3045, -51.1696],
-  "Maringá": [-23.4273, -51.9375],
   "Ponta Grossa": [-25.0945, -50.1619],
   "Foz do Iguaçu": [-25.5478, -54.5882],
   "Cascavel": [-24.9578, -53.4553],
-  "Caxias do Sul": [-29.1678, -51.1794],
-  "Pelotas": [-31.7654, -52.3376],
-  "Canoas": [-29.9186, -51.1836],
   "Santa Maria": [-29.6864, -53.8008],
-  "Joinville": [-26.3044, -48.8455],
-  "Blumenau": [-26.9194, -49.0661],
   "São José": [-27.5956, -48.6367],
   "Criciúma": [-28.6778, -49.3697],
   "Chapecó": [-27.1003, -52.6153],
-  "Camaçari": [-12.6981, -38.3244],
-  "Barreiras": [-12.1522, -44.9906],
   "Ilhéus": [-14.7889, -39.0489],
-  "Jaboatão dos Guararapes": [-8.1128, -35.0025],
-  "Olinda": [-8.0089, -34.8553],
   "Paulista": [-7.9406, -34.8711],
   "Santo André do Norte": [-3.6636, -39.9483],
   "Mossoró": [-5.1878, -37.3442],
   "Parnamirim": [-5.9147, -35.2642],
-  "Campina Grande": [-7.2306, -35.8817],
   "Patos": [-7.0178, -37.2806],
-  "Garanhuns": [-8.8897, -36.4933],
-  "Cabo de Santo Agostinho": [-8.2828, -35.0328],
-  "Niterói": [-22.8833, -43.1036],
-  "Duque de Caxias": [-22.7856, -43.3117],
-  "Nova Iguaçu": [-22.7592, -43.4511],
-  "Belford Roxo": [-22.7639, -43.3994],
-  "São Gonçalo": [-22.8269, -43.0550],
-  "Campos dos Goytacazes": [-21.7553, -41.3247],
-  "Volta Redonda": [-22.5231, -44.0997],
-  "Petrópolis": [-22.5050, -43.1786],
-  "Angra dos Reis": [-23.0067, -44.3181],
-  "Serra": [-20.1286, -40.3072],
-  "Cariacica": [-20.2639, -40.4178],
-  "Vila Velha": [-20.3297, -40.2920],
+  "Imperatriz": [-5.5261, -47.4908],
+  "Rio Verde": [-17.7981, -50.9278],
+  "Rondonópolis": [-16.4703, -54.6386],
+  "Várzea Grande": [-15.6467, -56.1322],
+  "Governador Valadares": [-18.8511, -41.9494],
+  "Ipatinga": [-19.4686, -42.5378],
+  "Divinópolis": [-20.1386, -44.8820],
+  "Sete Lagoas": [-19.4658, -44.2458],
+  "Teófilo Otoni": [-17.8578, -41.5050],
+  "Itabuna": [-14.7855, -39.2786],
+  "Barretos": [-20.5578, -48.5678],
   "São Caetano do Sul": [-23.6175, -46.5503],
   "São Mateus": [-18.7149, -39.8569],
   "Linhares": [-19.3950, -40.0650],
+  "Guaratinguetá": [-22.8164, -45.1906],
+  "Taubaté": [-23.0265, -45.5558],
+  "Jacareí": [-23.2981, -45.9658],
+  "Limeira": [-22.5640, -47.4008],
+  "Franca": [-20.5386, -47.4008],
+  "Araraquara": [-21.7938, -48.1758],
+  "São Carlos": [-22.0154, -47.8908],
+  "Botucatu": [-22.8850, -48.4450],
+  "Araçatuba": [-21.2089, -50.4394],
+  "Presidente Prudente": [-22.1256, -51.3889],
+  "Marília": [-22.2139, -49.9456],
+  "Registro": [-24.4872, -47.8444],
+  "Itapeva": [-23.9819, -48.8767],
+  "Taboão da Serra": [-23.6061, -46.7558],
+  "Embu das Artes": [-23.6494, -46.8508],
+  "Francisco Morato": [-23.2828, -46.7397],
+  "Franco da Rocha": [-23.3289, -46.7267],
+  "Cotia": [-23.6028, -46.9197],
+  "Itapecerica da Serra": [-23.7181, -46.8519],
+  "Santana de Parnaíba": [-23.4425, -46.9183],
+  "Pirapora do Bom Jesus": [-23.3975, -47.0022],
+  "Potim": [-22.8297, -45.0850],
+  "Aparecida": [-22.8481, -45.2328],
+  "Cachoeira Paulista": [-22.6764, -45.0081],
+  "Lorena": [-22.7328, -45.1239],
+  "Pindamonhangaba": [-22.9228, -45.4614],
+  "Tremembé": [-22.9597, -45.5497],
+  "Caçapava": [-23.0886, -45.7008],
+  "São José dos Campos": [-23.1794, -45.8869],
+  "Cruzeiro": [-22.5789, -44.9628],
+  "Volta Redonda": [-22.5231, -44.1044],
+  "Barra Mansa": [-22.5447, -44.1708],
+  "Resende": [-22.4686, -44.4508],
+  "Itatiaia": [-22.4931, -44.5650],
+  "Angra dos Reis": [-22.9661, -44.3181],
+  "Paraty": [-23.2181, -44.7158],
+  "Três Rios": [-22.1169, -43.2089],
+  "Valença": [-22.2447, -43.6997],
+  "Vassouras": [-22.4058, -43.6614],
 };
 
 type Employee = {
@@ -205,7 +275,7 @@ type Employee = {
   cep: string | null;
 };
 
-type GeocodedEmployee = Employee & { lat: number; lng: number };
+type GeocodedEmployee = Employee & { lat: number; lng: number; isApprox?: boolean };
 
 type Level = 1 | 2 | 3;
 
@@ -244,24 +314,30 @@ async function geocodeCidade(cidade: string, estado: string): Promise<[number, n
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
+function jitter(): number { return (Math.random() - 0.5) * 0.004; }
+
 function MapFlyTo({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
   useEffect(() => { map.flyTo(center, zoom, { duration: 1.2 }); }, [center, zoom]);
   return null;
 }
 
-function createEmployeeIcon(nome: string, status: string | null) {
-  const isAtivo = (status || "").toLowerCase() === "ativo";
+function createEmployeeIcon(nome: string, status: string | null, isApprox?: boolean) {
+  const s = ALL_STATUS_OPTIONS.find(o => o.value === (status || "Ativo"));
+  const bg = s?.bg ?? "#cbd5e1";
+  const fg = s?.fg ?? "#334155";
   const letra = nome ? nome.charAt(0).toUpperCase() : "?";
-  const bg = isAtivo ? "#2563eb" : "#64748b";
+  const opacity = isApprox ? "0.65" : "1";
   const html = `
     <div style="
       width:34px;height:34px;border-radius:50% 50% 50% 0;
       transform:rotate(-45deg);background:${bg};
-      border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);
+      border:2.5px solid ${isApprox ? "#94a3b8" : "white"};
+      box-shadow:0 2px 6px rgba(0,0,0,0.35);
       display:flex;align-items:center;justify-content:center;
+      opacity:${opacity};
     ">
-      <span style="transform:rotate(45deg);color:white;font-size:13px;font-weight:700;line-height:1;">
+      <span style="transform:rotate(45deg);color:${fg};font-size:13px;font-weight:700;line-height:1;">
         ${letra}
       </span>
     </div>`;
@@ -306,8 +382,10 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
 
+  const [statusFiltros, setStatusFiltros] = useState<string[]>(DEFAULT_STATUS_VISIVEIS);
+
   const { data: employees = [], isLoading: loadingEmps } = trpc.dashboards.funcionariosParaMapa.useQuery(
-    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), statusFiltros },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0, staleTime: 5 * 60 * 1000 }
   );
 
@@ -370,12 +448,12 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
   const handleStateClick = useCallback(async (state: string) => {
     if (state.length !== 2) return;
-    const count = stateDist.find(s => s.state === state)?.count || 0;
-    if (count === 0) return;
+    const hasEmps = employees.some(e => normalizeEstado(e.estado) === state);
+    if (!hasEmps) return;
     setSelectedState(state);
     setLevel(2);
     await loadCityCoords(state);
-  }, [stateDist, loadCityCoords]);
+  }, [employees, loadCityCoords]);
 
   const handleCityClick = useCallback(async (city: string) => {
     setSelectedCity(city);
@@ -383,15 +461,21 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     geocodingAbort.current = false;
 
     const emps = citiesInState.get(city) || [];
-    const toGeocode = emps.filter(e => e.logradouro || e.cep);
+
+    // Separate: employees with specific address vs only city/state
+    const withAddress = emps.filter(e => e.logradouro || e.cep);
+    const withCityOnly = emps.filter(e => !e.logradouro && !e.cep);
+
     setGeocoding(true);
-    setGeocodingProgress({ done: 0, total: toGeocode.length });
+    setGeocodingProgress({ done: 0, total: withAddress.length + (withCityOnly.length > 0 ? 1 : 0) });
     setGeocodedEmployees([]);
 
     const results: GeocodedEmployee[] = [];
-    for (let i = 0; i < toGeocode.length; i++) {
+
+    // 1) Geocode employees with logradouro/cep (exact)
+    for (let i = 0; i < withAddress.length; i++) {
       if (geocodingAbort.current) break;
-      const e = toGeocode[i];
+      const e = withAddress[i];
       let addr = "";
       if (e.logradouro) {
         addr = [e.logradouro, e.numero, e.bairro, e.cidade, e.estado, "Brasil"]
@@ -401,11 +485,42 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
           .filter(Boolean).join(", ");
       }
       const coords = addr ? await geocodeAddress(addr) : null;
-      if (coords) results.push({ ...e, lat: coords[0], lng: coords[1] });
+      if (coords) results.push({ ...e, lat: coords[0], lng: coords[1], isApprox: false });
       setGeocodedEmployees([...results]);
-      setGeocodingProgress({ done: i + 1, total: toGeocode.length });
-      if (i < toGeocode.length - 1) await sleep(1050);
+      setGeocodingProgress({ done: i + 1, total: withAddress.length + (withCityOnly.length > 0 ? 1 : 0) });
+      if (i < withAddress.length - 1) await sleep(1050);
     }
+
+    // 2) Employees with only city/state — place at city center with jitter (approximate)
+    if (!geocodingAbort.current && withCityOnly.length > 0) {
+      const cityName = city === SEM_CIDADE_KEY ? null : city;
+      const estado = withCityOnly[0]?.estado ?? "";
+      const normalState = normalizeEstado(estado);
+      let centerCoords: [number, number] | null = null;
+
+      if (cityName) {
+        centerCoords = await geocodeCidade(cityName, normalState);
+      } else {
+        // No city — fall back to state center
+        const sv = STATE_VIEW[normalState];
+        if (sv) centerCoords = sv.center;
+      }
+
+      if (centerCoords) {
+        for (const e of withCityOnly) {
+          if (geocodingAbort.current) break;
+          results.push({
+            ...e,
+            lat: centerCoords[0] + jitter(),
+            lng: centerCoords[1] + jitter(),
+            isApprox: true,
+          });
+        }
+        setGeocodedEmployees([...results]);
+      }
+      setGeocodingProgress(prev => ({ ...prev, done: prev.total }));
+    }
+
     setGeocoding(false);
   }, [citiesInState]);
 
@@ -428,13 +543,26 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
   const cityView = useMemo(() => {
     if (!selectedCity) return null;
     if (selectedCity === SEM_CIDADE_KEY) {
-      // Use state center for employees without city
       return stateView ? { center: stateView.center, zoom: 9 } : null;
     }
     if (!cityCoords.has(selectedCity)) return null;
     const [lat, lng] = cityCoords.get(selectedCity)!;
     return { center: [lat, lng] as [number, number], zoom: 13 };
   }, [selectedCity, cityCoords, stateView]);
+
+  function toggleStatus(value: string) {
+    setStatusFiltros(prev =>
+      prev.includes(value) ? prev.filter(s => s !== value) : [...prev, value]
+    );
+    // reset map when filter changes
+    setLevel(1);
+    setSelectedState(null);
+    setSelectedCity(null);
+    setGeocodedEmployees([]);
+  }
+
+  const approxCount = geocodedEmployees.filter(e => e.isApprox).length;
+  const exactCount = geocodedEmployees.filter(e => !e.isApprox).length;
 
   return (
     <Card className="border-border">
@@ -468,11 +596,38 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
           )}
         </div>
 
+        {/* Status filter chips */}
+        <div className="flex flex-wrap gap-1 mt-2">
+          {ALL_STATUS_OPTIONS.map(opt => {
+            const active = statusFiltros.includes(opt.value);
+            return (
+              <button
+                key={opt.value}
+                onClick={() => toggleStatus(opt.value)}
+                className="text-[10px] px-2 py-0.5 rounded-full border font-medium transition-all"
+                style={active
+                  ? { backgroundColor: opt.bg, color: opt.fg, borderColor: opt.fg + "55" }
+                  : { backgroundColor: "transparent", color: "#94a3b8", borderColor: "#e2e8f0" }
+                }
+                title={active ? `Ocultar ${opt.label}` : `Mostrar ${opt.label}`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => setStatusFiltros(ALL_STATUS_OPTIONS.map(s => s.value))}
+            className="text-[10px] px-2 py-0.5 rounded-full border border-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            Todos
+          </button>
+        </div>
+
         {/* Breadcrumb */}
         <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-0.5">
           <span
             className={level === 1 ? "text-blue-600 font-medium" : "cursor-pointer hover:text-blue-500"}
-            onClick={() => level > 1 && setLevel(1) && setSelectedState(null)}
+            onClick={() => { if (level > 1) { setLevel(1); setSelectedState(null); }}}
           >
             Brasil
           </span>
@@ -481,7 +636,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
               <span>›</span>
               <span
                 className={level === 2 ? "text-blue-600 font-medium" : "cursor-pointer hover:text-blue-500"}
-                onClick={() => level > 2 && goBack()}
+                onClick={() => { if (level > 2) goBack(); }}
               >
                 {STATE_NAMES[selectedState]}
               </span>
@@ -619,11 +774,11 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
               </div>
             )}
 
-            {/* No address found yet */}
+            {/* No results at all */}
             {!geocoding && geocodedEmployees.length === 0 && (
               <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                Nenhum endereço foi geocodificado. Verifique se os funcionários possuem logradouro ou CEP cadastrado.
+                Nenhum endereço foi geocodificado. Verifique se os funcionários possuem logradouro, CEP ou cidade cadastrada.
               </div>
             )}
 
@@ -642,7 +797,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
                   <Marker
                     key={emp.id}
                     position={[emp.lat, emp.lng]}
-                    icon={createEmployeeIcon(emp.nome, emp.status)}
+                    icon={createEmployeeIcon(emp.nome, emp.status, emp.isApprox)}
                   >
                     <Popup>
                       <div className="min-w-[160px]">
@@ -652,10 +807,15 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
                           <Badge
                             variant="secondary"
                             className="text-[10px] mt-1"
-                            style={{ backgroundColor: emp.status === "Ativo" ? "#dcfce7" : "#f1f5f9", color: emp.status === "Ativo" ? "#166534" : "#475569" }}
+                            style={statusStyle(emp.status)}
                           >
-                            {emp.status}
+                            {statusLabel(emp.status)}
                           </Badge>
+                        )}
+                        {emp.isApprox && (
+                          <p className="text-[10px] text-amber-600 mt-1 italic">
+                            Posição aproximada (centro da cidade)
+                          </p>
                         )}
                         <div className="mt-1.5 text-[11px] text-slate-500 space-y-0.5">
                           {emp.logradouro && (
@@ -672,14 +832,22 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
               </MapContainer>
             </div>
 
-            {/* Employees not geocoded */}
+            {/* Footer count */}
             {!geocoding && employeesInCity.length > 0 && (
-              <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
-                <Users className="h-3.5 w-3.5" />
-                {geocodedEmployees.length} de {employeesInCity.length} funcionários localizados no mapa
+              <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+                <Users className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {geocodedEmployees.length} de {employeesInCity.length} funcionário{employeesInCity.length !== 1 ? "s" : ""} no mapa
+                </span>
+                {exactCount > 0 && (
+                  <span className="text-green-600">({exactCount} endereço exato)</span>
+                )}
+                {approxCount > 0 && (
+                  <span className="text-amber-500">({approxCount} posição aproximada)</span>
+                )}
                 {employeesInCity.length - geocodedEmployees.length > 0 && (
-                  <span className="text-amber-500">
-                    ({employeesInCity.length - geocodedEmployees.length} sem endereço completo)
+                  <span className="text-red-400">
+                    ({employeesInCity.length - geocodedEmployees.length} sem dados de localização)
                   </span>
                 )}
               </div>

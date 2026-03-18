@@ -2797,6 +2797,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 513,
+    titulo: "Mapa de Funcionários — Filtro de status + geocoding com fallback para centro da cidade",
+    descricao: "Adicionados dois melhorias ao Mapa Interativo de Funcionários: (1) Filtro de status por chips no topo do mapa — todos os status possíveis (Ativo, Férias, Afastado, Licença, Aviso Prévio, Disp. Aviso, Recluso, Desligado, Lista Negra) podem ser ligados/desligados individualmente. Padrão: Desligados e Lista Negra ocultados. Filtro é aplicado no backend via parâmetro statusFiltros. (2) Correção do geocoding no Nível 3: funcionários sem logradouro e sem CEP, mas com cidade/estado cadastrados, agora aparecem no mapa com posição aproximada (centro da cidade + jitter de ±200m para não sobrepor). Marcadores aproximados ficam semi-transparentes e mostram 'Posição aproximada (centro da cidade)' no popup. O rodapé do mapa exibe contagem separada: exatos, aproximados e sem dados.",
+    tipo: "melhoria",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 512,
     titulo: "Simulador IA — Parsing de JSON robusto e logging detalhado de erros",
     descricao: "Corrigido bug no gerador de cronograma por IA (gerarCronogramaDoOrcamento): a extração do JSON da resposta usava regex gananciosa /\\{[\\s\\S]*\\}/ que, quando Claude adicionava texto após o JSON (ex: '{X} atividades'), capturava conteúdo extra causando JSON.parse falhar silenciosamente. Substituído por função extractFirstJson() que percorre o texto caractere a caractere rastreando profundidade de chaves, extraindo apenas o objeto JSON mais externo e válido. maxTokens aumentado de 8192 para 16000 para evitar truncamento em orçamentos grandes. Erros LLM e erros de parsing agora são separados em try/catches distintos e logados com o texto bruto da resposta para facilitar diagnóstico futuro. Corrigido também warning de chave duplicada 'Caruaru' no mapa de funcionários.",

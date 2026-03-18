@@ -2592,9 +2592,14 @@ async function getDashCompetenciasAnual(companyId: number, ano?: number, company
   };
 }
 
-async function getFuncionariosParaMapa(companyId: number, companyIds?: number[]) {
+async function getFuncionariosParaMapa(companyId: number, companyIds?: number[], statusFiltros?: string[]) {
   const db = await getDb();
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
+
+  const statusCondition = statusFiltros && statusFiltros.length > 0
+    ? inArray(employees.status, statusFiltros)
+    : sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`;
+
   const results = await db.select({
     id: employees.id,
     nome: employees.nomeCompleto,
@@ -2610,7 +2615,7 @@ async function getFuncionariosParaMapa(companyId: number, companyIds?: number[])
   .from(employees)
   .where(and(
     inArray(employees.companyId, ids),
-    sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+    statusCondition,
     sql`(
       (${employees.estado} IS NOT NULL AND TRIM(${employees.estado}) != '')
       OR (${employees.cidade} IS NOT NULL AND TRIM(${employees.cidade}) != '')
@@ -2645,5 +2650,5 @@ export const dashboardsRouter = router({
   documentos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashDocumentos(input.companyId, input.companyIds)),
   controleDocumentos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashControleDocumentos(input.companyId, input.companyIds)),
   competenciasAnual: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCompetenciasAnual(input.companyId, input.ano, input.companyIds)),
-  funcionariosParaMapa: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getFuncionariosParaMapa(input.companyId, input.companyIds)),
+  funcionariosParaMapa: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), statusFiltros: z.array(z.string()).optional() })).query(({ input }) => getFuncionariosParaMapa(input.companyId, input.companyIds, input.statusFiltros)),
 });
