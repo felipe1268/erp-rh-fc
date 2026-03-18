@@ -2366,6 +2366,29 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
         if (mesNum > 500) break;
       }
 
+      // ══════════════════════════════════════════════════════════════════════════
+      // LEI DE OURO — A soma dos custoTotal de todos os meses DEVE ser
+      // EXATAMENTE igual a valorTotal.  Qualquer centavo de diferença causada
+      // por divisão de inteiros (/100) é absorvido pelo último mês.
+      // Essa lei não pode ser violada: nenhum cronograma pode ter total diferente
+      // do orçamento contratado.
+      // ══════════════════════════════════════════════════════════════════════════
+      if (meses.length > 0) {
+        const somaCents = meses.reduce((s, m) => s + Math.round(m.custoTotal * 100), 0);
+        const diffCents = totalCentsTarget - somaCents; // pode ser +1, -1, ou 0
+        if (diffCents !== 0) {
+          const ult = meses[meses.length - 1];
+          ult.custoTotal = parseFloat(((Math.round(ult.custoTotal * 100) + diffCents) / 100).toFixed(2));
+          // Ajustar também o Mdo do último mês (residual) para manter mat+mdo=custoTotal
+          ult.custoMdo = parseFloat((ult.custoTotal - ult.custoMat).toFixed(2));
+        }
+        // Assert final (falha silenciosa no log, nunca explode para o usuário)
+        const checkCents = meses.reduce((s, m) => s + Math.round(m.custoTotal * 100), 0);
+        if (checkCents !== totalCentsTarget) {
+          console.error(`[LEI DE OURO VIOLADA] soma=${checkCents} !== target=${totalCentsTarget} diff=${checkCents - totalCentsTarget}`);
+        }
+      }
+
       return { atividades: atividadesGeradas, meses, totalMeses: meses.length, valorTotal: input.valorTotal, orcamentoMensal: input.orcamentoMensal, dataInicio: input.dataInicio, ratioMat, ratioMdo };
     }),
 

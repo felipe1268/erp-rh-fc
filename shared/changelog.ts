@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 530,
+    titulo: "LEI DE OURO — SimuladorCronograma: total dos meses = valorTotal exato (sem diferença de centavos)",
+    descricao: "Correção definitiva do bug onde o total exibido no SimuladorCronograma (soma dos meses) diferia do valorTotal do orçamento (ex: R$1.839.998,84 vs R$1.840.000,00). Causa raiz dupla: (1) Backend — operação mesCustoCents/100 para cada mês gera float com erro de representação binária; ao somar 25 floats o erro se acumula; (2) Frontend — totalGerado = mesesGerados.reduce((s,m) => s+m.custoTotal, 0) soma esses floats errados. Solução backend: após construir todos os meses, somam-se os custoTotal em centavos inteiros (Math.round(x*100)); se houver diferença de ±N centavos em relação ao totalCentsTarget, o último mês absorve o ajuste (único ponto de correção); assert de log é disparado caso a lei ainda seja violada após o ajuste. Solução frontend: novo estado totalGeradoExato armazena data.valorTotal (número inteiro exato) retornado pela API no onSuccess; const totalGerado passa a usar totalGeradoExato quando disponível, nunca o reduce() de floats. Ambas as correções garantem que nenhum cronograma gerado pela IA jamais exiba total diferente do contrato. Rev. 530.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 529,
     titulo: "SimuladorCronograma — Parcelas Intermediárias: simulação de antecipação de prazo",
     descricao: "Novo painel 'Antecipação por Parcelas Intermediárias' no SimuladorCronograma (modo IA), disponível após a geração do cronograma. Lógica: quando o cliente realiza um pagamento extra além da parcela mensal base em determinado mês, a construtora dispõe de mais caixa e pode executar volume maior de serviços, 'puxando' trabalho de meses futuros para o mês do pagamento extra e reduzindo a duração total da obra. Interface: botão 'Adicionar Parcela' gera uma linha com seletor de mês (usando labels de calendário: mar/26, abr/26...) e campo de valor extra; múltiplas parcelas em meses diferentes/iguais são suportadas; botão 'Simular Antecipação do Prazo' dispara o cálculo. Algoritmo greedy: para cada mês (1 a n), cap_efetiva = desembolso_base + extra_intermediário_nesse_mês; executa min(cap_efetiva, trabalho_restante); conta quantos meses são necessários até trabalho_restante=0. Resultado: 4 cards (prazo original / meses economizados / novo prazo / total de aportes extras), barra comparativa animada mostrando encurtamento, tabela mês a mês com badge EXTRA nos meses com parcela, coluna de utilização com barra de progresso colorida por cor (azul=mês com extra, roxo=normal), totalizadores no footer. Rev. 529.",

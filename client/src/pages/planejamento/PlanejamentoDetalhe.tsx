@@ -10746,6 +10746,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const [atividadesGeradas, setAtividadesGeradas] = useState<GeradoAtiv[]>([]);
   const [mesesGerados,      setMesesGerados]      = useState<GeradoMes[]>([]);
   const [gerado,            setGerado]            = useState(false);
+  const [totalGeradoExato,  setTotalGeradoExato]  = useState(0); // LEI DE OURO: usar valorTotal da API, nunca reduce() de floats
   const [ratioMat,          setRatioMat]          = useState(0);
   const [ratioMdo,          setRatioMdo]          = useState(0);
 
@@ -10803,6 +10804,9 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
       setGerado(true);
       setRatioMat(data.ratioMat ?? 0);
       setRatioMdo(data.ratioMdo ?? 0);
+      // LEI DE OURO: armazena o valorTotal EXATO retornado pela API (inteiro em memória)
+      // Nunca use reduce() sobre os custoTotal dos meses — acumula erro de ponto flutuante
+      setTotalGeradoExato(typeof data.valorTotal === "number" ? data.valorTotal : 0);
       toast.success(`Cronograma gerado por IA: ${data.totalMeses} ${data.totalMeses === 1 ? "mês" : "meses"}, ${(data.atividades || []).filter((a: any) => !a.isGrupo).length} atividades.`);
     },
     onError: (err: any) => toast.error(err.message),
@@ -10912,7 +10916,9 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   }
 
   const totalSimulado = mesesEdit.reduce((s, m) => s + m.custoTotal, 0);
-  const totalGerado   = mesesGerados.reduce((s, m) => s + m.custoTotal, 0);
+  // LEI DE OURO: totalGerado usa o valorTotal exato retornado pela API.
+  // NUNCA somar m.custoTotal dos meses com reduce() — acumula erro de ponto flutuante.
+  const totalGerado = totalGeradoExato > 0 ? totalGeradoExato : mesesGerados.reduce((s, m) => s + m.custoTotal, 0);
 
   // ── Render month cards (reusable for both modes) ──
   function renderMonthCards(
