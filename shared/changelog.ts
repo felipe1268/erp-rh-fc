@@ -3220,6 +3220,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-16 00:00:00",
   },
   {
+    version: 563,
+    titulo: "Usuários (aba Grupos) — Dropdown filtra usuários já alocados",
+    descricao: "No dropdown 'Adicionar usuário...' da aba Grupos de Acesso dentro de Usuários, usuários que já pertencem a qualquer grupo não aparecem mais como opção. Antes o filtro só excluía membros do grupo atual, permitindo selecionar pessoas já em outros grupos. Agora usa userGroupIdMap para filtrar todos os que já têm grupo. Também adicionado listAllMembers.invalidate() nos handlers de addMember e removeMember para que o mapa seja atualizado em tempo real após cada mudança de membership.",
+    tipo: "correcao",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 562,
     titulo: "Usuários — Grupo exibido corretamente; seleção por rádio",
     descricao: "Corrigido bug onde a tela de Usuários sempre mostrava 'Sem grupo' mesmo o usuário estando em um grupo. Causa raiz: a função getUserGroupLabel usava g.members e g._memberIds que nunca são populados pelo endpoint de lista de grupos. Solução: adicionada query listAllMembers (mesma fonte usada por GruposUsuarios) e criado userGroupIdMap para lookup direto userId→groupId. Impacto: (1) Lista de usuários agora mostra o grupo correto em tempo real; (2) Ao abrir o detalhe do usuário, o grupo atual é pré-selecionado corretamente; (3) Seleção convertida de checkboxes para botões rádio (apenas 1 grupo por usuário); (4) setGroupsMut agora invalida listAllMembers após salvar.",

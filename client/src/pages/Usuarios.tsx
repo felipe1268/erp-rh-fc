@@ -415,6 +415,7 @@ export default function Usuarios() {
   const addMemberMut = trpc.userGroups.addMember.useMutation({
     onSuccess: () => {
       utils.userGroups.list.invalidate();
+      utils.userGroups.listAllMembers.invalidate();
       if (selectedGroup) utils.userGroups.getMembers.invalidate({ groupId: selectedGroup.id });
     },
     onError: e => toast.error(e.message),
@@ -422,6 +423,7 @@ export default function Usuarios() {
   const removeMemberMut = trpc.userGroups.removeMember.useMutation({
     onSuccess: () => {
       utils.userGroups.list.invalidate();
+      utils.userGroups.listAllMembers.invalidate();
       if (selectedGroup) utils.userGroups.getMembers.invalidate({ groupId: selectedGroup.id });
     },
     onError: e => toast.error(e.message),
@@ -963,7 +965,10 @@ export default function Usuarios() {
                           <Select value={addMemberUserId} onValueChange={setAddMemberUserId}>
                             <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="Adicionar usuário..." /></SelectTrigger>
                             <SelectContent>
-                              {allUsers.filter((u:any)=>!groupMemberIds.includes(u.id)).map((u:any)=>(
+                              {allUsers.filter((u:any) =>
+                                // Mostra apenas usuários sem nenhum grupo ainda
+                                !userGroupIdMap[u.id]
+                              ).map((u:any)=>(
                                 <SelectItem key={u.id} value={String(u.id)}>{u.name||u.username}</SelectItem>
                               ))}
                             </SelectContent>
