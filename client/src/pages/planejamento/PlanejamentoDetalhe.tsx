@@ -2777,7 +2777,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
           <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold w-fit
             ${ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : overshot ? "bg-red-50 border-red-200 text-red-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
             <span className="text-[11px] font-normal text-inherit opacity-70">Soma Peso%:</span>
-            <span className="tabular-nums text-sm">{soma.toFixed(2)}%</span>
+            <span className="tabular-nums text-sm">{ok ? "100.00" : soma.toFixed(2)}%</span>
             {ok
               ? <span className="text-[10px] font-bold tracking-wide">✓ 100%</span>
               : <span className="text-[10px]">{overshot ? "▲ acima de 100%" : `▼ faltam ${(100 - soma).toFixed(2)}%`}</span>
