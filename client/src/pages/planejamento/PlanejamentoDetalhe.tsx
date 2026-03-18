@@ -11281,6 +11281,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
           {(() => {
             const diBase = new Date(dataInicio + "T12:00:00");
             const n = mesesGerados.length;
+            if (n === 0) return null;
 
             // Meses de maio no cronograma
             const maiosMeses: { mesIdx: number; ano: number; label: string }[] = [];
@@ -11291,9 +11292,10 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
               }
             });
 
-            const temReajuste = n > 12;
+            // Reajuste sempre disponível como ferramenta de projeção (não só quando n>12)
+            const temReajuste = true;
+            const reajusteAtivo = n > 12; // reajuste efetivamente incide (prazo contratual >12 meses)
             const temDissidio = maiosMeses.length > 0;
-            if (!temReajuste && !temDissidio) return null;
 
             // Parsing dos percentuais
             const pctR = parseFloat(pctReajuste.replace(",", ".")) || 0;
@@ -11337,16 +11339,30 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                   {/* Alert banners */}
                   <div className="space-y-2.5">
                     {temReajuste && (
-                      <div className="flex items-start gap-3 bg-white border border-amber-200 rounded-xl px-4 py-3">
-                        <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
-                          <TrendingUp className="h-4 w-4 text-amber-600" />
+                      <div className={`flex items-start gap-3 bg-white rounded-xl px-4 py-3 border ${reajusteAtivo ? "border-amber-200" : "border-slate-200"}`}>
+                        <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${reajusteAtivo ? "bg-amber-100" : "bg-slate-100"}`}>
+                          <TrendingUp className={`h-4 w-4 ${reajusteAtivo ? "text-amber-600" : "text-slate-500"}`} />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-amber-900">Reajuste Contratual — Obra acima de 12 meses</p>
-                          <p className="text-xs text-amber-700 mt-0.5">
-                            Esta obra tem duração de <strong>{n} meses</strong>. Contratos com prazo superior a 12 meses têm direito a reajuste pelo índice da construção civil (INCC, IPCA, IGP-M).
-                            O reajuste incide sobre todos os custos a partir do <strong>13º mês</strong>, sendo aplicado a cada 12 meses subsequentes.
-                          </p>
+                          {reajusteAtivo ? (
+                            <>
+                              <p className="text-sm font-semibold text-amber-900">Reajuste Contratual — Obra acima de 12 meses</p>
+                              <p className="text-xs text-amber-700 mt-0.5">
+                                Esta obra tem duração de <strong>{n} meses</strong>. Contratos com prazo superior a 12 meses têm direito a reajuste pelo índice da construção civil.
+                                O reajuste incide sobre todos os custos a partir do <strong>13º mês</strong>, sendo aplicado a cada 12 meses subsequentes.{" "}
+                                Índices de referência: <strong>INCC ≈ 4,9% a.a.</strong> · IPCA ≈ 5,1% a.a. · IGP-M ≈ 7,9% a.a.
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm font-semibold text-slate-700">Reajuste Contratual — Análise preventiva</p>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                Esta obra tem duração atual de <strong>{n} meses</strong>. Embora esteja abaixo de 12 meses, contratos podem ser estendidos.
+                                Simule o impacto de um reajuste caso o prazo se prolongue.{" "}
+                                Índices de referência: <strong>INCC ≈ 4,9% a.a.</strong> · IPCA ≈ 5,1% a.a. · IGP-M ≈ 7,9% a.a.
+                              </p>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
@@ -11373,7 +11389,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                       <div>
                         <label className="text-xs font-semibold text-amber-700 block mb-1.5">
                           % Reajuste Contratual (ao ano)
-                          <span className="ml-1 font-normal text-slate-400">— INCC / IPCA / IGP-M estimado</span>
+                          <span className="ml-1 font-normal text-slate-400">— índice de reajuste do contrato</span>
                         </label>
                         <div className="flex items-center gap-2">
                           <div className="relative flex-1">
@@ -11386,15 +11402,21 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-amber-500 font-bold">%</span>
                           </div>
-                          <div className="flex gap-1">
-                            {["5","8","10"].map(v => (
-                              <button key={v} onClick={() => { setPctReajuste(v + ",00"); setSimAjusteAtivo(false); }}
-                                className="text-[10px] px-2 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold transition-colors">
-                                {v}%
+                          <div className="flex gap-1 flex-wrap">
+                            {[
+                              { v: "4,90", label: "INCC" },
+                              { v: "5,10", label: "IPCA" },
+                              { v: "7,90", label: "IGP-M" },
+                            ].map(({ v, label }) => (
+                              <button key={v} onClick={() => { setPctReajuste(v); setSimAjusteAtivo(false); }}
+                                className="text-[10px] px-2 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold transition-colors flex flex-col items-center leading-tight">
+                                <span>{v}%</span>
+                                <span className="text-[8px] text-amber-500">{label}</span>
                               </button>
                             ))}
                           </div>
                         </div>
+                        <p className="text-[10px] text-slate-400 mt-1">Referência 12 meses (mai/25): INCC 4,87% · IPCA 5,06% · IGP-M 7,87% (FGV/IBGE)</p>
                       </div>
                     )}
                     {temDissidio && (
@@ -11414,15 +11436,21 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-orange-500 font-bold">%</span>
                           </div>
-                          <div className="flex gap-1">
-                            {["4","5","6"].map(v => (
-                              <button key={v} onClick={() => { setPctDissidio(v + ",00"); setSimAjusteAtivo(false); }}
-                                className="text-[10px] px-2 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 font-semibold transition-colors">
-                                {v}%
+                          <div className="flex gap-1 flex-wrap">
+                            {[
+                              { v: "5,00", label: "2023" },
+                              { v: "6,00", label: "2024" },
+                              { v: "7,00", label: "2025" },
+                            ].map(({ v, label }) => (
+                              <button key={v} onClick={() => { setPctDissidio(v); setSimAjusteAtivo(false); }}
+                                className="text-[10px] px-2 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 font-semibold transition-colors flex flex-col items-center leading-tight">
+                                <span>{v}%</span>
+                                <span className="text-[8px] text-orange-400">{label}</span>
                               </button>
                             ))}
                           </div>
                         </div>
+                        <p className="text-[10px] text-slate-400 mt-1">Histórico SINDUSCON-SP: 2023 → 5,0% · 2024 → 6,0% · 2025 → 7,0% (estimativa)</p>
                       </div>
                     )}
                     <div className="sm:col-span-2 flex justify-end">

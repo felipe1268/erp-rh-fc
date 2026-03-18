@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 541,
+    titulo: "Reajuste Contratual — sempre visível + coeficientes de mercado (INCC/IPCA/IGP-M)",
+    descricao: "Análise de Reajuste Contratual agora aparece para TODOS os cronogramas gerados (não só quando n>12 meses): (1) Para obras >12 meses: banner âmbar com texto 'Obra acima de 12 meses', reajuste efetivamente incide a partir do mês 13; (2) Para obras ≤12 meses: banner cinza 'Análise preventiva' — permite simular o impacto caso o prazo se estenda; (3) Presets do reajuste substituídos por índices de mercado reais: INCC 4,90% / IPCA 5,10% / IGP-M 7,90% com referência 'mai/25 (FGV/IBGE)'; (4) Presets do dissídio atualizados com histórico SINDUSCON-SP: 2023→5% / 2024→6% / 2025→7% (estimativa); (5) nota de rodapé em cada campo com fonte dos dados.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 540,
     titulo: "Parcelas Intermediárias — Botão 'Aprovar e Regerar com IA' + suporte a aportes no greedy",
     descricao: "Implementação completa do fluxo de aprovação de parcelas intermediárias no SimuladorCronograma: (1) Servidor: gerarCronogramaDoOrcamento agora aceita parcelas[] opcionais ({mes, valor}); o algoritmo greedy passa a usar tetoCents = orcMensalCents + extraCapCents[mesNum], permitindo que meses com aporte extra executem mais atividades; (2) Cliente: botão 'Aprovar e Regerar com IA' aparece abaixo do resultado da simulação quando há meses economizados (economizados>0) — normaliza os valores das parcelas (parseMoney), filtra valores inválidos e chama gerarMut.mutate() com o campo parcelas; botão desabilitado durante processamento com spinner; (3) Melhoria no input 'Valor extra (R$)': onKeyDown com Enter formata e blur o campo; botão Simular normaliza todos os valores antes do cálculo; (4) Lógica: a IA continua definindo duracaoDias+predecessora (sequência construtiva não muda), apenas o capital disponível por mês muda no greedy — resultado é um cronograma comprimido real com alocação correta de atividades por predecessora.",
