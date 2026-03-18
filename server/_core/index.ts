@@ -105,6 +105,8 @@ async function startServer() {
         console.log("[ColFix] planejamento_revisoes.diferencas OK");
         await db.execute(sql`ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS module_access TEXT`);
         console.log("[ColFix] user_groups.module_access OK");
+        await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_marco BOOLEAN DEFAULT FALSE`);
+        console.log("[ColFix] planejamento_atividades.is_marco OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     // Rev.547: migração aviso prévio — adiciona dataBaixa e move concluidos auto-marcados → aguardando_pagamento

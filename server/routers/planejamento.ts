@@ -458,6 +458,7 @@ export const planejamentoRouter = router({
         unidade:             z.string().nullish(),
         ordem:               z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
         isGrupo:             z.boolean().optional(),
+        isMarco:             z.boolean().optional(),
       })),
     }))
     .mutation(async ({ input }) => {
@@ -478,6 +479,7 @@ export const planejamentoRouter = router({
         unidade:             a.unidade ?? null,
         ordem:               a.ordem ?? i,
         isGrupo:             a.isGrupo ?? false,
+        isMarco:             a.isMarco ?? false,
       }));
 
       await db.transaction(async (tx) => {
@@ -758,6 +760,18 @@ export const planejamentoRouter = router({
           eq(planejamentoAvancos.projetoId, input.projetoId),
           eq(planejamentoAvancos.semana, input.semana),
         ));
+      return { success: true };
+    }),
+
+  toggleMarco: protectedProcedure
+    .input(z.object({ atividadeId: z.number(), isMarco: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE planejamento_atividades
+        SET is_marco = ${input.isMarco}
+        WHERE id = ${input.atividadeId}
+      `);
       return { success: true };
     }),
 

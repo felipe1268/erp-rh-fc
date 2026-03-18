@@ -3310,6 +3310,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 567,
+    titulo: "Cronograma — Marcos (Milestones)",
+    descricao: "Adicionado suporte completo a marcos (milestones) no cronograma: (1) Banco: coluna isMarco (boolean) adicionada a planejamento_atividades com ColFix automático no startup. (2) Backend: isMarco persistido em salvarAtividades; nova mutation toggleMarco para ativar/desativar marco sem entrar em modo de edição. (3) Importação XML: detecta <Milestone>1</Milestone>; importação XLSX: detecta colunas Milestone/Marco ou duração zero com ini=fim. (4) Pré-visualização de importação: coluna Marco ◆ com checkbox editável. (5) Tabela de atividades (view mode): linha com fundo roxo e badge ◆ Marco para marcadas; botão ◆ aparece no hover para toggle rápido. (6) Tabela de atividades (edit mode): checkbox ◆ ao lado do checkbox Grupo para marcar/desmarcar marco.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 556,
     titulo: "REFIS e Avanço Semanal — Alinhamento de cálculos e correção da Curva S",
     descricao: "Corrigidas divergências entre Avanço Semanal e REFIS: (1) previsto do Avanço Semanal agora usa T12:00:00 no parse de datas, eliminando bug de timezone e alinhando com o cálculo do REFIS; (2) Curva S realizada recalculada corretamente — era calculada com média de percentualSemanal (errado), agora usa o acumulado ponderado por atividade com pesoFinanceiro, idêntico ao algoritmo do avancoRealAtual do REFIS; (3) Cards KPI do REFIS (Avanço Semanal Previsto/Realizado, SPI, Desvio Físico) redesenhados com layout melhorado, barras de progresso e subtítulos informativos.",

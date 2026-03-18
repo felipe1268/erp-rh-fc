@@ -23,6 +23,7 @@ export interface TarefaImportada {
   pred:      string;
   recurso:   string;
   isGrupo:   boolean;
+  isMarco:   boolean;
   // pós-vinculação
   eapCodigo: string;
   pesoFin:   number;
@@ -126,6 +127,8 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
     const fin   = fmtDate(task.querySelector("Finish")?.textContent ?? "");
     const durRaw= task.querySelector("Duration")?.textContent ?? "";
     const summ  = task.querySelector("Summary")?.textContent === "1";
+    const milestoneTag = task.querySelector("Milestone")?.textContent;
+    const isMarco = milestoneTag === "1" || (!summ && parseDuration(durRaw) === 0 && durRaw !== "" && durRaw !== "0");
     const res   = task.querySelector("Assignment ResourceUID")?.textContent ?? "";
 
     // Collect ALL predecessor UIDs and convert them to WBS codes
@@ -139,7 +142,7 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
     result.push({
       wbs, nome: name, nivel: level, inicio: start, fim: fin,
       durDias: parseDuration(durRaw), pred, recurso: res,
-      isGrupo: summ, eapCodigo: wbs, pesoFin: 0,
+      isGrupo: summ, isMarco, eapCodigo: wbs, pesoFin: 0,
     });
   }
   return result;
@@ -165,7 +168,8 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
   const KEYS_DUR  = ["Duration", "Duração", "Duracao", "Dur"];
   const KEYS_PRED = ["Predecessors", "Predecessoras", "Predecessores", "Pred"];
   const KEYS_REC  = ["Resource Names", "Recursos", "Recurso", "Resource"];
-  const KEYS_SUMM = ["Summary", "Resumo", "Grupo", "Is Summary", "Outline Level", "Nível", "Nivel"];
+  const KEYS_SUMM  = ["Summary", "Resumo", "Grupo", "Is Summary", "Outline Level", "Nível", "Nivel"];
+  const KEYS_MARCO = ["Milestone", "Marco", "Is Milestone", "Marcos"];
 
   const headers = Object.keys(rows[0] ?? {});
 
@@ -177,14 +181,15 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
     return null;
   }
 
-  const kNome = findKey(KEYS_NOME);
-  const kWbs  = findKey(KEYS_WBS);
-  const kIni  = findKey(KEYS_INI);
-  const kFim  = findKey(KEYS_FIM);
-  const kDur  = findKey(KEYS_DUR);
-  const kPred = findKey(KEYS_PRED);
-  const kRec  = findKey(KEYS_REC);
-  const kSumm = findKey(KEYS_SUMM);
+  const kNome  = findKey(KEYS_NOME);
+  const kWbs   = findKey(KEYS_WBS);
+  const kIni   = findKey(KEYS_INI);
+  const kFim   = findKey(KEYS_FIM);
+  const kDur   = findKey(KEYS_DUR);
+  const kPred  = findKey(KEYS_PRED);
+  const kRec   = findKey(KEYS_REC);
+  const kSumm  = findKey(KEYS_SUMM);
+  const kMarco = findKey(KEYS_MARCO);
 
   if (!kNome) {
     const cols = headers.slice(0, 8).join(", ");
@@ -211,7 +216,17 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
         isGrupo = sv === "sim" || sv === "yes" || sv === "1" || sv === "true";
       }
 
-      return { wbs, nome, nivel: level, inicio: ini, fim, durDias, pred, recurso: rec, isGrupo, eapCodigo: wbs, pesoFin: 0 };
+      // Detecta marco: coluna Milestone/Marco OU duração zero (e não é grupo)
+      let isMarco = false;
+      if (kMarco) {
+        const mv = r[kMarco]?.toString().toLowerCase();
+        isMarco = mv === "sim" || mv === "yes" || mv === "1" || mv === "true";
+      }
+      if (!isMarco && !isGrupo && durDias === 0 && ini && fim && ini === fim) {
+        isMarco = true;
+      }
+
+      return { wbs, nome, nivel: level, inicio: ini, fim, durDias, pred, recurso: rec, isGrupo, isMarco, eapCodigo: wbs, pesoFin: 0 };
     });
 
   // Detecção automática de grupos: se há WBS filhos, o pai é grupo
@@ -387,6 +402,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       pesoFinanceiro:      t.pesoFin,
       recursoPrincipal:    t.recurso || undefined,
       isGrupo:             t.isGrupo,
+      isMarco:             t.isMarco,
       ordem:               i,
     }));
     salvarMutation.mutate({ revisaoId: revisaoAtiva.id, projetoId, atividades });
@@ -560,6 +576,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                       <th className="py-2 px-2 text-left w-28">EAP / WBS</th>
                       <th className="py-2 px-2 text-left">Nome da Atividade</th>
                       <th className="py-2 px-2 text-center w-7">Grupo</th>
+                      <th className="py-2 px-2 text-center w-7">Marco</th>
                       <th className="py-2 px-2 text-left w-24">Início</th>
                       <th className="py-2 px-2 text-left w-24">Fim</th>
                       <th className="py-2 px-2 text-right w-14">Dias</th>
@@ -593,6 +610,15 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                               checked={t.isGrupo}
                               onChange={e => updateTarefa(idx, "isGrupo", e.target.checked)}
                               className="h-3 w-3 accent-blue-600"
+                            />
+                          </td>
+                          <td className="px-2 py-1 text-center">
+                            <input
+                              type="checkbox"
+                              checked={t.isMarco}
+                              onChange={e => updateTarefa(idx, "isMarco", e.target.checked)}
+                              className="h-3 w-3 cursor-pointer"
+                              style={{accentColor:"#9333ea"}}
                             />
                           </td>
                           <td className="px-2 py-1">

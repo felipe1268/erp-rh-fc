@@ -4387,6 +4387,7 @@ export const planejamentoAtividades = pgTable("planejamento_atividades", {
   unidade:              varchar({ length: 30 }),
   ordem:                integer().default(0),
   isGrupo:              boolean("is_grupo").default(false),
+  isMarco:              boolean("is_marco").default(false),
   criadoEm:             timestamp("criado_em").defaultNow(),
 });
 

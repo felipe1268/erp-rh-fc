@@ -2353,6 +2353,11 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     },
   });
 
+  const toggleMarcoMut = trpc.planejamento.toggleMarco.useMutation({
+    onSuccess: () => utils.planejamento.listarAtividades.invalidate(),
+    onError: (e) => toast.error(`Erro ao marcar marco: ${e.message}`),
+  });
+
   const consolidarMut = trpc.planejamento.consolidarRevisao.useMutation({
     onSuccess: () => utils.planejamento.getProjetoById.invalidate({ id: projetoId }),
   });
@@ -2839,17 +2844,19 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                   : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
                 : atrasada
                   ? "bg-red-50"
-                  : a.isGrupo && nivel === 1
-                    ? "bg-yellow-50 border-l-4 border-l-yellow-400"
-                    : a.isGrupo && nivel === 2
-                      ? "bg-amber-50/60 border-l-4 border-l-amber-300"
-                      : a.isGrupo
-                        ? "bg-slate-50 border-l-4 border-l-slate-300"
-                        : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30";
+                  : a.isMarco
+                    ? "bg-purple-50/40 border-l-4 border-l-purple-400"
+                    : a.isGrupo && nivel === 1
+                      ? "bg-yellow-50 border-l-4 border-l-yellow-400"
+                      : a.isGrupo && nivel === 2
+                        ? "bg-amber-50/60 border-l-4 border-l-amber-300"
+                        : a.isGrupo
+                          ? "bg-slate-50 border-l-4 border-l-slate-300"
+                          : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30";
 
               return (
                 <tr key={a.id ?? idx}
-                  className={`border-b border-slate-100 ${rowBg} ${a.isGrupo ? "font-semibold" : ""}`}>
+                  className={`group border-b border-slate-100 ${rowBg} ${a.isGrupo ? "font-semibold" : ""}`}>
                   {editando ? (
                     <>
                       <td className="py-1 px-1">
@@ -2865,6 +2872,15 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                                   className="h-3.5 w-3.5 shrink-0 accent-amber-500 cursor-pointer" />
                               </UiTooltipTrigger>
                               <UiTooltipContent side="top" className="text-xs">Marcar como grupo/resumo</UiTooltipContent>
+                            </UiTooltip>
+                          </UiTooltipProvider>
+                          <UiTooltipProvider delayDuration={300}>
+                            <UiTooltip>
+                              <UiTooltipTrigger asChild>
+                                <input type="checkbox" checked={!!a.isMarco} onChange={e => updateLinha(idx, "isMarco", e.target.checked)}
+                                  className="h-3.5 w-3.5 shrink-0 cursor-pointer" style={{accentColor:"#9333ea"}} />
+                              </UiTooltipTrigger>
+                              <UiTooltipContent side="top" className="text-xs">Marcar como marco ◆</UiTooltipContent>
                             </UiTooltip>
                           </UiTooltipProvider>
                           <Input value={a.nome} onChange={e => updateLinha(idx, "nome", e.target.value)}
@@ -2927,6 +2943,27 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                           <span className={`text-[12px] leading-tight ${a.isGrupo ? "text-slate-900 font-bold uppercase tracking-wide" : "text-slate-700"} ${atrasada ? "text-red-700" : ""}`}>
                             {a.nome}
                           </span>
+                          {a.isMarco && (
+                            <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[9px] font-semibold shrink-0">
+                              ◆ Marco
+                            </span>
+                          )}
+                          {!editando && !isConsolidado && a.id && (
+                            <UiTooltipProvider delayDuration={300}>
+                              <UiTooltip>
+                                <UiTooltipTrigger asChild>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); toggleMarcoMut.mutate({ atividadeId: a.id!, isMarco: !a.isMarco }); }}
+                                    className={`ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ${a.isMarco ? "text-purple-500 hover:text-purple-700" : "text-slate-300 hover:text-purple-400"}`}>
+                                    ◆
+                                  </button>
+                                </UiTooltipTrigger>
+                                <UiTooltipContent side="top" className="text-xs">
+                                  {a.isMarco ? "Remover marco" : "Marcar como marco"}
+                                </UiTooltipContent>
+                              </UiTooltip>
+                            </UiTooltipProvider>
+                          )}
                           {atrasada && (
                             <UiTooltipProvider delayDuration={200}>
                               <UiTooltip>
@@ -6981,6 +7018,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
         pesoFinanceiro:   t.pesoFin,
         recursoPrincipal: t.recurso || undefined,
         isGrupo:          t.isGrupo,
+        isMarco:          t.isMarco,
         ordem:            i,
       }));
       salvarAtividadesMut.mutate({ revisaoId: revisao.id, projetoId, atividades });
