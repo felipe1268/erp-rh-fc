@@ -31,6 +31,7 @@ type InsertObra = typeof obras.$inferInsert;
 type InsertSector = typeof sectors.$inferInsert;
 type InsertJobFunction = typeof jobFunctions.$inferInsert;
 import { ENV } from './_core/env';
+import { normalizeCidadeInput } from '../shared/normalizeCidade';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -319,6 +320,10 @@ export async function createEmployee(data: InsertEmployee) {
   if (data.nomeCompleto && typeof data.nomeCompleto === 'string') {
     data = { ...data, nomeCompleto: data.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim() };
   }
+  // Normalizar cidade: Title Case + acentos corretos
+  if (data.cidade && typeof data.cidade === 'string') {
+    data = { ...data, cidade: normalizeCidadeInput(data.cidade) };
+  }
   // Gerar código interno automaticamente usando prefixo da empresa + auto-incremento atômico
   const companyId = data.companyId;
   
@@ -467,6 +472,10 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   // Sanitizar nomeCompleto: remover tabs, quebras de linha, espaços extras
   if (sanitized.nomeCompleto && typeof sanitized.nomeCompleto === 'string') {
     sanitized.nomeCompleto = sanitized.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  // Normalizar cidade: Title Case + acentos corretos
+  if (sanitized.cidade && typeof sanitized.cidade === 'string') {
+    sanitized.cidade = normalizeCidadeInput(sanitized.cidade);
   }
   // Validar código interno: não permitir números proibidos (dinâmico)
   if (sanitized.codigoInterno) {

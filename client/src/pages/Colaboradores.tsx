@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { EMPLOYEE_STATUS, EMPLOYEE_STATUS_MANUAL } from "../../../shared/modules";
+import { normalizeCidadeInput } from "../../../shared/normalizeCidade";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTituloEleitor, formatMoedaInput, formatMoedaSemPrefixo, parseMoedaBR, formatMoeda } from "@/lib/formatters";
 import { nowBrasilia } from "@/lib/dateUtils";
@@ -263,6 +264,13 @@ export default function Colaboradores() {
       toast.success(`${data.deleted} colaborador(es) excluído(s)!`);
     },
     onError: (e: any) => toast.error("Erro: " + e.message),
+  });
+  const normalizarCidadesMut = trpc.employees.normalizarCidades.useMutation({
+    onSuccess: (data: any) => {
+      utils.employees.list.invalidate();
+      toast.success(`Cidades normalizadas: ${data.corrigidos} corrigidas, ${data.ignorados} já estavam corretas.`);
+    },
+    onError: (e: any) => toast.error("Erro ao normalizar: " + e.message),
   });
 
   // Verificação de lista negra (desativado - módulo removido)
@@ -583,6 +591,7 @@ export default function Colaboradores() {
           <DraggableCommandBar barId="colaboradores" items={[
             { id: "print", node: <PrintActions title="Colaboradores" /> },
             { id: "importar", node: <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!hasValidSelection} className="gap-2"><Upload className="h-4 w-4" /> Importar Excel</Button> },
+            ...(user?.role === "admin" || user?.role === "admin_master" ? [{ id: "normalizarCidades", node: <Button variant="outline" onClick={() => { if (confirm("Corrigir caixa e acentos de todas as cidades cadastradas? Esta ação atualiza o banco de dados.")) normalizarCidadesMut.mutate({ companyId: companyId!, companyIds: queryCompanyIds }); }} disabled={normalizarCidadesMut.isPending || !hasValidSelection} className="gap-2 text-amber-700 border-amber-300 hover:bg-amber-50"><Wrench className="h-4 w-4" /> {normalizarCidadesMut.isPending ? "Corrigindo..." : "Padronizar Cidades"}</Button> }] : []),
             { id: "novo", node: <Button onClick={openNew} disabled={!hasValidSelection} className="gap-2"><Plus className="h-4 w-4" /> Novo</Button> },
           ]} />
         </div>
@@ -1057,7 +1066,7 @@ export default function Colaboradores() {
                               if (!d.erro) {
                                 set("logradouro", d.logradouro || "");
                                 set("bairro", d.bairro || "");
-                                set("cidade", d.localidade || "");
+                                set("cidade", normalizeCidadeInput(d.localidade || ""));
                                 set("estado", d.uf || "");
                                 toast.success("Endereço encontrado!");
                               } else {
@@ -1090,7 +1099,12 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Cidade</Label>
-                  <Input value={form.cidade ?? ""} onChange={e => set("cidade", e.target.value)} className="bg-input mt-1" />
+                  <Input
+                    value={form.cidade ?? ""}
+                    onChange={e => set("cidade", e.target.value)}
+                    onBlur={e => { const n = normalizeCidadeInput(e.target.value); if (n !== e.target.value) set("cidade", n); }}
+                    className="bg-input mt-1"
+                  />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">UF</Label>

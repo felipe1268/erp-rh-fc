@@ -40,6 +40,7 @@ import {
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
+import { normalizeCidadeInput } from "../shared/normalizeCidade";
 import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
@@ -624,6 +625,35 @@ export const appRouter = router({
       } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
       return { success: true };
     }),
+    normalizarCidades: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem executar esta ação." });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+        const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+        let corrigidos = 0;
+        let ignorados = 0;
+        for (const cid of ids) {
+          const rows = await db.execute(
+            sql`SELECT id, cidade FROM employees WHERE "companyId" = ${cid} AND cidade IS NOT NULL AND TRIM(cidade) != '' AND "deletedAt" IS NULL`
+          ) as any;
+          const list: { id: number; cidade: string }[] = rows?.rows ?? rows ?? [];
+          for (const row of list) {
+            const normalizada = normalizeCidadeInput(row.cidade);
+            if (normalizada && normalizada !== row.cidade) {
+              await db.execute(sql`UPDATE employees SET cidade = ${normalizada}, "updatedAt" = NOW() WHERE id = ${row.id}`);
+              corrigidos++;
+            } else {
+              ignorados++;
+            }
+          }
+        }
+        await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: 0, details: `Normalização de cidades executada: ${corrigidos} corrigidos, ${ignorados} já corretos.` });
+        return { corrigidos, ignorados, total: corrigidos + ignorados };
+      }),
     syncStatus: protectedProcedure.mutation(async () => {
       const result = await syncEmployeeStatus();
       return result;
