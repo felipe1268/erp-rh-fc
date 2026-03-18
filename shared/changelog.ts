@@ -2851,6 +2851,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 517,
+    titulo: "MapaFuncionariosInterativo — Filtros não resetam mais o mapa",
+    descricao: "toggleStatus removeu o reset para nível 1 (setLevel(1)/setSelectedState(null)/setSelectedCity(null)). Ao clicar em um filtro de status, o mapa permanece na tela atual: nível 1 atualiza automaticamente a distribuição por estado, nível 2 atualiza os clusters de cidades, nível 3 re-geocodifica os funcionários da cidade com o novo filtro após 900ms (aguarda o tRPC re-buscar com o novo statusFiltros). Implementado via handleCityClickRef + statusFiltrosKeyRef para evitar chamadas obsoletas e re-geocodificação duplicada na montagem.",
+    tipo: "melhoria",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 516,
     titulo: "MapaFuncionariosInterativo — Correção de localização e PINs ausentes",
     descricao: "Três bugs corrigidos: (1) cityView agora usa fallback triplo: cityCoords (geocodificado) → CITY_COORDS (tabela local, sem API) → centro do estado, eliminando o problema de 'mapa perdido' que exibia o centro do estado em vez da cidade selecionada. (2) loadCityCoords agora atualiza cityCoords incrementalmente a cada cidade geocodificada (setCityCoords funcional), não só no final — usuário que clica rápido na lista já tem coordenadas disponíveis. (3) handleCityClick: se geocodeAddress falha para funcionário com logradouro/CEP (endereço não encontrado no Nominatim), o funcionário é posicionado no centro da cidade com marcador aproximado em vez de desaparecer. cityCenter é resolvido antecipadamente com fallback CITY_COORDS → geocodeCidade → estado. MapContainer nível 3 recebeu key={selectedCity} para forçar remount ao trocar de cidade.",

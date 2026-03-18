@@ -401,6 +401,9 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
   const [geocoding, setGeocoding] = useState(false);
   const [geocodingProgress, setGeocodingProgress] = useState({ done: 0, total: 0 });
   const geocodingAbort = useRef(false);
+  // Ref to always call the latest version of handleCityClick inside effects/timeouts
+  const handleCityClickRef = useRef<(city: string) => void>(() => {});
+  const statusFiltrosKeyRef = useRef<string>("");
 
   const employeesInState = useMemo(
     () => (selectedState ? employees.filter(e => normalizeEstado(e.estado) === selectedState) : []),
@@ -548,6 +551,30 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     setGeocoding(false);
   }, [citiesInState, cityCoords]);
 
+  // Manter ref atualizado com a versão mais recente do handleCityClick
+  useEffect(() => { handleCityClickRef.current = handleCityClick; }, [handleCityClick]);
+
+  // Quando o filtro de status muda: se estiver no nível 3, re-geocodificar; senão, só deixa o dado atualizar
+  const statusFiltrosKey = statusFiltros.join(",");
+  useEffect(() => {
+    if (statusFiltrosKeyRef.current === "") {
+      // Primeira montagem — só registra, sem re-geocodificar
+      statusFiltrosKeyRef.current = statusFiltrosKey;
+      return;
+    }
+    if (statusFiltrosKeyRef.current === statusFiltrosKey) return;
+    statusFiltrosKeyRef.current = statusFiltrosKey;
+
+    if (level === 3 && selectedCity) {
+      geocodingAbort.current = true;
+      setGeocoding(false);
+      setGeocodedEmployees([]);
+      // Aguarda o tRPC re-buscar com o novo filtro antes de re-geocodificar
+      const t = setTimeout(() => handleCityClickRef.current(selectedCity), 900);
+      return () => clearTimeout(t);
+    }
+  }, [statusFiltrosKey]);
+
   const goBack = () => {
     if (level === 3) {
       geocodingAbort.current = true;
@@ -590,11 +617,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     setStatusFiltros(prev =>
       prev.includes(value) ? prev.filter(s => s !== value) : [...prev, value]
     );
-    // reset map when filter changes
-    setLevel(1);
-    setSelectedState(null);
-    setSelectedCity(null);
-    setGeocodedEmployees([]);
+    // Mantém o nível atual — o effect acima cuida de re-geocodificar ao nível 3 se necessário
   }
 
   const approxCount = geocodedEmployees.filter(e => e.isApprox).length;
