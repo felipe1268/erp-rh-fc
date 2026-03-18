@@ -2322,12 +2322,14 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
         mesAtivs.forEach(a => { completedEaps.add(a.eapCodigo); remaining = remaining.filter(r => r.eapCodigo !== a.eapCodigo); });
         const mesAtvsData = mesAtivs.map(a => {
           const custo    = getCusto(a);
+          // Calcular custoMat primeiro; custoMdo = custo - custoMat (residual exato, sem diferença de centavo)
           const custoMat = parseFloat((custo * ratioMat).toFixed(2));
-          const custoMdo = parseFloat((custo * ratioMdo).toFixed(2));
+          const custoMdo = parseFloat((custo - custoMat).toFixed(2));
           return { eapCodigo: a.eapCodigo, nome: a.nome, pesoFinanceiro: a.pesoFinanceiro, duracaoDias: a.duracaoDias, custo, custoMat, custoMdo };
         });
         const mesCustoMat = mesAtvsData.reduce((s, a) => s + a.custoMat, 0);
-        const mesCustoMdo = mesAtvsData.reduce((s, a) => s + a.custoMdo, 0);
+        // Residual exato no nível do mês também
+        const mesCustoMdo = parseFloat((mesCusto - mesCustoMat).toFixed(2));
         meses.push({ mes: mesNum++, custoTotal: mesCusto, custoMat: mesCustoMat, custoMdo: mesCustoMdo, atividades: mesAtvsData });
         if (mesNum > 500) break;
       }

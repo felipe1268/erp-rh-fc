@@ -2860,6 +2860,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 519,
+    titulo: "SimuladorCronograma — Gantt, Curva S e fix de arredondamento MT/MO",
+    descricao: "Três melhorias: (1) Fix de arredondamento — custoMdo calculado como residual exato (custo - custoMat) em vez de multiplicação independente, eliminando divergências de centavo no total MT+MO; mesmo ajuste no nível do mês (mesCustoMdo = mesCusto - mesCustoMat). Rodapé da tabela agora usa totalMdo = totalGerado - totalMat como residual exato. (2) Nova aba Gantt — visualização de barras horizontais por atividade × mês, mostrando a janela de execução de cada atividade no cronograma gerado, com rótulos de mês no cabeçalho e agrupamentos da EAP. (3) Nova aba Curva S — gráfico SVG com linha de desembolso acumulado planejado (%) por mês (baseline preliminar), com área preenchida em gradiente, pontos interativos e tabela-resumo de desembolso mensal/acumulado abaixo do gráfico.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 517,
     titulo: "MapaFuncionariosInterativo — Filtros não resetam mais o mapa",
     descricao: "toggleStatus removeu o reset para nível 1 (setLevel(1)/setSelectedState(null)/setSelectedCity(null)). Ao clicar em um filtro de status, o mapa permanece na tela atual: nível 1 atualiza automaticamente a distribuição por estado, nível 2 atualiza os clusters de cidades, nível 3 re-geocodifica os funcionários da cidade com o novo filtro após 900ms (aguarda o tRPC re-buscar com o novo statusFiltros). Implementado via handleCityClickRef + statusFiltrosKeyRef para evitar chamadas obsoletas e re-geocodificação duplicada na montagem.",

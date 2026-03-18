@@ -10278,7 +10278,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   });
   const [chatInput,     setChatInput]     = useState("");
   const [chatOpen,      setChatOpen]      = useState(false);
-  const [eapViewMode,   setEapViewMode]   = useState<"table" | "cards">("table");
+  const [eapViewMode,   setEapViewMode]   = useState<"table" | "cards" | "gantt" | "curva-s">("table");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const orcNum = parseMoney(orcamentoMensal);
@@ -10661,18 +10661,16 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                 <span className="text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-semibold">Padrão MS Project</span>
               </h3>
               <div className="flex gap-1">
-                <button
-                  onClick={() => setEapViewMode("table")}
-                  className={`text-[10px] px-2.5 py-1 rounded border font-medium transition-colors ${eapViewMode === "table" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
-                >Tabela</button>
-                <button
-                  onClick={() => setEapViewMode("cards")}
-                  className={`text-[10px] px-2.5 py-1 rounded border font-medium transition-colors ${eapViewMode === "cards" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
-                >Meses</button>
+                {(["table","cards","gantt","curva-s"] as const).map(mode => (
+                  <button key={mode}
+                    onClick={() => setEapViewMode(mode)}
+                    className={`text-[10px] px-2.5 py-1 rounded border font-medium transition-colors ${eapViewMode === mode ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                  >{{ table: "Tabela", cards: "Meses", gantt: "Gantt", "curva-s": "Curva S" }[mode]}</button>
+                ))}
               </div>
             </div>
 
-            {eapViewMode === "table" ? (() => {
+            {eapViewMode === "table" && (() => {
               // Construir mapa eap → mês e eap → dados de custo do mês
               const eapToMes = new Map<string, number>();
               const eapToCusto = new Map<string, { custo: number; custoMat: number; custoMdo: number }>();
@@ -10747,18 +10745,180 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                       <tr className="bg-slate-100 font-bold text-slate-700 border-t-2 border-slate-300">
                         <td className="px-3 py-2" colSpan={8}>TOTAL</td>
                         <td className="text-right px-2 py-2">{fmtR(totalGerado)}</td>
-                        {ratioMat > 0 && <td className="text-right px-2 py-2 text-blue-700">{fmtR(mesesGerados.reduce((s, m) => s + (m.custoMat ?? 0), 0))}</td>}
-                        {ratioMdo > 0 && <td className="text-right px-2 py-2 text-orange-700">{fmtR(mesesGerados.reduce((s, m) => s + (m.custoMdo ?? 0), 0))}</td>}
+                        {ratioMat > 0 && (() => { const tMat = mesesGerados.reduce((s, m) => s + (m.custoMat ?? 0), 0); return (<><td className="text-right px-2 py-2 text-blue-700">{fmtR(tMat)}</td>{ratioMdo > 0 && <td className="text-right px-2 py-2 text-orange-700">{fmtR(totalGerado - tMat)}</td>}</>); })()}
+                        {ratioMdo > 0 && !ratioMat && <td className="text-right px-2 py-2 text-orange-700">{fmtR(mesesGerados.reduce((s, m) => s + (m.custoMdo ?? 0), 0))}</td>}
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               );
-            })() : (
+            })()}
+
+            {eapViewMode === "cards" && (
               <div className="p-4 space-y-3">
                 {renderMonthCards(mesesGerados)}
               </div>
             )}
+
+            {eapViewMode === "gantt" && (() => {
+              const nMeses = mesesGerados.length;
+              if (nMeses === 0) return <div className="p-6 text-center text-sm text-slate-400">Nenhum mês gerado.</div>;
+              const diBase = new Date(dataInicio + "T12:00:00");
+              const getMesLabel = (mes: number) => { const d = new Date(diBase); d.setMonth(d.getMonth() + (mes - 1)); return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }); };
+              const eapToMes = new Map<string, number>();
+              mesesGerados.forEach(m => m.atividades.forEach(a => eapToMes.set(a.eapCodigo, m.mes)));
+              const COL_W = Math.max(28, Math.min(56, Math.floor(720 / nMeses)));
+              const LABEL_W = 180;
+              return (
+                <div className="overflow-x-auto p-3">
+                  <div style={{ minWidth: LABEL_W + nMeses * COL_W + 16 }}>
+                    {/* Header */}
+                    <div className="flex border-b-2 border-slate-300 pb-1 mb-1">
+                      <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="text-[9px] font-semibold text-slate-500 uppercase px-2">Atividade</div>
+                      {Array.from({ length: nMeses }, (_, i) => (
+                        <div key={i} style={{ width: COL_W, minWidth: COL_W }} className="text-center text-[9px] text-slate-400 font-medium truncate px-0.5">{getMesLabel(i + 1)}</div>
+                      ))}
+                    </div>
+                    {/* Rows */}
+                    {atividadesGeradas.map((a, idx) => {
+                      const mes = eapToMes.get(a.eapCodigo);
+                      return (
+                        <div key={idx} className={`flex items-center border-b border-slate-100 ${a.isGrupo ? "bg-slate-50" : "hover:bg-violet-50/30"}`} style={{ height: a.isGrupo ? 24 : 22 }}>
+                          <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`px-2 text-[10px] truncate ${a.isGrupo ? "font-bold text-slate-700 uppercase tracking-wide" : "text-slate-600 pl-4"}`} title={a.nome}>
+                            <span className="text-slate-400 mr-1">{a.eapCodigo}</span>{a.nome}
+                          </div>
+                          {!a.isGrupo && Array.from({ length: nMeses }, (_, i) => {
+                            const isMes = mes === i + 1;
+                            return (
+                              <div key={i} style={{ width: COL_W, minWidth: COL_W }} className="px-0.5 flex items-center justify-center" title={isMes ? `Mês ${mes}` : ""}>
+                                {isMes ? (
+                                  <div className="w-full rounded" style={{ height: 12, backgroundColor: "#7c3aed", opacity: 0.75 }} />
+                                ) : (
+                                  <div className="w-full rounded" style={{ height: 12, backgroundColor: "#f1f5f9" }} />
+                                )}
+                              </div>
+                            );
+                          })}
+                          {a.isGrupo && <div style={{ flex: 1 }} />}
+                        </div>
+                      );
+                    })}
+                    {/* Legenda */}
+                    <div className="mt-3 flex items-center gap-4 text-[9px] text-slate-400 px-2">
+                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded bg-violet-600 opacity-75" /> Atividade programada</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded bg-slate-200" /> Sem atividade</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {eapViewMode === "curva-s" && (() => {
+              const n = mesesGerados.length;
+              if (n === 0) return <div className="p-6 text-center text-sm text-slate-400">Nenhum mês gerado.</div>;
+              const diBase = new Date(dataInicio + "T12:00:00");
+              const getMesLabel = (mes: number) => { const d = new Date(diBase); d.setMonth(d.getMonth() + (mes - 1)); return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }); };
+
+              // Calcular acumulado mensal
+              let acum = 0;
+              const pontos = mesesGerados.map(m => { acum += m.custoTotal; return { mes: m.mes, label: getMesLabel(m.mes), mensal: m.custoTotal, acum, pct: totalGerado > 0 ? (acum / totalGerado) * 100 : 0 }; });
+
+              const W = 680, H = 260, PAD_L = 70, PAD_R = 20, PAD_T = 20, PAD_B = 50;
+              const innerW = W - PAD_L - PAD_R;
+              const innerH = H - PAD_T - PAD_B;
+              const xStep = n > 1 ? innerW / (n - 1) : innerW;
+              const toX = (i: number) => PAD_L + (n > 1 ? i * xStep : innerW / 2);
+              const toY = (pct: number) => PAD_T + innerH - (pct / 100) * innerH;
+
+              const linePath = pontos.map((p, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(1)} ${toY(p.pct).toFixed(1)}`).join(" ");
+              const areaPath = `${linePath} L ${toX(n - 1).toFixed(1)} ${(PAD_T + innerH).toFixed(1)} L ${toX(0).toFixed(1)} ${(PAD_T + innerH).toFixed(1)} Z`;
+
+              const yTicks = [0, 20, 40, 60, 80, 100];
+              const xTickStep = n <= 12 ? 1 : n <= 24 ? 2 : 3;
+
+              return (
+                <div className="p-4">
+                  <p className="text-[11px] text-slate-500 mb-3">Curva S — Desembolso Planejado Acumulado <span className="text-violet-600 font-medium">(Baseline preliminar)</span></p>
+                  <div className="overflow-x-auto">
+                    <svg width={W} height={H} className="font-sans select-none" style={{ maxWidth: "100%" }}>
+                      <defs>
+                        <linearGradient id="curvasGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.18" />
+                          <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
+                      {/* Grid horizontal */}
+                      {yTicks.map(t => (
+                        <g key={t}>
+                          <line x1={PAD_L} y1={toY(t)} x2={W - PAD_R} y2={toY(t)} stroke="#e2e8f0" strokeWidth="1" />
+                          <text x={PAD_L - 6} y={toY(t) + 4} textAnchor="end" fontSize="9" fill="#94a3b8">{t}%</text>
+                        </g>
+                      ))}
+                      {/* Grid vertical */}
+                      {pontos.filter((_, i) => i % xTickStep === 0).map((p, _, arr) => {
+                        const i = pontos.indexOf(p);
+                        return (
+                          <g key={i}>
+                            <line x1={toX(i)} y1={PAD_T} x2={toX(i)} y2={PAD_T + innerH} stroke="#f1f5f9" strokeWidth="1" />
+                            <text x={toX(i)} y={PAD_T + innerH + 14} textAnchor="middle" fontSize="8" fill="#94a3b8">{p.label}</text>
+                          </g>
+                        );
+                      })}
+                      {/* Área preenchida */}
+                      <path d={areaPath} fill="url(#curvasGrad)" />
+                      {/* Linha principal */}
+                      <path d={linePath} fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                      {/* Pontos */}
+                      {pontos.map((p, i) => (
+                        <g key={i}>
+                          <circle cx={toX(i)} cy={toY(p.pct)} r="4" fill="#7c3aed" stroke="white" strokeWidth="1.5" />
+                          {(n <= 12 || i % xTickStep === 0) && (
+                            <text x={toX(i)} y={toY(p.pct) - 8} textAnchor="middle" fontSize="8" fill="#6d28d9" fontWeight="600">{p.pct.toFixed(1)}%</text>
+                          )}
+                        </g>
+                      ))}
+                      {/* Eixo X */}
+                      <line x1={PAD_L} y1={PAD_T + innerH} x2={W - PAD_R} y2={PAD_T + innerH} stroke="#cbd5e1" strokeWidth="1.5" />
+                      {/* Eixo Y */}
+                      <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + innerH} stroke="#cbd5e1" strokeWidth="1.5" />
+                    </svg>
+                  </div>
+                  {/* Tabela resumo */}
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full text-[10px] border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-500 font-semibold">
+                          <th className="text-left px-3 py-1.5 border-b">Mês</th>
+                          <th className="text-right px-3 py-1.5 border-b">Desembolso</th>
+                          <th className="text-right px-3 py-1.5 border-b">Acumulado</th>
+                          <th className="text-right px-3 py-1.5 border-b">% Acum.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pontos.map((p, i) => (
+                          <tr key={i} className="border-b border-slate-100 hover:bg-violet-50/30">
+                            <td className="px-3 py-1">{p.label}</td>
+                            <td className="px-3 py-1 text-right text-slate-600">{fmtR(p.mensal)}</td>
+                            <td className="px-3 py-1 text-right font-medium text-violet-700">{fmtR(p.acum)}</td>
+                            <td className="px-3 py-1 text-right">
+                              <span className="bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-semibold">{p.pct.toFixed(1)}%</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-100 font-bold text-slate-700">
+                          <td className="px-3 py-1.5">TOTAL</td>
+                          <td className="px-3 py-1.5 text-right">{fmtR(totalGerado)}</td>
+                          <td className="px-3 py-1.5 text-right">{fmtR(totalGerado)}</td>
+                          <td className="px-3 py-1.5 text-right"><span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-semibold">100%</span></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* ── Chat JULINHO ── */}
