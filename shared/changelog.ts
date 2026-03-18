@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 545,
+    titulo: "Fix grupos de acesso: listagem e edição migradas para SQL raw",
+    descricao: "As colunas 'somenteVisualizacao' e 'ocultarDadosSensiveis' em user_groups são camelCase no banco, exigindo aspas duplas no SQL. O Drizzle ORM não gerava essas aspas consistentemente em SELECT e UPDATE, causando 0 grupos exibidos e falhas de edição. Solução: listUserGroups(), getUserGroupById() e updateUserGroup() convertidos para SQL raw com colunas devidamente quotadas e aliases (module_access AS 'moduleAccess', etc.).",
+    tipo: "bugfix",
+    modulos: "Usuários",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 544,
     titulo: "Fix definitivo: criar Grupo de Acesso — SQL raw contorna bug do Drizzle",
     descricao: "A tentativa anterior (Rev.543) de passar createdAt/updatedAt explicitamente não resolveu porque o Drizzle continuou gerando 'default' para essas colunas. Causa raiz identificada: colunas camelCase ('somenteVisualizacao', 'ocultarDadosSensiveis') no banco exigem aspas duplas no SQL, e o Drizzle não gerava os defaults corretamente com .defaultNow(). Solução: substituição do db.insert(userGroups).values() por db.execute(sql`INSERT INTO user_groups (nome, descricao, cor, icone, \"somenteVisualizacao\", \"ocultarDadosSensiveis\", created_at, updated_at) VALUES (...) RETURNING id`) — SQL raw testado e validado no banco.",

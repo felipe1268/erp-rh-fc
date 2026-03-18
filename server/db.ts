@@ -2564,14 +2564,28 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
 export async function listUserGroups() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(userGroups).orderBy(userGroups.nome);
+  const result = await db.execute(sql`
+    SELECT id, nome, descricao, cor, icone, ativo,
+           "somenteVisualizacao", "ocultarDadosSensiveis",
+           module_access AS "moduleAccess", created_at AS "createdAt", updated_at AS "updatedAt"
+    FROM user_groups
+    ORDER BY nome
+  `);
+  return result.rows as any[];
 }
 
 export async function getUserGroupById(id: number) {
   const db = await getDb();
   if (!db) return null;
-  const rows = await db.select().from(userGroups).where(eq(userGroups.id, id)).limit(1);
-  return rows[0] ?? null;
+  const result = await db.execute(sql`
+    SELECT id, nome, descricao, cor, icone, ativo,
+           "somenteVisualizacao", "ocultarDadosSensiveis",
+           module_access AS "moduleAccess", created_at AS "createdAt", updated_at AS "updatedAt"
+    FROM user_groups
+    WHERE id = ${id}
+    LIMIT 1
+  `);
+  return (result.rows[0] as any) ?? null;
 }
 
 export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number }) {
@@ -2592,7 +2606,24 @@ export async function createUserGroup(data: { nome: string; descricao?: string; 
 export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; ativo?: number }) {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
-  await db.update(userGroups).set(data).where(eq(userGroups.id, id));
+  // Build SET clause manually to handle camelCase columns with quotes
+  const sets: string[] = [];
+  const vals: any[] = [];
+  let idx = 1;
+  if (data.nome !== undefined)                { sets.push(`nome = $${idx++}`);                    vals.push(data.nome); }
+  if (data.descricao !== undefined)           { sets.push(`descricao = $${idx++}`);               vals.push(data.descricao); }
+  if (data.cor !== undefined)                 { sets.push(`cor = $${idx++}`);                     vals.push(data.cor); }
+  if (data.icone !== undefined)               { sets.push(`icone = $${idx++}`);                   vals.push(data.icone); }
+  if (data.somenteVisualizacao !== undefined) { sets.push(`"somenteVisualizacao" = $${idx++}`);   vals.push(data.somenteVisualizacao); }
+  if (data.ocultarDadosSensiveis !== undefined){ sets.push(`"ocultarDadosSensiveis" = $${idx++}`);vals.push(data.ocultarDadosSensiveis); }
+  if (data.ativo !== undefined)               { sets.push(`ativo = $${idx++}`);                   vals.push(data.ativo); }
+  if (sets.length === 0) return;
+  sets.push(`updated_at = now()`);
+  vals.push(id);
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await pool.query(`UPDATE user_groups SET ${sets.join(', ')} WHERE id = $${idx}`, vals);
+  } finally { await pool.end(); }
 }
 
 export async function deleteUserGroup(id: number) {
