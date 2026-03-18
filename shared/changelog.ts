@@ -3175,6 +3175,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 554,
+    titulo: "Mapa de Funcionários — 'Por Estado' como padrão + botão de geolocalização global",
+    descricao: "Alterado o modo de abertura padrão do Mapa de Funcionários de 'Mapa Geral' para 'Por Estado', que exibe o mapa SVG do Brasil com distribuição por estados. Adicionado botão 'Ver todos os funcionários no mapa com geolocalização' centralizado abaixo do mapa SVG, que ao ser clicado ativa o modo Mapa Geral (Leaflet) exibindo todos os funcionários da empresa plotados por geolocalização independente do estado ou cidade.",
+    tipo: "melhoria",
+    modulos: "RH/DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 553,
     titulo: "Aviso Prévio — Banners de aviso e reativação em massa de Concluídos",
     descricao: "Adicionado aviso/banner informativo na aba 'Aguardando Baixa' explicando que os colaboradores já cumpriram o aviso prévio e não estão mais em atividade, aguardando pagamento das verbas rescisórias, e que o usuário deve dar baixa manualmente em cada um. Adicionado banner de alerta vermelho na aba 'Concluídos' quando há avisos marcados incorretamente como concluídos, com botão 'Reativar N avisos' que realiza a reativação em massa para o status 'Aguardando Baixa' via nova mutation revertAllConcluidos no backend — com audit log e redirect automático ao filtro correto após a operação.",

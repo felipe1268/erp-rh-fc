@@ -521,7 +521,7 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
   );
 
   // ── View mode: "geral" = all cities at once, "estado" = drill-down ──
-  const [viewMode, setViewMode] = useState<"geral" | "estado">("geral");
+  const [viewMode, setViewMode] = useState<"geral" | "estado">("estado");
 
   // ── Estado drill-down state ──
   const [level, setLevel] = useState<Level>(1);
@@ -1217,13 +1217,24 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
           <>
             {/* Level 1: Brazil SVG Map */}
             {level === 1 && (
-              <BrazilMap
-                title=""
-                data={stateDist}
-                colorScheme="blue"
-                onStateClick={handleStateClick}
-                hideCard
-              />
+              <>
+                <BrazilMap
+                  title=""
+                  data={stateDist}
+                  colorScheme="blue"
+                  onStateClick={handleStateClick}
+                  hideCard
+                />
+                <div className="mt-3 flex justify-center">
+                  <button
+                    onClick={() => setViewMode("geral")}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold shadow-md transition-all hover:shadow-lg"
+                  >
+                    <Globe className="h-4 w-4" />
+                    Ver todos os funcionários no mapa com geolocalização
+                  </button>
+                </div>
+              </>
             )}
 
             {/* Level 2: State Leaflet Map — cities as clusters */}
