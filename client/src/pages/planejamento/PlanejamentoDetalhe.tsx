@@ -10247,6 +10247,451 @@ type GeradoMesAtv = { eapCodigo: string; nome: string; pesoFinanceiro: number; d
 type GeradoMes  = { mes: number; atividades: GeradoMesAtv[]; custoTotal: number; custoMat: number; custoMdo: number };
 type ChatMsg    = { role: "user" | "assistant"; content: string; ts: number };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Gantt — visualização de barras horizontais por atividade × mês
+// ─────────────────────────────────────────────────────────────────────────────
+function GanttSimulador({ atividadesGeradas, mesesGerados, dataInicio }: {
+  atividadesGeradas: GeradoAtiv[];
+  mesesGerados: GeradoMes[];
+  dataInicio: string;
+}) {
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const nMeses = mesesGerados.length;
+  if (nMeses === 0) return <div className="p-6 text-center text-sm text-slate-400">Nenhum mês gerado.</div>;
+
+  const diBase = new Date(dataInicio + "T12:00:00");
+  const getMesInfo = (mes: number) => {
+    const d = new Date(diBase); d.setMonth(d.getMonth() + (mes - 1));
+    return { short: d.toLocaleDateString("pt-BR", { month: "short" }).toUpperCase(), year: String(d.getFullYear()).slice(2) };
+  };
+
+  const eapToMes = new Map<string, number>();
+  const eapToInfo = new Map<string, GeradoMesAtv>();
+  mesesGerados.forEach(m => m.atividades.forEach(a => {
+    eapToMes.set(a.eapCodigo, m.mes);
+    eapToInfo.set(a.eapCodigo, a);
+  }));
+
+  const LABEL_W = 240;
+  const COL_W   = Math.max(38, Math.min(64, Math.floor(820 / nMeses)));
+  const ROW_H   = 30;
+  const GRP_H   = 26;
+  const HDR_H   = 44;
+
+  const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  return (
+    <div className="overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: 600 }}>
+      <div style={{ minWidth: LABEL_W + nMeses * COL_W + 4 }}>
+        {/* Sticky header */}
+        <div className="sticky top-0 z-10 flex border-b-2 border-slate-300 bg-white">
+          <div style={{ width: LABEL_W, minWidth: LABEL_W, height: HDR_H }}
+            className="px-3 flex items-end pb-2 text-[9px] font-bold text-slate-500 uppercase tracking-widest border-r border-slate-200 bg-slate-50 shrink-0">
+            ATIVIDADE
+          </div>
+          {Array.from({ length: nMeses }, (_, i) => {
+            const info = getMesInfo(i + 1);
+            const even = i % 2 === 0;
+            return (
+              <div key={i} style={{ width: COL_W, minWidth: COL_W, height: HDR_H }}
+                className={`flex flex-col items-center justify-center border-r border-slate-200 shrink-0 ${even ? "bg-slate-50" : "bg-white"}`}>
+                <span className="text-[9px] font-bold text-slate-700 leading-none">{info.short}</span>
+                <span className="text-[8px] text-slate-400 leading-none mt-0.5">/{info.year}</span>
+                <span className="text-[8px] text-slate-300 mt-1">{i + 1}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Activity rows */}
+        {atividadesGeradas.map((a, idx) => {
+          const mes    = eapToMes.get(a.eapCodigo);
+          const info   = eapToInfo.get(a.eapCodigo);
+          const isHov  = hoveredRow === a.eapCodigo;
+
+          if (a.isGrupo) {
+            return (
+              <div key={idx} style={{ height: GRP_H }}
+                className="flex items-center border-b border-slate-200 bg-gradient-to-r from-slate-100 to-slate-50">
+                <div style={{ width: LABEL_W, minWidth: LABEL_W, height: "100%" }}
+                  className="flex items-center gap-2 px-3 border-r border-slate-200 shrink-0">
+                  <span className="text-[9px] font-black text-slate-500 shrink-0">{a.eapCodigo}</span>
+                  <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wide truncate">{a.nome}</span>
+                </div>
+                <div style={{ flex: 1, height: "100%", backgroundImage: `repeating-linear-gradient(90deg,#e2e8f0 0,#e2e8f0 1px,transparent 1px,transparent ${COL_W}px)` }}
+                />
+              </div>
+            );
+          }
+
+          return (
+            <div key={idx} style={{ height: ROW_H }}
+              className={`flex items-center border-b border-slate-100 transition-colors cursor-default ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} ${isHov ? "!bg-violet-50" : ""}`}
+              onMouseEnter={() => setHoveredRow(a.eapCodigo)}
+              onMouseLeave={() => setHoveredRow(null)}>
+              {/* Label */}
+              <div style={{ width: LABEL_W, minWidth: LABEL_W, height: "100%" }}
+                className="flex items-center gap-1.5 px-3 border-r border-slate-100 shrink-0"
+                title={`${a.eapCodigo} — ${a.nome}${info ? ` | R$ ${fmtBRL(info.custo)} | ${a.pesoFinanceiro.toFixed(2)}%` : ""}`}>
+                <span className="text-[9px] text-slate-300 shrink-0 font-mono">{a.eapCodigo}</span>
+                <span className={`text-[10px] truncate ${isHov ? "text-violet-700 font-medium" : "text-slate-600"}`}>{a.nome}</span>
+              </div>
+              {/* Month cells */}
+              {Array.from({ length: nMeses }, (_, i) => {
+                const isMes = mes === i + 1;
+                return (
+                  <div key={i} style={{ width: COL_W, minWidth: COL_W, height: "100%" }}
+                    className="flex items-center justify-center border-r border-slate-100/50 shrink-0">
+                    {isMes ? (
+                      <div style={{
+                        width: "88%", height: 18, borderRadius: 5,
+                        background: isHov
+                          ? "linear-gradient(90deg,#6d28d9,#5b21b6)"
+                          : "linear-gradient(90deg,#8b5cf6,#7c3aed)",
+                        boxShadow: isHov ? "0 0 0 2px #c4b5fd,0 2px 4px rgba(124,58,237,0.4)" : "0 1px 3px rgba(109,40,217,0.3)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {COL_W >= 48 && (
+                          <span style={{ fontSize: 7, color: "rgba(255,255,255,0.9)", fontWeight: 700 }}>
+                            {a.pesoFinanceiro.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ width: "88%", height: 4, borderRadius: 2, background: i % 2 === 0 ? "#f1f5f9" : "#e2e8f0" }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {/* Footer — atividades por mês */}
+        <div className="sticky bottom-0 z-10 flex border-t-2 border-slate-200 bg-slate-50">
+          <div style={{ width: LABEL_W, minWidth: LABEL_W }}
+            className="px-3 py-1.5 text-[9px] font-bold text-slate-500 uppercase border-r border-slate-200 shrink-0">
+            Atividades / Mês
+          </div>
+          {mesesGerados.map((m, i) => (
+            <div key={i} style={{ width: COL_W, minWidth: COL_W }}
+              className="flex items-center justify-center border-r border-slate-100 shrink-0">
+              <span className="text-[9px] font-semibold text-violet-600">{m.atividades.length}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Legend */}
+      <div className="flex items-center gap-4 px-3 py-2 border-t border-slate-100 bg-white text-[9px] text-slate-400">
+        <span className="flex items-center gap-1">
+          <span style={{ display: "inline-block", width: 20, height: 8, borderRadius: 3, background: "linear-gradient(90deg,#8b5cf6,#7c3aed)" }} />
+          Atividade programada
+        </span>
+        <span className="flex items-center gap-1">
+          <span style={{ display: "inline-block", width: 20, height: 4, borderRadius: 2, background: "#e2e8f0" }} />
+          Período sem atividade
+        </span>
+        <span className="text-slate-300">· Hover para ver detalhes</span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Curva S interativa — linha acumulada + barras mensais + tooltip hover
+// ─────────────────────────────────────────────────────────────────────────────
+function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
+  mesesGerados: GeradoMes[];
+  totalGerado: number;
+  dataInicio: string;
+  fmtR: (v: number) => string;
+}) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const svgRef   = useRef<SVGSVGElement>(null);
+
+  const n = mesesGerados.length;
+  if (n === 0) return <div className="p-6 text-center text-sm text-slate-400">Nenhum mês gerado.</div>;
+
+  const diBase = new Date(dataInicio + "T12:00:00");
+  const getMesLabel = (mes: number) => {
+    const d = new Date(diBase); d.setMonth(d.getMonth() + (mes - 1));
+    return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+  };
+
+  let acum = 0;
+  const pontos = mesesGerados.map(m => {
+    acum += m.custoTotal;
+    return {
+      mes: m.mes, label: getMesLabel(m.mes),
+      mensal: m.custoTotal, acum,
+      pct: totalGerado > 0 ? (acum / totalGerado) * 100 : 0,
+    };
+  });
+
+  const W = 760, H = 320;
+  const PAD_L = 60, PAD_R = 20, PAD_T = 30, PAD_B = 64;
+  const BAR_ZONE = 44; // espaço para as barras mensais acima do eixo X
+  const innerW   = W - PAD_L - PAD_R;
+  const lineH    = H - PAD_T - PAD_B - BAR_ZONE;
+  const baseLineY = PAD_T + lineH;
+  const barBaseY  = PAD_T + lineH + BAR_ZONE;
+
+  const xStep = n > 1 ? innerW / (n - 1) : innerW;
+  const toX   = (i: number) => PAD_L + (n > 1 ? i * xStep : innerW / 2);
+  const toY   = (pct: number) => PAD_T + lineH - (pct / 100) * lineH;
+
+  // Catmull-Rom → cubic Bezier para curva suave
+  const catmullToBezier = (pts: { x: number; y: number }[]) => {
+    if (pts.length <= 1) return `M ${pts[0].x} ${pts[0].y}`;
+    let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(pts.length - 1, i + 2)];
+      const alpha = 0.5;
+      const cp1x = p1.x + (p2.x - p0.x) * alpha / 3;
+      const cp1y = p1.y + (p2.y - p0.y) * alpha / 3;
+      const cp2x = p2.x - (p3.x - p1.x) * alpha / 3;
+      const cp2y = p2.y - (p3.y - p1.y) * alpha / 3;
+      d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+    }
+    return d;
+  };
+
+  const pts       = pontos.map((p, i) => ({ x: toX(i), y: toY(p.pct) }));
+  const linePath  = catmullToBezier(pts);
+  const lastPt    = pts[pts.length - 1];
+  const firstPt   = pts[0];
+  const areaPath  = `${linePath} L ${lastPt.x.toFixed(2)} ${baseLineY} L ${firstPt.x.toFixed(2)} ${baseLineY} Z`;
+
+  const maxMensal = Math.max(...pontos.map(p => p.mensal), 1);
+  const barW      = Math.max(4, Math.min(18, xStep * 0.55));
+  const toBarH    = (v: number) => (v / maxMensal) * (BAR_ZONE - 6);
+
+  const yTicks     = [0, 25, 50, 75, 100];
+  const xTickStep  = n <= 12 ? 1 : n <= 24 ? 2 : n <= 36 ? 3 : 4;
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const mx = (e.clientX - rect.left) * (W / rect.width);
+    let ni = 0, nd = Infinity;
+    pts.forEach((p, i) => { const d = Math.abs(p.x - mx); if (d < nd) { nd = d; ni = i; } });
+    setHoveredIdx(ni);
+    // Scroll table row into view
+    if (tableRef.current) {
+      const row = tableRef.current.querySelector(`[data-idx="${ni}"]`) as HTMLElement | null;
+      row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  };
+
+  const hP   = hoveredIdx !== null ? pontos[hoveredIdx] : null;
+  const hX   = hoveredIdx !== null ? toX(hoveredIdx) : null;
+  const hY   = hoveredIdx !== null ? toY(pontos[hoveredIdx].pct) : null;
+  const tipRight = hoveredIdx !== null && hX !== null && hX > W * 0.62;
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <p className="text-sm font-semibold text-slate-700">Curva S — Desembolso Planejado Acumulado</p>
+          <p className="text-[11px] text-violet-600">Baseline preliminar · Passe o mouse sobre o gráfico para analisar</p>
+        </div>
+        <div className="flex gap-3 text-[9px] text-slate-400">
+          <span className="flex items-center gap-1">
+            <span style={{ display: "inline-block", width: 24, height: 3, background: "#7c3aed", borderRadius: 9 }} />
+            % Acumulado
+          </span>
+          <span className="flex items-center gap-1">
+            <span style={{ display: "inline-block", width: 10, height: 10, background: "#bfdbfe", borderRadius: 2 }} />
+            Desembolso mensal
+          </span>
+        </div>
+      </div>
+
+      {/* SVG Chart */}
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <svg
+          ref={svgRef}
+          width={W} height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          style={{ maxWidth: "100%", cursor: "crosshair", display: "block" }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHoveredIdx(null)}
+        >
+          <defs>
+            <linearGradient id="csGrad2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.01" />
+            </linearGradient>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
+
+          {/* Y grid & labels */}
+          {yTicks.map(t => (
+            <g key={t}>
+              <line x1={PAD_L} y1={toY(t)} x2={W - PAD_R} y2={toY(t)}
+                stroke={t === 50 ? "#ede9fe" : "#f1f5f9"}
+                strokeWidth={t === 0 || t === 100 ? 1.5 : t === 50 ? 1.5 : 1}
+                strokeDasharray={t === 50 ? "5 3" : ""} />
+              <text x={PAD_L - 5} y={toY(t) + 3.5} textAnchor="end" fontSize={9} fill={t === 50 ? "#7c3aed" : "#94a3b8"} fontWeight={t === 50 ? "600" : "400"}>{t}%</text>
+            </g>
+          ))}
+
+          {/* X labels */}
+          {pontos.filter((_, i) => i % xTickStep === 0).map((p) => {
+            const i = pontos.indexOf(p);
+            return (
+              <text key={i} x={toX(i)} y={barBaseY + 14} textAnchor="middle" fontSize={8} fill="#94a3b8">{p.label}</text>
+            );
+          })}
+
+          {/* Monthly bars */}
+          {pontos.map((p, i) => {
+            const bh  = toBarH(p.mensal);
+            const hov = hoveredIdx === i;
+            return (
+              <rect key={i}
+                x={toX(i) - barW / 2} y={barBaseY - bh}
+                width={barW} height={bh} rx={2}
+                fill={hov ? "#60a5fa" : "#bfdbfe"}
+                opacity={hov ? 1 : 0.8}
+              />
+            );
+          })}
+
+          {/* Separator line between bars and curve area */}
+          <line x1={PAD_L} y1={baseLineY} x2={W - PAD_R} y2={baseLineY} stroke="#e2e8f0" strokeWidth="1" />
+
+          {/* Area fill */}
+          <path d={areaPath} fill="url(#csGrad2)" />
+
+          {/* Smooth line */}
+          <path d={linePath} fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+
+          {/* Data points */}
+          {pontos.map((p, i) => {
+            const hov = hoveredIdx === i;
+            return (
+              <circle key={i}
+                cx={toX(i)} cy={toY(p.pct)}
+                r={hov ? 6 : n <= 30 ? 3.5 : 2}
+                fill={hov ? "#5b21b6" : "#7c3aed"}
+                stroke="white" strokeWidth={hov ? 2 : 1.5}
+                filter={hov ? "url(#glow)" : ""}
+              />
+            );
+          })}
+
+          {/* Hover crosshair */}
+          {hoveredIdx !== null && hX !== null && hY !== null && (
+            <>
+              <line x1={hX} y1={PAD_T} x2={hX} y2={barBaseY} stroke="#7c3aed" strokeWidth="1.2" strokeDasharray="4 3" opacity="0.55" />
+              <line x1={PAD_L} y1={hY} x2={W - PAD_R} y2={hY} stroke="#7c3aed" strokeWidth="1" strokeDasharray="4 3" opacity="0.35" />
+            </>
+          )}
+
+          {/* Hover tooltip */}
+          {hP && hX !== null && hY !== null && (() => {
+            const TW = 182, TH = 82, pad = 12;
+            const tx = tipRight ? hX - TW - pad : hX + pad;
+            const ty = Math.min(Math.max(hY - TH / 2, PAD_T + 4), baseLineY - TH - 4);
+            return (
+              <g>
+                <rect x={tx} y={ty} width={TW} height={TH} rx={7}
+                  fill="white" stroke="#ede9fe" strokeWidth="1.5"
+                  style={{ filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.12))" }} />
+                {/* Title bar */}
+                <rect x={tx} y={ty} width={TW} height={20} rx={7} fill="#7c3aed" />
+                <rect x={tx} y={ty + 13} width={TW} height={7} fill="#7c3aed" />
+                <text x={tx + TW / 2} y={ty + 13.5} textAnchor="middle" fontSize={10} fontWeight="700" fill="white">{hP.label}</text>
+                {/* Content */}
+                <text x={tx + 10} y={ty + 34} fontSize={9} fill="#64748b">Desembolso</text>
+                <text x={tx + TW - 10} y={ty + 34} fontSize={9} fill="#0f172a" textAnchor="end" fontWeight="600">{fmtR(hP.mensal)}</text>
+                <text x={tx + 10} y={ty + 49} fontSize={9} fill="#64748b">Acumulado</text>
+                <text x={tx + TW - 10} y={ty + 49} fontSize={9} fill="#6d28d9" textAnchor="end" fontWeight="700">{fmtR(hP.acum)}</text>
+                <text x={tx + 10} y={ty + 64} fontSize={9} fill="#64748b">% do Total</text>
+                <text x={tx + TW - 10} y={ty + 64} fontSize={11} fill="#4c1d95" textAnchor="end" fontWeight="800">{hP.pct.toFixed(1)}%</text>
+                {/* Progress bar inside tooltip */}
+                <rect x={tx + 10} y={ty + 70} width={TW - 20} height={4} rx={2} fill="#ede9fe" />
+                <rect x={tx + 10} y={ty + 70} width={(TW - 20) * hP.pct / 100} height={4} rx={2} fill="#7c3aed" />
+              </g>
+            );
+          })()}
+
+          {/* Axes */}
+          <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={barBaseY} stroke="#cbd5e1" strokeWidth="1.5" />
+          <line x1={PAD_L} y1={barBaseY} x2={W - PAD_R} y2={barBaseY} stroke="#cbd5e1" strokeWidth="1.5" />
+
+          {/* Y axis label */}
+          <text x={14} y={PAD_T + lineH / 2} textAnchor="middle" fontSize={8} fill="#94a3b8"
+            transform={`rotate(-90, 14, ${PAD_T + lineH / 2})`}>% Acumulado</text>
+        </svg>
+      </div>
+
+      {/* Interactive table */}
+      <div ref={tableRef} className="overflow-y-auto border border-slate-200 rounded-xl" style={{ maxHeight: 340 }}>
+        <table className="w-full text-[11px] border-collapse">
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-slate-100 text-slate-500 font-semibold">
+              <th className="text-left px-3 py-2 border-b border-slate-200">Mês</th>
+              <th className="text-right px-3 py-2 border-b border-slate-200">Desembolso Mensal</th>
+              <th className="text-right px-3 py-2 border-b border-slate-200">Acumulado</th>
+              <th className="text-right px-3 py-2 border-b border-slate-200">% Acum.</th>
+              <th className="text-left px-3 py-2 border-b border-slate-200 w-[130px]">Progresso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pontos.map((p, i) => {
+              const isHov = hoveredIdx === i;
+              return (
+                <tr key={i} data-idx={i}
+                  className={`border-b border-slate-100 cursor-pointer transition-colors ${isHov ? "bg-violet-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/40"} hover:bg-violet-50/60`}
+                  onMouseEnter={() => setHoveredIdx(i)}
+                  onMouseLeave={() => setHoveredIdx(null)}>
+                  <td className={`px-3 py-1.5 font-medium ${isHov ? "text-violet-700" : "text-slate-700"}`}>{p.label}</td>
+                  <td className={`px-3 py-1.5 text-right ${isHov ? "font-semibold text-blue-700" : "text-slate-500"}`}>{fmtR(p.mensal)}</td>
+                  <td className={`px-3 py-1.5 text-right font-medium ${isHov ? "text-violet-800" : "text-violet-700"}`}>{fmtR(p.acum)}</td>
+                  <td className="px-3 py-1.5 text-right">
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isHov ? "bg-violet-200 text-violet-800" : "bg-violet-100 text-violet-600"}`}>
+                      {p.pct.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${isHov ? "bg-violet-600" : "bg-violet-400"}`}
+                        style={{ width: `${p.pct}%` }} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="bg-slate-100 font-bold text-slate-700 sticky bottom-0">
+              <td className="px-3 py-2">TOTAL</td>
+              <td className="px-3 py-2 text-right">{fmtR(totalGerado)}</td>
+              <td className="px-3 py-2 text-right text-violet-700">{fmtR(totalGerado)}</td>
+              <td className="px-3 py-2 text-right">
+                <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">100%</span>
+              </td>
+              <td className="px-3 py-2">
+                <div className="h-2 bg-emerald-400 rounded-full" />
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils, onAdotado }: any) {
   const valorContrato  = parseFloat(proj?.valorContrato ?? "0") || 0;
   const dataInicioProj = atividades.find((a: any) => a.dataInicio)?.dataInicio ?? new Date().toISOString().split("T")[0];
@@ -10760,165 +11205,24 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
               </div>
             )}
 
-            {eapViewMode === "gantt" && (() => {
-              const nMeses = mesesGerados.length;
-              if (nMeses === 0) return <div className="p-6 text-center text-sm text-slate-400">Nenhum mês gerado.</div>;
-              const diBase = new Date(dataInicio + "T12:00:00");
-              const getMesLabel = (mes: number) => { const d = new Date(diBase); d.setMonth(d.getMonth() + (mes - 1)); return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }); };
-              const eapToMes = new Map<string, number>();
-              mesesGerados.forEach(m => m.atividades.forEach(a => eapToMes.set(a.eapCodigo, m.mes)));
-              const COL_W = Math.max(28, Math.min(56, Math.floor(720 / nMeses)));
-              const LABEL_W = 180;
-              return (
-                <div className="overflow-x-auto p-3">
-                  <div style={{ minWidth: LABEL_W + nMeses * COL_W + 16 }}>
-                    {/* Header */}
-                    <div className="flex border-b-2 border-slate-300 pb-1 mb-1">
-                      <div style={{ width: LABEL_W, minWidth: LABEL_W }} className="text-[9px] font-semibold text-slate-500 uppercase px-2">Atividade</div>
-                      {Array.from({ length: nMeses }, (_, i) => (
-                        <div key={i} style={{ width: COL_W, minWidth: COL_W }} className="text-center text-[9px] text-slate-400 font-medium truncate px-0.5">{getMesLabel(i + 1)}</div>
-                      ))}
-                    </div>
-                    {/* Rows */}
-                    {atividadesGeradas.map((a, idx) => {
-                      const mes = eapToMes.get(a.eapCodigo);
-                      return (
-                        <div key={idx} className={`flex items-center border-b border-slate-100 ${a.isGrupo ? "bg-slate-50" : "hover:bg-violet-50/30"}`} style={{ height: a.isGrupo ? 24 : 22 }}>
-                          <div style={{ width: LABEL_W, minWidth: LABEL_W }} className={`px-2 text-[10px] truncate ${a.isGrupo ? "font-bold text-slate-700 uppercase tracking-wide" : "text-slate-600 pl-4"}`} title={a.nome}>
-                            <span className="text-slate-400 mr-1">{a.eapCodigo}</span>{a.nome}
-                          </div>
-                          {!a.isGrupo && Array.from({ length: nMeses }, (_, i) => {
-                            const isMes = mes === i + 1;
-                            return (
-                              <div key={i} style={{ width: COL_W, minWidth: COL_W }} className="px-0.5 flex items-center justify-center" title={isMes ? `Mês ${mes}` : ""}>
-                                {isMes ? (
-                                  <div className="w-full rounded" style={{ height: 12, backgroundColor: "#7c3aed", opacity: 0.75 }} />
-                                ) : (
-                                  <div className="w-full rounded" style={{ height: 12, backgroundColor: "#f1f5f9" }} />
-                                )}
-                              </div>
-                            );
-                          })}
-                          {a.isGrupo && <div style={{ flex: 1 }} />}
-                        </div>
-                      );
-                    })}
-                    {/* Legenda */}
-                    <div className="mt-3 flex items-center gap-4 text-[9px] text-slate-400 px-2">
-                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded bg-violet-600 opacity-75" /> Atividade programada</span>
-                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded bg-slate-200" /> Sem atividade</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {eapViewMode === "gantt" && (
+              <div className="p-3">
+                <GanttSimulador
+                  atividadesGeradas={atividadesGeradas}
+                  mesesGerados={mesesGerados}
+                  dataInicio={dataInicio}
+                />
+              </div>
+            )}
 
-            {eapViewMode === "curva-s" && (() => {
-              const n = mesesGerados.length;
-              if (n === 0) return <div className="p-6 text-center text-sm text-slate-400">Nenhum mês gerado.</div>;
-              const diBase = new Date(dataInicio + "T12:00:00");
-              const getMesLabel = (mes: number) => { const d = new Date(diBase); d.setMonth(d.getMonth() + (mes - 1)); return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }); };
-
-              // Calcular acumulado mensal
-              let acum = 0;
-              const pontos = mesesGerados.map(m => { acum += m.custoTotal; return { mes: m.mes, label: getMesLabel(m.mes), mensal: m.custoTotal, acum, pct: totalGerado > 0 ? (acum / totalGerado) * 100 : 0 }; });
-
-              const W = 680, H = 260, PAD_L = 70, PAD_R = 20, PAD_T = 20, PAD_B = 50;
-              const innerW = W - PAD_L - PAD_R;
-              const innerH = H - PAD_T - PAD_B;
-              const xStep = n > 1 ? innerW / (n - 1) : innerW;
-              const toX = (i: number) => PAD_L + (n > 1 ? i * xStep : innerW / 2);
-              const toY = (pct: number) => PAD_T + innerH - (pct / 100) * innerH;
-
-              const linePath = pontos.map((p, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(1)} ${toY(p.pct).toFixed(1)}`).join(" ");
-              const areaPath = `${linePath} L ${toX(n - 1).toFixed(1)} ${(PAD_T + innerH).toFixed(1)} L ${toX(0).toFixed(1)} ${(PAD_T + innerH).toFixed(1)} Z`;
-
-              const yTicks = [0, 20, 40, 60, 80, 100];
-              const xTickStep = n <= 12 ? 1 : n <= 24 ? 2 : 3;
-
-              return (
-                <div className="p-4">
-                  <p className="text-[11px] text-slate-500 mb-3">Curva S — Desembolso Planejado Acumulado <span className="text-violet-600 font-medium">(Baseline preliminar)</span></p>
-                  <div className="overflow-x-auto">
-                    <svg width={W} height={H} className="font-sans select-none" style={{ maxWidth: "100%" }}>
-                      <defs>
-                        <linearGradient id="curvasGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.18" />
-                          <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.02" />
-                        </linearGradient>
-                      </defs>
-                      {/* Grid horizontal */}
-                      {yTicks.map(t => (
-                        <g key={t}>
-                          <line x1={PAD_L} y1={toY(t)} x2={W - PAD_R} y2={toY(t)} stroke="#e2e8f0" strokeWidth="1" />
-                          <text x={PAD_L - 6} y={toY(t) + 4} textAnchor="end" fontSize="9" fill="#94a3b8">{t}%</text>
-                        </g>
-                      ))}
-                      {/* Grid vertical */}
-                      {pontos.filter((_, i) => i % xTickStep === 0).map((p, _, arr) => {
-                        const i = pontos.indexOf(p);
-                        return (
-                          <g key={i}>
-                            <line x1={toX(i)} y1={PAD_T} x2={toX(i)} y2={PAD_T + innerH} stroke="#f1f5f9" strokeWidth="1" />
-                            <text x={toX(i)} y={PAD_T + innerH + 14} textAnchor="middle" fontSize="8" fill="#94a3b8">{p.label}</text>
-                          </g>
-                        );
-                      })}
-                      {/* Área preenchida */}
-                      <path d={areaPath} fill="url(#curvasGrad)" />
-                      {/* Linha principal */}
-                      <path d={linePath} fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-                      {/* Pontos */}
-                      {pontos.map((p, i) => (
-                        <g key={i}>
-                          <circle cx={toX(i)} cy={toY(p.pct)} r="4" fill="#7c3aed" stroke="white" strokeWidth="1.5" />
-                          {(n <= 12 || i % xTickStep === 0) && (
-                            <text x={toX(i)} y={toY(p.pct) - 8} textAnchor="middle" fontSize="8" fill="#6d28d9" fontWeight="600">{p.pct.toFixed(1)}%</text>
-                          )}
-                        </g>
-                      ))}
-                      {/* Eixo X */}
-                      <line x1={PAD_L} y1={PAD_T + innerH} x2={W - PAD_R} y2={PAD_T + innerH} stroke="#cbd5e1" strokeWidth="1.5" />
-                      {/* Eixo Y */}
-                      <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + innerH} stroke="#cbd5e1" strokeWidth="1.5" />
-                    </svg>
-                  </div>
-                  {/* Tabela resumo */}
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="w-full text-[10px] border-collapse">
-                      <thead>
-                        <tr className="bg-slate-100 text-slate-500 font-semibold">
-                          <th className="text-left px-3 py-1.5 border-b">Mês</th>
-                          <th className="text-right px-3 py-1.5 border-b">Desembolso</th>
-                          <th className="text-right px-3 py-1.5 border-b">Acumulado</th>
-                          <th className="text-right px-3 py-1.5 border-b">% Acum.</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pontos.map((p, i) => (
-                          <tr key={i} className="border-b border-slate-100 hover:bg-violet-50/30">
-                            <td className="px-3 py-1">{p.label}</td>
-                            <td className="px-3 py-1 text-right text-slate-600">{fmtR(p.mensal)}</td>
-                            <td className="px-3 py-1 text-right font-medium text-violet-700">{fmtR(p.acum)}</td>
-                            <td className="px-3 py-1 text-right">
-                              <span className="bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-semibold">{p.pct.toFixed(1)}%</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-slate-100 font-bold text-slate-700">
-                          <td className="px-3 py-1.5">TOTAL</td>
-                          <td className="px-3 py-1.5 text-right">{fmtR(totalGerado)}</td>
-                          <td className="px-3 py-1.5 text-right">{fmtR(totalGerado)}</td>
-                          <td className="px-3 py-1.5 text-right"><span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-semibold">100%</span></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              );
-            })()}
+            {eapViewMode === "curva-s" && (
+              <CurvaSSimulador
+                mesesGerados={mesesGerados}
+                totalGerado={totalGerado}
+                dataInicio={dataInicio}
+                fmtR={fmtR}
+              />
+            )}
           </div>
 
           {/* ── Chat JULINHO ── */}

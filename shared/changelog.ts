@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 521,
+    titulo: "SimuladorCronograma — Gantt redesenhado + Curva S interativa",
+    descricao: "Redesign completo das abas Gantt e Curva S no SimuladorCronograma: (1) Gantt: agora é um componente React próprio (GanttSimulador) com header sticky por mês (ABR/25, MAI/25...), linhas com altura 30px, barra gradiente roxa com bordas arredondadas e sombra, hover highlight por linha com efeito visual 'glow', coluna de label 240px com tooltip (EAP + nome), footer sticky com contagem de atividades por mês, repetição de linhas de grade visível no fundo das linhas de grupo, e scrollable até maxHeight 600px. (2) Curva S: agora é um componente React próprio (CurvaSSimulador) com suavização Catmull-Rom → Bezier cúbico (curva verdadeiramente suave), gráfico com barras de desembolso mensal abaixo da linha de acumulado, tooltip interativo por hover mostrando mês/desembolso/acumulado/% com cabeçalho roxo e barra de progresso inline, crosshair vertical+horizontal em tracejado roxo, tabela sincronizada com hover (hover no gráfico → highlight na tabela e vice-versa, com scroll automático da linha), tabela sticky no header/footer, largura do gráfico 760px, e legenda no topo. Rev. 521.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 405,
     titulo: "Permissões — Novo sistema simplificado de acesso por módulo",
     descricao: "Reformulação completa do sistema de permissões de usuários. O novo modelo elimina a complexidade de grupos, rotas e features granulares: cada usuário agora tem um toggle ON/OFF por módulo (12 módulos: RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro) e, quando ativo, define o nível de acesso como Administrador (acesso total) ou Somente Visualização. As permissões são salvas em JSON no campo users.modulesAccess, com nova mutation setUserModuleAccess no backend. A página Usuários foi reescrita com layout split-panel (lista à esquerda, configurações à direita) com todas as opções em uma única tela — sem modais nem abas. O PermissionsContext foi atualizado para usar o novo campo moduleAccess como fonte primária, mantendo fallback para o sistema legado de permissões granulares. A entrada 'Grupos de Usuários' foi removida da barra lateral.",
