@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 527,
+    titulo: "SimuladorCronograma — Painel de Reajuste Contratual e Dissídio Coletivo",
+    descricao: "Novo painel de análise financeira no SimuladorCronograma (modo IA): após a geração do cronograma, detecta automaticamente se (1) a obra ultrapassa 12 meses (reajuste contratual obrigatório pela Lei 14.133/21) e/ou (2) o cronograma passa pelo mês de maio de qualquer ano (dissídio coletivo da construção civil). Quando detectado, exibe alertas explicativos e campos de entrada para o usuário informar os percentuais estimados (% reajuste INCC/IPCA ao ano e % dissídio). Ao clicar em 'Simular Impacto Financeiro': calcula o novo total considerando o reajuste aplicado sobre todos os custos a partir do mês 13 (composto a cada 12 meses) e o dissídio aplicado somente sobre os custos de mão de obra após cada mês de maio no cronograma. Exibe 3 cards comparativos (original / impacto / total projetado) e tabela mês a mês com marcação das células afetadas (badge REAJ. e DISSÍDIO) e coluna de motivo. Atalhos rápidos de percentual (5/8/10% para reajuste, 4/5/6% para dissídio). Nota de rodapé de aviso para efeitos contratuais. Rev. 527.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 526,
     titulo: "CurvaSSimulador — Gráfico ampliado, KPI cards e visual mais impactante",
     descricao: "Redesign visual do componente CurvaSSimulador na aba Curva S do SimuladorCronograma: (1) dimensões do SVG aumentadas de W=760×H=320 para W=960×H=480, quase dobrando a área da linha acumulada (lineH passou de 182px para 308px); (2) SVG agora usa width:100%/height:auto para preencher toda a largura disponível sem scroll horizontal; (3) adicionados 4 KPI cards em row acima do gráfico: Total Contrato (roxo), Período com nº de meses (cinza), Pico Mensal (azul), Média Mensal (verde); (4) linha da curva S passou de stroke #7c3aed 2.5px para gradiente linear #6d28d9→#a855f7 com 3.5px — muito mais vibrante; (5) pontos de dados ampliados (r=5 vs r=3.5, r=8 hover vs r=6); (6) cabeçalho com fonte maior (text-base font-bold) e legenda com swatch gradient; (7) tooltip ampliado (TW=214×TH=96) com filtro drop-shadow nativo SVG; (8) fontes dos eixos aumentadas (Y: 9→11px, X: 8→10px); (9) área de preenchimento com gradiente 3 stops mais vívido; (10) grade horizontal com 25%/75% em tracejado fino e 50% destacada em ddd6fe; (11) BAR_ZONE aumentado de 44→64px para barras mensais mais visíveis. Rev. 526.",

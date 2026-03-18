@@ -10749,6 +10749,11 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const [ratioMat,          setRatioMat]          = useState(0);
   const [ratioMdo,          setRatioMdo]          = useState(0);
 
+  // Reajuste / Dissídio
+  const [pctReajuste,    setPctReajuste]    = useState("8,00");
+  const [pctDissidio,    setPctDissidio]    = useState("5,00");
+  const [simAjusteAtivo, setSimAjusteAtivo] = useState(false);
+
   // Chat JULINHO
   const chatStorageKey = `sim_chat_${projetoId}`;
   const [chatMessages,  setChatMessages]  = useState<ChatMsg[]>(() => {
@@ -11125,6 +11130,255 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                   <p className="text-[10px] text-orange-500 font-semibold uppercase tracking-wide">Mão de Obra (MO)</p>
                   <p className="text-sm font-bold text-orange-700 mt-0.5">{fmtR(totalMdo)}</p>
                   <p className="text-[11px] text-orange-400">{totalGerado > 0 ? ((totalMdo / totalGerado) * 100).toFixed(1) : "0"}% do total</p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Painel: Análise de Reajuste Contratual / Dissídio ── */}
+          {(() => {
+            const diBase = new Date(dataInicio + "T12:00:00");
+            const n = mesesGerados.length;
+
+            // Meses de maio no cronograma
+            const maiosMeses: { mesIdx: number; ano: number; label: string }[] = [];
+            mesesGerados.forEach(m => {
+              const d = new Date(diBase); d.setMonth(diBase.getMonth() + (m.mes - 1));
+              if (d.getMonth() === 4) { // maio = 4 (0-indexed)
+                maiosMeses.push({ mesIdx: m.mes, ano: d.getFullYear(), label: d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) });
+              }
+            });
+
+            const temReajuste = n > 12;
+            const temDissidio = maiosMeses.length > 0;
+            if (!temReajuste && !temDissidio) return null;
+
+            // Parsing dos percentuais
+            const pctR = parseFloat(pctReajuste.replace(",", ".")) || 0;
+            const pctD = parseFloat(pctDissidio.replace(",", ".")) || 0;
+
+            // Cálculo da simulação ajustada
+            let totalAjustado = 0;
+            const mesesAjustados = mesesGerados.map(m => {
+              let mdo = m.custoMdo ?? 0;
+              let mat = m.custoMat ?? 0;
+              // Reajuste contratual: aplica a partir do mês 13, composto a cada 12 meses
+              if (m.mes > 12 && pctR > 0) {
+                const ciclos = Math.ceil((m.mes - 12) / 12);
+                const fat = Math.pow(1 + pctR / 100, ciclos);
+                mdo = mdo * fat; mat = mat * fat;
+              }
+              // Dissídio: aplica à MO após cada mês de maio
+              if (pctD > 0) {
+                let cnt = 0;
+                for (const maio of maiosMeses) { if (m.mes > maio.mesIdx) cnt++; }
+                if (cnt > 0) mdo = mdo * Math.pow(1 + pctD / 100, cnt);
+              }
+              const custoAj = mdo + mat;
+              totalAjustado += custoAj;
+              return { mes: m.mes, custoOriginal: m.custoTotal, custoAjustado: custoAj };
+            });
+
+            const deltaTotal = totalAjustado - totalGerado;
+            const deltaPct   = totalGerado > 0 ? (deltaTotal / totalGerado) * 100 : 0;
+
+            return (
+              <div className="rounded-2xl border border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 overflow-hidden shadow-sm">
+                {/* Header */}
+                <div className="flex items-center gap-2 px-5 py-3.5 border-b border-amber-200 bg-amber-100/60">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                  <h3 className="text-sm font-bold text-amber-900">Análise de Reajuste Contratual e Dissídio</h3>
+                  <span className="ml-auto text-[10px] bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-semibold">Projeção Financeira</span>
+                </div>
+
+                <div className="p-5 space-y-4">
+                  {/* Alert banners */}
+                  <div className="space-y-2.5">
+                    {temReajuste && (
+                      <div className="flex items-start gap-3 bg-white border border-amber-200 rounded-xl px-4 py-3">
+                        <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <TrendingUp className="h-4 w-4 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-amber-900">Reajuste Contratual — Obra acima de 12 meses</p>
+                          <p className="text-xs text-amber-700 mt-0.5">
+                            Esta obra tem duração de <strong>{n} meses</strong>. Contratos com prazo superior a 12 meses têm direito a reajuste pelo índice da construção civil (INCC, IPCA, IGP-M).
+                            O reajuste incide sobre todos os custos a partir do <strong>13º mês</strong>, sendo aplicado a cada 12 meses subsequentes.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {temDissidio && (
+                      <div className="flex items-start gap-3 bg-white border border-orange-200 rounded-xl px-4 py-3">
+                        <div className="h-8 w-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <Users className="h-4 w-4 text-orange-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-orange-900">Dissídio Coletivo — Obra passa pelo mês de maio</p>
+                          <p className="text-xs text-orange-700 mt-0.5">
+                            A obra passa pelo{maiosMeses.length > 1 ? "s" : ""} mês{maiosMeses.length > 1 ? "es" : ""} de {maiosMeses.map(m => <strong key={m.mesIdx}> {m.label}</strong>)}{maiosMeses.length > 0 ? "." : ""}
+                            {" "}Em maio ocorre o dissídio coletivo da construção civil em SP e na maioria dos estados. O aumento salarial incide sobre todos os custos de <strong>mão de obra</strong> a partir do mês seguinte ao dissídio.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Inputs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white border border-slate-200 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-slate-500 sm:col-span-2 uppercase tracking-wide">Informe os percentuais projetados para simular o impacto</p>
+                    {temReajuste && (
+                      <div>
+                        <label className="text-xs font-semibold text-amber-700 block mb-1.5">
+                          % Reajuste Contratual (ao ano)
+                          <span className="ml-1 font-normal text-slate-400">— INCC / IPCA / IGP-M estimado</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type="text" inputMode="decimal"
+                              value={pctReajuste}
+                              onChange={e => { setPctReajuste(e.target.value.replace(/[^0-9,.]/g, "")); setSimAjusteAtivo(false); }}
+                              className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm font-semibold text-amber-900 bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300 pr-8"
+                              placeholder="0,00"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-amber-500 font-bold">%</span>
+                          </div>
+                          <div className="flex gap-1">
+                            {["5","8","10"].map(v => (
+                              <button key={v} onClick={() => { setPctReajuste(v + ",00"); setSimAjusteAtivo(false); }}
+                                className="text-[10px] px-2 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold transition-colors">
+                                {v}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {temDissidio && (
+                      <div>
+                        <label className="text-xs font-semibold text-orange-700 block mb-1.5">
+                          % Dissídio Coletivo
+                          <span className="ml-1 font-normal text-slate-400">— aumento da mão de obra em maio</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type="text" inputMode="decimal"
+                              value={pctDissidio}
+                              onChange={e => { setPctDissidio(e.target.value.replace(/[^0-9,.]/g, "")); setSimAjusteAtivo(false); }}
+                              className="w-full border border-orange-300 rounded-lg px-3 py-2 text-sm font-semibold text-orange-900 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300 pr-8"
+                              placeholder="0,00"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-orange-500 font-bold">%</span>
+                          </div>
+                          <div className="flex gap-1">
+                            {["4","5","6"].map(v => (
+                              <button key={v} onClick={() => { setPctDissidio(v + ",00"); setSimAjusteAtivo(false); }}
+                                className="text-[10px] px-2 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 font-semibold transition-colors">
+                                {v}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="sm:col-span-2 flex justify-end">
+                      <button
+                        onClick={() => setSimAjusteAtivo(true)}
+                        className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm"
+                      >
+                        <Calculator className="h-4 w-4" />
+                        Simular Impacto Financeiro
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Resultado da simulação */}
+                  {simAjusteAtivo && (
+                    <div className="space-y-4">
+                      {/* Cards comparativos */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Orçamento Original</p>
+                          <p className="text-xl font-extrabold text-slate-700 mt-1">{fmtR(totalGerado)}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">sem reajustes</p>
+                        </div>
+                        <div className="bg-white border border-red-200 rounded-xl p-4 text-center">
+                          <p className="text-[10px] font-semibold text-red-400 uppercase tracking-wide">Impacto Estimado</p>
+                          <p className="text-xl font-extrabold text-red-600 mt-1">+ {fmtR(deltaTotal)}</p>
+                          <p className="text-[11px] text-red-400 mt-0.5">acréscimo de {deltaPct.toFixed(2)}%</p>
+                        </div>
+                        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-center">
+                          <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide">Total Projetado</p>
+                          <p className="text-xl font-extrabold text-amber-800 mt-1">{fmtR(totalAjustado)}</p>
+                          <p className="text-[11px] text-amber-600 mt-0.5">com reajuste{temDissidio ? " + dissídio" : ""}</p>
+                        </div>
+                      </div>
+
+                      {/* Tabela mês a mês */}
+                      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                          <p className="text-xs font-semibold text-slate-600">Impacto por Mês</p>
+                          <p className="text-[10px] text-slate-400">Comparativo original × ajustado</p>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[11px] border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 text-slate-500 font-semibold">
+                                <th className="text-left px-3 py-2 border-b border-slate-200">Mês</th>
+                                <th className="text-right px-3 py-2 border-b border-slate-200">Original</th>
+                                <th className="text-right px-3 py-2 border-b border-slate-200">Ajustado</th>
+                                <th className="text-right px-3 py-2 border-b border-slate-200">Acréscimo</th>
+                                <th className="text-left px-3 py-2 border-b border-slate-200 w-[110px]">Motivo</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {mesesAjustados.map((ma, i) => {
+                                const d = new Date(diBase); d.setMonth(diBase.getMonth() + (ma.mes - 1));
+                                const lbl = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+                                const diff = ma.custoAjustado - ma.custoOriginal;
+                                const isMaio = d.getMonth() === 4;
+                                const isReaj = ma.mes === 13 || (ma.mes > 13 && (ma.mes - 13) % 12 === 0);
+                                const hasChange = diff > 0.01;
+                                return (
+                                  <tr key={i} className={`border-b border-slate-100 ${hasChange ? "bg-amber-50/60" : i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                                    <td className="px-3 py-1.5 font-medium text-slate-700">
+                                      {lbl}
+                                      {isMaio && <span className="ml-1 text-[9px] bg-orange-100 text-orange-600 px-1 rounded font-semibold">DISSÍDIO</span>}
+                                      {isReaj && <span className="ml-1 text-[9px] bg-amber-100 text-amber-700 px-1 rounded font-semibold">REAJ.</span>}
+                                    </td>
+                                    <td className="px-3 py-1.5 text-right text-slate-500">{fmtR(ma.custoOriginal)}</td>
+                                    <td className={`px-3 py-1.5 text-right font-semibold ${hasChange ? "text-amber-800" : "text-slate-500"}`}>{fmtR(ma.custoAjustado)}</td>
+                                    <td className={`px-3 py-1.5 text-right font-semibold ${hasChange ? "text-red-600" : "text-slate-300"}`}>{hasChange ? `+ ${fmtR(diff)}` : "—"}</td>
+                                    <td className="px-3 py-1.5">
+                                      {isReaj && temReajuste && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold">Reajuste {pctReajuste}%/a</span>}
+                                      {!isReaj && maiosMeses.some(mm => ma.mes > mm.mesIdx) && temDissidio && <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-semibold">Dissídio {pctDissidio}%</span>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-slate-100 font-bold text-slate-700 sticky bottom-0">
+                                <td className="px-3 py-2">TOTAL</td>
+                                <td className="px-3 py-2 text-right">{fmtR(totalGerado)}</td>
+                                <td className="px-3 py-2 text-right text-amber-800">{fmtR(totalAjustado)}</td>
+                                <td className="px-3 py-2 text-right text-red-600">+ {fmtR(deltaTotal)}</td>
+                                <td className="px-3 py-2 text-[10px] text-slate-400">+{deltaPct.toFixed(2)}%</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 italic">
+                        * Projeção estimada com base nos percentuais informados. O reajuste aplica sobre todos os custos a partir do mês 13 (composto a cada 12 meses).
+                        O dissídio aplica apenas sobre os custos de <strong>mão de obra</strong> a partir do mês seguinte ao mês de maio de cada ano.
+                        Valores para fins de planejamento — consulte seu advogado/contador para efeitos contratuais.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             );
