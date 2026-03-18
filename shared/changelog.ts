@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 523,
+    titulo: "MapaFuncionariosInterativo — Correção coordenadas Potim, SP",
+    descricao: "Corrigidas as coordenadas de Potim no CITY_COORDS. A longitude anterior (-45.0850) estava ~5,5 km a leste do local correto, colocando o cluster de funcionários de Potim numa área geograficamente incorreta. Coordenadas corrigidas para (-22.8292, -45.1549), que correspondem ao centro real do município de Potim, SP (aproximadamente 3,7 km a leste do centro de Guaratinguetá, conforme dados do IBGE). Rev. 523.",
+    tipo: "bugfix",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 522,
     titulo: "SimuladorCronograma — Fix centavo: Largest Remainder Method",
     descricao: "Correção de bug matemático no gerarCronogramaDoOrcamento: a soma dos custos de todas as atividades não batia exatamente com o valorTotal (diferença de até R$ 5,52 no caso reportado). Causa: (pesoFinanceiro/100) × valorTotal acumula erros de ponto flutuante sub-centavo, agravados pela normalização dos pesos com .toFixed(4). Solução: Largest Remainder Method (LRM) — (1) calcula custo exato em centavos para cada atividade, (2) aplica Math.floor para obter centavos inteiros, (3) distribui os centavos restantes às atividades com maior fração residual, (4) garante matematicamente que sum(custoCentsMap) = round(valorTotal × 100). O acúmulo mensal também passou a usar aritmética inteira em centavos (mesCustoCents) em vez de float, eliminando qualquer erro de soma. Resultado: Total gerado = Orçamento sem nenhuma diferença de centavo. Rev. 522.",
