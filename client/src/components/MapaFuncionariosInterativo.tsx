@@ -168,7 +168,6 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "Jaboatão dos Guararapes": [-8.1128, -35.0025],
   "Olinda": [-8.0089, -34.8553],
   "Paulista": [-7.9406, -34.8711],
-  "Caruaru": [-8.2763, -35.9753],
   "Santo André do Norte": [-3.6636, -39.9483],
   "Mossoró": [-5.1878, -37.3442],
   "Parnamirim": [-5.9147, -35.2642],

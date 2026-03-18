@@ -2797,6 +2797,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-17 00:00:00",
   },
   {
+    version: 512,
+    titulo: "Simulador IA — Parsing de JSON robusto e logging detalhado de erros",
+    descricao: "Corrigido bug no gerador de cronograma por IA (gerarCronogramaDoOrcamento): a extração do JSON da resposta usava regex gananciosa /\\{[\\s\\S]*\\}/ que, quando Claude adicionava texto após o JSON (ex: '{X} atividades'), capturava conteúdo extra causando JSON.parse falhar silenciosamente. Substituído por função extractFirstJson() que percorre o texto caractere a caractere rastreando profundidade de chaves, extraindo apenas o objeto JSON mais externo e válido. maxTokens aumentado de 8192 para 16000 para evitar truncamento em orçamentos grandes. Erros LLM e erros de parsing agora são separados em try/catches distintos e logados com o texto bruto da resposta para facilitar diagnóstico futuro. Corrigido também warning de chave duplicada 'Caruaru' no mapa de funcionários.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-17 00:00:00",
+  },
+  {
     version: 511,
     titulo: "Mapa de Funcionários — Bug: 0 funcionários no nível estado corrigido",
     descricao: "Corrigidos dois bugs no mapa interativo: (1) Backend: getFuncionariosParaMapa usava 'employees.nome' (campo inexistente) em vez de 'employees.nomeCompleto', e filtrava apenas funcionários com 'cidade IS NOT NULL' — excluindo todos que têm estado mas sem cidade cadastrada. Agora seleciona employees.nomeCompleto e aceita qualquer funcionário com pelo menos um campo de endereço (estado, cidade, logradouro ou cep) preenchido. (2) Frontend: criado grupo especial 'Endereço sem cidade cadastrada' (chave __sem_cidade__) no nível 2 — exibido como botão âmbar abaixo das cidades normais, com contagem. Ao clicar, leva ao nível 3 geocodificando os funcionários pelo logradouro+estado ou CEP+estado. Breadcrumb e título do nível 3 exibem 'Endereço sem cidade' em vez do código interno. Corrigido também o bug de 'null' na string de geocodificação CEP (usava template string com valor null).",

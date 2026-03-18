@@ -2195,23 +2195,49 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
         duracaoDias: number; predecessora: string; pesoFinanceiro: number; unidade: string;
       }[] = [];
 
+      // Extrai o JSON mais externo de uma string que pode ter markdown ou texto extra
+      function extractFirstJson(text: string): string | null {
+        const start = text.indexOf("{");
+        if (start === -1) return null;
+        let depth = 0;
+        for (let i = start; i < text.length; i++) {
+          if (text[i] === "{") depth++;
+          else if (text[i] === "}") {
+            depth--;
+            if (depth === 0) return text.slice(start, i + 1);
+          }
+        }
+        return null; // JSON não fechado (resposta truncada)
+      }
+
+      let rawText = "";
       try {
         const result = await invokeLLM({
           messages: [{ role: "user", content: prompt }],
-          maxTokens: 8192,
+          maxTokens: 16000,
         });
-        const text = typeof result.choices[0]?.message?.content === "string"
+        rawText = typeof result.choices[0]?.message?.content === "string"
           ? result.choices[0].message.content : "";
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (Array.isArray(parsed.atividades) && parsed.atividades.length > 0) {
-            atividadesGeradas = parsed.atividades;
-          }
+      } catch (e: any) {
+        console.error("[gerarCronograma] Erro na chamada LLM:", e?.message ?? e);
+        throw new Error(`Falha ao chamar IA: ${e?.message ?? "erro desconhecido"}`);
+      }
+
+      try {
+        const jsonStr = extractFirstJson(rawText);
+        if (!jsonStr) {
+          console.error("[gerarCronograma] Resposta sem JSON:", rawText.slice(0, 300));
+          throw new Error("A IA não retornou JSON válido.");
         }
-      } catch (e) {
-        console.error("[gerarCronograma] Erro IA:", e);
-        throw new Error("Falha ao gerar cronograma com IA. Tente novamente.");
+        const parsed = JSON.parse(jsonStr);
+        if (Array.isArray(parsed.atividades) && parsed.atividades.length > 0) {
+          atividadesGeradas = parsed.atividades;
+        } else {
+          console.error("[gerarCronograma] JSON sem campo 'atividades':", jsonStr.slice(0, 300));
+        }
+      } catch (e: any) {
+        console.error("[gerarCronograma] Erro ao parsear JSON:", e?.message, "| raw:", rawText.slice(0, 500));
+        throw new Error(`Falha ao interpretar resposta da IA: ${e?.message ?? "JSON inválido"}`);
       }
 
       if (atividadesGeradas.length === 0) throw new Error("A IA não retornou atividades válidas.");
