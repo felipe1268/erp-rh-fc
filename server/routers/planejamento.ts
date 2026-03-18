@@ -2267,7 +2267,26 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
 
       // 4. Distribuição mensal (algoritmo guloso com topologia)
       const folhasSeq = atividadesGeradas.filter(a => !a.isGrupo);
-      const getCusto = (a: typeof folhasSeq[0]) => (a.pesoFinanceiro / 100) * input.valorTotal;
+
+      // ── Largest Remainder Method ───────────────────────────────────────────
+      // Garante que a soma exata dos custos de TODAS as atividades = valorTotal,
+      // sem perda de nenhum centavo, independente de erros de ponto flutuante.
+      const totalCentsTarget = Math.round(input.valorTotal * 100);
+      const lrmData = folhasSeq.map(a => {
+        const exactCents = (a.pesoFinanceiro / 100) * input.valorTotal * 100;
+        const floored    = Math.floor(exactCents);
+        return { eapCodigo: a.eapCodigo, floored, frac: exactCents - floored };
+      });
+      const floorSum    = lrmData.reduce((s, x) => s + x.floored, 0);
+      const remainder   = totalCentsTarget - floorSum; // qtd de atividades que recebem +1 centavo
+      const bonusEaps   = new Set(
+        [...lrmData].sort((a, b) => b.frac - a.frac).slice(0, remainder).map(x => x.eapCodigo)
+      );
+      const custoCentsMap = new Map<string, number>(); // eapCodigo → centavos exatos
+      lrmData.forEach(x => custoCentsMap.set(x.eapCodigo, x.floored + (bonusEaps.has(x.eapCodigo) ? 1 : 0)));
+
+      // getCusto agora retorna valor exato em BRL (sem sub-centavo)
+      const getCusto = (a: typeof folhasSeq[0]) => (custoCentsMap.get(a.eapCodigo) ?? 0) / 100;
 
       // Topological sort by predecessora
       const byEap = new Map(folhasSeq.map(a => [a.eapCodigo, a]));
@@ -2302,34 +2321,47 @@ Retorne APENAS um JSON válido, sem comentários, sem markdown:
       let remaining = [...sequencia];
       const completedEaps = new Set<string>();
       let mesNum = 1;
+      // Orçamento mensal em centavos inteiros para comparação exata
+      const orcMensalCents = Math.round(input.orcamentoMensal * 100);
 
       while (remaining.length > 0) {
         const mesAtivs: typeof sequencia = [];
-        let mesCusto = 0;
+        let mesCustoCents = 0; // acumula em centavos inteiros — sem erro de ponto flutuante
         let progressed = false;
 
         for (let i = 0; i < remaining.length; i++) {
           const a = remaining[i];
           const preds = predSet.get(a.eapCodigo) ?? new Set<string>();
           if (![...preds].every(p => completedEaps.has(p))) continue;
-          const custo = getCusto(a);
-          if (mesCusto + custo <= input.orcamentoMensal || mesAtivs.length === 0) {
-            mesAtivs.push(a); mesCusto += custo; progressed = true;
+          const cents = custoCentsMap.get(a.eapCodigo) ?? 0;
+          if (mesCustoCents + cents <= orcMensalCents || mesAtivs.length === 0) {
+            mesAtivs.push(a); mesCustoCents += cents; progressed = true;
           }
         }
-        if (!progressed && remaining.length > 0) { mesAtivs.push(remaining[0]); mesCusto = getCusto(remaining[0]); }
+        if (!progressed && remaining.length > 0) {
+          mesAtivs.push(remaining[0]);
+          mesCustoCents = custoCentsMap.get(remaining[0].eapCodigo) ?? 0;
+        }
 
         mesAtivs.forEach(a => { completedEaps.add(a.eapCodigo); remaining = remaining.filter(r => r.eapCodigo !== a.eapCodigo); });
+
+        // Custo do mês em centavos inteiros → converte para BRL exato
+        const mesCusto = mesCustoCents / 100;
+
         const mesAtvsData = mesAtivs.map(a => {
-          const custo    = getCusto(a);
-          // Calcular custoMat primeiro; custoMdo = custo - custoMat (residual exato, sem diferença de centavo)
+          const cCents   = custoCentsMap.get(a.eapCodigo) ?? 0;
+          const custo    = cCents / 100;
+          // Custos Mat/Mdo por atividade: mat = floor(custo*ratioMat), mdo = custo - mat (residual exato)
           const custoMat = parseFloat((custo * ratioMat).toFixed(2));
           const custoMdo = parseFloat((custo - custoMat).toFixed(2));
           return { eapCodigo: a.eapCodigo, nome: a.nome, pesoFinanceiro: a.pesoFinanceiro, duracaoDias: a.duracaoDias, custo, custoMat, custoMdo };
         });
-        const mesCustoMat = mesAtvsData.reduce((s, a) => s + a.custoMat, 0);
-        // Residual exato no nível do mês também
-        const mesCustoMdo = parseFloat((mesCusto - mesCustoMat).toFixed(2));
+
+        // Totais Mat/Mdo do mês — Mdo é residual exato para bater com mesCusto
+        const mesCustoMatCents = mesAtvsData.reduce((s, a) => s + Math.round(a.custoMat * 100), 0);
+        const mesCustoMat      = mesCustoMatCents / 100;
+        const mesCustoMdo      = parseFloat((mesCusto - mesCustoMat).toFixed(2));
+
         meses.push({ mes: mesNum++, custoTotal: mesCusto, custoMat: mesCustoMat, custoMdo: mesCustoMdo, atividades: mesAtvsData });
         if (mesNum > 500) break;
       }

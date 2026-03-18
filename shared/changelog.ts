@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 522,
+    titulo: "SimuladorCronograma — Fix centavo: Largest Remainder Method",
+    descricao: "Correção de bug matemático no gerarCronogramaDoOrcamento: a soma dos custos de todas as atividades não batia exatamente com o valorTotal (diferença de até R$ 5,52 no caso reportado). Causa: (pesoFinanceiro/100) × valorTotal acumula erros de ponto flutuante sub-centavo, agravados pela normalização dos pesos com .toFixed(4). Solução: Largest Remainder Method (LRM) — (1) calcula custo exato em centavos para cada atividade, (2) aplica Math.floor para obter centavos inteiros, (3) distribui os centavos restantes às atividades com maior fração residual, (4) garante matematicamente que sum(custoCentsMap) = round(valorTotal × 100). O acúmulo mensal também passou a usar aritmética inteira em centavos (mesCustoCents) em vez de float, eliminando qualquer erro de soma. Resultado: Total gerado = Orçamento sem nenhuma diferença de centavo. Rev. 522.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 521,
     titulo: "SimuladorCronograma — Gantt redesenhado + Curva S interativa",
     descricao: "Redesign completo das abas Gantt e Curva S no SimuladorCronograma: (1) Gantt: agora é um componente React próprio (GanttSimulador) com header sticky por mês (ABR/25, MAI/25...), linhas com altura 30px, barra gradiente roxa com bordas arredondadas e sombra, hover highlight por linha com efeito visual 'glow', coluna de label 240px com tooltip (EAP + nome), footer sticky com contagem de atividades por mês, repetição de linhas de grade visível no fundo das linhas de grupo, e scrollable até maxHeight 600px. (2) Curva S: agora é um componente React próprio (CurvaSSimulador) com suavização Catmull-Rom → Bezier cúbico (curva verdadeiramente suave), gráfico com barras de desembolso mensal abaixo da linha de acumulado, tooltip interativo por hover mostrando mês/desembolso/acumulado/% com cabeçalho roxo e barra de progresso inline, crosshair vertical+horizontal em tracejado roxo, tabela sincronizada com hover (hover no gráfico → highlight na tabela e vice-versa, com scroll automático da linha), tabela sticky no header/footer, largura do gráfico 760px, e legenda no topo. Rev. 521.",
