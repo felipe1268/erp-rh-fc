@@ -10792,8 +10792,13 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
   const [collapsedGroups,   setCollapsedGroups]   = useState<Set<string>>(new Set());
   const toggleEapGroup = (code: string) =>
     setCollapsedGroups(prev => { const next = new Set(prev); next.has(code) ? next.delete(code) : next.add(code); return next; });
+  const collapseAllGroups = () => {
+    const all = new Set(atividadesGeradas.filter(a => a.isGrupo).map(a => a.eapCodigo));
+    setCollapsedGroups(all);
+  };
+  const expandAllGroups = () => setCollapsedGroups(new Set());
+  // Oculta um item (grupo ou folha) se qualquer ancestral estiver colapsado
   const isEapHidden = (a: GeradoAtiv) => {
-    if (a.isGrupo) return false;
     const parts = a.eapCodigo.split('.');
     for (let n = parts.length - 1; n >= 1; n--) {
       if (collapsedGroups.has(parts.slice(0, n).join('.'))) return true;
@@ -11822,17 +11827,31 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                 EAP Gerada pela IA
                 <span className="text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-semibold">Padrão MS Project</span>
               </h3>
-              <div className="flex items-center rounded-lg border border-slate-200 bg-slate-100 p-1 gap-0.5">
-                {(["table","cards","gantt","curva-s"] as const).map(mode => (
-                  <button key={mode}
-                    onClick={() => setEapViewMode(mode)}
-                    className={`text-xs px-4 py-1.5 rounded-md font-semibold transition-all whitespace-nowrap ${
-                      eapViewMode === mode
-                        ? "bg-violet-600 text-white shadow-sm"
-                        : "text-slate-500 hover:text-slate-700 hover:bg-white/70"
-                    }`}
-                  >{{ table: "Tabela", cards: "Meses", gantt: "Gantt", "curva-s": "Curva S" }[mode]}</button>
-                ))}
+              <div className="flex items-center gap-2">
+                {eapViewMode === "table" && atividadesGeradas.some(a => a.isGrupo) && (
+                  <div className="flex items-center gap-1">
+                    <button onClick={collapseAllGroups} title="Colapsar todos os grupos"
+                      className="text-[10px] font-semibold text-slate-500 hover:text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-md px-2 py-1 transition-colors flex items-center gap-1">
+                      <span>▶▶</span> Colapsar
+                    </button>
+                    <button onClick={expandAllGroups} title="Expandir todos os grupos"
+                      className="text-[10px] font-semibold text-slate-500 hover:text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-md px-2 py-1 transition-colors flex items-center gap-1">
+                      <span>▼▼</span> Expandir
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center rounded-lg border border-slate-200 bg-slate-100 p-1 gap-0.5">
+                  {(["table","cards","gantt","curva-s"] as const).map(mode => (
+                    <button key={mode}
+                      onClick={() => setEapViewMode(mode)}
+                      className={`text-xs px-4 py-1.5 rounded-md font-semibold transition-all whitespace-nowrap ${
+                        eapViewMode === mode
+                          ? "bg-violet-600 text-white shadow-sm"
+                          : "text-slate-500 hover:text-slate-700 hover:bg-white/70"
+                      }`}
+                    >{{ table: "Tabela", cards: "Meses", gantt: "Gantt", "curva-s": "Curva S" }[mode]}</button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -11878,28 +11897,48 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
 
                         if (a.isGrupo) {
                           const collapsed = collapsedGroups.has(a.eapCodigo);
+                          const nivel = a.nivel ?? (a.eapCodigo.split('.').length);
+                          // Estilo por nível — igual ao orçamento
+                          const rowCls = nivel === 1
+                            ? "bg-slate-700 border-b border-slate-600 cursor-pointer hover:bg-slate-600 select-none transition-colors"
+                            : nivel === 2
+                              ? "bg-slate-200 border-b border-slate-300 cursor-pointer hover:bg-slate-300/70 select-none transition-colors"
+                              : "bg-slate-100 border-b border-slate-200 cursor-pointer hover:bg-slate-200/70 select-none transition-colors";
+                          const textCls = nivel === 1
+                            ? "font-bold text-white uppercase text-[10px] tracking-widest"
+                            : nivel === 2
+                              ? "font-bold text-slate-700 uppercase text-[10px] tracking-wide"
+                              : "font-semibold text-slate-600 text-[10px]";
+                          const eapCls = nivel === 1
+                            ? "font-bold text-slate-200 whitespace-nowrap"
+                            : nivel === 2
+                              ? "font-bold text-slate-500 whitespace-nowrap"
+                              : "font-semibold text-slate-400 whitespace-nowrap";
+                          const chevronCls = nivel === 1 ? "text-slate-300" : "text-slate-400";
+                          const indent = nivel === 1 ? "px-3" : nivel === 2 ? "pl-6 pr-3" : "pl-9 pr-3";
                           return (
-                            <tr key={i}
-                              className="bg-slate-100 border-b border-slate-200 cursor-pointer hover:bg-slate-200/70 select-none transition-colors"
+                            <tr key={i} className={rowCls}
                               onClick={() => toggleEapGroup(a.eapCodigo)}
                               title={collapsed ? "Expandir grupo" : "Recolher grupo"}>
-                              <td className="px-3 py-1.5 font-bold text-slate-600 whitespace-nowrap">
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="text-slate-400 text-[10px]">{collapsed ? "▶" : "▼"}</span>
+                              <td className={`${indent} py-2 ${eapCls}`}>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className={`text-[9px] ${chevronCls}`}>{collapsed ? "▶" : "▼"}</span>
                                   {a.eapCodigo}
                                 </span>
                               </td>
-                              <td className="px-3 py-1.5 font-bold text-slate-800 uppercase text-[10px] tracking-wide" colSpan={ratioMat > 0 && ratioMdo > 0 ? 9 : ratioMat > 0 || ratioMdo > 0 ? 8 : 7}>
+                              <td className={`px-3 py-2 ${textCls}`} colSpan={ratioMat > 0 && ratioMdo > 0 ? 9 : ratioMat > 0 || ratioMdo > 0 ? 8 : 7}>
                                 {a.nome}
                               </td>
                             </tr>
                           );
                         }
 
+                        const leafNivel = a.eapCodigo.split('.').length;
+                        const leafIndent = leafNivel <= 2 ? "pl-6" : leafNivel === 3 ? "pl-9" : leafNivel === 4 ? "pl-12" : "pl-16";
                         return (
                           <tr key={i} className="border-b border-slate-100 hover:bg-violet-50/30 transition-colors">
-                            <td className="px-3 py-1.5 text-slate-400 pl-6">{a.eapCodigo}</td>
-                            <td className="px-3 py-1.5 text-slate-700 pl-6">{a.nome}</td>
+                            <td className={`px-3 py-1.5 text-slate-400 ${leafIndent}`}>{a.eapCodigo}</td>
+                            <td className={`px-3 py-1.5 text-slate-700 ${leafIndent}`}>{a.nome}</td>
                             <td className="text-center px-2 py-1.5 text-slate-500">{a.duracaoDias}d</td>
                             <td className="text-center px-2 py-1.5 text-slate-500">{startD ? fmtDate(startD) : "—"}</td>
                             <td className="text-center px-2 py-1.5 text-slate-500">{endD ? fmtDate(endD) : "—"}</td>

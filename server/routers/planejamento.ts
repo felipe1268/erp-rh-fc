@@ -2098,7 +2098,7 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
       .where(and(
         eq(orcamentoItens.orcamentoId, projeto.orcamentoId),
         or(
-          eq(orcamentoItens.tipo, 'grupo'),
+          eq(orcamentoItens.tipo, 'Etapa/Subetapa'),
           sql`${orcamentoItens.custoTotal} > 0`,
         ),
       ))
@@ -2106,9 +2106,10 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
 
       if (todosItens.length === 0) throw new Error("O orçamento vinculado não tem itens cadastrados.");
 
-      // Separar grupos e folhas
-      const gruposOrc  = todosItens.filter(i => i.tipo === 'grupo');
-      const folhasOrc  = todosItens.filter(i => i.tipo !== 'grupo' && parseFloat(String(i.custoTotal || 0)) > 0);
+      // Separar grupos (Etapa/Subetapa) e folhas (itens com custo > 0 que não são grupos)
+      const TIPO_GRUPO = 'Etapa/Subetapa';
+      const gruposOrc  = todosItens.filter(i => i.tipo === TIPO_GRUPO);
+      const folhasOrc  = todosItens.filter(i => i.tipo !== TIPO_GRUPO && parseFloat(String(i.custoTotal || 0)) > 0);
 
       if (folhasOrc.length === 0) throw new Error("O orçamento não tem atividades folha com custo > 0.");
 
@@ -2294,7 +2295,7 @@ Retorne SOMENTE este JSON (sem markdown, sem comentários, sem texto extra):
           atividadesGeradas.map(a => [a.eapCodigo, { duracaoDias: a.duracaoDias, predecessora: a.predecessora }])
         );
         atividadesGeradas = todosItens.map(item => {
-          const isGrupo = item.tipo === 'grupo';
+          const isGrupo = item.tipo === TIPO_GRUPO;
           const custo   = parseFloat(String(item.custoTotal || 0));
           const nivel   = (item.eapCodigo || "").split('.').length;
           if (isGrupo) {

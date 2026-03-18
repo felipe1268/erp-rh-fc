@@ -3049,6 +3049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 539,
+    titulo: "EAP Cronograma — Colapsar/Expandir grupos + fix tipo Etapa/Subetapa",
+    descricao: "Duas correções na tabela EAP Gerada pela IA: (1) isEapHidden corrigido para também ocultar sub-grupos quando um grupo pai é colapsado (antes retornava false para qualquer isGrupo, deixando sub-grupos visíveis mesmo com pai colapsado); (2) fix crítico no servidor: grupos de orçamento são identificados por tipo='Etapa/Subetapa' (não 'grupo') — corrige o merge onde 0 grupos eram encontrados; (3) estilo visual dos grupos por nível hierárquico: nivel 1 = bg-slate-700 texto branco uppercase, nivel 2 = bg-slate-200 texto slate-700, nivel 3+ = bg-slate-100; (4) indentação crescente das folhas por profundidade; (5) botões 'Colapsar' e 'Expandir' no cabeçalho da tabela para colapso/expansão global de todos os grupos.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 538,
     titulo: "Cronograma IA — Preservação da EAP exata do orçamento",
     descricao: "Reescrita conceitual do gerador de cronograma por IA (gerarCronogramaDoOrcamento). Correção do erro fundamental onde a IA criava uma nova EAP do zero (inventando grupos, renomeando atividades, adicionando/removendo itens). Novo comportamento: (1) servidor busca TODOS os itens do orçamento — grupos (tipo='grupo') e folhas (custoTotal>0) — preservando EAP codes, nomes e hierarquia exatos do upload; (2) prompt reformulado com REGRAS ABSOLUTAS: não criar atividades, não remover, não alterar nomes ou EAPs — IA define APENAS duracaoDias + predecessora para cada folha; (3) server-side merge: grupos recebem isGrupo=true/duracaoDias=0/predecessora=''; folhas recebem pesoFinanceiro calculado pelo ratio custo/totalGeral do próprio orçamento (não pela IA); (4) algoritmo de distribuição mensal guloso downstream inalterado. Barra de progresso atualizada com mensagens descrevendo o novo fluxo.",
