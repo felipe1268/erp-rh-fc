@@ -11105,11 +11105,15 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                 EAP Gerada pela IA
                 <span className="text-[10px] bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-semibold">Padrão MS Project</span>
               </h3>
-              <div className="flex gap-1">
+              <div className="flex items-center rounded-lg border border-slate-200 bg-slate-100 p-1 gap-0.5">
                 {(["table","cards","gantt","curva-s"] as const).map(mode => (
                   <button key={mode}
                     onClick={() => setEapViewMode(mode)}
-                    className={`text-[10px] px-2.5 py-1 rounded border font-medium transition-colors ${eapViewMode === mode ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                    className={`text-xs px-4 py-1.5 rounded-md font-semibold transition-all whitespace-nowrap ${
+                      eapViewMode === mode
+                        ? "bg-violet-600 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-700 hover:bg-white/70"
+                    }`}
                   >{{ table: "Tabela", cards: "Meses", gantt: "Gantt", "curva-s": "Curva S" }[mode]}</button>
                 ))}
               </div>
