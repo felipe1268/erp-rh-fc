@@ -3699,6 +3699,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
 
   // ── Previsto para a semana (interpolação linear por datas) ─────────────────
   // Fallback para peso igual (1/n) quando nenhuma atividade tem peso financeiro
+  // NOTA: usa T12:00:00 para evitar bug de timezone (idêntico ao REFIS)
   const previsto = useMemo(() => {
     const folhasComDatas = folhas.filter((a: any) => a.dataInicio && a.dataFim);
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
@@ -3706,9 +3707,9 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     const denom     = semPeso ? (folhasComDatas.length || 1) : pesoTotal;
     let soma = 0;
     folhasComDatas.forEach((a: any) => {
-      const ini  = new Date(a.dataInicio).getTime();
-      const fim  = new Date(a.dataFim).getTime();
-      const ref  = new Date(semanaAtual).getTime();
+      const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
+      const fim  = new Date(a.dataFim    + "T12:00:00").getTime();
+      const ref  = new Date(semanaAtual  + "T12:00:00").getTime();
       let exp = 0;
       if (ref >= fim) exp = 100;
       else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
@@ -8123,59 +8124,78 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
 
           {/* ── Cards KPI — faixa horizontal inferior ────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-100">
+          <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-slate-200">
             {/* ADV SEMANAL PREVISTO */}
-            <div className="flex flex-col items-center justify-center px-4 py-4 text-center" style={{ background: "#fffbeb" }}>
-              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "#92400e" }}>Avanço Semanal</p>
-              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: "#b45309" }}>Previsto</p>
+            <div className="flex flex-col px-5 py-4 border-r border-slate-100" style={{ background: "#fffbeb" }}>
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-3" style={{ color: "#92400e" }}>
+                Avanço Semanal<br/>
+                <span style={{ color: "#b45309" }}>Previsto</span>
+              </p>
               <p className="text-3xl font-black leading-none" style={{ color: "#d97706" }}>{fPct_(avancoPrevSemanal)}</p>
-              <div className="mt-2 w-full h-1 rounded-full" style={{ background: "#fde68a" }}>
-                <div className="h-full rounded-full" style={{ width: `${Math.min(avancoPrevSemanal * 10, 100)}%`, background: "#FFB800" }} />
+              <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#fde68a" }}>
+                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(avancoPrevSemanal * 10, 100)}%`, background: "#FFB800" }} />
               </div>
+              <p className="text-[9px] mt-2 text-amber-700 font-medium">Baseado no cronograma</p>
             </div>
 
             {/* ADV SEMANAL REAL */}
-            <div className="flex flex-col items-center justify-center px-4 py-4 text-center" style={{ background: "#eff6ff" }}>
-              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "#1e3a8a" }}>Avanço Semanal</p>
-              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: "#1d4ed8" }}>Realizado</p>
+            <div className="flex flex-col px-5 py-4 border-r border-slate-100" style={{ background: "#eff6ff" }}>
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-3" style={{ color: "#1e3a8a" }}>
+                Avanço Semanal<br/>
+                <span style={{ color: "#1d4ed8" }}>Realizado</span>
+              </p>
               <p className="text-3xl font-black leading-none" style={{ color: "#2563eb" }}>{fPct_(avancoRealSemanal)}</p>
-              <div className="mt-2 w-full h-1 rounded-full" style={{ background: "#bfdbfe" }}>
-                <div className="h-full rounded-full" style={{ width: `${Math.min(avancoRealSemanal * 10, 100)}%`, background: "#3b82f6" }} />
+              <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#bfdbfe" }}>
+                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(avancoRealSemanal * 10, 100)}%`, background: "#3b82f6" }} />
               </div>
+              <p className="text-[9px] mt-2 text-blue-700 font-medium">Ponderado financeiramente</p>
             </div>
 
             {/* SPI */}
             <div
-              className="flex flex-col items-center justify-center px-4 py-4 text-center"
-              style={{ background: avancoPrevisto === 0 ? "#f1f5f9" : spi >= 1 ? "#f0fdf4" : spi >= 0.9 ? "#fef9c3" : "#fef2f2" }}
+              className="flex flex-col px-5 py-4 border-r border-slate-100"
+              style={{ background: avancoPrevisto === 0 ? "#f8fafc" : spi >= 1 ? "#f0fdf4" : spi >= 0.9 ? "#fef9c3" : "#fef2f2" }}
             >
-              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: avancoPrevisto === 0 ? "#64748b" : spi >= 1 ? "#166534" : spi >= 0.9 ? "#92400e" : "#991b1b" }}>
-                SPI — Índice de Desempenho
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-3"
+                style={{ color: avancoPrevisto === 0 ? "#64748b" : spi >= 1 ? "#166534" : spi >= 0.9 ? "#92400e" : "#991b1b" }}>
+                SPI — Índice de<br/>Desempenho
               </p>
-              <p
-                className="text-3xl font-black leading-none"
-                style={{ color: avancoPrevisto === 0 ? "#94a3b8" : spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }}
-              >
+              <p className="text-3xl font-black leading-none"
+                style={{ color: avancoPrevisto === 0 ? "#94a3b8" : spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }}>
                 {avancoPrevisto === 0 ? "—" : spi.toFixed(2)}
               </p>
-              <p className="text-[9px] mt-2 font-semibold" style={{ color: avancoPrevisto === 0 ? "#94a3b8" : spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }}>
-                {avancoPrevisto === 0 ? "Sem previsto" : spi >= 1 ? "✓ Dentro do prazo" : spi >= 0.9 ? "⚠ Atenção" : "✗ Abaixo do previsto"}
+              <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden bg-slate-200">
+                <div className="h-full rounded-full transition-all"
+                  style={{ width: `${Math.min(Math.max(spi, 0) * 100, 100)}%`,
+                    background: spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }} />
+              </div>
+              <p className="text-[9px] mt-2 font-semibold"
+                style={{ color: avancoPrevisto === 0 ? "#94a3b8" : spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }}>
+                {avancoPrevisto === 0 ? "Sem previsto" : spi >= 1 ? "Dentro do prazo" : spi >= 0.9 ? "Atenção" : "Abaixo do previsto"}
               </p>
             </div>
 
             {/* DESVIO FÍSICO */}
             <div
-              className="flex flex-col items-center justify-center px-4 py-4 text-center"
+              className="flex flex-col px-5 py-4"
               style={{ background: desvioFisico >= 0 ? "#f0fdf4" : "#fef2f2" }}
             >
-              <p className="text-[9px] font-bold uppercase tracking-[0.12em] mb-2 text-slate-500">Desvio Físico</p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-3 text-slate-500">
+                Desvio Físico<br/>
+                <span className={desvioFisico >= 0 ? "text-emerald-700" : "text-red-700"}>
+                  {desvioFisico >= 0 ? "Adiantado" : "Atrasado"}
+                </span>
+              </p>
               <p className={`text-3xl font-black leading-none ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                 {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
               </p>
-              <p className={`text-[9px] mt-2 font-semibold flex items-center gap-0.5 ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                {desvioFisico >= 0
-                  ? <><ArrowUpRight className="h-3 w-3" /> Adiantado</>
-                  : <><ArrowDownRight className="h-3 w-3" /> Atrasado</>}
+              <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden bg-slate-200">
+                <div className="h-full rounded-full transition-all"
+                  style={{ width: `${Math.min(Math.abs(desvioFisico) * 5, 100)}%`,
+                    background: desvioFisico >= 0 ? "#16a34a" : "#dc2626" }} />
+              </div>
+              <p className={`text-[9px] mt-2 font-medium`} style={{ color: "#64748b" }}>
+                Semana {semana}
               </p>
             </div>
           </div>

@@ -3219,4 +3219,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-16 00:00:00",
   },
+  {
+    version: 556,
+    titulo: "REFIS e Avanço Semanal — Alinhamento de cálculos e correção da Curva S",
+    descricao: "Corrigidas divergências entre Avanço Semanal e REFIS: (1) previsto do Avanço Semanal agora usa T12:00:00 no parse de datas, eliminando bug de timezone e alinhando com o cálculo do REFIS; (2) Curva S realizada recalculada corretamente — era calculada com média de percentualSemanal (errado), agora usa o acumulado ponderado por atividade com pesoFinanceiro, idêntico ao algoritmo do avancoRealAtual do REFIS; (3) Cards KPI do REFIS (Avanço Semanal Previsto/Realizado, SPI, Desvio Físico) redesenhados com layout melhorado, barras de progresso e subtítulos informativos.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
 ];

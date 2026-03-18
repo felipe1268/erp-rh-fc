@@ -803,23 +803,35 @@ export const planejamentoRouter = router({
       const curvaPlanejada = gerarCurvaPlanejada(atividades);
       const curvaBaseline  = gerarCurvaPlanejada(baseline);
 
-      // Curva realizada
-      const avancoMap: Map<string, { soma: number; cont: number }> = new Map();
-      avancos.forEach(av => {
-        const k = av.semana;
-        if (!avancoMap.has(k)) avancoMap.set(k, { soma: 0, cont: 0 });
-        const entry = avancoMap.get(k)!;
-        entry.soma += n(av.percentualSemanal);
-        entry.cont += 1;
-      });
+      // Curva realizada — acumulado ponderado por atividade (idêntico ao REFIS)
+      // Para cada semana com avanços, calcula o acumulado ponderado real
+      // (mesmo algoritmo usado em avancoRealAtual no cliente)
+      const folhasParaCurva = atividades.filter(a => !a.isGrupo);
+      const pesoBrutoCurva  = folhasParaCurva.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
+      const usarIgualCurva  = pesoBrutoCurva === 0;
+      const pesoTotalCurva  = usarIgualCurva ? folhasParaCurva.length || 1 : pesoBrutoCurva;
 
-      let acumReal = 0;
-      const curvaRealizada = [...avancoMap.entries()]
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([semana, { soma, cont }]) => {
-          acumReal = Math.min(100, acumReal + soma / cont);
-          return { semana, acumulado: +acumReal.toFixed(2) };
+      // Obtém todas as semanas com dados, em ordem
+      const semanasComAvanco = [...new Set(avancos.map(av => av.semana))].sort();
+
+      const curvaRealizada = semanasComAvanco.map(semana => {
+        // Para cada atividade, pegar o último avanço <= semana
+        const latestMap: Record<number, { val: number; sem: string }> = {};
+        avancos
+          .filter(av => av.semana <= semana)
+          .forEach(av => {
+            const id = av.atividadeId;
+            if (!latestMap[id] || av.semana > latestMap[id].sem) {
+              latestMap[id] = { val: n(av.percentualAcumulado), sem: av.semana };
+            }
+          });
+        let soma = 0;
+        folhasParaCurva.forEach(a => {
+          const peso = usarIgualCurva ? 1 : n(a.pesoFinanceiro) || 1;
+          soma += (latestMap[a.id]?.val ?? 0) * (peso / pesoTotalCurva);
         });
+        return { semana, acumulado: +Math.min(100, soma).toFixed(2) };
+      });
 
       // Linha de tendência por regressão linear
       let curvaTendencia: { semana: string; acumulado: number }[] = [];
