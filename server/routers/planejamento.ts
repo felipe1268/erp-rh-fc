@@ -2021,15 +2021,17 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
         .then(r => r[0]);
       if (!revisaoAtual) throw new Error("Revisão não encontrada.");
 
+      const hoje2 = new Date().toISOString().split("T")[0];
       const [novaRevisao] = await db.insert(planejamentoRevisoes).values({
-        projetoId:   input.projetoId,
-        numero:      (revisaoAtual.numero ?? 0) + 1,
-        descricao:   "Cronograma gerado pelo Simulador de Orçamento Mensal",
-        status:      "aprovada",
-        criadoPor:   ctx.user?.name || "Sistema",
-        isBaseline:  false,
-        consolidado: false,
-      } as any).returning({ id: planejamentoRevisoes.id });
+        projetoId:    input.projetoId,
+        numero:       (revisaoAtual.numero ?? 0) + 1,
+        descricao:    "Cronograma gerado pelo Simulador de Orçamento Mensal",
+        dataRevisao:  hoje2,
+        status:       "aprovada",
+        aprovadoPor:  ctx.user?.name || "Sistema",
+        isBaseline:   false,
+        consolidado:  false,
+      }).returning({ id: planejamentoRevisoes.id });
 
       if (!novaRevisao) throw new Error("Falha ao criar revisão.");
 
@@ -2484,15 +2486,17 @@ Retorne SOMENTE este JSON (sem markdown, sem comentários, sem texto extra):
         .where(eq(planejamentoRevisoes.id, input.revisaoId)).then(r => r[0]);
       if (!revisaoAtual) throw new Error("Revisão não encontrada.");
 
+      const hoje = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
       const [novaRevisao] = await db.insert(planejamentoRevisoes).values({
-        projetoId:   input.projetoId,
-        numero:      (revisaoAtual.numero ?? 0) + 1,
-        descricao:   "Cronograma gerado por IA a partir do orçamento",
-        status:      "aprovada",
-        criadoPor:   ctx.user?.name || "Sistema",
-        isBaseline:  false,
-        consolidado: false,
-      } as any).returning({ id: planejamentoRevisoes.id });
+        projetoId:    input.projetoId,
+        numero:       (revisaoAtual.numero ?? 0) + 1,
+        descricao:    "Cronograma gerado por IA a partir do orçamento",
+        dataRevisao:  hoje,
+        status:       "aprovada",
+        aprovadoPor:  ctx.user?.name || "Sistema",
+        isBaseline:   false,
+        consolidado:  false,
+      }).returning({ id: planejamentoRevisoes.id });
 
       if (!novaRevisao) throw new Error("Falha ao criar revisão.");
 
