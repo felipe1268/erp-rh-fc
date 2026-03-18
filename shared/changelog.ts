@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 549,
+    titulo: "Fix ícone de EPI: jardineira/macacão agora exibe ícone de roupa corretamente",
+    descricao: "A função getEpiIcon exibia óculos para jardineiras porque nomes longos de EPIs contêm 'faces' (ex: 'em ambas as faces') e 'solda' (ex: 'solda eletrônica'), que disparavam as regras de óculos/solda antes das regras de vestuário. Correção: jardineira e macacão adicionados com verificação ANTES das demais regras; regra de face alterada de n.includes('face') para n.includes('protetor de face') para evitar falsos positivos em descrições de roupas.",
+    tipo: "bugfix",
+    modulos: "EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 548,
     titulo: "Dashboard EPIs: clique no gráfico 'Entregas por Motivo' expande detalhes",
     descricao: "Ao clicar em qualquer fatia do gráfico rosca 'Todas as Entregas por Motivo', um painel se expande abaixo exibindo a tabela completa das entregas daquele motivo: funcionário, função, EPI/item, obra, quantidade e data. Clicar novamente na mesma fatia fecha o painel. Implementado via onChartClick existente no DashChart + campo entregasDetalhe adicionado à resposta da API de EPIs.",

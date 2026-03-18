@@ -46,16 +46,19 @@ type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entr
 // Mapeamento de ícones dinâmicos por tipo de EPI
 function getEpiIcon(nome: string, className: string = "h-4 w-4") {
   const n = (nome || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Vestuário/roupa deve ser verificado ANTES de óculos, pois descrições longas podem conter "face" ou "solda"
+  if (n.includes("jardineira") || n.includes("macacao") || n.includes("macacão")) return <Shirt className={`${className} text-indigo-600`} />;
+  if (n.includes("uniforme") || n.includes("camisa") || n.includes("calca") || n.includes("jaleco") || n.includes("avental") || n.includes("vestimenta") || n.includes("manga")) return <Shirt className={`${className} text-indigo-600`} />;
   if (n.includes("capacete") || n.includes("helmet")) return <HardHat className={`${className} text-amber-600`} />;
   if (n.includes("luva")) return <Hand className={`${className} text-blue-600`} />;
-  if (n.includes("oculos") || n.includes("viseira") || n.includes("protetor facial") || n.includes("face")) return <Glasses className={`${className} text-sky-600`} />;
+  // "protetor de face" / "protetor facial" são óculos/viseira; evitar match em "ambas as faces" de roupas
+  if (n.includes("oculos") || n.includes("viseira") || n.includes("protetor facial") || n.includes("protetor de face")) return <Glasses className={`${className} text-sky-600`} />;
   if (n.includes("bota") || n.includes("botina") || n.includes("calcado") || n.includes("sapato")) return <Footprints className={`${className} text-amber-800`} />;
   if (n.includes("auricular") || n.includes("abafador") || n.includes("ouvido") || n.includes("plug")) return <Ear className={`${className} text-purple-600`} />;
-  if (n.includes("uniforme") || n.includes("camisa") || n.includes("calca") || n.includes("jaleco") || n.includes("avental") || n.includes("vestimenta") || n.includes("manga")) return <Shirt className={`${className} text-indigo-600`} />;
   if (n.includes("respirador") || n.includes("mascara") || n.includes("respiratoria") || n.includes("pff")) return <Wind className={`${className} text-teal-600`} />;
-  if (n.includes("cinto") || n.includes("arnês") || n.includes("arnes") || n.includes("trava-queda") || n.includes("talabarte")) return <Shield className={`${className} text-red-600`} />;
-  if (n.includes("soldador") || n.includes("solda") || n.includes("touca")) return <Flame className={`${className} text-orange-600`} />;
-  if (n.includes("creme") || n.includes("protetor solar") || n.includes("filtro")) return <Droplets className={`${className} text-cyan-600`} />;
+  if (n.includes("cinto") || n.includes("arnes") || n.includes("trava-queda") || n.includes("talabarte")) return <Shield className={`${className} text-red-600`} />;
+  if (n.includes("soldador") || n.includes("touca balacla")) return <Flame className={`${className} text-orange-600`} />;
+  if (n.includes("creme") || n.includes("protetor solar") || n.includes("filtro solar")) return <Droplets className={`${className} text-cyan-600`} />;
   if (n.includes("ferramenta") || n.includes("chave")) return <Wrench className={`${className} text-gray-600`} />;
   if (n.includes("eletric") || n.includes("isolante")) return <Zap className={`${className} text-yellow-600`} />;
   if (n.includes("primeiros") || n.includes("socorro") || n.includes("kit")) return <HeartPulse className={`${className} text-red-500`} />;
