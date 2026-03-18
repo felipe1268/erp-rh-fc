@@ -242,7 +242,7 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "Itapecerica da Serra": [-23.7181, -46.8519],
   "Santana de Parnaíba": [-23.4425, -46.9183],
   "Pirapora do Bom Jesus": [-23.3975, -47.0022],
-  "Potim": [-22.8292, -45.1549],
+  "Potim": [-22.8377, -45.2565],
   "Aparecida": [-22.8481, -45.2328],
   "Cachoeira Paulista": [-22.6764, -45.0081],
   "Lorena": [-22.7328, -45.1239],
@@ -279,7 +279,7 @@ type GeocodedEmployee = Employee & { lat: number; lng: number; isApprox?: boolea
 
 type Level = 1 | 2 | 3;
 
-const geocacheKey = (addr: string) => `geo:${addr}`;
+const geocacheKey = (addr: string) => `geo2:${addr}`;
 
 // Global rate-limiter: ensures ≥1100ms between real Nominatim API calls
 let _lastGeoCall = 0;

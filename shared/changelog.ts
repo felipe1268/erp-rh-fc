@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 528,
+    titulo: "MapaFuncionariosInterativo — Correção definitiva coordenadas Potim, SP",
+    descricao: "Terceira correção das coordenadas de Potim no CITY_COORDS. As coordenadas da Rev. 523 (-22.8292, -45.1549) estavam incorretas: a longitude -45.1549 é 0.0357° a LESTE de Guaratinguetá (-45.1906), colocando o marcador 'posição aproximada' no lado oposto da cidade (área do Parque Ecológico do Taboão). Confirmado via geocoder OSM/Nominatim: Potim está a OESTE-SUDOESTE de Guaratinguetá. Coordenadas corrigidas para (-22.8377, -45.2565) — resultado direto do Nominatim para 'Potim, São Paulo, Brasil', posicionando o centro aproximado corretamente no município. Também atualizado o prefixo do cache de geocodificação (geo: → geo2:) para invalidar todos os resultados anteriormente armazenados no sessionStorage do browser, forçando regeodificação limpa na próxima abertura do mapa. Rev. 528.",
+    tipo: "bugfix",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 527,
     titulo: "SimuladorCronograma — Painel de Reajuste Contratual e Dissídio Coletivo",
     descricao: "Novo painel de análise financeira no SimuladorCronograma (modo IA): após a geração do cronograma, detecta automaticamente se (1) a obra ultrapassa 12 meses (reajuste contratual obrigatório pela Lei 14.133/21) e/ou (2) o cronograma passa pelo mês de maio de qualquer ano (dissídio coletivo da construção civil). Quando detectado, exibe alertas explicativos e campos de entrada para o usuário informar os percentuais estimados (% reajuste INCC/IPCA ao ano e % dissídio). Ao clicar em 'Simular Impacto Financeiro': calcula o novo total considerando o reajuste aplicado sobre todos os custos a partir do mês 13 (composto a cada 12 meses) e o dissídio aplicado somente sobre os custos de mão de obra após cada mês de maio no cronograma. Exibe 3 cards comparativos (original / impacto / total projetado) e tabela mês a mês com marcação das células afetadas (badge REAJ. e DISSÍDIO) e coluna de motivo. Atalhos rápidos de percentual (5/8/10% para reajuste, 4/5/6% para dissídio). Nota de rodapé de aviso para efeitos contratuais. Rev. 527.",
