@@ -3222,6 +3222,7 @@ export const moduleConfig = pgTable("module_config", {
   enabledAt: timestamp("enabled_at", { mode: "string" }).defaultNow(),
   disabledAt: timestamp("disabled_at", { mode: "string" }),
   updatedBy: varchar("updated_by", { length: 255 }),
+  disabledPages: text("disabled_pages"), // JSON array of page paths disabled for this module
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => [

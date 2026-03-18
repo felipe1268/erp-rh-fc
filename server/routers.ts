@@ -2202,6 +2202,7 @@ export const appRouter = router({
         id: moduleMap[key]?.id ?? null,
         updatedBy: moduleMap[key]?.updatedBy ?? null,
         updatedAt: moduleMap[key]?.updatedAt ?? null,
+        disabledPages: (() => { try { return JSON.parse(moduleMap[key]?.disabledPages || "[]"); } catch { return []; } })() as string[],
       }));
     }),
     toggle: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), moduleKey: z.string(),
@@ -2234,6 +2235,49 @@ export const appRouter = router({
         });
       }
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "module_config", entityId: input.companyId, details: `Módulo ${input.moduleKey} ${input.enabled ? 'HABILITADO' : 'DESABILITADO'}` });
+      return { success: true };
+    }),
+    togglePage: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      moduleKey: z.string(),
+      pagePath: z.string(),
+      enabled: z.boolean(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin pode alterar módulos" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { moduleConfig } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const existing = await db.select().from(moduleConfig).where(
+        and(companyFilter(moduleConfig.companyId, input), eq(moduleConfig.moduleKey, input.moduleKey))
+      );
+      let pages: string[] = [];
+      if (existing.length > 0) {
+        try { pages = JSON.parse(existing[0].disabledPages || "[]"); } catch { pages = []; }
+        if (input.enabled) {
+          pages = pages.filter((p: string) => p !== input.pagePath);
+        } else {
+          if (!pages.includes(input.pagePath)) pages.push(input.pagePath);
+        }
+        await db.update(moduleConfig).set({
+          disabledPages: JSON.stringify(pages),
+          updatedBy: ctx.user.name ?? "Sistema",
+          updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        }).where(eq(moduleConfig.id, existing[0].id));
+      } else {
+        pages = input.enabled ? [] : [input.pagePath];
+        await db.insert(moduleConfig).values({
+          companyId: input.companyId,
+          moduleKey: input.moduleKey,
+          enabled: 1,
+          enabledAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+          updatedBy: ctx.user.name ?? "Sistema",
+          disabledPages: JSON.stringify(pages),
+        });
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "module_config", entityId: input.companyId, details: `Sub-item ${input.pagePath} do módulo ${input.moduleKey} ${input.enabled ? 'HABILITADO' : 'DESABILITADO'}` });
       return { success: true };
     }),
   }),

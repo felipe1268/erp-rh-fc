@@ -612,7 +612,7 @@ function DashboardLayoutContent({
   const { state, toggleSidebar } = useSidebar();
   const { selectedCompany } = useCompany();
   const { activeModule, setActiveModule } = useModule();
-  const { isModuleEnabled } = useModuleConfig();
+  const { isModuleEnabled, isPageEnabled } = useModuleConfig();
   const hubToConfigKey: Record<string, string> = {
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
@@ -704,9 +704,10 @@ function DashboardLayoutContent({
   const [dragTargetItem, setDragTargetItem] = useState<string | null>(null);
 
   function getSidebarOrderedItems(section: MenuSection): MenuItem[] {
+    const enabledItems = section.items.filter(item => isPageEnabled(item.path));
     const order = itemOrder[section.title];
-    if (!order || order.length === 0) return section.items;
-    return [...section.items].sort((a, b) => {
+    if (!order || order.length === 0) return enabledItems;
+    return [...enabledItems].sort((a, b) => {
       const ai = order.indexOf(a.path);
       const bi = order.indexOf(b.path);
       if (ai === -1 && bi === -1) return 0;

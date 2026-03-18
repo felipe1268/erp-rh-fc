@@ -17,7 +17,7 @@ import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -2046,12 +2046,175 @@ function RefreshCaepiButton({ onSuccess }: { onSuccess: () => void }) {
 
 
 /* ═══════════ MÓDULOS DO SISTEMA ═══════════ */
+// Sub-itens de navegação por módulo (espelha DashboardLayout)
+type ModPageItem = { label: string; path: string; section: string };
+const MODULE_PAGES: Record<string, ModPageItem[]> = {
+  rh: [
+    { section: "Principal", label: "Painel RH", path: "/painel/rh" },
+    { section: "Principal", label: "Colaboradores", path: "/colaboradores" },
+    { section: "Operacional", label: "Fechamento de Ponto", path: "/fechamento-ponto" },
+    { section: "Operacional", label: "Folha de Pagamento", path: "/folha-pagamento" },
+    { section: "Operacional", label: "Controle de Documentos", path: "/controle-documentos" },
+    { section: "Operacional", label: "Vale Alimentação", path: "/vale-alimentacao" },
+    { section: "Operacional", label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
+    { section: "Operacional", label: "Apontamentos de Campo", path: "/apontamentos-campo" },
+    { section: "Operacional", label: "Crachás", path: "/crachas" },
+    { section: "Operacional", label: "Lançar Atestados", path: "/controle-documentos?tab=atestados" },
+    { section: "Operacional", label: "Advertências", path: "/controle-documentos?tab=advertencias" },
+    { section: "Gestão de Pessoas", label: "Aviso Prévio", path: "/aviso-previo" },
+    { section: "Gestão de Pessoas", label: "Férias", path: "/ferias" },
+    { section: "Gestão de Pessoas", label: "Contratos PJ", path: "/modulo-pj" },
+    { section: "Gestão de Pessoas", label: "PJ Medições", path: "/pj-medicoes" },
+    { section: "Relatórios", label: "Raio-X do Funcionário", path: "/relatorios/raio-x" },
+    { section: "Relatórios", label: "Relatório de Ponto", path: "/relatorios/ponto" },
+    { section: "Relatórios", label: "Relatório de Folha", path: "/relatorios/folha" },
+    { section: "Relatórios", label: "Relatório de Divergências", path: "/relatorios/divergencias" },
+    { section: "Relatórios", label: "Custo por Obra", path: "/relatorios/custo-obra" },
+    { section: "Relatórios", label: "Habilidades por Obra", path: "/relatorios/habilidades-obra" },
+    { section: "Dashboards", label: "Todos os Dashboards", path: "/dashboards" },
+    { section: "Dashboards", label: "Funcionários", path: "/dashboards/funcionarios" },
+    { section: "Dashboards", label: "Cartão de Ponto", path: "/dashboards/cartao-ponto" },
+    { section: "Dashboards", label: "Folha de Pagamento", path: "/dashboards/folha-pagamento" },
+    { section: "Dashboards", label: "Horas Extras", path: "/dashboards/horas-extras" },
+    { section: "Dashboards", label: "Aviso Prévio", path: "/dashboards/aviso-previo" },
+    { section: "Dashboards", label: "Férias", path: "/dashboards/ferias" },
+    { section: "Dashboards", label: "Efetivo por Obra", path: "/dashboards/efetivo-obra" },
+    { section: "Dashboards", label: "Perfil por Tempo de Casa", path: "/dashboards/perfil-tempo-casa" },
+    { section: "Dashboards", label: "Controle de Documentos", path: "/dashboards/controle-documentos" },
+    { section: "Dashboards", label: "Apontamentos de Campo", path: "/dashboards/apontamentos" },
+    { section: "Dashboards", label: "Habilidades", path: "/dashboards/habilidades" },
+    { section: "Tabelas e Config.", label: "Feriados", path: "/feriados" },
+    { section: "Tabelas e Config.", label: "Dissídio", path: "/dissidio" },
+    { section: "Inteligência Artificial", label: "Comparativo Convenções", path: "/comparativo-convencoes" },
+  ],
+  sst: [
+    { section: "Principal", label: "Painel SST", path: "/painel/sst" },
+    { section: "Segurança", label: "Controle de EPIs", path: "/epis" },
+    { section: "Segurança", label: "Estoque por Obra", path: "/epis?tab=estoque_obra" },
+    { section: "Segurança", label: "Checklists EPI", path: "/epis?tab=checklist" },
+    { section: "Segurança", label: "Descontos EPI", path: "/epis?tab=descontos" },
+    { section: "Segurança", label: "Transferências EPI", path: "/epis?tab=transferencias" },
+    { section: "Segurança", label: "Config EPI", path: "/epis?tab=config" },
+    { section: "Segurança", label: "CIPA", path: "/cipa" },
+    { section: "Dashboards", label: "EPIs", path: "/dashboards/epis" },
+  ],
+  juridico: [
+    { section: "Principal", label: "Painel Jurídico", path: "/painel/juridico" },
+    { section: "Jurídico", label: "Processos Trabalhistas", path: "/processos-trabalhistas" },
+    { section: "Dashboards", label: "Jurídico", path: "/dashboards/juridico" },
+  ],
+  avaliacao: [
+    { section: "Avaliação", label: "Dashboard", path: "/avaliacao-desempenho" },
+    { section: "Avaliação", label: "Avaliar Funcionário", path: "/avaliacao-desempenho?tab=avaliar" },
+    { section: "Avaliação", label: "Avaliações Realizadas", path: "/avaliacao-desempenho?tab=avaliacoes" },
+    { section: "Avaliação", label: "Raio-X do Funcionário", path: "/avaliacao-desempenho?tab=raio-x" },
+    { section: "Gestão", label: "Avaliadores", path: "/avaliacao-desempenho?tab=avaliadores" },
+    { section: "Gestão", label: "Critérios", path: "/avaliacao-desempenho?tab=criterios" },
+    { section: "Pesquisas", label: "Pesquisas Customizadas", path: "/avaliacao-desempenho?tab=pesquisas" },
+    { section: "Pesquisas", label: "Clima Organizacional", path: "/avaliacao-desempenho?tab=clima" },
+  ],
+  terceiros: [
+    { section: "Terceiros", label: "Painel Terceiros", path: "/terceiros/painel" },
+    { section: "Terceiros", label: "Empresas Terceiras", path: "/terceiros/empresas" },
+    { section: "Terceiros", label: "Funcionários Terceiros", path: "/terceiros/funcionarios" },
+    { section: "Contratos", label: "Contratos de Serviço", path: "/terceiros/contratos" },
+    { section: "Contratos", label: "Medições", path: "/terceiros/medicoes" },
+    { section: "Contratos", label: "Previsão de Caixa", path: "/terceiros/previsao-caixa" },
+    { section: "Conformidade", label: "Obrigações Mensais", path: "/terceiros/obrigacoes" },
+    { section: "Conformidade", label: "Painel de Conformidade", path: "/terceiros/conformidade" },
+    { section: "Conformidade", label: "Alertas e Cobranças", path: "/terceiros/alertas" },
+    { section: "Operacional", label: "Portal Externo", path: "/terceiros/portal" },
+    { section: "IA", label: "Validação IA de Docs", path: "/terceiros/validacao-ia" },
+  ],
+  parceiros: [
+    { section: "Parceiros", label: "Painel Parceiros", path: "/parceiros/painel" },
+    { section: "Parceiros", label: "Parceiros Conveniados", path: "/parceiros/cadastro" },
+    { section: "Operacional", label: "Lançamentos", path: "/parceiros/lancamentos" },
+    { section: "Operacional", label: "Aprovações RH", path: "/parceiros/aprovacoes" },
+    { section: "Operacional", label: "Portal Externo", path: "/parceiros/portal" },
+    { section: "Financeiro", label: "Guia de Descontos", path: "/parceiros/guia-descontos" },
+    { section: "Financeiro", label: "Pagamentos", path: "/parceiros/pagamentos" },
+  ],
+  orcamento: [
+    { section: "Orçamento", label: "Painel Orçamento", path: "/orcamento/painel" },
+    { section: "Orçamento", label: "Dashboard", path: "/orcamento/dash" },
+    { section: "Orçamento", label: "Orçamentos", path: "/orcamento/lista" },
+    { section: "Orçamento", label: "Composições", path: "/orcamento/composicoes" },
+    { section: "Orçamento", label: "Insumos", path: "/orcamento/insumos" },
+    { section: "Orçamento", label: "Encargos Sociais", path: "/orcamento/encargos" },
+  ],
+  planejamento: [
+    { section: "Planejamento", label: "Projetos", path: "/planejamento" },
+  ],
+  cadastro: [
+    { section: "Cadastro", label: "Empresas", path: "/empresas" },
+    { section: "Cadastro", label: "Colaboradores", path: "/colaboradores" },
+    { section: "Cadastro", label: "Clientes", path: "/clientes" },
+    { section: "Cadastro", label: "Obras", path: "/obras" },
+    { section: "Cadastro", label: "Efetivo por Obra", path: "/obras/efetivo" },
+    { section: "Cadastro", label: "Setores", path: "/setores" },
+    { section: "Cadastro", label: "Funções", path: "/funcoes" },
+    { section: "Cadastro", label: "Relógios de Ponto", path: "/relogios-ponto" },
+    { section: "Cadastro", label: "Convenções Coletivas", path: "/convencoes-coletivas" },
+    { section: "Cadastro", label: "Habilidades", path: "/habilidades" },
+    { section: "Cadastro", label: "Contas Bancárias", path: "/contas-bancarias" },
+    { section: "Cadastro", label: "Fornecedores", path: "/compras/fornecedores" },
+  ],
+  compras: [
+    { section: "Painel", label: "Painel de Controle", path: "/compras/painel" },
+    { section: "Fluxo", label: "Solicitações (SC)", path: "/compras/solicitacoes" },
+    { section: "Fluxo", label: "Cotações", path: "/compras/cotacoes" },
+    { section: "Fluxo", label: "Ordens de Compra (OC)", path: "/compras/ordens" },
+    { section: "Fluxo", label: "Recebimentos", path: "/compras/recebimentos" },
+    { section: "Prioridade", label: "Compras Emergenciais", path: "/compras/emergencial" },
+    { section: "Prioridade", label: "Aprovações Pendentes", path: "/compras/aprovacoes" },
+    { section: "Financeiro", label: "Contas a Pagar", path: "/compras/financeiro" },
+    { section: "Financeiro", label: "Realocação de Verba", path: "/compras/realocacao" },
+    { section: "Financeiro", label: "Comissões", path: "/compras/comissoes" },
+    { section: "Cadastros", label: "Fornecedores", path: "/compras/fornecedores" },
+    { section: "Sistema", label: "Configurações", path: "/compras/configuracoes" },
+    { section: "Sistema", label: "Mas Controle ERP", path: "/integracoes/mas-controle" },
+  ],
+  almoxarifado: [
+    { section: "Almoxarifado", label: "Visão Geral", path: "/almoxarifado" },
+    { section: "Almoxarifado", label: "Movimentações", path: "/almoxarifado/movimentacoes" },
+    { section: "Almoxarifado", label: "Inventário Semanal", path: "/almoxarifado/inventario" },
+    { section: "Ações Rápidas", label: "Nova Entrada", path: "/almoxarifado?modal=entrada" },
+    { section: "Ações Rápidas", label: "Ferramentas", path: "/almoxarifado?modal=ferramentas" },
+    { section: "Ações Rápidas", label: "Insumo", path: "/almoxarifado?modal=insumo" },
+    { section: "Ações Rápidas", label: "Transferir", path: "/almoxarifado?modal=transferir" },
+    { section: "Ações Rápidas", label: "Fechar Dia", path: "/almoxarifado?modal=fechardia" },
+    { section: "Ações Rápidas", label: "Cadastros", path: "/almoxarifado?modal=cadastros" },
+    { section: "Configurações", label: "Categorias", path: "/almoxarifado/categorias" },
+  ],
+  financeiro: [
+    { section: "Painel", label: "Dashboard", path: "/financeiro" },
+    { section: "Movimentações", label: "Lançamentos", path: "/financeiro/lancamentos" },
+    { section: "Movimentações", label: "Receitas de Obras", path: "/financeiro/receitas" },
+    { section: "Movimentações", label: "Contas a Pagar", path: "/financeiro/contas-a-pagar" },
+    { section: "Movimentações", label: "Contas a Receber", path: "/financeiro/contas-a-receber" },
+    { section: "Análise", label: "DRE", path: "/financeiro/dre" },
+    { section: "Análise", label: "Fluxo de Caixa", path: "/financeiro/fluxo-de-caixa" },
+    { section: "Análise", label: "Obrigações Fiscais", path: "/financeiro/obrigacoes-fiscais" },
+    { section: "Cadastros", label: "Plano de Contas", path: "/financeiro/plano-de-contas" },
+    { section: "Cadastros", label: "Centros de Custo", path: "/financeiro/centros-de-custo" },
+    { section: "Cadastros", label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
+    { section: "Cadastros", label: "Configurações", path: "/financeiro/configuracoes" },
+  ],
+};
+
 function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: boolean }) {
   const { modules, isLoading, refetch } = useModuleConfig();
   const toggleMut = trpc.moduleConfig.toggle.useMutation({
     onSuccess: () => { refetch(); toast.success("Módulo atualizado com sucesso!"); },
     onError: (e: any) => toast.error(e.message || "Erro ao atualizar módulo"),
   });
+  const togglePageMut = trpc.moduleConfig.togglePage.useMutation({
+    onSuccess: () => { refetch(); },
+    onError: (e: any) => toast.error(e.message || "Erro ao atualizar funcionalidade"),
+  });
+
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
   // Acompanha a ordem definida na tela inicial
   const [moduleOrder, setModuleOrder] = useState<string[]>(() => {
@@ -2067,7 +2230,6 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     return () => { window.removeEventListener("fc-module-order-changed", onCustom); window.removeEventListener("storage", onStorage); };
   }, []);
 
-  // Mapeia moduleKey → hubId para encontrar posição na ordem
   const keyToHubId: Record<string, string> = { rh: "rh-dp" };
 
   const MODULE_INFO: Record<string, { label: string; subtitle: string; icon: any; color: string; bgColor: string; borderColor: string; description: string }> = {
@@ -2087,12 +2249,23 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
 
+  const sortedModules = moduleOrder.length === 0 ? modules : [...modules].sort((a: any, b: any) => {
+    const aHub = keyToHubId[a.moduleKey] ?? a.moduleKey;
+    const bHub = keyToHubId[b.moduleKey] ?? b.moduleKey;
+    const ai = moduleOrder.indexOf(aHub);
+    const bi = moduleOrder.indexOf(bHub);
+    if (ai === -1 && bi === -1) return 0;
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-gray-800">Módulos do Sistema</h2>
-          <p className="text-sm text-gray-500 mt-1">Habilite ou desabilite módulos para controlar o acesso. Módulos desabilitados ficam ocultos na navegação e na tela inicial.</p>
+          <p className="text-sm text-gray-500 mt-1">Habilite ou desabilite módulos inteiros ou funcionalidades específicas. Itens desabilitados ficam ocultos na barra lateral para todos os usuários.</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-400">
           <ToggleRight className="h-4 w-4" />
@@ -2100,47 +2273,98 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
         </div>
       </div>
 
-      <div className="grid gap-4">
-        {(moduleOrder.length === 0 ? modules : [...modules].sort((a: any, b: any) => {
-          const aHub = keyToHubId[a.moduleKey] ?? a.moduleKey;
-          const bHub = keyToHubId[b.moduleKey] ?? b.moduleKey;
-          const ai = moduleOrder.indexOf(aHub);
-          const bi = moduleOrder.indexOf(bHub);
-          if (ai === -1 && bi === -1) return 0;
-          if (ai === -1) return 1;
-          if (bi === -1) return -1;
-          return ai - bi;
-        })).map((mod: any) => {
+      <div className="grid gap-3">
+        {sortedModules.map((mod: any) => {
           const info = MODULE_INFO[mod.moduleKey];
           if (!info) return null;
           const Icon = info.icon;
+          const isExpanded = expandedModules.has(mod.moduleKey);
+          const pages = MODULE_PAGES[mod.moduleKey] ?? [];
+          const disabledPages: string[] = mod.disabledPages ?? [];
+          const disabledCount = disabledPages.length;
+
+          // Group pages by section
+          const sections: Record<string, ModPageItem[]> = {};
+          for (const p of pages) {
+            if (!sections[p.section]) sections[p.section] = [];
+            sections[p.section].push(p);
+          }
+
           return (
-            <div key={mod.moduleKey} className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${mod.enabled ? `${info.borderColor} ${info.bgColor}` : "border-gray-200 bg-gray-50 opacity-60"}`}>
-              <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${mod.enabled ? info.bgColor : "bg-gray-100"}`}>
-                <Icon className={`h-6 w-6 ${mod.enabled ? info.color : "text-gray-400"}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className={`font-semibold ${mod.enabled ? "text-gray-900" : "text-gray-500"}`}>{info.label}</h3>
-                  <span className="text-xs text-gray-400">{info.subtitle}</span>
+            <div key={mod.moduleKey} className={`rounded-xl border-2 transition-all ${mod.enabled ? `${info.borderColor} ${info.bgColor}` : "border-gray-200 bg-gray-50 opacity-60"}`}>
+              {/* Header row */}
+              <div className="flex items-center gap-4 p-4">
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${mod.enabled ? info.bgColor : "bg-gray-100"}`}>
+                  <Icon className={`h-5 w-5 ${mod.enabled ? info.color : "text-gray-400"}`} />
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{info.description}</p>
-                {mod.updatedBy && (
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    Última alteração por {mod.updatedBy} {mod.updatedAt ? `em ${new Date(mod.updatedAt).toLocaleDateString("pt-BR")}` : ""}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className={`font-semibold text-sm ${mod.enabled ? "text-gray-900" : "text-gray-500"}`}>{info.label}</h3>
+                    <span className="text-xs text-gray-400 hidden sm:inline">{info.subtitle}</span>
+                    {disabledCount > 0 && mod.enabled && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                        {disabledCount} {disabledCount === 1 ? "item oculto" : "itens ocultos"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{info.description}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${mod.enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                    {mod.enabled ? "Habilitado" : "Desabilitado"}
+                  </span>
+                  <Switch
+                    checked={mod.enabled}
+                    onCheckedChange={(checked: boolean) => toggleMut.mutate({ companyId, moduleKey: mod.moduleKey, enabled: checked })}
+                    disabled={toggleMut.isPending}
+                  />
+                  {pages.length > 0 && (
+                    <button
+                      onClick={() => setExpandedModules(prev => {
+                        const next = new Set(prev);
+                        if (next.has(mod.moduleKey)) next.delete(mod.moduleKey);
+                        else next.add(mod.moduleKey);
+                        return next;
+                      })}
+                      className={`p-1 rounded-lg hover:bg-white/60 transition-colors ${mod.enabled ? info.color : "text-gray-400"}`}
+                      title={isExpanded ? "Recolher funcionalidades" : "Expandir funcionalidades"}
+                    >
+                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Expanded sub-items */}
+              {isExpanded && pages.length > 0 && (
+                <div className="border-t border-current/10 px-4 pb-4 pt-3">
+                  <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+                    <Info className="h-3.5 w-3.5" />
+                    Itens desabilitados ficam ocultos na barra lateral para todos os usuários. Os dados são preservados.
                   </p>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${mod.enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                  {mod.enabled ? "Habilitado" : "Desabilitado"}
-                </span>
-                <Switch
-                  checked={mod.enabled}
-                  onCheckedChange={(checked: boolean) => toggleMut.mutate({ companyId, moduleKey: mod.moduleKey, enabled: checked })}
-                  disabled={toggleMut.isPending}
-                />
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0.5">
+                    {Object.entries(sections).map(([sectionTitle, items]) => (
+                      <div key={sectionTitle} className="mb-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1 pl-1">{sectionTitle}</p>
+                        {items.map(item => {
+                          const pageEnabled = !disabledPages.includes(item.path);
+                          return (
+                            <div key={item.path} className="flex items-center justify-between py-1 px-1 rounded-lg hover:bg-white/50 transition-colors group">
+                              <span className={`text-xs ${pageEnabled ? "text-gray-700" : "text-gray-400 line-through"}`}>{item.label}</span>
+                              <Switch
+                                checked={pageEnabled}
+                                onCheckedChange={(checked: boolean) => togglePageMut.mutate({ companyId, moduleKey: mod.moduleKey, pagePath: item.path, enabled: checked })}
+                                disabled={togglePageMut.isPending || !mod.enabled}
+                                className="scale-75 origin-right"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -2152,10 +2376,10 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
           <div>
             <h4 className="text-sm font-semibold text-blue-800">Como funciona</h4>
             <ul className="text-xs text-blue-700 mt-1 space-y-1">
-              <li>• Módulos <strong>desabilitados</strong> ficam ocultos na tela inicial e na barra lateral para todos os usuários.</li>
-              <li>• Os dados do módulo desabilitado são <strong>preservados</strong> — nada é excluído.</li>
-              <li>• Ao reabilitar, tudo volta ao normal imediatamente.</li>
-              <li>• Ideal para controlar quais funcionalidades cada empresa contratante pode acessar.</li>
+              <li>• <strong>Módulo desabilitado:</strong> todo o módulo fica oculto na tela inicial e barra lateral.</li>
+              <li>• <strong>Funcionalidade desabilitada:</strong> apenas aquela tela fica oculta na barra lateral.</li>
+              <li>• Os dados sempre são <strong>preservados</strong> — nada é excluído ao desabilitar.</li>
+              <li>• Clique na seta <ChevronRight className="inline h-3 w-3 mx-0.5" /> ao lado do switch para ver e controlar funcionalidades individuais.</li>
             </ul>
           </div>
         </div>

@@ -3319,6 +3319,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 569,
+    titulo: "Módulos — Controle granular de funcionalidades por sub-item",
+    descricao: "Adicionado controle individual de funcionalidades dentro de cada módulo na tela 'Módulos do Sistema'. Cada card de módulo agora possui botão de expansão (▶) que revela a lista de todas as telas/funcionalidades daquele módulo organizadas por seção. Cada item tem seu próprio toggle ON/OFF. Funcionalidades desabilitadas ficam ocultas da barra lateral de navegação para todos os usuários, sem excluir dados. Badge de contagem indica quantos itens estão ocultos. Backend: nova mutation togglePage que atualiza coluna disabled_pages (JSON) no module_config; list retorna disabledPages por módulo. Frontend: ModuleConfigContext expõe isPageEnabled(path); DashboardLayout filtra itens de navegação via isPageEnabled.",
+    tipo: "feature",
+    modulos: "Configurações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 567,
     titulo: "Cronograma — Marcos (Milestones)",
     descricao: "Adicionado suporte completo a marcos (milestones) no cronograma: (1) Banco: coluna isMarco (boolean) adicionada a planejamento_atividades com ColFix automático no startup. (2) Backend: isMarco persistido em salvarAtividades; nova mutation toggleMarco para ativar/desativar marco sem entrar em modo de edição. (3) Importação XML: detecta <Milestone>1</Milestone>; importação XLSX: detecta colunas Milestone/Marco ou duração zero com ini=fim. (4) Pré-visualização de importação: coluna Marco ◆ com checkbox editável. (5) Tabela de atividades (view mode): linha com fundo roxo e badge ◆ Marco para marcadas; botão ◆ aparece no hover para toggle rápido. (6) Tabela de atividades (edit mode): checkbox ◆ ao lado do checkbox Grupo para marcar/desmarcar marco.",
