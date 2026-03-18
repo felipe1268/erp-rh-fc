@@ -4363,7 +4363,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       setCfgDiaCorte(configMed.diaCorte ?? 25);
       setCfgEntrada(n(configMed.entrada));
       setCfgParcelas(configMed.numeroParcelas ?? 6);
-      setCfgInicioFat((configMed.inicioFaturamento as any) ?? "");
+      setCfgInicioFat(configMed.inicioFaturamento ? String(configMed.inicioFaturamento).substring(0, 7) : "");
       setCfgSinalPct(n(configMed.sinalPct) || 0);
       setCfgRetencaoPct(n(configMed.retencaoPct) || 5);
       setCfgDataInicioObra((configMed as any).dataInicioObra ?? "");

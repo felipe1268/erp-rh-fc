@@ -3067,6 +3067,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 546,
+    titulo: "Fix: salvar Início Faturamento — formato YYYY-MM incompatível com coluna date",
+    descricao: "O input type='month' enviava o valor 'YYYY-MM' (ex: '2026-01') que o PostgreSQL rejeita em colunas date. Correção: no servidor, valores com 7 chars recebem '-01' (primeiro dia do mês). No cliente, ao carregar config existente, o valor ISO retornado do banco é truncado para 'YYYY-MM' compatível com o input month.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 545,
     titulo: "Fix grupos de acesso: listagem e edição migradas para SQL raw",
     descricao: "As colunas 'somenteVisualizacao' e 'ocultarDadosSensiveis' em user_groups são camelCase no banco, exigindo aspas duplas no SQL. O Drizzle ORM não gerava essas aspas consistentemente em SELECT e UPDATE, causando 0 grupos exibidos e falhas de edição. Solução: listUserGroups(), getUserGroupById() e updateUserGroup() convertidos para SQL raw com colunas devidamente quotadas e aliases (module_access AS 'moduleAccess', etc.).",

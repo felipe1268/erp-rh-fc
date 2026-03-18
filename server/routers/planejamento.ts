@@ -1391,7 +1391,9 @@ export const planejamentoRouter = router({
         diaCorte:          input.diaCorte,
         entrada:           String(input.entrada ?? 0),
         numeroParcelas:    input.numeroParcelas ?? 6,
-        inicioFaturamento: input.inicioFaturamento ?? null,
+        inicioFaturamento: input.inicioFaturamento
+          ? (input.inicioFaturamento.length === 7 ? input.inicioFaturamento + "-01" : input.inicioFaturamento.substring(0, 10))
+          : null,
         sinalPct:          String(input.sinalPct ?? 0),
         retencaoPct:       String(input.retencaoPct ?? 5),
         dataInicioObra:    input.dataInicioObra ?? null,
