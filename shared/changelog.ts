@@ -2896,6 +2896,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 524,
+    titulo: "MapaFuncionariosInterativo — Mapa Geral com drill-down por cidade",
+    descricao: "No modo Mapa Geral, clicar em um círculo de cidade agora geocodifica cada funcionário pelo endereço real (logradouro, número, bairro, cidade, CEP) e exibe pins individuais no mapa — igual ao comportamento do modo Por Estado / nível cidade. Pins com endereço exato são posicionados no local real; pins sem endereço ficam com jitter no centro da cidade. Barra de progresso e contagem de geocodificação durante o processo. Botão 'Voltar ao mapa geral' no header. Chips abaixo do mapa também acionam o drill-down. Tooltip no hover dos círculos mostra nome da cidade e contagem. Rev. 524.",
+    tipo: "feature",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 523,
     titulo: "MapaFuncionariosInterativo — Correção coordenadas Potim, SP",
     descricao: "Corrigidas as coordenadas de Potim no CITY_COORDS. A longitude anterior (-45.0850) estava ~5,5 km a leste do local correto, colocando o cluster de funcionários de Potim numa área geograficamente incorreta. Coordenadas corrigidas para (-22.8292, -45.1549), que correspondem ao centro real do município de Potim, SP (aproximadamente 3,7 km a leste do centro de Guaratinguetá, conforme dados do IBGE). Rev. 523.",
