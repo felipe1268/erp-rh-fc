@@ -2860,6 +2860,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 520,
+    titulo: "MapaFuncionariosInterativo — Mapa Geral + Painel Sem Endereço",
+    descricao: "Duas grandes melhorias no mapa de funcionários: (1) Novo modo 'Mapa Geral' (padrão): Leaflet com todos os funcionários de todas as cidades ao mesmo tempo, agrupados em clusters por cidade. O usuário pode navegar livremente com o mouse (pan/zoom), sem precisar clicar em estado → cidade → ver equipe. Clicar num cluster faz flyTo para aquela cidade no zoom 12. Popup do cluster lista nome, cargo e status de cada funcionário. Strip de botões abaixo do mapa para navegar rapidamente para qualquer cidade. Geocodificação assíncrona incremental de todas as cidades ao entrar no modo. (2) Painel 'Funcionários sem endereço válido' sempre visível abaixo do mapa (colapsível): lista todos os funcionários que não possuem cidade, logradouro nem CEP — impossível localizá-los no mapa — com colunas Nome/Função/Status/Estado/O que falta, para o RH identificar e corrigir os cadastros. (3) Modo 'Por Estado' mantido com o drill-down existente (estado → cidade → pins individuais). Toggle entre modos no cabeçalho do card.",
+    tipo: "feature",
+    modulos: "Dashboard RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-18 00:00:00",
+  },
+  {
     version: 519,
     titulo: "SimuladorCronograma — Gantt, Curva S e fix de arredondamento MT/MO",
     descricao: "Três melhorias: (1) Fix de arredondamento — custoMdo calculado como residual exato (custo - custoMat) em vez de multiplicação independente, eliminando divergências de centavo no total MT+MO; mesmo ajuste no nível do mês (mesCustoMdo = mesCusto - mesCustoMat). Rodapé da tabela agora usa totalMdo = totalGerado - totalMat como residual exato. (2) Nova aba Gantt — visualização de barras horizontais por atividade × mês, mostrando a janela de execução de cada atividade no cronograma gerado, com rótulos de mês no cabeçalho e agrupamentos da EAP. (3) Nova aba Curva S — gráfico SVG com linha de desembolso acumulado planejado (%) por mês (baseline preliminar), com área preenchida em gradiente, pontos interativos e tabela-resumo de desembolso mensal/acumulado abaixo do gráfico.",

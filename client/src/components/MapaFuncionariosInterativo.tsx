@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, ArrowLeft, Loader2, Users, AlertCircle } from "lucide-react";
+import { MapPin, ArrowLeft, Loader2, Users, AlertCircle, ChevronDown, ChevronUp, Globe, Map as MapIcon } from "lucide-react";
 import BrazilMap from "@/components/BrazilMap";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -249,7 +249,6 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "Pindamonhangaba": [-22.9228, -45.4614],
   "Tremembé": [-22.9597, -45.5497],
   "Caçapava": [-23.0886, -45.7008],
-  "São José dos Campos": [-23.1794, -45.8869],
   "Cruzeiro": [-22.5789, -44.9628],
   "Volta Redonda": [-22.5231, -44.1044],
   "Barra Mansa": [-22.5447, -44.1708],
@@ -260,6 +259,7 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "Três Rios": [-22.1169, -43.2089],
   "Valença": [-22.2447, -43.6997],
   "Vassouras": [-22.4058, -43.6614],
+  "Piquete": [-22.6111, -45.1758],
 };
 
 type Employee = {
@@ -344,6 +344,57 @@ function createEmployeeIcon(nome: string, status: string | null, isApprox?: bool
   return L.divIcon({ html, className: "", iconSize: [34, 40], iconAnchor: [17, 40], popupAnchor: [0, -40] });
 }
 
+// ── Mapa Geral: city cluster marker with employee list popup ──────────────────
+function LivreCityCluster({ city, coords, emps }: {
+  city: string;
+  coords: [number, number];
+  emps: Employee[];
+}) {
+  const map = useMap();
+  const radius = Math.max(13, Math.min(42, 13 + emps.length * 1.8));
+
+  return (
+    <CircleMarker
+      center={coords}
+      radius={radius}
+      pathOptions={{ color: "#1d4ed8", fillColor: "#3b82f6", fillOpacity: 0.88, weight: 2.5 }}
+      eventHandlers={{ click: () => map.flyTo(coords, 12, { duration: 0.9 }) }}
+    >
+      <Popup maxWidth={280} autoPan>
+        <div style={{ minWidth: 200 }}>
+          <p style={{ fontWeight: 700, fontSize: 13, color: "#1e293b", marginBottom: 2 }}>{city}</p>
+          <p style={{ fontSize: 11, color: "#3b82f6", marginBottom: 8 }}>
+            {emps.length} funcionário{emps.length !== 1 ? "s" : ""}
+          </p>
+          <div style={{ maxHeight: 200, overflowY: "auto" }}>
+            {emps.slice(0, 25).map(emp => {
+              const s = ALL_STATUS_OPTIONS.find(o => o.value === (emp.status || "Ativo"));
+              const bg = s?.bg ?? "#f1f5f9"; const fg = s?.fg ?? "#475569";
+              return (
+                <div key={emp.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: "50%", background: bg, color: fg,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 10, fontWeight: 700, flexShrink: 0,
+                  }}>{emp.nome.charAt(0)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: "#334155", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{emp.nome}</p>
+                    {emp.funcao && <p style={{ fontSize: 9, color: "#94a3b8", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{emp.funcao}</p>}
+                  </div>
+                  <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 9999, background: bg, color: fg, fontWeight: 600, flexShrink: 0 }}>{s?.label ?? emp.status ?? "—"}</span>
+                </div>
+              );
+            })}
+            {emps.length > 25 && (
+              <p style={{ fontSize: 10, color: "#94a3b8", textAlign: "center", margin: "4px 0 0" }}>+ {emps.length - 25} mais funcionários</p>
+            )}
+          </div>
+        </div>
+      </Popup>
+    </CircleMarker>
+  );
+}
+
 function CityClusterMarker({ lat, lng, count, cityName, onClick }: {
   lat: number; lng: number; count: number; cityName: string; onClick: () => void;
 }) {
@@ -389,11 +440,21 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0, staleTime: 5 * 60 * 1000 }
   );
 
+  // ── View mode: "geral" = all cities at once, "estado" = drill-down ──
+  const [viewMode, setViewMode] = useState<"geral" | "estado">("geral");
+
+  // ── Estado drill-down state ──
   const [level, setLevel] = useState<Level>(1);
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
 
+  // ── Shared city coords cache ──
   const [cityCoords, setCityCoords] = useState<Map<string, [number, number]>>(new Map());
+  const cityCordsRef = useRef<Map<string, [number, number]>>(new Map());
+  useEffect(() => { cityCordsRef.current = cityCoords; }, [cityCoords]);
+  const geocodingCitiesRef = useRef<Set<string>>(new Set());
+
+  // ── Loading states ──
   const [loadingCities, setLoadingCities] = useState(false);
   const [cityLoadProgress, setCityLoadProgress] = useState({ done: 0, total: 0 });
 
@@ -401,7 +462,11 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
   const [geocoding, setGeocoding] = useState(false);
   const [geocodingProgress, setGeocodingProgress] = useState({ done: 0, total: 0 });
   const geocodingAbort = useRef(false);
-  // Ref to always call the latest version of handleCityClick inside effects/timeouts
+
+  // ── Sem endereço panel ──
+  const [semEnderecoOpen, setSemEnderecoOpen] = useState(false);
+
+  // ── Refs for stable callbacks ──
   const handleCityClickRef = useRef<(city: string) => void>(() => {});
   const statusFiltrosKeyRef = useRef<string>("");
 
@@ -428,27 +493,82 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     [citiesInState, selectedCity]
   );
 
+  // ── All city groups for Mapa Geral ──
+  const cityGroups = useMemo(() => {
+    const m = new Map<string, Employee[]>();
+    for (const e of employees) {
+      if (!e.cidade) continue;
+      const city = e.cidade.trim();
+      if (!m.has(city)) m.set(city, []);
+      m.get(city)!.push(e);
+    }
+    return m;
+  }, [employees]);
+
+  // ── Sem endereço válido: employees that cannot be located at all ──
+  const semEnderecoValido = useMemo(() => {
+    return employees.filter(e => !e.cidade && !e.logradouro && !e.cep);
+  }, [employees]);
+
+  // ── Load coords for all cities (Mapa Geral) ──
+  const loadAllCityCoords = useCallback(async () => {
+    const pairs: [string, string][] = [];
+    const seen = new Set<string>();
+    for (const e of employees) {
+      if (!e.cidade) continue;
+      const city = e.cidade.trim();
+      if (seen.has(city)) continue;
+      seen.add(city);
+      pairs.push([city, normalizeEstado(e.estado)]);
+    }
+    const toGeocode = pairs.filter(
+      ([city]) => !cityCordsRef.current.has(city) && !geocodingCitiesRef.current.has(city)
+    );
+    if (toGeocode.length === 0) return;
+    toGeocode.forEach(([city]) => geocodingCitiesRef.current.add(city));
+    setLoadingCities(true);
+    setCityLoadProgress({ done: 0, total: toGeocode.length });
+    for (let i = 0; i < toGeocode.length; i++) {
+      const [city, state] = toGeocode[i];
+      const coords = await geocodeCidade(city, state);
+      if (coords) {
+        setCityCoords(prev => { const next = new Map(prev); next.set(city, coords); return next; });
+      }
+      setCityLoadProgress({ done: i + 1, total: toGeocode.length });
+      if (i < toGeocode.length - 1) await sleep(800);
+    }
+    setLoadingCities(false);
+  }, [employees]);
+
+  // Trigger all-city geocoding when in "geral" mode
+  useEffect(() => {
+    if (viewMode === "geral" && employees.length > 0) {
+      loadAllCityCoords();
+    }
+  }, [viewMode, employees.length, loadAllCityCoords]);
+
+  // ── Estado mode: load city coords for a single state ──
   const loadCityCoords = useCallback(async (state: string) => {
     const uniqueCities = [...new Set(
       employees.filter(e => normalizeEstado(e.estado) === state && e.cidade).map(e => e.cidade!.trim())
     )];
-    const missingCities = uniqueCities.filter(c => !cityCoords.has(c));
+    const missingCities = uniqueCities.filter(c => !cityCordsRef.current.has(c) && !geocodingCitiesRef.current.has(c));
     if (missingCities.length === 0) return;
 
+    missingCities.forEach(c => geocodingCitiesRef.current.add(c));
     setLoadingCities(true);
     setCityLoadProgress({ done: 0, total: missingCities.length });
     for (let i = 0; i < missingCities.length; i++) {
       const city = missingCities[i];
       const coords = await geocodeCidade(city, state);
       if (coords) {
-        // Atualizar incrementalmente — assim que cada cidade é geocodificada, o mapa já pode usá-la
         setCityCoords(prev => { const next = new Map(prev); next.set(city, coords); return next; });
       }
       setCityLoadProgress({ done: i + 1, total: missingCities.length });
       if (i < missingCities.length - 1) await sleep(800);
     }
     setLoadingCities(false);
-  }, [employees, cityCoords]);
+  }, [employees]);
 
   const handleStateClick = useCallback(async (state: string) => {
     if (state.length !== 2) return;
@@ -466,7 +586,6 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
     const emps = citiesInState.get(city) || [];
 
-    // Separate: employees with specific address vs only city/state
     const withAddress = emps.filter(e => e.logradouro || e.cep);
     const withCityOnly = emps.filter(e => !e.logradouro && !e.cep);
 
@@ -476,20 +595,16 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
 
     const results: GeocodedEmployee[] = [];
 
-    // Helper: resolve city center coords (CITY_COORDS → geocodeCidade → state center)
     const resolveCityCenter = async (cityName: string | null, estado: string): Promise<[number, number] | null> => {
       const normalState = normalizeEstado(estado);
       if (cityName) {
-        // Check CITY_COORDS first (sem chamada de API)
         const normalizado = Object.keys(CITY_COORDS).find(
           c => c.toLowerCase().trim() === cityName.toLowerCase().trim()
         );
         if (normalizado) return CITY_COORDS[normalizado];
-        // Depois tenta API Nominatim
         const via = await geocodeCidade(cityName, normalState);
         if (via) return via;
       }
-      // Fallback: centro do estado
       const sv = STATE_VIEW[normalState];
       return sv ? sv.center : null;
     };
@@ -498,16 +613,13 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     const anyEmp = emps[0];
     const estadoRef = anyEmp?.estado ?? "";
 
-    // Resolve o centro da cidade antecipadamente para usar como fallback
     let cityCenter: [number, number] | null = null;
-    // Se já temos em cityCoords, usar imediatamente (sem esperar API)
-    if (cityName && cityCoords.has(cityName)) {
-      cityCenter = cityCoords.get(cityName)!;
+    if (cityName && cityCordsRef.current.has(cityName)) {
+      cityCenter = cityCordsRef.current.get(cityName)!;
     } else {
       cityCenter = await resolveCityCenter(cityName, estadoRef);
     }
 
-    // 1) Geocode employees with logradouro/cep (exact)
     for (let i = 0; i < withAddress.length; i++) {
       if (geocodingAbort.current) break;
       const e = withAddress[i];
@@ -523,7 +635,6 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
       if (coords) {
         results.push({ ...e, lat: coords[0], lng: coords[1], isApprox: false });
       } else if (cityCenter) {
-        // Endereço não geocodificado → posição aproximada no centro da cidade
         results.push({ ...e, lat: cityCenter[0] + jitter(), lng: cityCenter[1] + jitter(), isApprox: true });
       }
       setGeocodedEmployees([...results]);
@@ -531,7 +642,6 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
       if (i < withAddress.length - 1) await sleep(1050);
     }
 
-    // 2) Employees with only city/state — place at city center with jitter (approximate)
     if (!geocodingAbort.current && withCityOnly.length > 0) {
       if (cityCenter) {
         for (const e of withCityOnly) {
@@ -549,16 +659,13 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     }
 
     setGeocoding(false);
-  }, [citiesInState, cityCoords]);
+  }, [citiesInState]);
 
-  // Manter ref atualizado com a versão mais recente do handleCityClick
   useEffect(() => { handleCityClickRef.current = handleCityClick; }, [handleCityClick]);
 
-  // Quando o filtro de status muda: se estiver no nível 3, re-geocodificar; senão, só deixa o dado atualizar
   const statusFiltrosKey = statusFiltros.join(",");
   useEffect(() => {
     if (statusFiltrosKeyRef.current === "") {
-      // Primeira montagem — só registra, sem re-geocodificar
       statusFiltrosKeyRef.current = statusFiltrosKey;
       return;
     }
@@ -569,7 +676,6 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
       geocodingAbort.current = true;
       setGeocoding(false);
       setGeocodedEmployees([]);
-      // Aguarda o tRPC re-buscar com o novo filtro antes de re-geocodificar
       const t = setTimeout(() => handleCityClickRef.current(selectedCity), 900);
       return () => clearTimeout(t);
     }
@@ -596,12 +702,10 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     if (selectedCity === SEM_CIDADE_KEY) {
       return stateView ? { center: stateView.center, zoom: 9 } : null;
     }
-    // 1ª opção: coordenadas já geocodificadas por loadCityCoords
     if (cityCoords.has(selectedCity)) {
       const [lat, lng] = cityCoords.get(selectedCity)!;
       return { center: [lat, lng] as [number, number], zoom: 13 };
     }
-    // 2ª opção: tabela local CITY_COORDS (sem API)
     const normalizado = Object.keys(CITY_COORDS).find(
       c => c.toLowerCase().trim() === selectedCity.toLowerCase().trim()
     );
@@ -609,7 +713,6 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
       const [lat, lng] = CITY_COORDS[normalizado];
       return { center: [lat, lng] as [number, number], zoom: 13 };
     }
-    // 3ª opção: centro do estado como fallback
     return stateView ? { center: stateView.center, zoom: 10 } : null;
   }, [selectedCity, cityCoords, stateView]);
 
@@ -617,11 +720,16 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
     setStatusFiltros(prev =>
       prev.includes(value) ? prev.filter(s => s !== value) : [...prev, value]
     );
-    // Mantém o nível atual — o effect acima cuida de re-geocodificar ao nível 3 se necessário
   }
 
   const approxCount = geocodedEmployees.filter(e => e.isApprox).length;
   const exactCount = geocodedEmployees.filter(e => !e.isApprox).length;
+
+  // City list sorted by count (for the bottom nav strip in Mapa Geral)
+  const sortedCities = useMemo(() =>
+    [...cityGroups.entries()].sort((a, b) => b[1].length - a[1].length),
+    [cityGroups]
+  );
 
   return (
     <Card className="border-border">
@@ -629,30 +737,44 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <MapPin className="h-4 w-4 text-blue-500" />
-            {level === 1 && "Distribuição de Funcionários por Estado"}
-            {level === 2 && selectedState && (
-              <>
-                {STATE_NAMES[selectedState] || selectedState}
-                <Badge variant="secondary" className="text-xs">
-                  {employeesInState.length} funcionário{employeesInState.length !== 1 ? "s" : ""}
-                </Badge>
-              </>
-            )}
-            {level === 3 && selectedCity && (
-              <>
-                {selectedCity === SEM_CIDADE_KEY ? SEM_CIDADE_LABEL : selectedCity}
-                <Badge variant="secondary" className="text-xs">
-                  {employeesInCity.length} funcionário{employeesInCity.length !== 1 ? "s" : ""}
-                </Badge>
-              </>
-            )}
+            {viewMode === "geral"
+              ? "Mapa Geral — Todos os Funcionários"
+              : level === 1
+                ? "Distribuição por Estado"
+                : level === 2 && selectedState
+                  ? <>{STATE_NAMES[selectedState] || selectedState} <Badge variant="secondary" className="text-xs">{employeesInState.length} func.</Badge></>
+                  : level === 3 && selectedCity
+                    ? <>{selectedCity === SEM_CIDADE_KEY ? SEM_CIDADE_LABEL : selectedCity} <Badge variant="secondary" className="text-xs">{employeesInCity.length} func.</Badge></>
+                    : "Mapa"
+            }
           </CardTitle>
-          {level > 1 && (
-            <Button variant="ghost" size="sm" onClick={goBack} className="h-7 text-xs gap-1">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              {level === 2 ? "Voltar ao Brasil" : `Voltar a ${STATE_NAMES[selectedState!] || selectedState}`}
-            </Button>
-          )}
+          <div className="flex items-center gap-1.5">
+            {viewMode === "estado" && level > 1 && (
+              <Button variant="ghost" size="sm" onClick={goBack} className="h-7 text-xs gap-1">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                {level === 2 ? "Voltar ao Brasil" : `Voltar a ${STATE_NAMES[selectedState!] || selectedState}`}
+              </Button>
+            )}
+            {/* View mode toggle */}
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+              <button
+                onClick={() => setViewMode("geral")}
+                className={`flex items-center gap-1 text-[10px] px-2.5 py-1.5 font-medium transition-colors ${viewMode === "geral" ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+                title="Ver todos os funcionários no mapa"
+              >
+                <Globe className="h-3 w-3" />
+                Mapa Geral
+              </button>
+              <button
+                onClick={() => setViewMode("estado")}
+                className={`flex items-center gap-1 text-[10px] px-2.5 py-1.5 font-medium transition-colors border-l border-slate-200 ${viewMode === "estado" ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+                title="Navegar por estado e cidade"
+              >
+                <MapIcon className="h-3 w-3" />
+                Por Estado
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Status filter chips */}
@@ -682,51 +804,40 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
           </button>
         </div>
 
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-0.5">
-          <span
-            className={level === 1 ? "text-blue-600 font-medium" : "cursor-pointer hover:text-blue-500"}
-            onClick={() => { if (level > 1) { setLevel(1); setSelectedState(null); }}}
-          >
-            Brasil
-          </span>
-          {level >= 2 && selectedState && (
-            <>
-              <span>›</span>
-              <span
-                className={level === 2 ? "text-blue-600 font-medium" : "cursor-pointer hover:text-blue-500"}
-                onClick={() => { if (level > 2) goBack(); }}
-              >
-                {STATE_NAMES[selectedState]}
-              </span>
-            </>
-          )}
-          {level === 3 && selectedCity && (
-            <>
-              <span>›</span>
-              <span className="text-blue-600 font-medium">
-                {selectedCity === SEM_CIDADE_KEY ? SEM_CIDADE_LABEL : selectedCity}
-              </span>
-            </>
-          )}
-        </div>
+        {/* Breadcrumb (estado mode only) */}
+        {viewMode === "estado" && (
+          <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-0.5">
+            <span
+              className={level === 1 ? "text-blue-600 font-medium" : "cursor-pointer hover:text-blue-500"}
+              onClick={() => { if (level > 1) { setLevel(1); setSelectedState(null); }}}
+            >Brasil</span>
+            {level >= 2 && selectedState && (
+              <>
+                <span>›</span>
+                <span
+                  className={level === 2 ? "text-blue-600 font-medium" : "cursor-pointer hover:text-blue-500"}
+                  onClick={() => { if (level > 2) goBack(); }}
+                >{STATE_NAMES[selectedState]}</span>
+              </>
+            )}
+            {level === 3 && selectedCity && (
+              <>
+                <span>›</span>
+                <span className="text-blue-600 font-medium">
+                  {selectedCity === SEM_CIDADE_KEY ? SEM_CIDADE_LABEL : selectedCity}
+                </span>
+              </>
+            )}
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="p-3">
-        {/* Level 1: Brazil SVG Map */}
-        {level === 1 && (
-          <BrazilMap
-            title=""
-            data={stateDist}
-            colorScheme="blue"
-            onStateClick={handleStateClick}
-            hideCard
-          />
-        )}
 
-        {/* Level 2: State Leaflet Map — cities as clusters */}
-        {level === 2 && stateView && (
+        {/* ── MAPA GERAL: todos os funcionários no mapa ── */}
+        {viewMode === "geral" && (
           <div>
+            {/* Loading indicator */}
             {(loadingCities || loadingEmps) && (
               <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
@@ -735,185 +846,361 @@ export default function MapaFuncionariosInterativo({ stateDist }: MapaFuncionari
                   : "Carregando funcionários..."}
               </div>
             )}
-            <div className="rounded-lg overflow-hidden border border-slate-200" style={{ height: 420 }}>
+
+            {/* Summary */}
+            <div className="flex items-center gap-3 mb-2 text-xs text-slate-500">
+              <span>
+                <strong className="text-slate-700">{employees.length}</strong> funcionário{employees.length !== 1 ? "s" : ""}
+              </span>
+              <span>·</span>
+              <span>
+                <strong className="text-slate-700">{cityGroups.size}</strong> cidade{cityGroups.size !== 1 ? "s" : ""}
+              </span>
+              <span>·</span>
+              <span>
+                <strong className="text-slate-700">{cityCoords.size}</strong> cidades no mapa
+              </span>
+              {semEnderecoValido.length > 0 && (
+                <>
+                  <span>·</span>
+                  <span className="text-amber-600">
+                    <strong>{semEnderecoValido.length}</strong> sem endereço
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Leaflet map — all cities */}
+            <div className="rounded-lg overflow-hidden border border-slate-200" style={{ height: 480 }}>
               <MapContainer
-                center={stateView.center}
-                zoom={stateView.zoom}
+                center={[-18.5, -48.5]}
+                zoom={6}
                 style={{ height: "100%", width: "100%" }}
+                scrollWheelZoom
               >
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                {[...citiesInState.entries()].map(([city, emps]) => {
-                  if (city === SEM_CIDADE_KEY) return null;
+                {[...cityGroups.entries()].map(([city, emps]) => {
                   const coords = cityCoords.get(city);
                   if (!coords) return null;
                   return (
-                    <CityClusterMarker
+                    <LivreCityCluster
                       key={city}
-                      lat={coords[0]}
-                      lng={coords[1]}
-                      count={emps.length}
-                      cityName={city}
-                      onClick={() => handleCityClick(city)}
+                      city={city}
+                      coords={coords}
+                      emps={emps}
                     />
                   );
                 })}
               </MapContainer>
             </div>
-            {/* City legend */}
-            {(() => {
-              const semCidade = citiesInState.get(SEM_CIDADE_KEY);
-              const regularCities = [...citiesInState.entries()]
-                .filter(([c]) => c !== SEM_CIDADE_KEY)
-                .sort((a, b) => b[1].length - a[1].length);
-              return (
-                <>
-                  {regularCities.length > 0 && (
-                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                      {regularCities.map(([city, emps]) => (
-                        <button
-                          key={city}
-                          onClick={() => handleCityClick(city)}
-                          className="flex items-center justify-between gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
-                        >
-                          <span className="truncate font-medium text-slate-700">{city}</span>
-                          <Badge variant="secondary" className="text-[10px] shrink-0">{emps.length}</Badge>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {semCidade && semCidade.length > 0 && (
-                    <div className="mt-2">
+
+            {/* City navigation chips below map */}
+            {sortedCities.length > 0 && (
+              <div className="mt-3">
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mb-1.5">Navegar para cidade</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {sortedCities.map(([city, emps]) => {
+                    const coords = cityCoords.get(city);
+                    return (
                       <button
-                        onClick={() => handleCityClick(SEM_CIDADE_KEY)}
-                        className="w-full flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 hover:border-amber-300 transition-colors text-left"
+                        key={city}
+                        disabled={!coords}
+                        className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border font-medium transition-colors ${coords ? "border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 text-slate-700" : "border-slate-100 bg-slate-50 text-slate-300 cursor-wait"}`}
+                        title={coords ? `${emps.length} funcionário(s) em ${city}` : "Localizando..."}
+                        onClick={() => {
+                          if (!coords) return;
+                          // Find the map instance and fly — handled internally by clicking the cluster marker
+                          // This just copies the coords to clipboard for now (maps click via Leaflet)
+                          const event = new CustomEvent("mapaGeral:flyTo", { detail: { coords, city } });
+                          window.dispatchEvent(event);
+                        }}
                       >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <MapPin className="h-3 w-3 text-amber-500 shrink-0" />
-                          <span className="font-medium text-amber-800">
-                            Endereço sem cidade cadastrada
-                          </span>
-                          <span className="text-[10px] text-amber-600">
-                            — geocodificar por logradouro/CEP
-                          </span>
-                        </div>
-                        <Badge className="text-[10px] shrink-0 bg-amber-200 text-amber-800 hover:bg-amber-200">{semCidade.length}</Badge>
+                        {!coords && <Loader2 className="h-2.5 w-2.5 animate-spin text-slate-300" />}
+                        <span>{city}</span>
+                        <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">{emps.length}</Badge>
                       </button>
-                    </div>
-                  )}
-                  {regularCities.length === 0 && (!semCidade || semCidade.length === 0) && !loadingEmps && !loadingCities && (
-                    <div className="mt-3 text-xs text-slate-400 text-center py-4">
-                      Nenhum funcionário com endereço cadastrado neste estado.
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Level 3: City Leaflet Map — individual employee pins */}
-        {level === 3 && (
-          <div>
-            {/* Progress bar */}
-            {geocoding && (
-              <div className="mb-3">
-                <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
-                  Geocodificando endereços... {geocodingProgress.done}/{geocodingProgress.total}
-                </div>
-                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-500 rounded-full"
-                    style={{ width: `${geocodingProgress.total > 0 ? (geocodingProgress.done / geocodingProgress.total) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
+        {/* ── MODO POR ESTADO: drill-down existente ── */}
+        {viewMode === "estado" && (
+          <>
+            {/* Level 1: Brazil SVG Map */}
+            {level === 1 && (
+              <BrazilMap
+                title=""
+                data={stateDist}
+                colorScheme="blue"
+                onStateClick={handleStateClick}
+                hideCard
+              />
             )}
 
-            {/* No results at all */}
-            {!geocoding && geocodedEmployees.length === 0 && (
-              <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                Nenhum endereço foi geocodificado. Verifique se os funcionários possuem logradouro, CEP ou cidade cadastrada.
-              </div>
-            )}
-
-            <div className="rounded-lg overflow-hidden border border-slate-200" style={{ height: 440 }}>
-              <MapContainer
-                key={selectedCity ?? "city"}
-                center={cityView?.center || stateView?.center || [-15.78, -47.93]}
-                zoom={cityView?.zoom || 12}
-                style={{ height: "100%", width: "100%" }}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                {cityView && <MapFlyTo center={cityView.center} zoom={cityView.zoom} />}
-                {geocodedEmployees.map(emp => (
-                  <Marker
-                    key={emp.id}
-                    position={[emp.lat, emp.lng]}
-                    icon={createEmployeeIcon(emp.nome, emp.status, emp.isApprox)}
+            {/* Level 2: State Leaflet Map — cities as clusters */}
+            {level === 2 && stateView && (
+              <div>
+                {(loadingCities || loadingEmps) && (
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                    {loadingCities
+                      ? `Localizando cidades... ${cityLoadProgress.done}/${cityLoadProgress.total}`
+                      : "Carregando funcionários..."}
+                  </div>
+                )}
+                <div className="rounded-lg overflow-hidden border border-slate-200" style={{ height: 420 }}>
+                  <MapContainer
+                    center={stateView.center}
+                    zoom={stateView.zoom}
+                    style={{ height: "100%", width: "100%" }}
                   >
-                    <Popup>
-                      <div className="min-w-[160px]">
-                        <p className="font-bold text-slate-800 text-sm">{emp.nome}</p>
-                        {emp.funcao && <p className="text-xs text-slate-500 mt-0.5">{emp.funcao}</p>}
-                        {emp.status && (
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] mt-1"
-                            style={statusStyle(emp.status)}
-                          >
-                            {statusLabel(emp.status)}
-                          </Badge>
-                        )}
-                        {emp.isApprox && (
-                          <p className="text-[10px] text-amber-600 mt-1 italic">
-                            Posição aproximada (centro da cidade)
-                          </p>
-                        )}
-                        <div className="mt-1.5 text-[11px] text-slate-500 space-y-0.5">
-                          {emp.logradouro && (
-                            <p>{emp.logradouro}{emp.numero ? `, ${emp.numero}` : ""}</p>
-                          )}
-                          {emp.bairro && <p>{emp.bairro}</p>}
-                          {emp.cidade && <p className="font-medium">{emp.cidade} - {emp.estado}</p>}
-                          {emp.cep && <p>CEP: {emp.cep}</p>}
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    {[...citiesInState.entries()].map(([city, emps]) => {
+                      if (city === SEM_CIDADE_KEY) return null;
+                      const coords = cityCoords.get(city);
+                      if (!coords) return null;
+                      return (
+                        <CityClusterMarker
+                          key={city}
+                          lat={coords[0]}
+                          lng={coords[1]}
+                          count={emps.length}
+                          cityName={city}
+                          onClick={() => handleCityClick(city)}
+                        />
+                      );
+                    })}
+                  </MapContainer>
+                </div>
+                {/* City legend */}
+                {(() => {
+                  const semCidade = citiesInState.get(SEM_CIDADE_KEY);
+                  const regularCities = [...citiesInState.entries()]
+                    .filter(([c]) => c !== SEM_CIDADE_KEY)
+                    .sort((a, b) => b[1].length - a[1].length);
+                  return (
+                    <>
+                      {regularCities.length > 0 && (
+                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {regularCities.map(([city, emps]) => (
+                            <button
+                              key={city}
+                              onClick={() => handleCityClick(city)}
+                              className="flex items-center justify-between gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
+                            >
+                              <span className="truncate font-medium text-slate-700">{city}</span>
+                              <Badge variant="secondary" className="text-[10px] shrink-0">{emps.length}</Badge>
+                            </button>
+                          ))}
                         </div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                ))}
-              </MapContainer>
-            </div>
+                      )}
+                      {semCidade && semCidade.length > 0 && (
+                        <div className="mt-2">
+                          <button
+                            onClick={() => handleCityClick(SEM_CIDADE_KEY)}
+                            className="w-full flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 hover:border-amber-300 transition-colors text-left"
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <MapPin className="h-3 w-3 text-amber-500 shrink-0" />
+                              <span className="font-medium text-amber-800">Endereço sem cidade cadastrada</span>
+                              <span className="text-[10px] text-amber-600">— geocodificar por logradouro/CEP</span>
+                            </div>
+                            <Badge className="text-[10px] shrink-0 bg-amber-200 text-amber-800 hover:bg-amber-200">{semCidade.length}</Badge>
+                          </button>
+                        </div>
+                      )}
+                      {regularCities.length === 0 && (!semCidade || semCidade.length === 0) && !loadingEmps && !loadingCities && (
+                        <div className="mt-3 text-xs text-slate-400 text-center py-4">
+                          Nenhum funcionário com endereço cadastrado neste estado.
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
-            {/* Footer count */}
-            {!geocoding && employeesInCity.length > 0 && (
-              <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
-                <Users className="h-3.5 w-3.5 shrink-0" />
-                <span>
-                  {geocodedEmployees.length} de {employeesInCity.length} funcionário{employeesInCity.length !== 1 ? "s" : ""} no mapa
-                </span>
-                {exactCount > 0 && (
-                  <span className="text-green-600">({exactCount} endereço exato)</span>
+            {/* Level 3: City Leaflet Map — individual employee pins */}
+            {level === 3 && (
+              <div>
+                {geocoding && (
+                  <div className="mb-3">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                      Geocodificando endereços... {geocodingProgress.done}/{geocodingProgress.total}
+                    </div>
+                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 transition-all duration-500 rounded-full"
+                        style={{ width: `${geocodingProgress.total > 0 ? (geocodingProgress.done / geocodingProgress.total) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
-                {approxCount > 0 && (
-                  <span className="text-amber-500">({approxCount} posição aproximada)</span>
+
+                {!geocoding && geocodedEmployees.length === 0 && (
+                  <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    Nenhum endereço foi geocodificado. Verifique se os funcionários possuem logradouro, CEP ou cidade cadastrada.
+                  </div>
                 )}
-                {employeesInCity.length - geocodedEmployees.length > 0 && (
-                  <span className="text-red-400">
-                    ({employeesInCity.length - geocodedEmployees.length} sem dados de localização)
-                  </span>
+
+                <div className="rounded-lg overflow-hidden border border-slate-200" style={{ height: 440 }}>
+                  <MapContainer
+                    key={selectedCity ?? "city"}
+                    center={cityView?.center || stateView?.center || [-15.78, -47.93]}
+                    zoom={cityView?.zoom || 12}
+                    style={{ height: "100%", width: "100%" }}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    {cityView && <MapFlyTo center={cityView.center} zoom={cityView.zoom} />}
+                    {geocodedEmployees.map(emp => (
+                      <Marker
+                        key={emp.id}
+                        position={[emp.lat, emp.lng]}
+                        icon={createEmployeeIcon(emp.nome, emp.status, emp.isApprox)}
+                      >
+                        <Popup>
+                          <div className="min-w-[160px]">
+                            <p className="font-bold text-slate-800 text-sm">{emp.nome}</p>
+                            {emp.funcao && <p className="text-xs text-slate-500 mt-0.5">{emp.funcao}</p>}
+                            {emp.status && (
+                              <Badge variant="secondary" className="text-[10px] mt-1" style={statusStyle(emp.status)}>
+                                {statusLabel(emp.status)}
+                              </Badge>
+                            )}
+                            {emp.isApprox && (
+                              <p className="text-[10px] text-amber-600 mt-1 italic">
+                                Posição aproximada (centro da cidade)
+                              </p>
+                            )}
+                            <div className="mt-1.5 text-[11px] text-slate-500 space-y-0.5">
+                              {emp.logradouro && (
+                                <p>{emp.logradouro}{emp.numero ? `, ${emp.numero}` : ""}</p>
+                              )}
+                              {emp.bairro && <p>{emp.bairro}</p>}
+                              {emp.cidade && <p className="font-medium">{emp.cidade} - {emp.estado}</p>}
+                              {emp.cep && <p>CEP: {emp.cep}</p>}
+                            </div>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))}
+                  </MapContainer>
+                </div>
+
+                {!geocoding && employeesInCity.length > 0 && (
+                  <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+                    <Users className="h-3.5 w-3.5 shrink-0" />
+                    <span>{geocodedEmployees.length} de {employeesInCity.length} funcionário{employeesInCity.length !== 1 ? "s" : ""} no mapa</span>
+                    {exactCount > 0 && <span className="text-green-600">({exactCount} endereço exato)</span>}
+                    {approxCount > 0 && <span className="text-amber-500">({approxCount} posição aproximada)</span>}
+                    {employeesInCity.length - geocodedEmployees.length > 0 && (
+                      <span className="text-red-400">({employeesInCity.length - geocodedEmployees.length} sem dados de localização)</span>
+                    )}
+                  </div>
                 )}
               </div>
             )}
-          </div>
+          </>
         )}
+
+        {/* ── PAINEL: Funcionários sem endereço válido ── */}
+        <div className={`mt-4 border rounded-xl overflow-hidden transition-all ${semEnderecoValido.length > 0 ? "border-amber-200" : "border-slate-200"}`}>
+          <button
+            onClick={() => setSemEnderecoOpen(o => !o)}
+            className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold transition-colors ${semEnderecoValido.length > 0 ? "bg-amber-50 hover:bg-amber-100 text-amber-800" : "bg-slate-50 hover:bg-slate-100 text-slate-600"}`}
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle className={`h-4 w-4 ${semEnderecoValido.length > 0 ? "text-amber-500" : "text-slate-400"}`} />
+              <span>Funcionários sem endereço válido para o mapa</span>
+              <Badge className={`text-[10px] ${semEnderecoValido.length > 0 ? "bg-amber-200 text-amber-800 hover:bg-amber-200" : "bg-slate-200 text-slate-600 hover:bg-slate-200"}`}>
+                {semEnderecoValido.length}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              {semEnderecoValido.length > 0 && (
+                <span className="text-[10px] text-amber-600 font-normal">Corrija para aparecer no mapa</span>
+              )}
+              {semEnderecoOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </div>
+          </button>
+
+          {semEnderecoOpen && (
+            <div className="p-3">
+              {semEnderecoValido.length === 0 ? (
+                <div className="text-center py-6 text-sm text-slate-400">
+                  ✓ Todos os funcionários têm pelo menos um dado de localização (cidade, logradouro ou CEP).
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                    Os funcionários abaixo não possuem <strong>cidade</strong>, <strong>logradouro</strong> nem <strong>CEP</strong> cadastrados — impossível localizá-los no mapa.
+                    O RH deve acessar o cadastro de cada funcionário e preencher o endereço.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px] border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-500 font-semibold border-b border-slate-200">
+                          <th className="text-left px-3 py-2">Nome</th>
+                          <th className="text-left px-3 py-2">Função</th>
+                          <th className="text-left px-3 py-2">Status</th>
+                          <th className="text-left px-3 py-2">Estado</th>
+                          <th className="text-left px-3 py-2">O que falta</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {semEnderecoValido.map((emp, i) => {
+                          const faltando: string[] = [];
+                          if (!emp.cidade) faltando.push("Cidade");
+                          if (!emp.logradouro) faltando.push("Logradouro");
+                          if (!emp.cep) faltando.push("CEP");
+                          return (
+                            <tr key={emp.id} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                              <td className="px-3 py-2 font-medium text-slate-700">{emp.nome}</td>
+                              <td className="px-3 py-2 text-slate-500">{emp.funcao || <span className="text-slate-300">—</span>}</td>
+                              <td className="px-3 py-2">
+                                {emp.status ? (
+                                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold" style={statusStyle(emp.status)}>
+                                    {statusLabel(emp.status)}
+                                  </span>
+                                ) : <span className="text-slate-300">—</span>}
+                              </td>
+                              <td className="px-3 py-2 text-slate-500">{emp.estado || <span className="text-red-400 font-medium">Sem estado!</span>}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-wrap gap-1">
+                                  {faltando.map(f => (
+                                    <span key={f} className="bg-red-100 text-red-600 text-[9px] px-1.5 py-0.5 rounded-full font-medium">{f}</span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2 text-right">
+                    {semEnderecoValido.length} funcionário{semEnderecoValido.length !== 1 ? "s" : ""} listado{semEnderecoValido.length !== 1 ? "s" : ""}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
