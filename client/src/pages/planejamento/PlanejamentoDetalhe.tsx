@@ -3485,6 +3485,8 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
 const REV_COLORS = ["#7c3aed","#0891b2","#d97706","#be185d","#0d9488","#ea580c","#9333ea","#0284c7"];
 
 function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, revisaoAtiva, curvaMedicoes = [] }: any) {
+  const [curvaTipo, setCurvaTipo] = useState<"trabalho" | "financeira">("trabalho");
+
   // Revisões anteriores com toggles
   const { data: todasRevisoes = [] } = trpc.planejamento.getCurvasTodasRevisoes.useQuery(
     { projetoId }, { enabled: !!projetoId }
@@ -3554,6 +3556,29 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
 
   return (
     <div className="space-y-4">
+      {/* ── Switcher Trabalho / Financeira ───────────────────────────────── */}
+      <div className="flex bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+        {[
+          { id: "trabalho",   label: "Curva S de Trabalho",  icon: "📐" },
+          { id: "financeira", label: "Curva S Financeira",   icon: "💰" },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setCurvaTipo(tab.id as "trabalho" | "financeira")}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-all
+              ${curvaTipo === tab.id
+                ? "bg-blue-600 text-white"
+                : "text-slate-500 hover:bg-slate-50"}`}
+          >
+            <span>{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── ABA: TRABALHO ─────────────────────────────────────────────────── */}
+      {curvaTipo === "trabalho" && <>
       {/* Legenda dinâmica */}
       <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
         {[
@@ -3600,7 +3625,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
       {/* Gráfico */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
         <p className="text-sm font-semibold text-slate-700 mb-1">
-          Curva S — Avanço Físico Acumulado
+          Curva S de Trabalho — Avanço Físico Acumulado (%)
         </p>
         <p className="text-xs text-slate-400 mb-3">
           Realizado atual: <strong style={{ color: "#22c55e" }}>{fPct(avancoAtual)}</strong>
@@ -3699,25 +3724,36 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
         <p>🟢 <strong>Tendência</strong>: Projeção baseada no ritmo atual. Indica data estimada de conclusão.</p>
         {revisoesAnteriores.length > 0 && <p>⚙️ <strong>Revisões anteriores</strong>: Ative os botões acima para comparar cronogramas de revisões anteriores.</p>}
       </div>
+      </>}
 
-      {/* ── Curva S Financeira ──────────────────────────────────────────────── */}
-      {(() => {
+      {/* ── ABA: FINANCEIRA ───────────────────────────────────────────────── */}
+      {curvaTipo === "financeira" && (() => {
         const contrato = n(proj?.valorContrato ?? 0);
-        if (contrato <= 0 || merged.length === 0) return null;
+        const hasMedicoes = (curvaMedicoes as any[]).length > 0;
+        if (contrato <= 0 && !hasMedicoes) return (
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
+            <DollarSign className="h-10 w-10 opacity-30" />
+            <p className="text-sm font-medium text-slate-600">Valor do Contrato não configurado</p>
+            <p className="text-xs text-center max-w-sm">
+              Informe o <strong>Valor do Contrato</strong> nas configurações do projeto para visualizar a Curva S Financeira.
+              Lançamentos de Medição também aparecem aqui automaticamente.
+            </p>
+          </div>
+        );
+        if (merged.length === 0) return null;
 
-        // Escala % → R$
+        // Escala % → R$ (só quando valorContrato > 0)
         const finMerged = merged.map((row: any) => ({
           ...row,
-          baseline:  row.baseline  != null ? +(contrato * row.baseline  / 100).toFixed(2) : null,
-          planejada: row.planejada != null ? +(contrato * row.planejada / 100).toFixed(2) : null,
-          realizada: row.realizada != null ? +(contrato * row.realizada / 100).toFixed(2) : null,
-          tendencia: row.tendencia != null ? +(contrato * row.tendencia / 100).toFixed(2) : null,
+          baseline:  (contrato > 0 && row.baseline  != null) ? +(contrato * row.baseline  / 100).toFixed(2) : null,
+          planejada: (contrato > 0 && row.planejada != null) ? +(contrato * row.planejada / 100).toFixed(2) : null,
+          realizada: (contrato > 0 && row.realizada != null) ? +(contrato * row.realizada / 100).toFixed(2) : null,
+          tendencia: (contrato > 0 && row.tendencia != null) ? +(contrato * row.tendencia / 100).toFixed(2) : null,
         }));
 
         // Mescla curvaMedicoes (faturado acumulado por competência "YYYY-MM")
         const medMap: Record<string, number> = {};
         (curvaMedicoes as any[]).forEach((m: any) => { medMap[m.competencia] = m.valorAcumulado; });
-        const hasMedicoes = (curvaMedicoes as any[]).length > 0;
         const finFull = hasMedicoes ? finMerged.map((row: any) => {
           const comp = String(row.semana ?? "").slice(0, 7);
           const allComps = Object.keys(medMap).filter(k => k <= comp);
@@ -3736,6 +3772,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
         };
 
         return (
+          <>
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
             {/* Legenda */}
             <div className="flex flex-wrap gap-4 text-xs mb-3">
@@ -3768,10 +3805,13 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
             </div>
 
             <p className="text-sm font-semibold text-slate-700 mb-1">
-              Curva S — Evolução Financeira Acumulada
+              Curva S Financeira — Evolução Acumulada (R$)
             </p>
             <p className="text-xs text-slate-400 mb-3">
-              Valores escalados pelo contrato: <strong>{fmt(contrato)}</strong>
+              {contrato > 0
+                ? <>Valores escalados pelo contrato: <strong>{fmt(contrato)}</strong></>
+                : "Exibindo medições lançadas. Configure o Valor do Contrato para ver as curvas planejadas."
+              }
             </p>
 
             <ResponsiveContainer width="100%" height={360}>
@@ -3829,6 +3869,17 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
               </LineChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Interpretação financeira */}
+          <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 text-xs text-slate-600 space-y-1">
+            <p className="font-semibold text-slate-700 mb-2">Como interpretar</p>
+            {finHasBaseline  && <p>🔵 <strong>Baseline</strong>: Valor financeiro planejado no plano original (Rev 00).</p>}
+            {finHasPlanejada && <p>🔴 <strong>Revisão Atual</strong>: Valor financeiro previsto na revisão vigente.</p>}
+            {contrato > 0    && <p>🟢 <strong>Realizado</strong>: Avanço físico convertido em R$ pelo valor do contrato.</p>}
+            {finHasFaturado  && <p>🟣 <strong>Faturado Real</strong>: Valor efetivamente medido/faturado (Módulo Medição).</p>}
+            {!contrato       && <p>⚠️ Configure o <strong>Valor do Contrato</strong> nas configurações do projeto para ver as curvas planejada e realizada em R$.</p>}
+          </div>
+        </>
         );
       })()}
     </div>

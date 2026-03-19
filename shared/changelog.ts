@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 604,
+    titulo: "Curva S: abas separadas para Curva S de Trabalho e Curva S Financeira",
+    descricao: "A aba Curva S agora possui um switcher visual com dois painéis distintos: (1) Curva S de Trabalho — avanço físico acumulado em %, com baseline, revisão atual, realizado e tendência; (2) Curva S Financeira — evolução acumulada em R$, com valores escalados pelo Valor do Contrato e integração com medições faturadas. A curva financeira agora é sempre acessível via aba: quando o Valor do Contrato está zerado mas há medições lançadas, exibe só o faturado real; quando não há nenhum dado financeiro, exibe aviso orientativo para configurar o contrato. Cada aba tem seu próprio bloco 'Como interpretar' contextualizado.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 597,
     titulo: "Curva S: corrigido pesos financeiros distorcendo a curva em cronogramas importados",
     descricao: "Após importar cronograma do MS Project, a Curva S ficava plana em 0% durante todo o ano e saltava para 100% apenas no último dia. Causa-raiz: a atividade 'FIM DO PROJETO - DESMOBILIZAÇÃO' (marco final) tinha pesoFinanceiro > 0, tornando-se a única contribuidora da curva enquanto as demais 1511 atividades com peso=0 contribuíam nada. Fix: getCurvaS e getCurvasTodasRevisoes agora detectam se menos de 20% das atividades folha têm peso definido e, nesse caso, usam pesos iguais (distribuição temporal uniforme). Também: após aprovação de revisão (inclusive importação de cronograma), o cache da Curva S, curvas de revisões e lista de atividades são invalidados para garantir dados frescos imediatamente.",
