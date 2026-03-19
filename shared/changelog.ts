@@ -3589,6 +3589,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 600,
+    titulo: "Obras: impedido cadastro de obra com nome duplicado",
+    descricao: "A função de criação de obra agora verifica se já existe uma obra ativa com o mesmo nome na mesma empresa antes de inserir. Se existir, retorna um erro claro: 'Já existe uma obra ativa com o nome X'. Isso evita que duas obras homônimas sejam criadas por duplo-clique, importação duplicada ou qualquer outra ação acidental, e elimina a causa raiz dos 'Conflitos de Obra' que apareciam quando o DIXI importava registros para dois registros de obra com o mesmo nome.",
+    tipo: "bugfix",
+    modulos: "Obras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 599,
     titulo: "Ponto: matching DIXI duplo (Nº Interno + nome com detecção de ambiguidade)",
     descricao: "Duas melhorias simultâneas no algoritmo de matching do DIXI. (1) Novo passo 1.5: se o campo 'nome' enviado pelo relógio bater exatamente com o Nº Interno (codigoInterno, ex: JFC018) ou matrícula do funcionário, o match é feito imediatamente antes de qualquer comparação por nome — permite usar o relógio com códigos únicos para eliminar confusão entre nomes parecidos. (2) Detecção de ambiguidade nos passos por nome (primeiro+último e parcial): se o nome do DIXI puder casar com MAIS DE UM funcionário, o registro vai para 'Não Identificados' em vez de ser atribuído ao primeiro encontrado — o usuário resolve manualmente vinculando ao funcionário correto, e o sistema memoriza essa vinculação para imports futuros. Essas duas melhorias funcionam em conjunto: código para o próximo mês, resolução manual para o mês atual.",

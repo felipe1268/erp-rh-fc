@@ -1339,6 +1339,13 @@ export async function searchEmployeesByTraining(companyId: number, trainingName:
 export async function createObra(data: InsertObra) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Verifica duplicata: não permite duas obras ativas com o mesmo nome na mesma empresa
+  const [existing] = await db.select({ id: obras.id })
+    .from(obras)
+    .where(and(eq(obras.companyId, data.companyId), eq(obras.nome, data.nome), isNull(obras.deletedAt)));
+  if (existing) {
+    throw new Error(`Já existe uma obra ativa com o nome "${data.nome}". Verifique se ela não foi criada anteriormente.`);
+  }
   const result = await db.insert(obras).values(data).returning();
   return { id: result[0].id };
 }
