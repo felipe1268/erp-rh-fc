@@ -3489,4 +3489,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 586,
+    titulo: "Painel RH: corrigido crash que zeravam todos os KPIs",
+    descricao: "A coluna 'dataBaixa' da tabela termination_notices estava ausente no banco Neon (NEON_DATABASE_URL) porque a migration Rev.547 usava DATABASE_URL incorretamente. O Drizzle gerava SELECT explícito incluindo essa coluna inexistente, causando falha silenciosa em homeData.getData e zerando todos os KPIs do Painel RH. Correção: coluna adicionada ao banco via ALTER TABLE, 24 registros migrados de 'concluido' → 'aguardando_pagamento', e a migration de startup corrigida para usar NEON_DATABASE_URL (com fallback para DATABASE_URL).",
+    tipo: "bugfix",
+    modulos: "Painel RH — KPIs / homeData",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];

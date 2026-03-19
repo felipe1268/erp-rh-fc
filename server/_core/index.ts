@@ -116,10 +116,11 @@ async function startServer() {
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     // Rev.547: migração aviso prévio — adiciona dataBaixa e move concluidos auto-marcados → aguardando_pagamento
+    // Rev.586: corrigido para usar NEON_DATABASE_URL (banco correto da FC Engenharia)
     (async () => {
       try {
         const { Pool } = await import("pg");
-        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL });
         await pool.query(`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "dataBaixa" date`);
         const r = await pool.query(`UPDATE termination_notices SET status='aguardando_pagamento', "updatedAt"=NOW() WHERE status='concluido' AND "dataBaixa" IS NULL AND "deletedAt" IS NULL`);
         await pool.end();
