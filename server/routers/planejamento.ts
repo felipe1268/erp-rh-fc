@@ -25,6 +25,10 @@ import {
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
+// pg driver returns `date` columns as Date objects; after JSON serialization they become
+// "2026-02-09T00:00:00.000Z". The frontend expects "YYYY-MM-DD" strings.
+const toDateStr = (v: any): string =>
+  v instanceof Date ? v.toISOString().split("T")[0] : String(v).slice(0, 10);
 
 export const planejamentoRouter = router({
 
@@ -499,12 +503,13 @@ export const planejamentoRouter = router({
     .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      return db.select().from(planejamentoAvancos)
+      const rows = await db.select().from(planejamentoAvancos)
         .where(and(
           eq(planejamentoAvancos.projetoId, input.projetoId),
           eq(planejamentoAvancos.revisaoId, input.revisaoId),
         ))
         .orderBy(asc(planejamentoAvancos.semana), asc(planejamentoAvancos.atividadeId));
+      return rows.map(r => ({ ...r, semana: toDateStr(r.semana) }));
     }),
 
   // Retorna todas as semanas que têm qualquer avanço registrado no projeto (qualquer revisão)
@@ -517,7 +522,7 @@ export const planejamentoRouter = router({
         .from(planejamentoAvancos)
         .where(eq(planejamentoAvancos.projetoId, input.projetoId))
         .orderBy(asc(planejamentoAvancos.semana));
-      return rows.map(r => r.semana);
+      return rows.map(r => toDateStr(r.semana));
     }),
 
   salvarAvanco: protectedProcedure
@@ -627,9 +632,10 @@ export const planejamentoRouter = router({
     .input(z.object({ projetoId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      return db.select().from(planejamentoRefis)
+      const rows = await db.select().from(planejamentoRefis)
         .where(eq(planejamentoRefis.projetoId, input.projetoId))
         .orderBy(desc(planejamentoRefis.semana));
+      return rows.map(r => ({ ...r, semana: toDateStr(r.semana) }));
     }),
 
   salvarRefis: protectedProcedure
@@ -780,7 +786,7 @@ export const planejamentoRouter = router({
     .input(z.object({ projetoId: z.number(), revisaoId: z.number(), baselineId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const [atividades, baseline, avancos] = await Promise.all([
+      const [atividades, baseline, avancosRaw] = await Promise.all([
         db.select().from(planejamentoAtividades)
           .where(eq(planejamentoAtividades.revisaoId, input.revisaoId))
           .orderBy(asc(planejamentoAtividades.dataInicio)),
@@ -794,6 +800,8 @@ export const planejamentoRouter = router({
           ))
           .orderBy(asc(planejamentoAvancos.semana)),
       ]);
+      // Normaliza semana para "YYYY-MM-DD" (pg retorna colunas date como Date objects)
+      const avancos = avancosRaw.map(av => ({ ...av, semana: toDateStr(av.semana) }));
 
       function gerarCurvaPlanejada(ativs: typeof atividades) {
         if (!ativs.length) return [];

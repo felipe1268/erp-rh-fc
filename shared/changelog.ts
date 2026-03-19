@@ -3462,4 +3462,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 583,
+    titulo: "Bugfix crítico: semana de avanços retornada como Date object causava 0% em todo o Avanço Semanal",
+    descricao: "O driver pg retorna colunas do tipo date como objetos JavaScript Date, que após serialização JSON tRPC viram strings ISO '2026-02-09T00:00:00.000Z'. O frontend comparava com strings de data puras '2026-02-09', causando falha silenciosa em todas as comparações (===, <=, >) nos useMemos avancoExistente, avancoMaisRecente e semanasComDados. Resultado: a aba Avanço Semanal mostrava todas as atividades a 0% ao abrir (os dados já salvos não eram carregados), os marcadores verdes de semanas com dados desapareciam, e a Curva S Realizada acumulava 2241 pontos duplicados em vez de 5. Correção: adicionada função helper toDateStr() no servidor que normaliza qualquer valor de coluna date para 'YYYY-MM-DD'; aplicada nos endpoints listarAvancos, listarSemanasComAvanco, getCurvaS (normalização antes de todo processamento) e listarRefis. Os valores de progresso no cabeçalho (avancosMap DB×DB) já eram corretos e não foram afetados.",
+    tipo: "bugfix",
+    modulos: "Planejamento — Avanço Semanal, Curva S, REFIS",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];
