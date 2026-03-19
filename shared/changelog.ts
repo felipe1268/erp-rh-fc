@@ -3471,4 +3471,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 584,
+    titulo: "Bugfix crítico: Painel RH mostrava todos os zeros — colunas date retornadas como Date objects pelo pg driver",
+    descricao: "Causa raiz confirmada: o driver pg 8.20 parseia colunas PostgreSQL do tipo date (OID 1082) como objetos JavaScript Date por padrão. O Drizzle com { mode: 'string' } não tem mapFromDriverValue para sobrescrever isso. Em homeData.ts, o código fazia e.dataNascimento.split('-') diretamente, lançando TypeError (Date.split is not a function) que derrubava toda a query getData, fazendo o Painel RH exibir zeros em todos os contadores. Correção: adicionado helper toDateStr(v) = v instanceof Date ? v.toISOString().split('T')[0] : String(v).slice(0,10) no topo do arquivo. Aplicado a todos os campos date de todas as tabelas no arquivo: dataNascimento, dataAdmissao, dataDemissao (employees), dataValidade (asos), dataAudiencia (processosTrabalhistas), dataInicio/dataFim (vacationPeriods, terminationNotices), dataPrevisaoFim (obras), experienciaInicio, dataOcorrencia (warnings). Datas também normalizadas nas respostas retornadas ao cliente.",
+    tipo: "bugfix",
+    modulos: "Painel RH — Dashboard Home",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];

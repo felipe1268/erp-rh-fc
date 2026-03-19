@@ -5,6 +5,15 @@ import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacat
 import { eq, and, sql, gte, lte, desc, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 
+// O driver pg retorna colunas date como objetos Date (não strings).
+// Drizzle's { mode: 'string' } não tem mapFromDriverValue, então passam como Date.
+// Este helper normaliza para "YYYY-MM-DD" independente do tipo recebido.
+const toDateStr = (v: any): string => {
+  if (!v) return "";
+  if (v instanceof Date) return v.toISOString().split("T")[0];
+  return String(v).slice(0, 10);
+};
+
 export const homeDataRouter = router({
   /**
    * Dados consolidados para a Home/Dashboard principal
@@ -51,12 +60,13 @@ export const homeDataRouter = router({
       const aniversariantes = ativos
         .filter(e => {
           if (!e.dataNascimento) return false;
-          const parts = e.dataNascimento.split("-");
+          const dn = toDateStr(e.dataNascimento);
+          const parts = dn.split("-");
           if (parts.length < 3) return false;
           return parseInt(parts[1]) === mesAtual;
         })
         .map(e => {
-          const parts = e.dataNascimento!.split("-");
+          const parts = toDateStr(e.dataNascimento!).split("-");
           const dia = parseInt(parts[2]);
           const isHoje = dia === diaAtual;
           const jaPassou = dia < diaAtual;
@@ -78,12 +88,13 @@ export const homeDataRouter = router({
       const aniversariosEmpresa = ativos
         .filter(e => {
           if (!e.dataAdmissao) return false;
-          const parts = e.dataAdmissao.split("-");
+          const da = toDateStr(e.dataAdmissao);
+          const parts = da.split("-");
           if (parts.length < 3) return false;
           return parseInt(parts[1]) === mesAtual;
         })
         .map(e => {
-          const parts = e.dataAdmissao!.split("-");
+          const parts = toDateStr(e.dataAdmissao!).split("-");
           const dia = parseInt(parts[2]);
           const anoAdmissao = parseInt(parts[0]);
           const anosEmpresa = brasilYear - anoAdmissao;
@@ -113,7 +124,7 @@ export const homeDataRouter = router({
       const asoMap = new Map<number, typeof allAsos[0]>();
       for (const aso of allAsos) {
         const existing = asoMap.get(aso.employeeId);
-        if (!existing || aso.dataValidade > existing.dataValidade) {
+        if (!existing || toDateStr(aso.dataValidade) > toDateStr(existing.dataValidade)) {
           asoMap.set(aso.employeeId, aso);
         }
       }
@@ -139,7 +150,8 @@ export const homeDataRouter = router({
         const emp = empMap.get(empId);
         if (!emp) continue;
 
-        const validade = new Date(aso.dataValidade + "T00:00:00");
+        const validadeStr = toDateStr(aso.dataValidade!);
+        const validade = new Date(validadeStr + "T00:00:00");
         const diffMs = validade.getTime() - hoje.getTime();
         const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
@@ -148,7 +160,7 @@ export const homeDataRouter = router({
             employeeId: empId,
             nome: emp.nomeCompleto,
             funcao: emp.funcao,
-            dataValidade: aso.dataValidade,
+            dataValidade: validadeStr,
             diasRestantes,
             vencido: diasRestantes < 0,
           });
@@ -167,13 +179,13 @@ export const homeDataRouter = router({
       const feriasAlerta = ativos
         .filter(e => {
           if (!e.dataAdmissao) return false;
-          const admissao = new Date(e.dataAdmissao + "T00:00:00");
+          const admissao = new Date(toDateStr(e.dataAdmissao) + "T00:00:00");
           const mesesTrabalhados = (hoje.getFullYear() - admissao.getFullYear()) * 12 + (hoje.getMonth() - admissao.getMonth());
           // Se tem mais de 11 meses e não está de férias
           return mesesTrabalhados >= 11 && e.status === "Ativo";
         })
         .map(e => {
-          const admissao = new Date(e.dataAdmissao! + "T00:00:00");
+          const admissao = new Date(toDateStr(e.dataAdmissao!) + "T00:00:00");
           const mesesTrabalhados = (hoje.getFullYear() - admissao.getFullYear()) * 12 + (hoje.getMonth() - admissao.getMonth());
           // Calcular próximo período aquisitivo
           const anosCompletos = Math.floor(mesesTrabalhados / 12);
@@ -185,7 +197,7 @@ export const homeDataRouter = router({
             id: e.id,
             nome: e.nomeCompleto,
             funcao: e.funcao,
-            dataAdmissao: e.dataAdmissao,
+            dataAdmissao: toDateStr(e.dataAdmissao!),
             mesesTrabalhados,
             periodoAquisitivo: anosCompletos + 1,
             diasParaVencer,
@@ -219,17 +231,22 @@ export const homeDataRouter = router({
       const hoje60Str = hoje60.toISOString().split('T')[0];
 
       const feriasAgendadas = allVacations
-        .filter(v => v.status === 'agendada' && v.dataInicio && v.dataInicio >= hojeStr && v.dataInicio <= hoje60Str)
+        .filter(v => {
+          if (v.status !== 'agendada' || !v.dataInicio) return false;
+          const di = toDateStr(v.dataInicio);
+          return di >= hojeStr && di <= hoje60Str;
+        })
         .map(v => {
           const emp = ativos.find(e => e.id === v.employeeId);
-          const diasAteInicio = Math.ceil((new Date(v.dataInicio! + 'T12:00:00').getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+          const diStr = toDateStr(v.dataInicio!);
+          const diasAteInicio = Math.ceil((new Date(diStr + 'T12:00:00').getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
           return {
             id: v.id,
             employeeId: v.employeeId,
             nome: emp?.nomeCompleto || 'Funcionário',
             funcao: emp?.funcao || '-',
-            dataInicio: v.dataInicio,
-            dataFim: v.dataFim,
+            dataInicio: diStr,
+            dataFim: toDateStr(v.dataFim!),
             diasGozo: v.diasGozo,
             abonoPecuniario: v.abonoPecuniario,
             diasAteInicio,
@@ -242,17 +259,25 @@ export const homeDataRouter = router({
       // Set de IDs de funcionários existentes para filtrar VPs de funcionários deletados
       const allEmpIds = new Set(allEmps.map(e => e.id));
       const feriasEmAndamento = allVacations
-        .filter(v => allEmpIds.has(v.employeeId) && (v.status === 'em_gozo' || (v.dataInicio && v.dataFim && v.dataInicio <= hojeStr && v.dataFim >= hojeStr && v.status !== 'cancelada')))
+        .filter(v => {
+          if (!allEmpIds.has(v.employeeId)) return false;
+          if (v.status === 'em_gozo') return true;
+          if (!v.dataInicio || !v.dataFim) return false;
+          const di = toDateStr(v.dataInicio);
+          const df = toDateStr(v.dataFim);
+          return di <= hojeStr && df >= hojeStr && v.status !== 'cancelada';
+        })
         .map(v => {
           const emp = allEmps.find(e => e.id === v.employeeId);
-          const diasRestantes = v.dataFim ? Math.ceil((new Date(v.dataFim + 'T12:00:00').getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+          const dfStr = toDateStr(v.dataFim!);
+          const diasRestantes = dfStr ? Math.ceil((new Date(dfStr + 'T12:00:00').getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : 0;
           return {
             id: v.id,
             employeeId: v.employeeId,
             nome: emp?.nomeCompleto || 'Funcionário',
             funcao: emp?.funcao || '-',
-            dataInicio: v.dataInicio,
-            dataFim: v.dataFim,
+            dataInicio: toDateStr(v.dataInicio!),
+            dataFim: dfStr,
             diasRestantes: Math.max(0, diasRestantes),
           };
         });
@@ -262,7 +287,11 @@ export const homeDataRouter = router({
       hoje90.setDate(hoje90.getDate() + 90);
       const hoje90Str = hoje90.toISOString().split('T')[0];
       const feriasCustoProximo = allVacations
-        .filter(v => v.dataInicio && v.dataInicio >= hojeStr && v.dataInicio <= hoje90Str && v.status !== 'cancelada')
+        .filter(v => {
+          if (!v.dataInicio || v.status === 'cancelada') return false;
+          const di = toDateStr(v.dataInicio);
+          return di >= hojeStr && di <= hoje90Str;
+        })
         .reduce((total, v) => total + (parseFloat(v.valorTotal || '0') || 0), 0);
 
       const feriasDashboard = {
@@ -280,15 +309,20 @@ export const homeDataRouter = router({
         .where(companyFilter(processosTrabalhistas.companyId, input));
 
       const proximasAudiencias = processos
-        .filter(p => p.dataAudiencia && p.dataAudiencia >= hojeStr && !["encerrado", "arquivado"].includes(p.status))
+        .filter(p => {
+          if (!p.dataAudiencia) return false;
+          const da = toDateStr(p.dataAudiencia);
+          return da >= hojeStr && !["encerrado", "arquivado"].includes(p.status);
+        })
         .map(p => {
-          const audiencia = new Date(p.dataAudiencia! + "T00:00:00");
+          const daStr = toDateStr(p.dataAudiencia!);
+          const audiencia = new Date(daStr + "T00:00:00");
           const dias = Math.ceil((audiencia.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
           return {
             id: p.id,
             numeroProcesso: p.numeroProcesso,
             reclamante: p.reclamante,
-            dataAudiencia: p.dataAudiencia,
+            dataAudiencia: daStr,
             dias,
             risco: p.risco,
             status: p.status,
@@ -305,13 +339,19 @@ export const homeDataRouter = router({
       const ha30diasStr = ha30dias.toISOString().split("T")[0];
 
       const admissoesRecentes = allEmps
-        .filter(e => e.dataAdmissao && e.dataAdmissao >= ha30diasStr)
-        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, data: e.dataAdmissao!, tipo: "admissao" as const }))
+        .filter(e => {
+          if (!e.dataAdmissao) return false;
+          return toDateStr(e.dataAdmissao) >= ha30diasStr;
+        })
+        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, data: toDateStr(e.dataAdmissao!), tipo: "admissao" as const }))
         .sort((a, b) => b.data.localeCompare(a.data));
 
       const demissoesRecentes = allEmps
-        .filter(e => e.dataDemissao && e.dataDemissao >= ha30diasStr)
-        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, data: e.dataDemissao!, tipo: "demissao" as const }))
+        .filter(e => {
+          if (!e.dataDemissao) return false;
+          return toDateStr(e.dataDemissao) >= ha30diasStr;
+        })
+        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, data: toDateStr(e.dataDemissao!), tipo: "demissao" as const }))
         .sort((a, b) => b.data.localeCompare(a.data));
 
       const movimentacoes = [...admissoesRecentes, ...demissoesRecentes]
@@ -325,7 +365,10 @@ export const homeDataRouter = router({
         .where(and(companyFilter(warnings.companyId, input), isNull(warnings.deletedAt)));
 
       const advertenciasRecentes = allWarnings
-        .filter(w => w.dataOcorrencia && w.dataOcorrencia >= ha30diasStr)
+        .filter(w => {
+          if (!w.dataOcorrencia) return false;
+          return toDateStr(w.dataOcorrencia) >= ha30diasStr;
+        })
         .map(w => {
           const emp = empMap.get(w.employeeId);
           return {
@@ -333,7 +376,7 @@ export const homeDataRouter = router({
             employeeId: w.employeeId,
             nome: emp?.nomeCompleto || "Desconhecido",
             tipo: w.tipoAdvertencia,
-            data: w.dataOcorrencia,
+            data: toDateStr(w.dataOcorrencia!),
           };
         })
         .sort((a, b) => (b.data || "").localeCompare(a.data || ""))
@@ -359,19 +402,23 @@ export const homeDataRouter = router({
       const em80diasStr = em80dias.toISOString().split('T')[0];
 
       const obrasProximasFim = obrasAtivas
-        .filter(o => o.dataPrevisaoFim && o.dataPrevisaoFim <= em80diasStr && o.dataPrevisaoFim >= hojeStr)
+        .filter(o => {
+          if (!o.dataPrevisaoFim) return false;
+          const dpf = toDateStr(o.dataPrevisaoFim);
+          return dpf <= em80diasStr && dpf >= hojeStr;
+        })
         .map(o => {
-          const fimPrevisto = new Date(o.dataPrevisaoFim! + 'T00:00:00');
+          const dpfStr = toDateStr(o.dataPrevisaoFim!);
+          const fimPrevisto = new Date(dpfStr + 'T00:00:00');
           const diasRestantes = Math.ceil((fimPrevisto.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-          // Contar funcionários alocados nesta obra
-          // Contar via alocações ativas
+          // Contar funcionários alocados nesta obra via alocações ativas
           const obraEmpCount = homeAlocs.filter(a => a.obraId === o.id).length;
           return {
             id: o.id,
             nome: o.nome,
             codigo: o.codigo,
             cliente: o.cliente,
-            dataPrevisaoFim: o.dataPrevisaoFim,
+            dataPrevisaoFim: dpfStr,
             diasRestantes,
             funcionariosAlocados: obraEmpCount,
             urgencia: diasRestantes <= 30 ? 'critico' : diasRestantes <= 60 ? 'urgente' : 'atencao',
@@ -387,8 +434,9 @@ export const homeDataRouter = router({
         .map(e => {
           const exp = e as any;
           const tipo = exp.experienciaTipo; // '30_30' ou '45_45'
-          const inicio = exp.experienciaInicio || e.dataAdmissao;
-          if (!inicio) return null;
+          const inicioRaw = exp.experienciaInicio || e.dataAdmissao;
+          if (!inicioRaw) return null;
+          const inicio = toDateStr(inicioRaw);
 
           const dias1 = tipo === '30_30' ? 30 : 45;
           const dias2 = tipo === '30_30' ? 60 : 90;
@@ -426,7 +474,7 @@ export const homeDataRouter = router({
             status,
             diasRestantes,
             urgencia,
-            prorrogadoEm: exp.experienciaProrrogadoEm,
+            prorrogadoEm: exp.experienciaProrrogadoEm ? toDateStr(exp.experienciaProrrogadoEm) : null,
             obs: exp.experienciaObs,
           };
         })
@@ -449,7 +497,8 @@ export const homeDataRouter = router({
 
       const avisosPrevios = avisosAtivos.map(a => {
         const emp = allEmps.find(e => e.id === a.employeeId);
-        const dataFim = new Date(a.dataFim + 'T00:00:00');
+        const dataFimStr = toDateStr(a.dataFim!);
+        const dataFim = new Date(dataFimStr + 'T00:00:00');
         const diasRestantes = Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
         return {
           id: a.id,
@@ -457,8 +506,8 @@ export const homeDataRouter = router({
           nome: emp?.nomeCompleto || 'Funcionário',
           funcao: emp?.funcao || '-',
           tipo: a.tipo,
-          dataInicio: a.dataInicio,
-          dataFim: a.dataFim,
+          dataInicio: toDateStr(a.dataInicio!),
+          dataFim: dataFimStr,
           diasRestantes,
           valorEstimado: a.valorEstimadoTotal,
           urgencia: diasRestantes <= 0 ? 'vencido' : diasRestantes <= 3 ? 'critico' : diasRestantes <= 7 ? 'urgente' : 'normal',
