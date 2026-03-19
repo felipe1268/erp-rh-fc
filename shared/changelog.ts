@@ -3589,6 +3589,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 599,
+    titulo: "Ponto: matching DIXI por código de matrícula único (ex: JFC001) evita confusão entre funcionários com nomes iguais",
+    descricao: "Adicionado novo passo no algoritmo de matching do DIXI (passo 1.5): se o nome enviado pelo relógio (campo 'nome' no XLS) bater exatamente com a matrícula cadastrada no funcionário, o sistema usa esse match antes de tentar qualquer comparação por nome. Isso permite configurar o relógio DIXI com códigos únicos por funcionário (ex: JFC001 para Jean Carlos Martins, JCR001 para Jean Carlos Ribeiro da Silva), eliminando definitivamente a confusão quando há dois funcionários com nomes idênticos ou muito parecidos. Basta cadastrar a matrícula correspondente em cada funcionário no sistema e configurar o relógio com esses códigos. Os passos anteriores (memória de vinculação e número DIXI) e posteriores (nome exato, primeiro+último, parcial) permanecem inalterados como fallback.",
+    tipo: "melhoria",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 598,
     titulo: "Avanço Semanal: previsto da 1ª semana não era mais zero quando atividades iniciam no mesmo dia",
     descricao: "O 'Previsto (semana)' mostrava 0.0% na primeira semana de lançamento sempre que as atividades do cronograma iniciavam exatamente na data de início da semana. Causa: a interpolação linear usava o INÍCIO da semana como referência (ref > ini = false quando ref === ini → 0%). Fix: o cálculo de previsto — tanto no card do cabeçalho quanto na coluna 'Previsto%' de cada atividade na tabela — agora usa o FIM da semana (= segunda-feira seguinte) como referência. Isso significa que 'Previsto (semana)' representa o avanço planejado ACUMULADO ao término da semana selecionada, compatível com o 'Realizado (acum.)' também medido ao término da semana. Resultado: a 1ª semana agora exibe o percentual previsto correto e a variação (Real − Prev.) é calculada de forma justa.",

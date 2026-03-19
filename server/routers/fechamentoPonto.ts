@@ -283,6 +283,14 @@ function matchEmployee(
     }
   }
 
+  // 1.5. Match by DIXI nome = matrícula do funcionário (código único no relógio, ex: JFC001)
+  // Permite configurar o relógio com códigos únicos em vez de nomes, evitando confusão
+  // quando há funcionários com nomes parecidos (ex: dois "Jean Carlos")
+  const dixiNameUpper = dixiName.trim().toUpperCase();
+  for (const emp of employeeList) {
+    if (emp.matricula && emp.matricula.trim().toUpperCase() === dixiNameUpper) return emp;
+  }
+
   // 2. Exact name match
   for (const emp of employeeList) {
     if (normalizeNameForMatch(emp.nomeCompleto) === normalized) return emp;
