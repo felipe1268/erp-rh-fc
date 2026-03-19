@@ -2943,4 +2943,214 @@ export const fechamentoPontoRouter = router({
         totalFuncionarios: simulacao.length,
       };
     }),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CORREÇÃO RETROATIVA — aplica as regras de Aviso Prévio e Férias sobre
+  // registros já salvos no banco, sem precisar re-importar o DIXI.
+  // Pula registros com ajusteManual = 1 para preservar correções manuais.
+  // ─────────────────────────────────────────────────────────────────────────
+  aplicarCorrecaoRetroativa: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const criteria = await getCriteriaMap(input.companyId);
+
+      let corrigidasFerias = 0;
+      let corrigidasAviso = 0;
+
+      // ── 1. FÉRIAS ──────────────────────────────────────────────────────────
+      // Para cada período de férias ativo, zera faltas/atrasos dos registros
+      // de ponto que caem dentro do período.
+      const feriasAtivas = await db.select({
+        employeeId: vacationPeriods.employeeId,
+        dataInicio:    vacationPeriods.dataInicio,
+        dataFim:       vacationPeriods.dataFim,
+        periodo2Inicio: vacationPeriods.periodo2Inicio,
+        periodo2Fim:    vacationPeriods.periodo2Fim,
+        periodo3Inicio: vacationPeriods.periodo3Inicio,
+        periodo3Fim:    vacationPeriods.periodo3Fim,
+      }).from(vacationPeriods).where(
+        and(
+          companyFilter(vacationPeriods.companyId, input),
+          sql`${vacationPeriods.status} NOT IN ('cancelada', 'pendente')`,
+          isNull(vacationPeriods.deletedAt),
+          sql`${vacationPeriods.dataInicio} IS NOT NULL`,
+        )
+      );
+
+      for (const fp of feriasAtivas) {
+        // Monta os intervalos válidos deste período
+        const ranges: Array<{ inicio: string; fim: string }> = [];
+        if (fp.dataInicio && fp.dataFim)           ranges.push({ inicio: fp.dataInicio,    fim: fp.dataFim });
+        if (fp.periodo2Inicio && fp.periodo2Fim)   ranges.push({ inicio: fp.periodo2Inicio, fim: fp.periodo2Fim });
+        if (fp.periodo3Inicio && fp.periodo3Fim)   ranges.push({ inicio: fp.periodo3Inicio, fim: fp.periodo3Fim });
+
+        for (const { inicio, fim } of ranges) {
+          const result = await db.execute(sql`
+            UPDATE time_records
+            SET faltas = '0', atrasos = '0:00'
+            WHERE company_id = ${input.companyId}
+              AND employee_id = ${fp.employeeId}
+              AND ajuste_manual = 0
+              AND data BETWEEN ${inicio} AND ${fim}
+              AND (faltas != '0' OR (atrasos IS NOT NULL AND atrasos != '0:00' AND atrasos != ''))
+          `);
+          corrigidasFerias += Number((result as any).rowCount ?? 0);
+        }
+      }
+
+      // ── 2. AVISO PRÉVIO ────────────────────────────────────────────────────
+      // Para cada aviso com reducaoJornada, recalcula expectedMinutes e
+      // corrige HE / atrasos / faltas dos registros não ajustados manualmente.
+      const avisos = await db.select({
+        employeeId:    terminationNotices.employeeId,
+        dataInicio:    terminationNotices.dataInicio,
+        dataFim:       terminationNotices.dataFim,
+        reducaoJornada: terminationNotices.reducaoJornada,
+      }).from(terminationNotices).where(
+        and(
+          companyFilter(terminationNotices.companyId, input),
+          eq(terminationNotices.status, 'em_andamento'),
+          sql`${terminationNotices.tipo} IN ('empregador_trabalhado', 'empregado_trabalhado')`,
+          sql`${terminationNotices.reducaoJornada} IN ('2h_dia', '7_dias_corridos')`,
+          sql`${terminationNotices.deletedAt} IS NULL`,
+        )
+      );
+
+      for (const aviso of avisos) {
+        // Busca o funcionário para obter a jornada de trabalho
+        const empRows = await db.select({
+          id: employees.id,
+          jornadaTrabalho: employees.jornadaTrabalho,
+        }).from(employees).where(eq(employees.id, aviso.employeeId));
+        if (!empRows.length) continue;
+        const emp = empRows[0];
+
+        // Busca registros não ajustados dentro do período do aviso
+        const records = await db.select({
+          id:              timeRecords.id,
+          data:            timeRecords.data,
+          entrada1:        timeRecords.entrada1,
+          saida1:          timeRecords.saida1,
+          entrada2:        timeRecords.entrada2,
+          saida2:          timeRecords.saida2,
+          entrada3:        timeRecords.entrada3,
+          saida3:          timeRecords.saida3,
+          horasTrabalhadas: timeRecords.horasTrabalhadas,
+        }).from(timeRecords).where(
+          and(
+            eq(timeRecords.companyId, input.companyId),
+            eq(timeRecords.employeeId, aviso.employeeId),
+            sql`${timeRecords.ajusteManual} = 0`,
+            sql`${timeRecords.data} BETWEEN ${aviso.dataInicio} AND ${aviso.dataFim}`,
+          )
+        );
+
+        for (const rec of records) {
+          const data = rec.data!;
+
+          // Calcula totalMinutes a partir das batidas armazenadas
+          let totalMinutes = 0;
+          const dm = (a: string | null | undefined, b: string | null | undefined) => {
+            if (!a || !b) return 0;
+            const [ah, am] = a.split(':').map(Number);
+            const [bh, bm] = b.split(':').map(Number);
+            return Math.max(0, (bh * 60 + bm) - (ah * 60 + am));
+          };
+          totalMinutes += dm(rec.entrada1, rec.saida1);
+          totalMinutes += dm(rec.entrada2, rec.saida2);
+          totalMinutes += dm(rec.entrada3, rec.saida3);
+
+          // Se não tem batidas, tenta parsear horasTrabalhadas direto
+          if (totalMinutes === 0 && rec.horasTrabalhadas) {
+            const parts = rec.horasTrabalhadas.split(':');
+            if (parts.length === 2) totalMinutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+          }
+
+          // Calcula expectedMinutes a partir da jornada do funcionário para este dia
+          let expectedMinutes = 480;
+          let isDiaFolga = false;
+          if (emp.jornadaTrabalho) {
+            try {
+              const jornada = typeof emp.jornadaTrabalho === 'string'
+                ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+              const dow = new Date(data + 'T12:00:00').getDay();
+              const dayMap: Record<number, string> = { 0:'dom',1:'seg',2:'ter',3:'qua',4:'qui',5:'sex',6:'sab' };
+              const dk = dayMap[dow];
+              if (jornada[dk]?.entrada && jornada[dk]?.saida) {
+                const j = jornada[dk];
+                const [sh, sm] = j.saida.split(':').map(Number);
+                const [eh, em2] = j.entrada.split(':').map(Number);
+                const totalJ = (sh * 60 + sm) - (eh * 60 + em2);
+                let intervMin = 60;
+                if (j.intervalo) {
+                  const ip = j.intervalo.split(':');
+                  if (ip.length === 2) intervMin = parseInt(ip[0]) * 60 + parseInt(ip[1]);
+                }
+                expectedMinutes = Math.max(0, totalJ - intervMin);
+              } else {
+                expectedMinutes = 0;
+                isDiaFolga = true;
+              }
+            } catch { /* usa 480 */ }
+          }
+
+          // Aplica redução do aviso prévio
+          if (aviso.reducaoJornada === '2h_dia') {
+            expectedMinutes = Math.max(0, expectedMinutes - 120);
+          } else if (aviso.reducaoJornada === '7_dias_corridos') {
+            const fimAviso  = new Date(aviso.dataFim + 'T12:00:00');
+            const dataAtual = new Date(data + 'T12:00:00');
+            const diffDias  = Math.ceil((fimAviso.getTime() - dataAtual.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDias <= 7) expectedMinutes = 0;
+          }
+
+          const diffBruto = totalMinutes - expectedMinutes;
+          const tolAtraso = criteria.pontoToleranciaAtraso;
+          const tolSaida  = criteria.pontoToleranciaSaida;
+          const faltaApos = criteria.pontoFaltaAposAtraso;
+
+          let horasExtras = 0;
+          let atrasos = 0;
+          let faltas  = '0';
+
+          if (isDiaFolga && totalMinutes > 0) {
+            horasExtras = totalMinutes;
+          } else if (diffBruto > 0) {
+            // Chegou cedo (antecipada): tudo HE se não há batida de entrada definida com tolerância
+            // Saiu mais tarde: só conta se além da tolerância
+            horasExtras = diffBruto > tolSaida ? diffBruto : 0;
+          } else if (diffBruto < 0 && totalMinutes > 0) {
+            const atrasoReal = Math.abs(diffBruto);
+            if (atrasoReal <= tolAtraso) {
+              // dentro da tolerância — sem penalidade
+            } else if (atrasoReal >= faltaApos) {
+              faltas = '1';
+            } else {
+              atrasos = atrasoReal;
+            }
+          } else if (totalMinutes === 0) {
+            faltas = '1';
+          }
+
+          const heStr    = minsToHHMM(horasExtras);
+          const atrasStr = minsToHHMM(atrasos);
+
+          await db.execute(sql`
+            UPDATE time_records
+            SET horas_extras = ${heStr},
+                atrasos      = ${atrasStr},
+                faltas       = ${faltas}
+            WHERE id = ${rec.id}
+          `);
+          corrigidasAviso++;
+        }
+      }
+
+      return {
+        corrigidasFerias,
+        corrigidasAviso,
+        total: corrigidasFerias + corrigidasAviso,
+      };
+    }),
 });
