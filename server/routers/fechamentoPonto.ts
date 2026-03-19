@@ -1765,6 +1765,7 @@ export const fechamentoPontoRouter = router({
       if (input.employeeId) conditions.push(eq(timeRecords.employeeId, input.employeeId));
 
       const recs = await db.select({
+        id: timeRecords.id,
         employeeId: timeRecords.employeeId,
         employeeName: employees.nomeCompleto,
         data: timeRecords.data,
@@ -1878,6 +1879,7 @@ export const fechamentoPontoRouter = router({
         employeeName: string;
         data: string;
         hasOverlap: boolean;
+        isSameObraDuplicate: boolean;
         transferAnalysis: Array<{
           fromObraId: number | null;
           fromObraNome: string | null;
@@ -1889,14 +1891,16 @@ export const fechamentoPontoRouter = router({
           gapMinutes: number;
         }> | null;
         obras: Array<{ obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null }>;
-        records: Array<{ obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null; entrada1: string | null; saida1: string | null; entrada2: string | null; saida2: string | null; entrada3: string | null; saida3: string | null; ajusteManual: number | null }>;
+        records: Array<{ id: number; obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null; entrada1: string | null; saida1: string | null; entrada2: string | null; saida2: string | null; entrada3: string | null; saida3: string | null; ajusteManual: number | null }>;
       }> = [];
 
       for (const [key, entries] of Object.entries(byEmpDate)) {
         if (entries.length > 1) {
           const obraIds = new Set(entries.map(e => e.obraId));
+          const [empId, data] = key.split('|');
+
           if (obraIds.size > 1) {
-            const [empId, data] = key.split('|');
+            // Conflito entre obras diferentes (comportamento original)
             const overlap = checkOverlap(entries);
             const transferInfo = !overlap ? analyzeTransfer(entries) : null;
             conflitos.push({
@@ -1904,9 +1908,22 @@ export const fechamentoPontoRouter = router({
               employeeName: empNames[Number(empId)] || 'Desconhecido',
               data,
               hasOverlap: overlap,
+              isSameObraDuplicate: false,
               transferAnalysis: transferInfo,
               obras: entries.map(e => ({ obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas })),
-              records: entries.map(e => ({ obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas, entrada1: e.entrada1, saida1: e.saida1, entrada2: e.entrada2, saida2: e.saida2, entrada3: e.entrada3, saida3: e.saida3, ajusteManual: e.ajusteManual })),
+              records: entries.map(e => ({ id: e.id, obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas, entrada1: e.entrada1, saida1: e.saida1, entrada2: e.entrada2, saida2: e.saida2, entrada3: e.entrada3, saida3: e.saida3, ajusteManual: e.ajusteManual })),
+            });
+          } else {
+            // NOVO: Batidas duplicadas na mesma obra (mesmo obraId, mesmo funcionário, mesmo dia)
+            conflitos.push({
+              employeeId: Number(empId),
+              employeeName: empNames[Number(empId)] || 'Desconhecido',
+              data,
+              hasOverlap: false,
+              isSameObraDuplicate: true,
+              transferAnalysis: null,
+              obras: entries.map(e => ({ obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas })),
+              records: entries.map(e => ({ id: e.id, obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas, entrada1: e.entrada1, saida1: e.saida1, entrada2: e.entrada2, saida2: e.saida2, entrada3: e.entrada3, saida3: e.saida3, ajusteManual: e.ajusteManual })),
             });
           }
         }
@@ -2021,9 +2038,10 @@ export const fechamentoPontoRouter = router({
   resolveConflito: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       data: z.string(), // YYYY-MM-DD
-      acao: z.enum(["manter_obra", "confirmar_deslocamento", "excluir_registro", "marcar_falta"]),
+      acao: z.enum(["manter_obra", "confirmar_deslocamento", "excluir_registro", "excluir_por_id", "marcar_falta"]),
       obraIdManter: z.number().optional(), // para manter_obra: qual obra manter
       obraIdExcluir: z.number().optional(), // para excluir_registro: qual registro excluir
+      recordId: z.number().optional(), // para excluir_por_id: excluir registro específico pelo id PK
       justificativa: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -2145,6 +2163,15 @@ export const fechamentoPontoRouter = router({
           eq(timeRecords.obraId, input.obraIdExcluir),
         ));
         return { success: true, message: `Registro da obra removido (erro de lançamento).` };
+      }
+
+      if (input.acao === "excluir_por_id" && input.recordId) {
+        // Excluir registro específico pelo ID primário (usado para batidas duplicadas da mesma obra)
+        await db.delete(timeRecords).where(and(
+          companyFilter(timeRecords.companyId, input),
+          eq(timeRecords.id, input.recordId),
+        ));
+        return { success: true, message: `Registro duplicado excluído com sucesso.` };
       }
 
       if (input.acao === "marcar_falta") {

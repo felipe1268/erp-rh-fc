@@ -3534,4 +3534,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 591,
+    titulo: "Fechamento de Ponto: resolução de batidas duplicadas na mesma obra",
+    descricao: "Melhoria na seção de conflitos do Fechamento de Ponto. A detecção de batidas duplicadas (mesmo funcionário, mesma obra, mesmo dia) já existia com badge roxo 'Batida Duplicada'. Agora a linha expandida exibe painel específico para este tipo de conflito com: descrição da causa, lista dos registros duplicados com horários e botão de exclusão individual por ID primário. Novo acao 'excluir_por_id' no resolveConflito (usa WHERE id = recordId em vez de obraId, evitando exclusão indevida de ambos os registros). Query getConflitosObraDia atualizada para incluir campo id nos records retornados.",
+    tipo: "bugfix",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];

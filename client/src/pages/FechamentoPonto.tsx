@@ -19,7 +19,7 @@ import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
-  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText
+  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText, Copy
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -1272,7 +1272,7 @@ export default function FechamentoPonto() {
                           </thead>
                           <tbody>
                             {conflitos.data.map((c: any, idx: number) => (
-                              <tr key={idx} className={`border-b last:border-0 hover:bg-orange-50/30 ${c.hasOverlap ? "border-l-4 border-l-red-500 bg-red-50/20" : "border-l-4 border-l-green-500"}`}>
+                              <tr key={idx} className={`border-b last:border-0 hover:bg-orange-50/30 ${c.hasOverlap ? "border-l-4 border-l-red-500 bg-red-50/20" : c.isSameObraDuplicate ? "border-l-4 border-l-purple-500 bg-purple-50/20" : "border-l-4 border-l-green-500"}`}>
                                 <td className="p-2">
                                   <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openPontoDetalhe(c.employeeId)}>
                                     {c.employeeName}
@@ -1285,6 +1285,10 @@ export default function FechamentoPonto() {
                                     <Badge className="text-xs bg-red-100 text-red-800 border border-red-300">
                                       <XCircle className="h-3 w-3 mr-1" /> Sobreposição
                                     </Badge>
+                                  ) : c.isSameObraDuplicate ? (
+                                    <Badge className="text-xs bg-purple-100 text-purple-800 border border-purple-300">
+                                      <Copy className="h-3 w-3 mr-1" /> Batida Duplicada
+                                    </Badge>
                                   ) : (
                                     <Badge className="text-xs bg-green-100 text-green-800 border border-green-300">
                                       <CheckCircle className="h-3 w-3 mr-1" /> Válido
@@ -1294,7 +1298,7 @@ export default function FechamentoPonto() {
                                 <td className="p-2">
                                   <div className="flex flex-wrap gap-1">
                                     {c.obras.map((o: any, i: number) => (
-                                      <Badge key={i} variant="outline" className={`text-xs ${c.hasOverlap ? "border-red-300 text-red-700 bg-red-50" : "border-green-300 text-green-700 bg-green-50"}`}>
+                                      <Badge key={i} variant="outline" className={`text-xs ${c.hasOverlap ? "border-red-300 text-red-700 bg-red-50" : c.isSameObraDuplicate ? "border-purple-300 text-purple-700 bg-purple-50" : "border-green-300 text-green-700 bg-green-50"}`}>
                                         {o.obraNome || "Sem Obra"} ({o.horasTrabalhadas || "0:00"})
                                       </Badge>
                                     ))}
@@ -2022,9 +2026,10 @@ export default function FechamentoPonto() {
                             const key = `${c.employeeId}|${c.data}`;
                             const isExpanded = expandedConflict === key;
                             const isOverlap = c.hasOverlap;
+                            const isDuplicate = c.isSameObraDuplicate;
                             return (
                               <React.Fragment key={key}>
-                                <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isExpanded ? (isOverlap ? "bg-red-50" : "bg-green-50") : ""} ${isOverlap ? "border-l-4 border-l-red-500" : "border-l-4 border-l-green-500"}`}
+                                <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isExpanded ? (isOverlap ? "bg-red-50" : isDuplicate ? "bg-purple-50" : "bg-green-50") : ""} ${isOverlap ? "border-l-4 border-l-red-500" : isDuplicate ? "border-l-4 border-l-purple-500" : "border-l-4 border-l-green-500"}`}
                                   onClick={() => setExpandedConflict(isExpanded ? null : key)}>
                                   <td className="p-2">
                                     <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openPontoDetalhe(c.employeeId); }}>
@@ -2039,6 +2044,10 @@ export default function FechamentoPonto() {
                                     {isOverlap ? (
                                       <Badge className="text-xs bg-red-100 text-red-800 border border-red-300">
                                         <XCircle className="h-3 w-3 mr-1" /> Sobreposição
+                                      </Badge>
+                                    ) : isDuplicate ? (
+                                      <Badge className="text-xs bg-purple-100 text-purple-800 border border-purple-300">
+                                        <Copy className="h-3 w-3 mr-1" /> Batida Duplicada
                                       </Badge>
                                     ) : c.transferAnalysis && c.transferAnalysis.length > 0 ? (
                                       <Badge className="text-xs bg-blue-100 text-blue-800 border border-blue-300">
@@ -2178,7 +2187,31 @@ export default function FechamentoPonto() {
                                         </table>
                                         {!isConsolidado && (
                                           <div className="mt-3 space-y-2">
-                                            {isOverlap ? (
+                                            {isDuplicate ? (
+                                              <div className="p-3 bg-purple-50 border border-purple-300 rounded-lg">
+                                                <p className="text-xs text-purple-900 font-bold mb-1 flex items-center gap-1">
+                                                  <Copy className="h-3.5 w-3.5" /> Batida duplicada na mesma obra
+                                                </p>
+                                                <p className="text-[11px] text-purple-700 mb-2">
+                                                  Existem {c.records?.length || 2} registros para o mesmo funcionário, obra e dia com horários diferentes.
+                                                  Isso ocorre quando o arquivo de ponto foi importado mais de uma vez ou o relógio registrou duas jornadas no mesmo dia.
+                                                  Mantenha apenas o registro correto e exclua a duplicata usando a opção abaixo.
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                  {(c.records || []).map((o: any, oi: number) => (
+                                                    <Button key={`del-dup-${oi}`} size="sm" variant="ghost" className="gap-1.5 text-xs text-red-600 hover:bg-red-50 border border-red-200"
+                                                      onClick={() => {
+                                                        if (confirm(`Excluir o ${oi === 0 ? "1º" : "2º"} registro (Entrada: ${o.entrada1 || "--:--"}, Saída: ${o.saida1 || "--:--"}) para este funcionário neste dia?`)) {
+                                                          resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "excluir_por_id", recordId: o.id, justificativa: conflictJustificativa || `Batida duplicada removida (entrada: ${o.entrada1})` });
+                                                        }
+                                                      }}
+                                                      disabled={resolveConflitoMut.isPending}>
+                                                      <Trash2 className="h-3.5 w-3.5" /> Excluir {oi === 0 ? "1º" : "2º"} reg. (Ent: {o.entrada1 || "--:--"})
+                                                    </Button>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            ) : isOverlap ? (
                                               <div className="p-3 bg-red-50 border border-red-300 rounded-lg">
                                                 <p className="text-xs text-red-800 font-bold mb-2 flex items-center gap-1">
                                                   <AlertCircle className="h-3.5 w-3.5" /> Resolução obrigatória: Escolha qual obra manter
