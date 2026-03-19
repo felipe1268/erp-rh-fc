@@ -3525,4 +3525,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 590,
+    titulo: "Novo módulo: Medição de Contratos",
+    descricao: "Implementação completa do módulo Medição de Contratos para faturamento de obras. DB: 4 novas tabelas (medicao_contratos, medicao_boletins, medicao_boletim_itens, medicao_fd_registros) criadas via startup migration (CREATE TABLE IF NOT EXISTS). Servidor: router medicao.ts com 17 procedures (CRUD de contratos, boletins, itens, FD, consulta EAP/atividades/orçamento). Cliente: páginas MedicaoContratos (listagem) e MedicaoDetalhe (detalhe do contrato com abas Boletins e Fundo de Despesa). Navegação integrada: DashboardLayout com menuSectionsMedicao e tema teal, ModuleContext com rotas /medicao e /medicao/:id, App.tsx com lazy imports e rotas registradas.",
+    tipo: "feature",
+    modulos: "Medição de Contratos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];

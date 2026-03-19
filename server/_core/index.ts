@@ -115,6 +115,89 @@ async function startServer() {
         console.log("[ColFix] planejamento_atividades.disabled OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
+    // Rev.590: criar tabelas do módulo Medição de Contratos (se não existirem)
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS medicao_contratos (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            projeto_id INTEGER NOT NULL,
+            criterio VARCHAR(30) NOT NULL DEFAULT 'avanco_fisico',
+            valor_total_contrato NUMERIC(15,2) DEFAULT 0,
+            percentual_sinal NUMERIC(5,2) DEFAULT 0,
+            valor_sinal_recebido NUMERIC(15,2) DEFAULT 0,
+            percentual_retencao NUMERIC(5,2),
+            valor_minimo_fd NUMERIC(15,2),
+            status VARCHAR(20) NOT NULL DEFAULT 'ativo',
+            observacoes TEXT,
+            criado_em TIMESTAMP DEFAULT NOW(),
+            atualizado_em TIMESTAMP DEFAULT NOW(),
+            deleted_at TIMESTAMP
+          )
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS medicao_boletins (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            contrato_id INTEGER NOT NULL,
+            numero INTEGER NOT NULL,
+            periodo_referencia VARCHAR(7) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'rascunho',
+            data_envio DATE,
+            data_aprovacao DATE,
+            valor_bruto NUMERIC(15,2) DEFAULT 0,
+            desconto_sinal NUMERIC(15,2) DEFAULT 0,
+            desconto_retencao NUMERIC(15,2) DEFAULT 0,
+            glosa NUMERIC(15,2) DEFAULT 0,
+            deducao_fd NUMERIC(15,2) DEFAULT 0,
+            valor_liquido NUMERIC(15,2) DEFAULT 0,
+            observacoes TEXT,
+            financial_entry_id INTEGER,
+            criado_em TIMESTAMP DEFAULT NOW(),
+            atualizado_em TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS medicao_boletim_itens (
+            id SERIAL PRIMARY KEY,
+            boletim_id INTEGER NOT NULL,
+            atividade_id INTEGER,
+            eap_codigo VARCHAR(50),
+            descricao VARCHAR(500) NOT NULL,
+            valor_contratual NUMERIC(15,2) DEFAULT 0,
+            percentual_acumulado_anterior NUMERIC(8,4) DEFAULT 0,
+            percentual_periodo NUMERIC(8,4) DEFAULT 0,
+            percentual_acumulado_atual NUMERIC(8,4) DEFAULT 0,
+            valor_periodo NUMERIC(15,2) DEFAULT 0,
+            tipo_avanco VARCHAR(30) NOT NULL DEFAULT 'fisico',
+            is_fd BOOLEAN DEFAULT FALSE,
+            criado_em TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS medicao_fd_registros (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            contrato_id INTEGER NOT NULL,
+            descricao VARCHAR(500) NOT NULL,
+            valor NUMERIC(15,2) NOT NULL,
+            data_registro DATE NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pendente',
+            boletim_desconto_id INTEGER,
+            compra_id INTEGER,
+            origem VARCHAR(20) NOT NULL DEFAULT 'manual',
+            observacoes TEXT,
+            criado_em TIMESTAMP DEFAULT NOW(),
+            atualizado_em TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        console.log("[MedicaoMigration] Tabelas do módulo Medição OK");
+      } catch (e: any) { console.warn("[MedicaoMigration] Aviso:", e?.message ?? e); }
+    });
     // Rev.547: migração aviso prévio — adiciona dataBaixa e move concluidos auto-marcados → aguardando_pagamento
     // Rev.586: corrigido para usar NEON_DATABASE_URL (banco correto da FC Engenharia)
     (async () => {

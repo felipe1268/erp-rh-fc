@@ -127,6 +127,13 @@
       "when": 1773913248331,
       "tag": "0017_add_dataBaixa_termination_notices",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1773919421881,
+      "tag": "0018_medicao_contratos_module",
+      "breakpoints": true
     }
   ]
 }

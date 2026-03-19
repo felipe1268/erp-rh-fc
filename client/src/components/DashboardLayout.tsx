@@ -423,6 +423,15 @@ const menuSectionsPlanejamento: MenuSection[] = [
   },
 ];
 
+const menuSectionsMedicao: MenuSection[] = [
+  {
+    title: "Medição de Contratos",
+    items: [
+      { icon: FileBarChart, label: "Contratos",       path: "/medicao"          },
+    ],
+  },
+];
+
 const menuSectionsCadastro: MenuSection[] = [
   {
     title: "Cadastro",
@@ -452,6 +461,7 @@ const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "parceiros":     menuSectionsParceiros,
   "orcamento":     menuSectionsOrcamento,
   "planejamento":  menuSectionsPlanejamento,
+  "medicao":       menuSectionsMedicao,
   "cadastro":      menuSectionsCadastro,
   "compras":       menuSectionsCompras,
   "almoxarifado":  menuSectionsAlmoxarifado,
@@ -516,6 +526,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "parceiros":      "/parceiros/painel",
   "orcamento":      "/orcamento/painel",
   "planejamento":   "/planejamento",
+  "medicao":        "/medicao",
   "cadastro":       "/empresas",
   "compras":        "/compras/painel",
   "almoxarifado":   "/almoxarifado",
@@ -532,7 +543,8 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "terceiros":     { icon: HardHat,    color: "text-orange-400", bg: "bg-orange-500/20"  },
   "parceiros":     { icon: Handshake,  color: "text-purple-400", bg: "bg-purple-500/20"  },
   "orcamento":     { icon: Calculator, color: "text-cyan-400",   bg: "bg-cyan-500/20"    },
-  "planejamento":  { icon: Target,     color: "text-green-400",  bg: "bg-green-500/20"   },
+  "planejamento":  { icon: Target,        color: "text-green-400",   bg: "bg-green-500/20"   },
+  "medicao":       { icon: FileBarChart,  color: "text-teal-400",    bg: "bg-teal-500/20"    },
   "cadastro":      { icon: BookOpen,      color: "text-indigo-400",  bg: "bg-indigo-500/20"  },
   "compras":       { icon: ShoppingCart,  color: "text-rose-400",    bg: "bg-rose-500/20"    },
   "almoxarifado":  { icon: Warehouse,     color: "text-emerald-400", bg: "bg-emerald-500/20" },

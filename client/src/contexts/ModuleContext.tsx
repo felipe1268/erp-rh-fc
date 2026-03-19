@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -69,6 +69,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/orcamento/insumos":      "orcamento" as ModuleId,
   "/orcamento/biblioteca":   "orcamento" as ModuleId,
   "/planejamento":           "planejamento" as ModuleId,
+  "/medicao":                "medicao" as ModuleId,
   "/comparativo-convencoes": "rh-dp" as ModuleId,
   "/compras/painel":           "compras" as ModuleId,
   "/compras/almoxarifado":     "almoxarifado" as ModuleId,
@@ -114,6 +115,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "parceiros": "Parceiros",
   "orcamento": "Orçamento",
   "planejamento": "Planejamento",
+  "medicao": "Medição",
   "cadastro": "Cadastro",
   "compras": "Compras",
   "almoxarifado": "Almoxarifado",
@@ -127,7 +129,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp"; // Default to RH & DP

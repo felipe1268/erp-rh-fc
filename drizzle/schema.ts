@@ -5847,3 +5847,73 @@ export const sinapiPriceCache = pgTable("sinapi_price_cache", {
   precoComDesoneracao: numeric("preco_com_desoneracao", { precision: 10, scale: 2 }),
   atualizadoEm: timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_sinapi_codigo").on(t.codigo)]);
+
+export const medicaoContratos = pgTable("medicao_contratos", {
+  id:                   serial().primaryKey(),
+  companyId:            integer("company_id").notNull(),
+  projetoId:            integer("projeto_id").notNull(),
+  criterio:             varchar({ length: 30 }).notNull().default("avanco_fisico"),
+  valorTotalContrato:   numeric("valor_total_contrato", { precision: 15, scale: 2 }).default("0"),
+  percentualSinal:      numeric("percentual_sinal", { precision: 5, scale: 2 }).default("0"),
+  valorSinalRecebido:   numeric("valor_sinal_recebido", { precision: 15, scale: 2 }).default("0"),
+  percentualRetencao:   numeric("percentual_retencao", { precision: 5, scale: 2 }),
+  valorMinimoFd:        numeric("valor_minimo_fd", { precision: 15, scale: 2 }),
+  status:               varchar({ length: 20 }).notNull().default("ativo"),
+  observacoes:          text(),
+  criadoEm:             timestamp("criado_em").defaultNow(),
+  atualizadoEm:         timestamp("atualizado_em").defaultNow(),
+  deletedAt:            timestamp("deleted_at"),
+}, (t) => [index("idx_mc_projeto").on(t.projetoId), index("idx_mc_company").on(t.companyId)]);
+
+export const medicaoBoletins = pgTable("medicao_boletins", {
+  id:                   serial().primaryKey(),
+  companyId:            integer("company_id").notNull(),
+  contratoId:           integer("contrato_id").notNull(),
+  numero:               integer().notNull(),
+  periodoReferencia:    varchar("periodo_referencia", { length: 7 }).notNull(),
+  status:               varchar({ length: 20 }).notNull().default("rascunho"),
+  dataEnvio:            date("data_envio", { mode: "string" }),
+  dataAprovacao:        date("data_aprovacao", { mode: "string" }),
+  valorBruto:           numeric("valor_bruto", { precision: 15, scale: 2 }).default("0"),
+  descontoSinal:        numeric("desconto_sinal", { precision: 15, scale: 2 }).default("0"),
+  descontoRetencao:     numeric("desconto_retencao", { precision: 15, scale: 2 }).default("0"),
+  glosa:                numeric({ precision: 15, scale: 2 }).default("0"),
+  deducaoFd:            numeric("deducao_fd", { precision: 15, scale: 2 }).default("0"),
+  valorLiquido:         numeric("valor_liquido", { precision: 15, scale: 2 }).default("0"),
+  observacoes:          text(),
+  financialEntryId:     integer("financial_entry_id"),
+  criadoEm:             timestamp("criado_em").defaultNow(),
+  atualizadoEm:         timestamp("atualizado_em").defaultNow(),
+}, (t) => [index("idx_mb_contrato").on(t.contratoId), index("idx_mb_company").on(t.companyId)]);
+
+export const medicaoBoletimItens = pgTable("medicao_boletim_itens", {
+  id:                           serial().primaryKey(),
+  boletimId:                    integer("boletim_id").notNull(),
+  atividadeId:                  integer("atividade_id"),
+  eapCodigo:                    varchar("eap_codigo", { length: 50 }),
+  descricao:                    varchar({ length: 500 }).notNull(),
+  valorContratual:              numeric("valor_contratual", { precision: 15, scale: 2 }).default("0"),
+  percentualAcumuladoAnterior:  numeric("percentual_acumulado_anterior", { precision: 8, scale: 4 }).default("0"),
+  percentualPeriodo:            numeric("percentual_periodo", { precision: 8, scale: 4 }).default("0"),
+  percentualAcumuladoAtual:     numeric("percentual_acumulado_atual", { precision: 8, scale: 4 }).default("0"),
+  valorPeriodo:                 numeric("valor_periodo", { precision: 15, scale: 2 }).default("0"),
+  tipoAvanco:                   varchar("tipo_avanco", { length: 30 }).notNull().default("fisico"),
+  isFd:                         boolean("is_fd").default(false),
+  criadoEm:                     timestamp("criado_em").defaultNow(),
+}, (t) => [index("idx_mbi_boletim").on(t.boletimId)]);
+
+export const medicaoFdRegistros = pgTable("medicao_fd_registros", {
+  id:                   serial().primaryKey(),
+  companyId:            integer("company_id").notNull(),
+  contratoId:           integer("contrato_id").notNull(),
+  descricao:            varchar({ length: 500 }).notNull(),
+  valor:                numeric({ precision: 15, scale: 2 }).notNull(),
+  dataRegistro:         date("data_registro", { mode: "string" }).notNull(),
+  status:               varchar({ length: 20 }).notNull().default("pendente"),
+  boletimDescontoId:    integer("boletim_desconto_id"),
+  compraId:             integer("compra_id"),
+  origem:               varchar({ length: 20 }).notNull().default("manual"),
+  observacoes:          text(),
+  criadoEm:             timestamp("criado_em").defaultNow(),
+  atualizadoEm:         timestamp("atualizado_em").defaultNow(),
+}, (t) => [index("idx_mfd_contrato").on(t.contratoId), index("idx_mfd_company").on(t.companyId)]);

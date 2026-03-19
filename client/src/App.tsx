@@ -145,6 +145,10 @@ const OrcamentoDashPage  = lazy(() => import("./pages/orcamento/OrcamentoDashPag
 const PlanejamentoLista   = lazy(() => import("./pages/planejamento/PlanejamentoLista"));
 const PlanejamentoDetalhe = lazy(() => import("./pages/planejamento/PlanejamentoDetalhe"));
 
+// Medição de Contratos
+const MedicaoContratos = lazy(() => import("./pages/medicao/MedicaoContratos"));
+const MedicaoDetalhe   = lazy(() => import("./pages/medicao/MedicaoDetalhe"));
+
 // Compras
 const PainelCompras = lazy(() => import("./pages/compras/Painel"));
 const Fornecedores = lazy(() => import("./pages/compras/Fornecedores"));
@@ -327,6 +331,8 @@ function Router() {
         {/* Planejamento */}
         <Route path="/planejamento"              component={PlanejamentoLista} />
         <Route path="/planejamento/:id"          component={PlanejamentoDetalhe} />
+        <Route path="/medicao"                   component={MedicaoContratos} />
+        <Route path="/medicao/:id"               component={MedicaoDetalhe} />
         {/* Compras */}
         <Route path="/almoxarifado/categorias"     component={AlmoxarifadoCategorias} />
         <Route path="/almoxarifado/movimentacoes" component={AlmoxarifadoMovimentacoes} />
