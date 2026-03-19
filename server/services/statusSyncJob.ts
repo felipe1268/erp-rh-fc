@@ -188,11 +188,22 @@ export async function syncEmployeeStatus(): Promise<{
   }
 }
 
+async function syncWithRetry(attempt = 0): Promise<void> {
+  try {
+    await syncEmployeeStatus();
+  } catch (e: any) {
+    if (attempt < 2) {
+      // Retry silencioso após 60s (máximo 2 tentativas)
+      setTimeout(() => syncWithRetry(attempt + 1), 60000);
+    }
+  }
+}
+
 export function startStatusSyncJob() {
   if (statusSyncInterval) clearInterval(statusSyncInterval);
   // Verificar a cada 1 hora
-  statusSyncInterval = setInterval(syncEmployeeStatus, 60 * 60 * 1000);
+  statusSyncInterval = setInterval(() => syncWithRetry(), 60 * 60 * 1000);
   console.log("[StatusSync] Job de sincronização de status iniciado (verifica a cada 1h)");
-  // Executar na primeira vez com delay de 30s
-  setTimeout(syncEmployeeStatus, 30000);
+  // Executar na primeira vez com delay de 2 min (aguarda ColFix e conexões estabilizarem)
+  setTimeout(() => syncWithRetry(), 2 * 60 * 1000);
 }

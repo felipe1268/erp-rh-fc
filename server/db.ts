@@ -41,10 +41,10 @@ export async function getDb() {
     try {
       const pool = new Pool({
         connectionString: dbUrl,
-        max: 20,                          // max 20 concurrent connections
-        min: 2,                           // manter 2 conexões prontas
-        idleTimeoutMillis: 60000,         // liberar idle após 60s
-        connectionTimeoutMillis: 5000,    // falha rápida se sem conexão em 5s
+        max: 10,                          // max 10 concurrent connections
+        min: 0,                           // não manter conexões idle (Neon encerra idle automaticamente)
+        idleTimeoutMillis: 30000,         // liberar idle após 30s
+        connectionTimeoutMillis: 10000,   // aguardar até 10s por conexão (Neon pode demorar a responder)
         allowExitOnIdle: false,
       });
       _db = drizzle(pool);

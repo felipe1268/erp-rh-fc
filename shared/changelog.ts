@@ -3561,4 +3561,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 594,
+    titulo: "Correção: erro de conexão Neon no job StatusSync em produção",
+    descricao: "Job syncEmployeeStatus ajustado: delay inicial de 30s → 2 minutos (para o Neon estabilizar após o ColFix pesado do startup). Adicionado retry silencioso de até 2 tentativas com intervalo de 60s. Pool de conexões pg ajustado: min=0 (sem idle connections que Neon encerra), max=10, connectionTimeoutMillis=10000 (Neon pode ser lento em cold start).",
+    tipo: "bugfix",
+    modulos: "Infraestrutura",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];
