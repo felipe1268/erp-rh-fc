@@ -7317,7 +7317,13 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
   });
 
   const aprovarMutation = trpc.planejamento.aprovarRevisao.useMutation({
-    onSuccess: () => { utils.planejamento.getProjetoById.invalidate(); fecharModal(); },
+    onSuccess: () => {
+      utils.planejamento.getProjetoById.invalidate();
+      utils.planejamento.getCurvaS.invalidate();
+      utils.planejamento.getCurvasTodasRevisoes.invalidate();
+      utils.planejamento.listarAtividades.invalidate();
+      fecharModal();
+    },
   });
 
   const transferirAvancosMut = trpc.planejamento.transferirAvancosParaNovaRevisao.useMutation({

@@ -834,8 +834,11 @@ export const planejamentoRouter = router({
         const folhas = ativs.filter(a => !a.isGrupo && a.dataInicio && a.dataFim);
         if (!folhas.length) return [];
 
-        const pesoBruto = folhas.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
-        const usarIgual = pesoBruto === 0;
+        const pesoBruto   = folhas.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
+        const ativComPeso = folhas.filter(a => n(a.pesoFinanceiro) > 0).length;
+        // Usa peso igual se: todos têm peso 0 OU menos de 20% das atividades têm peso definido
+        // (evita que poucas atividades com peso dominem a curva, como "FIM DO PROJETO")
+        const usarIgual = pesoBruto === 0 || ativComPeso < folhas.length * 0.2;
         const pesoTotal = usarIgual ? folhas.length : pesoBruto;
 
         const dates: Map<string, number> = new Map();
@@ -872,10 +875,11 @@ export const planejamentoRouter = router({
       // Curva realizada — acumulado ponderado por atividade (idêntico ao REFIS)
       // Para cada semana com avanços, calcula o acumulado ponderado real
       // (mesmo algoritmo usado em avancoRealAtual no cliente)
-      const folhasParaCurva = atividades.filter(a => !a.isGrupo);
-      const pesoBrutoCurva  = folhasParaCurva.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
-      const usarIgualCurva  = pesoBrutoCurva === 0;
-      const pesoTotalCurva  = usarIgualCurva ? folhasParaCurva.length || 1 : pesoBrutoCurva;
+      const folhasParaCurva    = atividades.filter(a => !a.isGrupo);
+      const pesoBrutoCurva     = folhasParaCurva.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
+      const ativComPesoCurva   = folhasParaCurva.filter(a => n(a.pesoFinanceiro) > 0).length;
+      const usarIgualCurva     = pesoBrutoCurva === 0 || ativComPesoCurva < folhasParaCurva.length * 0.2;
+      const pesoTotalCurva     = usarIgualCurva ? folhasParaCurva.length || 1 : pesoBrutoCurva;
 
       // Obtém todas as semanas com dados, em ordem
       const semanasComAvanco = [...new Set(avancos.map(av => av.semana))].sort();
@@ -945,9 +949,10 @@ export const planejamentoRouter = router({
       function gerarCurva(ativs: any[]) {
         const folhas = ativs.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
         if (!folhas.length) return [];
-        const pesoBruto = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
-        const usarIgual = pesoBruto === 0;
-        const pesoTotal = usarIgual ? folhas.length : pesoBruto;
+        const pesoBruto   = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+        const ativComPeso = folhas.filter((a: any) => n(a.pesoFinanceiro) > 0).length;
+        const usarIgual   = pesoBruto === 0 || ativComPeso < folhas.length * 0.2;
+        const pesoTotal   = usarIgual ? folhas.length : pesoBruto;
         const dates: Map<string, number> = new Map();
         folhas.forEach((a: any) => {
           const inicio  = new Date(a.dataInicio);
