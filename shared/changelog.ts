@@ -3391,6 +3391,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 578,
+    titulo: "Modal Confirmar Recebimento — tela maior e formatação de valor pt-BR",
+    descricao: "Modal 'Confirmar Recebimento' ampliado de max-w-sm para max-w-md. Campo de valor agora exibe separador de milhar em tempo real (ex: 246.000,00) tanto no pré-preenchimento quanto durante a digitação. Lógica de formatação auto-aplicada via fmtBaixaInput: strip dots/comma, re-format inteiros com toLocaleString pt-BR, preserva decimais até 2 casas. Texto do campo aumentado para text-lg para melhor leitura.",
+    tipo: "melhoria",
+    modulos: "Planejamento — Fluxo de Caixa",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 577,
     titulo: "Cronograma — Desativar/Reativar atividades em bloco (remoção de escopo)",
     descricao: "Multi-seleção de atividades no Gantt Cronograma: botão 'Selecionar Atividades' entra em modo de seleção; clique em qualquer linha seleciona/deseleciona (checkbox + highlight âmbar); barra de ação flutuante mostra contador e botões 'Desativar (n)' / 'Reativar (n)' conforme estado dos selecionados. Atividades desativadas: fundo cinza, texto riscado, linha-esquerda cinza, excluídas dos cálculos de progresso. Banco: nova coluna disabled BOOLEAN DEFAULT FALSE em planejamento_atividades com migration automática no boot. Endpoint bulk toggleAtividadesDisabled recebe array de IDs + boolean disabled.",

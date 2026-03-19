@@ -4496,7 +4496,16 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
 
   const [baixaModal, setBaixaModal] = useState<{ mes: string; valorPrevisto: number; label: string } | null>(null);
   const [baixaValorInputStr, setBaixaValorInputStr] = useState("");
-  const [baixaInputFocused, setBaixaInputFocused] = useState(false);
+
+  function fmtBaixaInput(raw: string): string {
+    const stripped = raw.replace(/\./g, "").replace(",", ".");
+    const parts = stripped.split(".");
+    const intPart = parts[0].replace(/\D/g, "");
+    const decPart = parts.length > 1 ? parts[1].slice(0, 2) : null;
+    if (!intPart && decPart === null) return "";
+    const intFormatted = intPart ? parseInt(intPart, 10).toLocaleString("pt-BR") : "0";
+    return decPart !== null ? intFormatted + "," + decPart : intFormatted;
+  }
 
   const abrirBaixa = (mes: string, valorPrevisto: number, label: string) => {
     const atual = baixas[mes];
@@ -4506,8 +4515,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       persistBaixas(next);
     } else {
       setBaixaModal({ mes, valorPrevisto, label });
-      setBaixaValorInputStr(valorPrevisto.toFixed(2).replace(".", ","));
-      setBaixaInputFocused(false);
+      setBaixaValorInputStr(fmtBaixaInput(valorPrevisto.toFixed(2).replace(".", ",")));
     }
   };
 
@@ -5801,7 +5809,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
 
       {/* ── Modal Dar Baixa com valor editável ─────────────────────────────── */}
       <Dialog open={!!baixaModal} onOpenChange={(o) => { if (!o) setBaixaModal(null); }}>
-        <DialogContent style={{ background: "#ffffff", color: "#111827" }} className="max-w-sm">
+        <DialogContent style={{ background: "#ffffff", color: "#111827" }} className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -5830,19 +5838,12 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                     type="text"
                     inputMode="decimal"
                     autoFocus
-                    value={baixaInputFocused
-                      ? baixaValorInputStr
-                      : (parseFloat(baixaValorInputStr.replace(/\./g, "").replace(",", ".")) || 0)
-                          .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                    }
-                    onFocus={() => setBaixaInputFocused(true)}
-                    onBlur={() => setBaixaInputFocused(false)}
+                    value={baixaValorInputStr}
                     onChange={e => {
-                      const raw = e.target.value.replace(/[^\d,]/g, "");
-                      setBaixaValorInputStr(raw);
+                      setBaixaValorInputStr(fmtBaixaInput(e.target.value));
                     }}
                     onKeyDown={e => { if (e.key === "Enter") confirmarBaixaValor(); }}
-                    className="h-10 w-full text-sm border border-slate-300 rounded-lg px-3 focus:ring-2 focus:ring-emerald-400 outline-none font-semibold"
+                    className="h-10 w-full text-lg border border-slate-300 rounded-lg px-3 focus:ring-2 focus:ring-emerald-400 outline-none font-semibold"
                     placeholder="0,00"
                   />
                 </div>
