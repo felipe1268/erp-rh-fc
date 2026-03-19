@@ -257,7 +257,7 @@ function parseDixiXLS(buffer: Buffer): {
 // Match employee name from DIXI to database
 function matchEmployee(
   dixiName: string,
-  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho?: any; matricula?: string | null }>,
+  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho?: any; matricula?: string | null; codigoInterno?: string | null }>,
   dixiId?: string,
   memoryMappings?: Array<{ dixiName: string; employeeId: number }>
 ): { id: number; nomeCompleto: string; jornadaTrabalho?: any } | null {
@@ -283,10 +283,14 @@ function matchEmployee(
     }
   }
 
-  // 1.5. Match by DIXI nome = matrícula do funcionário (código único no relógio, ex: JFC001)
-  // Permite configurar o relógio com códigos únicos em vez de nomes, evitando confusão
-  // quando há funcionários com nomes parecidos (ex: dois "Jean Carlos")
+  // 1.5. Match by DIXI nome = codigoInterno ou matrícula do funcionário
+  // Permite configurar o relógio com o Nº Interno (ex: JFC018) em vez de nomes,
+  // evitando confusão quando há funcionários com nomes parecidos (ex: dois "Jean Carlos").
+  // codigoInterno tem prioridade sobre matricula.
   const dixiNameUpper = dixiName.trim().toUpperCase();
+  for (const emp of employeeList) {
+    if (emp.codigoInterno && emp.codigoInterno.trim().toUpperCase() === dixiNameUpper) return emp;
+  }
   for (const emp of employeeList) {
     if (emp.matricula && emp.matricula.trim().toUpperCase() === dixiNameUpper) return emp;
   }
@@ -327,7 +331,7 @@ function matchEmployee(
 // NOW: mesReferencia is derived from each record's date, not from input
 function processRecords(
   records: Array<{ dixiId: string; nome: string; data: string; hora: string; modo: string; sn: string }>,
-  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho: any; acordoHoraExtra?: any; heNormal50?: any; heNoturna?: any; he100?: any; heFeriado?: any; heInterjornada?: any }>,
+  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho: any; matricula?: string | null; codigoInterno?: string | null; acordoHoraExtra?: any; heNormal50?: any; heNoturna?: any; he100?: any; heFeriado?: any; heInterjornada?: any }>,
   obraId: number | null,
   companyId: number,
   criteria: CriteriaMap = DEFAULT_CRITERIA,
@@ -617,6 +621,7 @@ export const fechamentoPontoRouter = router({
         nomeCompleto: employees.nomeCompleto,
         jornadaTrabalho: employees.jornadaTrabalho,
         matricula: employees.matricula,
+        codigoInterno: employees.codigoInterno,
       }).from(employees).where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
       // Get all dixi devices for this company (to match SN -> obra)

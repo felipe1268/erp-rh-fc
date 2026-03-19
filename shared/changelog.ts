@@ -3590,8 +3590,8 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 599,
-    titulo: "Ponto: matching DIXI por código de matrícula único (ex: JFC001) evita confusão entre funcionários com nomes iguais",
-    descricao: "Adicionado novo passo no algoritmo de matching do DIXI (passo 1.5): se o nome enviado pelo relógio (campo 'nome' no XLS) bater exatamente com a matrícula cadastrada no funcionário, o sistema usa esse match antes de tentar qualquer comparação por nome. Isso permite configurar o relógio DIXI com códigos únicos por funcionário (ex: JFC001 para Jean Carlos Martins, JCR001 para Jean Carlos Ribeiro da Silva), eliminando definitivamente a confusão quando há dois funcionários com nomes idênticos ou muito parecidos. Basta cadastrar a matrícula correspondente em cada funcionário no sistema e configurar o relógio com esses códigos. Os passos anteriores (memória de vinculação e número DIXI) e posteriores (nome exato, primeiro+último, parcial) permanecem inalterados como fallback.",
+    titulo: "Ponto: matching DIXI por Nº Interno (ex: JFC018) evita confusão entre funcionários com nomes iguais",
+    descricao: "Adicionado novo passo no algoritmo de matching do DIXI (passo 1.5): se o 'nome' enviado pelo relógio bater com o Nº Interno (codigoInterno, ex: JFC018) do funcionário, o sistema usa esse match imediatamente — antes de qualquer comparação por nome. Isso permite programar o relógio DIXI com os Nºs Internos de cada funcionário em vez do nome completo, eliminando a confusão quando há dois funcionários com nomes parecidos (ex: Jean Carlos Martins = JFC018 e Jean Carlos Ribeiro da Silva = JCR042). Como fallback, o passo também verifica a matrícula. Os passos anteriores (memória de vinculação e ID numérico DIXI) e posteriores (nome exato, primeiro+último, parcial) permanecem inalterados.",
     tipo: "melhoria",
     modulos: "Ponto Eletrônico",
     criadoPor: "Sistema",
