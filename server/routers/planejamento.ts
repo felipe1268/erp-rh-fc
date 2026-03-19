@@ -37,9 +37,30 @@ export const planejamentoRouter = router({
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      return db.select().from(planejamentoProjetos)
+      const rows = await db.select({
+        id:                    planejamentoProjetos.id,
+        companyId:             planejamentoProjetos.companyId,
+        obraId:                planejamentoProjetos.obraId,
+        orcamentoId:           planejamentoProjetos.orcamentoId,
+        nome:                  planejamentoProjetos.nome,
+        cliente:               planejamentoProjetos.cliente,
+        local:                 planejamentoProjetos.local,
+        responsavel:           planejamentoProjetos.responsavel,
+        dataInicio:            planejamentoProjetos.dataInicio,
+        dataTerminoContratual: planejamentoProjetos.dataTerminoContratual,
+        valorContrato:         planejamentoProjetos.valorContrato,
+        status:                planejamentoProjetos.status,
+        descricao:             planejamentoProjetos.descricao,
+        criadoEm:              planejamentoProjetos.criadoEm,
+        atualizadoEm:          planejamentoProjetos.atualizadoEm,
+        orcamentoTotalVenda:   orcamentos.totalVenda,
+        orcamentoValorNegociado: orcamentos.valorNegociado,
+      })
+        .from(planejamentoProjetos)
+        .leftJoin(orcamentos, eq(planejamentoProjetos.orcamentoId, orcamentos.id))
         .where(eq(planejamentoProjetos.companyId, input.companyId))
         .orderBy(desc(planejamentoProjetos.criadoEm));
+      return rows;
     }),
 
   criarProjeto: protectedProcedure

@@ -24,6 +24,27 @@ function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function formatBrlInput(raw: string | number | null | undefined): string {
+  const num = parseFloat(String(raw || "").replace(",", "."));
+  if (isNaN(num) || num === 0) return "";
+  return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseBrlInput(formatted: string): string {
+  const clean = formatted.replace(/\./g, "").replace(",", ".");
+  const num = parseFloat(clean);
+  if (isNaN(num)) return "";
+  return num.toFixed(2);
+}
+
+function handleBrlChange(
+  e: React.ChangeEvent<HTMLInputElement>,
+  setter: (v: string) => void
+) {
+  const raw = e.target.value.replace(/[^\d,]/g, "");
+  setter(raw);
+}
+
 function StatusBadge({ status }: { status: string }) {
   if (status === "encerrado")
     return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"><AlertCircle className="h-3 w-3" />Encerrado</span>;
@@ -86,17 +107,29 @@ export default function MedicaoContratos() {
     });
   }
 
+  function handleProjetoSelect(projetoId: string) {
+    const projeto = (projetos as any[]).find((p: any) => String(p.id) === projetoId);
+    let autoValor = "";
+    if (projeto) {
+      const negociado = parseFloat(projeto.orcamentoValorNegociado || "0");
+      const totalVenda = parseFloat(projeto.orcamentoTotalVenda || "0");
+      const valor = negociado > 0 ? negociado : totalVenda > 0 ? totalVenda : 0;
+      if (valor > 0) autoValor = formatBrlInput(valor);
+    }
+    setForm(f => ({ ...f, projetoId, valorTotalContrato: autoValor }));
+  }
+
   function handleCriar() {
     if (!form.projetoId) return;
     criarMutation.mutate({
       companyId,
       projetoId: parseInt(form.projetoId),
       criterio: form.criterio as "avanco_fisico" | "parcela_fixa",
-      valorTotalContrato: form.valorTotalContrato || undefined,
+      valorTotalContrato: parseBrlInput(form.valorTotalContrato) || undefined,
       percentualSinal: form.percentualSinal || undefined,
-      valorSinalRecebido: form.valorSinalRecebido || undefined,
+      valorSinalRecebido: parseBrlInput(form.valorSinalRecebido) || undefined,
       percentualRetencao: form.percentualRetencao || null,
-      valorMinimoFd: form.valorMinimoFd || null,
+      valorMinimoFd: parseBrlInput(form.valorMinimoFd) || null,
       observacoes: form.observacoes || null,
     });
   }
@@ -223,7 +256,7 @@ export default function MedicaoContratos() {
 
                 <div>
                   <Label className="text-xs font-medium text-gray-700 mb-1.5 block">Projeto / Obra <span className="text-red-500">*</span></Label>
-                  <Select value={form.projetoId} onValueChange={v => setForm(f => ({ ...f, projetoId: v }))}>
+                  <Select value={form.projetoId} onValueChange={handleProjetoSelect}>
                     <SelectTrigger className="h-9 text-sm">
                       <SelectValue placeholder="Selecione o projeto..." />
                     </SelectTrigger>
@@ -288,7 +321,12 @@ export default function MedicaoContratos() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs font-medium text-gray-700 mb-1.5 block">Valor Total do Contrato</Label>
+                    <Label className="text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+                      Valor Total do Contrato
+                      {form.valorTotalContrato && (
+                        <span className="text-[10px] text-emerald-600 font-normal normal-case">• do orçamento</span>
+                      )}
+                    </Label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">R$</span>
                       <Input
@@ -296,6 +334,10 @@ export default function MedicaoContratos() {
                         placeholder="0,00"
                         value={form.valorTotalContrato}
                         onChange={e => setForm(f => ({ ...f, valorTotalContrato: e.target.value }))}
+                        onBlur={e => {
+                          const parsed = parseBrlInput(e.target.value);
+                          if (parsed) setForm(f => ({ ...f, valorTotalContrato: formatBrlInput(parsed) }));
+                        }}
                       />
                     </div>
                   </div>
@@ -308,6 +350,10 @@ export default function MedicaoContratos() {
                         placeholder="0,00"
                         value={form.valorSinalRecebido}
                         onChange={e => setForm(f => ({ ...f, valorSinalRecebido: e.target.value }))}
+                        onBlur={e => {
+                          const parsed = parseBrlInput(e.target.value);
+                          if (parsed) setForm(f => ({ ...f, valorSinalRecebido: formatBrlInput(parsed) }));
+                        }}
                       />
                     </div>
                   </div>
@@ -357,9 +403,13 @@ export default function MedicaoContratos() {
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">R$</span>
                       <Input
                         className="h-9 text-sm pl-8"
-                        placeholder="Valor mínimo aceito pelo cliente"
+                        placeholder="0,00"
                         value={form.valorMinimoFd}
                         onChange={e => setForm(f => ({ ...f, valorMinimoFd: e.target.value }))}
+                        onBlur={e => {
+                          const parsed = parseBrlInput(e.target.value);
+                          if (parsed) setForm(f => ({ ...f, valorMinimoFd: formatBrlInput(parsed) }));
+                        }}
                       />
                     </div>
                   </div>

@@ -3543,4 +3543,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 592,
+    titulo: "Medição de Contratos: valor automático do orçamento + formatação BRL",
+    descricao: "Modal 'Novo Contrato de Medição': ao selecionar o projeto, o campo Valor Total do Contrato é preenchido automaticamente com o valor total de venda do orçamento vinculado (preferência para valorNegociado se existir). Campos monetários (Valor Total, Sinal Recebido, Valor Mínimo FD) formatam automaticamente no padrão BRL (1.234.567,89) ao sair do campo. No envio, os valores são convertidos de volta para decimal antes de salvar. listarProjetos agora faz LEFT JOIN com orcamentos e retorna orcamentoTotalVenda e orcamentoValorNegociado.",
+    tipo: "melhoria",
+    modulos: "Medição de Contratos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];
