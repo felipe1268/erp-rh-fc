@@ -3498,4 +3498,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 587,
+    titulo: "Avanço Físico Previsto alinhado entre cabeçalho e Avanço Semanal",
+    descricao: "O cabeçalho da obra usava a Curva S (método de blocos semanais) para calcular o Previsto, enquanto a aba Avanço Semanal usava interpolação linear por atividade. O método de blocos semanais atribuía o peso total de toda uma semana ao ponto de início daquela semana, inflacionando o Previsto (ex: 22.8% vs 19.5% correto). Correção: avancoPrevistoDia passa a usar interpolação linear idêntica ao Avanço Semanal, com segunda-feira da semana atual como referência padrão. Ao navegar nas semanas da Curva S, a referência é atualizada proporcionalmente. Os dois valores agora são sempre consistentes.",
+    tipo: "bugfix",
+    modulos: "Planejamento — Cabeçalho / Avanço Físico Previsto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];

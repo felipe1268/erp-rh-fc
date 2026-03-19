@@ -334,21 +334,29 @@ export default function PlanejamentoDetalhe() {
     return Math.min(100, ponderado);
   }, [atividades, avancosMap]);
 
-  // Previsto acumulado: usa curvaPlanejada se houver revisão diferente da baseline,
-  // senão usa curvaBaseline (que é o único plano disponível quando só há uma revisão).
+  // Previsto acumulado: interpolação linear por atividade folha (mesmo algoritmo do Avanço Semanal).
+  // Usa segunda-feira da semana atual (ou semanaVisualizacao quando selecionada) como referência,
+  // evitando divergência causada pelo método de blocos semanais da Curva S.
   const avancoPrevistoDia = useMemo(() => {
-    const curva = curvaData?.curvaPlanejada?.length
-      ? curvaData.curvaPlanejada
-      : curvaData?.curvaBaseline?.length
-        ? curvaData.curvaBaseline
-        : null;
-    if (!curva) return null;
-    const ref = semanaVisualizacao ?? new Date().toISOString().split("T")[0];
-    const passados = (curva as { semana: string; acumulado: number }[])
-      .filter(p => p.semana <= ref);
-    if (passados.length === 0) return 0;
-    return passados[passados.length - 1].acumulado;
-  }, [curvaData, semanaVisualizacao]);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
+    if (!folhas.length) return null;
+    const refStr = semanaVisualizacao ?? toMonday(new Date());
+    const ref = new Date(refStr + "T12:00:00").getTime();
+    const pesoBruto = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso = pesoBruto === 0;
+    const denom = semPeso ? (folhas.length || 1) : pesoBruto;
+    let soma = 0;
+    folhas.forEach((a: any) => {
+      const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+      const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+      let exp = 0;
+      if (ref >= fim) exp = 100;
+      else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      soma += (exp * peso) / denom;
+    });
+    return +soma.toFixed(1);
+  }, [atividades, semanaVisualizacao]);
 
   if (loadingProj) return (
     <DashboardLayout>
