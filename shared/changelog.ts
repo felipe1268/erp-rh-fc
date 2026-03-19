@@ -3590,8 +3590,8 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 599,
-    titulo: "Ponto: matching DIXI por Nº Interno (ex: JFC018) evita confusão entre funcionários com nomes iguais",
-    descricao: "Adicionado novo passo no algoritmo de matching do DIXI (passo 1.5): se o 'nome' enviado pelo relógio bater com o Nº Interno (codigoInterno, ex: JFC018) do funcionário, o sistema usa esse match imediatamente — antes de qualquer comparação por nome. Isso permite programar o relógio DIXI com os Nºs Internos de cada funcionário em vez do nome completo, eliminando a confusão quando há dois funcionários com nomes parecidos (ex: Jean Carlos Martins = JFC018 e Jean Carlos Ribeiro da Silva = JCR042). Como fallback, o passo também verifica a matrícula. Os passos anteriores (memória de vinculação e ID numérico DIXI) e posteriores (nome exato, primeiro+último, parcial) permanecem inalterados.",
+    titulo: "Ponto: matching DIXI duplo (Nº Interno + nome com detecção de ambiguidade)",
+    descricao: "Duas melhorias simultâneas no algoritmo de matching do DIXI. (1) Novo passo 1.5: se o campo 'nome' enviado pelo relógio bater exatamente com o Nº Interno (codigoInterno, ex: JFC018) ou matrícula do funcionário, o match é feito imediatamente antes de qualquer comparação por nome — permite usar o relógio com códigos únicos para eliminar confusão entre nomes parecidos. (2) Detecção de ambiguidade nos passos por nome (primeiro+último e parcial): se o nome do DIXI puder casar com MAIS DE UM funcionário, o registro vai para 'Não Identificados' em vez de ser atribuído ao primeiro encontrado — o usuário resolve manualmente vinculando ao funcionário correto, e o sistema memoriza essa vinculação para imports futuros. Essas duas melhorias funcionam em conjunto: código para o próximo mês, resolução manual para o mês atual.",
     tipo: "melhoria",
     modulos: "Ponto Eletrônico",
     criadoPor: "Sistema",

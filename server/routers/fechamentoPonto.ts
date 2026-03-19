@@ -300,28 +300,34 @@ function matchEmployee(
     if (normalizeNameForMatch(emp.nomeCompleto) === normalized) return emp;
   }
 
-  // 3. Match by first + last name
+  // 3. Match by first + last name — com detecção de ambiguidade
+  // Se mais de um funcionário casar com mesmo primeiro+último nome, manda para Não Identificados
   if (parts.length >= 2) {
     const firstName = parts[0];
     const lastName = parts[parts.length - 1];
-    for (const emp of employeeList) {
-      const empNorm = normalizeNameForMatch(emp.nomeCompleto);
-      const empParts = empNorm.split(" ");
-      if (empParts[0] === firstName && empParts[empParts.length - 1] === lastName) return emp;
-    }
+    const candidates3 = employeeList.filter(emp => {
+      const empParts = normalizeNameForMatch(emp.nomeCompleto).split(" ");
+      return empParts[0] === firstName && empParts[empParts.length - 1] === lastName;
+    });
+    if (candidates3.length === 1) return candidates3[0];
+    // Se > 1 candidato com mesmo primeiro+último → ambíguo → cai no próximo passo
+    // Se nenhum → também cai no próximo passo
   }
 
-  // 4. Partial match - first name + any other part
+  // 4. Partial match - primeiro nome + mínimo 2 partes em comum — com detecção de ambiguidade
+  // Se mais de um funcionário casar → manda para Não Identificados ao invés de escolher errado
   if (parts.length >= 1) {
     const firstName = parts[0];
-    for (const emp of employeeList) {
+    const candidates4 = employeeList.filter(emp => {
       const empNorm = normalizeNameForMatch(emp.nomeCompleto);
-      if (empNorm.startsWith(firstName + " ")) {
-        const empParts = empNorm.split(" ");
-        const matchCount = parts.filter(p => empParts.includes(p)).length;
-        if (matchCount >= 2) return emp;
-      }
-    }
+      if (!empNorm.startsWith(firstName + " ")) return false;
+      const empParts = empNorm.split(" ");
+      const matchCount = parts.filter(p => empParts.includes(p)).length;
+      return matchCount >= 2;
+    });
+    if (candidates4.length === 1) return candidates4[0];
+    // Se > 1 candidato (nome ambíguo entre dois funcionários) → retorna null → vai para Não Identificados
+    // O usuário resolve manualmente vinculando ao funcionário correto
   }
 
   return null;
