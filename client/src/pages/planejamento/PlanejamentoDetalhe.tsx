@@ -7661,25 +7661,24 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     });
   }
 
-  // Curva S filtrada até semana selecionada (max 16 pontos) com tendência
+  // Curva S física — idêntica ao merged da aba Curva S (todas as semanas, todas as linhas)
   const curvaFiltrada = useMemo(() => {
-    const planSrc = curvaData?.curvaPlanejada?.length ? curvaData.curvaPlanejada : curvaData?.curvaBaseline;
-    if (!planSrc) return [];
-    const plan = (planSrc as any[]).filter((p: any) => p.semana <= semana).slice(-16);
-    const real = (curvaData.curvaRealizada as any[] ?? []).filter((p: any) => p.semana <= semana);
-    const tend = (curvaData.curvaTendencia as any[] ?? []).filter((p: any) => p.semana <= semana);
-    const realMap2: Record<string, number> = {};
-    real.forEach((p: any) => { realMap2[p.semana] = p.acumulado; });
-    const tendMap: Record<string, number> = {};
-    tend.forEach((p: any) => { tendMap[p.semana] = p.acumulado; });
-    return plan.map((p: any, i: number) => ({
-      label: `S${i + 1}`,
-      semana: p.semana,
-      previsto:   +(p.acumulado ?? 0).toFixed(1),
-      realizado:  realMap2[p.semana] != null ? +(realMap2[p.semana]).toFixed(1) : undefined,
-      tendencia:  tendMap[p.semana]  != null ? +(tendMap[p.semana]).toFixed(1)  : undefined,
-    }));
-  }, [curvaData, semana]);
+    if (!curvaData) return [];
+    const map: Record<string, any> = {};
+    const add = (arr: any[], key: string) => (arr ?? []).forEach((p: any) => {
+      if (!map[p.semana]) map[p.semana] = { semana: p.semana };
+      map[p.semana][key] = +(p.acumulado ?? 0).toFixed(1);
+    });
+    add(curvaData.curvaBaseline,  "baseline");
+    add(curvaData.curvaPlanejada, "planejada");
+    add(curvaData.curvaRealizada, "realizada");
+    add(curvaData.curvaTendencia, "tendencia");
+    const rows = (Object.values(map) as any[]).sort((a, b) => a.semana.localeCompare(b.semana));
+    return rows.map((p: any, i: number) => ({ ...p, label: `Sem ${String(i + 1).padStart(2, "0")}` }));
+  }, [curvaData]);
+
+  const cfHasBaseline  = curvaFiltrada.some((p: any) => p.baseline  != null);
+  const cfHasPlanejada = curvaFiltrada.some((p: any) => p.planejada != null);
 
   // Valor total do contrato (sum das vendas dos itens cruzados)
   const totalContrato = useMemo(() => {
@@ -7687,29 +7686,24 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     return itens.reduce((s: number, item: any) => s + n(item.vendaTotal), 0);
   }, [cruzamento]);
 
-  // Curva S financeira (R$) — planejado × realizado sobre o contrato
+  // Curva S financeira (R$) — idêntica ao merged, mas escalada pelo valor do contrato
   const curvaFinanceira = useMemo(() => {
-    const planSrc2 = curvaData?.curvaPlanejada?.length ? curvaData.curvaPlanejada : curvaData?.curvaBaseline;
-    if (!planSrc2 || totalContrato === 0) return [];
-    const plan = (planSrc2 as any[]).filter((p: any) => p.semana <= semana).slice(-16);
-    const real = (curvaData.curvaRealizada as any[] ?? []).filter((p: any) => p.semana <= semana);
-    const tend = (curvaData.curvaTendencia as any[] ?? []).filter((p: any) => p.semana <= semana);
-    const realMap2: Record<string, number> = {};
-    real.forEach((p: any) => { realMap2[p.semana] = p.acumulado; });
-    const tendMap: Record<string, number> = {};
-    tend.forEach((p: any) => { tendMap[p.semana] = p.acumulado; });
-    return plan.map((p: any, i: number) => {
-      const rv = realMap2[p.semana];
-      const tv = tendMap[p.semana];
-      return {
-        label: `S${i + 1}`,
-        semana: p.semana,
-        previsto:  +((p.acumulado ?? 0) / 100 * totalContrato).toFixed(0),
-        realizado: rv != null ? +(rv / 100 * totalContrato).toFixed(0) : undefined,
-        tendencia: tv != null ? +(tv / 100 * totalContrato).toFixed(0) : undefined,
-      };
+    if (!curvaData || totalContrato === 0) return [];
+    const map: Record<string, any> = {};
+    const add = (arr: any[], key: string) => (arr ?? []).forEach((p: any) => {
+      if (!map[p.semana]) map[p.semana] = { semana: p.semana };
+      map[p.semana][key] = +((p.acumulado ?? 0) / 100 * totalContrato).toFixed(0);
     });
-  }, [curvaData, semana, totalContrato]);
+    add(curvaData.curvaBaseline,  "baseline");
+    add(curvaData.curvaPlanejada, "planejada");
+    add(curvaData.curvaRealizada, "realizada");
+    add(curvaData.curvaTendencia, "tendencia");
+    const rows = (Object.values(map) as any[]).sort((a, b) => a.semana.localeCompare(b.semana));
+    return rows.map((p: any, i: number) => ({ ...p, label: `Sem ${String(i + 1).padStart(2, "0")}` }));
+  }, [curvaData, totalContrato]);
+
+  const cfFinHasBaseline  = curvaFinanceira.some((p: any) => p.baseline  != null);
+  const cfFinHasPlanejada = curvaFinanceira.some((p: any) => p.planejada != null);
 
   // Desvio físico global (pp)
   const desvioFisico = avancoRealAtual - avancoPrevisto;
@@ -8473,10 +8467,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               Curva S Física — Avanço Acumulado (%)
             </p>
             <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
-              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
-              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#10b981" }} /> Realizado</span>
+              {cfHasBaseline  && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} /> Baseline</span>}
+              {cfHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Revisão Atual</span>}
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Realizado</span>
               <span className="flex items-center gap-1.5">
-                <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#9b59b6" strokeWidth="2" strokeDasharray="4 2" /></svg>
+                <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 2" /></svg>
                 Tendência
               </span>
               <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3A ? "rotate-180" : ""}`} />
@@ -8487,11 +8482,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               {/* KPI strip */}
               <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
                 <div className="px-5 py-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Acumulado Previsto</p>
-                  <p className="text-lg font-bold text-amber-600">{fPct_(avancoPrevisto)}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Revisão Atual</p>
+                  <p className="text-lg font-bold text-red-600">{fPct_(avancoPrevisto)}</p>
                 </div>
                 <div className="px-5 py-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Acumulado Realizado</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Realizado</p>
                   <p className="text-lg font-bold text-emerald-700">{fPct_(avancoRealAtual)}</p>
                 </div>
                 <div className="px-5 py-3 text-center">
@@ -8504,14 +8499,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               {/* Chart */}
               <div className="px-5 py-4" style={{ height: 320 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={curvaFiltrada} margin={{ top: 12, right: 40, bottom: curvaFiltrada.length > 8 ? 40 : 20, left: 8 }}>
+                  <LineChart data={curvaFiltrada} margin={{ top: 12, right: 40, bottom: curvaFiltrada.length > 10 ? 42 : 20, left: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 10, fill: "#64748b" }}
-                      angle={curvaFiltrada.length > 8 ? -35 : 0}
-                      textAnchor={curvaFiltrada.length > 8 ? "end" : "middle"}
-                      height={curvaFiltrada.length > 8 ? 50 : 28}
+                      angle={curvaFiltrada.length > 10 ? -35 : 0}
+                      textAnchor={curvaFiltrada.length > 10 ? "end" : "middle"}
+                      height={curvaFiltrada.length > 10 ? 50 : 28}
                       interval={Math.max(0, Math.floor(curvaFiltrada.length / 12) - 1)}
                       axisLine={{ stroke: "#e2e8f0" }}
                       tickLine={false}
@@ -8528,17 +8523,20 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       content={({ payload, label }: any) => {
                         if (!payload?.length) return null;
                         const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
-                        const prev = get("previsto"); const real = get("realizado"); const tend = get("tendencia");
-                        const desvio = prev != null && real != null ? (real as number) - (prev as number) : null;
+                        const base = get("baseline"); const plan = get("planejada"); const real = get("realizada"); const tend = get("tendencia");
+                        const ref = plan ?? base;
+                        const desvio = ref != null && real != null ? (real as number) - (ref as number) : null;
                         const row = curvaFiltrada.find((r: any) => r.label === label);
+                        const [y, m, d] = String(row?.semana ?? "").split("-");
                         return (
-                          <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[170px]">
+                          <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[190px]">
                             <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">
-                              {label}{row?.semana ? ` · ${String(row.semana).split("-").reverse().join("/")}` : ""}
+                              {label}{row?.semana ? ` · ${d}/${m}/${y}` : ""}
                             </p>
-                            {prev  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#FFB800" }}>Previsto</span><strong>{Number(prev).toFixed(1)}%</strong></p>}
-                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#10b981" }}>Realizado</span><strong>{Number(real).toFixed(1)}%</strong></p>}
-                            {tend  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#9b59b6" }}>Tendência</span><strong>{Number(tend).toFixed(1)}%</strong></p>}
+                            {base  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Baseline</span><strong>{Number(base).toFixed(1)}%</strong></p>}
+                            {plan  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#ef4444" }}>Revisão Atual</span><strong>{Number(plan).toFixed(1)}%</strong></p>}
+                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado</span><strong>{Number(real).toFixed(1)}%</strong></p>}
+                            {tend  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#16a34a" }}>Tendência</span><strong>{Number(tend).toFixed(1)}%</strong></p>}
                             {desvio != null && (
                               <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                                 <span>Desvio</span><span>{desvio >= 0 ? "+" : ""}{desvio.toFixed(1)}%</span>
@@ -8548,13 +8546,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                         );
                       }}
                     />
-                    <ReferenceLine y={avancoPrevisto}  stroke="#FFB800" strokeDasharray="5 4" strokeWidth={1}
-                      label={{ value: `${avancoPrevisto.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#B8860B", fontWeight: 700 }} />
-                    <ReferenceLine y={avancoRealAtual} stroke="#10b981" strokeDasharray="5 4" strokeWidth={1}
-                      label={{ value: `${avancoRealAtual.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#059669", fontWeight: 700 }} />
-                    <Line type="monotone" dataKey="previsto"  stroke="#FFB800" strokeWidth={2.5} dot={false} name="previsto" />
-                    <Line type="monotone" dataKey="realizado" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: "#10b981", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls name="realizado" />
-                    <Line type="monotone" dataKey="tendencia" stroke="#9b59b6" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
+                    <ReferenceLine y={avancoPrevisto}  stroke="#ef4444" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: `${avancoPrevisto.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
+                    <ReferenceLine y={avancoRealAtual} stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: `${avancoRealAtual.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
+                    {cfHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
+                    {cfHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
+                    <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4, fill: "#22c55e", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
+                    <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -8568,8 +8567,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         const prevAcumFin  = totalContrato * avancoPrevisto  / 100;
         const realAcumFin  = totalContrato * avancoRealAtual / 100;
         const desvioFin    = realAcumFin - prevAcumFin;
-        const maxFin       = Math.max(...curvaFinanceira.map((r: any) => r.previsto ?? 0), ...curvaFinanceira.map((r: any) => r.realizado ?? 0), ...curvaFinanceira.map((r: any) => r.tendencia ?? 0));
-        const finTickFmt   = (v: number) => maxFin >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : maxFin >= 1_000 ? `${(v/1_000).toFixed(0)}k` : v.toFixed(0);
+        const maxFin       = Math.max(...curvaFinanceira.map((r: any) => r.baseline ?? 0), ...curvaFinanceira.map((r: any) => r.planejada ?? 0), ...curvaFinanceira.map((r: any) => r.realizada ?? 0), ...curvaFinanceira.map((r: any) => r.tendencia ?? 0));
+        const finTickFmt   = (v: number) => v === 0 ? "0" : v.toLocaleString("pt-BR");
         return (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-700 border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3B(v => !v)}>
@@ -8577,10 +8576,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               Curva S Financeira — Faturamento Acumulado (R$)
             </p>
             <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
-              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#FFB800" }} /> Previsto</span>
-              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#10b981" }} /> Realizado</span>
+              {cfFinHasBaseline  && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} /> Baseline</span>}
+              {cfFinHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Revisão Atual</span>}
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Realizado</span>
               <span className="flex items-center gap-1.5">
-                <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#9b59b6" strokeWidth="2" strokeDasharray="4 2" /></svg>
+                <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 2" /></svg>
                 Tendência
               </span>
               <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3B ? "rotate-180" : ""}`} />
@@ -8595,8 +8595,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   <p className="text-base font-bold text-slate-700">{fmt(totalContrato)}</p>
                 </div>
                 <div className="px-4 py-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Previsto Acumulado</p>
-                  <p className="text-base font-bold text-amber-600">{fmt(prevAcumFin)}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Revisão Atual</p>
+                  <p className="text-base font-bold text-red-600">{fmt(prevAcumFin)}</p>
                 </div>
                 <div className="px-4 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Realizado Acumulado</p>
@@ -8612,14 +8612,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               {/* Chart */}
               <div className="px-5 py-4" style={{ height: 320 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={curvaFinanceira} margin={{ top: 12, right: 40, bottom: curvaFinanceira.length > 8 ? 40 : 20, left: 8 }}>
+                  <LineChart data={curvaFinanceira} margin={{ top: 12, right: 78, bottom: curvaFinanceira.length > 10 ? 42 : 20, left: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 10, fill: "#64748b" }}
-                      angle={curvaFinanceira.length > 8 ? -35 : 0}
-                      textAnchor={curvaFinanceira.length > 8 ? "end" : "middle"}
-                      height={curvaFinanceira.length > 8 ? 50 : 28}
+                      angle={curvaFinanceira.length > 10 ? -35 : 0}
+                      textAnchor={curvaFinanceira.length > 10 ? "end" : "middle"}
+                      height={curvaFinanceira.length > 10 ? 50 : 28}
                       interval={Math.max(0, Math.floor(curvaFinanceira.length / 12) - 1)}
                       axisLine={{ stroke: "#e2e8f0" }}
                       tickLine={false}
@@ -8627,7 +8627,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     <YAxis
                       tickFormatter={finTickFmt}
                       tick={{ fontSize: 10, fill: "#64748b" }}
-                      width={58}
+                      width={90}
                       axisLine={false}
                       tickLine={false}
                     />
@@ -8635,18 +8635,21 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       content={({ payload, label }: any) => {
                         if (!payload?.length) return null;
                         const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
-                        const prev = get("previsto"); const real = get("realizado"); const tend = get("tendencia");
-                        const desvio = prev != null && real != null ? (real as number) - (prev as number) : null;
+                        const base = get("baseline"); const plan = get("planejada"); const real = get("realizada"); const tend = get("tendencia");
+                        const ref = plan ?? base;
+                        const desvio = ref != null && real != null ? (real as number) - (ref as number) : null;
                         const row = curvaFinanceira.find((r: any) => r.label === label);
+                        const [y, m, d] = String(row?.semana ?? "").split("-");
                         const brl = (v: any) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
                         return (
-                          <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[200px]">
+                          <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[220px]">
                             <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">
-                              {label}{row?.semana ? ` · ${String(row.semana).split("-").reverse().join("/")}` : ""}
+                              {label}{row?.semana ? ` · ${d}/${m}/${y}` : ""}
                             </p>
-                            {prev  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#FFB800" }}>Previsto</span><strong>{brl(prev)}</strong></p>}
-                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#10b981" }}>Realizado</span><strong>{brl(real)}</strong></p>}
-                            {tend  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#9b59b6" }}>Tendência</span><strong>{brl(tend)}</strong></p>}
+                            {base  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Baseline</span><strong>{brl(base)}</strong></p>}
+                            {plan  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#ef4444" }}>Revisão Atual</span><strong>{brl(plan)}</strong></p>}
+                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado</span><strong>{brl(real)}</strong></p>}
+                            {tend  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#16a34a" }}>Tendência</span><strong>{brl(tend)}</strong></p>}
                             {desvio != null && (
                               <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                                 <span>Desvio</span><span>{desvio >= 0 ? "+" : ""}{brl(desvio)}</span>
@@ -8656,13 +8659,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                         );
                       }}
                     />
-                    <ReferenceLine y={prevAcumFin}  stroke="#FFB800" strokeDasharray="5 4" strokeWidth={1}
-                      label={{ value: finTickFmt(prevAcumFin),  position: "right", fontSize: 9, fill: "#B8860B", fontWeight: 700 }} />
-                    <ReferenceLine y={realAcumFin}  stroke="#10b981" strokeDasharray="5 4" strokeWidth={1}
-                      label={{ value: finTickFmt(realAcumFin), position: "right", fontSize: 9, fill: "#059669", fontWeight: 700 }} />
-                    <Line type="monotone" dataKey="previsto"  stroke="#FFB800" strokeWidth={2.5} dot={false} name="previsto" />
-                    <Line type="monotone" dataKey="realizado" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: "#10b981", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls name="realizado" />
-                    <Line type="monotone" dataKey="tendencia" stroke="#9b59b6" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
+                    <ReferenceLine y={prevAcumFin}  stroke="#ef4444" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: finTickFmt(prevAcumFin),  position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
+                    <ReferenceLine y={realAcumFin}  stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: finTickFmt(realAcumFin), position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
+                    {cfFinHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
+                    {cfFinHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
+                    <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4, fill: "#22c55e", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
+                    <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
