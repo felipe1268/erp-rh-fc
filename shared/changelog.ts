@@ -3589,6 +3589,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 601,
+    titulo: "EPIs: fotos agora persistem entre redeploys (armazenadas no banco de dados)",
+    descricao: "Correção definitiva para fotos de EPIs que sumiam após cada republicação do sistema. Causa raiz: as fotos eram salvas no disco local do servidor de produção, que é apagado a cada redeploy. Fix: as fotos agora são armazenadas diretamente no banco de dados (Neon, externo e permanente) como data URI. Antes do envio, o cliente comprime automaticamente a imagem para no máximo 500×500px com qualidade JPEG 0.75, garantindo que cada foto ocupe apenas 20–50KB no banco. Fotos enviadas anteriormente que ficaram com URL quebrada precisarão ser reenviadas. Daqui em diante nenhuma foto será perdida por redeploy.",
+    tipo: "bugfix",
+    modulos: "EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 600,
     titulo: "Obras: impedido cadastro de obra com nome duplicado",
     descricao: "A função de criação de obra agora verifica se já existe uma obra ativa com o mesmo nome na mesma empresa antes de inserir. Se existir, retorna um erro claro: 'Já existe uma obra ativa com o nome X'. Isso evita que duas obras homônimas sejam criadas por duplo-clique, importação duplicada ou qualquer outra ação acidental, e elimina a causa raiz dos 'Conflitos de Obra' que apareciam quando o DIXI importava registros para dois registros de obra com o mesmo nome.",

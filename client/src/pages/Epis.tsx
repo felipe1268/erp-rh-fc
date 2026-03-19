@@ -693,12 +693,28 @@ export default function Epis() {
                           onChange={async e => {
                             const file = e.target.files?.[0];
                             if (!file || !editingEpi) return;
-                            const reader = new FileReader();
-                            reader.onload = async (ev) => {
-                              const base64 = (ev.target?.result as string).split(',')[1];
-                              uploadFotoEpiMut.mutate({ id: editingEpi.id, fileBase64: base64, mimeType: file.type });
+                            // Comprime a imagem antes de enviar (max 500px, JPEG 0.75)
+                            // Isso garante que a foto cabe no banco e persiste entre redeploys
+                            const MAX_PX = 500;
+                            const QUALITY = 0.75;
+                            const img = new Image();
+                            const objectUrl = URL.createObjectURL(file);
+                            img.onload = () => {
+                              let { width, height } = img;
+                              if (width > MAX_PX || height > MAX_PX) {
+                                if (width > height) { height = Math.round(height * MAX_PX / width); width = MAX_PX; }
+                                else { width = Math.round(width * MAX_PX / height); height = MAX_PX; }
+                              }
+                              const canvas = document.createElement('canvas');
+                              canvas.width = width; canvas.height = height;
+                              const ctx = canvas.getContext('2d')!;
+                              ctx.drawImage(img, 0, 0, width, height);
+                              const dataUrl = canvas.toDataURL('image/jpeg', QUALITY);
+                              URL.revokeObjectURL(objectUrl);
+                              const base64 = dataUrl.split(',')[1];
+                              uploadFotoEpiMut.mutate({ id: editingEpi.id, fileBase64: base64, mimeType: 'image/jpeg' });
                             };
-                            reader.readAsDataURL(file);
+                            img.src = objectUrl;
                           }} />
                         <Button type="button" size="sm" variant="outline"
                           onClick={() => fotoEpiInputRef.current?.click()}

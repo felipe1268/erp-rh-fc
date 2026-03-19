@@ -129,14 +129,18 @@ export const episRouter = router({
     }),
 
   // Upload de foto do EPI
+  // Armazena como data URI diretamente no banco (Neon é externo e persiste entre redeploys).
+  // O cliente comprime a imagem antes de enviar (max 500px, quality 0.75) para manter tamanho razoável.
   uploadFotoEpi: protectedProcedure
     .input(z.object({ id: z.number(), fileBase64: z.string(), mimeType: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      const ext = input.mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
-      const key = `epi-fotos/${input.id}_${Date.now()}.${ext}`;
-      const buffer = Buffer.from(input.fileBase64, 'base64');
-      const { url } = await storagePut(key, buffer, input.mimeType);
+      // Valida tamanho máximo (~400KB base64 ≈ ~300KB imagem comprimida)
+      if (input.fileBase64.length > 600_000) {
+        throw new Error("Imagem muito grande. Por favor selecione uma imagem menor ou o sistema comprimirá automaticamente.");
+      }
+      const mime = input.mimeType.startsWith('image/') ? input.mimeType : 'image/jpeg';
+      const url = `data:${mime};base64,${input.fileBase64}`;
       await db.update(epis).set({ fotoUrl: url, alteradoPor: ctx.user?.name || 'Sistema' } as any).where(eq(epis.id, input.id));
       return { url };
     }),
