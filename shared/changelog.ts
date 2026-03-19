@@ -3516,4 +3516,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 589,
+    titulo: "Avisos Prévios: desembolso pendente incluía apenas 'em andamento', ignorando 'aguardando pagamento'",
+    descricao: "O widget de Avisos Prévios no Painel RH consultava apenas status='em_andamento' (17 registros, R$118.578,73), ignorando status='aguardando_pagamento' (24 registros, R$163.112,37) cujo dataBaixa IS NULL — ou seja, rescisões cujo período acabou mas que ainda não foram pagas. O servidor agora consulta ambos os status; o card exibe badges diferenciados (vermelho 'Xd restantes' para em_andamento, âmbar 'Aguard. Pgto' para aguardando_pagamento); label atualizado para 'Desembolso pendente (sem baixa)'; total correto: R$281.691,10. Também gerada migration Drizzle 0017 para a coluna dataBaixa e demais colunas que existiam no banco Neon via ColFix mas não tinham arquivo de migration, corrigindo o travamento do deploy na etapa de validação.",
+    tipo: "bugfix",
+    modulos: "Painel RH — Avisos Prévios / homeData / Deploy",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];
