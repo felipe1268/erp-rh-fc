@@ -459,9 +459,14 @@ export const planejamentoRouter = router({
     .input(z.object({ revisaoId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      return db.select().from(planejamentoAtividades)
+      const rows = await db.select().from(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId))
         .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
+      return rows.map(r => ({
+        ...r,
+        dataInicio: r.dataInicio ? toDateStr(r.dataInicio) : null,
+        dataFim:    r.dataFim    ? toDateStr(r.dataFim)    : null,
+      }));
     }),
 
   salvarAtividades: protectedProcedure

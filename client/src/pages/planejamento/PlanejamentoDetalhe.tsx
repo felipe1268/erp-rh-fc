@@ -621,6 +621,7 @@ export default function PlanejamentoDetalhe() {
             refisLista={refisLista}
             revisaoAtiva={revisaoAtiva}
             curvaData={curvaData}
+            curvaMedicoes={curvaMedicoes}
             utils={utils}
             fmt={fmt}
             fPct={fPct}
@@ -7685,7 +7686,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, utils, fmt, fPct: fPct_, isAdminMaster, initialSemana, onInitialSemanaConsumed, onSemanaChange }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, initialSemana, onInitialSemanaConsumed, onSemanaChange }: any) {
   const [semana, setSemanaRaw] = useState(() => toMonday(new Date()));
   const setSemana = (s: string) => { setSemanaRaw(s); onSemanaChange?.(s); };
   const [obs, setObs] = useState("");

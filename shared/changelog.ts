@@ -3570,4 +3570,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 595,
+    titulo: "Planejamento: correção de REFIS crash e Avanço Semanal zerado",
+    descricao: "1) REFIS: corrigido ReferenceError 'curvaMedicoes is not defined' — prop curvaMedicoes não estava sendo passada do componente pai ao Refis; adicionada à invocação e à assinatura da função com default []. 2) Avanço Semanal: corrigido bug onde 'Previsto (Semana)' e 'Realizado (Acum.)' exibiam sempre 0.0% mesmo com atividades e avanços salvos. Causa-raiz: o driver pg do PostgreSQL retorna colunas 'date' como objetos Date, que ao serem concatenados com strings ('T12:00:00') geravam datas inválidas (NaN) no cálculo de interpolação linear. Fix: listarAtividades agora converte dataInicio e dataFim para strings 'YYYY-MM-DD' via toDateStr, consistente com o padrão já usado em listarAvancos.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];
