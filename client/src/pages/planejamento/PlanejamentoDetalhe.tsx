@@ -7705,6 +7705,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const cfFinHasBaseline  = curvaFinanceira.some((p: any) => p.baseline  != null);
   const cfFinHasPlanejada = curvaFinanceira.some((p: any) => p.planejada != null);
 
+  // Label correspondente à semana "hoje" para linha vertical no gráfico REFIS
+  const cfHojeLabel = useMemo(() => {
+    const hoje = new Date().toISOString().split("T")[0];
+    const row = (curvaFiltrada as any[]).find((r: any) => r.semana >= hoje);
+    return row?.label ?? null;
+  }, [curvaFiltrada]);
+
   // Desvio físico global (pp)
   const desvioFisico = avancoRealAtual - avancoPrevisto;
   // Desvio financeiro do mês (R$)
@@ -8497,62 +8504,64 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </div>
               </div>
               {/* Chart */}
-              <div className="px-5 py-4" style={{ height: 320 }}>
+              <div className="px-5 py-4" style={{ height: 360 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={curvaFiltrada} margin={{ top: 12, right: 40, bottom: curvaFiltrada.length > 10 ? 42 : 20, left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 50 : 20, left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10, fill: "#64748b" }}
-                      angle={curvaFiltrada.length > 10 ? -35 : 0}
-                      textAnchor={curvaFiltrada.length > 10 ? "end" : "middle"}
-                      height={curvaFiltrada.length > 10 ? 50 : 28}
-                      interval={Math.max(0, Math.floor(curvaFiltrada.length / 12) - 1)}
-                      axisLine={{ stroke: "#e2e8f0" }}
-                      tickLine={false}
+                      tick={{ fontSize: 10 }}
+                      angle={-30}
+                      textAnchor="end"
+                      height={50}
+                      interval={Math.max(0, Math.floor(curvaFiltrada.length / 10) - 1)}
                     />
-                    <YAxis
-                      domain={[0, 100]}
-                      tickFormatter={v => `${v}%`}
-                      tick={{ fontSize: 10, fill: "#64748b" }}
-                      width={42}
-                      axisLine={false}
-                      tickLine={false}
-                    />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
                     <Tooltip
                       content={({ payload, label }: any) => {
                         if (!payload?.length) return null;
                         const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
                         const base = get("baseline"); const plan = get("planejada"); const real = get("realizada"); const tend = get("tendencia");
-                        const ref = plan ?? base;
-                        const desvio = ref != null && real != null ? (real as number) - (ref as number) : null;
+                        const desvBaseVsPlan = base != null && plan != null ? (plan as number) - (base as number) : null;
+                        const desvBaseVsReal = base != null && real != null ? (real as number) - (base as number) : null;
                         const row = curvaFiltrada.find((r: any) => r.label === label);
                         const [y, m, d] = String(row?.semana ?? "").split("-");
                         return (
-                          <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[190px]">
-                            <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">
-                              {label}{row?.semana ? ` · ${d}/${m}/${y}` : ""}
-                            </p>
-                            {base  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Baseline</span><strong>{Number(base).toFixed(1)}%</strong></p>}
-                            {plan  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#ef4444" }}>Revisão Atual</span><strong>{Number(plan).toFixed(1)}%</strong></p>}
-                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado</span><strong>{Number(real).toFixed(1)}%</strong></p>}
-                            {tend  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#16a34a" }}>Tendência</span><strong>{Number(tend).toFixed(1)}%</strong></p>}
-                            {desvio != null && (
-                              <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                <span>Desvio</span><span>{desvio >= 0 ? "+" : ""}{desvio.toFixed(1)}%</span>
-                              </p>
+                          <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-[210px]">
+                            <p className="font-semibold text-slate-700 mb-2">{label}{row?.semana ? ` (${d}/${m}/${y})` : ""}</p>
+                            {base  != null && <p style={{ color: "#1e40af" }}>Baseline : <strong>{Number(base).toFixed(1)}%</strong></p>}
+                            {plan  != null && <p style={{ color: "#ef4444" }}>Revisão Atual : <strong>{Number(plan).toFixed(1)}%</strong></p>}
+                            {real  != null && <p style={{ color: "#22c55e" }}>Realizado : <strong>{Number(real).toFixed(1)}%</strong></p>}
+                            {tend  != null && <p style={{ color: "#16a34a" }}>Tendência : <strong>{Number(tend).toFixed(1)}%</strong></p>}
+                            {(desvBaseVsPlan != null || desvBaseVsReal != null) && (
+                              <div className="mt-2 pt-2 border-t border-slate-100 space-y-0.5">
+                                {desvBaseVsPlan != null && (
+                                  <p className={`font-semibold ${desvBaseVsPlan >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                    ↔ Atual vs Baseline: {desvBaseVsPlan >= 0 ? "+" : ""}{desvBaseVsPlan.toFixed(1)}%
+                                  </p>
+                                )}
+                                {desvBaseVsReal != null && (
+                                  <p className={`font-semibold ${desvBaseVsReal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                    ↔ Realizado vs Baseline: {desvBaseVsReal >= 0 ? "+" : ""}{desvBaseVsReal.toFixed(1)}%
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </div>
                         );
                       }}
                     />
+                    {cfHojeLabel && (
+                      <ReferenceLine x={cfHojeLabel} stroke="#94a3b8" strokeDasharray="2 2"
+                        label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
+                    )}
                     <ReferenceLine y={avancoPrevisto}  stroke="#ef4444" strokeDasharray="5 4" strokeWidth={1}
                       label={{ value: `${avancoPrevisto.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
                     <ReferenceLine y={avancoRealAtual} stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
                       label={{ value: `${avancoRealAtual.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
                     {cfHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
                     {cfHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
-                    <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4, fill: "#22c55e", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
+                    <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
                     <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -8610,26 +8619,22 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </div>
               </div>
               {/* Chart */}
-              <div className="px-5 py-4" style={{ height: 320 }}>
+              <div className="px-5 py-4" style={{ height: 360 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={curvaFinanceira} margin={{ top: 12, right: 78, bottom: curvaFinanceira.length > 10 ? 42 : 20, left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <LineChart data={curvaFinanceira} margin={{ top: 5, right: 90, bottom: curvaFinanceira.length > 10 ? 50 : 20, left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10, fill: "#64748b" }}
-                      angle={curvaFinanceira.length > 10 ? -35 : 0}
-                      textAnchor={curvaFinanceira.length > 10 ? "end" : "middle"}
-                      height={curvaFinanceira.length > 10 ? 50 : 28}
-                      interval={Math.max(0, Math.floor(curvaFinanceira.length / 12) - 1)}
-                      axisLine={{ stroke: "#e2e8f0" }}
-                      tickLine={false}
+                      tick={{ fontSize: 10 }}
+                      angle={-30}
+                      textAnchor="end"
+                      height={50}
+                      interval={Math.max(0, Math.floor(curvaFinanceira.length / 10) - 1)}
                     />
                     <YAxis
                       tickFormatter={finTickFmt}
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10 }}
                       width={90}
-                      axisLine={false}
-                      tickLine={false}
                     />
                     <Tooltip
                       content={({ payload, label }: any) => {
@@ -8659,13 +8664,17 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                         );
                       }}
                     />
+                    {cfHojeLabel && (
+                      <ReferenceLine x={cfHojeLabel} stroke="#94a3b8" strokeDasharray="2 2"
+                        label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
+                    )}
                     <ReferenceLine y={prevAcumFin}  stroke="#ef4444" strokeDasharray="5 4" strokeWidth={1}
                       label={{ value: finTickFmt(prevAcumFin),  position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
                     <ReferenceLine y={realAcumFin}  stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
                       label={{ value: finTickFmt(realAcumFin), position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
                     {cfFinHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
                     {cfFinHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
-                    <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4, fill: "#22c55e", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
+                    <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
                     <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
                   </LineChart>
                 </ResponsiveContainer>
