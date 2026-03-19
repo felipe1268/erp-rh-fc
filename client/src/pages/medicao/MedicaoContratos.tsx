@@ -229,35 +229,35 @@ export default function MedicaoContratos() {
       </div>
 
       <Dialog open={modalAberto} onOpenChange={open => { setModalAberto(open); if (!open) resetForm(); }}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden">
+        <DialogContent className="max-w-3xl p-0 overflow-hidden">
           {/* Header com gradiente */}
-          <div className="bg-gradient-to-r from-[#0f2744] to-[#1a3a5c] px-6 py-4">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center flex-shrink-0">
-                <FileText className="h-4.5 w-4.5 text-white" />
+          <div className="bg-gradient-to-r from-[#0f2744] to-[#1a3a5c] px-8 py-5">
+            <div className="flex items-center gap-4">
+              <div className="h-11 w-11 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center flex-shrink-0">
+                <FileText className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-white leading-tight">Novo Contrato de Medição</h2>
-                <p className="text-xs text-blue-200/70 mt-0.5">Preencha os dados do contrato para iniciar os boletins</p>
+                <h2 className="text-lg font-semibold text-white leading-tight">Novo Contrato de Medição</h2>
+                <p className="text-sm text-blue-200/70 mt-0.5">Preencha os dados do contrato para iniciar os boletins</p>
               </div>
             </div>
           </div>
 
-          <div className="px-6 py-4">
+          <div className="px-8 py-6">
             {/* Layout 2 colunas: esquerda = Identificação | direita = Valores + Deduções */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            <div className="grid grid-cols-2 gap-x-10 gap-y-5">
 
               {/* ---- COLUNA ESQUERDA: Identificação ---- */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pb-1 border-b border-gray-100">
-                  <Building2 className="h-3.5 w-3.5 text-gray-400" />
+              <div className="space-y-5">
+                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                  <Building2 className="h-4 w-4 text-gray-400" />
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Identificação</span>
                 </div>
 
                 <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1.5 block">Projeto / Obra <span className="text-red-500">*</span></Label>
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">Projeto / Obra <span className="text-red-500">*</span></Label>
                   <Select value={form.projetoId} onValueChange={handleProjetoSelect}>
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-10 text-sm">
                       <SelectValue placeholder="Selecione o projeto..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -269,7 +269,7 @@ export default function MedicaoContratos() {
                     </SelectContent>
                   </Select>
                   {projetosDisponiveis.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
+                    <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
                       <AlertCircle className="h-3 w-3" />
                       Todos os projetos já possuem contrato ou não há projetos cadastrados.
                     </p>
@@ -277,9 +277,9 @@ export default function MedicaoContratos() {
                 </div>
 
                 <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1.5 block">Critério de Medição</Label>
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">Critério de Medição</Label>
                   <Select value={form.criterio} onValueChange={v => setForm(f => ({ ...f, criterio: v }))}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="avanco_fisico">
                         <div className="flex items-center gap-2">
@@ -298,13 +298,13 @@ export default function MedicaoContratos() {
                 </div>
 
                 {/* Observações na coluna esquerda (abaixo) */}
-                <div className="space-y-2 pt-1">
-                  <div className="flex items-center gap-2 pb-1 border-b border-gray-100">
-                    <StickyNote className="h-3.5 w-3.5 text-gray-400" />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <StickyNote className="h-4 w-4 text-gray-400" />
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Observações</span>
                   </div>
                   <Textarea
-                    className="text-sm resize-none h-[80px]"
+                    className="text-sm resize-none h-[120px]"
                     placeholder="Condições especiais, observações gerais..."
                     value={form.observacoes}
                     onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
@@ -313,24 +313,24 @@ export default function MedicaoContratos() {
               </div>
 
               {/* ---- COLUNA DIREITA: Valores + Deduções ---- */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pb-1 border-b border-gray-100">
-                  <DollarSign className="h-3.5 w-3.5 text-gray-400" />
+              <div className="space-y-5">
+                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                  <DollarSign className="h-4 w-4 text-gray-400" />
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Valores Contratuais</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
                       Valor Total do Contrato
                       {form.valorTotalContrato && (
                         <span className="text-[10px] text-emerald-600 font-normal normal-case">• do orçamento</span>
                       )}
                     </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">R$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">R$</span>
                       <Input
-                        className="h-9 text-sm pl-8"
+                        className="h-10 text-sm pl-9"
                         placeholder="0,00"
                         value={form.valorTotalContrato}
                         onChange={e => setForm(f => ({ ...f, valorTotalContrato: e.target.value }))}
@@ -342,11 +342,11 @@ export default function MedicaoContratos() {
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs font-medium text-gray-700 mb-1.5 block">Sinal Recebido</Label>
+                    <Label className="text-sm font-medium text-gray-700 mb-2 block">Sinal Recebido</Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">R$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">R$</span>
                       <Input
-                        className="h-9 text-sm pl-8"
+                        className="h-10 text-sm pl-9"
                         placeholder="0,00"
                         value={form.valorSinalRecebido}
                         onChange={e => setForm(f => ({ ...f, valorSinalRecebido: e.target.value }))}
@@ -359,50 +359,50 @@ export default function MedicaoContratos() {
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-1">
-                  <div className="flex items-center gap-2 pb-1 border-b border-gray-100">
-                    <Percent className="h-3.5 w-3.5 text-gray-400" />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <Percent className="h-4 w-4 text-gray-400" />
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Deduções por Medição</span>
                   </div>
 
-                  <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
-                    <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label className="text-xs font-medium text-gray-700 mb-1.5 block">% Desconto de Sinal</Label>
+                        <Label className="text-sm font-medium text-gray-700 mb-2 block">% Desconto de Sinal</Label>
                         <div className="relative">
                           <Input
-                            className="h-9 text-sm pr-7 bg-white"
+                            className="h-10 text-sm pr-8 bg-white"
                             placeholder="ex: 1.00"
                             value={form.percentualSinal}
                             onChange={e => setForm(f => ({ ...f, percentualSinal: e.target.value }))}
                           />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
                         </div>
                       </div>
                       <div>
-                        <Label className="text-xs font-medium text-gray-700 mb-1.5 block">% Retenção de Garantia</Label>
+                        <Label className="text-sm font-medium text-gray-700 mb-2 block">% Retenção de Garantia</Label>
                         <div className="relative">
                           <Input
-                            className="h-9 text-sm pr-7 bg-white"
+                            className="h-10 text-sm pr-8 bg-white"
                             placeholder="opcional"
                             value={form.percentualRetencao}
                             onChange={e => setForm(f => ({ ...f, percentualRetencao: e.target.value }))}
                           />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
                         </div>
                       </div>
                     </div>
-                    <p className="text-[10px] text-amber-700 mt-2 leading-snug">Descontados automaticamente em cada boletim de medição gerado.</p>
+                    <p className="text-xs text-amber-700 mt-3 leading-snug">Descontados automaticamente em cada boletim de medição gerado.</p>
                   </div>
 
                   <div>
-                    <Label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                    <Label className="text-sm font-medium text-gray-700 mb-2 block">
                       Valor Mínimo para FD — Faturamento Direto
                     </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">R$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">R$</span>
                       <Input
-                        className="h-9 text-sm pl-8"
+                        className="h-10 text-sm pl-9"
                         placeholder="0,00"
                         value={form.valorMinimoFd}
                         onChange={e => setForm(f => ({ ...f, valorMinimoFd: e.target.value }))}
@@ -419,26 +419,24 @@ export default function MedicaoContratos() {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-3 bg-gray-50 border-t flex items-center justify-between gap-3">
-            <p className="text-xs text-gray-400">Campos com <span className="text-red-500">*</span> são obrigatórios</p>
-            <div className="flex gap-2">
+          <div className="px-8 py-4 bg-gray-50 border-t flex items-center justify-between gap-3">
+            <p className="text-sm text-gray-400">Campos com <span className="text-red-500">*</span> são obrigatórios</p>
+            <div className="flex gap-3">
               <Button
                 variant="outline"
-                size="sm"
-                className="h-9"
+                className="h-10 px-5"
                 onClick={() => { setModalAberto(false); resetForm(); }}
               >
                 Cancelar
               </Button>
               <Button
-                size="sm"
-                className="h-9 bg-[#0f2744] hover:bg-[#1a3a5c] text-white gap-1.5"
+                className="h-10 px-5 bg-[#0f2744] hover:bg-[#1a3a5c] text-white gap-2"
                 onClick={handleCriar}
                 disabled={!form.projetoId || criarMutation.isPending}
               >
                 {criarMutation.isPending
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <Plus className="h-3.5 w-3.5" />
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Plus className="h-4 w-4" />
                 }
                 Criar Contrato
               </Button>

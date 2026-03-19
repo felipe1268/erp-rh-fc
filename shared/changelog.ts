@@ -3552,4 +3552,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 593,
+    titulo: "Medição de Contratos: modal Novo Contrato ampliado",
+    descricao: "Modal 'Novo Contrato de Medição' expandido de max-w-2xl para max-w-3xl. Padding interno aumentado (px-8 py-6), espaçamento entre colunas ampliado (gap-x-10), inputs com altura h-10, labels em text-sm, textarea maior (h-120px), botões do footer maiores e sem compressão.",
+    tipo: "melhoria",
+    modulos: "Medição de Contratos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];
