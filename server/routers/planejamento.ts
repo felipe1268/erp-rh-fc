@@ -951,6 +951,26 @@ export const planejamentoRouter = router({
       return resultado;
     }),
 
+  // ── Curva S de Faturamento Real (medições aprovadas acumuladas) ──────────
+  getCurvaMedicoes: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const meds = await db.select().from(planejamentoMedicoes)
+        .where(eq(planejamentoMedicoes.projetoId, input.projetoId))
+        .orderBy(asc(planejamentoMedicoes.competencia));
+      let acumulado = 0;
+      return meds.map(m => {
+        acumulado += n(m.valorMedido);
+        return {
+          competencia:    m.competencia,        // "YYYY-MM"
+          valorMedido:    n(m.valorMedido),
+          valorAcumulado: +acumulado.toFixed(2),
+          status:         m.status ?? "pendente",
+        };
+      });
+    }),
+
   // ── Cronograma de Compras ──────────────────────────────────────────────────
   listarCompras: protectedProcedure
     .input(z.object({ projetoId: z.number(), revisao: z.number().optional() }))

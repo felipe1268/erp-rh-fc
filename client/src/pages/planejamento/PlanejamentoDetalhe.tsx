@@ -307,6 +307,11 @@ export default function PlanejamentoDetalhe() {
     { enabled: !!revisaoAtiva }
   );
 
+  const { data: curvaMedicoes = [] } = trpc.planejamento.getCurvaMedicoes.useQuery(
+    { projetoId },
+    { enabled: !!projetoId }
+  );
+
   // ── Avanço atual (média ponderada das atividades folha) ───────────────────
   const avancosMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -7705,6 +7710,38 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const cfFinHasBaseline  = curvaFinanceira.some((p: any) => p.baseline  != null);
   const cfFinHasPlanejada = curvaFinanceira.some((p: any) => p.planejada != null);
 
+  // Faturamento Real acumulado — merge das medições mensais na curva semanal
+  const curvaFinanceiraFull = useMemo(() => {
+    if (!(curvaMedicoes as any[]).length) return curvaFinanceira;
+    // mapa competencia ("YYYY-MM") → valorAcumulado
+    const medMap: Record<string, number> = {};
+    (curvaMedicoes as any[]).forEach((m: any) => { medMap[m.competencia] = m.valorAcumulado; });
+    // Competencias disponíveis ordenadas
+    const comps = Object.keys(medMap).sort();
+    return curvaFinanceira.map((row: any) => {
+      if (!row.semana) return row;
+      const rowComp = String(row.semana).substring(0, 7); // "YYYY-MM"
+      // Última competência <= competência desta semana
+      const applicable = comps.filter(c => c <= rowComp);
+      if (!applicable.length) return row;
+      const lastComp = applicable[applicable.length - 1];
+      return { ...row, faturado: medMap[lastComp] };
+    });
+  }, [curvaFinanceira, curvaMedicoes]);
+
+  const cfHasFaturado = (curvaFinanceiraFull as any[]).some((p: any) => p.faturado != null);
+
+  // Faturado acumulado até a semana do REFIS
+  const faturadoAcumulado = useMemo(() => {
+    const semanaRefis = semana;
+    const meds = (curvaMedicoes as any[]);
+    if (!meds.length) return 0;
+    const refisComp = String(semanaRefis).substring(0, 7);
+    let acum = 0;
+    meds.forEach((m: any) => { if (m.competencia <= refisComp) acum = m.valorAcumulado; });
+    return acum;
+  }, [curvaMedicoes, semana]);
+
   // Label correspondente à semana "hoje" para linha vertical no gráfico REFIS
   const cfHojeLabel = useMemo(() => {
     const hoje = new Date().toISOString().split("T")[0];
@@ -8576,7 +8613,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         const prevAcumFin  = totalContrato * avancoPrevisto  / 100;
         const realAcumFin  = totalContrato * avancoRealAtual / 100;
         const desvioFin    = realAcumFin - prevAcumFin;
-        const maxFin       = Math.max(...curvaFinanceira.map((r: any) => r.baseline ?? 0), ...curvaFinanceira.map((r: any) => r.planejada ?? 0), ...curvaFinanceira.map((r: any) => r.realizada ?? 0), ...curvaFinanceira.map((r: any) => r.tendencia ?? 0));
+        const desvioFatVsReal = cfHasFaturado ? faturadoAcumulado - realAcumFin : null;
+        const maxFin       = Math.max(...(curvaFinanceiraFull as any[]).map((r: any) => r.baseline ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.planejada ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.realizada ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.tendencia ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.faturado ?? 0));
         const finTickFmt   = (v: number) => v === 0 ? "0" : v.toLocaleString("pt-BR");
         return (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -8587,7 +8625,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
               {cfFinHasBaseline  && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} /> Baseline</span>}
               {cfFinHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Revisão Atual</span>}
-              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Realizado</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Realizado (Físico×Contrato)</span>
+              {cfHasFaturado && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#7c3aed" }} /> Faturado Real</span>}
               <span className="flex items-center gap-1.5">
                 <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 2" /></svg>
                 Tendência
@@ -8598,7 +8637,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           {!colBloco3B && (
             <>
               {/* KPI strip */}
-              <div className="grid grid-cols-4 divide-x divide-slate-100 border-b border-slate-100">
+              <div className={`grid divide-x divide-slate-100 border-b border-slate-100 ${cfHasFaturado ? "grid-cols-5" : "grid-cols-4"}`}>
                 <div className="px-4 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Contrato Total</p>
                   <p className="text-base font-bold text-slate-700">{fmt(totalContrato)}</p>
@@ -8608,20 +8647,34 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   <p className="text-base font-bold text-red-600">{fmt(prevAcumFin)}</p>
                 </div>
                 <div className="px-4 py-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Realizado Acumulado</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Realizado (Físico)</p>
                   <p className="text-base font-bold text-emerald-700">{fmt(realAcumFin)}</p>
                 </div>
+                {cfHasFaturado && (
+                  <div className="px-4 py-3 text-center">
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturado Real</p>
+                    <p className="text-base font-bold" style={{ color: "#7c3aed" }}>{fmt(faturadoAcumulado)}</p>
+                  </div>
+                )}
                 <div className="px-4 py-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Desvio Financeiro</p>
-                  <p className={`text-base font-bold ${desvioFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {desvioFin >= 0 ? "+" : ""}{fmt(desvioFin)}
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">
+                    {cfHasFaturado ? "Fat. vs Físico" : "Desvio Financeiro"}
                   </p>
+                  {cfHasFaturado && desvioFatVsReal != null ? (
+                    <p className={`text-base font-bold ${desvioFatVsReal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {desvioFatVsReal >= 0 ? "+" : ""}{fmt(desvioFatVsReal)}
+                    </p>
+                  ) : (
+                    <p className={`text-base font-bold ${desvioFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {desvioFin >= 0 ? "+" : ""}{fmt(desvioFin)}
+                    </p>
+                  )}
                 </div>
               </div>
               {/* Chart */}
               <div className="px-5 py-4" style={{ height: 360 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={curvaFinanceira} margin={{ top: 5, right: 90, bottom: curvaFinanceira.length > 10 ? 50 : 20, left: 10 }}>
+                  <LineChart data={curvaFinanceiraFull as any[]} margin={{ top: 5, right: 90, bottom: (curvaFinanceiraFull as any[]).length > 10 ? 50 : 20, left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis
                       dataKey="label"
@@ -8629,7 +8682,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       angle={-30}
                       textAnchor="end"
                       height={50}
-                      interval={Math.max(0, Math.floor(curvaFinanceira.length / 10) - 1)}
+                      interval={Math.max(0, Math.floor((curvaFinanceiraFull as any[]).length / 10) - 1)}
                     />
                     <YAxis
                       tickFormatter={finTickFmt}
@@ -8640,22 +8693,29 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       content={({ payload, label }: any) => {
                         if (!payload?.length) return null;
                         const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
-                        const base = get("baseline"); const plan = get("planejada"); const real = get("realizada"); const tend = get("tendencia");
+                        const base = get("baseline"); const plan = get("planejada"); const real = get("realizada"); const fat = get("faturado"); const tend = get("tendencia");
                         const ref = plan ?? base;
                         const desvio = ref != null && real != null ? (real as number) - (ref as number) : null;
-                        const row = curvaFinanceira.find((r: any) => r.label === label);
+                        const desvioFatR = fat != null && real != null ? (fat as number) - (real as number) : null;
+                        const row = (curvaFinanceiraFull as any[]).find((r: any) => r.label === label);
                         const [y, m, d] = String(row?.semana ?? "").split("-");
                         const brl = (v: any) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
                         return (
-                          <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[220px]">
+                          <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[230px]">
                             <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">
                               {label}{row?.semana ? ` · ${d}/${m}/${y}` : ""}
                             </p>
                             {base  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Baseline</span><strong>{brl(base)}</strong></p>}
                             {plan  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#ef4444" }}>Revisão Atual</span><strong>{brl(plan)}</strong></p>}
-                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado</span><strong>{brl(real)}</strong></p>}
+                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado (Físico)</span><strong>{brl(real)}</strong></p>}
+                            {fat   != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#7c3aed" }}>Faturado Real</span><strong>{brl(fat)}</strong></p>}
                             {tend  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#16a34a" }}>Tendência</span><strong>{brl(tend)}</strong></p>}
-                            {desvio != null && (
+                            {desvioFatR != null && (
+                              <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvioFatR >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                <span>Fat. vs Físico</span><span>{desvioFatR >= 0 ? "+" : ""}{brl(desvioFatR)}</span>
+                              </p>
+                            )}
+                            {desvio != null && !desvioFatR && (
                               <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                                 <span>Desvio</span><span>{desvio >= 0 ? "+" : ""}{brl(desvio)}</span>
                               </p>
@@ -8676,6 +8736,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     {cfFinHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
                     <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
                     <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
+                    {cfHasFaturado && (
+                      <Line type="stepAfter" dataKey="faturado" stroke="#7c3aed" strokeWidth={2.5}
+                        dot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }} activeDot={{ r: 7 }}
+                        connectNulls name="faturado" />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>

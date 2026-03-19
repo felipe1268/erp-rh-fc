@@ -3391,6 +3391,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 576,
+    titulo: "REFIS Curva S Financeira — Linha Faturado Real (medições vs valor físico)",
+    descricao: "Adicionada linha 'Faturado Real' (roxo #7c3aed) na Curva S Financeira do REFIS. Backend: novo endpoint getCurvaMedicoes que busca planejamento_medicoes, acumula valorMedido por competência ('YYYY-MM') e retorna o acumulado. Frontend: query tRPC; curvaFinanceiraFull faz merge semanal (última competência <= semana da linha); linha stepAfter em roxo; KPI strip expande para 5 colunas exibindo 'Faturado Real' e 'Fat. vs Físico' (diferença entre faturado e realizado físico×contrato); legenda e tooltip atualizados com a nova linha. Comportamento: quando faturado > físico = overbilling (contrato com parcelas fixas recebe mais do que produziu); quando < = underbilling.",
+    tipo: "feature",
+    modulos: "Planejamento — REFIS",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 575,
     titulo: "REFIS Curva S — Idêntica à aba Curva S (timeline completo, Baseline + Revisão Atual)",
     descricao: "A Curva S Física e Financeira no REFIS agora usa a mesma lógica da aba dedicada Curva S: (1) Removido o filtro .slice(-16) que limitava a 16 semanas — agora exibe o projeto inteiro desde a Sem 01 até o fim; (2) Adicionadas as linhas Baseline (azul #1e40af) e Revisão Atual (vermelho #ef4444) além de Realizado (verde #22c55e) e Tendência (verde tracejado #16a34a), com flags cfHasBaseline/cfHasPlanejada para exibição condicional; (3) Legenda e tooltip atualizados com os 4 nomes corretos; (4) KPI strip renomeado de 'Acumulado Previsto' para 'Revisão Atual'; (5) Curva S Financeira: eixo Y agora exibe valores em formato numérico pt-BR completo (ex: 1.400.000) em vez de abreviações M/k; (6) Margem e largura do YAxis financeiro ampliadas para acomodar os números inteiros.",
