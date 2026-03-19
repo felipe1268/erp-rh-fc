@@ -3480,4 +3480,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 585,
+    titulo: "Curva Financeira Prevista respeita tipo de medição (Avanço Físico vs. Parcela Fixa)",
+    descricao: "O componente CronogramaFinanceiro agora carrega a configuração de medição do projeto (tipoMedicao, entrada, numeroParcelas, inicioFaturamento) para construir corretamente a distribuição mensal do 'Previsto'. Modo 'avanco': distribui a venda proporcionalmente ao avanço físico da obra (comportamento anterior). Modo 'parcela_fixa': distribui como entrada + N parcelas iguais a partir do mês de início do faturamento. Custo, meta, material e M.O. sempre seguem o avanço físico independente do modo. A curva S 'Prev.Acum%' reflete agora o calendário real de recebimento. Badge de modo exibido no título do gráfico (azul = Avanço Físico, âmbar = Parcela Fixa N×).",
+    tipo: "melhoria",
+    modulos: "Planejamento — Cronograma de Medições / Fluxo de Caixa",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];

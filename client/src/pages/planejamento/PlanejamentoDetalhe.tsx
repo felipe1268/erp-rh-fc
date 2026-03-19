@@ -6054,6 +6054,14 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const { data: medicoes = [], refetch } = trpc.planejamento.listarMedicoes.useQuery(
     { projetoId }, { enabled: !!projetoId });
 
+  // Configuração de medição: carregada aqui para que o "Previsto" reflita o tipo de pagamento
+  const { data: configMed } = trpc.planejamento.getConfigMedicao.useQuery(
+    { projetoId }, { enabled: !!projetoId });
+  const cfgTipo      = (configMed?.tipoMedicao as "avanco" | "parcela_fixa") ?? "avanco";
+  const cfgEntrada   = n(configMed?.entrada ?? 0);
+  const cfgParcelas  = configMed?.numeroParcelas ?? 6;
+  const cfgInicioFat = configMed?.inicioFaturamento ? String(configMed.inicioFaturamento).substring(0, 7) : "";
+
   const cfUtils = trpc.useUtils();
   const salvarMut  = trpc.planejamento.salvarMedicao.useMutation({ onSuccess: () => {
     refetch();
@@ -6066,7 +6074,10 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
     cfUtils.planejamento.getCurvaMedicoes.invalidate({ projetoId });
   }});
 
-  // Distribui os 3 cenários mensalmente
+  // Distribui os 3 cenários mensalmente.
+  // Para "avanco": distribui venda proporcionalmente ao avanço físico (dias de cada item no mês).
+  // Para "parcela_fixa": distribui venda como parcelas fixas conforme configuração de medição.
+  // Em ambos os casos, custo/meta/mat/mdo seguem sempre o avanço físico.
   const dadosMensais = useMemo(() => {
     const itens = cruzamento?.itens ?? [];
     if (itens.length === 0) return [];
@@ -6122,8 +6133,37 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
     const bdiComissaoPct = bdi.comissao    ?? 0;
     const bdiLucroPct    = bdi.lucro       ?? 0;
 
+    // ── Distribuição de VENDA por tipo de medição ─────────────────────────
+    // Monta um mapa mes -> venda para ser usado abaixo.
+    // "avanco": distribui proporcionalmente ao progresso físico (já calculado em meses).
+    // "parcela_fixa": distribui conforme o calendário de faturamento configurado.
+    const vendaByMes: Record<string, number> = {};
+
+    if (cfgTipo === "parcela_fixa") {
+      const totalVenda = tV > 0 ? tV : (sV > 0 ? sV : 0);
+      const saldoParcelar = Math.max(0, totalVenda - cfgEntrada);
+      const valorParcela  = cfgParcelas > 0 ? saldoParcelar / cfgParcelas : 0;
+      const inicioMes     = cfgInicioFat || priData;
+      meses.forEach(x => {
+        if (x.mes === inicioMes) {
+          vendaByMes[x.mes] = cfgEntrada;
+        } else if (x.mes > inicioMes) {
+          const startDate = new Date(inicioMes + "-01");
+          const thisDate  = new Date(x.mes + "-01");
+          const diffM = (thisDate.getFullYear() - startDate.getFullYear()) * 12
+                      + (thisDate.getMonth() - startDate.getMonth());
+          vendaByMes[x.mes] = (diffM >= 1 && diffM <= cfgParcelas) ? valorParcela : 0;
+        } else {
+          vendaByMes[x.mes] = 0;
+        }
+      });
+    } else {
+      // Avanço físico: usa a distribuição linear por dias já calculada (com escala)
+      meses.forEach(x => { vendaByMes[x.mes] = x.venda * fcV; });
+    }
+
     return meses.map(x => {
-      const venda  = x.venda * fcV;
+      const venda  = vendaByMes[x.mes] ?? 0;
       const custo  = x.custo * fcC;
       const meta   = x.meta  * fcM;
       const mat    = x.mat   * fcMat;
@@ -6140,7 +6180,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
       const margemMeta = venda - meta;
       return { mes: x.mes, nomeMes: x.nomeMes, venda, meta, custo, mat, mdo, admCentral, impostos, risco, comissao, custoTotal, lucro, margemMeta };
     });
-  }, [cruzamento]);
+  }, [cruzamento, cfgTipo, cfgEntrada, cfgParcelas, cfgInicioFat]);
 
   // Junta com medições
   const rows = useMemo(() => {
@@ -6307,9 +6347,16 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-sm font-semibold text-slate-700">
-                {cenario === "lucro" ? "Análise de Lucro Previsto × Realizado" : `Cenário ${cen.label} — Previsto × Realizado`}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-slate-700">
+                  {cenario === "lucro" ? "Análise de Lucro Previsto × Realizado" : `Cenário ${cen.label} — Previsto × Realizado`}
+                </p>
+                {configMed && (
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${cfgTipo === "parcela_fixa" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                    {cfgTipo === "parcela_fixa" ? `Parcela Fixa (${cfgParcelas}×)` : "Avanço Físico"}
+                  </span>
+                )}
+              </div>
               <p className="text-[10px] text-slate-400">Barras = valores mensais (eixo esq.) · Linhas = acumulado % (eixo dir.)</p>
             </div>
           </div>
