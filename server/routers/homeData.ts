@@ -486,12 +486,16 @@ export const homeDataRouter = router({
       const experienciasAtencao = experiencias.filter((e: any) => e.urgencia === 'atencao').length;
 
       // ============================================================
-      // 10b. AVISOS PRÉVIOS EM ANDAMENTO
+      // 10b. AVISOS PRÉVIOS EM ANDAMENTO + AGUARDANDO PAGAMENTO
       // ============================================================
+      // Inclui 'em_andamento' (período em curso) E 'aguardando_pagamento'
+      // (período encerrado mas rescisão ainda não paga — dataBaixa IS NULL).
+      // Ambos representam desembolso financeiro pendente para a empresa.
       const avisosAtivos = await db.select().from(terminationNotices)
         .where(and(
           companyFilter(terminationNotices.companyId, input),
-          eq(terminationNotices.status, 'em_andamento'),
+          sql`${terminationNotices.status} IN ('em_andamento', 'aguardando_pagamento')`,
+          sql`${terminationNotices.dataBaixa} IS NULL`,
           sql`${terminationNotices.deletedAt} IS NULL`,
         ));
 
@@ -500,6 +504,7 @@ export const homeDataRouter = router({
         const dataFimStr = toDateStr(a.dataFim!);
         const dataFim = new Date(dataFimStr + 'T00:00:00');
         const diasRestantes = Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+        const aguardando = a.status === 'aguardando_pagamento';
         return {
           id: a.id,
           employeeId: a.employeeId,
@@ -510,9 +515,17 @@ export const homeDataRouter = router({
           dataFim: dataFimStr,
           diasRestantes,
           valorEstimado: a.valorEstimadoTotal,
-          urgencia: diasRestantes <= 0 ? 'vencido' : diasRestantes <= 3 ? 'critico' : diasRestantes <= 7 ? 'urgente' : 'normal',
+          status: a.status,
+          urgencia: aguardando
+            ? 'aguardando_pagamento'
+            : diasRestantes <= 0 ? 'vencido' : diasRestantes <= 3 ? 'critico' : diasRestantes <= 7 ? 'urgente' : 'normal',
         };
-      }).sort((a, b) => a.diasRestantes - b.diasRestantes);
+      }).sort((a, b) => {
+        // em_andamento vencendo primeiro, depois aguardando_pagamento
+        if (a.urgencia === 'aguardando_pagamento' && b.urgencia !== 'aguardando_pagamento') return 1;
+        if (b.urgencia === 'aguardando_pagamento' && a.urgencia !== 'aguardando_pagamento') return -1;
+        return a.diasRestantes - b.diasRestantes;
+      });
 
       // ============================================================
       // 11. STATS CONSOLIDADOS
@@ -553,8 +566,9 @@ export const homeDataRouter = router({
         experienciasVencidas,
         experienciasUrgentes,
         experienciasAtencao,
-        avisosPreviosAtivos: avisosPrevios.length,
+        avisosPreviosAtivos: avisosPrevios.filter(a => a.urgencia !== 'aguardando_pagamento').length,
         avisosPreviosVencendo: avisosPrevios.filter(a => a.urgencia === 'critico' || a.urgencia === 'vencido').length,
+        avisosPreviosAguardando: avisosPrevios.filter(a => a.urgencia === 'aguardando_pagamento').length,
       };
 
       return {

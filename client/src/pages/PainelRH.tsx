@@ -270,23 +270,26 @@ export default function PainelRH() {
               {/* Card de Avisos Prévios em Andamento */}
               {canSeeAvisoPrevio && (homeData?.avisosPrevios?.length ?? 0) > 0 && (() => {
                 const avisosValidos = homeData!.avisosPrevios.filter((a: any) => a.nome && a.nome !== 'Funcionário' && a.nome !== 'Funcionário excluído');
-                const totalValorEstimado = homeData!.avisosPrevios.reduce((acc: number, a: any) => acc + (parseFloat(a.valorEstimado) || 0), 0);
+                const emAndamento = avisosValidos.filter((a: any) => a.urgencia !== 'aguardando_pagamento');
+                const aguardandoPgto = avisosValidos.filter((a: any) => a.urgencia === 'aguardando_pagamento');
+                const totalValorEstimado = avisosValidos.reduce((acc: number, a: any) => acc + (parseFloat(a.valorEstimado) || 0), 0);
                 return avisosValidos.length > 0 && (
                 <Card className="border-2 border-red-300 bg-gradient-to-r from-red-50 to-orange-50">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm flex items-center gap-2">
+                      <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
                         <FileText className="h-4 w-4 text-red-600" />
                         Avisos Prévios em Andamento
-                        <Badge variant="destructive" className="text-[10px]">{avisosValidos.length} ativo{avisosValidos.length !== 1 ? 's' : ''}</Badge>
+                        {emAndamento.length > 0 && <Badge variant="destructive" className="text-[10px]">{emAndamento.length} ativo{emAndamento.length !== 1 ? 's' : ''}</Badge>}
                         {(s?.avisosPreviosVencendo ?? 0) > 0 && <Badge className="bg-red-600 text-white text-[10px] animate-pulse">{s!.avisosPreviosVencendo} vencendo!</Badge>}
+                        {aguardandoPgto.length > 0 && <Badge className="bg-amber-500 text-white text-[10px]">{aguardandoPgto.length} aguard. pgto</Badge>}
                       </CardTitle>
                       <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate('/aviso-previo')}>Ver todos <ChevronRight className="h-3 w-3 ml-1" /></Button>
                     </div>
                     {canSeeValues && totalValorEstimado > 0 && (
                       <div className="mt-2 flex items-center gap-2 bg-red-100/60 rounded-lg px-3 py-2">
                         <DollarSign className="h-4 w-4 text-red-600" />
-                        <span className="text-xs text-red-700">Valor total estimado:</span>
+                        <span className="text-xs text-red-700">Desembolso pendente (sem baixa):</span>
                         <span className="text-sm font-bold text-red-700">R$ {totalValorEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     )}
@@ -295,8 +298,10 @@ export default function PainelRH() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                       {avisosValidos.map((a: any) => {
                         const tipoLabel = a.tipo === 'empregador_trabalhado' ? 'Emp. Trabalhado' : a.tipo === 'empregador_indenizado' ? 'Emp. Indenizado' : a.tipo === 'empregado_trabalhado' ? 'Ped. Trabalhado' : 'Ped. Indenizado';
+                        const isAguardando = a.urgencia === 'aguardando_pagamento';
                         return (
                           <div key={a.id} onClick={() => setSelectedAvisoId(a.id)} className={`p-3 rounded-lg border cursor-pointer hover:shadow-md transition-shadow ${
+                            isAguardando ? 'bg-amber-50 border-amber-300' :
                             a.urgencia === 'vencido' ? 'bg-red-100 border-red-300 animate-pulse' :
                             a.urgencia === 'critico' ? 'bg-red-50 border-red-200' :
                             a.urgencia === 'urgente' ? 'bg-orange-50 border-orange-200' :
@@ -305,12 +310,13 @@ export default function PainelRH() {
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-xs font-bold text-foreground">{a.nome}</span>
                               <Badge className={`text-[9px] ${
+                                isAguardando ? 'bg-amber-500 text-white' :
                                 a.urgencia === 'vencido' ? 'bg-red-600 text-white' :
                                 a.urgencia === 'critico' ? 'bg-red-500 text-white' :
                                 a.urgencia === 'urgente' ? 'bg-orange-500 text-white' :
                                 'bg-blue-100 text-blue-700'
                               }`}>
-                                {a.diasRestantes <= 0 ? 'VENCIDO!' : `${a.diasRestantes}d restantes`}
+                                {isAguardando ? 'Aguard. Pgto' : a.diasRestantes <= 0 ? 'VENCIDO!' : `${a.diasRestantes}d restantes`}
                               </Badge>
                             </div>
                             <p className="text-[10px] text-muted-foreground">{a.funcao} · {tipoLabel}</p>
