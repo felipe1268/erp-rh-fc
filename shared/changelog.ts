@@ -3589,6 +3589,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 603,
+    titulo: "Planejamento: Curva S — correção definitiva da geração para cronogramas com 1900+ atividades",
+    descricao: "Corrigido bug na função gerarCurvaPlanejada que em alguns cenários retornava vazio (exibindo 'Sem dados suficientes') mesmo com 1512 atividades-folha com datas válidas. Causa raiz: (1) o cálculo de duração usava Math.round(...)+1 em vez de Math.ceil, causando um off-by-one que sobre-contava semanas em atividades que terminam exatamente na segunda-feira de início da próxima semana, gerando semPeso negativo ou incorreto e corrompendo o acumulado; (2) datas inválidas podiam lançar exceção em toMondayStr() derrubando toda a query silenciosamente. Fixes: (a) dur agora usa Math.ceil((fimSeg-inicioSeg)/7dias) — matematicamente correto; (b) isNaN() protege contra datas inválidas — atividade é simplesmente ignorada; (c) função parseDate centralizada usa 'YYYY-MM-DDT12:00:00Z' para evitar desvio de fuso horário em qualquer ambiente UTC-X; (d) getCurvasTodasRevisoes (curvas de revisões anteriores) sincronizado com a mesma lógica de segunda-feira e proteção contra datas inválidas, garantindo alinhamento correto no eixo X do gráfico.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 602,
     titulo: "Planejamento: 4 correções — Curva S, Avanço Acumulado, REFIS e Nova Revisão",
     descricao: "1) CURVA S — Semanas excessivas: a curva planejada gerava uma linha por cada data de início/fim de atividade em vez de agrupar por semana completa. Causa raiz: chave do mapa usava a data bruta em vez da segunda-feira da semana. Fix: todas as atividades são agora normalizadas para segunda-feira antes de gerar a curva, eliminando os pontos extras. 2) AVANÇO ACUMULADO SEMANAL DIVERGENTE: o indicador de % no seletor de semana mostrava só as atividades atualizadas naquela semana exata, ignorando avanços registrados em semanas anteriores. Fix: para cada semana, usa o valor mais recente de cada atividade até (e inclusive) aquela semana — resultado sempre crescente e correto. 3) REFIS PREVISTO: o previsto era calculado no início da semana (segunda-feira) em vez do fim (domingo), causando divergência de valores entre o REFIS e a tela de Avanço Semanal. Fix: adotado o mesmo padrão do Avanço Semanal (fim da semana como referência). 4) NOVA REVISÃO → PROJETO NÃO ENCONTRADO: após upload de nova revisão, a página redirecionava para 'projeto não encontrado'. Causa raiz: invalidate() chamado sem { id: projetoId } — zerando temporariamente todos os projetos em cache. Fix: todas as invalidações passam o ID correto.",

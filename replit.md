@@ -90,7 +90,7 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
   - Returns `matchedByNome: true` flag; frontend shows amber warning badge when fallback used
   - Frontend file: `ProgramacaoSemanal.tsx`, `RecursosDaSemana` component (~line 460)
 - **Prog. Semanal — JULINHO errors**: `iaErro` state captures and shows mutation errors (no more silent fail)
-- **Curva S**: Shows spinner while loading; server generates curve using equal weights when no peso_financeiro set
+- **Curva S**: Shows spinner while loading; server generates curve using equal weights when no peso_financeiro set. gerarCurvaPlanejada uses toMondayStr() to normalize all dates to Monday before generating keys (aligns X-axis); uses Math.ceil for dur; skips invalid dates with isNaN guard. Projects: id=4 (Hotel do Papa), id=6 (Chlorum Palmeira), id=7 (QIU 2 F4 old), id=16 (QIU 2 F4 active, 1900 ativs, rev 25)
 - **Avanço Semanal**: Import MS Project (XML/XLSX) → uses `salvarAvancoLote` batch endpoint (NOT 1512 individual requests)
   - `salvarAvancoLote` endpoint: 1 request with all items, processed in chunks of 50 on server
   - `filtroAtivo` states: "semana" (active week), "pendentes" (pending activities), "todas" (all)

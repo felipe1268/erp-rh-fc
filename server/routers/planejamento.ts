@@ -853,15 +853,23 @@ export const planejamentoRouter = router({
 
         const dates: Map<string, number> = new Map();
         folhas.forEach(a => {
-          // Parseia como "YYYY-MM-DDT12:00:00Z" para evitar desvio de fuso que
-          // transformaria "2025-03-10" em domingo (dia anterior) em UTC-3.
-          const dateStr = (s: string) => toDateStr(s).replace(/T.*/, '') + "T12:00:00Z";
-          const inicio   = new Date(dateStr(a.dataInicio as any));
-          const fim      = new Date(dateStr(a.dataFim as any));
-          // Normaliza início para a segunda-feira da semana
+          // Parseia datas evitando desvio de fuso: usa meio-dia UTC para garantir que
+          // "2026-01-26" nunca vire "2026-01-25" ao normalizar para segunda-feira.
+          const parseDate = (v: any): Date => {
+            const s = toDateStr(v).slice(0, 10); // "YYYY-MM-DD"
+            return new Date(s + "T12:00:00Z");
+          };
+          const inicio = parseDate(a.dataInicio);
+          const fim    = parseDate(a.dataFim);
+          if (isNaN(inicio.getTime()) || isNaN(fim.getTime())) return; // ignora datas inválidas
+          // Normaliza início e fim para a segunda-feira da respectiva semana
           const inicioSeg = new Date(toMondayStr(inicio) + "T12:00:00Z");
           const fimSeg    = new Date(toMondayStr(fim)    + "T12:00:00Z");
-          const dur      = Math.max(1, Math.round((fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000)) + 1);
+          // dur = nº de semanas que a atividade ocupa.
+          // inicioSeg e fimSeg são sempre segundas-feiras → diferença é SEMPRE múltiplo exato de 7 dias.
+          // +1 para incluir a semana do fimSeg (atividade está ativa nesse período).
+          const weeksDiff = (fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000); // inteiro exato
+          const dur       = Math.max(1, weeksDiff + 1);
           const pesoAtiv = usarIgual ? 1 : n(a.pesoFinanceiro);
           const semPeso  = pesoAtiv / dur / pesoTotal * 100;
           let cur = new Date(inicioSeg);
@@ -972,14 +980,19 @@ export const planejamentoRouter = router({
         const pesoTotal   = usarIgual ? folhas.length : pesoBruto;
         const dates: Map<string, number> = new Map();
         folhas.forEach((a: any) => {
-          const inicio  = new Date(a.dataInicio);
-          const fim     = new Date(a.dataFim);
-          const dur     = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (7 * 86400000)));
+          const parseD = (v: any) => new Date(toDateStr(v).slice(0, 10) + "T12:00:00Z");
+          const inicio = parseD(a.dataInicio);
+          const fim    = parseD(a.dataFim);
+          if (isNaN(inicio.getTime()) || isNaN(fim.getTime())) return;
+          const inicioSeg = new Date(toMondayStr(inicio) + "T12:00:00Z");
+          const fimSeg    = new Date(toMondayStr(fim)    + "T12:00:00Z");
+          const weeksDiff2 = (fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000);
+          const dur     = Math.max(1, weeksDiff2 + 1);
           const pAtiv   = usarIgual ? 1 : n(a.pesoFinanceiro);
           const semPeso = pAtiv / dur / pesoTotal * 100;
-          let cur = new Date(inicio);
+          let cur = new Date(inicioSeg);
           for (let i = 0; i < dur; i++) {
-            const key = cur.toISOString().split("T")[0];
+            const key = toMondayStr(cur);
             dates.set(key, (dates.get(key) ?? 0) + semPeso);
             cur = new Date(cur.getTime() + 7 * 86400000);
           }
