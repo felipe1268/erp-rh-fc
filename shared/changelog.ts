@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 605,
+    titulo: "Fechamento de Ponto: cruzamento com Aviso Prévio (redução 2h) e Férias",
+    descricao: "Dois cruzamentos críticos adicionados ao fechamento de ponto: (1) AVISO PRÉVIO com redução de 2h/dia — a redução de expectedMinutes agora é aplicada ANTES do cálculo de diffBruto (bug anterior: a redução era aplicada depois, sem efeito real nos cálculos de HE, atraso e falta); a opção de 7 dias corridos também está corrigida na mesma ordem. (2) FÉRIAS — o fechamento agora consulta vacation_periods e verifica se o funcionário está em período de gozo no dia (suporta até 3 fracionamentos); se sim, faltas e atrasos são zerados automaticamente, independentemente de bater ponto. O status 'cancelada' e 'pendente' é excluído da consulta.",
+    tipo: "bugfix",
+    modulos: "Ponto Eletrônico,RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 604,
     titulo: "Curva S: abas separadas para Curva S de Trabalho e Curva S Financeira",
     descricao: "A aba Curva S agora possui um switcher visual com dois painéis distintos: (1) Curva S de Trabalho — avanço físico acumulado em %, com baseline, revisão atual, realizado e tendência; (2) Curva S Financeira — evolução acumulada em R$, com valores escalados pelo Valor do Contrato e integração com medições faturadas. A curva financeira agora é sempre acessível via aba: quando o Valor do Contrato está zerado mas há medições lançadas, exibe só o faturado real; quando não há nenhum dado financeiro, exibe aviso orientativo para configurar o contrato. Cada aba tem seu próprio bloco 'Como interpretar' contextualizado.",

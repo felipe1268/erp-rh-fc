@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings, vacationPeriods
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -343,6 +343,7 @@ function processRecords(
   criteria: CriteriaMap = DEFAULT_CRITERIA,
   activeAvisos: Array<{ employeeId: number; dataInicio: string; dataFim: string; reducaoJornada: string | null }> = [],
   memoryMappings: Array<{ dixiName: string; employeeId: number }> = [],
+  activeFeriasGozo: Array<{ employeeId: number; dataInicio: string; dataFim: string; periodo2Inicio: string | null; periodo2Fim: string | null; periodo3Inicio: string | null; periodo3Fim: string | null }> = [],
 ) {
   // Group by person+day
   const grouped: Record<string, Record<string, string[]>> = {};
@@ -461,8 +462,40 @@ function processRecords(
       const tolAtraso = criteria.pontoToleranciaAtraso; // min
       const tolSaida = criteria.pontoToleranciaSaida;   // min
       const faltaApos = criteria.pontoFaltaAposAtraso;  // min
-      
-      // Calcular diferença bruta
+
+      // ===== INTEGRAÇÃO AVISO PRÉVIO (ANTES do diffBruto) =====
+      // Reduz expectedMinutes ANTES de calcular a diferença para que o cálculo de
+      // HE, atraso e falta respeite a jornada reduzida (Art. 488 CLT).
+      const avisoAtivo = activeAvisos.find(a =>
+        a.employeeId === emp.id && data >= a.dataInicio && data <= a.dataFim
+      );
+      if (avisoAtivo) {
+        if (avisoAtivo.reducaoJornada === '2h_dia') {
+          // Reduz 2 horas por dia da jornada esperada
+          expectedMinutes = Math.max(0, expectedMinutes - 120);
+        } else if (avisoAtivo.reducaoJornada === '7_dias_corridos') {
+          // Nos últimos 7 dias corridos o funcionário não precisa comparecer
+          const fimAviso = new Date(avisoAtivo.dataFim + 'T12:00:00');
+          const dataAtual  = new Date(data + 'T12:00:00');
+          const diffDias = Math.ceil((fimAviso.getTime() - dataAtual.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDias <= 7) expectedMinutes = 0;
+        }
+      }
+
+      // ===== INTEGRAÇÃO FÉRIAS =====
+      // Verifica se o funcionário está em período de gozo de férias no dia.
+      // Suporta até 3 fracionamentos cadastrados em vacation_periods.
+      const inFeriasRange = (inicio: string | null, fim: string | null) =>
+        !!inicio && !!fim && data >= inicio && data <= fim;
+      const emFeriasGozo = activeFeriasGozo.find(f =>
+        f.employeeId === emp.id && (
+          inFeriasRange(f.dataInicio, f.dataFim) ||
+          inFeriasRange(f.periodo2Inicio, f.periodo2Fim) ||
+          inFeriasRange(f.periodo3Inicio, f.periodo3Fim)
+        )
+      );
+
+      // Calcular diferença bruta (agora com expectedMinutes já corrigido pelo aviso prévio)
       const diffBruto = totalMinutes - expectedMinutes;
       
       // Aplicar tolerâncias:
@@ -472,32 +505,12 @@ function processRecords(
       let atrasos = 0;
       let faltas = "0";
 
-      // ===== INTEGRAÇÃO AVISO PRÉVIO =====
-      // Se o funcionário está em período de aviso prévio trabalhado, não gerar falta
-      // e aplicar redução de jornada conforme Art. 488 CLT
-      const avisoAtivo = activeAvisos.find(a => 
-        a.employeeId === emp.id && data >= a.dataInicio && data <= a.dataFim
-      );
-      if (avisoAtivo) {
-        // Aplicar redução de jornada do aviso prévio
-        if (avisoAtivo.reducaoJornada === '2h_dia') {
-          // Reduz 2 horas por dia da jornada esperada
-          expectedMinutes = Math.max(0, expectedMinutes - 120);
-        } else if (avisoAtivo.reducaoJornada === '7_dias_corridos') {
-          // Nos últimos 7 dias corridos, o funcionário não precisa comparecer
-          const fimAviso = new Date(avisoAtivo.dataFim + 'T12:00:00');
-          const dataAtual = new Date(data + 'T12:00:00');
-          const diffDias = Math.ceil((fimAviso.getTime() - dataAtual.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDias <= 7) {
-            // Últimos 7 dias: não exigir presença, não gerar falta
-            expectedMinutes = 0;
-          }
-        }
-        // Durante aviso prévio, não gerar falta se trabalhou menos
-        // (tolerância maior - o funcionário pode ter saído mais cedo legalmente)
-      }
-
-      if (isDiaFolgaJornada && totalMinutes > 0) {
+      // Dias de férias: zera faltas e atrasos — o funcionário não precisa bater ponto no período de gozo
+      if (emFeriasGozo) {
+        faltas = "0";
+        atrasos = 0;
+        horasExtras = 0;
+      } else if (isDiaFolgaJornada && totalMinutes > 0) {
         // DIA DE FOLGA (sáb/dom sem escala): TUDO é hora extra
         horasExtras = totalMinutes;
         // Não gerar atraso nem falta em dia de folga
@@ -721,6 +734,24 @@ export const fechamentoPontoRouter = router({
           )
         );
 
+        // Buscar períodos de férias em gozo — para não gerar falta nos dias de férias
+        const activeFeriasGozo = await db.select({
+          employeeId: vacationPeriods.employeeId,
+          dataInicio:    vacationPeriods.dataInicio,
+          dataFim:       vacationPeriods.dataFim,
+          periodo2Inicio: vacationPeriods.periodo2Inicio,
+          periodo2Fim:    vacationPeriods.periodo2Fim,
+          periodo3Inicio: vacationPeriods.periodo3Inicio,
+          periodo3Fim:    vacationPeriods.periodo3Fim,
+        }).from(vacationPeriods).where(
+          and(
+            companyFilter(vacationPeriods.companyId, input),
+            sql`${vacationPeriods.status} NOT IN ('cancelada', 'pendente')`,
+            isNull(vacationPeriods.deletedAt),
+            sql`${vacationPeriods.dataInicio} IS NOT NULL`,
+          )
+        );
+
         // Carregar memória de vinculação DIXI para auto-match
         const memMappings = await db.select({
           dixiName: dixiNameMappings.dixiName,
@@ -729,7 +760,7 @@ export const fechamentoPontoRouter = router({
 
         // Process records - mesReferencia is auto-detected from each record's date
         const { timeRecordsToInsert, inconsistencies, unmatchedNames, unmatchedRecordsToInsert } = processRecords(
-          records, empList as any, obraId, input.companyId, criteria, activeAvisos, memMappings
+          records, empList as any, obraId, input.companyId, criteria, activeAvisos, memMappings, activeFeriasGozo as any
         );
 
         // Salvar registros não identificados para vinculação posterior
