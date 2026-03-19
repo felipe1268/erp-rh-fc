@@ -4591,8 +4591,6 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [saved, setSaved]             = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false);
   const [cfgBloqueado, setCfgBloqueado] = useState(false);
-  const [custoTooltip, setCustoTooltip] = useState<{ r: any; x: number; y: number } | null>(null);
-
   // ── Reforços de Parcela (anti-caixa negativo) — persiste em localStorage ──
   const reforcoKey = `reforcos_${projetoId}`;
   const [reforcos, setReforcos] = useState<Record<string, number>>(() => {
@@ -4639,7 +4637,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
         if (!next[comp]?.confirmado || Math.abs((next[comp].valor ?? 0) - val) > 0.01) {
           next[comp] = {
             confirmado: true,
-            data: (m.atualizadoEm ?? m.competencia + "-01").substring(0, 10),
+            data: m.atualizadoEm
+              ? new Date(m.atualizadoEm).toISOString().substring(0, 10)
+              : m.competencia + "-01",
             valor: val,
           };
           changed = true;
@@ -5048,34 +5048,6 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
 
   return (
     <div className="space-y-6">
-
-      {/* ── Tooltip fixo para Custo Total (fora de qualquer overflow) ─────── */}
-      {custoTooltip && (
-        <div
-          style={{ position: "fixed", top: custoTooltip.y, left: custoTooltip.x, zIndex: 9999, pointerEvents: "none" }}
-          className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 min-w-[230px] text-left"
-        >
-          <p className="text-[10px] font-bold text-slate-600 mb-1.5 border-b pb-1">Composição do Custo Total</p>
-          {[
-            { label: "Material",       v: custoTooltip.r.mat },
-            { label: "Mão de Obra",    v: custoTooltip.r.mdo },
-            { label: "Ind. Obra (CI)", v: custoTooltip.r.custo - custoTooltip.r.mat - custoTooltip.r.mdo },
-            { label: "Adm. Central",   v: custoTooltip.r.admCentral },
-            { label: "Impostos",       v: custoTooltip.r.impostos },
-            { label: "Risco",          v: custoTooltip.r.risco },
-            { label: "Comissão",       v: custoTooltip.r.comissao },
-          ].map(({ label, v }) => (
-            <div key={label} className="flex justify-between text-[10px] py-0.5">
-              <span className="text-slate-500">{label}</span>
-              <span className="font-medium text-slate-700">{fmt(v)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between text-[10px] font-bold border-t mt-1 pt-1 text-amber-700">
-            <span>Total</span>
-            <span>{fmt(custoTooltip.r.custoTotal)}</span>
-          </div>
-        </div>
-      )}
 
       {/* ── Painel de Configuração ─────────────────────────────────────────── */}
       <div className={`bg-white rounded-xl shadow-sm overflow-hidden border-2 ${cfgBloqueado ? "border-emerald-400" : "border-slate-200"}`}>
@@ -6055,6 +6027,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
 function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt, fPct }: any) {
   const valorContrato = n(proj.valorContrato);
   const [cenario, setCenario] = useState<Cenario>("venda");
+  const [custoTooltip, setCustoTooltip] = useState<{ r: any; x: number; y: number } | null>(null);
 
   const { data: cruzamento, isLoading: loadCruz, isError: cruzError } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
     { projetoId }, { enabled: !!projetoId, retry: 1 });
@@ -6290,6 +6263,34 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
 
   return (
     <div className="space-y-5">
+
+      {/* ── Tooltip fixo para Custo Total (fora de qualquer overflow) ─────── */}
+      {custoTooltip && (
+        <div
+          style={{ position: "fixed", top: custoTooltip.y, left: custoTooltip.x, zIndex: 9999, pointerEvents: "none" }}
+          className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 min-w-[230px] text-left"
+        >
+          <p className="text-[10px] font-bold text-slate-600 mb-1.5 border-b pb-1">Composição do Custo Total</p>
+          {[
+            { label: "Material",       v: custoTooltip.r.mat },
+            { label: "Mão de Obra",    v: custoTooltip.r.mdo },
+            { label: "Ind. Obra (CI)", v: custoTooltip.r.custo - custoTooltip.r.mat - custoTooltip.r.mdo },
+            { label: "Adm. Central",   v: custoTooltip.r.admCentral },
+            { label: "Impostos",       v: custoTooltip.r.impostos },
+            { label: "Risco",          v: custoTooltip.r.risco },
+            { label: "Comissão",       v: custoTooltip.r.comissao },
+          ].map(({ label, v }) => (
+            <div key={label} className="flex justify-between text-[10px] py-0.5">
+              <span className="text-slate-500">{label}</span>
+              <span className="font-medium text-slate-700">{fmt(v)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between text-[10px] font-bold border-t mt-1 pt-1 text-amber-700">
+            <span>Total</span>
+            <span>{fmt(custoTooltip.r.custoTotal)}</span>
+          </div>
+        </div>
+      )}
 
       {/* Banner de cruzamento */}
       {qtdCruz > 0 ? (

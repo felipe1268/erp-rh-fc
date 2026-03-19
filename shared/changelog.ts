@@ -3507,4 +3507,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 588,
+    titulo: "Crash corrigido na aba Prev. Medição (PrevisaoMedicao)",
+    descricao: "O tRPC usa SuperJSON como transformer, que deserializa colunas timestamp como objetos Date (não strings) no cliente. O useEffect de sincronização de baixas (linha 4635) chamava .substring(0,10) diretamente sobre m.atualizadoEm — que era um Date object — causando TypeError: substring is not a function dentro do .forEach(), derrubando o componente. Correção: conversão explícita via new Date(m.atualizadoEm).toISOString().substring(0,10). Segundo fix: o estado custoTooltip e o render do tooltip de composição de custo estavam definidos dentro de PrevisaoMedicao, mas acionados por onMouseEnter dentro de CronogramaFinanceiro (função irmã — escopo diferente). A referência a setCustoTooltip em CronogramaFinanceiro era inválida e causaria ReferenceError ao hover. Estado e render movidos para CronogramaFinanceiro onde pertencem.",
+    tipo: "bugfix",
+    modulos: "Planejamento — Prev. Medição / Cronograma Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];
