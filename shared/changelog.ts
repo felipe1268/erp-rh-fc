@@ -3391,6 +3391,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 581,
+    titulo: "Fluxo de Caixa ↔ Cronograma de Medições — integração bidirecional automática",
+    descricao: "Dar Baixa no Fluxo de Caixa agora persiste automaticamente uma medição no banco de dados (planejamento_medicoes) com status='confirmado' e valorMedido=valor confirmado — eliminando a necessidade de registrar separadamente no Cronograma de Medições. O desfazer baixa reseta a medição para status='pendente' e valorMedido=0. Direção inversa: ao registrar uma medição no Cronograma de Medições, a query listarMedicoes é invalidada globalmente e um useEffect em PrevisaoMedicao sincroniza automaticamente o localStorage das baixas com os dados do DB, refletindo o lançamento no Fluxo de Caixa sem ação adicional do usuário. Adicionalmente, ao confirmar uma baixa, getCurvaMedicoes é invalidado, atualizando a linha 'Faturado Real' na Curva S Financeira em tempo real.",
+    tipo: "feature",
+    modulos: "Planejamento — Fluxo de Caixa / Cronograma de Medições",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 580,
     titulo: "Fluxo de Caixa — Valor Recebido usa o valor efetivamente confirmado na baixa",
     descricao: "Corrigido bug em que os KPIs 'Recebido ✓' e o totalizador do rodapé da tabela usavam r.recebido/r.liquido (valor planejado da parcela) em vez de baixas[r.mes]?.valor (o valor digitado e confirmado pelo usuário na baixa manual). A correção vale para ambos os modos: Parcelas Fixas (fluxoCaixa) e Avanço/Venda (previsoesMensais). Agora, se o usuário confirmar um valor diferente do previsto, o total exibido reflete exatamente o que foi recebido. Quando baixas[r.mes]?.valor é undefined (compatibilidade retroativa com baixas antigas sem campo valor), faz fallback para r.recebido/r.liquido.",

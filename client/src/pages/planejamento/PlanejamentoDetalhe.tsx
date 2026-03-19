@@ -4626,6 +4626,43 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     localStorage.setItem(baixaKey, JSON.stringify(next));
   };
 
+  // ── Integração bidirecional com Cronograma de Medições (DB) ───────────────
+  const { data: medicoesBD = [] } = trpc.planejamento.listarMedicoes.useQuery(
+    { projetoId }, { enabled: !!projetoId, staleTime: 5000 });
+  const trpcUtils = trpc.useUtils();
+  const salvarMedicaoMut = trpc.planejamento.salvarMedicao.useMutation({
+    onSuccess: () => {
+      trpcUtils.planejamento.getCurvaMedicoes.invalidate({ projetoId });
+      trpcUtils.planejamento.listarMedicoes.invalidate({ projetoId });
+    },
+  });
+
+  // Sync: medições confirmadas no DB → localStorage baixas (quando Cronograma de Medições registrar)
+  useEffect(() => {
+    if (!(medicoesBD as any[]).length) return;
+    const stored = JSON.parse(localStorage.getItem(baixaKey) ?? "{}") as Record<string, any>;
+    let changed = false;
+    const next = { ...stored };
+    (medicoesBD as any[]).forEach((m: any) => {
+      const val = parseFloat(m.valorMedido ?? "0");
+      const comp = String(m.competencia);
+      if (val > 0) {
+        if (!next[comp]?.confirmado || Math.abs((next[comp].valor ?? 0) - val) > 0.01) {
+          next[comp] = {
+            confirmado: true,
+            data: (m.atualizadoEm ?? m.competencia + "-01").substring(0, 10),
+            valor: val,
+          };
+          changed = true;
+        }
+      } else if (next[comp]?.confirmado) {
+        delete next[comp];
+        changed = true;
+      }
+    });
+    if (changed) persistBaixas(next);
+  }, [medicoesBD]);
+
   const [baixaModal, setBaixaModal] = useState<{ mes: string; valorPrevisto: number; label: string } | null>(null);
   const [baixaValorInputStr, setBaixaValorInputStr] = useState("");
 
@@ -4645,6 +4682,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       const next = { ...baixas };
       delete next[mes];
       persistBaixas(next);
+      salvarMedicaoMut.mutate({ projetoId, competencia: mes, valorMedido: 0, status: "pendente" });
     } else {
       setBaixaModal({ mes, valorPrevisto, label });
       setBaixaValorInputStr(fmtBaixaInput(valorPrevisto.toFixed(2).replace(".", ",")));
@@ -4664,6 +4702,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
         pendente: pendente > 0 ? pendente : undefined,
       },
     });
+    salvarMedicaoMut.mutate({ projetoId, competencia: baixaModal.mes, valorMedido: val, status: "confirmado" });
     setBaixaModal(null);
     toast.success(
       pendente > 0
@@ -6034,8 +6073,17 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
   const { data: medicoes = [], refetch } = trpc.planejamento.listarMedicoes.useQuery(
     { projetoId }, { enabled: !!projetoId });
 
-  const salvarMut  = trpc.planejamento.salvarMedicao.useMutation({ onSuccess: () => refetch() });
-  const excluirMut = trpc.planejamento.excluirMedicao.useMutation({ onSuccess: () => refetch() });
+  const cfUtils = trpc.useUtils();
+  const salvarMut  = trpc.planejamento.salvarMedicao.useMutation({ onSuccess: () => {
+    refetch();
+    cfUtils.planejamento.listarMedicoes.invalidate({ projetoId });
+    cfUtils.planejamento.getCurvaMedicoes.invalidate({ projetoId });
+  }});
+  const excluirMut = trpc.planejamento.excluirMedicao.useMutation({ onSuccess: () => {
+    refetch();
+    cfUtils.planejamento.listarMedicoes.invalidate({ projetoId });
+    cfUtils.planejamento.getCurvaMedicoes.invalidate({ projetoId });
+  }});
 
   // Distribui os 3 cenários mensalmente
   const dadosMensais = useMemo(() => {
