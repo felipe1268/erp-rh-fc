@@ -28,7 +28,7 @@ import {
   Settings, AlertCircle, Lock, LockOpen,
   Bot, Brain, Sparkles, MessageSquare, Send, Zap,
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
-  ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer,
+  ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer, CheckSquare,
   TrendingDown, ArrowUpRight, ArrowDownRight, Circle, CalendarClock, Network,
   Users, HardHat, CheckCircle, Calculator,
 } from "lucide-react";
@@ -2331,6 +2331,24 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   const [periodoFiltro, setPeriodoFiltro] = useState<PeriodoFiltro>("tudo");
   const [intervaloIni,  setIntervaloIni]  = useState("");
   const [intervaloFim,  setIntervaloFim]  = useState("");
+  const [selectedAtiv,  setSelectedAtiv]  = useState<Set<number>>(new Set());
+  const [modoSelecao,   setModoSelecao]   = useState(false);
+
+  const toggleAtivDisabledMut = trpc.planejamento.toggleAtividadesDisabled.useMutation({
+    onSuccess: () => {
+      utils.planejamento.listarAtividades.invalidate();
+      setSelectedAtiv(new Set());
+      setModoSelecao(false);
+    },
+  });
+
+  function toggleSelecao(id: number) {
+    setSelectedAtiv(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   const limparMutation = trpc.planejamento.limparCronograma.useMutation({
     onSuccess: () => {
@@ -2661,6 +2679,15 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                 <Edit3 className="h-3.5 w-3.5" />
                 Editar Cronograma
               </Button>
+              {/* Seleção em bloco para desativar/ativar atividades */}
+              {!editando && atividades.length > 0 && (
+                <Button size="sm" variant={modoSelecao ? "default" : "outline"}
+                  className={`gap-1.5 ${modoSelecao ? "bg-amber-600 hover:bg-amber-700 border-amber-600" : "border-amber-300 text-amber-700 hover:bg-amber-50"}`}
+                  onClick={() => { setModoSelecao(v => !v); setSelectedAtiv(new Set()); }}>
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  {modoSelecao ? "Cancelar Seleção" : "Selecionar Atividades"}
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -2688,6 +2715,47 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               Confirmar Exclusão
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* ── Barra de ação de seleção em bloco ──────────────────────────────────── */}
+      {modoSelecao && (
+        <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-amber-800">
+            <CheckSquare className="h-4 w-4 shrink-0" />
+            <span>
+              {selectedAtiv.size === 0
+                ? "Clique em uma atividade para selecioná-la"
+                : <><strong>{selectedAtiv.size}</strong> atividade{selectedAtiv.size !== 1 ? "s" : ""} selecionada{selectedAtiv.size !== 1 ? "s" : ""}</>}
+            </span>
+            {selectedAtiv.size > 0 && (
+              <button onClick={() => setSelectedAtiv(new Set())} className="ml-1 text-amber-600 hover:text-amber-800 underline text-xs">limpar seleção</button>
+            )}
+          </div>
+          {selectedAtiv.size > 0 && (
+            <div className="flex gap-2 shrink-0">
+              {/* Verificar se todos os selecionados já estão disabled — para mostrar "Reativar" */}
+              {(() => {
+                const selArr = atividades.filter((a: any) => selectedAtiv.has(a.id));
+                const todosDisabled = selArr.length > 0 && selArr.every((a: any) => a.disabled);
+                return todosDisabled ? (
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+                    disabled={toggleAtivDisabledMut.isPending}
+                    onClick={() => toggleAtivDisabledMut.mutate({ ids: [...selectedAtiv], disabled: false })}>
+                    {toggleAtivDisabledMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckSquare className="h-3.5 w-3.5" />}
+                    Reativar ({selectedAtiv.size})
+                  </Button>
+                ) : (
+                  <Button size="sm" className="bg-slate-600 hover:bg-slate-700 gap-1.5"
+                    disabled={toggleAtivDisabledMut.isPending}
+                    onClick={() => toggleAtivDisabledMut.mutate({ ids: [...selectedAtiv], disabled: true })}>
+                    {toggleAtivDisabledMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    Desativar ({selectedAtiv.size})
+                  </Button>
+                );
+              })()}
+            </div>
+          )}
         </div>
       )}
 
@@ -2813,6 +2881,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
           </colgroup>
           <thead>
             <tr className="bg-slate-700 text-white">
+              {modoSelecao && !editando && <th className="py-2 px-2 w-8 text-center text-[11px]">✓</th>}
               <th className="py-2 px-2 text-left text-[11px]">EAP</th>
               <th className="py-2 px-2 text-left text-[11px]">
                 {editando ? "☑ Atividade / Grupo" : "Atividade"}
@@ -2847,25 +2916,38 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 
               // MS-Project style row color
               const nivel = a.nivel ?? 1;
-              const rowBg = editando
-                ? a.isGrupo
-                  ? (a.nivel ?? 1) === 1 ? "bg-yellow-50 border-l-4 border-l-yellow-400" : "bg-amber-50/60 border-l-4 border-l-amber-300"
-                  : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
-                : atrasada
-                  ? "bg-red-50"
-                  : a.isMarco
-                    ? "bg-purple-50/40 border-l-4 border-l-purple-400"
-                    : a.isGrupo && nivel === 1
-                      ? "bg-yellow-50 border-l-4 border-l-yellow-400"
-                      : a.isGrupo && nivel === 2
-                        ? "bg-amber-50/60 border-l-4 border-l-amber-300"
-                        : a.isGrupo
-                          ? "bg-slate-50 border-l-4 border-l-slate-300"
-                          : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30";
+              const isDisabled = !!a.disabled;
+              const isSelected = selectedAtiv.has(a.id);
+              const rowBg = isDisabled
+                ? "bg-slate-100 opacity-60 border-l-4 border-l-slate-400"
+                : isSelected
+                  ? "bg-amber-100 border-l-4 border-l-amber-500"
+                  : editando
+                    ? a.isGrupo
+                      ? (a.nivel ?? 1) === 1 ? "bg-yellow-50 border-l-4 border-l-yellow-400" : "bg-amber-50/60 border-l-4 border-l-amber-300"
+                      : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                    : atrasada
+                      ? "bg-red-50"
+                      : a.isMarco
+                        ? "bg-purple-50/40 border-l-4 border-l-purple-400"
+                        : a.isGrupo && nivel === 1
+                          ? "bg-yellow-50 border-l-4 border-l-yellow-400"
+                          : a.isGrupo && nivel === 2
+                            ? "bg-amber-50/60 border-l-4 border-l-amber-300"
+                            : a.isGrupo
+                              ? "bg-slate-50 border-l-4 border-l-slate-300"
+                              : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30";
 
               return (
                 <tr key={a.id ?? idx}
-                  className={`group border-b border-slate-100 ${rowBg} ${a.isGrupo ? "font-semibold" : ""}`}>
+                  onClick={modoSelecao && !editando && a.id ? () => toggleSelecao(a.id) : undefined}
+                  className={`group border-b border-slate-100 ${rowBg} ${a.isGrupo ? "font-semibold" : ""} ${modoSelecao && !editando ? "cursor-pointer select-none hover:brightness-95" : ""} ${isDisabled ? "line-through text-slate-400" : ""}`}>
+                  {modoSelecao && !editando && (
+                    <td className="py-1.5 px-2 text-center w-8" onClick={e => { e.stopPropagation(); toggleSelecao(a.id); }}>
+                      <input type="checkbox" readOnly checked={isSelected}
+                        className="h-3.5 w-3.5 accent-amber-500 cursor-pointer" />
+                    </td>
+                  )}
                   {editando ? (
                     <>
                       <td className="py-1 px-1">

@@ -3391,6 +3391,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 577,
+    titulo: "Cronograma — Desativar/Reativar atividades em bloco (remoção de escopo)",
+    descricao: "Multi-seleção de atividades no Gantt Cronograma: botão 'Selecionar Atividades' entra em modo de seleção; clique em qualquer linha seleciona/deseleciona (checkbox + highlight âmbar); barra de ação flutuante mostra contador e botões 'Desativar (n)' / 'Reativar (n)' conforme estado dos selecionados. Atividades desativadas: fundo cinza, texto riscado, linha-esquerda cinza, excluídas dos cálculos de progresso. Banco: nova coluna disabled BOOLEAN DEFAULT FALSE em planejamento_atividades com migration automática no boot. Endpoint bulk toggleAtividadesDisabled recebe array de IDs + boolean disabled.",
+    tipo: "feature",
+    modulos: "Planejamento — Cronograma",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 576,
     titulo: "REFIS Curva S Financeira — Linha Faturado Real (medições vs valor físico)",
     descricao: "Adicionada linha 'Faturado Real' (roxo #7c3aed) na Curva S Financeira do REFIS. Backend: novo endpoint getCurvaMedicoes que busca planejamento_medicoes, acumula valorMedido por competência ('YYYY-MM') e retorna o acumulado. Frontend: query tRPC; curvaFinanceiraFull faz merge semanal (última competência <= semana da linha); linha stepAfter em roxo; KPI strip expande para 5 colunas exibindo 'Faturado Real' e 'Fat. vs Físico' (diferença entre faturado e realizado físico×contrato); legenda e tooltip atualizados com a nova linha. Comportamento: quando faturado > físico = overbilling (contrato com parcelas fixas recebe mais do que produziu); quando < = underbilling.",

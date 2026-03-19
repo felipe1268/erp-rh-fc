@@ -971,6 +971,23 @@ export const planejamentoRouter = router({
       });
     }),
 
+  // ── Toggle disabled em bloco (remover/restaurar do escopo) ────────────────
+  toggleAtividadesDisabled: protectedProcedure
+    .input(z.object({
+      ids:     z.array(z.number()),
+      disabled: z.boolean(),
+    }))
+    .mutation(async ({ input }) => {
+      if (!input.ids.length) return { updated: 0 };
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE planejamento_atividades
+        SET disabled = ${input.disabled}
+        WHERE id = ANY(ARRAY[${sql.raw(input.ids.join(","))}]::int[])
+      `);
+      return { updated: input.ids.length };
+    }),
+
   // ── Cronograma de Compras ──────────────────────────────────────────────────
   listarCompras: protectedProcedure
     .input(z.object({ projetoId: z.number(), revisao: z.number().optional() }))
