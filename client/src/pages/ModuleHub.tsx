@@ -178,9 +178,10 @@ const MODULES: Module[] = [
     icon: Home, accentFrom: "#EC4899", accentTo: "#DB2777", accentGlow: "", iconBg: "", path: "", active: false, features: [],
   },
   {
-    id: "medicao-obras", title: "Medição de Obras", subtitle: "Medições Físicas e Financeiras",
-    description: "Controle de medições por etapa, faturamento e acompanhamento de cronograma.",
-    icon: Ruler, accentFrom: "#8B5CF6", accentTo: "#6D28D9", accentGlow: "", iconBg: "", path: "", active: false, features: [],
+    id: "medicao", title: "Medição", subtitle: "Medição de Contratos",
+    description: "Boletins de medição por avanço físico, fundo de despesas e faturamento de contratos de obra.",
+    icon: Ruler, accentFrom: "#14B8A6", accentTo: "#0D9488", accentGlow: "rgba(20,184,166,0.35)", iconBg: "rgba(20,184,166,0.12)", path: "/medicao", active: true,
+    features: ["Boletins de Medição", "Fundo de Despesas (FD)", "Avanço Físico", "Faturamento"],
   },
   {
     id: "diario-obras", title: "Diário de Obras", subtitle: "Registro Diário",

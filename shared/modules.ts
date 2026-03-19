@@ -232,6 +232,16 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     ],
   },
   {
+    id: "medicao",
+    label: "Medição",
+    description: "Boletins de medição de contratos, fundo de despesas e faturamento por avanço físico.",
+    color: "teal",
+    icon: "FileBarChart",
+    features: [
+      { key: "medicao-contratos", label: "Contratos de Medição", route: "/medicao", icon: "FileBarChart" },
+    ],
+  },
+  {
     id: "almoxarifado",
     label: "Almoxarifado",
     description: "Controle de materiais, ferramentas e equipamentos. Empréstimos diários, inventário semanal, movimentações entrada/saída.",
