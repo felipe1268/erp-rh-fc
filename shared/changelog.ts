@@ -3589,6 +3589,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 598,
+    titulo: "Avanço Semanal: previsto da 1ª semana não era mais zero quando atividades iniciam no mesmo dia",
+    descricao: "O 'Previsto (semana)' mostrava 0.0% na primeira semana de lançamento sempre que as atividades do cronograma iniciavam exatamente na data de início da semana. Causa: a interpolação linear usava o INÍCIO da semana como referência (ref > ini = false quando ref === ini → 0%). Fix: o cálculo de previsto — tanto no card do cabeçalho quanto na coluna 'Previsto%' de cada atividade na tabela — agora usa o FIM da semana (= segunda-feira seguinte) como referência. Isso significa que 'Previsto (semana)' representa o avanço planejado ACUMULADO ao término da semana selecionada, compatível com o 'Realizado (acum.)' também medido ao término da semana. Resultado: a 1ª semana agora exibe o percentual previsto correto e a variação (Real − Prev.) é calculada de forma justa.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 597,
     titulo: "Curva S: corrigido pesos financeiros distorcendo a curva em cronogramas importados",
     descricao: "Após importar cronograma do MS Project, a Curva S ficava plana em 0% durante todo o ano e saltava para 100% apenas no último dia. Causa-raiz: a atividade 'FIM DO PROJETO - DESMOBILIZAÇÃO' (marco final) tinha pesoFinanceiro > 0, tornando-se a única contribuidora da curva enquanto as demais 1511 atividades com peso=0 contribuíam nada. Fix: getCurvaS e getCurvasTodasRevisoes agora detectam se menos de 20% das atividades folha têm peso definido e, nesse caso, usam pesos iguais (distribuição temporal uniforme). Também: após aprovação de revisão (inclusive importação de cronograma), o cache da Curva S, curvas de revisões e lista de atividades são invalidados para garantir dados frescos imediatamente.",

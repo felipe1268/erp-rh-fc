@@ -3881,6 +3881,16 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   const semanaIdx = semanas.indexOf(semanaAtual);
   const semanaNum = semanaIdx >= 0 ? semanaIdx + 1 : 1;
 
+  // Fim da semana selecionada = início da próxima (ou +7 dias se for a última)
+  // Usado no cálculo de previsto: comparar ao FIM da semana, não ao início
+  const semanaFim = useMemo(() => {
+    const idx = semanas.indexOf(semanaAtual);
+    if (idx >= 0 && idx + 1 < semanas.length) return semanas[idx + 1];
+    const d = new Date(semanaAtual + "T12:00:00");
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0];
+  }, [semanas, semanaAtual]);
+
   // Mantém semanaAtual dentro da faixa disponível
   useEffect(() => {
     if (semanas.length > 0 && !semanas.includes(semanaAtual)) {
@@ -3983,8 +3993,10 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   }, [avancos, semanaAtual, semanas]);
 
   // ── Previsto para a semana (interpolação linear por datas) ─────────────────
-  // Fallback para peso igual (1/n) quando nenhuma atividade tem peso financeiro
-  // NOTA: usa T12:00:00 para evitar bug de timezone (idêntico ao REFIS)
+  // Usa o FIM da semana (= início da próxima) como referência, para que a
+  // semana 1 mostre o previsto acumulado ao término da semana — não ao início,
+  // que seria sempre 0% quando as atividades também iniciam nesse dia.
+  // Fallback para peso igual (1/n) quando nenhuma atividade tem peso financeiro.
   const previsto = useMemo(() => {
     const folhasComDatas = folhas.filter((a: any) => a.dataInicio && a.dataFim);
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
@@ -3994,7 +4006,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     folhasComDatas.forEach((a: any) => {
       const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
       const fim  = new Date(a.dataFim    + "T12:00:00").getTime();
-      const ref  = new Date(semanaAtual  + "T12:00:00").getTime();
+      const ref  = new Date(semanaFim    + "T12:00:00").getTime();
       let exp = 0;
       if (ref >= fim) exp = 100;
       else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
@@ -4002,7 +4014,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       soma += (exp * peso) / denom;
     });
     return +soma.toFixed(1);
-  }, [folhas, semanaAtual]);
+  }, [folhas, semanaFim]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
   // Prioriza avancoLocal > avancoExistente (semana exata) > avancoMaisRecente (semana mais recente ≤ atual)
@@ -4449,12 +4461,12 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
               const anterior = avancoAnterior[a.id] ?? 0;
               const alterado = avancoLocal[a.id] !== undefined;
 
-              // Previsto individual
+              // Previsto individual — usa FIM da semana como referência
               let prevInd = 0;
               if (a.dataInicio && a.dataFim) {
-                const ini = new Date(a.dataInicio).getTime();
-                const fim = new Date(a.dataFim).getTime();
-                const ref = new Date(semanaAtual).getTime();
+                const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+                const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+                const ref = new Date(semanaFim     + "T12:00:00").getTime();
                 if (ref >= fim) prevInd = 100;
                 else if (ref > ini) prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
               }
