@@ -30,6 +30,16 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 const toDateStr = (v: any): string =>
   v instanceof Date ? v.toISOString().split("T")[0] : String(v).slice(0, 10);
 
+// Normaliza qualquer data para a segunda-feira da sua semana (YYYY-MM-DD).
+// Usa UTC para evitar desvio de fuso: datas armazenadas como "YYYY-MM-DD" são
+// interpretadas como midnight UTC, e getDay() em UTC é o correto aqui.
+function toMondayStr(d: Date): string {
+  const day  = d.getUTCDay();               // 0=dom, 1=seg, ..., 6=sáb
+  const diff = day === 0 ? -6 : 1 - day;   // quantos dias voltar até segunda
+  const m    = new Date(d.getTime() + diff * 86_400_000);
+  return m.toISOString().split("T")[0];
+}
+
 export const planejamentoRouter = router({
 
   // ── Projetos ──────────────────────────────────────────────────────────────
@@ -843,14 +853,21 @@ export const planejamentoRouter = router({
 
         const dates: Map<string, number> = new Map();
         folhas.forEach(a => {
-          const inicio   = new Date(a.dataInicio!);
-          const fim      = new Date(a.dataFim!);
-          const dur      = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (7 * 86400000)));
+          // Parseia como "YYYY-MM-DDT12:00:00Z" para evitar desvio de fuso que
+          // transformaria "2025-03-10" em domingo (dia anterior) em UTC-3.
+          const dateStr = (s: string) => toDateStr(s).replace(/T.*/, '') + "T12:00:00Z";
+          const inicio   = new Date(dateStr(a.dataInicio as any));
+          const fim      = new Date(dateStr(a.dataFim as any));
+          // Normaliza início para a segunda-feira da semana
+          const inicioSeg = new Date(toMondayStr(inicio) + "T12:00:00Z");
+          const fimSeg    = new Date(toMondayStr(fim)    + "T12:00:00Z");
+          const dur      = Math.max(1, Math.round((fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000)) + 1);
           const pesoAtiv = usarIgual ? 1 : n(a.pesoFinanceiro);
           const semPeso  = pesoAtiv / dur / pesoTotal * 100;
-          let cur = new Date(inicio);
+          let cur = new Date(inicioSeg);
           for (let i = 0; i < dur; i++) {
-            const key = cur.toISOString().split("T")[0];
+            // Chave sempre é uma segunda-feira — garante alinhamento com o eixo X do gráfico
+            const key = toMondayStr(cur);
             dates.set(key, (dates.get(key) ?? 0) + semPeso);
             cur = new Date(cur.getTime() + 7 * 86400000);
           }

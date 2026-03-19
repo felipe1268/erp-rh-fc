@@ -3914,20 +3914,25 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     });
   }, [folhas, semanaAtual, filtroAtivo]);
 
-  // % realizado ponderado por semana (para indicador no seletor)
+  // % realizado ponderado por semana (para indicador no seletor).
+  // CORREÇÃO: para cada semana com dados, usa o ÚLTIMO avanço de cada atividade até
+  // aquela semana (não apenas os da semana exata). Isso garante que o acumulado
+  // exibido seja crescente e reflita corretamente o progresso global do projeto.
   const semanasComDados = useMemo(() => {
     const result: Record<string, number> = {};
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
-    const bySem: Record<string, Record<number, number>> = {};
-    avancos.forEach((av: any) => {
-      if (!bySem[av.semana]) bySem[av.semana] = {};
-      bySem[av.semana][av.atividadeId] = n(av.percentualAcumulado);
-    });
-    Object.entries(bySem).forEach(([sem, m]) => {
+    // Semanas únicas que possuem algum avanço, em ordem crescente
+    const todasSemanas = [...new Set((avancos as any[]).map((av: any) => av.semana as string))].sort();
+    todasSemanas.forEach(sem => {
       let soma = 0;
       folhas.forEach((a: any) => {
         const peso = n(a.pesoFinanceiro) || 1;
-        soma += (m[a.id] ?? 0) * (peso / pesoTotal);
+        // Valor mais recente desta atividade até (inclusive) a semana em questão
+        const avsAtiv = (avancos as any[])
+          .filter((av: any) => av.atividadeId === a.id && av.semana <= sem);
+        if (avsAtiv.length === 0) return;
+        avsAtiv.sort((x: any, y: any) => y.semana.localeCompare(x.semana));
+        soma += n(avsAtiv[0].percentualAcumulado) * (peso / pesoTotal);
       });
       result[sem] = +Math.min(100, soma).toFixed(1);
     });
@@ -7319,18 +7324,18 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
   }, [revisoes]);
 
   const cancelarMutation = trpc.planejamento.cancelarRevisao.useMutation({
-    onSuccess: () => utils.planejamento.getProjetoById.invalidate(),
+    onSuccess: () => utils.planejamento.getProjetoById.invalidate({ id: projetoId }),
     onError: (e) => alert(e.message),
   });
 
   const excluirMutation = trpc.planejamento.excluirRevisao.useMutation({
-    onSuccess: () => { utils.planejamento.getProjetoById.invalidate(); setConfirmExcluirId(null); },
+    onSuccess: () => { utils.planejamento.getProjetoById.invalidate({ id: projetoId }); setConfirmExcluirId(null); },
     onError: (e) => { alert(e.message); setConfirmExcluirId(null); },
   });
 
   const aprovarMutation = trpc.planejamento.aprovarRevisao.useMutation({
     onSuccess: () => {
-      utils.planejamento.getProjetoById.invalidate();
+      utils.planejamento.getProjetoById.invalidate({ id: projetoId });
       utils.planejamento.getCurvaS.invalidate();
       utils.planejamento.getCurvasTodasRevisoes.invalidate();
       utils.planejamento.listarAtividades.invalidate();
@@ -7829,29 +7834,52 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     return { pesoTotal: semPeso ? (folhas.length || 1) : soma, semPeso };
   }
 
-  // Calcula avanço previsto ponderado para a semana a partir do cronograma
+  // Fim da semana selecionada (domingo = segunda + 6 dias).
+  // Idêntico ao que AvancoSemanal usa — garante que o previsto seja calculado
+  // ao TÉRMINO da semana, e não no seu início (segunda-feira), o que causava
+  // divergência entre o REFIS e a tela de Avanço Semanal.
+  const semanaFimRefis = useMemo(() => {
+    const idx = semanas.indexOf(semana);
+    if (idx >= 0 && idx + 1 < semanas.length) return semanas[idx + 1];
+    const d = new Date(semana + "T12:00:00");
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0];
+  }, [semana, semanas]);
+
+  // Calcula avanço previsto ponderado para a semana a partir do cronograma.
+  // Usa o FIM da semana (domingo) como referência — igual ao AvancoSemanal.
   const avancoPrevisto = useMemo(() => {
     const folhas = atividades.filter((a: any) => !a.isGrupo);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
-      return s + prevIndRef(a, semana) * (peso / pesoTotal);
+      return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semana]);
+  }, [atividades, semanaFimRefis]);
 
   // Avanço semanal previsto e realizado
   const semIdx   = semanas.indexOf(semana);
   const semAntes = semIdx > 0 ? semanas[semIdx - 1] : null;
 
+  // Fim da semana ANTERIOR (para calcular o incremento semanal previsto)
+  const semAntesFim = useMemo(() => {
+    if (!semAntes) return null;
+    const idx = semanas.indexOf(semAntes);
+    if (idx >= 0 && idx + 1 < semanas.length) return semanas[idx + 1];
+    const d = new Date(semAntes + "T12:00:00");
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0];
+  }, [semAntes, semanas]);
+
   const avancoPrevAntes = useMemo(() => {
-    if (!semAntes) return 0;
+    if (!semAntesFim) return 0;
     const folhas = atividades.filter((a: any) => !a.isGrupo);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
-      return s + prevIndRef(a, semAntes) * (peso / pesoTotal);
+      return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semAntes]);
+  }, [atividades, semAntesFim]);
 
   const avancoPrevSemanal = Math.max(0, avancoPrevisto - avancoPrevAntes);
 

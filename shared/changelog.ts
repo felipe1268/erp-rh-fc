@@ -3589,6 +3589,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 602,
+    titulo: "Planejamento: 4 correções — Curva S, Avanço Acumulado, REFIS e Nova Revisão",
+    descricao: "1) CURVA S — Semanas excessivas: a curva planejada gerava uma linha por cada data de início/fim de atividade em vez de agrupar por semana completa. Causa raiz: chave do mapa usava a data bruta em vez da segunda-feira da semana. Fix: todas as atividades são agora normalizadas para segunda-feira antes de gerar a curva, eliminando os pontos extras. 2) AVANÇO ACUMULADO SEMANAL DIVERGENTE: o indicador de % no seletor de semana mostrava só as atividades atualizadas naquela semana exata, ignorando avanços registrados em semanas anteriores. Fix: para cada semana, usa o valor mais recente de cada atividade até (e inclusive) aquela semana — resultado sempre crescente e correto. 3) REFIS PREVISTO: o previsto era calculado no início da semana (segunda-feira) em vez do fim (domingo), causando divergência de valores entre o REFIS e a tela de Avanço Semanal. Fix: adotado o mesmo padrão do Avanço Semanal (fim da semana como referência). 4) NOVA REVISÃO → PROJETO NÃO ENCONTRADO: após upload de nova revisão, a página redirecionava para 'projeto não encontrado'. Causa raiz: invalidate() chamado sem { id: projetoId } — zerando temporariamente todos os projetos em cache. Fix: todas as invalidações passam o ID correto.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 601,
     titulo: "Obras: mesclagem de obras duplicadas + EPIs: fotos persistem entre redeploys",
     descricao: "1) OBRAS — Nova função 'Mesclar': quando duas obras com o mesmo nome coexistem por erro (ex: dupla importação DIXI), o usuário pode mesclar a duplicata na correta. Todos os registros de ponto, inconsistências, alocações e ajustes manuais são migrados para a obra destino e a origem é excluída — sem reimportar, sem perder ajustes. Botão 'Mesclar' (âmbar) aparece em cada card de obra. 2) EPIs — Correção definitiva para fotos que sumiam após redeploy. As fotos agora são armazenadas no banco de dados (Neon, permanente) como data URI. O sistema comprime automaticamente para 500×500px / JPEG 0.75 antes de enviar (~30–50KB por foto). Fotos anteriores quebradas precisarão ser reenviadas.",
