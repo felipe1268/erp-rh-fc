@@ -461,7 +461,7 @@ export default function Epis() {
         setCaLookupResult(res);
         setEpiForm(f => ({
           ...f,
-          nome: res.descricao || res.nome || f.nome,
+          nome: f.nome || res.descricao || res.nome,
           fabricante: res.fabricante || f.fabricante,
           validadeCa: res.validade || f.validadeCa,
         }));

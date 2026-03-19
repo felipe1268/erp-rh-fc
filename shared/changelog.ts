@@ -3579,4 +3579,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 596,
+    titulo: "EPIs: consulta de CA não sobrescreve mais o nome ao editar",
+    descricao: "Ao abrir o modal de edição de um EPI, o lookup automático do CA disparava e sobrescrevia o nome personalizado pelo nome completo da base SINAPI/CA. Fix: a lógica de preenchimento agora usa 'f.nome || res.descricao || res.nome' — se o EPI já tem nome cadastrado, ele é preservado. O nome do CA só é preenchido automaticamente ao criar um EPI novo (campo vazio).",
+    tipo: "bugfix",
+    modulos: "EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
 ];
