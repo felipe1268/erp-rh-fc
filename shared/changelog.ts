@@ -3391,6 +3391,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 579,
+    titulo: "Aba Curva S — Gráfico Financeiro separado abaixo do Físico",
+    descricao: "Adicionado segundo gráfico 'Curva S — Evolução Financeira Acumulada' na aba Curva S, abaixo do gráfico físico (inalterado). O gráfico financeiro escala as mesmas linhas (Baseline, Revisão Atual, Realizado, Tendência) multiplicando o percentual acumulado pelo valor do contrato (proj.valorContrato). Quando há dados de curvaMedicoes (medições reais), exibe também a linha 'Faturado Real' em roxo #7c3aed (stepAfter). Legenda própria, tooltip em R$ com dessvio Fat. vs Físico quando aplicável, linha 'Hoje' compartilhada. Só renderiza quando valorContrato > 0.",
+    tipo: "feature",
+    modulos: "Planejamento — Curva S",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 578,
     titulo: "Modal Confirmar Recebimento — tela maior e formatação de valor pt-BR",
     descricao: "Modal 'Confirmar Recebimento' ampliado de max-w-sm para max-w-md. Campo de valor agora exibe separador de milhar em tempo real (ex: 246.000,00) tanto no pré-preenchimento quanto durante a digitação. Lógica de formatação auto-aplicada via fmtBaixaInput: strip dots/comma, re-format inteiros com toLocaleString pt-BR, preserva decimais até 2 casas. Texto do campo aumentado para text-lg para melhor leitura.",

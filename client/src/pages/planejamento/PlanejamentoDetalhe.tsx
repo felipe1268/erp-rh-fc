@@ -584,7 +584,7 @@ export default function PlanejamentoDetalhe() {
           />
         )}
         {aba === "curva-s" && (
-          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} />
+          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} curvaMedicoes={curvaMedicoes} />
         )}
         {aba === "avanco" && (
           <AvancoSemanal
@@ -3494,7 +3494,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
 // Paleta de cores para revisões anteriores (distintas, mas secundárias)
 const REV_COLORS = ["#7c3aed","#0891b2","#d97706","#be185d","#0d9488","#ea580c","#9333ea","#0284c7"];
 
-function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, revisaoAtiva }: any) {
+function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, revisaoAtiva, curvaMedicoes = [] }: any) {
   // Revisões anteriores com toggles
   const { data: todasRevisoes = [] } = trpc.planejamento.getCurvasTodasRevisoes.useQuery(
     { projetoId }, { enabled: !!projetoId }
@@ -3709,6 +3709,138 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
         <p>🟢 <strong>Tendência</strong>: Projeção baseada no ritmo atual. Indica data estimada de conclusão.</p>
         {revisoesAnteriores.length > 0 && <p>⚙️ <strong>Revisões anteriores</strong>: Ative os botões acima para comparar cronogramas de revisões anteriores.</p>}
       </div>
+
+      {/* ── Curva S Financeira ──────────────────────────────────────────────── */}
+      {(() => {
+        const contrato = n(proj?.valorContrato ?? 0);
+        if (contrato <= 0 || merged.length === 0) return null;
+
+        // Escala % → R$
+        const finMerged = merged.map((row: any) => ({
+          ...row,
+          baseline:  row.baseline  != null ? +(contrato * row.baseline  / 100).toFixed(2) : null,
+          planejada: row.planejada != null ? +(contrato * row.planejada / 100).toFixed(2) : null,
+          realizada: row.realizada != null ? +(contrato * row.realizada / 100).toFixed(2) : null,
+          tendencia: row.tendencia != null ? +(contrato * row.tendencia / 100).toFixed(2) : null,
+        }));
+
+        // Mescla curvaMedicoes (faturado acumulado por competência "YYYY-MM")
+        const medMap: Record<string, number> = {};
+        (curvaMedicoes as any[]).forEach((m: any) => { medMap[m.competencia] = m.valorAcumulado; });
+        const hasMedicoes = (curvaMedicoes as any[]).length > 0;
+        const finFull = hasMedicoes ? finMerged.map((row: any) => {
+          const comp = String(row.semana ?? "").slice(0, 7);
+          const allComps = Object.keys(medMap).filter(k => k <= comp);
+          const lastComp = allComps.length ? allComps[allComps.length - 1] : null;
+          return { ...row, faturado: lastComp != null ? medMap[lastComp] : undefined };
+        }) : finMerged;
+
+        const finHasBaseline  = finFull.some((p: any) => p.baseline  != null);
+        const finHasPlanejada = finFull.some((p: any) => p.planejada != null);
+        const finHasFaturado  = finFull.some((p: any) => p.faturado  != null);
+
+        const finTickFmt = (v: number) => {
+          if (v >= 1_000_000) return (v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "M";
+          if (v >= 1_000)     return (v / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + "k";
+          return v.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+        };
+
+        return (
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            {/* Legenda */}
+            <div className="flex flex-wrap gap-4 text-xs mb-3">
+              {finHasBaseline && (
+                <div className="flex items-center gap-1.5">
+                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#1e40af" strokeWidth="2" /></svg>
+                  <span className="text-slate-600">Baseline</span>
+                </div>
+              )}
+              {finHasPlanejada && (
+                <div className="flex items-center gap-1.5">
+                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#ef4444" strokeWidth="3.5" /></svg>
+                  <span className="text-slate-600">Revisão Atual</span>
+                </div>
+              )}
+              <div className="flex items-center gap-1.5">
+                <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#22c55e" strokeWidth="2.5" /></svg>
+                <span className="text-slate-600">Realizado</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#16a34a" strokeWidth="2" strokeDasharray="5 3" /></svg>
+                <span className="text-slate-600">Tendência</span>
+              </div>
+              {finHasFaturado && (
+                <div className="flex items-center gap-1.5">
+                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#7c3aed" strokeWidth="2.5" /></svg>
+                  <span className="text-slate-600">Faturado Real</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-sm font-semibold text-slate-700 mb-1">
+              Curva S — Evolução Financeira Acumulada
+            </p>
+            <p className="text-xs text-slate-400 mb-3">
+              Valores escalados pelo contrato: <strong>{fmt(contrato)}</strong>
+            </p>
+
+            <ResponsiveContainer width="100%" height={360}>
+              <LineChart data={finFull} margin={{ left: 10, right: 80, top: 5, bottom: merged.length > 10 ? 50 : 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-30} textAnchor="end"
+                  height={50} interval={Math.max(0, Math.floor(finFull.length / 10) - 1)}
+                  tickFormatter={(v: string) => semanaLabel[v] ?? v} />
+                <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10 }} width={72} />
+                <Tooltip
+                  content={({ payload, label }: any) => {
+                    if (!payload?.length) return null;
+                    const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
+                    const base = get("baseline"); const plan = get("planejada");
+                    const real = get("realizada"); const fat  = get("faturado"); const tend = get("tendencia");
+                    const ref = plan ?? base;
+                    const desvio = ref != null && real != null ? (real as number) - (ref as number) : null;
+                    const desvioFat = fat != null && real != null ? (fat as number) - (real as number) : null;
+                    const [y, m, d] = String(label).split("-");
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[230px]">
+                        <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">
+                          {semanaLabel[label] ?? label} · {d}/{m}/{y}
+                        </p>
+                        {base != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Baseline</span><strong>{fmt(base)}</strong></p>}
+                        {plan != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#ef4444" }}>Revisão Atual</span><strong>{fmt(plan)}</strong></p>}
+                        {real != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado</span><strong>{fmt(real)}</strong></p>}
+                        {fat  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#7c3aed" }}>Faturado Real</span><strong>{fmt(fat)}</strong></p>}
+                        {tend != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#16a34a" }}>Tendência</span><strong>{fmt(tend)}</strong></p>}
+                        {desvioFat != null && (
+                          <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvioFat >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            <span>Fat. vs Físico</span><span>{desvioFat >= 0 ? "+" : ""}{fmt(desvioFat)}</span>
+                          </p>
+                        )}
+                        {desvio != null && !desvioFat && (
+                          <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            <span>Desvio</span><span>{desvio >= 0 ? "+" : ""}{fmt(desvio)}</span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+                {semanas.includes(hoje) && (
+                  <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
+                )}
+                {finHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls />}
+                {finHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls />}
+                <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />
+                <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
+                {finHasFaturado && (
+                  <Line type="stepAfter" dataKey="faturado" stroke="#7c3aed" strokeWidth={2.5}
+                    dot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }} activeDot={{ r: 7 }} connectNulls />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
     </div>
   );
 }
