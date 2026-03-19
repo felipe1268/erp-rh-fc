@@ -3391,6 +3391,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 580,
+    titulo: "Fluxo de Caixa — Valor Recebido usa o valor efetivamente confirmado na baixa",
+    descricao: "Corrigido bug em que os KPIs 'Recebido ✓' e o totalizador do rodapé da tabela usavam r.recebido/r.liquido (valor planejado da parcela) em vez de baixas[r.mes]?.valor (o valor digitado e confirmado pelo usuário na baixa manual). A correção vale para ambos os modos: Parcelas Fixas (fluxoCaixa) e Avanço/Venda (previsoesMensais). Agora, se o usuário confirmar um valor diferente do previsto, o total exibido reflete exatamente o que foi recebido. Quando baixas[r.mes]?.valor é undefined (compatibilidade retroativa com baixas antigas sem campo valor), faz fallback para r.recebido/r.liquido.",
+    tipo: "bugfix",
+    modulos: "Planejamento — Fluxo de Caixa",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 579,
     titulo: "Aba Curva S — Gráfico Financeiro separado abaixo do Físico",
     descricao: "Adicionado segundo gráfico 'Curva S — Evolução Financeira Acumulada' na aba Curva S, abaixo do gráfico físico (inalterado). O gráfico financeiro escala as mesmas linhas (Baseline, Revisão Atual, Realizado, Tendência) multiplicando o percentual acumulado pelo valor do contrato (proj.valorContrato). Quando há dados de curvaMedicoes (medições reais), exibe também a linha 'Faturado Real' em roxo #7c3aed (stepAfter). Legenda própria, tooltip em R$ com dessvio Fat. vs Físico quando aplicável, linha 'Hoje' compartilhada. Só renderiza quando valorContrato > 0.",

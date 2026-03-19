@@ -5365,7 +5365,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
               {/* KPI Previsto vs Recebido (baixas manuais) — modo avanço */}
               {(() => {
                 const totalPrevisto = previsoesMensais.reduce((s, r) => s + (r.liquido > 0 ? r.liquido : 0), 0);
-                const totalRecebido = previsoesMensais.reduce((s, r) => s + (r.liquido > 0 && baixas[r.mes]?.confirmado ? r.liquido : 0), 0);
+                const totalRecebido = previsoesMensais.reduce((s, r) => s + (r.liquido > 0 && baixas[r.mes]?.confirmado ? (baixas[r.mes]?.valor ?? r.liquido) : 0), 0);
                 const aReceber = totalPrevisto - totalRecebido;
                 const pct = totalPrevisto > 0 ? (totalRecebido / totalPrevisto) * 100 : 0;
                 const nBaixas = previsoesMensais.filter(r => r.liquido > 0 && baixas[r.mes]?.confirmado).length;
@@ -5661,7 +5661,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                       <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(previsoesMensais.reduce((s, r) => s + r.custo, 0))}</td>
                       <td className="py-2 px-3" />
                       <td className="py-2 px-3 text-center text-emerald-300 font-bold">
-                        {fmt(previsoesMensais.reduce((s, r) => s + (baixas[r.mes]?.confirmado ? r.liquido : 0), 0))} ✓
+                        {fmt(previsoesMensais.reduce((s, r) => s + (baixas[r.mes]?.confirmado ? (baixas[r.mes]?.valor ?? r.liquido) : 0), 0))} ✓
                       </td>
                     </tr>
                   </tfoot>
@@ -5716,7 +5716,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
           {/* KPI Previsto vs Recebido (baixas manuais) */}
           {(() => {
             const totalPrevisto = fluxoCaixa.reduce((s, r) => s + (r.recebido > 0 ? r.recebido : 0), 0);
-            const totalRecebido = fluxoCaixa.reduce((s, r) => s + (r.recebido > 0 && baixas[r.mes]?.confirmado ? r.recebido : 0), 0);
+            const totalRecebido = fluxoCaixa.reduce((s, r) => s + (r.recebido > 0 && baixas[r.mes]?.confirmado ? (baixas[r.mes]?.valor ?? r.recebido) : 0), 0);
             const aReceber = totalPrevisto - totalRecebido;
             const pct = totalPrevisto > 0 ? (totalRecebido / totalPrevisto) * 100 : 0;
             const nBaixas = fluxoCaixa.filter(r => r.recebido > 0 && baixas[r.mes]?.confirmado).length;
@@ -5918,7 +5918,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                     <td className="py-2 px-3 text-right font-bold text-amber-300">{fmt(fluxoCaixa.reduce((s, r) => s + r.recebido, 0))}</td>
                     <td colSpan={2} />
                     <td className="py-2 px-3 text-center text-emerald-300 font-bold">
-                      {fmt(fluxoCaixa.reduce((s, r) => s + (baixas[r.mes]?.confirmado ? r.recebido : 0), 0))} ✓
+                      {fmt(fluxoCaixa.reduce((s, r) => s + (baixas[r.mes]?.confirmado ? (baixas[r.mes]?.valor ?? r.recebido) : 0), 0))} ✓
                     </td>
                   </tr>
                 </tfoot>
