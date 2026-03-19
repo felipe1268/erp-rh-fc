@@ -3391,6 +3391,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-18 00:00:00",
   },
   {
+    version: 582,
+    titulo: "Planejamento — abas 'Linha de Balanços' e 'IA Gestora' removidas temporariamente",
+    descricao: "Removidas as abas 'Linha de Balanços' (id: lob) e 'IA Gestora' (id: ia-gestora) da barra de navegação de Planejamento. As funcionalidades serão reimplementadas de forma mais eficiente em versão futura. Os componentes LobLinhaBalancosTab e IAGestora permanecem no código-fonte para referência, mas não são mais expostos na interface.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-19 00:00:00",
+  },
+  {
     version: 581,
     titulo: "Fluxo de Caixa ↔ Cronograma de Medições — integração bidirecional automática",
     descricao: "Dar Baixa no Fluxo de Caixa agora persiste automaticamente uma medição no banco de dados (planejamento_medicoes) com status='confirmado' e valorMedido=valor confirmado — eliminando a necessidade de registrar separadamente no Cronograma de Medições. O desfazer baixa reseta a medição para status='pendente' e valorMedido=0. Direção inversa: ao registrar uma medição no Cronograma de Medições, a query listarMedicoes é invalidada globalmente e um useEffect em PrevisaoMedicao sincroniza automaticamente o localStorage das baixas com os dados do DB, refletindo o lançamento no Fluxo de Caixa sem ação adicional do usuário. Adicionalmente, ao confirmar uma baixa, getCurvaMedicoes é invalidado, atualizando a linha 'Faturado Real' na Curva S Financeira em tempo real.",

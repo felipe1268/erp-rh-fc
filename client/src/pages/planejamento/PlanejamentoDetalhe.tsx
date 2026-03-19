@@ -42,7 +42,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "lob" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "ia-gestora" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "simulador";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "simulador";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -108,7 +108,6 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "visao-geral",          label: "Visão Geral",        Icon: BarChart3 },
   { id: "cronograma",           label: "Cronograma",         Icon: CalendarRange },
   { id: "gantt",                label: "Gantt",              Icon: CalendarCheck },
-  { id: "lob",                  label: "Linha de Balanços",  Icon: Building2 },
   { id: "cronograma-financeiro",label: "Crono. Financeiro",  Icon: DollarSign },
   { id: "curva-s",              label: "Curva S",            Icon: TrendingUp },
   { id: "avanco",               label: "Avanço Semanal",     Icon: Activity },
@@ -120,7 +119,6 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "custo-rh",             label: "Custo RH",           Icon: Users },
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
-  { id: "ia-gestora",           label: "IA Gestora",         Icon: Bot },
   { id: "simulador",            label: "Simulador",          Icon: Calculator },
 ];
 const TAB_IDS = TAB_DEFS.map(t => t.id);
@@ -622,23 +620,6 @@ export default function PlanejamentoDetalhe() {
             initialSemana={refisInitSemana}
             onInitialSemanaConsumed={() => setRefisInitSemana(null)}
             onSemanaChange={setSemanaVisualizacao}
-          />
-        )}
-        {aba === "lob" && (
-          <LobLinhaBalancosTab
-            projetoId={projetoId}
-            nomeProjeto={proj?.nome ?? "Projeto"}
-          />
-        )}
-        {aba === "ia-gestora" && (
-          <IAGestora
-            projetoId={projetoId}
-            proj={proj}
-            atividades={atividades}
-            avancos={avancos}
-            revisaoAtiva={revisaoAtiva}
-            utils={utils}
-            fmt={fmt}
           />
         )}
         {aba === "cronograma-financeiro" && (
