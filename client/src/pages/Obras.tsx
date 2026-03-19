@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
@@ -86,6 +86,10 @@ export default function Obras() {
     onError: (err) => { setSaving(false); toast.error(err.message || "Erro ao atualizar obra"); },
   });
   const deleteMut = trpc.obras.delete.useMutation({ onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); toast.success("Obra excluída!"); } });
+  const mesclarMut = trpc.obras.mesclar.useMutation({
+    onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); setMesclarDialog({ open: false, sourceObra: null }); setMesclarTargetId(null); toast.success("Obras mescladas com sucesso! Todos os registros foram migrados."); },
+    onError: (err) => toast.error(err.message || "Erro ao mesclar obras"),
+  });
   const addSnMut = trpc.obras.addSn.useMutation({
     onSuccess: () => { allSnsQ.refetch(); obraSnQ.refetch(); toast.success("SN vinculado com sucesso!"); setNewSn(""); setNewSnApelido(""); },
     onError: (err) => toast.error(err.message),
@@ -96,6 +100,8 @@ export default function Obras() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [mesclarDialog, setMesclarDialog] = useState<{ open: boolean; sourceObra: any | null }>({ open: false, sourceObra: null });
+  const [mesclarTargetId, setMesclarTargetId] = useState<number | null>(null);
   const [form, setForm] = useState<ObraForm>(emptyForm);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -414,9 +420,13 @@ export default function Obras() {
                         )}
                       </div>
                     )}
-                    <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap">
                       <Button variant="outline" size="sm" onClick={() => openEdit(obra)}>
                         <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                      </Button>
+                      <Button variant="outline" size="sm" className="text-amber-600 hover:text-amber-700 border-amber-200 hover:border-amber-300"
+                        onClick={() => { setMesclarDialog({ open: true, sourceObra: obra }); setMesclarTargetId(null); }}>
+                        <Merge className="h-3.5 w-3.5 mr-1" /> Mesclar
                       </Button>
                       <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(obra.id)}>
                         <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
@@ -962,6 +972,74 @@ export default function Obras() {
               className="bg-[#1B2A4A] hover:bg-[#243660] min-w-[120px]"
             >
               {criarClienteMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar Cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de Mesclagem de Obras */}
+      <Dialog open={mesclarDialog.open} onOpenChange={(open) => { if (!open) { setMesclarDialog({ open: false, sourceObra: null }); setMesclarTargetId(null); } }}>
+        <DialogContent style={{ background: '#ffffff', color: '#111827' }} className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Merge className="h-5 w-5 text-amber-600" />
+              Mesclar Obra Duplicada
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <p className="font-medium mb-1">O que isso faz:</p>
+              <ul className="list-disc list-inside space-y-1 text-xs">
+                <li>Todos os registros de ponto da obra abaixo serão migrados para a obra destino</li>
+                <li>Todos os ajustes manuais, justificativas e aprovações são <strong>preservados</strong></li>
+                <li>A obra de origem será excluída após a migração</li>
+                <li>Esta ação <strong>não pode ser desfeita</strong></li>
+              </ul>
+            </div>
+
+            <div>
+              <Label className="text-xs font-medium text-slate-500">Obra de origem (será excluída)</Label>
+              <div className="mt-1 rounded border bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                {mesclarDialog.sourceObra?.nome ?? "—"}
+                <span className="ml-2 text-xs text-slate-400">ID: {mesclarDialog.sourceObra?.id}</span>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-medium">Obra destino (receberá todos os registros) <span className="text-red-500">*</span></Label>
+              <Select
+                value={mesclarTargetId?.toString() ?? ""}
+                onValueChange={(v) => setMesclarTargetId(Number(v))}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Selecione a obra destino..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {obras
+                    .filter((o: any) => o.id !== mesclarDialog.sourceObra?.id)
+                    .map((o: any) => (
+                      <SelectItem key={o.id} value={o.id.toString()}>
+                        {o.nome}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setMesclarDialog({ open: false, sourceObra: null }); setMesclarTargetId(null); }}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!mesclarTargetId || mesclarMut.isPending}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => {
+                if (!mesclarDialog.sourceObra || !mesclarTargetId) return;
+                if (!window.confirm(`Confirma mesclar "${mesclarDialog.sourceObra.nome}" (ID ${mesclarDialog.sourceObra.id}) → obra destino ID ${mesclarTargetId}?\n\nTodos os registros de ponto serão migrados e a obra de origem será excluída. Esta ação não pode ser desfeita.`)) return;
+                mesclarMut.mutate({ sourceId: mesclarDialog.sourceObra.id, targetId: mesclarTargetId });
+              }}
+            >
+              {mesclarMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Mesclando...</> : "Confirmar Mesclagem"}
             </Button>
           </DialogFooter>
         </DialogContent>

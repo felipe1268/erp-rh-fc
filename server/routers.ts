@@ -985,6 +985,41 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "obras", entityType: "obra", entityId: input.id, details: `Obra excluída (lixeira)` });
       return { success: true };
     }),
+    // Mescla dois registros de obra duplicados: migra todos os registros de ponto, inconsistências
+    // e registros não identificados da obra-fonte para a obra-destino, depois exclui a fonte.
+    // Preserva 100% dos ajustes manuais já feitos — só o obraId muda.
+    mesclar: protectedProcedure
+      .input(z.object({ sourceId: z.number(), targetId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        if (input.sourceId === input.targetId) throw new Error("Obra de origem e destino são a mesma.");
+        const db = (await getDb())!;
+        // Migra registros de ponto (preserva todos os ajustes manuais, justificativas, etc.)
+        await db.execute(sql`UPDATE time_records SET "obraId" = ${input.targetId} WHERE "obraId" = ${input.sourceId}`);
+        // Migra inconsistências de ponto
+        await db.execute(sql`UPDATE time_inconsistencies SET "obraId" = ${input.targetId} WHERE "obraId" = ${input.sourceId}`);
+        // Migra registros DIXI não identificados
+        await db.execute(sql`UPDATE unmatched_dixi_records SET "obraId" = ${input.targetId} WHERE "obraId" = ${input.sourceId}`);
+        // Migra consolidações de ponto
+        await db.execute(sql`UPDATE ponto_consolidacao SET "obraId" = ${input.targetId} WHERE "obraId" = ${input.sourceId}`);
+        // Migra alocações de funcionários (evita duplicatas: só atualiza quem não já está na obra destino)
+        await db.execute(sql`
+          UPDATE employee_allocations SET "obraId" = ${input.targetId}
+          WHERE "obraId" = ${input.sourceId}
+            AND "employeeId" NOT IN (
+              SELECT "employeeId" FROM employee_allocations WHERE "obraId" = ${input.targetId}
+            )
+        `);
+        // Exclui alocações duplicadas que porventura restaram na fonte
+        await db.execute(sql`DELETE FROM employee_allocations WHERE "obraId" = ${input.sourceId}`);
+        // Soft-delete na obra-fonte
+        await deleteObra(input.sourceId, ctx.user.id, ctx.user.name ?? "Sistema");
+        await createAuditLog({
+          userId: ctx.user.id, userName: ctx.user.name ?? "Sistema",
+          action: "UPDATE", module: "obras", entityType: "obra", entityId: input.sourceId,
+          details: `Obra mesclada com obra ID ${input.targetId} — todos os registros de ponto, inconsistências e alocações migrados`,
+        });
+        return { success: true };
+      }),
     // Lista colaboradores com cargos de liderança para o campo "Engenheiro Responsável"
     listLiderancas: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
       const db = await getDb();

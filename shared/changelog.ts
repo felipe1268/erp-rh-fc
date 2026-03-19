@@ -3590,10 +3590,10 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 601,
-    titulo: "EPIs: fotos agora persistem entre redeploys (armazenadas no banco de dados)",
-    descricao: "Correção definitiva para fotos de EPIs que sumiam após cada republicação do sistema. Causa raiz: as fotos eram salvas no disco local do servidor de produção, que é apagado a cada redeploy. Fix: as fotos agora são armazenadas diretamente no banco de dados (Neon, externo e permanente) como data URI. Antes do envio, o cliente comprime automaticamente a imagem para no máximo 500×500px com qualidade JPEG 0.75, garantindo que cada foto ocupe apenas 20–50KB no banco. Fotos enviadas anteriormente que ficaram com URL quebrada precisarão ser reenviadas. Daqui em diante nenhuma foto será perdida por redeploy.",
+    titulo: "Obras: mesclagem de obras duplicadas + EPIs: fotos persistem entre redeploys",
+    descricao: "1) OBRAS — Nova função 'Mesclar': quando duas obras com o mesmo nome coexistem por erro (ex: dupla importação DIXI), o usuário pode mesclar a duplicata na correta. Todos os registros de ponto, inconsistências, alocações e ajustes manuais são migrados para a obra destino e a origem é excluída — sem reimportar, sem perder ajustes. Botão 'Mesclar' (âmbar) aparece em cada card de obra. 2) EPIs — Correção definitiva para fotos que sumiam após redeploy. As fotos agora são armazenadas no banco de dados (Neon, permanente) como data URI. O sistema comprime automaticamente para 500×500px / JPEG 0.75 antes de enviar (~30–50KB por foto). Fotos anteriores quebradas precisarão ser reenviadas.",
     tipo: "bugfix",
-    modulos: "EPIs",
+    modulos: "Obras, EPIs",
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
