@@ -113,6 +113,35 @@ async function startServer() {
         console.log("[ColFix] planejamento_revisoes.consolidado OK");
         await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT FALSE`);
         console.log("[ColFix] planejamento_atividades.disabled OK");
+        await db.execute(sql`ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT`);
+        console.log("[ColFix] epis.fotoUrl OK");
+        // Recuperar fotos já enviadas cujo fotoUrl não foi salvo no banco
+        try {
+          const fs = await import("fs");
+          const path = await import("path");
+          const fotosDir = path.join(process.cwd(), "server", "uploads", "epi-fotos");
+          if (fs.existsSync(fotosDir)) {
+            const files = fs.readdirSync(fotosDir);
+            // Agrupar por EPI id, pegar a mais recente (maior timestamp)
+            const byId: Record<number, { ts: number; file: string }> = {};
+            for (const f of files) {
+              const m = f.match(/^(\d+)_(\d+)\.\w+$/);
+              if (!m) continue;
+              const epiId = parseInt(m[1]);
+              const ts = parseInt(m[2]);
+              if (!byId[epiId] || ts > byId[epiId].ts) byId[epiId] = { ts, file: f };
+            }
+            const ids = Object.keys(byId);
+            console.log(`[ColFix] epis.fotoUrl: ${ids.length} arquivo(s) em disco para recuperar.`);
+            let recovered = 0;
+            for (const [epiId, { file }] of Object.entries(byId)) {
+              const url = `/uploads/epi-fotos/${file}`;
+              const result = await db.execute(sql`UPDATE epis SET "fotoUrl" = ${url} WHERE id = ${Number(epiId)} AND ("fotoUrl" IS NULL OR "fotoUrl" = '')`);
+              if ((result as any).rowCount > 0) recovered++;
+            }
+            console.log(`[ColFix] epis.fotoUrl: ${recovered}/${ids.length} fotos recuperadas do disco.`);
+          }
+        } catch (re: any) { console.warn("[ColFix] Recuperação de fotos:", re?.message); }
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     // Rev.590: criar tabelas do módulo Medição de Contratos (se não existirem)
