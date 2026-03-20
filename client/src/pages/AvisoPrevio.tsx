@@ -21,7 +21,7 @@ import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
   CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer, RefreshCw, RotateCcw,
-  UserX, ShieldAlert, Edit2, Briefcase, Save, MinusCircle, PlusCircle, Link,
+  UserX, ShieldAlert, Edit2, Briefcase, Save, MinusCircle, PlusCircle, Link, Upload, Loader2, FileCheck,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
@@ -152,6 +152,8 @@ export default function AvisoPrevio() {
   const [novoEmpregoForm, setNovoEmpregoForm] = useState<{ ativo: boolean; comunicadoEm: string; cartaUrl: string }>({ ativo: false, comunicadoEm: '', cartaUrl: '' });
   const [savingAcerto, setSavingAcerto] = useState(false);
   const [savingNovoEmprego, setSavingNovoEmprego] = useState(false);
+  const [uploadingCarta, setUploadingCarta] = useState(false);
+  const cartaFileRef = useRef<HTMLInputElement>(null);
 
   const refreshSelectedItem = async (id: number) => {
     try {
@@ -200,6 +202,35 @@ export default function AvisoPrevio() {
     },
     onError: (e: any) => { toast.error(e.message || 'Erro ao salvar novo emprego'); setSavingNovoEmprego(false); },
   });
+
+  const uploadCartaMutation = trpc.avisoPrevio.avisoPrevio.uploadCartaNovoEmprego.useMutation({
+    onSuccess: async (result) => {
+      toast.success('Arquivo enviado com sucesso!');
+      setNovoEmpregoForm(f => ({ ...f, cartaUrl: result.url }));
+      setUploadingCarta(false);
+      if (selectedItem?.id) { refetch(); await refreshSelectedItem(selectedItem.id); }
+    },
+    onError: (e: any) => { toast.error(e.message || 'Erro ao enviar arquivo'); setUploadingCarta(false); },
+  });
+
+  const handleCartaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedItem?.id) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error('Arquivo muito grande. Máximo 10MB.'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      setUploadingCarta(true);
+      uploadCartaMutation.mutate({
+        id: selectedItem.id,
+        fileBase64: base64,
+        mimeType: file.type as any,
+        fileName: file.name,
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // Cálculo automático via useEffect
   const [calculoLoading, setCalculoLoading] = useState(false);
@@ -777,20 +808,39 @@ export default function AvisoPrevio() {
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-medium text-orange-700 block mb-1">Link da Carta / Comprovante</label>
+                          <label className="text-xs font-medium text-orange-700 block mb-1">Carta / Comprovante</label>
                           <div className="flex gap-1">
                             <Input
                               value={novoEmpregoForm.cartaUrl}
                               onChange={e => setNovoEmpregoForm(f => ({ ...f, cartaUrl: e.target.value }))}
-                              placeholder="URL do documento..."
+                              placeholder="URL ou envie o arquivo →"
                               className="text-sm h-8 border-orange-300"
                             />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 w-8 p-0 border-orange-300 text-orange-600 hover:bg-orange-100 flex-shrink-0"
+                              title="Enviar PDF ou JPG"
+                              disabled={uploadingCarta}
+                              onClick={() => cartaFileRef.current?.click()}
+                            >
+                              {uploadingCarta ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                            </Button>
                             {novoEmpregoForm.cartaUrl && (
-                              <a href={novoEmpregoForm.cartaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-8 w-8 bg-orange-200 rounded hover:bg-orange-300">
-                                <Link className="h-3.5 w-3.5 text-orange-700" />
+                              <a href={novoEmpregoForm.cartaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-8 w-8 bg-orange-200 rounded hover:bg-orange-300 flex-shrink-0" title="Abrir documento">
+                                <FileCheck className="h-3.5 w-3.5 text-orange-700" />
                               </a>
                             )}
                           </div>
+                          <input
+                            ref={cartaFileRef}
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            className="hidden"
+                            onChange={handleCartaFileChange}
+                          />
+                          <p className="text-[10px] text-orange-500 mt-0.5">PDF, JPG ou PNG · máx. 10MB</p>
                         </div>
                       </div>
                       <div className="text-[10px] text-orange-600">

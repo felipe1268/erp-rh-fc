@@ -7,6 +7,7 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
 import { corrigirPontoFuncionario } from "../utils/pontoCorrecaoAuto";
+import { storagePut } from "../storage";
 
 // ============================================================
 // CÁLCULOS CLT - RESCISÃO TRABALHISTA
@@ -1521,6 +1522,48 @@ export const avisoPrevioFeriasRouter = router({
             : `Novo emprego desativado por ${ctx.user.name}`,
         });
         return { success: true };
+      }),
+
+    /** Upload de arquivo (PDF/JPG) como carta de comprovante de novo emprego */
+    uploadCartaNovoEmprego: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        fileBase64: z.string(),
+        mimeType: z.enum(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']),
+        fileName: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [aviso] = await db.select({ id: terminationNotices.id, companyId: terminationNotices.companyId })
+          .from(terminationNotices)
+          .where(and(eq(terminationNotices.id, input.id), isNull(terminationNotices.deletedAt)));
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+
+        const ext = input.mimeType === 'application/pdf' ? 'pdf'
+          : input.mimeType === 'image/png' ? 'png' : 'jpg';
+        const randomSuffix = Math.random().toString(36).substring(2, 10);
+        const fileKey = `aviso-previo/${aviso.companyId}/${input.id}/carta-novo-emprego-${randomSuffix}.${ext}`;
+
+        const buffer = Buffer.from(input.fileBase64, 'base64');
+        const { url } = await storagePut(fileKey, buffer, input.mimeType);
+
+        await db.execute(sql`
+          UPDATE termination_notices SET
+            "novoEmpregoCartaUrl" = ${url},
+            "updatedAt" = NOW()
+          WHERE id = ${input.id}
+        `);
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'UPLOAD_CARTA_NOVO_EMPREGO',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.id,
+          details: `Carta/comprovante de novo emprego enviada por ${ctx.user.name} — arquivo: ${input.fileName}`,
+        });
+        return { success: true, url };
       }),
 
     /** Gerar dados para PDF do Aviso Prévio */

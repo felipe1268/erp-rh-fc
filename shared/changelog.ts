@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 615,
+    titulo: "Aviso Prévio: upload de PDF/JPG como comprovante de novo emprego (Súmula 276 TST)",
+    descricao: "No campo 'Carta / Comprovante' da seção Novo Emprego, o RH agora pode tanto colar uma URL quanto fazer upload direto de arquivo (PDF, JPG ou PNG, máx. 10MB). O arquivo é armazenado no servidor e a URL é salva automaticamente no campo. O botão de upload (ícone nuvem) exibe spinner durante o envio. Após upload bem-sucedido, o ícone de documento abre o arquivo. Auditoria registrada com nome do arquivo enviado e responsável.",
+    tipo: "feature",
+    modulos: "Aviso Prévio",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 614,
     titulo: "Hotfix: pool de conexões Neon — correção de timeout em cold start causando dashboard zerado",
     descricao: "Correção do pool de conexões PostgreSQL (Neon) que causava timeout e zeros no dashboard: connectionTimeoutMillis aumentado de 10s para 30s (Neon cold start pode levar 15-20s), max de 10 para 15 conexões simultâneas (background jobs + requisições de usuário), adicionado listener de erro no pool para evitar crashes silenciosos. Investigação: a produção apresentava 'Connection terminated due to connection timeout' nos jobs de background (StatusSync, RescisaoCheck, PurchaseJobs) que esgotavam o pool — consequentemente as queries do Painel Principal (home.getData) falhavam silenciosamente retornando undefined, exibindo zeros em todas as métricas.",
