@@ -1890,17 +1890,22 @@ export const fechamentoPontoRouter = router({
         const [h, m] = t.split(':').map(Number);
         return (h || 0) * 60 + (m || 0);
       };
+      // Normaliza nome da obra para comparação (evita falso conflito entre duplicatas de mesmo nome)
+      const obraKey = (r: { obraId: number | null; obraNome: string | null }) =>
+        r.obraNome ? r.obraNome.trim().toUpperCase() : (r.obraId != null ? String(r.obraId) : '__null__');
+
       const checkOverlap = (entries: typeof recs) => {
-        const intervalos: { obraId: number | null; inicio: number; fim: number }[] = [];
+        const intervalos: { obraKey: string; inicio: number; fim: number }[] = [];
         for (const r of entries) {
-          if (r.entrada1 && r.saida1) intervalos.push({ obraId: r.obraId, inicio: parseTimeMin(r.entrada1), fim: parseTimeMin(r.saida1) });
-          if (r.entrada2 && r.saida2) intervalos.push({ obraId: r.obraId, inicio: parseTimeMin(r.entrada2), fim: parseTimeMin(r.saida2) });
-          if (r.entrada3 && r.saida3) intervalos.push({ obraId: r.obraId, inicio: parseTimeMin(r.entrada3), fim: parseTimeMin(r.saida3) });
+          const key = obraKey(r);
+          if (r.entrada1 && r.saida1) intervalos.push({ obraKey: key, inicio: parseTimeMin(r.entrada1), fim: parseTimeMin(r.saida1) });
+          if (r.entrada2 && r.saida2) intervalos.push({ obraKey: key, inicio: parseTimeMin(r.entrada2), fim: parseTimeMin(r.saida2) });
+          if (r.entrada3 && r.saida3) intervalos.push({ obraKey: key, inicio: parseTimeMin(r.entrada3), fim: parseTimeMin(r.saida3) });
         }
         for (let i = 0; i < intervalos.length; i++) {
           for (let j = i + 1; j < intervalos.length; j++) {
             const a = intervalos[i], b = intervalos[j];
-            if (a.obraId !== b.obraId && a.inicio < b.fim && b.inicio < a.fim) {
+            if (a.obraKey !== b.obraKey && a.inicio < b.fim && b.inicio < a.fim) {
               return true;
             }
           }
@@ -1940,7 +1945,7 @@ export const fechamentoPontoRouter = router({
           // Se a obra anterior não tem saída registrada, sugerir saída
           const fromHasExit = !!(from.saida1 || from.saida2);
           
-          if (gap > 0 && from.obraId !== to.obraId) {
+          if (gap > 0 && obraKey(from) !== obraKey(to)) {
             // Sugerir saída = entrada na próxima obra (o funcionário saiu para ir à outra)
             const suggestedExitMin = toEntrada;
             const sugH = Math.floor(suggestedExitMin / 60);
@@ -1984,11 +1989,12 @@ export const fechamentoPontoRouter = router({
 
       for (const [key, entries] of Object.entries(byEmpDate)) {
         if (entries.length > 1) {
-          const obraIds = new Set(entries.map(e => e.obraId));
+          // Usar nome normalizado da obra como chave — evita falso conflito entre duplicatas de mesma obra (IDs diferentes, mesmo nome)
+          const obraNames = new Set(entries.map(e => obraKey(e)));
           const [empId, data] = key.split('|');
 
-          if (obraIds.size > 1) {
-            // Conflito entre obras diferentes (comportamento original)
+          if (obraNames.size > 1) {
+            // Conflito entre obras realmente diferentes
             const overlap = checkOverlap(entries);
             const transferInfo = !overlap ? analyzeTransfer(entries) : null;
             conflitos.push({
@@ -2002,7 +2008,7 @@ export const fechamentoPontoRouter = router({
               records: entries.map(e => ({ id: e.id, obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas, entrada1: e.entrada1, saida1: e.saida1, entrada2: e.entrada2, saida2: e.saida2, entrada3: e.entrada3, saida3: e.saida3, ajusteManual: e.ajusteManual })),
             });
           } else {
-            // NOVO: Batidas duplicadas na mesma obra (mesmo obraId, mesmo funcionário, mesmo dia)
+            // Batidas duplicadas na mesma obra (mesmo obraId/obraNome, mesmo funcionário, mesmo dia)
             conflitos.push({
               employeeId: Number(empId),
               employeeName: empNames[Number(empId)] || 'Desconhecido',

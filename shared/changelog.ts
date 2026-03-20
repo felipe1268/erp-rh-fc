@@ -3778,6 +3778,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 620,
+    titulo: "Efetivo por Obra: correção de obras duplicadas (mesmo nome, IDs diferentes)",
+    descricao: "Corrigidos três bugs relacionados a obras com nomes iguais mas IDs diferentes no banco: (1) deleteObra agora também desativa (isActive=0) todos os registros de obra_funcionarios da obra excluída — evita funcionários 'fantasmas' aparecendo no efetivo após exclusão; (2) getEfetivoPorObra agora filtra obras deletadas (isNull(obras.deletedAt)) no JOIN — obras excluídas não aparecem mais no relatório; (3) Agrupamento do efetivo agora sempre usa o nome da obra como chave (não o ID) — duas obras com mesmo nome e IDs diferentes são consolidadas em uma linha; (4) getConflitosObraDia: conflito entre obras agora é detectado por nome normalizado (não por obraId) — registros de duas obras duplicadas com mesmo nome no mesmo dia não geram mais falso conflito de sobreposição.",
+    tipo: "bugfix",
+    modulos: "Obras, Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 619,
     titulo: "Lançamento Manual: horários automáticos da jornada + mês completo com feriados em vermelho",
     descricao: "Três melhorias no dialog de Lançamento Manual: (1) Auto-preenchimento de horários a partir da jornada do funcionário (jornadaTrabalho): ao selecionar o colaborador no combobox, os dias já existentes na tabela recebem os horários conforme o dia da semana; ao clicar em 'Preencher mês completo', cada linha é gerada com horários calculados automaticamente (entrada, saída intervalo, retorno e saída — com intervalo matemático); ao alterar a data de uma linha vazia, o horário é preenchido automaticamente. (2) 'Preencher dias úteis do mês' renomeado para 'Preencher mês completo': agora inclui TODOS os dias do mês (antes só incluía dias úteis). (3) Sábados, domingos e feriados nacionais brasileiros aparecem em vermelho sem horário — feriados calculados dinamicamente incluindo Carnaval, Sexta-feira Santa, Páscoa e Corpus Christi. Dias de feriado (que não sejam fim de semana) exibem label 'feriado' abaixo do nome do dia.",

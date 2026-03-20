@@ -1375,11 +1375,14 @@ export async function updateObra(id: number, data: Partial<InsertObra>) {
 export async function deleteObra(id: number, userId?: number, userName?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Soft-delete the obra
   await db.update(obras).set({
     deletedAt: sql`NOW()`,
     deletedBy: userName || null,
     deletedByUserId: userId || null,
   } as any).where(eq(obras.id, id));
+  // Also deactivate all obra_funcionarios for this obra so employees don't appear as orphans
+  await db.execute(sql`UPDATE obra_funcionarios SET "isActive" = 0 WHERE "obraId" = ${id}`);
 }
 
 export async function restoreObra(id: number) {
@@ -1917,7 +1920,7 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
   const today = new Date().toISOString().split('T')[0];
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
 
-  // 1. Buscar alocações ativas com dados do funcionário
+  // 1. Buscar alocações ativas com dados do funcionário (excluir obras deletadas)
   const alocacoes = await db.select({
     obraId: obraFuncionarios.obraId,
     obraNome: obras.nome,
@@ -1927,7 +1930,7 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
     employeeId: obraFuncionarios.employeeId,
     empStatus: employees.status,
   }).from(obraFuncionarios)
-    .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
+    .innerJoin(obras, and(eq(obraFuncionarios.obraId, obras.id), isNull(obras.deletedAt)))
     .innerJoin(employees, eq(obraFuncionarios.employeeId, employees.id))
     .where(and(
       inArray(obraFuncionarios.companyId, ids),
@@ -1980,17 +1983,15 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
     ));
   const empIdsEmFerias = new Set(feriasAtivas.map(f => f.employeeId));
 
-  // 4. Agregar por obra — quando múltiplas construtoras, consolidar por NOME da obra
-  //    (FC e JF podem ter obras com mesmo nome mas IDs diferentes)
-  const isMultiCompany = ids.length > 1;
+  // 4. Agregar por obra — sempre consolida por NOME para evitar duplicatas com mesmo nome e IDs diferentes
   const obraMap = new Map<string, {
     obraId: number; obraIds: number[]; obraNome: string; obraCodigo: string | null; obraStatus: string | null; obraCidade: string | null;
     efetivo: number; qtdAtivo: number; qtdAviso: number; qtdAvisoDispensado: number; qtdFerias: number; qtdAfastado: number; qtdRecluso: number;
   }>();
 
   for (const a of alocacoes) {
-    // Chave: por nome (trim) quando multi-company, por obraId quando single
-    const key = isMultiCompany ? (a.obraNome || '').trim().toUpperCase() : String(a.obraId);
+    // Chave sempre por nome (trim+upper) — evita duplicatas de mesma obra com IDs diferentes
+    const key = (a.obraNome || '').trim().toUpperCase();
     if (!obraMap.has(key)) {
       obraMap.set(key, {
         obraId: a.obraId, obraIds: [a.obraId], obraNome: a.obraNome, obraCodigo: a.obraCodigo, obraStatus: a.obraStatus, obraCidade: a.obraCidade,
