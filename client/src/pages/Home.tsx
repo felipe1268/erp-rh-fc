@@ -858,6 +858,7 @@ function AlertasDialog({
       count: s?.asosVencidos ?? 0,
       items: (homeData?.asosAlerta ?? []).filter((a: any) => a.vencido).map((a: any) => ({
         label: a.nome,
+        empStatus: a.status,
         sublabel: a.funcao || "",
         detail: `Vencido há ${Math.abs(a.diasRestantes)} dias`,
         detailColor: "text-red-600 font-bold",
@@ -874,6 +875,7 @@ function AlertasDialog({
       count: s?.asosVencendo ?? 0,
       items: (homeData?.asosAlerta ?? []).filter((a: any) => !a.vencido).map((a: any) => ({
         label: a.nome,
+        empStatus: a.status,
         sublabel: a.funcao || "",
         detail: `${a.diasRestantes} dias restantes`,
         detailColor: a.diasRestantes <= 15 ? "text-orange-600 font-semibold" : "text-muted-foreground",
@@ -890,6 +892,7 @@ function AlertasDialog({
       count: s?.semAso ?? 0,
       items: (homeData?.semAso ?? []).map((e: any) => ({
         label: e.nome,
+        empStatus: e.status,
         sublabel: e.funcao || "",
         detail: "Sem ASO cadastrado",
         detailColor: "text-amber-600",
@@ -906,6 +909,7 @@ function AlertasDialog({
       count: s?.feriasAlerta ?? 0,
       items: (homeData?.feriasAlerta ?? []).map((f: any) => ({
         label: f.nome,
+        empStatus: f.status,
         sublabel: `${f.periodoAquisitivo}º período aquisitivo`,
         detail: f.diasParaVencer <= 0 ? "VENCIDO" : `${f.diasParaVencer} dias para vencer`,
         detailColor: f.urgente ? "text-red-600 font-bold" : "text-yellow-600",
@@ -922,6 +926,7 @@ function AlertasDialog({
       count: (stats?.experienciasVencidas ?? 0) + (stats?.experienciasUrgentes ?? 0),
       items: (homeData?.experiencias ?? []).filter((e: any) => e.urgencia === 'vencido' || e.urgencia === 'urgente').map((e: any) => ({
         label: e.nome,
+        empStatus: e.empStatus,
         sublabel: `${e.funcao || ''} · ${e.status === 'prorrogado' ? '2º período' : '1º período'}`,
         detail: e.diasRestantes < 0 ? `Vencido há ${Math.abs(e.diasRestantes)} dias` : e.diasRestantes === 0 ? 'VENCE HOJE' : `${e.diasRestantes} dias restantes`,
         detailColor: e.urgencia === 'vencido' ? 'text-red-600 font-bold' : 'text-orange-600 font-semibold',
@@ -1011,8 +1016,8 @@ function AlertasDialog({
                     className={`flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2 rounded-lg ${group.bgColor} border ${group.borderColor} gap-1`}
                   >
                     <div className="min-w-0">
-                      <span className="text-sm font-medium">{item.label}</span>
-                      {item.sublabel && <span className="text-xs text-muted-foreground ml-2">{item.sublabel}</span>}
+                      <span className="text-sm font-medium flex items-center gap-1.5 flex-wrap">{item.label}<EmpStatusBadge status={item.empStatus} /></span>
+                      {item.sublabel && <span className="text-xs text-muted-foreground block">{item.sublabel}</span>}
                     </div>
                     <span className={`text-xs font-mono shrink-0 ${item.detailColor}`}>{item.detail}</span>
                   </div>
