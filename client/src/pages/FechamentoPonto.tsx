@@ -659,17 +659,14 @@ export default function FechamentoPonto() {
     const [y, m] = mesAno.split("-").map(Number);
     const emp = (employeesList.data || []).find((e: any) => e.id === manualData.employeeId);
     const jornada = emp?.jornadaTrabalho || null;
-    const holidays = getBrazilianHolidays(y);
     const dias: typeof manualDays = [];
     const d = new Date(y, m - 1, 1);
     while (d.getMonth() === m - 1) {
       const dow = d.getDay();
       const dateStr = d.toISOString().split("T")[0];
       const isWeekend = dow === 0 || dow === 6;
-      const isHoliday = holidays.has(dateStr);
-      // Weekends and holidays: add without times (user decides)
-      // Weekdays with schedule: auto-fill
-      if (isWeekend || isHoliday) {
+      // Weekends: add without times; weekdays: auto-fill schedule
+      if (isWeekend) {
         dias.push({ id: `${dateStr}-${Math.random()}`, data: dateStr, entrada1: "", saida1: "", entrada2: "", saida2: "" });
       } else {
         const sched = getScheduleForDay(jornada, dateStr);
@@ -3622,10 +3619,8 @@ export default function FechamentoPonto() {
                             const dow = day.data ? ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][new Date(day.data + "T12:00:00").getDay()] : "";
                             const dowNum = day.data ? new Date(day.data + "T12:00:00").getDay() : -1;
                             const isWeekend = [0, 6].includes(dowNum);
-                            const [yrRow] = day.data ? day.data.split("-").map(Number) : [0];
-                            const isHoliday = day.data ? getBrazilianHolidays(yrRow).has(day.data) : false;
-                            const isRed = isWeekend || isHoliday;
-                            const isFaltaMarcada = !!(day.data && !isWeekend && !isHoliday && !day.entrada1 && !day.saida1 && !day.entrada2 && !day.saida2);
+                            const isRed = isWeekend;
+                            const isFaltaMarcada = !!(day.data && !isWeekend && !day.entrada1 && !day.saida1 && !day.entrada2 && !day.saida2);
                             // Schedule comparison for color coding
                             const sched = selectedEmp?.jornadaTrabalho && day.data ? getScheduleForDay(selectedEmp.jornadaTrabalho, day.data) : null;
                             const schedHasTimes = !!(sched?.entrada1 && sched?.saida2);
@@ -3670,7 +3665,6 @@ export default function FechamentoPonto() {
                                 <td className="px-1 py-1 text-center">
                                   <div className="flex flex-col items-center gap-0.5">
                                     <span className={`text-xs font-bold ${isRed || isFaltaMarcada ? "text-red-600" : isOnSchedule ? "text-green-700" : isHorasExtras ? "text-blue-700" : isOffSchedule ? "text-amber-700" : "text-muted-foreground"}`}>{dow}</span>
-                                    {isHoliday && !isWeekend && <span className="text-[9px] text-red-500 leading-none">feriado</span>}
                                     {isFaltaMarcada && <span className="text-[9px] text-red-700 font-bold leading-none">FALTA</span>}
                                     {isOnSchedule && <span className="text-[9px] text-green-700 font-bold leading-none">✓ OK</span>}
                                     {isHorasExtras && <span className="text-[9px] text-blue-700 font-bold leading-none">H.E.</span>}
