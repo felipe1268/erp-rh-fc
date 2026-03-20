@@ -658,6 +658,13 @@ export default function FechamentoPonto() {
     },
     onError: (err) => toast.error("Erro: " + err.message),
   });
+  const limparDixiComManualMut = trpc.fechamentoPonto.limparDixiComManual.useMutation({
+    onSuccess: (data: any) => {
+      conflitos.refetch(); stats.refetch(); summary.refetch();
+      toast.success(data.message || `${data.excluidos} registros DIXI excluídos!`, { duration: 8000 });
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
   const linkUnmatchedMut = trpc.fechamentoPonto.linkUnmatchedToEmployee.useMutation({
     onSuccess: (data) => {
       unmatchedData.refetch(); stats.refetch(); summary.refetch(); inconsistencies.refetch();
@@ -3642,6 +3649,33 @@ export default function FechamentoPonto() {
         <FullScreenDialog open={showClearDialog} onClose={() => setShowClearDialog(false)} title={`Limpar Base — ${formatMesAno(mesAno)}`} icon={<Trash2 className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-red-800 to-red-600">
           <div className="w-full max-w-xl">
             <div className="space-y-4">
+              {/* === LIMPEZA DE DIXI COM MANUAL === */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-blue-800 mb-1">Prioridade Manual sobre DIXI</p>
+                <p className="text-xs text-blue-700 mb-3">
+                  Remove registros DIXI de dias onde já existe lançamento manual para o mesmo funcionário. Aplica-se ao mês selecionado ou a toda a base.
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-100 text-xs"
+                    disabled={limparDixiComManualMut.isPending}
+                    onClick={() => {
+                      if (confirm(`Remover registros DIXI do mês ${formatMesAno(mesAno)} onde já existe lançamento manual?\n\nEsta ação é irreversível.`)) {
+                        limparDixiComManualMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
+                      }
+                    }}>
+                    {limparDixiComManualMut.isPending ? "Processando..." : `Limpar ${formatMesAno(mesAno)}`}
+                  </Button>
+                  <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-100 text-xs"
+                    disabled={limparDixiComManualMut.isPending}
+                    onClick={() => {
+                      if (confirm(`Remover registros DIXI de TODA A BASE onde já existe lançamento manual?\n\nEsta ação é irreversível e pode afetar vários meses.`)) {
+                        limparDixiComManualMut.mutate({ companyId, companyIds });
+                      }
+                    }}>
+                    {limparDixiComManualMut.isPending ? "Processando..." : "Limpar Toda a Base"}
+                  </Button>
+                </div>
+              </div>
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
                 <strong>Atenção:</strong> Esta ação é irreversível.
               </div>

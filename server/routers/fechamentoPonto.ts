@@ -817,11 +817,25 @@ export const fechamentoPontoRouter = router({
             )
           );
 
-          // Insert time records in batches
+          // Filtrar registros DIXI onde já existe lançamento manual para o mesmo funcionário/dia
+          let recsParaInserir = recs;
           if (recs.length > 0) {
+            const empIds = [...new Set(recs.map((r: any) => r.employeeId))];
+            const manuaisExistentes = await db.execute(sql`
+              SELECT "employeeId", data FROM time_records
+              WHERE "companyId" = ${input.companyId}
+                AND fonte = 'manual'
+                AND "employeeId" IN (${sql.join(empIds.map((id: number) => sql`${id}`), sql`, `)})
+                AND data BETWEEN ${`${mesRef}-01`} AND ${`${mesRef}-31`}
+            `);
+            const manualSet = new Set((manuaisExistentes.rows as any[]).map((r: any) => `${r.employeeId}|${r.data}`));
+            recsParaInserir = recs.filter((r: any) => !manualSet.has(`${r.employeeId}|${r.data}`));
+          }
+          // Insert time records in batches
+          if (recsParaInserir.length > 0) {
             const batchSize = 50;
-            for (let i = 0; i < recs.length; i += batchSize) {
-              const batch = recs.slice(i, i + batchSize);
+            for (let i = 0; i < recsParaInserir.length; i += batchSize) {
+              const batch = recsParaInserir.slice(i, i + batchSize);
               await db.insert(timeRecords).values(batch);
             }
           }
@@ -998,6 +1012,7 @@ export const fechamentoPontoRouter = router({
             employeeStatus: r.employeeStatus,
             obraId: r.obraId,
             obraIds: new Set<number>(),
+            datesSet: new Set<string>(),
             diasTrabalhados: 0,
             totalMinutosTrabalhados: 0,
             totalMinutosExtras: 0,
@@ -1006,7 +1021,11 @@ export const fechamentoPontoRouter = router({
           };
         }
         const emp = byEmployee[r.employeeId];
-        emp.diasTrabalhados++;
+        // Conta dias únicos: se já existe registro manual para esse dia, o DIXI não conta novamente
+        if (!emp.datesSet.has(r.data)) {
+          emp.datesSet.add(r.data);
+          emp.diasTrabalhados++;
+        }
         if (r.obraId) emp.obraIds.add(r.obraId);
         if (r.horasTrabalhadas) {
           const [h, m] = r.horasTrabalhadas.split(":").map(Number);
@@ -1235,6 +1254,15 @@ export const fechamentoPontoRouter = router({
 
       if (existing.length > 0) {
         await db.update(timeRecords).set(record as any).where(eq(timeRecords.id, existing[0].id));
+        // Apagar quaisquer outros registros DIXI do mesmo funcionário/dia (não o que acabamos de salvar)
+        await db.execute(sql`
+          DELETE FROM time_records
+          WHERE "companyId" = ${input.companyId}
+            AND "employeeId" = ${input.employeeId}
+            AND data = ${input.data}
+            AND fonte = 'dixi'
+            AND id != ${existing[0].id}
+        `);
         await db.update(timeInconsistencies)
           .set({ status: "ajustado", resolvidoPor: ctx.user?.name || "RH", resolvidoEm: new Date().toISOString().split("T")[0] })
           .where(and(
@@ -1243,6 +1271,14 @@ export const fechamentoPontoRouter = router({
           ));
         return { success: true, action: "updated" };
       } else {
+        // Apagar DIXI existente antes de inserir o manual
+        await db.execute(sql`
+          DELETE FROM time_records
+          WHERE "companyId" = ${input.companyId}
+            AND "employeeId" = ${input.employeeId}
+            AND data = ${input.data}
+            AND fonte = 'dixi'
+        `);
         await db.insert(timeRecords).values(record as any);
         return { success: true, action: "created" };
       }
@@ -2591,6 +2627,64 @@ export const fechamentoPontoRouter = router({
         resolved,
         excluidos: idsParaExcluir.length,
         message: `${resolved} grupo(s) de duplicatas resolvido(s). ${idsParaExcluir.length} registro(s) duplicado(s) excluído(s). Em cada caso foi mantido o registro com mais horas ou o ajuste manual.`,
+      };
+    }),
+
+  // ============================================================
+  // LIMPEZA: REMOVER REGISTROS DIXI ONDE EXISTE MANUAL NO MESMO DIA
+  // ============================================================
+  limparDixiComManual: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      mesReferencia: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas administradores podem executar esta operação.' });
+      }
+
+      const companyIds = input.companyIds || [input.companyId];
+      const companyIdsSql = sql.join(companyIds.map(id => sql`${id}`), sql`, `);
+
+      let dateFilter = sql``;
+      if (input.mesReferencia) {
+        const mesStart = `${input.mesReferencia}-01`;
+        const mesEnd = `${input.mesReferencia}-31`;
+        dateFilter = sql` AND tr.data BETWEEN ${mesStart} AND ${mesEnd}`;
+      }
+
+      // Encontrar todos os IDs de registros DIXI que têm um registro Manual correspondente (mesmo companyId, employeeId, data)
+      const dixiParaApagar = await db.execute(sql`
+        SELECT tr.id FROM time_records tr
+        WHERE tr."companyId" IN (${companyIdsSql})
+          AND tr.fonte = 'dixi'
+          ${dateFilter}
+          AND EXISTS (
+            SELECT 1 FROM time_records m
+            WHERE m."companyId" = tr."companyId"
+              AND m."employeeId" = tr."employeeId"
+              AND m.data = tr.data
+              AND m.fonte = 'manual'
+          )
+      `);
+
+      const ids = (dixiParaApagar.rows as any[]).map(r => Number(r.id));
+      if (ids.length === 0) {
+        return { success: true, excluidos: 0, message: 'Nenhum registro DIXI encontrado com conflito Manual. Base já está limpa.' };
+      }
+
+      await db.execute(sql`
+        DELETE FROM time_records
+        WHERE id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+      `);
+
+      return {
+        success: true,
+        excluidos: ids.length,
+        message: `${ids.length} registro(s) DIXI excluído(s) onde já existia lançamento manual para o mesmo funcionário/dia. A prioridade do lançamento manual foi preservada.`,
       };
     }),
 
