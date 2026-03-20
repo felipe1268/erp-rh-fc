@@ -3913,6 +3913,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 635,
+    titulo: "HE: atualização do time_records + percentuais distintos semana/fim-de-semana",
+    descricao: "processarPonto agora atualiza time_records.horasExtras com o HE recalculado, fazendo a tela de detalhe do funcionário exibir o valor correto (antes sempre mostrava '-'). gerarVale e simularPagamento agora separam as HE por tipoDia: dias úteis recebem hePercentualDiurna (ex: 50%) e sábados/compensados/feriados recebem hePercentualDomingo (ex: 100%). Antes, ambos aplicavam apenas o percentual de dias úteis para todas as horas extras.",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento, Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 634,
     titulo: "Bug crítico: horas extras sempre zeradas no processamento do ponto",
     descricao: "Corrigido bug onde horasExtras ficava sempre '0:00' para todos os funcionários no payroll. Causa raiz dupla: (1) processarPonto lia rec.horasExtras do time_records, campo que nunca era preenchido em registros manuais e frequentemente vazio em importações DIXI; (2) manualEntry sempre gravava horasExtras: '0:00'. Solução: adicionada função getExpectedMins/getExpectedMinsFromJornada que parseia o JSON jornadaTrabalho do funcionário e retorna os minutos líquidos esperados para cada dia (saida-entrada menos intervalo de almoço). processarPonto agora sempre recalcula HE = max(0, horasTrabalhadas - expectedMins) — funciona para dias úteis, sábados e cenário multi-obra. manualEntry agora busca a jornada do funcionário e salva horasExtras corretamente também. jornadaTrabalho adicionado ao select de empList em processarPonto.",

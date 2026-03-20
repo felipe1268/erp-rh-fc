@@ -335,6 +335,10 @@ export const payrollEngineRouter = router({
         return { isInconsistente: 0, tipo: null };
       };
 
+      // Collect time_records HE updates to apply after all employees are processed
+      // (updates time_records.horasExtras so the detail view shows computed HE correctly)
+      const timeRecordHEUpdates: { id: number; he: string }[] = [];
+
       // Process each employee
       for (const emp of empList) {
         // PART 1: Days from ponto period - status: registrado
@@ -393,6 +397,11 @@ export const payrollEngineRouter = router({
               const actualMins = parseTime(horasTrabalhadas) || 0;
               const heMins = Math.max(0, actualMins - expectedMins);
               horasExtras = heMins > 0 ? minutesToHHMM(heMins) : "0:00";
+            }
+
+            // Queue update of time_records.horasExtras so detail view reflects computed HE
+            if (timeRecordId !== null) {
+              timeRecordHEUpdates.push({ id: timeRecordId, he: horasExtras });
             }
 
             // Inconsistency detection
@@ -471,6 +480,12 @@ export const payrollEngineRouter = router({
             totalInserted++;
           }
         }
+      }
+
+      // Batch-update time_records.horasExtras with computed values
+      // so the employee detail view shows HE correctly (it reads from time_records)
+      for (const upd of timeRecordHEUpdates) {
+        await db.execute(sql`UPDATE time_records SET "horasExtras" = ${upd.he} WHERE id = ${upd.id}`);
       }
 
       // Create alerts for inconsistencies
@@ -1057,21 +1072,32 @@ export const payrollEngineRouter = router({
         faltasMap.set(Number(r.employeeId), Number(r.totalFaltas) || 0);
       }
 
-      // Get overtime (HE) values from time_records for the ponto period
+      // Get overtime (HE) values — split by tipoDia to apply correct % per type
       const heRows = ((await db.execute(sql`
-        SELECT "employeeId", 
-          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00' 
+        SELECT "employeeId",
+          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00'
+                AND "tipoDia" = 'util'
             THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
-            ELSE 0 END) as "totalMinutosHE"
+            ELSE 0 END) as "minsHE_util",
+          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00'
+                AND "tipoDia" IN ('sabado', 'compensado', 'feriado')
+            THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
+            ELSE 0 END) as "minsHE_fim"
         FROM timecard_daily 
         WHERE "companyId" = ${input.companyId} 
         AND "mesCompetencia" = ${input.mesReferencia}
         AND "statusDia" = 'registrado'
         GROUP BY "employeeId"
       `)) as any).rows || [];
+      const heUtilMap = new Map<number, number>();
+      const heFimMap = new Map<number, number>();
       const heMap = new Map<number, number>();
       for (const r of (heRows || [])) {
-        heMap.set(Number(r.employeeId), Number(r.totalMinutosHE) || 0);
+        const u = Number(r.minsHE_util) || 0;
+        const f = Number(r.minsHE_fim) || 0;
+        heUtilMap.set(Number(r.employeeId), u);
+        heFimMap.set(Number(r.employeeId), f);
+        heMap.set(Number(r.employeeId), u + f);
       }
 
       // Clear existing advances for this month
@@ -1095,7 +1121,11 @@ export const payrollEngineRouter = router({
         const valorAdiantamento = salarioBruto * (percentual / 100);
         const faltas = faltasMap.get(emp.id) || 0;
         const minutosHE = heMap.get(emp.id) || 0;
-        const valorHE = (minutosHE / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
+        const minutosHE_util = heUtilMap.get(emp.id) || 0;
+        const minutosHE_fim = heFimMap.get(emp.id) || 0;
+        const valorHE_util = (minutosHE_util / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
+        const valorHE_fim = (minutosHE_fim / 60) * valorHora * (1 + criteria.hePercentualDomingo / 100);
+        const valorHE = valorHE_util + valorHE_fim;
         const valorTotalVale = valorAdiantamento + valorHE;
 
         const alertas: string[] = [];
@@ -1336,20 +1366,31 @@ export const payrollEngineRouter = router({
         faltasMap.set(Number(r.employeeId), r);
       }
 
-      // Get HE values
+      // Get HE values — split by tipoDia to apply correct % (weekday vs weekend)
       const heRows2 = ((await db.execute(sql`
-        SELECT "employeeId", 
-          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00' 
+        SELECT "employeeId",
+          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00'
+                AND "tipoDia" = 'util'
             THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
-            ELSE 0 END) as "totalMinutosHE"
+            ELSE 0 END) as "minsHE_util",
+          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00'
+                AND "tipoDia" IN ('sabado', 'compensado', 'feriado')
+            THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
+            ELSE 0 END) as "minsHE_fim"
         FROM timecard_daily 
         WHERE "companyId" = ${input.companyId} 
         AND "mesCompetencia" = ${input.mesReferencia}
         GROUP BY "employeeId"
       `)) as any).rows || [];
+      const heUtilMap = new Map<number, number>();
+      const heFimMap = new Map<number, number>();
       const heMap = new Map<number, number>();
       for (const r of (heRows2 || [])) {
-        heMap.set(Number(r.employeeId), Number(r.totalMinutosHE) || 0);
+        const u = Number(r.minsHE_util) || 0;
+        const f = Number(r.minsHE_fim) || 0;
+        heUtilMap.set(Number(r.employeeId), u);
+        heFimMap.set(Number(r.employeeId), f);
+        heMap.set(Number(r.employeeId), u + f);
       }
 
       // Clear existing payments for this month
@@ -1423,7 +1464,11 @@ export const payrollEngineRouter = router({
         const valorHora = parseBRL(emp.valorHora);
         const salarioBruto = valorHora * criteria.cargaHorariaDiaria * diasUteis;
         const minutosHE = heMap.get(emp.id) || 0;
-        const valorHE = (minutosHE / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
+        const minutosHE_util = heUtilMap.get(emp.id) || 0;
+        const minutosHE_fim = heFimMap.get(emp.id) || 0;
+        const valorHE_util = (minutosHE_util / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
+        const valorHE_fim = (minutosHE_fim / 60) * valorHora * (1 + criteria.hePercentualDomingo / 100);
+        const valorHE = valorHE_util + valorHE_fim;
         const totalProventos = salarioBruto + valorHE;
 
         const adv = advMap.get(emp.id);
