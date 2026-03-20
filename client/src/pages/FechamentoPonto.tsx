@@ -20,8 +20,11 @@ import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
-  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText, Copy
+  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText, Copy,
+  ChevronsUpDown, Check, Plus, X
 } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -484,6 +487,9 @@ export default function FechamentoPonto() {
   const [manualData, setManualData] = useState({
     employeeId: 0, obraId: 0, data: "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "",
   });
+  const [manualEmpPopoverOpen, setManualEmpPopoverOpen] = useState(false);
+  const [manualDays, setManualDays] = useState<Array<{id: string; data: string; entrada1: string; saida1: string; entrada2: string; saida2: string}>>([]);
+  const [manualSaving, setManualSaving] = useState(false);
   const [resolveData, setResolveData] = useState({ status: "justificado" as string, justificativa: "" });
   const [expandedConflict, setExpandedConflict] = useState<string | null>(null); // "empId|data"
   const [conflictJustificativa, setConflictJustificativa] = useState("");
@@ -574,6 +580,53 @@ export default function FechamentoPonto() {
     },
     onError: (err) => toast.error("Erro: " + err.message),
   });
+  const manualBatchMut = trpc.fechamentoPonto.manualEntry.useMutation({
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+
+  // Sync manualDays when dialog opens (pre-fill if opened from inconsistency)
+  useEffect(() => {
+    if (showManualDialog) {
+      if (manualData.data) {
+        setManualDays([{ id: String(Date.now()), data: manualData.data, entrada1: manualData.entrada1 || "", saida1: manualData.saida1 || "", entrada2: manualData.entrada2 || "", saida2: manualData.saida2 || "" }]);
+      } else {
+        setManualDays([]);
+      }
+    }
+  }, [showManualDialog]);
+
+  const gerarDiasUteisDoMes = () => {
+    const [y, m] = mesAno.split("-").map(Number);
+    const dias: typeof manualDays = [];
+    const d = new Date(y, m - 1, 1);
+    while (d.getMonth() === m - 1) {
+      const dow = d.getDay();
+      if (dow !== 0 && dow !== 6) {
+        dias.push({ id: `${d.toISOString().split("T")[0]}-${Math.random()}`, data: d.toISOString().split("T")[0], entrada1: "", saida1: "", entrada2: "", saida2: "" });
+      }
+      d.setDate(d.getDate() + 1);
+    }
+    setManualDays(dias);
+  };
+
+  const saveManualBatch = async () => {
+    if (!manualData.employeeId) return toast.error("Selecione o colaborador");
+    const filled = manualDays.filter(d => d.data);
+    if (filled.length === 0) return toast.error("Adicione pelo menos um dia");
+    setManualSaving(true);
+    let saved = 0; let errors = 0;
+    for (const day of filled) {
+      try {
+        await manualBatchMut.mutateAsync({ companyId, companyIds, employeeId: manualData.employeeId, obraId: manualData.obraId || undefined, mesReferencia: day.data.substring(0, 7), data: day.data, entrada1: day.entrada1 || undefined, saida1: day.saida1 || undefined, entrada2: day.entrada2 || undefined, saida2: day.saida2 || undefined, justificativa: manualData.justificativa || undefined });
+        saved++;
+      } catch { errors++; }
+    }
+    setManualSaving(false);
+    stats.refetch(); summary.refetch(); conflitos.refetch();
+    if (selectedEmployeeId) employeeDetail.refetch();
+    if (errors === 0) { toast.success(`${saved} lançamento(s) salvo(s) com sucesso!`); setShowManualDialog(false); }
+    else toast.warning(`${saved} salvo(s), ${errors} com erro.`);
+  };
   const resolveMut = trpc.fechamentoPonto.resolveInconsistency.useMutation({
     onSuccess: () => {
       setShowResolveDialog(false);
@@ -3388,49 +3441,140 @@ export default function FechamentoPonto() {
 
         {/* ===== MANUAL ENTRY DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showManualDialog} onClose={() => setShowManualDialog(false)} title="Lançamento Manual" subtitle={`Competência: ${formatMesAno(mesAno)}`} icon={<PenLine className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-purple-800 to-purple-600">
-          <div className="w-full max-w-xl">
-            <div className="space-y-3">
+          <div className="w-full max-w-4xl">
+            <div className="space-y-4">
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-xs text-purple-800">
-                Registros manuais ficam <strong>destacados</strong> e são rastreados.
+                Registros manuais ficam <strong>destacados</strong> e são rastreados. Você pode lançar vários dias de uma vez.
               </div>
+
+              {/* Colaborador (combobox com busca) + Obra */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="mb-1 block">Colaborador</Label>
+                  <Popover open={manualEmpPopoverOpen} onOpenChange={setManualEmpPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button type="button" className="flex w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent/10 focus:outline-none focus:ring-1 focus:ring-ring">
+                        <span className={manualData.employeeId ? "text-foreground" : "text-muted-foreground"}>
+                          {manualData.employeeId
+                            ? (employeesList.data || []).find((e: any) => e.id === manualData.employeeId)?.nomeCompleto || "Colaborador"
+                            : "Pesquisar colaborador..."}
+                        </span>
+                        <ChevronsUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
+                      <Command>
+                        <CommandInput placeholder="Digite nome ou função..." />
+                        <CommandList className="max-h-64">
+                          <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">Nenhum colaborador encontrado</CommandEmpty>
+                          <CommandGroup>
+                            {(employeesList.data || []).map((e: any) => (
+                              <CommandItem key={e.id} value={`${e.nomeCompleto || ""} ${e.funcao || ""}`} onSelect={() => { setManualData(p => ({ ...p, employeeId: e.id })); setManualEmpPopoverOpen(false); }} className="flex items-center justify-between py-2 cursor-pointer">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs shrink-0">{(e.nomeCompleto || "").charAt(0)}</div>
+                                  <div>
+                                    <p className="font-medium text-sm">{e.nomeCompleto}</p>
+                                    <p className="text-xs text-muted-foreground">{e.funcao || ""}</p>
+                                  </div>
+                                </div>
+                                {manualData.employeeId === e.id && <Check className="h-4 w-4 text-purple-600 shrink-0" />}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
+                  <Label className="mb-1 block">Obra (opcional)</Label>
+                  <Select value={String(manualData.obraId || "")} onValueChange={v => setManualData(p => ({ ...p, obraId: v ? parseInt(v) : 0 }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">— Sem obra —</SelectItem>
+                      {(obrasList.data || []).map((o: any) => (
+                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Tabela de dias */}
               <div>
-                <Label>Colaborador</Label>
-                <Select value={String(manualData.employeeId || "")} onValueChange={v => setManualData(p => ({ ...p, employeeId: parseInt(v) }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {(employeesList.data || []).map((e: any) => (
-                      <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                  <Label>Dias lançados <span className="text-muted-foreground font-normal text-xs">({manualDays.length} {manualDays.length === 1 ? "dia" : "dias"})</span></Label>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50" onClick={gerarDiasUteisDoMes} type="button">
+                      <CalendarDays className="h-3.5 w-3.5" /> Preencher dias úteis do mês
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setManualDays(p => [...p, { id: String(Date.now()), data: "", entrada1: "", saida1: "", entrada2: "", saida2: "" }])} type="button">
+                      <Plus className="h-3.5 w-3.5" /> Adicionar dia
+                    </Button>
+                  </div>
+                </div>
+
+                {manualDays.length === 0 ? (
+                  <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground bg-muted/20">
+                    Clique em <strong>"Adicionar dia"</strong> para inserir um dia, ou <strong>"Preencher dias úteis do mês"</strong> para lançar todos os dias úteis de {formatMesAno(mesAno)} de uma vez.
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto max-h-[340px] overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/40 sticky top-0 z-10">
+                          <tr>
+                            <th className="px-2 py-1.5 text-left font-medium text-xs w-36">Data</th>
+                            <th className="px-2 py-1.5 text-center font-medium text-xs w-10 text-muted-foreground">Dia</th>
+                            <th className="px-2 py-1.5 text-center font-medium text-xs">Entrada</th>
+                            <th className="px-2 py-1.5 text-center font-medium text-xs">Saída Int.</th>
+                            <th className="px-2 py-1.5 text-center font-medium text-xs">Retorno</th>
+                            <th className="px-2 py-1.5 text-center font-medium text-xs">Saída</th>
+                            <th className="px-1 py-1.5 w-7"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {manualDays.map((day, idx) => {
+                            const dow = day.data ? ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][new Date(day.data + "T12:00:00").getDay()] : "";
+                            const isWeekend = day.data ? [0, 6].includes(new Date(day.data + "T12:00:00").getDay()) : false;
+                            return (
+                              <tr key={day.id} className={`border-t ${isWeekend ? "bg-amber-50/50" : idx % 2 === 0 ? "" : "bg-muted/10"}`}>
+                                <td className="px-2 py-1">
+                                  <Input type="date" value={day.data} className="h-7 text-xs w-full" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, data: e.target.value } : d))} />
+                                </td>
+                                <td className="px-1 py-1 text-center">
+                                  <span className={`text-xs font-medium ${isWeekend ? "text-amber-600" : "text-muted-foreground"}`}>{dow}</span>
+                                </td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada1} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida1} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada2} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida2} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1 text-center">
+                                  <button type="button" onClick={() => setManualDays(p => p.filter(d => d.id !== day.id))} className="text-muted-foreground hover:text-red-500 transition-colors">
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Justificativa */}
               <div>
-                <Label>Data</Label>
-                <Input type="date" value={manualData.data} onChange={e => setManualData(p => ({ ...p, data: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Entrada</Label><Input type="time" value={manualData.entrada1} onChange={e => setManualData(p => ({ ...p, entrada1: e.target.value }))} /></div>
-                <div><Label>Saída Int.</Label><Input type="time" value={manualData.saida1} onChange={e => setManualData(p => ({ ...p, saida1: e.target.value }))} /></div>
-                <div><Label>Retorno</Label><Input type="time" value={manualData.entrada2} onChange={e => setManualData(p => ({ ...p, entrada2: e.target.value }))} /></div>
-                <div><Label>Saída</Label><Input type="time" value={manualData.saida2} onChange={e => setManualData(p => ({ ...p, saida2: e.target.value }))} /></div>
-              </div>
-              <div>
-                <Label>Justificativa</Label>
-                <Textarea value={manualData.justificativa} onChange={e => setManualData(p => ({ ...p, justificativa: e.target.value }))} placeholder="Motivo do lançamento manual..." />
+                <Label className="mb-1 block">Justificativa <span className="text-xs text-muted-foreground font-normal">(aplica-se a todos os dias)</span></Label>
+                <Textarea value={manualData.justificativa} onChange={e => setManualData(p => ({ ...p, justificativa: e.target.value }))} placeholder="Motivo do lançamento manual..." rows={2} />
               </div>
             </div>
+
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowManualDialog(false)}>Cancelar</Button>
-              <Button onClick={() => {
-                if (!manualData.employeeId || !manualData.data) return toast.error("Selecione o colaborador e a data");
-                manualMut.mutate({ companyId, companyIds, employeeId: manualData.employeeId, obraId: manualData.obraId || undefined,
-                  mesReferencia: manualData.data.substring(0, 7), data: manualData.data,
-                  entrada1: manualData.entrada1 || undefined, saida1: manualData.saida1 || undefined,
-                  entrada2: manualData.entrada2 || undefined, saida2: manualData.saida2 || undefined,
-                  justificativa: manualData.justificativa || undefined,
-                });
-              }} disabled={manualMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
-                {manualMut.isPending ? "Salvando..." : "Salvar"}
+              <Button onClick={saveManualBatch} disabled={manualSaving} className="bg-[#1B2A4A] hover:bg-[#243660] gap-2">
+                {manualSaving ? "Salvando..." : `Salvar ${manualDays.filter(d => d.data).length > 1 ? manualDays.filter(d => d.data).length + " lançamentos" : "lançamento"}`}
               </Button>
             </div>
           </div>

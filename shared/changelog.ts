@@ -3769,6 +3769,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 618,
+    titulo: "Lançamento Manual redesenhado — busca de colaborador + multi-dia",
+    descricao: "Dialog de Lançamento Manual completamente redesenhado: (1) Campo 'Colaborador' substituído por combobox pesquisável (Command+Popover) que filtra por nome e função conforme o usuário digita; (2) Tela multi-dia: em vez de um único dia, uma tabela com linhas editáveis permite lançar vários dias de uma só vez — cada linha tem data, dia da semana (destaque laranja para finais de semana), Entrada, Saída Int., Retorno e Saída; (3) Botão 'Preencher dias úteis do mês' gera automaticamente todas as linhas dos dias úteis do mês selecionado; (4) Botão 'Adicionar dia' para inserir linhas avulsas; (5) Botão para remover linhas individualmente; (6) Justificativa única aplicada a todos os dias; (7) Botão Salvar mostra o número de lançamentos pendentes e envia cada dia sequencialmente via batch; (8) Obra mantida como campo opcional compartilhado. useEffect sincroniza com dados pré-preenchidos ao abrir a partir de uma inconsistência.",
+    tipo: "feature",
+    modulos: "Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 617,
     titulo: "Prioridade do lançamento Manual sobre DIXI — eliminação de registros duplicados",
     descricao: "Implementada lógica completa para garantir que registros manuais (ajusteManual=1) sempre sobrescrevam os registros DIXI no mesmo funcionário/dia: (1) getSummary agora conta diasTrabalhados usando datas únicas por funcionário (Set<string>), eliminando dupla contagem quando coexistem DIXI e Manual; (2) manualEntry: ao criar registro manual, deleta qualquer registro DIXI existente para o mesmo companyId/employeeId/data antes do insert; ao atualizar, deleta registros DIXI concorrentes que não sejam o registro sendo editado; (3) Import DIXI: antes de inserir o lote, consulta registros manuais existentes para o mesmo mês/funcionário e filtra os dias cobertos (fonte='manual'), evitando que uma reimportação DIXI sobreponha lançamentos manuais; (4) Novo procedimento limparDixiComManual: deleta em massa todos os registros DIXI onde já existe um Manual para o mesmo companyId/employeeId/data — pode ser executado por mês ou para toda a base. UI: botão 'Prioridade Manual sobre DIXI' no dialog Limpar Base com opções de limpeza por mês ou toda a base.",
