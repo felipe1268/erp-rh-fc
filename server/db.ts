@@ -41,11 +41,14 @@ export async function getDb() {
     try {
       const pool = new Pool({
         connectionString: dbUrl,
-        max: 10,                          // max 10 concurrent connections
+        max: 15,                          // max 15 concurrent connections (jobs + user requests)
         min: 0,                           // não manter conexões idle (Neon encerra idle automaticamente)
         idleTimeoutMillis: 30000,         // liberar idle após 30s
-        connectionTimeoutMillis: 10000,   // aguardar até 10s por conexão (Neon pode demorar a responder)
+        connectionTimeoutMillis: 30000,   // aguardar até 30s (Neon cold start pode demorar 15-20s)
         allowExitOnIdle: false,
+      });
+      pool.on('error', (err) => {
+        console.warn('[Database] Pool error (idle client):', err.message);
       });
       _db = drizzle(pool);
     } catch (error) {

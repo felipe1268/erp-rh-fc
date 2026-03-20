@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 614,
+    titulo: "Hotfix: pool de conexões Neon — correção de timeout em cold start causando dashboard zerado",
+    descricao: "Correção do pool de conexões PostgreSQL (Neon) que causava timeout e zeros no dashboard: connectionTimeoutMillis aumentado de 10s para 30s (Neon cold start pode levar 15-20s), max de 10 para 15 conexões simultâneas (background jobs + requisições de usuário), adicionado listener de erro no pool para evitar crashes silenciosos. Investigação: a produção apresentava 'Connection terminated due to connection timeout' nos jobs de background (StatusSync, RescisaoCheck, PurchaseJobs) que esgotavam o pool — consequentemente as queries do Painel Principal (home.getData) falhavam silenciosamente retornando undefined, exibindo zeros em todas as métricas.",
+    tipo: "bugfix",
+    modulos: "Sistema, Painel Principal",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 613,
     titulo: "Hotfix: correção de regressão crítica — Painel RH, Raio X e vínculos quebrados (Rev. 612)",
     descricao: "Correção de regressão introduzida na Rev. 612: os 11 novos campos do módulo Aviso Prévio (fgtsReal, fgtsEditadoManualmente, fgtsEditadoEm, fgtsEditadoPor, descontosAcerto, descontosAcertoDesc, acrescimosAcerto, acrescimosAcertoDesc, novoEmpregoAtivo, novoEmpregoComunicadoEm, novoEmpregoCartaUrl) não estavam sendo criados no banco de dados de produção (Neon), fazendo com que todas as queries relacionadas ao módulo Aviso Prévio falhassem silenciosamente — resultado: Painel RH exibindo zeros, Raio X do funcionário não abrindo, vínculos/dados de funcionários sumiram. Correção: colunas adicionadas diretamente no Neon via ALTER TABLE e incluídas no bloco ColFix do startup para garantia futura.",
