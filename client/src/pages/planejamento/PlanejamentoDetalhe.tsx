@@ -3731,13 +3731,21 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
         const contrato = n(proj?.valorContrato ?? 0);
         const hasMedicoes = (curvaMedicoes as any[]).length > 0;
         if (contrato <= 0 && !hasMedicoes) return (
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
-            <DollarSign className="h-10 w-10 opacity-30" />
-            <p className="text-sm font-medium text-slate-600">Valor do Contrato não configurado</p>
-            <p className="text-xs text-center max-w-sm">
-              Informe o <strong>Valor do Contrato</strong> nas configurações do projeto para visualizar a Curva S Financeira.
-              Lançamentos de Medição também aparecem aqui automaticamente.
-            </p>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-4 text-slate-400">
+            <DollarSign className="h-12 w-12 opacity-20" />
+            <div className="text-center">
+              <p className="text-sm font-semibold text-slate-600 mb-1">Valor do Contrato não configurado</p>
+              <p className="text-xs text-slate-400 max-w-sm">
+                Informe o <strong className="text-slate-500">Valor do Contrato</strong> nas configurações do projeto para visualizar a Curva S Financeira.
+                Lançamentos de Medição também aparecem aqui automaticamente.
+              </p>
+            </div>
+            <button
+              onClick={abrirEditProjeto}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+            >
+              <Settings className="h-4 w-4" /> Abrir Configurações do Projeto
+            </button>
           </div>
         );
         if (merged.length === 0) return null;
