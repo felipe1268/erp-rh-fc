@@ -3913,6 +3913,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 639,
+    titulo: "Vale: busca por nome + link para cartão de ponto",
+    descricao: "Adicionado campo de busca na tela de Cálculo Vale/Adiantamento para filtrar funcionários por nome. Nomes nas tabelas de aprovados e com alerta tornados clicáveis: ao clicar, navega direto para o Fechamento de Ponto com o funcionário e mês pré-selecionados (?funcionario=ID&mes=YYYY-MM), permitindo verificar lançamentos e aferir o cartão sem precisar navegar manualmente.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 638,
     titulo: "Bug fix: tipoDia não existe em time_records — derivar do dia da semana",
     descricao: "computeHEFromTimeRecords e computeHeForRecord usavam tr.tipoDia que não existe na tabela time_records (existe apenas em timecard_daily). O erro 'Failed query: SELECT ... tipoDia' era gerado porque a coluna não existe no schema. Fix: removida a seleção de tipoDia; tipo do dia agora é derivado do dia da semana da data (dow=6 → sábado/100%, dow=1-5 → útil/50%, dow=0 → domingo/pula).",

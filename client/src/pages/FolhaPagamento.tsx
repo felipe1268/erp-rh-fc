@@ -19,6 +19,7 @@ import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Textarea } from "@/components/ui/textarea";
@@ -73,8 +74,11 @@ export default function FolhaPagamento() {
   const [viewLancId, setViewLancId] = useState<number | null>(null);
   const [viewTipo, setViewTipo] = useState<string>("");
 
+  const [, setLocation] = useLocation();
+
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
+  const [valeSearch, setValeSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterFuncao, setFilterFuncao] = useState<string>("all");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -1473,9 +1477,17 @@ export default function FolhaPagamento() {
                       </tr>
                     </thead>
                     <tbody>
-                      {funcionariosComAlerta.map((f: any, i: number) => (
+                      {funcionariosComAlerta.filter((f: any) => !valeSearch || f.nome?.toUpperCase().includes(valeSearch.toUpperCase())).map((f: any, i: number) => (
                         <tr key={i} className="border-b border-amber-200 hover:bg-amber-100/50">
-                          <td className="py-2 px-2 font-medium">{f.nome}</td>
+                          <td className="py-2 px-2 font-medium">
+                            <button
+                              className="text-left hover:text-blue-600 hover:underline focus:outline-none"
+                              onClick={() => setLocation(`/fechamento-ponto?funcionario=${f.employeeId}&mes=${mesAno}`)}
+                              title="Abrir cartão de ponto"
+                            >
+                              {f.nome}
+                            </button>
+                          </td>
                           <td className="py-2 px-2">
                             <div className="flex flex-wrap gap-1">
                               {f.alertaMotivo?.split(' | ').map((motivo: string, j: number) => (
@@ -1517,12 +1529,24 @@ export default function FolhaPagamento() {
             </Card>
           )}
 
+          {/* CAMPO DE BUSCA */}
+          <div className="relative no-print">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar funcionário pelo nome..."
+              value={valeSearch}
+              onChange={e => setValeSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+
           {/* TABELA DE FUNCIONÁRIOS APROVADOS */}
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="font-semibold text-sm">Funcionários Aprovados ({funcionariosSemAlerta.length})</span>
+                <span className="font-semibold text-sm">Funcionários Aprovados ({funcionariosSemAlerta.filter((f: any) => !valeSearch || f.nome?.toUpperCase().includes(valeSearch.toUpperCase())).length})</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1537,9 +1561,17 @@ export default function FolhaPagamento() {
                     </tr>
                   </thead>
                   <tbody>
-                    {funcionariosSemAlerta.map((f: any, i: number) => (
+                    {funcionariosSemAlerta.filter((f: any) => !valeSearch || f.nome?.toUpperCase().includes(valeSearch.toUpperCase())).map((f: any, i: number) => (
                       <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-2 px-2 font-medium">{f.nome}</td>
+                        <td className="py-2 px-2 font-medium">
+                          <button
+                            className="text-left hover:text-blue-600 hover:underline focus:outline-none"
+                            onClick={() => setLocation(`/fechamento-ponto?funcionario=${f.employeeId}&mes=${mesAno}`)}
+                            title="Abrir cartão de ponto"
+                          >
+                            {f.nome}
+                          </button>
+                        </td>
                         <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
                         <td className="text-right py-2 px-2">{formatBRL(f.valorAdiantamento)}</td>
                         <td className="text-right py-2 px-2 text-orange-700 font-medium">{formatBRL(f.valorHE)}</td>
