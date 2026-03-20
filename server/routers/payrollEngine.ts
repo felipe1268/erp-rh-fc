@@ -162,6 +162,55 @@ async function getPayrollCriteria(db: any, companyId: number) {
   };
 }
 
+// ============================================================
+// Computes HE maps directly from time_records — no processarPonto needed.
+// Returns heUtilMap (dias úteis), heFimMap (sáb/compensado/feriado), heMap (total).
+// ============================================================
+async function computeHEFromTimeRecords(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  companyId: number,
+  mesReferencia: string,
+  cargaHorariaDiaria: number
+): Promise<{ heUtilMap: Map<number, number>; heFimMap: Map<number, number>; heMap: Map<number, number> }> {
+  const FIM_SEMANA = new Set(["sabado", "compensado", "feriado", "domingo"]);
+  const AUSENCIA = new Set(["falta", "ferias", "atestado", "licenca_maternidade", "licenca_paternidade", "afastamento"]);
+
+  const trRaws = ((await db.execute(sql`
+    SELECT tr."employeeId", tr.data, tr."horasTrabalhadas", tr."tipoDia", e."jornadaTrabalho"
+    FROM time_records tr
+    JOIN employees e ON e.id = tr."employeeId"
+    WHERE tr."companyId" = ${companyId}
+      AND tr."mesReferencia" = ${mesReferencia}
+      AND tr."horasTrabalhadas" IS NOT NULL
+      AND tr."horasTrabalhadas" != ''
+      AND tr."horasTrabalhadas" != '0:00'
+  `)) as any).rows || [];
+
+  const heUtilMap = new Map<number, number>();
+  const heFimMap = new Map<number, number>();
+  const heMap = new Map<number, number>();
+
+  for (const r of trRaws) {
+    if (AUSENCIA.has(String(r.tipoDia))) continue;
+    const empId = Number(r.employeeId);
+    const trabMins = parseTime(String(r.horasTrabalhadas)) || 0;
+    if (trabMins <= 0) continue;
+    const dateStr = r.data instanceof Date ? r.data.toISOString().slice(0, 10) : String(r.data).slice(0, 10);
+    const expectedMins = getExpectedMins(r.jornadaTrabalho, dateStr, cargaHorariaDiaria);
+    const heMins = Math.max(0, trabMins - expectedMins);
+    if (heMins <= 0) continue;
+
+    if (FIM_SEMANA.has(String(r.tipoDia))) {
+      heFimMap.set(empId, (heFimMap.get(empId) || 0) + heMins);
+    } else {
+      heUtilMap.set(empId, (heUtilMap.get(empId) || 0) + heMins);
+    }
+    heMap.set(empId, (heMap.get(empId) || 0) + heMins);
+  }
+
+  return { heUtilMap, heFimMap, heMap };
+}
+
 export const payrollEngineRouter = router({
   // ============================================================
   // 1. ABRIR / LISTAR COMPETÊNCIAS
@@ -1072,33 +1121,10 @@ export const payrollEngineRouter = router({
         faltasMap.set(Number(r.employeeId), Number(r.totalFaltas) || 0);
       }
 
-      // Get overtime (HE) values — split by tipoDia to apply correct % per type
-      const heRows = ((await db.execute(sql`
-        SELECT "employeeId",
-          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00'
-                AND "tipoDia" = 'util'
-            THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
-            ELSE 0 END) as "minsHE_util",
-          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00'
-                AND "tipoDia" IN ('sabado', 'compensado', 'feriado')
-            THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
-            ELSE 0 END) as "minsHE_fim"
-        FROM timecard_daily 
-        WHERE "companyId" = ${input.companyId} 
-        AND "mesCompetencia" = ${input.mesReferencia}
-        AND "statusDia" = 'registrado'
-        GROUP BY "employeeId"
-      `)) as any).rows || [];
-      const heUtilMap = new Map<number, number>();
-      const heFimMap = new Map<number, number>();
-      const heMap = new Map<number, number>();
-      for (const r of (heRows || [])) {
-        const u = Number(r.minsHE_util) || 0;
-        const f = Number(r.minsHE_fim) || 0;
-        heUtilMap.set(Number(r.employeeId), u);
-        heFimMap.set(Number(r.employeeId), f);
-        heMap.set(Number(r.employeeId), u + f);
-      }
+      // Get overtime (HE) values — computed directly from time_records (no processarPonto needed)
+      const { heUtilMap, heFimMap, heMap } = await computeHEFromTimeRecords(
+        db, input.companyId, input.mesReferencia, criteria.cargaHorariaDiaria
+      );
 
       // Clear existing advances for this month
       await db.execute(sql`
@@ -1366,32 +1392,10 @@ export const payrollEngineRouter = router({
         faltasMap.set(Number(r.employeeId), r);
       }
 
-      // Get HE values — split by tipoDia to apply correct % (weekday vs weekend)
-      const heRows2 = ((await db.execute(sql`
-        SELECT "employeeId",
-          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00'
-                AND "tipoDia" = 'util'
-            THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
-            ELSE 0 END) as "minsHE_util",
-          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00'
-                AND "tipoDia" IN ('sabado', 'compensado', 'feriado')
-            THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
-            ELSE 0 END) as "minsHE_fim"
-        FROM timecard_daily 
-        WHERE "companyId" = ${input.companyId} 
-        AND "mesCompetencia" = ${input.mesReferencia}
-        GROUP BY "employeeId"
-      `)) as any).rows || [];
-      const heUtilMap = new Map<number, number>();
-      const heFimMap = new Map<number, number>();
-      const heMap = new Map<number, number>();
-      for (const r of (heRows2 || [])) {
-        const u = Number(r.minsHE_util) || 0;
-        const f = Number(r.minsHE_fim) || 0;
-        heUtilMap.set(Number(r.employeeId), u);
-        heFimMap.set(Number(r.employeeId), f);
-        heMap.set(Number(r.employeeId), u + f);
-      }
+      // Get HE values — computed directly from time_records (no processarPonto needed)
+      const { heUtilMap, heFimMap, heMap } = await computeHEFromTimeRecords(
+        db, input.companyId, input.mesReferencia, criteria.cargaHorariaDiaria
+      );
 
       // Clear existing payments for this month
       await db.execute(sql`

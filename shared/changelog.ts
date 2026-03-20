@@ -3913,6 +3913,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 637,
+    titulo: "HE no vale e pagamento: cálculo direto de time_records",
+    descricao: "gerarVale e simularPagamento agora calculam HE diretamente de time_records, sem depender da tabela timecard_daily (que só é preenchida pelo 'Processar Ponto'). Nova função computeHEFromTimeRecords: faz JOIN com employees para obter jornadaTrabalho, calcula expected per-day via getExpectedMins, agrega por tipoDia (util/sab/compensado/feriado). Resultado: a coluna HE (R$) no cálculo do vale deixa de mostrar R$ 0,00 para todos os funcionários.",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 636,
     titulo: "H.Extra calculado automaticamente no cartão de ponto",
     descricao: "getEmployeeDetail agora calcula o HE on-the-fly para cada registro no cartão de ponto, sem depender do 'Processar Ponto' da Gestão de Competências. Usa a jornada individual do funcionário (jornadaTrabalho) para calcular o esperado; fallback para jornadaHorasDiarias da empresa. Dias de ausência (falta, férias, atestado, licença, afastamento) retornam HE = 0:00 automaticamente.",
