@@ -883,10 +883,19 @@ export const planejamentoRouter = router({
 
         const sorted = [...dates.entries()].sort((a, b) => a[0].localeCompare(b[0]));
         let acum = 0;
-        return sorted.map(([semana, val]) => {
+        const pontos = sorted.map(([semana, val]) => {
           acum = Math.min(100, acum + val);
           return { semana, acumulado: +acum.toFixed(2) };
         });
+        // Prepend ponto zero: semana ANTERIOR à primeira atividade, com acumulado=0
+        // Garante que a curva S sempre comece em 0% no eixo Y
+        if (pontos.length > 0) {
+          const primeiraDate   = new Date(pontos[0].semana + "T12:00:00Z");
+          const semanaAntes    = new Date(primeiraDate.getTime() - 7 * 86400000);
+          const semanaAntesStr = toMondayStr(semanaAntes);
+          pontos.unshift({ semana: semanaAntesStr, acumulado: 0 });
+        }
+        return pontos;
       }
 
       // Baseline: sempre gerada (é o plano original imutável — Rev 00)
@@ -999,10 +1008,16 @@ export const planejamentoRouter = router({
         });
         const sorted = [...dates.entries()].sort((a, b) => a[0].localeCompare(b[0]));
         let acum = 0;
-        return sorted.map(([semana, val]) => {
+        const pts = sorted.map(([semana, val]) => {
           acum = Math.min(100, acum + val);
           return { semana, acumulado: +acum.toFixed(2) };
         });
+        if (pts.length > 0) {
+          const primeiraDate   = new Date(pts[0].semana + "T12:00:00Z");
+          const semanaAntes    = new Date(primeiraDate.getTime() - 7 * 86400000);
+          pts.unshift({ semana: toMondayStr(semanaAntes), acumulado: 0 });
+        }
+        return pts;
       }
 
       const resultado = await Promise.all(revisoes.map(async rev => {

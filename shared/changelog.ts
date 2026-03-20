@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 609,
+    titulo: "Curva S: ponto zero antes da primeira atividade",
+    descricao: "A Curva S de Trabalho e a Curva S Financeira agora sempre iniciam em 0% (acumulado=0) na semana imediatamente anterior à primeira atividade do projeto. Antes, o gráfico começava diretamente na primeira semana com o valor já acumulado da primeira fatia de peso, fazendo a curva parecer que 'saltava' do zero para ~8-15% logo no primeiro ponto visível. A correção foi aplicada em gerarCurvaPlanejada (curva principal) e gerarCurva (curva por revisão em getCurvasTodasRevisoes).",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 608,
     titulo: "Fechamento de Ponto: resolução automática em lote de Batidas Duplicadas",
     descricao: "Nova mutation resolveAllDuplicatas e botão 'Resolver Duplicatas (N)' no cabeçalho do card de conflitos. Para cada grupo de registros duplicados (mesmo funcionário, mesma obra, mesmo dia), o sistema mantém automaticamente o melhor registro — prioridade 1: lançamento manual (ajusteManual=1); prioridade 2: registro com mais horas trabalhadas. Os demais são excluídos. O botão 'Resolver Todos' agora foi dividido em dois: 'Resolver Duplicatas' (roxo, para batidas duplicadas da mesma obra) e 'Confirmar Deslocamentos' (laranja, para obras diferentes). Cada um aparece apenas quando há casos do seu tipo.",
