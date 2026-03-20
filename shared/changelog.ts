@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 606,
+    titulo: "Fechamento de Ponto: botão Período Especial no detalhe do funcionário",
+    descricao: "Novo botão 'Período Especial' no cabeçalho da tela de detalhe do funcionário no Fechamento de Ponto. Permite informar manualmente que o funcionário estava de férias ou aviso prévio em um intervalo de datas e corrige imediatamente os registros já lançados: (1) Férias — zera faltas e atrasos em todos os dias do período; (2) Aviso Prévio 2h/dia — recalcula a jornada esperada com redução de 2h e reprocessa HE, atrasos e faltas; (3) Aviso Prévio 7 dias corridos — nos últimos 7 dias do período informado, zera a jornada esperada (funcionário pode se ausentar). Registros com ajuste manual = 1 são preservados.",
+    tipo: "feature",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 605,
     titulo: "Fechamento de Ponto: cruzamento com Aviso Prévio (redução 2h) e Férias",
     descricao: "Dois cruzamentos críticos adicionados ao fechamento de ponto: (1) AVISO PRÉVIO com redução de 2h/dia — a redução de expectedMinutes agora é aplicada ANTES do cálculo de diffBruto (bug anterior: a redução era aplicada depois, sem efeito real nos cálculos de HE, atraso e falta); a opção de 7 dias corridos também está corrigida na mesma ordem. (2) FÉRIAS — o fechamento agora consulta vacation_periods e verifica se o funcionário está em período de gozo no dia (suporta até 3 fracionamentos); se sim, faltas e atrasos são zerados automaticamente, independentemente de bater ponto. O status 'cancelada' e 'pendente' é excluído da consulta.",

@@ -2945,6 +2945,126 @@ export const fechamentoPontoRouter = router({
     }),
 
   // ─────────────────────────────────────────────────────────────────────────
+  // CORREÇÃO MANUAL DE PERÍODO — permite informar manualmente que um funcionário
+  // estava de férias ou aviso prévio em um intervalo de datas e corrige os
+  // registros de ponto já lançados naquele período.
+  // ─────────────────────────────────────────────────────────────────────────
+  corrigirPeriodoEspecialManual: protectedProcedure
+    .input(z.object({
+      companyId:   z.number(),
+      employeeId:  z.number(),
+      dataInicio:  z.string(), // YYYY-MM-DD
+      dataFim:     z.string(), // YYYY-MM-DD
+      tipo:        z.enum(['ferias', 'aviso_2h', 'aviso_7dias']),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+
+      if (input.tipo === 'ferias') {
+        // ── Férias: zera faltas e atrasos (preserva ajuste manual) ──────────
+        const result = await db.execute(sql`
+          UPDATE time_records
+          SET faltas = '0', atrasos = '0:00'
+          WHERE company_id = ${input.companyId}
+            AND employee_id = ${input.employeeId}
+            AND ajuste_manual = 0
+            AND data BETWEEN ${input.dataInicio} AND ${input.dataFim}
+        `);
+        return { corrigidos: Number((result as any).rowCount ?? 0) };
+      }
+
+      // ── Aviso Prévio: recalcula expectedMinutes com redução ──────────────
+      const criteria = await getCriteriaMap(input.companyId);
+      const [emp] = await db.select({ jornadaTrabalho: employees.jornadaTrabalho })
+        .from(employees).where(eq(employees.id, input.employeeId));
+
+      const records = await db.select({
+        id: timeRecords.id, data: timeRecords.data,
+        entrada1: timeRecords.entrada1, saida1: timeRecords.saida1,
+        entrada2: timeRecords.entrada2, saida2: timeRecords.saida2,
+        entrada3: timeRecords.entrada3, saida3: timeRecords.saida3,
+        horasTrabalhadas: timeRecords.horasTrabalhadas,
+      }).from(timeRecords).where(
+        and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.employeeId, input.employeeId),
+          sql`${timeRecords.ajusteManual} = 0`,
+          sql`${timeRecords.data} BETWEEN ${input.dataInicio} AND ${input.dataFim}`,
+        )
+      );
+
+      let corrigidos = 0;
+      for (const rec of records) {
+        const data = rec.data!;
+        const dm = (a: string | null | undefined, b: string | null | undefined) => {
+          if (!a || !b) return 0;
+          const [ah, am] = a.split(':').map(Number);
+          const [bh, bm] = b.split(':').map(Number);
+          return Math.max(0, (bh * 60 + bm) - (ah * 60 + am));
+        };
+        let totalMinutes = dm(rec.entrada1, rec.saida1) + dm(rec.entrada2, rec.saida2) + dm(rec.entrada3, rec.saida3);
+        if (totalMinutes === 0 && rec.horasTrabalhadas) {
+          const p = rec.horasTrabalhadas.split(':');
+          if (p.length === 2) totalMinutes = parseInt(p[0]) * 60 + parseInt(p[1]);
+        }
+
+        let expectedMinutes = 480;
+        let isDiaFolga = false;
+        if (emp?.jornadaTrabalho) {
+          try {
+            const jornada = typeof emp.jornadaTrabalho === 'string' ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+            const dow = new Date(data + 'T12:00:00').getDay();
+            const dayMap: Record<number, string> = { 0:'dom',1:'seg',2:'ter',3:'qua',4:'qui',5:'sex',6:'sab' };
+            const dk = dayMap[dow];
+            if (jornada[dk]?.entrada && jornada[dk]?.saida) {
+              const j = jornada[dk];
+              const [sh, sm] = j.saida.split(':').map(Number);
+              const [eh, em2] = j.entrada.split(':').map(Number);
+              let intMin = 60;
+              if (j.intervalo) { const ip = j.intervalo.split(':'); if (ip.length===2) intMin = parseInt(ip[0])*60+parseInt(ip[1]); }
+              expectedMinutes = Math.max(0, (sh*60+sm)-(eh*60+em2)-intMin);
+            } else { expectedMinutes = 0; isDiaFolga = true; }
+          } catch { /* usa 480 */ }
+        }
+
+        if (input.tipo === 'aviso_2h') {
+          expectedMinutes = Math.max(0, expectedMinutes - 120);
+        } else if (input.tipo === 'aviso_7dias') {
+          // Nos 7 dias corridos finais o funcionário pode se ausentar; usa dataFim como fim do aviso
+          const fimAviso  = new Date(input.dataFim + 'T12:00:00');
+          const dataAtual = new Date(data + 'T12:00:00');
+          const diffDias  = Math.ceil((fimAviso.getTime() - dataAtual.getTime()) / (1000*60*60*24));
+          if (diffDias <= 7) expectedMinutes = 0;
+        }
+
+        const diffBruto = totalMinutes - expectedMinutes;
+        const { pontoToleranciaAtraso: tolAtraso, pontoToleranciaSaida: tolSaida, pontoFaltaAposAtraso: faltaApos } = criteria;
+        let horasExtras = 0, atrasos = 0, faltas = '0';
+
+        if (isDiaFolga && totalMinutes > 0) {
+          horasExtras = totalMinutes;
+        } else if (diffBruto > 0) {
+          horasExtras = diffBruto > tolSaida ? diffBruto : 0;
+        } else if (diffBruto < 0 && totalMinutes > 0) {
+          const ar = Math.abs(diffBruto);
+          if (ar > tolAtraso) { if (ar >= faltaApos) faltas = '1'; else atrasos = ar; }
+        } else if (totalMinutes === 0) {
+          faltas = '1';
+        }
+
+        await db.execute(sql`
+          UPDATE time_records
+          SET horas_extras = ${minutesToHHMM(horasExtras)},
+              atrasos      = ${minutesToHHMM(atrasos)},
+              faltas       = ${faltas}
+          WHERE id = ${rec.id}
+        `);
+        corrigidos++;
+      }
+      return { corrigidos };
+    }),
+
+  // ─────────────────────────────────────────────────────────────────────────
   // CORREÇÃO RETROATIVA — aplica as regras de Aviso Prévio e Férias sobre
   // registros já salvos no banco, sem precisar re-importar o DIXI.
   // Pula registros com ajusteManual = 1 para preservar correções manuais.

@@ -496,6 +496,11 @@ export default function FechamentoPonto() {
   // Simulador Horistas
   const [simDiasUteis, setSimDiasUteis] = useState(22);
   const [simHorasDia, setSimHorasDia] = useState(8);
+  // Período especial manual (férias / aviso prévio retroativo)
+  const [showPeriodoEspecial, setShowPeriodoEspecial] = useState(false);
+  const [periodoEspecialTipo, setPeriodoEspecialTipo] = useState<'ferias' | 'aviso_2h' | 'aviso_7dias'>('ferias');
+  const [periodoEspecialInicio, setPeriodoEspecialInicio] = useState("");
+  const [periodoEspecialFim, setPeriodoEspecialFim] = useState("");
   // Memória DIXI
   const [addMappingOpen, setAddMappingOpen] = useState(false);
   const [newMappingDixiName, setNewMappingDixiName] = useState("");
@@ -592,6 +597,15 @@ export default function FechamentoPonto() {
       toast.success(`Mês consolidado por ${data.consolidadoPor}`);
     },
     onError: (err) => toast.error(err.message),
+  });
+  const periodoEspecialMut = trpc.fechamentoPonto.corrigirPeriodoEspecialManual.useMutation({
+    onSuccess: (data) => {
+      setShowPeriodoEspecial(false);
+      employeeDetail.refetch(); stats.refetch(); summary.refetch();
+      if (data.corrigidos === 0) toast.info("Nenhum registro automático encontrado nesse período (registros ajustados manualmente são preservados).");
+      else toast.success(`${data.corrigidos} registro(s) corrigido(s) com sucesso.`);
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
   });
   const desconsolidarMut = trpc.fechamentoPonto.desconsolidarMes.useMutation({
     onSuccess: () => {
@@ -915,6 +929,12 @@ export default function FechamentoPonto() {
                 <Button variant="outline" size="sm" className="ml-2 gap-1.5 text-xs text-muted-foreground" onClick={() => openRaioX(selectedEmployeeId)}>
                   <Users className="h-3.5 w-3.5" /> Raio-X Completo
                 </Button>
+                {!isConsolidado && (
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs text-blue-700 border-blue-300 hover:bg-blue-50"
+                    onClick={() => { setPeriodoEspecialInicio(""); setPeriodoEspecialFim(""); setPeriodoEspecialTipo("ferias"); setShowPeriodoEspecial(true); }}>
+                    <CalendarDays className="h-3.5 w-3.5" /> Período Especial
+                  </Button>
+                )}
               </div>
             ) : (
               <div>
@@ -3603,6 +3623,72 @@ export default function FechamentoPonto() {
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 
       {/* ===== MODAL DE AJUSTE RÁPIDO DE INCONSISTÊNCIA ===== */}
+      {/* ===== DIALOG: PERÍODO ESPECIAL MANUAL (Férias / Aviso Prévio retroativo) ===== */}
+      <Dialog open={showPeriodoEspecial} onOpenChange={setShowPeriodoEspecial}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-700">
+              <CalendarDays className="h-5 w-5" /> Aplicar Período Especial
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+              Informa manualmente que o funcionário estava de <strong>férias</strong> ou <strong>aviso prévio</strong> em um período e corrige automaticamente os registros de ponto já lançados.
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Tipo de período</Label>
+              <Select value={periodoEspecialTipo} onValueChange={(v) => setPeriodoEspecialTipo(v as any)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ferias">Férias (zera faltas e atrasos)</SelectItem>
+                  <SelectItem value="aviso_2h">Aviso Prévio — redução de 2h/dia</SelectItem>
+                  <SelectItem value="aviso_7dias">Aviso Prévio — 7 dias corridos (pode se ausentar)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Data início</Label>
+                <Input type="date" value={periodoEspecialInicio} onChange={e => setPeriodoEspecialInicio(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Data fim</Label>
+                <Input type="date" value={periodoEspecialFim} onChange={e => setPeriodoEspecialFim(e.target.value)} />
+              </div>
+            </div>
+
+            {periodoEspecialTipo === 'ferias' && (
+              <p className="text-xs text-muted-foreground">Todos os registros sem ajuste manual no período terão <strong>faltas e atrasos zerados</strong>.</p>
+            )}
+            {periodoEspecialTipo === 'aviso_2h' && (
+              <p className="text-xs text-muted-foreground">A jornada esperada será reduzida em <strong>2 horas por dia</strong> — HE, atrasos e faltas serão recalculados com a jornada corrigida.</p>
+            )}
+            {periodoEspecialTipo === 'aviso_7dias' && (
+              <p className="text-xs text-muted-foreground">Nos <strong>últimos 7 dias corridos</strong> do período informado, a jornada esperada é zerada (o funcionário pode se ausentar sem gerar falta).</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPeriodoEspecial(false)}>Cancelar</Button>
+            <Button
+              disabled={!periodoEspecialInicio || !periodoEspecialFim || periodoEspecialMut.isPending}
+              onClick={() => periodoEspecialMut.mutate({
+                companyId,
+                employeeId: selectedEmployeeId!,
+                dataInicio: periodoEspecialInicio,
+                dataFim: periodoEspecialFim,
+                tipo: periodoEspecialTipo,
+              })}
+            >
+              {periodoEspecialMut.isPending ? "Aplicando..." : "Aplicar Correção"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={quickFixOpen} onOpenChange={setQuickFixOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
