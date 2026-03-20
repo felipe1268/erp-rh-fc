@@ -35,6 +35,38 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio" | "nao_identificados" | "memoria_dixi" | "simulador_horistas" | "descontos_clt";
 
+// Easter Sunday calculation (Gaussian algorithm)
+function getEaster(year: number): Date {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+// Returns a Set of "YYYY-MM-DD" strings for Brazilian national holidays in a given year
+function getBrazilianHolidays(year: number): Set<string> {
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+  const fixed = [
+    `${year}-01-01`, `${year}-04-21`, `${year}-05-01`,
+    `${year}-09-07`, `${year}-10-12`, `${year}-11-02`,
+    `${year}-11-15`, `${year}-12-25`,
+  ];
+  const easter = getEaster(year);
+  const addDays = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+  const variable = [
+    fmt(addDays(easter, -48)), // Segunda de Carnaval
+    fmt(addDays(easter, -47)), // Terça de Carnaval
+    fmt(addDays(easter, -2)),  // Sexta-feira Santa
+    fmt(easter),               // Páscoa
+    fmt(addDays(easter, 60)),  // Corpus Christi
+  ];
+  return new Set([...fixed, ...variable]);
+}
+
 // Helper: extracts schedule times from jornadaTrabalho for a given date
 function getScheduleForDay(jornadaTrabalho: string | null | undefined, dateStr: string): { entrada1: string; saida1: string; entrada2: string; saida2: string } {
   const empty = { entrada1: "", saida1: "", entrada2: "", saida2: "" };
@@ -629,15 +661,20 @@ export default function FechamentoPonto() {
     const [y, m] = mesAno.split("-").map(Number);
     const emp = (employeesList.data || []).find((e: any) => e.id === manualData.employeeId);
     const jornada = emp?.jornadaTrabalho || null;
+    const holidays = getBrazilianHolidays(y);
     const dias: typeof manualDays = [];
     const d = new Date(y, m - 1, 1);
     while (d.getMonth() === m - 1) {
       const dow = d.getDay();
       const dateStr = d.toISOString().split("T")[0];
-      // Include day if it has a schedule (or default to weekdays if no schedule set)
-      const sched = getScheduleForDay(jornada, dateStr);
-      const hasSched = jornada ? !!sched.entrada1 : dow !== 0 && dow !== 6;
-      if (hasSched) {
+      const isWeekend = dow === 0 || dow === 6;
+      const isHoliday = holidays.has(dateStr);
+      // Weekends and holidays: add without times (user decides)
+      // Weekdays with schedule: auto-fill
+      if (isWeekend || isHoliday) {
+        dias.push({ id: `${dateStr}-${Math.random()}`, data: dateStr, entrada1: "", saida1: "", entrada2: "", saida2: "" });
+      } else {
+        const sched = getScheduleForDay(jornada, dateStr);
         dias.push({ id: `${dateStr}-${Math.random()}`, data: dateStr, ...sched });
       }
       d.setDate(d.getDate() + 1);
@@ -3552,7 +3589,7 @@ export default function FechamentoPonto() {
                   <Label>Dias lançados <span className="text-muted-foreground font-normal text-xs">({manualDays.length} {manualDays.length === 1 ? "dia" : "dias"})</span></Label>
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" className="text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50" onClick={gerarDiasUteisDoMes} type="button">
-                      <CalendarDays className="h-3.5 w-3.5" /> Preencher dias úteis do mês
+                      <CalendarDays className="h-3.5 w-3.5" /> Preencher mês completo
                     </Button>
                     <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setManualDays(p => [...p, { id: String(Date.now()), data: "", entrada1: "", saida1: "", entrada2: "", saida2: "" }])} type="button">
                       <Plus className="h-3.5 w-3.5" /> Adicionar dia
@@ -3562,7 +3599,7 @@ export default function FechamentoPonto() {
 
                 {manualDays.length === 0 ? (
                   <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground bg-muted/20">
-                    Clique em <strong>"Adicionar dia"</strong> para inserir um dia, ou <strong>"Preencher dias úteis do mês"</strong> para lançar todos os dias úteis de {formatMesAno(mesAno)} de uma vez.
+                    Clique em <strong>"Adicionar dia"</strong> para inserir um dia, ou <strong>"Preencher mês completo"</strong> para lançar todos os dias de {formatMesAno(mesAno)} — feriados e fins de semana aparecem em vermelho sem horário.
                   </div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
@@ -3582,9 +3619,13 @@ export default function FechamentoPonto() {
                         <tbody>
                           {manualDays.map((day, idx) => {
                             const dow = day.data ? ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][new Date(day.data + "T12:00:00").getDay()] : "";
-                            const isWeekend = day.data ? [0, 6].includes(new Date(day.data + "T12:00:00").getDay()) : false;
+                            const dowNum = day.data ? new Date(day.data + "T12:00:00").getDay() : -1;
+                            const isWeekend = [0, 6].includes(dowNum);
+                            const [yrRow] = day.data ? day.data.split("-").map(Number) : [0];
+                            const isHoliday = day.data ? getBrazilianHolidays(yrRow).has(day.data) : false;
+                            const isRed = isWeekend || isHoliday;
                             return (
-                              <tr key={day.id} className={`border-t ${isWeekend ? "bg-amber-50/50" : idx % 2 === 0 ? "" : "bg-muted/10"}`}>
+                              <tr key={day.id} className={`border-t ${isRed ? "bg-red-50/60" : idx % 2 === 0 ? "" : "bg-muted/10"}`}>
                                 <td className="px-2 py-1">
                                   <Input type="date" value={day.data} className="h-7 text-xs w-full" onChange={e => {
                                     const newDate = e.target.value;
@@ -3601,7 +3642,10 @@ export default function FechamentoPonto() {
                                   }} />
                                 </td>
                                 <td className="px-1 py-1 text-center">
-                                  <span className={`text-xs font-medium ${isWeekend ? "text-amber-600" : "text-muted-foreground"}`}>{dow}</span>
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <span className={`text-xs font-bold ${isRed ? "text-red-600" : "text-muted-foreground"}`}>{dow}</span>
+                                    {isHoliday && !isWeekend && <span className="text-[9px] text-red-500 leading-none">feriado</span>}
+                                  </div>
                                 </td>
                                 <td className="px-1 py-1"><Input type="time" value={day.entrada1} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
                                 <td className="px-1 py-1"><Input type="time" value={day.saida1} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
