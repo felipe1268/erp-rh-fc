@@ -127,25 +127,39 @@ export default function FolhaPagamento() {
   const [valeResult, setValeResult] = useState<any>(null);
   const [pagamentoResult, setPagamentoResult] = useState<any>(null);
   const [afericaoResult, setAfericaoResult] = useState<any>(null);
+  const [calcElapsed, setCalcElapsed] = useState(0);
+  const [calcType, setCalcType] = useState<"vale" | "pagamento" | null>(null);
 
   const gerarValeMut = trpc.payrollEngine.gerarVale.useMutation({
     onSuccess: (data) => {
+      setCalcType(null);
+      setCalcElapsed(0);
       setValeResult(data);
       setViewMode("calculo_vale");
-      toast.success(data.message);
+      toast.success(`Vale calculado: ${data.totalFuncionarios ?? ''} funcionários — R$ ${data.totalVale ? Number(data.totalVale).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''}`);
       payrollPeriod.refetch();
     },
-    onError: (err) => toast.error(`Erro ao calcular vale: ${err.message}`),
+    onError: (err) => { setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao calcular vale: ${err.message}`); },
   });
   const simularPagamentoMut = trpc.payrollEngine.simularPagamento.useMutation({
     onSuccess: (data) => {
+      setCalcType(null);
+      setCalcElapsed(0);
       setPagamentoResult(data);
       setViewMode("calculo_pagamento");
-      toast.success(data.message);
+      toast.success(`Pagamento simulado: ${data.totalFuncionarios ?? ''} funcionários — líquido R$ ${data.totalLiquido ? Number(data.totalLiquido).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''}`);
       payrollPeriod.refetch();
     },
-    onError: (err) => toast.error(`Erro ao simular pagamento: ${err.message}`),
+    onError: (err) => { setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao simular pagamento: ${err.message}`); },
   });
+
+  useEffect(() => {
+    if (!calcType) return;
+    setCalcElapsed(0);
+    const interval = setInterval(() => setCalcElapsed(s => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [calcType]);
+
   const afericaoMut = trpc.payrollEngine.realizarAfericao.useMutation({
     onSuccess: (data) => {
       setAfericaoResult(data);
@@ -1889,6 +1903,58 @@ export default function FolhaPagamento() {
           <span className="text-sm font-semibold text-[#1B2A4A]">{formatMesAno(mesAno)}</span>
         </div>
 
+        {/* ===== OVERLAY DE PROGRESSO DO CÁLCULO ===== */}
+        <Dialog open={calcType !== null}>
+          <DialogContent className="sm:max-w-md" onInteractOutside={e => e.preventDefault()}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {calcType === "vale" ? <CreditCard className="h-5 w-5 text-orange-600" /> : <DollarSign className="h-5 w-5 text-green-600" />}
+                {calcType === "vale" ? "Calculando Vale" : "Simulando Pagamento"}
+              </DialogTitle>
+              <DialogDescription>
+                {calcType === "vale"
+                  ? "Calculando adiantamentos (40% salário + HE) para todos os funcionários CLT ativos."
+                  : "Calculando folha completa: salário bruto, descontos, INSS, FGTS, rateio por obra."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-5 py-4">
+              <div className="relative">
+                <div className="h-16 w-16 rounded-full border-4 border-gray-100 border-t-[#1B2A4A] animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {calcType === "vale"
+                    ? <CreditCard className="h-6 w-6 text-orange-600" />
+                    : <DollarSign className="h-6 w-6 text-green-600" />}
+                </div>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-[#1B2A4A] tabular-nums">
+                  {Math.floor(calcElapsed / 60) > 0
+                    ? `${Math.floor(calcElapsed / 60)}m ${calcElapsed % 60}s`
+                    : `${calcElapsed}s`}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">tempo decorrido</p>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div className="h-full bg-[#1B2A4A] rounded-full animate-pulse" style={{ width: `${Math.min(95, (calcElapsed / 120) * 100)}%`, transition: 'width 1s linear' }} />
+              </div>
+              <div className="text-center text-xs text-muted-foreground space-y-1 bg-blue-50 rounded-lg p-3 w-full">
+                <p className="font-medium text-blue-700">Como funciona:</p>
+                {calcType === "vale" ? <>
+                  <p>1. Busca faltas e horas extras do ponto (1 a 15)</p>
+                  <p>2. Calcula 40% do salário + HE para cada funcionário</p>
+                  <p>3. Registra adiantamentos e lança no Financeiro</p>
+                  <p className="font-medium text-blue-700 mt-1">Os resultados aparecerão em "Calcular Vale → Ver Resultado"</p>
+                </> : <>
+                  <p>1. Busca adiantamentos, faltas e horas extras do mês</p>
+                  <p>2. Calcula salário líquido com todos os descontos</p>
+                  <p>3. Faz rateio por obra para cada funcionário</p>
+                  <p className="font-medium text-blue-700 mt-1">Os resultados aparecerão em "Simular Pagamento → Ver Resultado"</p>
+                </>}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* ===== CÁLCULO INTERNO (PayrollEngine) ===== */}
         <Card className="border-2 border-[#1B2A4A]/20 bg-gradient-to-r from-blue-50/50 to-indigo-50/50">
           <CardContent className="p-5">
@@ -1919,7 +1985,7 @@ export default function FolhaPagamento() {
                 <p className="text-xs text-muted-foreground mb-3">40% do salário + horas extras do ponto real (15 a 15)</p>
                 <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-700"
                   disabled={gerarValeMut.isPending}
-                  onClick={() => gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
+                  onClick={() => { setCalcType("vale"); gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
                   {gerarValeMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : <><Zap className="h-3 w-3 mr-1" /> Calcular Vale</>}
                 </Button>
                 {valeResult && (
@@ -1947,7 +2013,7 @@ export default function FolhaPagamento() {
                 <p className="text-xs text-muted-foreground mb-3">100% salário − adiantamento − faltas − INSS − descontos</p>
                 <Button size="sm" className="w-full bg-green-600 hover:bg-green-700"
                   disabled={simularPagamentoMut.isPending}
-                  onClick={() => simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
+                  onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
                   {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
                 </Button>
                 {pagamentoResult && (

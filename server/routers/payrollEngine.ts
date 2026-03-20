@@ -1028,6 +1028,11 @@ export const payrollEngineRouter = router({
       const results: any[] = [];
       let totalVale = 0;
       let bloqueados = 0;
+      const dataPrevista = `${year}-${String(month).padStart(2, "0")}-${String(criteria.diaAdiantamento).padStart(2, "0")}`;
+
+      // Pre-calculate all employees in memory (no DB calls in loop)
+      const advanceInsertRows: any[] = [];
+      const eventInsertRows: any[] = [];
 
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
@@ -1039,67 +1044,57 @@ export const payrollEngineRouter = router({
         const valorHE = (minutosHE / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
         const valorTotalVale = valorAdiantamento + valorHE;
 
-        // Check alerts (not blocking - user decides)
-        let alertaTipo = "";
-        let alertaMotivo = "";
         const alertas: string[] = [];
-        
-        // Regra 1: 10+ faltas nos 15 primeiros dias do mês atual
-        if (faltas >= 10) {
-          alertas.push(`${faltas} faltas nos 15 primeiros dias do mês (01/${String(month).padStart(2,'0')} a 15/${String(month).padStart(2,'0')})`);
-        }
-        // Regra 2: Admitido após dia 10 do mês
+        if (faltas >= 10) alertas.push(`${faltas} faltas nos 15 primeiros dias do mês (01/${String(month).padStart(2,'0')} a 15/${String(month).padStart(2,'0')})`);
         if (emp.dataAdmissao) {
           const admDay = new Date(emp.dataAdmissao + "T12:00:00Z").getUTCDate();
           const admMonth = new Date(emp.dataAdmissao + "T12:00:00Z").getUTCMonth() + 1;
           const admYear = new Date(emp.dataAdmissao + "T12:00:00Z").getUTCFullYear();
-          if (admYear === year && admMonth === month && admDay > 10) {
-            alertas.push(`Admitido após dia 10 do mês (${emp.dataAdmissao})`);
-          }
-        }
-        
-        const temAlerta = alertas.length > 0;
-        if (temAlerta) {
-          alertaTipo = alertas.length > 1 ? "multiplo" : (faltas >= 10 ? "faltas_excessivas" : "admissao_recente");
-          alertaMotivo = alertas.join(" | ");
-          bloqueados++; // count for summary, but NOT blocking
+          if (admYear === year && admMonth === month && admDay > 10) alertas.push(`Admitido após dia 10 do mês (${emp.dataAdmissao})`);
         }
 
+        const temAlerta = alertas.length > 0;
+        const alertaTipo = temAlerta ? (alertas.length > 1 ? "multiplo" : (faltas >= 10 ? "faltas_excessivas" : "admissao_recente")) : "";
+        const alertaMotivo = alertas.join(" | ");
+        if (temAlerta) bloqueados++;
+
+        advanceInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
+          ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
+          ${temAlerta ? 1 : 0}, ${alertaMotivo || null},
+          ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${temAlerta ? 'alerta' : 'calculado'})`);
+
+        if (!temAlerta) {
+          eventInsertRows.push(sql`(${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
+            ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
+            ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})`);
+        }
+
+        totalVale += valorTotalVale;
+        results.push({
+          employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
+          valorAdiantamento, valorHE, valorTotalVale, temAlerta, alertaTipo, alertaMotivo,
+          bloqueado: false, faltas, minutosHE,
+        });
+      }
+
+      // Batch INSERT all advances in one query
+      if (advanceInsertRows.length > 0) {
         await db.execute(sql`
           INSERT INTO payroll_advances ("companyId", "employeeId", "mesReferencia", "salarioBrutoMes", "percentualAdiantamento",
             "valorAdiantamento", "valorHorasExtras", "horasExtrasQtd", "valorTotalVale", "bloqueado", "motivoBloqueio",
             "faltasNoPeriodo", "valorHora", "cargaHorariaDiaria", "diasUteisNoMes", status)
-          VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
-            ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
-            ${temAlerta ? 1 : 0}, ${alertaMotivo || null},
-            ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${temAlerta ? 'alerta' : 'calculado'})
+          VALUES ${sql.join(advanceInsertRows, sql`,`)}
         `);
+      }
 
-        // Create financial event (always create, user decides later for alerts)
-        const dataPrevista = `${year}-${String(month).padStart(2, "0")}-${String(criteria.diaAdiantamento).padStart(2, "0")}`;
-        if (!temAlerta) {
-          await db.execute(sql`
-            INSERT INTO financial_events ("companyId", tipo, categoria, "mesCompetencia", "dataPrevista", valor, status, "employeeId", "employeeName", descricao, "origemTipo", "criadoPor")
-            VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto}, ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
-          `);
-        }
-        totalVale += valorTotalVale; // always count in total
-
-        results.push({
-          employeeId: emp.id,
-          nome: emp.nomeCompleto,
-          valorHora,
-          salarioBruto,
-          valorAdiantamento,
-          valorHE,
-          valorTotalVale,
-          temAlerta,
-          alertaTipo,
-          alertaMotivo,
-          bloqueado: false, // never auto-block, user decides
-          faltas,
-          minutosHE,
-        });
+      // Batch INSERT all financial events in one query
+      if (eventInsertRows.length > 0) {
+        // Also delete existing financial events for this vale (avoid duplicates on recalc)
+        await db.execute(sql`DELETE FROM financial_events WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia} AND "origemTipo" = 'payroll_advance'`);
+        await db.execute(sql`
+          INSERT INTO financial_events ("companyId", tipo, categoria, "mesCompetencia", "dataPrevista", valor, status, "employeeId", "employeeName", descricao, "origemTipo", "criadoPor")
+          VALUES ${sql.join(eventInsertRows, sql`,`)}
+        `);
       }
 
       // Update period
@@ -1316,6 +1311,60 @@ export const payrollEngineRouter = router({
       // Calculate 5th business day of next month
       const dataPagamentoPrevista = getNthBusinessDay(nextParsed.year, nextParsed.month, criteria.diaPagamento);
 
+      const empIds = empList.map(e => e.id);
+      const empIdsSql = sql.join(empIds.map(id => sql`${id}`), sql`,`);
+      const allCompanyIds = resolveCompanyIds(input);
+
+      // PRE-FETCH: VR diário for all employees in one query
+      const vrBatchRows = ((await db.execute(sql`
+        SELECT DISTINCT ON ("employeeId") "employeeId", "valorDiario"
+        FROM vr_benefits
+        WHERE "companyId" = ${input.companyId} AND "employeeId" IN (${empIdsSql})
+        ORDER BY "employeeId", "mesReferencia" DESC
+      `)) as any).rows || [];
+      const vrDiarioMap = new Map<number, number>();
+      for (const r of vrBatchRows) vrDiarioMap.set(Number(r.employeeId), parseBRL(r.valorDiario));
+
+      // PRE-FETCH: VA (vr_benefits valorTotal) for this competência
+      const vaBatchRows = ((await db.execute(sql`
+        SELECT "employeeId", "valorTotal" FROM vr_benefits
+        WHERE "companyId" = ${input.companyId} AND "employeeId" IN (${empIdsSql}) AND "mesReferencia" = ${input.mesReferencia}
+      `)) as any).rows || [];
+      const vaMap = new Map<number, number>();
+      for (const r of vaBatchRows) vaMap.set(Number(r.employeeId), parseBRL(r.valorTotal));
+
+      // PRE-FETCH: Obra dias for all employees in one query
+      const obraBatchRows = ((await db.execute(sql`
+        SELECT td."employeeId", td."obraId", COUNT(*) as dias, o.nome as "obraNome"
+        FROM timecard_daily td
+        LEFT JOIN obras o ON td."obraId" = o.id
+        WHERE td."employeeId" IN (${empIdsSql})
+          AND td."companyId" IN (${sql.join(allCompanyIds.map(id => sql`${id}`), sql`,`)})
+          AND td."mesCompetencia" = ${input.mesReferencia}
+          AND td."statusDia" = 'registrado'
+          AND td."obraId" IS NOT NULL
+        GROUP BY td."employeeId", td."obraId", o.nome
+      `)) as any).rows || [];
+      const obraMap = new Map<number, any[]>();
+      for (const r of obraBatchRows) {
+        if (!obraMap.has(Number(r.employeeId))) obraMap.set(Number(r.employeeId), []);
+        obraMap.get(Number(r.employeeId))!.push(r);
+      }
+
+      // PRE-FETCH: Convênios for all employees in one query
+      const convenioBatchRows = ((await db.execute(sql`
+        SELECT lp.employee_id, COALESCE(SUM(CAST(lp.valor AS DECIMAL(15,2))), 0) as "totalConvenio"
+        FROM lancamentos_parceiros lp
+        WHERE lp.employee_id IN (${empIdsSql}) AND lp.company_id = ${input.companyId}
+          AND lp.competencia_desconto = ${input.mesReferencia}
+          AND lp.status_lancamento_parceiro IN ('pendente', 'aprovado')
+        GROUP BY lp.employee_id
+      `)) as any).rows || [];
+      const convenioMap = new Map<number, number>();
+      for (const r of convenioBatchRows) convenioMap.set(Number(r.employee_id), parseFloat(r.totalConvenio || '0'));
+
+      const paymentInsertRows: any[] = [];
+
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
         const salarioBruto = valorHora * criteria.cargaHorariaDiaria * diasUteis;
@@ -1323,7 +1372,6 @@ export const payrollEngineRouter = router({
         const valorHE = (minutosHE / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
         const totalProventos = salarioBruto + valorHE;
 
-        // Descontos
         const adv = advMap.get(emp.id);
         const descontoAdiantamento = adv ? parseBRL(adv.valorTotalVale) : 0;
 
@@ -1333,81 +1381,44 @@ export const payrollEngineRouter = router({
         const descontoFaltas = faltasQtd * valorHora * criteria.cargaHorariaDiaria;
         const descontoAtrasos = (atrasosMinutos / 60) * valorHora;
 
-        // VR discount per falta
-        const vrDiario = await getEmployeeVrDiario(db, emp.id, input.companyId);
+        const vrDiario = vrDiarioMap.get(emp.id) || 0;
         const descontoVrFaltas = criteria.descontoVrFalta ? faltasQtd * vrDiario : 0;
 
-        // VA (Vale Alimentação) - buscar do módulo vr_benefits (lançamento mensal)
-        const vaRows = ((await db.execute(sql`
-          SELECT "valorTotal" FROM vr_benefits 
-          WHERE "companyId" = ${input.companyId} AND "employeeId" = ${emp.id} AND "mesReferencia" = ${input.mesReferencia}
-          LIMIT 1
-        `)) as any).rows || [];
-        const vaLancamento = vaRows?.[0] ? parseBRL(vaRows[0].valorTotal) : 0;
-        // Desconto de 5% do VA (conforme convenção coletiva) proporcional aos dias trabalhados
-        const vaDescontoPct = 0.05; // 5% conforme convenção
+        const vaLancamento = vaMap.get(emp.id) || 0;
+        const vaDescontoPct = 0.05;
         const vaDescontoBase = vaLancamento * vaDescontoPct;
-        // Se faltou, desconta proporcional do VA
         const vaDescontoFaltas = faltasQtd > 0 ? (vaLancamento / diasUteis) * faltasQtd * vaDescontoPct : 0;
-        const descontoVaTotal = vaDescontoBase - vaDescontoFaltas; // desconto de 5% sobre dias trabalhados
-        // VT (Vale Transporte) - valor diário do cadastro do funcionário
+        const descontoVaTotal = vaDescontoBase - vaDescontoFaltas;
+
         const vtDiario = parseBRL(emp.vtValorDiario);
-        const vtValorMensalCalc = vtDiario * diasUteis;
+        const vtValorMensal = vtDiario * diasUteis;
         const descontoVtFaltas = criteria.descontoVtFalta ? faltasQtd * vtDiario : 0;
 
-        // Pensão
         let descontoPensao = 0;
         if (emp.pensaoAlimenticia) {
-          if (emp.pensaoTipo === "percentual") {
-            descontoPensao = salarioBruto * (parseBRL(emp.pensaoPercentual) / 100);
-          } else {
-            descontoPensao = parseBRL(emp.pensaoValor);
-          }
+          descontoPensao = emp.pensaoTipo === "percentual"
+            ? salarioBruto * (parseBRL(emp.pensaoPercentual) / 100)
+            : parseBRL(emp.pensaoValor);
         }
 
-        // Acerto do escuro (adjustments from previous month's aferição)
         const adjustments = adjMap.get(emp.id) || [];
         const acertoEscuroValor = adjustments.reduce((acc: number, a: any) => acc + parseBRL(a.valorTotal), 0);
-        const acertoEscuroDetalhes = adjustments.map((a: any) => ({
-          data: a.data,
-          tipo: a.tipo,
-          valor: a.valorTotal,
-          descricao: a.descricao,
-        }));
+        const acertoEscuroDetalhes = adjustments.map((a: any) => ({ data: a.data, tipo: a.tipo, valor: a.valorTotal, descricao: a.descricao }));
 
-        // ===== CAMPOS RATEÁVEIS POR OBRA =====
-        // VA (Vale Alimentação) - do módulo vr_benefits (já calculado acima)
         const vaValor = vaLancamento;
-        // VT (Vale Transporte) - valor mensal calculado acima
-        const vtValorMensal = vtValorMensalCalc;
-        // VR (Vale Refeição) - valor total mensal (diário * dias úteis)
         const vrValorMensal = vrDiario * diasUteis;
-        // Seguro de Vida
         const seguroVidaValor = parseBRL(emp.seguroVida);
-        // FGTS (8% padrão ou percentual do funcionário)
         const fgtsPerc = parseBRL(emp.fgtsPercentual) || 8;
         const fgtsValor = salarioBruto * (fgtsPerc / 100);
-        // INSS (percentual do funcionário ou tabela progressiva simplificada)
         const inssPerc = parseBRL(emp.inssPercentual) || 0;
         const inssValor = inssPerc > 0 ? salarioBruto * (inssPerc / 100) : 0;
 
-        // Rateio por obra: buscar dias trabalhados por obra no mês
-        const obraDiasRows = ((await db.execute(sql`
-          SELECT td."obraId", COUNT(*) as dias, o.nome as "obraNome"
-          FROM timecard_daily td
-          LEFT JOIN obras o ON td."obraId" = o.id
-          WHERE td."employeeId" = ${emp.id} AND td."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
-          AND td."mesCompetencia" = ${input.mesReferencia} AND td."statusDia" = 'registrado'
-          AND td."obraId" IS NOT NULL
-          GROUP BY td."obraId", o.nome
-        `)) as any).rows || [];
-        const totalDiasObra = (obraDiasRows || []).reduce((s: number, r: any) => s + Number(r.dias), 0) || diasUteis;
-        const rateioPorObra = (obraDiasRows || []).map((r: any) => {
+        const obraDiasRows = obraMap.get(emp.id) || [];
+        const totalDiasObra = obraDiasRows.reduce((s: number, r: any) => s + Number(r.dias), 0) || diasUteis;
+        const rateioPorObra = obraDiasRows.map((r: any) => {
           const proporcao = Number(r.dias) / totalDiasObra;
           return {
-            obraId: r.obraId,
-            obraNome: r.obraNome || 'Sem obra',
-            dias: Number(r.dias),
+            obraId: r.obraId, obraNome: r.obraNome || 'Sem obra', dias: Number(r.dias),
             proporcao: Math.round(proporcao * 10000) / 10000,
             salario: Math.round(salarioBruto * proporcao * 100) / 100,
             va: Math.round(vaValor * proporcao * 100) / 100,
@@ -1419,19 +1430,33 @@ export const payrollEngineRouter = router({
           };
         });
 
-        // Convênios (farmácia, posto, etc.) - buscar lançamentos aprovados do mês
-        const convenioRows = ((await db.execute(sql`
-          SELECT COALESCE(SUM(CAST(lp.valor AS DECIMAL(15,2))), 0) as totalConvenio
-          FROM lancamentos_parceiros lp
-          WHERE lp.employee_id = ${emp.id} AND lp.company_id = ${input.companyId}
-          AND lp.competencia_desconto = ${input.mesReferencia}
-          AND lp.status_lancamento_parceiro IN ('pendente', 'aprovado')
-        `)) as any).rows || [];
-        const descontoConvenio = parseFloat((convenioRows as any[])?.[0]?.totalConvenio || '0');
-
+        const descontoConvenio = convenioMap.get(emp.id) || 0;
         const totalDescontos = descontoAdiantamento + descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVaTotal + descontoVtFaltas + descontoPensao + acertoEscuroValor + inssValor + descontoConvenio;
         const salarioLiquido = totalProventos - totalDescontos;
 
+        paymentInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis},
+          ${formatMoney(salarioBruto)}, ${formatMoney(valorHE)}, ${formatMoney(totalProventos)},
+          ${formatMoney(descontoAdiantamento)}, ${formatMoney(descontoFaltas)}, ${faltasQtd}, ${formatMoney(descontoAtrasos)}, ${atrasosMinutos},
+          ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(inssValor)}, ${formatMoney(fgtsValor)}, ${formatMoney(descontoConvenio)},
+          ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
+          'simulado', ${dataPagamentoPrevista})`);
+
+        grandTotalLiquido += salarioLiquido;
+        grandTotalBruto += salarioBruto;
+        grandTotalDescontos += totalDescontos;
+
+        results.push({
+          employeeId: emp.id, nome: emp.nomeCompleto, funcao: emp.funcao, codigoInterno: emp.codigoInterno,
+          salarioBruto, valorHE, totalProventos, descontoAdiantamento, descontoFaltas, faltasQtd,
+          descontoAtrasos, descontoVrFaltas, descontoVtFaltas, descontoVaTotal, descontoPensao,
+          descontoInss: inssValor, descontoFgts: fgtsValor, acertoEscuroValor, descontoConvenio,
+          totalDescontos, salarioLiquido, dataPagamentoPrevista, vaValor,
+          vtValor: vtValorMensal, vtDiario, vrValor: vrValorMensal, seguroVidaValor, rateioPorObra,
+        });
+      }
+
+      // Batch INSERT all payments in one query
+      if (paymentInsertRows.length > 0) {
         await db.execute(sql`
           INSERT INTO payroll_payments ("companyId", "employeeId", "mesReferencia", "valorHora", "cargaHorariaDiaria", "diasUteisNoMes",
             "salarioBrutoMes", "horasExtrasValor", "totalProventos",
@@ -1439,48 +1464,8 @@ export const payrollEngineRouter = router({
             "descontoVrFaltas", "descontoVtFaltas", "descontoPensao", "descontoInss", "descontoFgts", "descontoOutros",
             "totalDescontos", "acertoEscuroValor", "acertoEscuroDetalhes", "salarioLiquido",
             status, "dataPagamentoPrevista")
-          VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis},
-            ${formatMoney(salarioBruto)}, ${formatMoney(valorHE)}, ${formatMoney(totalProventos)},
-            ${formatMoney(descontoAdiantamento)}, ${formatMoney(descontoFaltas)}, ${faltasQtd}, ${formatMoney(descontoAtrasos)}, ${atrasosMinutos},
-            ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(inssValor)}, ${formatMoney(fgtsValor)}, ${formatMoney(descontoConvenio)},
-            ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
-            'simulado', ${dataPagamentoPrevista})
+          VALUES ${sql.join(paymentInsertRows, sql`,`)}
         `);
-
-        grandTotalLiquido += salarioLiquido;
-        grandTotalBruto += salarioBruto;
-        grandTotalDescontos += totalDescontos;
-
-        results.push({
-          employeeId: emp.id,
-          nome: emp.nomeCompleto,
-          funcao: emp.funcao,
-          codigoInterno: emp.codigoInterno,
-          salarioBruto,
-          valorHE,
-          totalProventos,
-          descontoAdiantamento,
-          descontoFaltas,
-          faltasQtd,
-          descontoAtrasos,
-          descontoVrFaltas,
-          descontoVtFaltas,
-          descontoVaTotal,
-          descontoPensao,
-          descontoInss: inssValor,
-          descontoFgts: fgtsValor,
-          acertoEscuroValor,
-          descontoConvenio,
-          totalDescontos,
-          salarioLiquido,
-          dataPagamentoPrevista,
-          vaValor,
-          vtValor: vtValorMensal,
-          vtDiario,
-          vrValor: vrValorMensal,
-          seguroVidaValor,
-          rateioPorObra,
-        });
       }
 
       // Update period
@@ -2565,11 +2550,10 @@ async function getEmployeeValorHora(db: any, employeeId: number): Promise<number
 }
 
 async function getEmployeeVrDiario(db: any, employeeId: number, companyId: number): Promise<number> {
-  // Try to get from vr_benefits for current month
   const rows = ((await db.execute(sql`
-    SELECT valorDiario FROM vr_benefits 
-    WHERE employeeId = ${employeeId} AND companyId = ${companyId}
-    ORDER BY mesReferencia DESC LIMIT 1
+    SELECT "valorDiario" FROM vr_benefits 
+    WHERE "employeeId" = ${employeeId} AND "companyId" = ${companyId}
+    ORDER BY "mesReferencia" DESC LIMIT 1
   `)) as any).rows || [];
   if (rows[0]?.valorDiario) return parseBRL(rows[0].valorDiario);
   return 0;
