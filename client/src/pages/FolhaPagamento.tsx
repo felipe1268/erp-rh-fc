@@ -2287,15 +2287,15 @@ export default function FolhaPagamento() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-stretch">
               {/* CALCULAR VALE */}
-              <div className="bg-white rounded-lg border border-orange-200 p-4">
+              <div className="bg-white rounded-lg border border-orange-200 p-4 flex flex-col">
                 <div className="flex items-center gap-2 mb-2">
                   <CreditCard className="h-4 w-4 text-orange-600" />
                   <span className="font-semibold text-sm">Calcular Vale</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">Adiantamento — {(() => { const p = (payrollPeriod.data as any); return p?.percentualAdiantamento || 40; })()}% do salário (sem HE)</p>
-                <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-700"
+                <p className="text-xs text-muted-foreground mb-3 flex-1">Adiantamento — {(() => { const p = (payrollPeriod.data as any); return p?.percentualAdiantamento || 40; })()}% do salário (sem HE)</p>
+                <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-700 mt-auto"
                   disabled={gerarValeMut.isPending}
                   onClick={() => { setCalcType("vale"); gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
                   {gerarValeMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : <><Zap className="h-3 w-3 mr-1" /> Calcular Vale</>}
@@ -2317,46 +2317,48 @@ export default function FolhaPagamento() {
               </div>
 
               {/* HORA EXTRA MÓDULO */}
-              <div className="bg-white rounded-lg border border-purple-300 p-4">
+              <div className="bg-white rounded-lg border border-purple-300 p-4 flex flex-col">
                 <div className="flex items-center gap-2 mb-2">
                   <TrendingUp className="h-4 w-4 text-purple-700" />
                   <span className="font-semibold text-sm">Hora Extra</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">Período configurável com detecção de duplicidade</p>
-                {(() => {
-                  const activePeriods = (hePeriods.data as any[] || []).filter((p: any) => p.status !== 'cancelado');
-                  return activePeriods.length > 0 ? (
-                    <div className="space-y-1">
-                      {activePeriods.slice(0, 2).map((p: any) => (
-                        <Button key={p.id} size="sm" variant="ghost" className="w-full text-xs text-purple-700 h-7"
-                          onClick={() => { setHeViewPeriodId(p.id); setViewMode("he_modulo"); }}>
-                          <Eye className="h-3 w-3 mr-1" />
-                          {String(p.dataInicio).slice(0,10)} → {String(p.dataFim).slice(0,10)}
-                          <Badge className={`ml-1 text-[9px] ${p.status === 'aprovado' ? 'bg-green-100 text-green-700' : p.status === 'pago' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{p.status}</Badge>
+                <p className="text-xs text-muted-foreground mb-3 flex-1">Período configurável com detecção de duplicidade</p>
+                <div className="mt-auto">
+                  {(() => {
+                    const activePeriods = (hePeriods.data as any[] || []).filter((p: any) => p.status !== 'cancelado');
+                    return activePeriods.length > 0 ? (
+                      <div className="space-y-1">
+                        {activePeriods.slice(0, 2).map((p: any) => (
+                          <Button key={p.id} size="sm" variant="ghost" className="w-full text-xs text-purple-700 h-7"
+                            onClick={() => { setHeViewPeriodId(p.id); setViewMode("he_modulo"); }}>
+                            <Eye className="h-3 w-3 mr-1" />
+                            {String(p.dataInicio).slice(0,10)} → {String(p.dataFim).slice(0,10)}
+                            <Badge className={`ml-1 text-[9px] ${p.status === 'aprovado' ? 'bg-green-100 text-green-700' : p.status === 'pago' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{p.status}</Badge>
+                          </Button>
+                        ))}
+                        <Button size="sm" variant="outline" className="w-full border-purple-300 text-purple-700 hover:bg-purple-50"
+                          onClick={() => setViewMode("he_modulo")}>
+                          <TrendingUp className="h-3 w-3 mr-1" /> Gerenciar HE
                         </Button>
-                      ))}
-                      <Button size="sm" variant="outline" className="w-full border-purple-300 text-purple-700 hover:bg-purple-50"
+                      </div>
+                    ) : (
+                      <Button size="sm" className="w-full bg-purple-700 hover:bg-purple-800"
                         onClick={() => setViewMode("he_modulo")}>
-                        <TrendingUp className="h-3 w-3 mr-1" /> Gerenciar HE
+                        <Zap className="h-3 w-3 mr-1" /> Calcular HE
                       </Button>
-                    </div>
-                  ) : (
-                    <Button size="sm" className="w-full bg-purple-700 hover:bg-purple-800"
-                      onClick={() => setViewMode("he_modulo")}>
-                      <Zap className="h-3 w-3 mr-1" /> Calcular HE
-                    </Button>
-                  );
-                })()}
+                    );
+                  })()}
+                </div>
               </div>
 
               {/* SIMULAR PAGAMENTO */}
-              <div className="bg-white rounded-lg border border-green-200 p-4">
+              <div className="bg-white rounded-lg border border-green-200 p-4 flex flex-col">
                 <div className="flex items-center gap-2 mb-2">
                   <DollarSign className="h-4 w-4 text-green-600" />
                   <span className="font-semibold text-sm">Simular Pagamento</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">100% salário − adiantamento − faltas − INSS − descontos</p>
-                <Button size="sm" className="w-full bg-green-600 hover:bg-green-700"
+                <p className="text-xs text-muted-foreground mb-3 flex-1">100% salário − adiantamento − faltas − INSS − descontos</p>
+                <Button size="sm" className="w-full bg-green-600 hover:bg-green-700 mt-auto"
                   disabled={simularPagamentoMut.isPending}
                   onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
                   {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
@@ -2369,13 +2371,13 @@ export default function FolhaPagamento() {
               </div>
 
               {/* AFERIR ESCURO */}
-              <div className="bg-white rounded-lg border border-purple-200 p-4">
+              <div className="bg-white rounded-lg border border-purple-200 p-4 flex flex-col">
                 <div className="flex items-center gap-2 mb-2">
                   <Moon className="h-4 w-4 text-purple-600" />
                   <span className="font-semibold text-sm">Aferir Escuro</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">Compara o escuro do mês anterior com o ponto real importado</p>
-                <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700"
+                <p className="text-xs text-muted-foreground mb-3 flex-1">Compara o escuro do mês anterior com o ponto real importado</p>
+                <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700 mt-auto"
                   disabled={afericaoMut.isPending}
                   onClick={() => afericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
                   {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
