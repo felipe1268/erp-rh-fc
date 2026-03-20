@@ -134,6 +134,13 @@
       "when": 1773919421881,
       "tag": "0018_medicao_contratos_module",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1773970686272,
+      "tag": "0019_mute_screwball",
+      "breakpoints": true
     }
   ]
 }

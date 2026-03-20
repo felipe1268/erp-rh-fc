@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 612,
+    titulo: "Aviso Prévio: FGTS real editável, descontos/acréscimos de acerto e Novo Emprego (Súmula 276 TST)",
+    descricao: "Três novas funcionalidades no módulo de Aviso Prévio: (1) FGTS Real editável — o RH pode informar o saldo real do FGTS conforme extrato CAIXA/eSocial; o sistema recalcula a Multa 40% sobre o valor real e registra quem editou, quando e o valor anterior (badge âmbar 'FGTS Real'). (2) Descontos e Acréscimos do Acerto — dois campos com valor + descrição para ajustar o total da rescisão (ex: dívida EPI, PLR, bônus). (3) Novo Emprego durante Aviso Prévio Trabalhado (Súmula 276 TST) — toggle que ativa o cenário legal onde o funcionário comprova novo emprego: Aviso Prévio Indenizado zerado, saldo de salário recalculado até a data da comunicação, prazo de pagamento = comunicação + 10 dias (Art. 477 §6º CLT), campo para link da carta/comprovante e badge 'Súmula 276 TST' no painel e na lista.",
+    tipo: "feature",
+    modulos: "Aviso Prévio",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 611,
     titulo: "Remoção do Cronograma de Compras (Planejamento) e módulo Horas Extras",
     descricao: "Aba 'Cronograma de Compras' removida do módulo Planejamento (será repensada futuramente). Módulo 'Horas Extras' removido da navegação lateral, do painel de configuração de menu e do índice de dashboards.",

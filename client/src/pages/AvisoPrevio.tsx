@@ -21,8 +21,9 @@ import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
   CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer, RefreshCw, RotateCcw,
-  UserX, ShieldAlert,
+  UserX, ShieldAlert, Edit2, Briefcase, Save, MinusCircle, PlusCircle, Link,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -143,6 +144,61 @@ export default function AvisoPrevio() {
       setDarBaixaForm({ observacoes: '', desligarFuncionario: false, categoriaDesligamento: '', motivoDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' });
     },
     onError: (err) => { toast.error(err.message || "Erro ao dar baixa"); },
+  });
+
+  // Novos: FGTS Real, Acerto, Novo Emprego
+  const [fgtsEditDialog, setFgtsEditDialog] = useState<{ open: boolean; valor: string }>({ open: false, valor: '' });
+  const [acertoForm, setAcertoForm] = useState<{ descontosAcerto: string; descontosAcertoDesc: string; acrescimosAcerto: string; acrescimosAcertoDesc: string }>({ descontosAcerto: '', descontosAcertoDesc: '', acrescimosAcerto: '', acrescimosAcertoDesc: '' });
+  const [novoEmpregoForm, setNovoEmpregoForm] = useState<{ ativo: boolean; comunicadoEm: string; cartaUrl: string }>({ ativo: false, comunicadoEm: '', cartaUrl: '' });
+  const [savingAcerto, setSavingAcerto] = useState(false);
+  const [savingNovoEmprego, setSavingNovoEmprego] = useState(false);
+
+  const refreshSelectedItem = async (id: number) => {
+    try {
+      const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id });
+      if (detail) {
+        setSelectedItem(detail);
+        // Sincronizar forms com dados frescos
+        setAcertoForm({
+          descontosAcerto: (detail as any).descontosAcerto || '',
+          descontosAcertoDesc: (detail as any).descontosAcertoDesc || '',
+          acrescimosAcerto: (detail as any).acrescimosAcerto || '',
+          acrescimosAcertoDesc: (detail as any).acrescimosAcertoDesc || '',
+        });
+        setNovoEmpregoForm({
+          ativo: !!(detail as any).novoEmpregoAtivo,
+          comunicadoEm: (detail as any).novoEmpregoComunicadoEm || '',
+          cartaUrl: (detail as any).novoEmpregoCartaUrl || '',
+        });
+      }
+    } catch (e) { console.error('Erro ao recarregar detalhes:', e); }
+  };
+
+  const editarFgtsReal = trpc.avisoPrevio.avisoPrevio.editarFgtsReal.useMutation({
+    onSuccess: async () => {
+      toast.success('FGTS real atualizado!');
+      setFgtsEditDialog({ open: false, valor: '' });
+      if (selectedItem?.id) { refetch(); await refreshSelectedItem(selectedItem.id); }
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao salvar FGTS real'),
+  });
+
+  const editarAcerto = trpc.avisoPrevio.avisoPrevio.editarAcerto.useMutation({
+    onSuccess: async () => {
+      toast.success('Acerto atualizado!');
+      setSavingAcerto(false);
+      if (selectedItem?.id) { refetch(); await refreshSelectedItem(selectedItem.id); }
+    },
+    onError: (e: any) => { toast.error(e.message || 'Erro ao salvar acerto'); setSavingAcerto(false); },
+  });
+
+  const ativarNovoEmprego = trpc.avisoPrevio.avisoPrevio.ativarNovoEmprego.useMutation({
+    onSuccess: async () => {
+      toast.success('Situação de novo emprego atualizada!');
+      setSavingNovoEmprego(false);
+      if (selectedItem?.id) { refetch(); await refreshSelectedItem(selectedItem.id); }
+    },
+    onError: (e: any) => { toast.error(e.message || 'Erro ao salvar novo emprego'); setSavingNovoEmprego(false); },
   });
 
   // Cálculo automático via useEffect
@@ -518,6 +574,10 @@ export default function AvisoPrevio() {
                       <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                         <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>
                           {a.employeeName}
+                          <div className="flex gap-1 mt-0.5 flex-wrap">
+                            {(a as any).novoEmpregoAtivo ? <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.5 rounded-full font-semibold">Novo Emprego · Súmula 276</span> : null}
+                            {(a as any).fgtsEditadoManualmente ? <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-semibold">FGTS Real</span> : null}
+                          </div>
                         </td>
                         <td className="p-3 text-xs">{formatCPF(a.employeeCpf)}</td>
                         <td className="p-3 text-center">{formatDate(a.dataDiaTrabalhado)}</td>
@@ -551,7 +611,13 @@ export default function AvisoPrevio() {
                         </td>
                         <td className="p-3">
                           <div className="flex items-center justify-center gap-1">
-                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={async () => { setSelectedItem(a); setShowDetailDialog(true); try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) setSelectedItem(detail); } catch(e) { console.error('Erro ao buscar detalhes:', e); } }}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={async () => {
+                              setSelectedItem(a);
+                              setShowDetailDialog(true);
+                              setAcertoForm({ descontosAcerto: (a as any).descontosAcerto || '', descontosAcertoDesc: (a as any).descontosAcertoDesc || '', acrescimosAcerto: (a as any).acrescimosAcerto || '', acrescimosAcertoDesc: (a as any).acrescimosAcertoDesc || '' });
+                              setNovoEmpregoForm({ ativo: !!(a as any).novoEmpregoAtivo, comunicadoEm: (a as any).novoEmpregoComunicadoEm || '', cartaUrl: (a as any).novoEmpregoCartaUrl || '' });
+                              try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) { setSelectedItem(detail); setAcertoForm({ descontosAcerto: (detail as any).descontosAcerto || '', descontosAcertoDesc: (detail as any).descontosAcertoDesc || '', acrescimosAcerto: (detail as any).acrescimosAcerto || '', acrescimosAcertoDesc: (detail as any).acrescimosAcertoDesc || '' }); setNovoEmpregoForm({ ativo: !!(detail as any).novoEmpregoAtivo, comunicadoEm: (detail as any).novoEmpregoComunicadoEm || '', cartaUrl: (detail as any).novoEmpregoCartaUrl || '' }); } } catch(e) { console.error('Erro ao buscar detalhes:', e); }
+                            }}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                             {a.status === "em_andamento" && (
@@ -674,6 +740,86 @@ export default function AvisoPrevio() {
                 <p className="text-xs text-blue-600 uppercase font-semibold mb-2">Redução de Jornada (Art. 488 CLT)</p>
                 <p className="font-medium">{REDUCAO_LABELS[selectedItem.reducaoJornada] || "Nenhuma"}</p>
               </div>
+
+              {/* ===== NOVO EMPREGO — Súmula 276 TST ===== */}
+              {selectedItem.tipo?.includes('trabalhado') && (
+                <div className={`rounded-lg border p-4 ${novoEmpregoForm.ativo ? 'bg-orange-50 border-orange-300' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className={`h-4 w-4 ${novoEmpregoForm.ativo ? 'text-orange-600' : 'text-gray-400'}`} />
+                      <p className={`text-xs font-bold uppercase ${novoEmpregoForm.ativo ? 'text-orange-700' : 'text-gray-500'}`}>
+                        Novo Emprego durante o Aviso Prévio
+                      </p>
+                      {novoEmpregoForm.ativo && (
+                        <span className="text-[10px] bg-orange-600 text-white px-2 py-0.5 rounded-full font-semibold">Súmula 276 TST</span>
+                      )}
+                    </div>
+                    <Switch
+                      checked={novoEmpregoForm.ativo}
+                      onCheckedChange={(v) => setNovoEmpregoForm(f => ({ ...f, ativo: v }))}
+                    />
+                  </div>
+                  {novoEmpregoForm.ativo && (
+                    <div className="space-y-3">
+                      <div className="bg-orange-100 border border-orange-200 rounded p-3 text-xs text-orange-800">
+                        <strong>Súmula 276 TST:</strong> Funcionário encontrou novo emprego e apresentou comprovante. O empregador fica isento do pagamento dos dias restantes do aviso prévio. Saldo de salário calculado até a data da comunicação. Prazo de pagamento: 10 dias corridos a partir desta data.
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-medium text-orange-700 block mb-1">Data da Comunicação *</label>
+                          <Input
+                            type="date"
+                            value={novoEmpregoForm.comunicadoEm}
+                            min={selectedItem.dataInicio}
+                            max={selectedItem.dataFim}
+                            onChange={e => setNovoEmpregoForm(f => ({ ...f, comunicadoEm: e.target.value }))}
+                            className="text-sm h-8 border-orange-300"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-orange-700 block mb-1">Link da Carta / Comprovante</label>
+                          <div className="flex gap-1">
+                            <Input
+                              value={novoEmpregoForm.cartaUrl}
+                              onChange={e => setNovoEmpregoForm(f => ({ ...f, cartaUrl: e.target.value }))}
+                              placeholder="URL do documento..."
+                              className="text-sm h-8 border-orange-300"
+                            />
+                            {novoEmpregoForm.cartaUrl && (
+                              <a href={novoEmpregoForm.cartaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-8 w-8 bg-orange-200 rounded hover:bg-orange-300">
+                                <Link className="h-3.5 w-3.5 text-orange-700" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-orange-600">
+                        Efeitos: Aviso Prévio Indenizado = R$ 0,00 · Saldo salário recalculado até {formatDate(novoEmpregoForm.comunicadoEm) || '?'} · Prazo pagamento = data comunicação + 10 dias
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-3 flex justify-end">
+                    <Button
+                      size="sm"
+                      disabled={savingNovoEmprego || (novoEmpregoForm.ativo && !novoEmpregoForm.comunicadoEm)}
+                      className="h-8 text-xs bg-orange-600 hover:bg-orange-700 text-white"
+                      onClick={() => {
+                        setSavingNovoEmprego(true);
+                        ativarNovoEmprego.mutate({
+                          id: selectedItem.id,
+                          ativo: novoEmpregoForm.ativo,
+                          comunicadoEm: novoEmpregoForm.comunicadoEm || null,
+                          cartaUrl: novoEmpregoForm.cartaUrl || null,
+                        });
+                      }}
+                    >
+                      <Save className="h-3 w-3 mr-1" />
+                      {savingNovoEmprego ? 'Salvando...' : 'Salvar'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {selectedItem.previsaoRescisao && (() => {
                 let prev: any;
                 try { prev = JSON.parse(selectedItem.previsaoRescisao); } catch { prev = null; }
@@ -692,10 +838,42 @@ export default function AvisoPrevio() {
                       <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">VR Proporcional (R$ {prev.vrDiario}/dia × {prev.diasTrabalhadosMes}):</span><span className="font-semibold">{formatMoeda(prev.vrProporcional)}</span></div>
                       <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">13º Proporcional ({prev.meses13o}/12):</span><span className="font-semibold">{formatMoeda(prev.decimoTerceiroProporcional)}</span></div>
                       <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Aviso Prévio Indenizado ({prev.diasExtrasAviso} dias extras):</span><span className="font-semibold">{formatMoeda(prev.avisoPrevioIndenizado)}</span></div>
+                      {/* Aviso prévio indenizado zerado por Súmula 276 */}
+                      {prev.novoEmpregoAplicado && (
+                        <div className="flex items-center gap-2 py-1 px-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700 mt-1">
+                          <Briefcase className="h-3 w-3" />
+                          <span><strong>Súmula 276 TST aplicada:</strong> Aviso prévio indenizado zerado. Saldo de salário e prazo calculados até a comunicação do novo emprego.</span>
+                        </div>
+                      )}
+
+                      {/* FGTS com edição manual */}
                       <div className="mt-2 pt-1">
-                        <p className="text-[10px] text-gray-400 uppercase font-bold">FGTS (informativo)</p>
-                        <div className="flex justify-between py-0.5"><span className="text-xs text-gray-400">FGTS Estimado:</span><span className="text-xs text-gray-500">{formatMoeda(prev.fgtsEstimado)}</span></div>
-                        <div className="flex justify-between py-0.5"><span className="text-xs text-gray-400">Multa 40%:</span><span className="text-xs text-gray-500">{formatMoeda(prev.multaFGTS)}</span></div>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-[10px] text-gray-400 uppercase font-bold">FGTS (informativo)</p>
+                          {selectedItem.tipo?.includes('empregador') && (
+                            <Button size="sm" variant="ghost" className="h-6 text-[10px] text-amber-600 hover:text-amber-700 px-2 gap-1" onClick={() => setFgtsEditDialog({ open: true, valor: selectedItem.fgtsReal || '' })}>
+                              <Edit2 className="h-3 w-3" />
+                              {selectedItem.fgtsEditadoManualmente ? 'Editar saldo real' : 'Informar saldo real'}
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex justify-between py-0.5">
+                          <span className="text-xs text-gray-400">FGTS Estimado (sistema):</span>
+                          <span className="text-xs text-gray-500">{formatMoeda(prev.fgtsEstimado)}</span>
+                        </div>
+                        {selectedItem.fgtsEditadoManualmente ? (
+                          <div className="flex justify-between py-0.5 bg-amber-50 px-1 rounded">
+                            <span className="text-xs text-amber-600 flex items-center gap-1">
+                              Saldo Real (editado manualmente)
+                              <span className="text-[9px] text-amber-400">por {selectedItem.fgtsEditadoPor}</span>
+                            </span>
+                            <span className="text-xs font-semibold text-amber-700">{formatMoeda(selectedItem.fgtsReal)}</span>
+                          </div>
+                        ) : null}
+                        <div className="flex justify-between py-0.5">
+                          <span className="text-xs text-gray-400">Multa 40%{selectedItem.fgtsEditadoManualmente ? ' (sobre saldo real)' : ' (sobre estimado)'}:</span>
+                          <span className="text-xs font-medium text-gray-600">{formatMoeda(prev.multaFGTS)}</span>
+                        </div>
                       </div>
                     </div>
                     <div className="border-t-2 border-green-300 mt-3 pt-3 flex justify-between text-lg font-bold text-green-700">
@@ -708,6 +886,94 @@ export default function AvisoPrevio() {
                   </div>
                 );
               })()}
+
+              {/* ===== DESCONTOS E ACRÉSCIMOS DO ACERTO ===== */}
+              <div className="rounded-lg border border-gray-200 p-4 bg-white">
+                <p className="text-xs font-bold uppercase text-gray-500 mb-3 flex items-center gap-1">
+                  <DollarSign className="h-3.5 w-3.5" /> Acerto de Rescisão — Descontos e Acréscimos
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Descontos */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1 text-xs font-semibold text-red-600">
+                      <MinusCircle className="h-3.5 w-3.5" /> Descontos
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Valor R$..."
+                      value={acertoForm.descontosAcerto}
+                      onChange={e => setAcertoForm(f => ({ ...f, descontosAcerto: e.target.value }))}
+                      className="h-8 text-sm border-red-200"
+                    />
+                    <Input
+                      placeholder="Descrição (ex: dívida EPI, vale)..."
+                      value={acertoForm.descontosAcertoDesc}
+                      onChange={e => setAcertoForm(f => ({ ...f, descontosAcertoDesc: e.target.value }))}
+                      className="h-8 text-xs border-red-200"
+                    />
+                  </div>
+                  {/* Acréscimos */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1 text-xs font-semibold text-green-600">
+                      <PlusCircle className="h-3.5 w-3.5" /> Acréscimos
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Valor R$..."
+                      value={acertoForm.acrescimosAcerto}
+                      onChange={e => setAcertoForm(f => ({ ...f, acrescimosAcerto: e.target.value }))}
+                      className="h-8 text-sm border-green-200"
+                    />
+                    <Input
+                      placeholder="Descrição (ex: PLR, bônus)..."
+                      value={acertoForm.acrescimosAcertoDesc}
+                      onChange={e => setAcertoForm(f => ({ ...f, acrescimosAcertoDesc: e.target.value }))}
+                      className="h-8 text-xs border-green-200"
+                    />
+                  </div>
+                </div>
+                {/* Total ajustado */}
+                {(parseFloat(acertoForm.descontosAcerto || '0') > 0 || parseFloat(acertoForm.acrescimosAcerto || '0') > 0) && (() => {
+                  let prev: any = null;
+                  try { prev = JSON.parse(selectedItem.previsaoRescisao); } catch {}
+                  if (!prev) return null;
+                  const base = parseFloat(prev.total || '0');
+                  const desc = parseFloat(acertoForm.descontosAcerto || '0');
+                  const acr = parseFloat(acertoForm.acrescimosAcerto || '0');
+                  const total = base - desc + acr;
+                  return (
+                    <div className="mt-3 pt-3 border-t border-gray-200 flex justify-between items-center">
+                      <div className="text-xs text-gray-500">Total verbas: {formatMoeda(base.toFixed(2))} {desc > 0 ? `- ${formatMoeda(desc.toFixed(2))}` : ''} {acr > 0 ? `+ ${formatMoeda(acr.toFixed(2))}` : ''}</div>
+                      <div className="font-bold text-base text-slate-800">= {formatMoeda(total.toFixed(2))}</div>
+                    </div>
+                  );
+                })()}
+                <div className="flex justify-end mt-3">
+                  <Button
+                    size="sm"
+                    disabled={savingAcerto}
+                    className="h-8 text-xs bg-slate-700 hover:bg-slate-800 text-white"
+                    onClick={() => {
+                      setSavingAcerto(true);
+                      editarAcerto.mutate({
+                        id: selectedItem.id,
+                        descontosAcerto: acertoForm.descontosAcerto || null,
+                        descontosAcertoDesc: acertoForm.descontosAcertoDesc || null,
+                        acrescimosAcerto: acertoForm.acrescimosAcerto || null,
+                        acrescimosAcertoDesc: acertoForm.acrescimosAcertoDesc || null,
+                      });
+                    }}
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    {savingAcerto ? 'Salvando...' : 'Salvar Acerto'}
+                  </Button>
+                </div>
+              </div>
+
               {selectedItem.observacoes && (
                 <div className="bg-muted/30 rounded-lg p-4">
                   <p className="text-xs text-muted-foreground uppercase">Observações</p>
@@ -1289,6 +1555,59 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
       </div>
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {/* Modal: Editar FGTS Real */}
+      <Dialog open={fgtsEditDialog.open} onOpenChange={(v) => { if (!editarFgtsReal.isPending) setFgtsEditDialog(s => ({ ...s, open: v })); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <Edit2 className="h-5 w-5" /> Saldo Real do FGTS
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800">
+              Informe o saldo real do FGTS conforme extrato da CAIXA ou eSocial. A Multa 40% será recalculada com base neste valor.
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-700 block mb-1">Saldo Real do FGTS (R$)</label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Ex: 5.230,45"
+                value={fgtsEditDialog.valor}
+                onChange={e => setFgtsEditDialog(s => ({ ...s, valor: e.target.value }))}
+                className="text-sm"
+                autoFocus
+              />
+            </div>
+            {fgtsEditDialog.valor && (() => {
+              const saldo = parseFloat(fgtsEditDialog.valor);
+              if (isNaN(saldo)) return null;
+              return (
+                <div className="text-xs text-gray-600">
+                  Multa 40% sobre este saldo: <span className="font-bold text-amber-700">{formatMoeda((saldo * 0.4).toFixed(2))}</span>
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter className="gap-2">
+            {selectedItem?.fgtsEditadoManualmente && (
+              <Button variant="ghost" size="sm" className="text-red-500 mr-auto" disabled={editarFgtsReal.isPending} onClick={() => editarFgtsReal.mutate({ id: selectedItem.id, fgtsReal: null })}>
+                Remover edição manual
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setFgtsEditDialog({ open: false, valor: '' })}>Cancelar</Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!fgtsEditDialog.valor || editarFgtsReal.isPending}
+              onClick={() => editarFgtsReal.mutate({ id: selectedItem!.id, fgtsReal: fgtsEditDialog.valor })}
+            >
+              {editarFgtsReal.isPending ? 'Salvando...' : 'Confirmar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal: Dar Baixa no Aviso Prévio */}
       <Dialog open={darBaixaModal.open} onOpenChange={(v) => { if (!darBaixa.isPending) setDarBaixaModal(s => ({ ...s, open: v })); }}>

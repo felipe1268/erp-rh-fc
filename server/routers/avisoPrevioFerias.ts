@@ -387,6 +387,17 @@ export const avisoPrevioFeriasRouter = router({
           observacoes: terminationNotices.observacoes,
           criadoPor: terminationNotices.criadoPor,
           createdAt: terminationNotices.createdAt,
+          fgtsReal: terminationNotices.fgtsReal,
+          fgtsEditadoManualmente: terminationNotices.fgtsEditadoManualmente,
+          fgtsEditadoEm: terminationNotices.fgtsEditadoEm,
+          fgtsEditadoPor: terminationNotices.fgtsEditadoPor,
+          descontosAcerto: terminationNotices.descontosAcerto,
+          descontosAcertoDesc: terminationNotices.descontosAcertoDesc,
+          acrescimosAcerto: terminationNotices.acrescimosAcerto,
+          acrescimosAcertoDesc: terminationNotices.acrescimosAcertoDesc,
+          novoEmpregoAtivo: terminationNotices.novoEmpregoAtivo,
+          novoEmpregoComunicadoEm: terminationNotices.novoEmpregoComunicadoEm,
+          novoEmpregoCartaUrl: terminationNotices.novoEmpregoCartaUrl,
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
@@ -474,15 +485,53 @@ export const avisoPrevioFeriasRouter = router({
             dtDataSaida.setDate(dtDataSaida.getDate() + 1);
             const diasTrabalhadosMes = dtDataSaida.getDate();
             
+            let diasTrabMes = diasTrabalhadosMes;
+            let dataFimParaCalculo = dataFim;
+
+            // Súmula 276 TST: Novo emprego durante aviso prévio trabalhado
+            // Recalcula saldo de salário até a data da comunicação
+            if (row.novoEmpregoAtivo && row.novoEmpregoComunicadoEm) {
+              const dtComun = new Date(row.novoEmpregoComunicadoEm + 'T00:00:00');
+              diasTrabMes = dtComun.getDate(); // dias no mês até a comunicação
+              dataFimParaCalculo = row.novoEmpregoComunicadoEm;
+            }
+
             const previsao = calcularRescisaoCompleta({
               salarioBase,
               dataAdmissao,
               dataDesligamento: row.dataInicio, // data de início do aviso
-              dataFimAviso: dataFim,
+              dataFimAviso: dataFimParaCalculo,
               tipo: row.tipo,
               vrDiario: 0,
-              diasTrabalhadosMes,
+              diasTrabalhadosMes: diasTrabMes,
             });
+
+            // Súmula 276: zerar aviso prévio indenizado e recalcular data limite
+            if (row.novoEmpregoAtivo && row.novoEmpregoComunicadoEm) {
+              const multaSalario = parseFloat(previsao.salarioDia) * parseFloat(previsao.diasExtrasAviso.toString());
+              previsao.avisoPrevioIndenizado = '0.00';
+              const totalSemAviso = parseFloat(previsao.total) - multaSalario;
+              previsao.total = Math.max(0, totalSemAviso).toFixed(2);
+              // Data limite = comunicação + 10 dias corridos (Art. 477 §6º CLT)
+              const dtLimite = new Date(row.novoEmpregoComunicadoEm + 'T00:00:00');
+              dtLimite.setDate(dtLimite.getDate() + 10);
+              previsao.dataLimitePagamento = dtLimite.toISOString().split('T')[0];
+              previsao.novoEmpregoAplicado = true;
+            }
+
+            // FGTS Real: recalcular multa 40% com saldo real informado
+            let fgtsRealValor: number | null = null;
+            if (row.fgtsReal) {
+              fgtsRealValor = parseFloat(row.fgtsReal.replace(',', '.'));
+              if (!isNaN(fgtsRealValor) && row.tipo.includes('empregador')) {
+                const multaReal = fgtsRealValor * 0.4;
+                const multaAntiga = parseFloat(previsao.multaFGTS);
+                previsao.multaFGTS = multaReal.toFixed(2);
+                previsao.fgtsRealUsado = fgtsRealValor.toFixed(2);
+                // Ajustar total: remover multa estimada e adicionar multa real
+                previsao.total = (parseFloat(previsao.total) - multaAntiga + multaReal).toFixed(2);
+              }
+            }
             
             // Retornar com previsão recalculada (incluir dataAdmissao para cálculo de tempo de serviço no frontend)
             return {
@@ -1357,6 +1406,119 @@ export const avisoPrevioFeriasRouter = router({
           entityType: 'terminationNotices',
           entityId: input.companyId,
           details: `Todos os avisos concluídos revertidos para Aguardando Baixa por ${ctx.user.name}`,
+        });
+        return { success: true };
+      }),
+
+    /** Editar o saldo real do FGTS manualmente (Súmula 276 / correção TR) */
+    editarFgtsReal: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        fgtsReal: z.string().nullable(), // null = remover edição manual (voltar ao estimado)
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices).where(
+          and(eq(terminationNotices.id, input.id), isNull(terminationNotices.deletedAt))
+        );
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+
+        await db.execute(sql`
+          UPDATE termination_notices SET
+            "fgtsReal" = ${input.fgtsReal},
+            "fgtsEditadoManualmente" = ${input.fgtsReal ? 1 : 0},
+            "fgtsEditadoEm" = ${input.fgtsReal ? sql`NOW()` : null},
+            "fgtsEditadoPor" = ${input.fgtsReal ? (ctx.user.name ?? 'Sistema') : null},
+            "updatedAt" = NOW()
+          WHERE id = ${input.id}
+        `);
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: input.fgtsReal ? 'EDITAR_FGTS_REAL' : 'REMOVER_FGTS_REAL',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.id,
+          details: input.fgtsReal
+            ? `FGTS real editado manualmente para R$ ${input.fgtsReal} por ${ctx.user.name}`
+            : `Edição manual do FGTS removida por ${ctx.user.name}`,
+        });
+        return { success: true };
+      }),
+
+    /** Editar campos de desconto e acréscimo do acerto */
+    editarAcerto: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        descontosAcerto: z.string().nullable(),
+        descontosAcertoDesc: z.string().nullable(),
+        acrescimosAcerto: z.string().nullable(),
+        acrescimosAcertoDesc: z.string().nullable(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices).where(
+          and(eq(terminationNotices.id, input.id), isNull(terminationNotices.deletedAt))
+        );
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+
+        await db.execute(sql`
+          UPDATE termination_notices SET
+            "descontosAcerto" = ${input.descontosAcerto},
+            "descontosAcertoDesc" = ${input.descontosAcertoDesc},
+            "acrescimosAcerto" = ${input.acrescimosAcerto},
+            "acrescimosAcertoDesc" = ${input.acrescimosAcertoDesc},
+            "updatedAt" = NOW()
+          WHERE id = ${input.id}
+        `);
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'EDITAR_ACERTO_RESCISAO',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.id,
+          details: `Descontos/acréscimos do acerto atualizados por ${ctx.user.name}`,
+        });
+        return { success: true };
+      }),
+
+    /** Ativar/desativar cenário de novo emprego durante aviso prévio (Súmula 276 TST) */
+    ativarNovoEmprego: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        ativo: z.boolean(),
+        comunicadoEm: z.string().nullable(), // data da comunicação (YYYY-MM-DD)
+        cartaUrl: z.string().nullable(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices).where(
+          and(eq(terminationNotices.id, input.id), isNull(terminationNotices.deletedAt))
+        );
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+
+        await db.execute(sql`
+          UPDATE termination_notices SET
+            "novoEmpregoAtivo" = ${input.ativo ? 1 : 0},
+            "novoEmpregoComunicadoEm" = ${input.comunicadoEm},
+            "novoEmpregoCartaUrl" = ${input.cartaUrl},
+            "updatedAt" = NOW()
+          WHERE id = ${input.id}
+        `);
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: input.ativo ? 'ATIVAR_NOVO_EMPREGO' : 'DESATIVAR_NOVO_EMPREGO',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.id,
+          details: input.ativo
+            ? `Novo emprego ativado — comunicado em ${input.comunicadoEm} — Súmula 276 TST — por ${ctx.user.name}`
+            : `Novo emprego desativado por ${ctx.user.name}`,
         });
         return { success: true };
       }),
