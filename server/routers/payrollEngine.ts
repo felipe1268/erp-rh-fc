@@ -695,6 +695,16 @@ export const payrollEngineRouter = router({
         actualMap.set(`${r.employeeId}-${r.data}`, r);
       }
 
+      // Build a map employeeId → jornadaTrabalho for correct HE recalculation per employee
+      const escuroEmployeeIds = [...new Set((escuroRecords as any[]).map((e: any) => e.employeeId))];
+      const escuroEmpRows = escuroEmployeeIds.length > 0
+        ? ((await db.execute(sql`SELECT id, "jornadaTrabalho" FROM employees WHERE id = ANY(${escuroEmployeeIds}::int[])`)) as any).rows || []
+        : [];
+      const empJornadaMap = new Map<number, string | null>();
+      for (const row of escuroEmpRows) {
+        empJornadaMap.set(row.id, row.jornadaTrabalho ?? null);
+      }
+
       let totalAferidos = 0;
       let divergencias = 0;
       const divergenciasList: any[] = [];
@@ -819,6 +829,18 @@ export const payrollEngineRouter = router({
 
         // Update the timecard_daily record - sobrepor com dados reais do ponto
         if (actual) {
+          // Recalculate HE from actual worked minutes vs employee jornada
+          const empJornada = empJornadaMap.get(escuro.employeeId) ?? null;
+          const expectedMinsAf = getExpectedMins(empJornada, escuro.data, criteria.cargaHorariaDiaria);
+          const actualMinsAf = (() => {
+            const str = actual.horasTrabalhadas;
+            if (!str) return 0;
+            const parts = str.split(":");
+            return (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0);
+          })();
+          const heAfMins = Math.max(0, actualMinsAf - expectedMinsAf);
+          const horasExtrasAf = heAfMins > 0 ? minutesToHHMM(heAfMins) : "0:00";
+
           // Sobrescrever o registro "escuro" com os dados reais do ponto
           await db.execute(sql`
             UPDATE timecard_daily SET 
@@ -834,7 +856,7 @@ export const payrollEngineRouter = router({
               entrada3 = ${actual.entrada3 || null},
               saida3 = ${actual.saida3 || null},
               horasTrabalhadas = ${actual.horasTrabalhadas || '0:00'},
-              horasExtras = ${actual.horasExtras || '0:00'},
+              horasExtras = ${horasExtrasAf},
               horasNoturnas = ${actual.horasNoturnas || '0:00'},
               timeRecordId = ${actual.id || null},
               obraId = ${actual.obraId || null},
