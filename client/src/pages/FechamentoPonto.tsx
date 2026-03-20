@@ -3488,10 +3488,10 @@ export default function FechamentoPonto() {
                 </div>
                 <div>
                   <Label className="mb-1 block">Obra (opcional)</Label>
-                  <Select value={String(manualData.obraId || "")} onValueChange={v => setManualData(p => ({ ...p, obraId: v ? parseInt(v) : 0 }))}>
+                  <Select value={String(manualData.obraId || "0")} onValueChange={v => setManualData(p => ({ ...p, obraId: v === "0" ? 0 : parseInt(v) }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— Sem obra —</SelectItem>
+                      <SelectItem value="0">— Sem obra —</SelectItem>
                       {(obrasList.data || []).map((o: any) => (
                         <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                       ))}
