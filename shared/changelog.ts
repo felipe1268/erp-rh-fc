@@ -3913,6 +3913,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 634,
+    titulo: "Bug crítico: horas extras sempre zeradas no processamento do ponto",
+    descricao: "Corrigido bug onde horasExtras ficava sempre '0:00' para todos os funcionários no payroll. Causa raiz dupla: (1) processarPonto lia rec.horasExtras do time_records, campo que nunca era preenchido em registros manuais e frequentemente vazio em importações DIXI; (2) manualEntry sempre gravava horasExtras: '0:00'. Solução: adicionada função getExpectedMins/getExpectedMinsFromJornada que parseia o JSON jornadaTrabalho do funcionário e retorna os minutos líquidos esperados para cada dia (saida-entrada menos intervalo de almoço). processarPonto agora sempre recalcula HE = max(0, horasTrabalhadas - expectedMins) — funciona para dias úteis, sábados e cenário multi-obra. manualEntry agora busca a jornada do funcionário e salva horasExtras corretamente também. jornadaTrabalho adicionado ao select de empList em processarPonto.",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento, Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 617,
     titulo: "Prioridade do lançamento Manual sobre DIXI — eliminação de registros duplicados",
     descricao: "Implementada lógica completa para garantir que registros manuais (ajusteManual=1) sempre sobrescrevam os registros DIXI no mesmo funcionário/dia: (1) getSummary agora conta diasTrabalhados usando datas únicas por funcionário (Set<string>), eliminando dupla contagem quando coexistem DIXI e Manual; (2) manualEntry: ao criar registro manual, deleta qualquer registro DIXI existente para o mesmo companyId/employeeId/data antes do insert; ao atualizar, deleta registros DIXI concorrentes que não sejam o registro sendo editado; (3) Import DIXI: antes de inserir o lote, consulta registros manuais existentes para o mesmo mês/funcionário e filtra os dias cobertos (fonte='manual'), evitando que uma reimportação DIXI sobreponha lançamentos manuais; (4) Novo procedimento limparDixiComManual: deleta em massa todos os registros DIXI onde já existe um Manual para o mesmo companyId/employeeId/data — pode ser executado por mês ou para toda a base. UI: botão 'Prioridade Manual sobre DIXI' no dialog Limpar Base com opções de limpeza por mês ou toda a base.",

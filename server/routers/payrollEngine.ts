@@ -27,6 +27,29 @@ function minutesToHHMM(mins: number): string {
   return `${mins < 0 ? "-" : ""}${h}:${String(m).padStart(2, "0")}`;
 }
 
+// Calculates the expected NET work minutes for a given day based on the employee's
+// jornadaTrabalho JSON. Returns cargaHorariaDiaria*60 as fallback if jornada is absent.
+// horasTrabalhadas = sum of punch intervals (gaps like lunch are excluded), so
+// expectedMins must also exclude the lunch break (intervalo).
+function getExpectedMins(jornadaTrabalho: string | null | undefined, dateStr: string, cargaHorariaDiaria: number): number {
+  if (!jornadaTrabalho) return cargaHorariaDiaria * 60;
+  try {
+    const parsed = JSON.parse(jornadaTrabalho);
+    if (typeof parsed !== "object" || Array.isArray(parsed)) return cargaHorariaDiaria * 60;
+    const keys = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+    const dayKey = keys[new Date(dateStr + "T12:00:00Z").getUTCDay()];
+    const day = parsed[dayKey];
+    if (!day?.entrada || !day?.saida) return 0; // non-working day per jornada
+    const toMins = (t: string) => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+    let expectedMins = toMins(day.saida) - toMins(day.entrada);
+    if (day.intervalo) {
+      const [ih, im] = day.intervalo.split(":").map(Number);
+      expectedMins -= (ih || 0) * 60 + (im || 0); // subtract lunch break
+    }
+    return Math.max(0, expectedMins);
+  } catch { return cargaHorariaDiaria * 60; }
+}
+
 // Get business days in a month (Mon-Sat, excluding Sundays)
 function getDiasUteisNoMes(year: number, month: number): number {
   let count = 0;
@@ -249,6 +272,7 @@ export const payrollEngineRouter = router({
         nomeCompleto: employees.nomeCompleto,
         valorHora: employees.valorHora,
         salarioBase: employees.salarioBase,
+        jornadaTrabalho: employees.jornadaTrabalho,
       }).from(employees).where(
         and(
           companyFilter(employees.companyId, input),
@@ -340,7 +364,6 @@ export const payrollEngineRouter = router({
             timeRecordId = rec.id;
             obraId = rec.obraId || null;
             horasTrabalhadas = rec.horasTrabalhadas || "0:00";
-            horasExtras = rec.horasExtras || "0:00";
             horasNoturnas = rec.horasNoturnas || "0:00";
             numBatidas = countPunches(rec);
 
@@ -358,9 +381,18 @@ export const payrollEngineRouter = router({
                 rateioPercentual = totalMins > 0 ? Math.round((totalMinsPrimary / totalMins) * 100) : 50;
                 origemRegistro = "rateado";
                 horasTrabalhadas = minutesToHHMM(totalMins);
-                const totalHEMins = (parseTime(rec.horasExtras) || 0) + (parseTime(recs[1].horasExtras) || 0);
-                horasExtras = minutesToHHMM(totalHEMins);
+                // HE will be recalculated below in the general HE block using combined horasTrabalhadas
               }
+            }
+
+            // Recalculate HE from actual worked minutes vs expected jornada
+            // (rec.horasExtras from time_records is unreliable — always 0 for manual entries
+            //  and often 0 for biometric imports that don't compute it at import time)
+            if (!isInconsistente || inconsistenciaTipo !== "sobreposicao_horario") {
+              const expectedMins = getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
+              const actualMins = parseTime(horasTrabalhadas) || 0;
+              const heMins = Math.max(0, actualMins - expectedMins);
+              horasExtras = heMins > 0 ? minutesToHHMM(heMins) : "0:00";
             }
 
             // Inconsistency detection

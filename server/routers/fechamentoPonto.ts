@@ -26,6 +26,28 @@ function minutesToHHMM(mins: number): string {
   return `${mins < 0 ? "-" : ""}${h}:${String(m).padStart(2, "0")}`;
 }
 
+// Returns expected NET work minutes for a given day from the employee's jornada JSON.
+// horasTrabalhadas = sum of punch intervals (lunch gap excluded), so we also subtract
+// the lunch break (intervalo) from the expected range to keep comparison consistent.
+function getExpectedMinsFromJornada(jornadaTrabalho: string | null | undefined, dateStr: string): number | null {
+  if (!jornadaTrabalho) return null;
+  try {
+    const parsed = JSON.parse(jornadaTrabalho);
+    if (typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const keys = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+    const dayKey = keys[new Date(dateStr + "T12:00:00Z").getUTCDay()];
+    const day = parsed[dayKey];
+    if (!day?.entrada || !day?.saida) return 0;
+    const toMins = (t: string) => { const [h, m] = t.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+    let expectedMins = toMins(day.saida) - toMins(day.entrada);
+    if (day.intervalo) {
+      const [ih, im] = day.intervalo.split(":").map(Number);
+      expectedMins -= (ih || 0) * 60 + (im || 0);
+    }
+    return Math.max(0, expectedMins);
+  } catch { return null; }
+}
+
 function normalizeNameForMatch(name: string): string {
   return name
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -1217,6 +1239,13 @@ export const fechamentoPontoRouter = router({
       if (input.entrada2 && input.saida2) totalMinutes += diffMinutes(input.entrada2, input.saida2);
       if (input.entrada3 && input.saida3) totalMinutes += diffMinutes(input.entrada3, input.saida3);
 
+      // Fetch employee jornada to compute overtime correctly
+      const empData = await db.select({ jornadaTrabalho: employees.jornadaTrabalho })
+        .from(employees).where(eq(employees.id, input.employeeId)).limit(1);
+      const jornadaTrabalho = empData[0]?.jornadaTrabalho ?? null;
+      const expectedMins = getExpectedMinsFromJornada(jornadaTrabalho, input.data);
+      const heMins = expectedMins !== null ? Math.max(0, totalMinutes - expectedMins) : 0;
+
       const existing = await db.select().from(timeRecords)
         .where(and(
           companyFilter(timeRecords.companyId, input),
@@ -1242,7 +1271,7 @@ export const fechamentoPontoRouter = router({
         entrada3: input.entrada3 || null,
         saida3: input.saida3 || null,
         horasTrabalhadas: minutesToHHMM(totalMinutes),
-        horasExtras: "0:00",
+        horasExtras: minutesToHHMM(heMins),
         horasNoturnas: "0:00",
         faltas: "0",
         atrasos: "0:00",
