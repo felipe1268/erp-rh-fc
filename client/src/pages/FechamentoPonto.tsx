@@ -548,7 +548,7 @@ export default function FechamentoPonto() {
     employeeId: 0, obraId: 0, data: "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "",
   });
   const [manualEmpPopoverOpen, setManualEmpPopoverOpen] = useState(false);
-  const [manualDays, setManualDays] = useState<Array<{id: string; data: string; entrada1: string; saida1: string; entrada2: string; saida2: string; feriado?: boolean}>>([]);
+  const [manualDays, setManualDays] = useState<Array<{id: string; data: string; entrada1: string; saida1: string; entrada2: string; saida2: string; entrada3: string; saida3: string; feriado?: boolean}>>([]);
   const [showRangePopover, setShowRangePopover] = useState(false);
   const [rangeFrom, setRangeFrom] = useState(1);
   const [rangeTo, setRangeTo] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(); });
@@ -673,10 +673,10 @@ export default function FechamentoPonto() {
       const isWeekend = dow === 0 || dow === 6;
       // Weekends: add without times; weekdays: auto-fill schedule
       if (isWeekend) {
-        dias.push({ id: `${dateStr}-${Math.random()}`, data: dateStr, entrada1: "", saida1: "", entrada2: "", saida2: "" });
+        dias.push({ id: `${dateStr}-${Math.random()}`, data: dateStr, entrada1: "", saida1: "", entrada2: "", saida2: "", entrada3: "", saida3: "" });
       } else {
         const sched = getScheduleForDay(jornada, dateStr);
-        dias.push({ id: `${dateStr}-${Math.random()}`, data: dateStr, ...sched });
+        dias.push({ id: `${dateStr}-${Math.random()}`, data: dateStr, ...sched, entrada3: "", saida3: "" });
       }
       d.setDate(d.getDate() + 1);
     }
@@ -691,7 +691,7 @@ export default function FechamentoPonto() {
     let saved = 0; let errors = 0;
     for (const day of filled) {
       try {
-        await manualBatchMut.mutateAsync({ companyId, companyIds, employeeId: manualData.employeeId, obraId: manualData.obraId || undefined, mesReferencia: day.data.substring(0, 7), data: day.data, entrada1: day.entrada1 || undefined, saida1: day.saida1 || undefined, entrada2: day.entrada2 || undefined, saida2: day.saida2 || undefined, justificativa: manualData.justificativa || undefined });
+        await manualBatchMut.mutateAsync({ companyId, companyIds, employeeId: manualData.employeeId, obraId: manualData.obraId || undefined, mesReferencia: day.data.substring(0, 7), data: day.data, entrada1: day.entrada1 || undefined, saida1: day.saida1 || undefined, entrada2: day.entrada2 || undefined, saida2: day.saida2 || undefined, entrada3: day.entrada3 || undefined, saida3: day.saida3 || undefined, justificativa: manualData.justificativa || undefined });
         saved++;
       } catch { errors++; }
     }
@@ -3624,7 +3624,7 @@ export default function FechamentoPonto() {
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setManualDays(p => [...p, { id: String(Date.now()), data: "", entrada1: "", saida1: "", entrada2: "", saida2: "" }])} type="button">
+                    <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setManualDays(p => [...p, { id: String(Date.now()), data: "", entrada1: "", saida1: "", entrada2: "", saida2: "", entrada3: "", saida3: "" }])} type="button">
                       <Plus className="h-3.5 w-3.5" /> Adicionar dia
                     </Button>
                   </div>
@@ -3646,6 +3646,8 @@ export default function FechamentoPonto() {
                             <th className="px-2 py-1.5 text-center font-medium text-xs">Saída Int.</th>
                             <th className="px-2 py-1.5 text-center font-medium text-xs">Retorno</th>
                             <th className="px-2 py-1.5 text-center font-medium text-xs">Saída</th>
+                            <th className="px-2 py-1.5 text-center font-medium text-xs text-blue-600">Entr. HE</th>
+                            <th className="px-2 py-1.5 text-center font-medium text-xs text-blue-600">Saída HE</th>
                             <th className="px-1 py-1.5 text-center font-medium text-xs w-14 text-red-600">Falta</th>
                             <th className="px-1 py-1.5 text-center font-medium text-xs w-16 text-orange-600">Feriado</th>
                             <th className="px-1 py-1.5 w-7"></th>
@@ -3712,10 +3714,12 @@ export default function FechamentoPonto() {
                                     {isOffSchedule && <span className="text-[9px] text-amber-700 font-bold leading-none">DIFER.</span>}
                                   </div>
                                 </td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada1} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida1} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada2} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida2} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada1} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada || isRed ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida1} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada || isRed ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada2} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada || isRed ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida2} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada || isRed ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada3 || ""} className={`h-7 text-xs w-24 font-mono border-blue-200 ${isFaltaMarcada || isRed ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida3 || ""} className={`h-7 text-xs w-24 font-mono border-blue-200 ${isFaltaMarcada || isRed ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: e.target.value } : d))} /></td>
                                 <td className="px-1 py-1 text-center">
                                   <button
                                     type="button"
@@ -3724,9 +3728,9 @@ export default function FechamentoPonto() {
                                       if (isFaltaMarcada) {
                                         const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
                                         const sc = day.data && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, day.data) : null;
-                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: sc?.entrada1 || "", saida1: sc?.saida1 || "", entrada2: sc?.entrada2 || "", saida2: sc?.saida2 || "" } : d));
+                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: sc?.entrada1 || "", saida1: sc?.saida1 || "", entrada2: sc?.entrada2 || "", saida2: sc?.saida2 || "", entrada3: "", saida3: "" } : d));
                                       } else {
-                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: "", saida1: "", entrada2: "", saida2: "" } : d));
+                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: "", saida1: "", entrada2: "", saida2: "", entrada3: "", saida3: "" } : d));
                                       }
                                     }}
                                     className={`text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${isFaltaMarcada ? "bg-red-600 text-white hover:bg-red-700" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
@@ -3742,9 +3746,9 @@ export default function FechamentoPonto() {
                                       if (isFeriadoMarcado) {
                                         const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
                                         const sc = day.data && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, day.data) : null;
-                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, feriado: false, entrada1: sc?.entrada1 || "", saida1: sc?.saida1 || "", entrada2: sc?.entrada2 || "", saida2: sc?.saida2 || "" } : d));
+                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, feriado: false, entrada1: sc?.entrada1 || "", saida1: sc?.saida1 || "", entrada2: sc?.entrada2 || "", saida2: sc?.saida2 || "", entrada3: "", saida3: "" } : d));
                                       } else {
-                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, feriado: true, entrada1: "", saida1: "", entrada2: "", saida2: "" } : d));
+                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, feriado: true, entrada1: "", saida1: "", entrada2: "", saida2: "", entrada3: "", saida3: "" } : d));
                                       }
                                     }}
                                     className={`text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${isFeriadoMarcado ? "bg-orange-500 text-white hover:bg-orange-600" : "bg-orange-100 text-orange-700 hover:bg-orange-200"}`}

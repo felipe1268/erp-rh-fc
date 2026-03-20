@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 631,
+    titulo: "Lançamento manual de ponto: colunas de Hora Extra (Entr. HE / Saída HE)",
+    descricao: "Adicionadas duas colunas azuis por linha — 'Entr. HE' e 'Saída HE' — para registrar o período de hora extra após a jornada normal. Os campos são enviados ao backend como entrada3/saida3, que já eram suportados no cálculo de horas trabalhadas. Quando preenchidos, a linha exibe badge 'H.E.' azul e fundo azul automaticamente. Os botões Falta e Feriado também limpam os campos HE ao serem acionados.",
+    tipo: "melhoria",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 630,
     titulo: "Lançamento manual de ponto: botão Feriado por linha",
     descricao: "Adicionado botão 'Fer.' (laranja) em cada linha da tabela de lançamento manual. Ao clicar, marca o dia como feriado: apaga os horários e pinta a linha de vermelho claro com badge 'feriado' em laranja na coluna do dia (igual ao comportamento de fins de semana). Clicar novamente desmarca e restaura os horários da jornada. Feriados marcados manualmente não geram 'FALTA', pois são tratados como dias não trabalhados por definição.",
