@@ -84,10 +84,8 @@ function getScheduleForDay(jornadaTrabalho: string | null | undefined, dateStr: 
       const [ih, im] = day.intervalo.split(":").map(Number);
       const breakMins = (ih || 0) * 60 + (im || 0);
       if (breakMins > 0) {
-        const startMins = Number(entrada1.split(":")[0]) * 60 + Number(entrada1.split(":")[1]);
-        const endMins = Number(saida2.split(":")[0]) * 60 + Number(saida2.split(":")[1]);
-        const workedMins = endMins - startMins - breakMins;
-        const lunchOutMins = startMins + Math.floor(workedMins / 2);
+        // Intervalo fixo às 12:00 (padrão da construção civil)
+        const lunchOutMins = 12 * 60;
         const lunchInMins = lunchOutMins + breakMins;
         const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2,"0")}:${String(m % 60).padStart(2,"0")}`;
         return { entrada1, saida1: fmt(lunchOutMins), entrada2: fmt(lunchInMins), saida2 };
