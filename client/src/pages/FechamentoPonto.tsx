@@ -35,6 +35,36 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio" | "nao_identificados" | "memoria_dixi" | "simulador_horistas" | "descontos_clt";
 
+// Helper: extracts schedule times from jornadaTrabalho for a given date
+function getScheduleForDay(jornadaTrabalho: string | null | undefined, dateStr: string): { entrada1: string; saida1: string; entrada2: string; saida2: string } {
+  const empty = { entrada1: "", saida1: "", entrada2: "", saida2: "" };
+  if (!jornadaTrabalho || !dateStr) return empty;
+  try {
+    const parsed = JSON.parse(jornadaTrabalho);
+    if (typeof parsed !== "object" || Array.isArray(parsed)) return empty;
+    const keys = ["dom","seg","ter","qua","qui","sex","sab"];
+    const dayKey = keys[new Date(dateStr + "T12:00:00").getDay()];
+    const day = parsed[dayKey];
+    if (!day?.entrada || !day?.saida) return empty;
+    const entrada1 = day.entrada;
+    const saida2 = day.saida;
+    if (day.intervalo) {
+      const [ih, im] = day.intervalo.split(":").map(Number);
+      const breakMins = (ih || 0) * 60 + (im || 0);
+      if (breakMins > 0) {
+        const startMins = Number(entrada1.split(":")[0]) * 60 + Number(entrada1.split(":")[1]);
+        const endMins = Number(saida2.split(":")[0]) * 60 + Number(saida2.split(":")[1]);
+        const workedMins = endMins - startMins - breakMins;
+        const lunchOutMins = startMins + Math.floor(workedMins / 2);
+        const lunchInMins = lunchOutMins + breakMins;
+        const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2,"0")}:${String(m % 60).padStart(2,"0")}`;
+        return { entrada1, saida1: fmt(lunchOutMins), entrada2: fmt(lunchInMins), saida2 };
+      }
+    }
+    return { entrada1, saida1: "", entrada2: "", saida2 };
+  } catch { return empty; }
+}
+
 // Helper to navigate to Controle de Documentos > Advertências with pre-filled data
 function navigateToAdvertencia(setLocation: (path: string) => void, employeeId: number, employeeName: string, data: string, descricao: string) {
   // Store pre-fill data in sessionStorage so ControleDocumentos can pick it up
@@ -597,12 +627,18 @@ export default function FechamentoPonto() {
 
   const gerarDiasUteisDoMes = () => {
     const [y, m] = mesAno.split("-").map(Number);
+    const emp = (employeesList.data || []).find((e: any) => e.id === manualData.employeeId);
+    const jornada = emp?.jornadaTrabalho || null;
     const dias: typeof manualDays = [];
     const d = new Date(y, m - 1, 1);
     while (d.getMonth() === m - 1) {
       const dow = d.getDay();
-      if (dow !== 0 && dow !== 6) {
-        dias.push({ id: `${d.toISOString().split("T")[0]}-${Math.random()}`, data: d.toISOString().split("T")[0], entrada1: "", saida1: "", entrada2: "", saida2: "" });
+      const dateStr = d.toISOString().split("T")[0];
+      // Include day if it has a schedule (or default to weekdays if no schedule set)
+      const sched = getScheduleForDay(jornada, dateStr);
+      const hasSched = jornada ? !!sched.entrada1 : dow !== 0 && dow !== 6;
+      if (hasSched) {
+        dias.push({ id: `${dateStr}-${Math.random()}`, data: dateStr, ...sched });
       }
       d.setDate(d.getDate() + 1);
     }
@@ -3469,7 +3505,14 @@ export default function FechamentoPonto() {
                           <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">Nenhum colaborador encontrado</CommandEmpty>
                           <CommandGroup>
                             {(employeesList.data || []).map((e: any) => (
-                              <CommandItem key={e.id} value={`${e.nomeCompleto || ""} ${e.funcao || ""}`} onSelect={() => { setManualData(p => ({ ...p, employeeId: e.id, obraId: e.obraAtualId || 0 })); setManualEmpPopoverOpen(false); }} className="flex items-center justify-between py-2 cursor-pointer">
+                              <CommandItem key={e.id} value={`${e.nomeCompleto || ""} ${e.funcao || ""}`} onSelect={() => {
+                                setManualData(p => ({ ...p, employeeId: e.id, obraId: e.obraAtualId || 0 }));
+                                setManualEmpPopoverOpen(false);
+                                // Auto-fill schedule on existing days
+                                if (e.jornadaTrabalho) {
+                                  setManualDays(prev => prev.map(d => d.data ? { ...d, ...getScheduleForDay(e.jornadaTrabalho, d.data) } : d));
+                                }
+                              }} className="flex items-center justify-between py-2 cursor-pointer">
                                 <div className="flex items-center gap-2">
                                   <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs shrink-0">{(e.nomeCompleto || "").charAt(0)}</div>
                                   <div>
@@ -3543,7 +3586,19 @@ export default function FechamentoPonto() {
                             return (
                               <tr key={day.id} className={`border-t ${isWeekend ? "bg-amber-50/50" : idx % 2 === 0 ? "" : "bg-muted/10"}`}>
                                 <td className="px-2 py-1">
-                                  <Input type="date" value={day.data} className="h-7 text-xs w-full" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, data: e.target.value } : d))} />
+                                  <Input type="date" value={day.data} className="h-7 text-xs w-full" onChange={e => {
+                                    const newDate = e.target.value;
+                                    const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
+                                    const sched = newDate && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, newDate) : null;
+                                    setManualDays(p => p.map(d => d.id === day.id ? {
+                                      ...d, data: newDate,
+                                      // Auto-fill only if times are still empty
+                                      entrada1: d.entrada1 || sched?.entrada1 || "",
+                                      saida1: d.saida1 || sched?.saida1 || "",
+                                      entrada2: d.entrada2 || sched?.entrada2 || "",
+                                      saida2: d.saida2 || sched?.saida2 || "",
+                                    } : d));
+                                  }} />
                                 </td>
                                 <td className="px-1 py-1 text-center">
                                   <span className={`text-xs font-medium ${isWeekend ? "text-amber-600" : "text-muted-foreground"}`}>{dow}</span>
