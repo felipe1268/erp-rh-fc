@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 625,
+    titulo: "Transferência de EPI: seletor visual com foto e tamanho",
+    descricao: "Substituído o Select padrão do campo EPI no dialog Nova Transferência por um picker customizado (Popover) que exibe: miniatura da foto do EPI (ou ícone padrão se não houver foto), nome, tamanho destacado em azul, e estoque em verde/vermelho. O item selecionado também exibe a foto e o tamanho no campo de trigger. Inclui busca em tempo real por nome, tamanho ou CA.",
+    tipo: "melhoria",
+    modulos: "EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 624,
     titulo: "Lançamento manual de ponto: botão Falta por linha",
     descricao: "Adicionado botão 'Falta' em cada linha do dialog de lançamento manual de ponto. Ao clicar, apaga todos os horários da linha (Entrada, Saída Int., Retorno, Saída) marcando o dia como falta. A linha fica destacada em vermelho com badge 'FALTA' na coluna do dia e os inputs ficam opacos. Clicar novamente no botão (que vira '✕ Falta' em vermelho sólido) desfaz a falta e re-preenche com a jornada padrão do colaborador.",

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { trpc } from "@/lib/trpc";
 import { handleCurrencyInput, floatToCurrency, parseCurrencyToFloat } from "@/lib/currency";
 import { removeAccents } from "@/lib/searchUtils";
@@ -276,6 +277,8 @@ export default function Epis() {
   });
   const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [epiPickerOpen, setEpiPickerOpen] = useState(false);
+  const [epiPickerSearch, setEpiPickerSearch] = useState("");
   const [showObraConfirm, setShowObraConfirm] = useState(false);
   const [showEntradaDiretaDialog, setShowEntradaDiretaDialog] = useState(false);
   const [entradaDiretaForm, setEntradaDiretaForm] = useState({ epiId: "", obraId: "", quantidade: "", observacao: "" });
@@ -2527,16 +2530,82 @@ export default function Epis() {
             <div className="space-y-3">
               <div>
                 <Label>EPI *</Label>
-                <Select value={transForm.epiId || undefined} onValueChange={v => setTransForm(f => ({ ...f, epiId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o EPI..." /></SelectTrigger>
-                  <SelectContent>
-                    {episList.map((e: any) => (
-                      <SelectItem key={e.id} value={String(e.id)}>
-                        {e.nome} {e.ca ? `(CA: ${e.ca})` : ''} — Estoque Central: {e.quantidadeEstoque ?? 0}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={epiPickerOpen} onOpenChange={setEpiPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="w-full flex items-center gap-2 border rounded-md px-3 py-2 text-sm text-left hover:bg-muted/30 transition-colors">
+                      {transForm.epiId ? (() => {
+                        const sel = episList.find((e: any) => String(e.id) === transForm.epiId);
+                        return sel ? (
+                          <>
+                            {sel.fotoUrl
+                              ? <img src={sel.fotoUrl} alt={sel.nome} className="h-8 w-8 rounded object-cover border flex-shrink-0" />
+                              : <div className="h-8 w-8 rounded border bg-muted flex items-center justify-center flex-shrink-0"><HardHat className="h-4 w-4 text-muted-foreground" /></div>
+                            }
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{sel.nome}</p>
+                              <p className="text-xs text-muted-foreground">{sel.tamanho ? `Tam: ${sel.tamanho} • ` : ''}Estoque: {sel.quantidadeEstoque ?? 0}</p>
+                            </div>
+                          </>
+                        ) : <span className="text-muted-foreground">Selecione o EPI...</span>;
+                      })() : <span className="text-muted-foreground flex-1">Selecione o EPI...</span>}
+                      <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[420px] p-0" align="start">
+                    <div className="flex items-center border-b px-3 py-2 gap-2">
+                      <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <input
+                        autoFocus
+                        value={epiPickerSearch}
+                        onChange={e => setEpiPickerSearch(e.target.value)}
+                        placeholder="Buscar por nome, tamanho, CA..."
+                        className="flex-1 text-sm outline-none bg-transparent placeholder:text-muted-foreground"
+                      />
+                      {epiPickerSearch && <button type="button" onClick={() => setEpiPickerSearch("")} className="text-muted-foreground hover:text-foreground"><XIcon className="h-3.5 w-3.5" /></button>}
+                    </div>
+                    <div className="max-h-[320px] overflow-y-auto p-1">
+                      {episList
+                        .filter((e: any) => {
+                          if (!epiPickerSearch.trim()) return true;
+                          const term = epiPickerSearch.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                          const text = `${e.nome} ${e.tamanho || ''} ${e.ca || ''}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                          return text.includes(term);
+                        })
+                        .map((e: any) => (
+                          <button
+                            key={e.id}
+                            type="button"
+                            onClick={() => { setTransForm(f => ({ ...f, epiId: String(e.id) })); setEpiPickerOpen(false); setEpiPickerSearch(""); }}
+                            className={`w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent text-left transition-colors ${String(e.id) === transForm.epiId ? "bg-accent" : ""}`}
+                          >
+                            {e.fotoUrl
+                              ? <img src={e.fotoUrl} alt={e.nome} className="h-12 w-12 rounded-md object-cover border flex-shrink-0" />
+                              : <div className="h-12 w-12 rounded-md border bg-muted flex items-center justify-center flex-shrink-0"><HardHat className="h-5 w-5 text-muted-foreground" /></div>
+                            }
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{e.nome}</p>
+                              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                                {e.tamanho && <span className="text-xs text-blue-700 font-semibold">Tam: {e.tamanho}</span>}
+                                {e.ca && <span className="text-xs text-muted-foreground">CA: {e.ca}</span>}
+                                <span className={`text-xs font-medium ${(e.quantidadeEstoque ?? 0) === 0 ? "text-red-600" : "text-green-700"}`}>
+                                  Estoque: {e.quantidadeEstoque ?? 0}
+                                </span>
+                              </div>
+                            </div>
+                            {String(e.id) === transForm.epiId && <div className="h-5 w-5 rounded-full bg-[#1B2A4A] flex items-center justify-center flex-shrink-0"><span className="text-white text-xs">✓</span></div>}
+                          </button>
+                        ))}
+                      {episList.filter((e: any) => {
+                        if (!epiPickerSearch.trim()) return true;
+                        const term = epiPickerSearch.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                        const text = `${e.nome} ${e.tamanho || ''} ${e.ca || ''}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                        return text.includes(term);
+                      }).length === 0 && (
+                        <div className="text-center text-sm text-muted-foreground py-6">Nenhum EPI encontrado</div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div>
