@@ -3635,10 +3635,20 @@ export default function FechamentoPonto() {
                               day.saida1 === sched!.saida1 &&
                               day.entrada2 === sched!.entrada2 &&
                               day.saida2 === sched!.saida2;
-                            const isOffSchedule = !isRed && !isFaltaMarcada && hasAnyTime && schedHasTimes && !isOnSchedule;
+                            // Overtime detection: worked more minutes than scheduled
+                            const toMins = (t: string) => { if (!t) return 0; const [h,m] = t.split(':').map(Number); return (h||0)*60+(m||0); };
+                            const workedMins = (day.entrada1 && day.saida1 ? toMins(day.saida1) - toMins(day.entrada1) : 0)
+                              + (day.entrada2 && day.saida2 ? toMins(day.saida2) - toMins(day.entrada2) : 0);
+                            const schedMins = schedHasTimes ? (
+                              (sched!.entrada1 && sched!.saida1 ? toMins(sched!.saida1) - toMins(sched!.entrada1) : 0)
+                              + (sched!.entrada2 && sched!.saida2 ? toMins(sched!.saida2) - toMins(sched!.entrada2) : 0)
+                            ) : 0;
+                            const isHorasExtras = !isRed && !isFaltaMarcada && !isOnSchedule && hasAnyTime && schedHasTimes && workedMins > schedMins && workedMins > 0;
+                            const isOffSchedule = !isRed && !isFaltaMarcada && hasAnyTime && schedHasTimes && !isOnSchedule && !isHorasExtras;
                             const rowBg = isFaltaMarcada ? "bg-red-100/70"
                               : isRed ? "bg-red-50/60"
                               : isOnSchedule ? "bg-green-50/80"
+                              : isHorasExtras ? "bg-blue-50/80"
                               : isOffSchedule ? "bg-amber-50/80"
                               : idx % 2 === 0 ? "" : "bg-muted/10";
                             return (
