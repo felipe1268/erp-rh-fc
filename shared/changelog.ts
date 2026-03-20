@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 630,
+    titulo: "Lançamento manual de ponto: botão Feriado por linha",
+    descricao: "Adicionado botão 'Fer.' (laranja) em cada linha da tabela de lançamento manual. Ao clicar, marca o dia como feriado: apaga os horários e pinta a linha de vermelho claro com badge 'feriado' em laranja na coluna do dia (igual ao comportamento de fins de semana). Clicar novamente desmarca e restaura os horários da jornada. Feriados marcados manualmente não geram 'FALTA', pois são tratados como dias não trabalhados por definição.",
+    tipo: "melhoria",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 629,
     titulo: "Lançamento manual de ponto: seletor de período ao gerar dias automaticamente",
     descricao: "Substituído o botão 'Preencher mês completo' por 'Preencher período' que abre um popover com dois campos numéricos — 'De dia' e 'Até dia' — permitindo gerar apenas o intervalo desejado do mês (ex.: dia 16 ao dia 30). Os valores padrão são 1 e o último dia do mês. O botão Gerar aplica o range escolhido.",

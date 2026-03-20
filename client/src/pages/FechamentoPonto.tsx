@@ -548,7 +548,7 @@ export default function FechamentoPonto() {
     employeeId: 0, obraId: 0, data: "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "",
   });
   const [manualEmpPopoverOpen, setManualEmpPopoverOpen] = useState(false);
-  const [manualDays, setManualDays] = useState<Array<{id: string; data: string; entrada1: string; saida1: string; entrada2: string; saida2: string}>>([]);
+  const [manualDays, setManualDays] = useState<Array<{id: string; data: string; entrada1: string; saida1: string; entrada2: string; saida2: string; feriado?: boolean}>>([]);
   const [showRangePopover, setShowRangePopover] = useState(false);
   const [rangeFrom, setRangeFrom] = useState(1);
   const [rangeTo, setRangeTo] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(); });
@@ -3647,6 +3647,7 @@ export default function FechamentoPonto() {
                             <th className="px-2 py-1.5 text-center font-medium text-xs">Retorno</th>
                             <th className="px-2 py-1.5 text-center font-medium text-xs">Saída</th>
                             <th className="px-1 py-1.5 text-center font-medium text-xs w-14 text-red-600">Falta</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs w-16 text-orange-600">Feriado</th>
                             <th className="px-1 py-1.5 w-7"></th>
                           </tr>
                         </thead>
@@ -3657,8 +3658,9 @@ export default function FechamentoPonto() {
                             const dow = day.data ? ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][new Date(day.data + "T12:00:00").getDay()] : "";
                             const dowNum = day.data ? new Date(day.data + "T12:00:00").getDay() : -1;
                             const isWeekend = [0, 6].includes(dowNum);
-                            const isRed = isWeekend;
-                            const isFaltaMarcada = !!(day.data && !isWeekend && !day.entrada1 && !day.saida1 && !day.entrada2 && !day.saida2);
+                            const isFeriadoMarcado = !!day.feriado;
+                            const isRed = isWeekend || isFeriadoMarcado;
+                            const isFaltaMarcada = !!(day.data && !isWeekend && !isFeriadoMarcado && !day.entrada1 && !day.saida1 && !day.entrada2 && !day.saida2);
                             // Schedule comparison for color coding
                             const sched = selectedEmp?.jornadaTrabalho && day.data ? getScheduleForDay(selectedEmp.jornadaTrabalho, day.data) : null;
                             const schedHasTimes = !!(sched?.entrada1 && sched?.saida2);
@@ -3703,6 +3705,7 @@ export default function FechamentoPonto() {
                                 <td className="px-1 py-1 text-center">
                                   <div className="flex flex-col items-center gap-0.5">
                                     <span className={`text-xs font-bold ${isRed || isFaltaMarcada ? "text-red-600" : isOnSchedule ? "text-green-700" : isHorasExtras ? "text-blue-700" : isOffSchedule ? "text-amber-700" : "text-muted-foreground"}`}>{dow}</span>
+                                    {isFeriadoMarcado && <span className="text-[9px] text-orange-600 font-bold leading-none">feriado</span>}
                                     {isFaltaMarcada && <span className="text-[9px] text-red-700 font-bold leading-none">FALTA</span>}
                                     {isOnSchedule && <span className="text-[9px] text-green-700 font-bold leading-none">✓ OK</span>}
                                     {isHorasExtras && <span className="text-[9px] text-blue-700 font-bold leading-none">H.E.</span>}
@@ -3729,6 +3732,24 @@ export default function FechamentoPonto() {
                                     className={`text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${isFaltaMarcada ? "bg-red-600 text-white hover:bg-red-700" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
                                   >
                                     {isFaltaMarcada ? "✕ Falta" : "Falta"}
+                                  </button>
+                                </td>
+                                <td className="px-1 py-1 text-center">
+                                  <button
+                                    type="button"
+                                    title={isFeriadoMarcado ? "Desmarcar feriado" : "Marcar como feriado (apaga horários)"}
+                                    onClick={() => {
+                                      if (isFeriadoMarcado) {
+                                        const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
+                                        const sc = day.data && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, day.data) : null;
+                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, feriado: false, entrada1: sc?.entrada1 || "", saida1: sc?.saida1 || "", entrada2: sc?.entrada2 || "", saida2: sc?.saida2 || "" } : d));
+                                      } else {
+                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, feriado: true, entrada1: "", saida1: "", entrada2: "", saida2: "" } : d));
+                                      }
+                                    }}
+                                    className={`text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${isFeriadoMarcado ? "bg-orange-500 text-white hover:bg-orange-600" : "bg-orange-100 text-orange-700 hover:bg-orange-200"}`}
+                                  >
+                                    {isFeriadoMarcado ? "✕ Fer." : "Fer."}
                                   </button>
                                 </td>
                                 <td className="px-1 py-1 text-center">
