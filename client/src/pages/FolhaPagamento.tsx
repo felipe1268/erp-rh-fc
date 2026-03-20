@@ -47,7 +47,7 @@ function parseBRLNum(val: string | number | null | undefined): number {
   return parseFloat(str) || 0;
 }
 
-type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao";
+type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo";
 
 export default function FolhaPagamento() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
@@ -80,6 +80,16 @@ export default function FolhaPagamento() {
   const [searchTerm, setSearchTerm] = useState("");
   const [valeSearch, setValeSearch] = useState("");
   const [valeFilter, setValeFilter] = useState<"all" | "aprovados" | "alertas" | "he">("all");
+
+  // HE Módulo state
+  const prevMes = mesSelecionado === 1 ? 12 : mesSelecionado - 1;
+  const prevAno = mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado;
+  const defaultHeInicio = `${prevAno}-${String(prevMes).padStart(2, "0")}-16`;
+  const defaultHeFim = `${anoSelecionado}-${String(mesSelecionado).padStart(2, "0")}-15`;
+  const [heDataInicio, setHeDataInicio] = useState(defaultHeInicio);
+  const [heDataFim, setHeDataFim] = useState(defaultHeFim);
+  const [heCalcResult, setHeCalcResult] = useState<any>(null);
+  const [heViewPeriodId, setHeViewPeriodId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterFuncao, setFilterFuncao] = useState<string>("all");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -197,6 +207,33 @@ export default function FolhaPagamento() {
       gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
     },
     onError: (err) => toast.error(`Erro ao registrar decisão: ${err.message}`),
+  });
+
+  // ===== HE MÓDULO =====
+  const hePeriods = trpc.horasExtras.listarPeriods.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "he_modulo" }
+  );
+  const heDetalhe = trpc.horasExtras.getDetalhe.useQuery(
+    { hePeriodId: heViewPeriodId! },
+    { enabled: heViewPeriodId !== null }
+  );
+  const heCalcularMut = trpc.horasExtras.calcularHE.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      setHeCalcResult(data);
+      setHeViewPeriodId(data.hePeriodId);
+      hePeriods.refetch();
+    },
+    onError: (err) => toast.error(`Erro ao calcular HE: ${err.message}`),
+  });
+  const heAprovarMut = trpc.horasExtras.aprovar.useMutation({
+    onSuccess: () => { toast.success("Período de HE aprovado!"); hePeriods.refetch(); heDetalhe.refetch(); },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+  const heCancelarMut = trpc.horasExtras.cancelar.useMutation({
+    onSuccess: () => { toast.success("Período cancelado. Você pode recalcular agora."); hePeriods.refetch(); if (heViewPeriodId) setHeViewPeriodId(null); },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
   });
 
   // ===== MUTATIONS =====
@@ -1900,6 +1937,176 @@ export default function FolhaPagamento() {
     );
   }
 
+  // ===== HE MÓDULO VIEW =====
+  if (viewMode === "he_modulo") {
+    const periods = (hePeriods.data as any[]) || [];
+    const detalhe = heDetalhe.data;
+    const selectedPeriod = detalhe?.period;
+    const selectedEmps = (detalhe?.employees as any[]) || [];
+    const statusColor = (s: string) => s === 'aprovado' ? 'bg-green-100 text-green-700' : s === 'pago' ? 'bg-blue-100 text-blue-700' : s === 'cancelado' ? 'bg-gray-100 text-gray-500' : 'bg-purple-100 text-purple-700';
+
+    return (
+      <DashboardLayout>
+        <PrintHeader />
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => { setViewMode("resumo"); setHeViewPeriodId(null); }}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                  <TrendingUp className="h-6 w-6 text-purple-700" /> Módulo Hora Extra — {formatMesAno(mesAno)}
+                </h1>
+                <p className="text-sm text-muted-foreground">Período configurável · Detecção de sobreposição · Histórico rastreado</p>
+              </div>
+            </div>
+            <PrintActions title={`Hora Extra - ${formatMesAno(mesAno)}`} />
+          </div>
+
+          {/* CALCULAR NOVO PERÍODO */}
+          <Card className="border-purple-200">
+            <CardContent className="p-5">
+              <p className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <Calculator className="h-4 w-4 text-purple-700" /> Calcular Novo Período de HE
+              </p>
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Data Início</label>
+                  <input type="date" value={heDataInicio} onChange={e => setHeDataInicio(e.target.value)}
+                    className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Data Fim</label>
+                  <input type="date" value={heDataFim} onChange={e => setHeDataFim(e.target.value)}
+                    className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                </div>
+                <Button className="bg-purple-700 hover:bg-purple-800" disabled={heCalcularMut.isPending}
+                  onClick={() => heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: heDataInicio, dataFim: heDataFim })}>
+                  {heCalcularMut.isPending ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Calculando...</> : <><Zap className="h-4 w-4 mr-2" /> Calcular HE</>}
+                </Button>
+                <div className="text-xs text-muted-foreground">
+                  <p>Padrão sugerido: dia 16 do mês anterior → dia 15 do mês atual</p>
+                  <p className="text-amber-600 mt-0.5">Sobreposição com períodos ativos será bloqueada automaticamente</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* PERÍODOS REGISTRADOS */}
+          {hePeriods.isLoading ? (
+            <div className="text-center py-6 text-muted-foreground">Carregando períodos...</div>
+          ) : periods.length > 0 ? (
+            <Card>
+              <CardContent className="p-5">
+                <p className="font-semibold text-sm mb-3">Períodos Registrados — {formatMesAno(mesAno)}</p>
+                <div className="space-y-2">
+                  {periods.map((p: any) => (
+                    <div key={p.id} className={`border rounded-lg p-3 flex flex-wrap items-center gap-3 ${heViewPeriodId === p.id ? 'border-purple-400 bg-purple-50' : ''}`}>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-sm">{String(p.dataInicio).slice(0,10)} → {String(p.dataFim).slice(0,10)}</span>
+                        <span className="ml-3 text-sm text-muted-foreground">{p.totalFuncionarios} func · {formatBRL(Number(p.totalValorHE))}</span>
+                        <Badge className={`ml-2 text-[10px] ${statusColor(p.status)}`}>{p.status}</Badge>
+                        {p.criadoPor && <span className="ml-2 text-xs text-muted-foreground">por {p.criadoPor}</span>}
+                      </div>
+                      <div className="flex gap-2 no-print">
+                        <Button size="sm" variant="outline" className="h-7 text-xs"
+                          onClick={() => setHeViewPeriodId(heViewPeriodId === p.id ? null : p.id)}>
+                          <Eye className="h-3 w-3 mr-1" /> {heViewPeriodId === p.id ? 'Fechar' : 'Ver Detalhe'}
+                        </Button>
+                        {p.status === 'calculado' && (
+                          <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                            onClick={() => heAprovarMut.mutate({ hePeriodId: p.id, companyId })}
+                            disabled={heAprovarMut.isPending}>
+                            <CheckCircle className="h-3 w-3 mr-1" /> Aprovar
+                          </Button>
+                        )}
+                        {p.status !== 'pago' && p.status !== 'cancelado' && (
+                          <Button size="sm" variant="outline" className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50"
+                            onClick={() => { if (confirm('Cancelar este período de HE? Isso permite recalcular o mesmo intervalo de datas.')) heCancelarMut.mutate({ hePeriodId: p.id, companyId }); }}
+                            disabled={heCancelarMut.isPending}>
+                            <XCircle className="h-3 w-3 mr-1" /> Cancelar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 text-center text-muted-foreground text-sm">
+              Nenhum período de HE calculado para {formatMesAno(mesAno)}. Use o formulário acima para calcular.
+            </div>
+          )}
+
+          {/* DETALHE DO PERÍODO SELECIONADO */}
+          {heViewPeriodId && (
+            heDetalhe.isLoading ? (
+              <div className="text-center py-6 text-muted-foreground">Carregando detalhe...</div>
+            ) : selectedPeriod ? (
+              <Card className="border-purple-200">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="font-semibold text-sm">Detalhe: {String(selectedPeriod.dataInicio).slice(0,10)} → {String(selectedPeriod.dataFim).slice(0,10)}</p>
+                      <p className="text-xs text-muted-foreground">{selectedPeriod.totalFuncionarios} funcionários · Total HE: {formatBRL(Number(selectedPeriod.totalValorHE))}</p>
+                    </div>
+                    <Badge className={statusColor(selectedPeriod.status)}>{selectedPeriod.status}</Badge>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-gray-200">
+                          <th className="text-left py-2 px-2">Funcionário</th>
+                          <th className="text-right py-2 px-2">HE Dias Úteis</th>
+                          <th className="text-right py-2 px-2">HE Fim de Semana</th>
+                          <th className="text-right py-2 px-2">Total Horas</th>
+                          <th className="text-right py-2 px-2">Valor HE</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedEmps.map((e: any, i: number) => (
+                          <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-2 px-2 font-medium">
+                              <button className="text-left hover:text-blue-600 hover:underline focus:outline-none"
+                                onClick={() => setLocation(`/fechamento-ponto?funcionario=${e.employeeId}&mes=${mesAno}`)}>
+                                {e.nomeCompleto || e.nome}
+                              </button>
+                            </td>
+                            <td className="text-right py-2 px-2 text-xs text-muted-foreground">
+                              {e.heUtilMins > 0 ? `${Math.floor(e.heUtilMins/60)}h${String(e.heUtilMins%60).padStart(2,'0')}` : '—'}
+                            </td>
+                            <td className="text-right py-2 px-2 text-xs text-muted-foreground">
+                              {e.heFimMins > 0 ? `${Math.floor(e.heFimMins/60)}h${String(e.heFimMins%60).padStart(2,'0')}` : '—'}
+                            </td>
+                            <td className="text-right py-2 px-2">
+                              {Math.floor(e.heTotalMins/60)}h{String(e.heTotalMins%60).padStart(2,'0')}
+                            </td>
+                            <td className="text-right py-2 px-2 font-bold text-purple-700">{formatBRL(Number(e.valorHETotal))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+                          <td className="py-2 px-2" colSpan={4}>TOTAL</td>
+                          <td className="text-right py-2 px-2 text-lg text-purple-700">
+                            {formatBRL(selectedEmps.reduce((s: number, e: any) => s + Number(e.valorHETotal), 0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null
+          )}
+        </div>
+        <PrintFooterLGPD />
+      </DashboardLayout>
+    );
+  }
+
   // ===== MAIN VIEW (resumo) =====
   return (
     <DashboardLayout>
@@ -2046,14 +2253,14 @@ export default function FolhaPagamento() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               {/* CALCULAR VALE */}
               <div className="bg-white rounded-lg border border-orange-200 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <CreditCard className="h-4 w-4 text-orange-600" />
                   <span className="font-semibold text-sm">Calcular Vale</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">40% do salário + horas extras do ponto real (15 a 15)</p>
+                <p className="text-xs text-muted-foreground mb-3">Adiantamento — {(() => { const p = (payrollPeriod.data as any); return p?.percentualAdiantamento || 40; })()}% do salário (sem HE)</p>
                 <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-700"
                   disabled={gerarValeMut.isPending}
                   onClick={() => { setCalcType("vale"); gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
@@ -2073,6 +2280,39 @@ export default function FolhaPagamento() {
                     )}
                   </>
                 )}
+              </div>
+
+              {/* HORA EXTRA MÓDULO */}
+              <div className="bg-white rounded-lg border border-purple-300 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="h-4 w-4 text-purple-700" />
+                  <span className="font-semibold text-sm">Hora Extra</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">Período configurável com detecção de duplicidade</p>
+                {(() => {
+                  const activePeriods = (hePeriods.data as any[] || []).filter((p: any) => p.status !== 'cancelado');
+                  return activePeriods.length > 0 ? (
+                    <div className="space-y-1">
+                      {activePeriods.slice(0, 2).map((p: any) => (
+                        <Button key={p.id} size="sm" variant="ghost" className="w-full text-xs text-purple-700 h-7"
+                          onClick={() => { setHeViewPeriodId(p.id); setViewMode("he_modulo"); }}>
+                          <Eye className="h-3 w-3 mr-1" />
+                          {String(p.dataInicio).slice(0,10)} → {String(p.dataFim).slice(0,10)}
+                          <Badge className={`ml-1 text-[9px] ${p.status === 'aprovado' ? 'bg-green-100 text-green-700' : p.status === 'pago' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{p.status}</Badge>
+                        </Button>
+                      ))}
+                      <Button size="sm" variant="outline" className="w-full border-purple-300 text-purple-700 hover:bg-purple-50"
+                        onClick={() => setViewMode("he_modulo")}>
+                        <TrendingUp className="h-3 w-3 mr-1" /> Gerenciar HE
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" className="w-full bg-purple-700 hover:bg-purple-800"
+                      onClick={() => setViewMode("he_modulo")}>
+                      <Zap className="h-3 w-3 mr-1" /> Calcular HE
+                    </Button>
+                  );
+                })()}
               </div>
 
               {/* SIMULAR PAGAMENTO */}

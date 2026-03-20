@@ -3976,6 +3976,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 641,
+    titulo: "Módulo Hora Extra separado do Vale — novo fluxo com período configurável",
+    descricao: "HE agora é um módulo independente do vale. Criadas tabelas he_periods (cabeçalho de período) e he_period_employees (por funcionário). Router horasExtras com calcularHE (detecção de sobreposição via overlap check), aprovar, cancelar e marcarPago. gerarVale passa a calcular apenas o adiantamento (% do salário bruto) zerando valorHorasExtras. Frontend: nova view 'he_modulo' em FolhaPagamento.tsx com seletor de datas, botão Calcular HE, listagem de períodos com status badge, detalhe por funcionário com link para fechamento-ponto, ações Aprovar/Cancelar. Card 'Hora Extra' roxo adicionado ao grid da view resumo. Grid expandido para 4 colunas.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento, Hora Extra",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 617,
     titulo: "Prioridade do lançamento Manual sobre DIXI — eliminação de registros duplicados",
     descricao: "Implementada lógica completa para garantir que registros manuais (ajusteManual=1) sempre sobrescrevam os registros DIXI no mesmo funcionário/dia: (1) getSummary agora conta diasTrabalhados usando datas únicas por funcionário (Set<string>), eliminando dupla contagem quando coexistem DIXI e Manual; (2) manualEntry: ao criar registro manual, deleta qualquer registro DIXI existente para o mesmo companyId/employeeId/data antes do insert; ao atualizar, deleta registros DIXI concorrentes que não sejam o registro sendo editado; (3) Import DIXI: antes de inserir o lote, consulta registros manuais existentes para o mesmo mês/funcionário e filtra os dias cobertos (fonte='manual'), evitando que uma reimportação DIXI sobreponha lançamentos manuais; (4) Novo procedimento limparDixiComManual: deleta em massa todos os registros DIXI onde já existe um Manual para o mesmo companyId/employeeId/data — pode ser executado por mês ou para toda a base. UI: botão 'Prioridade Manual sobre DIXI' no dialog Limpar Base com opções de limpeza por mês ou toda a base.",

@@ -157,6 +157,52 @@ async function startServer() {
         } catch (re: any) { console.warn("[ColFix] Recuperação de fotos:", re?.message); }
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
+    // Rev.641: criar tabelas do módulo Hora Extra (he_periods + he_period_employees)
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS he_periods (
+            id SERIAL PRIMARY KEY,
+            "companyId" INTEGER NOT NULL,
+            "mesReferencia" VARCHAR(7) NOT NULL,
+            "dataInicio" DATE NOT NULL,
+            "dataFim" DATE NOT NULL,
+            status TEXT NOT NULL DEFAULT 'calculado',
+            "totalFuncionarios" INTEGER DEFAULT 0,
+            "totalHEMins" INTEGER DEFAULT 0,
+            "totalValorHE" NUMERIC(12,2) DEFAULT 0,
+            "criadoPor" TEXT,
+            "criadoEm" TIMESTAMP DEFAULT NOW(),
+            "aprovadoPor" TEXT,
+            "aprovadoEm" TIMESTAMP,
+            "pagoPor" TEXT,
+            "pagoEm" TIMESTAMP,
+            observacoes TEXT
+          )
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS he_period_employees (
+            id SERIAL PRIMARY KEY,
+            "hePeriodId" INTEGER NOT NULL,
+            "companyId" INTEGER NOT NULL,
+            "employeeId" INTEGER NOT NULL,
+            nome TEXT,
+            "heUtilMins" INTEGER DEFAULT 0,
+            "heFimMins" INTEGER DEFAULT 0,
+            "heTotalMins" INTEGER DEFAULT 0,
+            "valorHEUtil" NUMERIC(10,2) DEFAULT 0,
+            "valorHEFim" NUMERIC(10,2) DEFAULT 0,
+            "valorHETotal" NUMERIC(10,2) DEFAULT 0,
+            "salarioBruto" NUMERIC(10,2) DEFAULT 0,
+            "valorHora" NUMERIC(10,4) DEFAULT 0
+          )
+        `);
+        console.log("[ColFix] he_periods + he_period_employees Rev.641 OK");
+      } catch (e: any) { console.warn("[ColFix] he_periods:", e?.message ?? e); }
+    });
     // Rev.590: criar tabelas do módulo Medição de Contratos (se não existirem)
     import("../db").then(async ({ getDb }) => {
       try {

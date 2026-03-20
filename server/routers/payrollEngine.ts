@@ -1122,10 +1122,8 @@ export const payrollEngineRouter = router({
         faltasMap.set(Number(r.employeeId), Number(r.totalFaltas) || 0);
       }
 
-      // Get overtime (HE) values — computed directly from time_records (no processarPonto needed)
-      const { heUtilMap, heFimMap, heMap } = await computeHEFromTimeRecords(
-        db, input.companyId, input.mesReferencia, criteria.cargaHorariaDiaria
-      );
+      // HE is now a SEPARATE MODULE (he_periods / horasExtras router).
+      // Vale = pure advance only — no HE included here.
 
       // Clear existing advances for this month
       await db.execute(sql`
@@ -1147,13 +1145,10 @@ export const payrollEngineRouter = router({
         const percentual = criteria.percentualAdiantamento;
         const valorAdiantamento = salarioBruto * (percentual / 100);
         const faltas = faltasMap.get(emp.id) || 0;
-        const minutosHE = heMap.get(emp.id) || 0;
-        const minutosHE_util = heUtilMap.get(emp.id) || 0;
-        const minutosHE_fim = heFimMap.get(emp.id) || 0;
-        const valorHE_util = (minutosHE_util / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
-        const valorHE_fim = (minutosHE_fim / 60) * valorHora * (1 + criteria.hePercentualDomingo / 100);
-        const valorHE = valorHE_util + valorHE_fim;
-        const valorTotalVale = valorAdiantamento + valorHE;
+        // HE is now a SEPARATE MODULE — vale = adiantamento only
+        const minutosHE = 0;
+        const valorHE = 0;
+        const valorTotalVale = valorAdiantamento;
 
         const alertas: string[] = [];
         if (faltas >= 10) alertas.push(`${faltas} faltas nos 15 primeiros dias do mês (01/${String(month).padStart(2,'0')} a 15/${String(month).padStart(2,'0')})`);

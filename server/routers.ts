@@ -85,6 +85,7 @@ import { terceiroContratosRouter } from "./routers/terceiroContratos";
 import { parceirosRouter } from "./routers/parceiros";
 import { portalExternoRouter } from "./routers/portalExterno";
 import { payrollEngineRouter } from "./routers/payrollEngine";
+import { horasExtrasRouter } from "./routers/horasExtras";
 import { fieldNotesRouter } from "./routers/fieldNotes";
 import { epiAvancadoRouter } from "./routers/epiAvancado";
 import { backupRouter } from "./routers/backup";
@@ -149,6 +150,7 @@ export const appRouter = router({
   moAlocacao: moAlocacaoRouter,
   portalExterno: portalExternoRouter,
   payrollEngine: payrollEngineRouter,
+  horasExtras: horasExtrasRouter,
   fieldNotes: fieldNotesRouter,
   epiAvancado: epiAvancadoRouter,
   backup: backupRouter,
