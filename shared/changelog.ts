@@ -3759,4 +3759,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-19 00:00:00",
   },
+  {
+    version: 616,
+    titulo: "Badges de status de funcionário em todos os alertas e rankings",
+    descricao: "Criado componente EmpStatusBadge que exibe badge colorido ao lado do nome do funcionário quando seu status for diferente de 'Ativo': Férias (laranja), Afastado (azul), Licença/Maternidade/Paternidade (amarelo), Recluso/Lista Negra (cinza). Badge aparece em: PainelRH (aniversariantes, aniversariosEmpresa, experiências, avisos prévios, advertências recentes, cards full-screen de expansão, dialog KPI); Home (aniversariantes, aniversariosEmpresa compact e dialog expandido, ASOs alertas, semAso, advertências recentes, alertas de férias); FechamentoPonto (4 cards de ranking: Mais Pontuais, Mais Atrasados, Mais Horas Extras, Menos Dias). Backend homeData.ts atualizado para incluir campo status/empStatus em todos os endpoints de alertas e filtrar por todosNaoDesligados. fechamentoPonto getSummary inclui employeeStatus.",
+    tipo: "feature",
+    modulos: "RH,Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
 ];

@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import React from "react";
+import { EmpStatusBadge } from "@/components/EmpStatusBadge";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -741,6 +742,7 @@ export default function FechamentoPonto() {
       id: e.employeeId,
       nome: e.employeeName,
       funcao: e.employeeFuncao || "-",
+      status: e.employeeStatus,
       dias: e.diasTrabalhados || 0,
       horasTrab: parseHM(e.horasTrabalhadas),
       horasExtras: parseHM(e.horasExtras),
@@ -1377,6 +1379,7 @@ export default function FechamentoPonto() {
                               <div className="flex items-center gap-2">
                                 <span className={`font-bold w-4 text-center ${i === 0 ? "text-green-600" : "text-muted-foreground"}`}>{i + 1}</span>
                                 <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
+                                <EmpStatusBadge status={e.status} />
                               </div>
                               <span className="text-green-600 font-mono">{e.atrasosStr === "0:00" ? "Sem atraso" : e.atrasosStr}</span>
                             </div>
@@ -1400,6 +1403,7 @@ export default function FechamentoPonto() {
                               <div className="flex items-center gap-2">
                                 <span className={`font-bold w-4 text-center ${i === 0 ? "text-red-600" : "text-muted-foreground"}`}>{i + 1}</span>
                                 <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
+                                <EmpStatusBadge status={e.status} />
                               </div>
                               <span className="text-red-600 font-mono">{e.atrasosStr}</span>
                             </div>
@@ -1423,6 +1427,7 @@ export default function FechamentoPonto() {
                               <div className="flex items-center gap-2">
                                 <span className={`font-bold w-4 text-center ${i === 0 ? "text-amber-600" : "text-muted-foreground"}`}>{i + 1}</span>
                                 <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
+                                <EmpStatusBadge status={e.status} />
                               </div>
                               <span className="text-amber-600 font-mono">{e.horasExtrasStr}</span>
                             </div>
@@ -1446,6 +1451,7 @@ export default function FechamentoPonto() {
                               <div className="flex items-center gap-2">
                                 <span className={`font-bold w-4 text-center ${i === 0 ? "text-slate-600" : "text-muted-foreground"}`}>{i + 1}</span>
                                 <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
+                                <EmpStatusBadge status={e.status} />
                               </div>
                               <span className="text-slate-600 font-mono">{e.dias} dia{e.dias !== 1 ? "s" : ""}</span>
                             </div>

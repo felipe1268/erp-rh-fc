@@ -86,7 +86,7 @@ export const homeDataRouter = router({
       // ============================================================
       // 2B. ANIVERSÁRIOS DE EMPRESA (anos de casa)
       // ============================================================
-      const aniversariosEmpresa = ativos
+      const aniversariosEmpresa = todosNaoDesligados
         .filter(e => {
           if (!e.dataAdmissao) return false;
           const da = toDateStr(e.dataAdmissao);
@@ -105,6 +105,7 @@ export const homeDataRouter = router({
             id: e.id,
             nome: e.nomeCompleto,
             funcao: e.funcao,
+            status: e.status,
             obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null,
             dia,
             anosEmpresa,
@@ -137,17 +138,20 @@ export const homeDataRouter = router({
       em60dias.setDate(em60dias.getDate() + 60);
       const em60diasStr = em60dias.toISOString().split("T")[0];
 
+      const todosNaoDesligadosIds = new Set(todosNaoDesligados.map(e => e.id));
+
       const asosAlerta: Array<{
         employeeId: number;
         nome: string;
         funcao: string | null;
+        status: string | null;
         dataValidade: string;
         diasRestantes: number;
         vencido: boolean;
       }> = [];
 
       for (const [empId, aso] of Array.from(asoMap.entries())) {
-        if (!ativosIds.has(empId)) continue;
+        if (!todosNaoDesligadosIds.has(empId)) continue;
         const emp = empMap.get(empId);
         if (!emp) continue;
 
@@ -161,6 +165,7 @@ export const homeDataRouter = router({
             employeeId: empId,
             nome: emp.nomeCompleto,
             funcao: emp.funcao,
+            status: emp.status,
             dataValidade: validadeStr,
             diasRestantes,
             vencido: diasRestantes < 0,
@@ -169,10 +174,10 @@ export const homeDataRouter = router({
       }
       asosAlerta.sort((a, b) => a.diasRestantes - b.diasRestantes);
 
-      // Funcionários ativos SEM nenhum ASO
-      const semAso = ativos
+      // Funcionários não-desligados SEM nenhum ASO
+      const semAso = todosNaoDesligados
         .filter(e => !asoMap.has(e.id))
-        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao }));
+        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, status: e.status }));
 
       // ============================================================
       // 4. ALERTAS DE FÉRIAS (funcionários com mais de 11 meses sem férias)
@@ -376,6 +381,7 @@ export const homeDataRouter = router({
             id: w.id,
             employeeId: w.employeeId,
             nome: emp?.nomeCompleto || "Desconhecido",
+            empStatus: emp?.status || null,
             tipo: w.tipoAdvertencia,
             data: toDateStr(w.dataOcorrencia!),
           };
@@ -468,6 +474,7 @@ export const homeDataRouter = router({
             id: e.id,
             nome: e.nomeCompleto,
             funcao: e.funcao,
+            empStatus: e.status,
             tipo,
             inicio,
             fim1: fim1Str,
@@ -511,6 +518,7 @@ export const homeDataRouter = router({
           employeeId: a.employeeId,
           nome: emp?.nomeCompleto || 'Funcionário',
           funcao: emp?.funcao || '-',
+          empStatus: emp?.status || null,
           tipo: a.tipo,
           dataInicio: toDateStr(a.dataInicio!),
           dataFim: dataFimStr,

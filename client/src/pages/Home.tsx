@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
+import { EmpStatusBadge } from "@/components/EmpStatusBadge";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -353,7 +354,7 @@ export default function Home() {
                               <div className="flex items-center gap-2">
                                 {a.isHoje && <span className="text-base">🎂</span>}
                                 <div>
-                                  <span className="font-medium">{a.nome}</span>
+                                  <span className="font-medium flex items-center gap-1">{a.nome}<EmpStatusBadge status={(a as any).status} /></span>
                                   {a.funcao && <span className="text-muted-foreground ml-1">({a.funcao})</span>}
                                   {a.obra && <span className="text-blue-500 ml-1 text-[10px]">📍 {a.obra}</span>}
                                 </div>
@@ -479,8 +480,9 @@ export default function Home() {
                               key={a.employeeId}
                               className={`flex items-center justify-between text-xs px-2 py-1.5 rounded ${a.vencido ? "bg-red-50 border border-red-200" : a.diasRestantes <= 15 ? "bg-orange-50" : ""}`}
                             >
-                              <div>
+                              <div className="flex items-center gap-1">
                                 <span className="font-medium">{a.nome}</span>
+                                <EmpStatusBadge status={(a as any).status} />
                               </div>
                               <span className={`font-mono text-[10px] ${a.vencido ? "text-red-600 font-bold" : a.diasRestantes <= 15 ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}>
                                 {a.vencido ? `Vencido há ${Math.abs(a.diasRestantes)}d` : `${a.diasRestantes}d restantes`}
@@ -493,7 +495,7 @@ export default function Home() {
                                 {homeData!.semAso!.length} funcionário{homeData!.semAso!.length !== 1 ? "s" : ""} sem ASO cadastrado:
                               </p>
                               {homeData!.semAso!.slice(0, 3).map(e => (
-                                <div key={e.id} className="text-xs text-muted-foreground pl-2">{e.nome}</div>
+                                <div key={e.id} className="text-xs text-muted-foreground pl-2 flex items-center gap-1">{e.nome}<EmpStatusBadge status={(e as any).status} /></div>
                               ))}
                               {homeData!.semAso!.length > 3 && (
                                 <div className="text-[10px] text-muted-foreground pl-2">
@@ -529,9 +531,9 @@ export default function Home() {
                               className={`flex items-center justify-between text-xs px-2 py-1.5 rounded cursor-pointer hover:shadow-sm transition-all ${f.urgente ? "bg-amber-50 border border-amber-200 hover:bg-amber-100" : "hover:bg-muted/50"}`}
                               onClick={() => navigate("/ferias")}
                             >
-                              <div>
+                              <div className="flex items-center gap-1 flex-wrap">
                                 <span className="font-medium">{f.nome}</span>
-                                <span className="text-muted-foreground ml-1 text-[10px]">{f.periodoAquisitivo}º período</span>
+                                <span className="text-muted-foreground text-[10px]">{f.periodoAquisitivo}º período</span>
                               </div>
                               <div className="flex items-center gap-1">
                                 <span className={`font-mono text-[10px] ${f.urgente ? "text-red-600 font-bold" : "text-amber-600"}`}>
@@ -680,7 +682,7 @@ export default function Home() {
                               <div className="flex items-center gap-1.5 min-w-0">
                                 {a.isHoje ? <span className="text-sm flex-shrink-0">🏆</span> : <span className="text-sm flex-shrink-0">🎖️</span>}
                                 <div className="min-w-0">
-                                  <span className="font-medium block truncate">{a.nome}</span>
+                                  <span className="font-medium block truncate flex items-center gap-1">{a.nome}<EmpStatusBadge status={(a as any).status} /></span>
                                   {a.funcao && <span className="text-muted-foreground text-[10px]">{a.funcao}</span>}
                                 </div>
                               </div>
@@ -732,7 +734,7 @@ export default function Home() {
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-xl flex-shrink-0">{a.isHoje ? "🏆" : "🎖️"}</span>
                                 <div className="min-w-0">
-                                  <p className={`font-semibold text-sm truncate ${a.isHoje ? "text-amber-700" : ""}`}>{a.nome}</p>
+                                  <p className={`font-semibold text-sm truncate flex items-center gap-1 ${a.isHoje ? "text-amber-700" : ""}`}>{a.nome}<EmpStatusBadge status={(a as any).status} /></p>
                                   {a.funcao && <p className="text-xs text-muted-foreground">{a.funcao}</p>}
                                   {a.obra && <p className="text-[10px] text-blue-500">📍 {a.obra}</p>}
                                 </div>
@@ -765,7 +767,7 @@ export default function Home() {
                         <div className="space-y-1">
                           {homeData!.advertenciasRecentes!.map(a => (
                             <div key={a.id} className="flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-accent/50">
-                              <span className="font-medium">{a.nome}</span>
+                              <span className="font-medium flex items-center gap-1">{a.nome}<EmpStatusBadge status={(a as any).empStatus} /></span>
                               <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="text-[10px]">{a.tipo}</Badge>
                                 <span className="text-muted-foreground text-[10px]">

@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
+import { EmpStatusBadge } from "@/components/EmpStatusBadge";
 import DashboardLayout from "@/components/DashboardLayout";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -70,7 +71,7 @@ export default function PainelRH() {
     { enabled: hasValidCompany }
   );
   const s = homeData?.stats;
-  const [kpiExpand, setKpiExpand] = useState<{ title: string; items: { nome: string; funcao?: string; extra?: string; urgencia?: string }[] } | null>(null);
+  const [kpiExpand, setKpiExpand] = useState<{ title: string; items: { nome: string; funcao?: string; extra?: string; urgencia?: string; status?: string | null }[] } | null>(null);
   const [aniversariosFullOpen, setAniversariosFullOpen] = useState(false);
   const [cardExpand, setCardExpand] = useState<string | null>(null);
   const [alertaTab, setAlertaTab] = useState('todos');
@@ -165,8 +166,8 @@ export default function PainelRH() {
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Indicadores RH</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {canSeeObras && <KpiCard title="Obras Ativas" value={s?.obrasAtivas ?? 0} icon={Landmark} color="teal" onClick={() => navigate("/obras")} />}
-                  {canSeeDocumentos && <KpiCard title="ASOs Vencidos" value={s?.asosVencidos ?? 0} icon={FileWarning} color="red" onClick={() => navigate("/controle-documentos")} alert={!!s?.asosVencidos} onExpand={(s?.asosVencidos ?? 0) > 0 ? () => setKpiExpand({ title: "ASOs Vencidos", items: (homeData?.asosAlerta ?? []).filter((a: any) => a.vencido).map((a: any) => ({ nome: a.nome, funcao: a.funcao, extra: `Vencido há ${Math.abs(a.diasRestantes)} dia${Math.abs(a.diasRestantes) !== 1 ? 's' : ''}`, urgencia: 'critico' })) }) : undefined} />}
-                  {canSeeDocumentos && <KpiCard title="ASOs Vencendo (60d)" value={s?.asosVencendo ?? 0} icon={HeartPulse} color="orange" onClick={() => navigate("/controle-documentos")} onExpand={(s?.asosVencendo ?? 0) > 0 ? () => setKpiExpand({ title: "ASOs Vencendo (60 dias)", items: (homeData?.asosAlerta ?? []).filter((a: any) => !a.vencido).map((a: any) => ({ nome: a.nome, funcao: a.funcao, extra: `Vence em ${a.diasRestantes} dia${a.diasRestantes !== 1 ? 's' : ''}`, urgencia: a.diasRestantes <= 15 ? 'urgente' : 'atencao' })) }) : undefined} />}
+                  {canSeeDocumentos && <KpiCard title="ASOs Vencidos" value={s?.asosVencidos ?? 0} icon={FileWarning} color="red" onClick={() => navigate("/controle-documentos")} alert={!!s?.asosVencidos} onExpand={(s?.asosVencidos ?? 0) > 0 ? () => setKpiExpand({ title: "ASOs Vencidos", items: (homeData?.asosAlerta ?? []).filter((a: any) => a.vencido).map((a: any) => ({ nome: a.nome, funcao: a.funcao, status: a.status, extra: `Vencido há ${Math.abs(a.diasRestantes)} dia${Math.abs(a.diasRestantes) !== 1 ? 's' : ''}`, urgencia: 'critico' })) }) : undefined} />}
+                  {canSeeDocumentos && <KpiCard title="ASOs Vencendo (60d)" value={s?.asosVencendo ?? 0} icon={HeartPulse} color="orange" onClick={() => navigate("/controle-documentos")} onExpand={(s?.asosVencendo ?? 0) > 0 ? () => setKpiExpand({ title: "ASOs Vencendo (60 dias)", items: (homeData?.asosAlerta ?? []).filter((a: any) => !a.vencido).map((a: any) => ({ nome: a.nome, funcao: a.funcao, status: a.status, extra: `Vence em ${a.diasRestantes} dia${a.diasRestantes !== 1 ? 's' : ''}`, urgencia: a.diasRestantes <= 15 ? 'urgente' : 'atencao' })) }) : undefined} />}
                   {canSeeFerias && <KpiCard title="Férias a Vencer" value={s?.feriasAlerta ?? 0} icon={CalendarClock} color="yellow" onClick={() => navigate("/ferias")} onExpand={(s?.feriasAlerta ?? 0) > 0 ? () => setKpiExpand({ title: "Férias a Vencer", items: (homeData?.feriasAlerta ?? []).map((f: any) => ({ nome: f.nome, funcao: f.funcao, extra: f.diasParaVencer <= 0 ? 'Período vencido!' : `Vence em ${f.diasParaVencer} dias`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao' })) }) : undefined} />}
                 </div>
               </div>
@@ -193,8 +194,9 @@ export default function PainelRH() {
                         return (
                           <div key={exp.id} className={`flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2.5 rounded-lg border ${urgColors[exp.urgencia] || urgColors.normal} gap-2`}>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-semibold">{exp.nome}</span>
+                                <EmpStatusBadge status={exp.empStatus} />
                                 <Badge variant="outline" className="text-[10px]">{exp.funcao || '-'}</Badge>
                                 <Badge className={`text-[10px] ${exp.status === 'prorrogado' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                                   {exp.status === 'prorrogado' ? '2º período' : '1º período'}
@@ -308,7 +310,7 @@ export default function PainelRH() {
                             'bg-white border-gray-200'
                           }`}>
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-bold text-foreground">{a.nome}</span>
+                              <span className="text-xs font-bold text-foreground flex items-center gap-1">{a.nome}<EmpStatusBadge status={a.empStatus} /></span>
                               <Badge className={`text-[9px] ${
                                 isAguardando ? 'bg-amber-500 text-white' :
                                 a.urgencia === 'vencido' ? 'bg-red-600 text-white' :
@@ -360,7 +362,7 @@ export default function PainelRH() {
                               <div className="flex items-center gap-2">
                                 {a.isHoje ? <span className="text-base">🎂</span> : null}
                                 <div>
-                                  <span className="font-medium">{a.nome}</span>
+                                  <span className="font-medium flex items-center gap-1">{a.nome}<EmpStatusBadge status={a.status} /></span>
                                   {a.funcao ? <span className="text-muted-foreground ml-1">({a.funcao})</span> : null}
                                   {a.obra ? <span className="block text-[10px] text-blue-600 font-medium mt-0.5">📍 {a.obra}</span> : null}
                                 </div>
@@ -562,7 +564,7 @@ export default function PainelRH() {
                                 {a.isHoje ? <Trophy className="h-3.5 w-3.5 text-amber-600" /> : <Star className="h-3.5 w-3.5 text-slate-400" />}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <span className={`font-medium truncate block ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome}</span>
+                                <span className={`font-medium truncate block ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome} <EmpStatusBadge status={a.status} /></span>
                                 <span className="text-muted-foreground text-[10px]">{a.funcao}{a.obra ? ` · ${a.obra}` : ''}</span>
                               </div>
                               <div className="text-right shrink-0">
@@ -602,7 +604,7 @@ export default function PainelRH() {
                         <div className="space-y-1">
                           {homeData!.advertenciasRecentes!.map((a: any) => (
                             <div key={a.id} className="flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-accent/50">
-                              <span className="font-medium">{a.nome}</span>
+                              <span className="font-medium flex items-center gap-1">{a.nome}<EmpStatusBadge status={a.empStatus} /></span>
                               <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="text-[10px]">{a.tipo}</Badge>
                                 <span className="text-muted-foreground text-[10px]">{a.data ? new Date(a.data + "T00:00:00").toLocaleDateString("pt-BR") : ""}</span>
@@ -695,7 +697,7 @@ export default function PainelRH() {
                     {a.isHoje ? '🎂' : <span>{i + 1}</span>}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-base">{a.nome}</p>
+                    <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">{a.nome}<EmpStatusBadge status={a.status} /></p>
                     <p className="text-sm text-muted-foreground">
                       {a.funcao || ''}
                       {a.obra ? <span className="ml-2 text-blue-600 font-medium">· 📍 {a.obra}</span> : ''}
@@ -776,7 +778,7 @@ export default function PainelRH() {
                         <HeartPulse className="h-5 w-5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-base">{a.nome}</p>
+                        <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">{a.nome}<EmpStatusBadge status={a.status} /></p>
                         {a.funcao && <p className="text-sm text-muted-foreground">{a.funcao}</p>}
                       </div>
                       <Badge className={`text-sm px-3 shrink-0 ${a.vencido ? 'bg-red-100 text-red-700 border border-red-300' : a.diasRestantes <= 15 ? 'bg-orange-100 text-orange-700 border border-orange-300' : 'bg-yellow-100 text-yellow-700 border border-yellow-300'}`}>
@@ -794,7 +796,7 @@ export default function PainelRH() {
                               <User className="h-5 w-5 text-gray-500" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-base">{e.nome}</p>
+                              <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">{e.nome}<EmpStatusBadge status={e.status} /></p>
                               {e.funcao && <p className="text-sm text-muted-foreground">{e.funcao}</p>}
                             </div>
                             <Badge className="bg-gray-100 text-gray-600 border border-gray-300 text-sm px-3">Sem ASO</Badge>
@@ -868,7 +870,7 @@ export default function PainelRH() {
                     {a.isHoje ? <Trophy className="h-5 w-5 text-amber-600" /> : <span>{i + 1}</span>}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`font-semibold text-base ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome}</p>
+                    <p className={`font-semibold text-base flex items-center gap-1.5 flex-wrap ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome}<EmpStatusBadge status={a.status} /></p>
                     <p className="text-sm text-muted-foreground">{a.funcao}{a.obra ? ` · ${a.obra}` : ''}</p>
                   </div>
                   <div className="text-right shrink-0 space-y-1">
@@ -894,7 +896,7 @@ export default function PainelRH() {
                     <ShieldAlert className="h-5 w-5 text-orange-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-base">{a.nome}</p>
+                    <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">{a.nome}<EmpStatusBadge status={a.empStatus} /></p>
                     {a.funcao && <p className="text-sm text-muted-foreground">{a.funcao}</p>}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
@@ -930,7 +932,7 @@ export default function PainelRH() {
                     {a.isHoje ? <Trophy className="h-5 w-5 text-amber-600" /> : <span>{i + 1}</span>}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`font-semibold text-base ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome}</p>
+                    <p className={`font-semibold text-base flex items-center gap-1.5 flex-wrap ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome}<EmpStatusBadge status={a.status} /></p>
                     <p className="text-sm text-muted-foreground mt-0.5">
                       {a.funcao}
                       {a.obra ? <span className="ml-2 text-blue-600 font-medium">· {a.obra}</span> : ''}
@@ -970,7 +972,7 @@ export default function PainelRH() {
                     {i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-base">{item.nome}</p>
+                    <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">{item.nome}<EmpStatusBadge status={item.status} /></p>
                     {item.funcao && <p className="text-sm text-muted-foreground mt-0.5">{item.funcao}</p>}
                   </div>
                   {item.extra && (
