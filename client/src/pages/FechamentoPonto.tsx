@@ -3611,6 +3611,7 @@ export default function FechamentoPonto() {
                             <th className="px-2 py-1.5 text-center font-medium text-xs">Saída Int.</th>
                             <th className="px-2 py-1.5 text-center font-medium text-xs">Retorno</th>
                             <th className="px-2 py-1.5 text-center font-medium text-xs">Saída</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs w-14 text-red-600">Falta</th>
                             <th className="px-1 py-1.5 w-7"></th>
                           </tr>
                         </thead>
@@ -3622,8 +3623,9 @@ export default function FechamentoPonto() {
                             const [yrRow] = day.data ? day.data.split("-").map(Number) : [0];
                             const isHoliday = day.data ? getBrazilianHolidays(yrRow).has(day.data) : false;
                             const isRed = isWeekend || isHoliday;
+                            const isFaltaMarcada = day.data && !isWeekend && !isHoliday && !day.entrada1 && !day.saida1 && !day.entrada2 && !day.saida2;
                             return (
-                              <tr key={day.id} className={`border-t ${isRed ? "bg-red-50/60" : idx % 2 === 0 ? "" : "bg-muted/10"}`}>
+                              <tr key={day.id} className={`border-t ${isFaltaMarcada ? "bg-red-100/70" : isRed ? "bg-red-50/60" : idx % 2 === 0 ? "" : "bg-muted/10"}`}>
                                 <td className="px-2 py-1">
                                   <Input type="date" value={day.data} className="h-7 text-xs w-full" onChange={e => {
                                     const newDate = e.target.value;
@@ -3631,7 +3633,6 @@ export default function FechamentoPonto() {
                                     const sched = newDate && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, newDate) : null;
                                     setManualDays(p => p.map(d => d.id === day.id ? {
                                       ...d, data: newDate,
-                                      // Auto-fill only if times are still empty
                                       entrada1: d.entrada1 || sched?.entrada1 || "",
                                       saida1: d.saida1 || sched?.saida1 || "",
                                       entrada2: d.entrada2 || sched?.entrada2 || "",
@@ -3641,14 +3642,34 @@ export default function FechamentoPonto() {
                                 </td>
                                 <td className="px-1 py-1 text-center">
                                   <div className="flex flex-col items-center gap-0.5">
-                                    <span className={`text-xs font-bold ${isRed ? "text-red-600" : "text-muted-foreground"}`}>{dow}</span>
+                                    <span className={`text-xs font-bold ${isRed || isFaltaMarcada ? "text-red-600" : "text-muted-foreground"}`}>{dow}</span>
                                     {isHoliday && !isWeekend && <span className="text-[9px] text-red-500 leading-none">feriado</span>}
+                                    {isFaltaMarcada && <span className="text-[9px] text-red-700 font-bold leading-none">FALTA</span>}
                                   </div>
                                 </td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada1} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida1} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada2} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida2} className="h-7 text-xs w-24 font-mono" onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada1} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida1} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada2} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida2} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1 text-center">
+                                  <button
+                                    type="button"
+                                    title={isFaltaMarcada ? "Desfazer falta (preencher horários)" : "Marcar como falta (apaga horários)"}
+                                    onClick={() => {
+                                      if (isFaltaMarcada) {
+                                        // Undo: re-fill with schedule
+                                        const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
+                                        const sched = day.data && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, day.data) : null;
+                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: sched?.entrada1 || "", saida1: sched?.saida1 || "", entrada2: sched?.entrada2 || "", saida2: sched?.saida2 || "" } : d));
+                                      } else {
+                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: "", saida1: "", entrada2: "", saida2: "" } : d));
+                                      }
+                                    }}
+                                    className={`text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${isFaltaMarcada ? "bg-red-600 text-white hover:bg-red-700" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
+                                  >
+                                    {isFaltaMarcada ? "✕ Falta" : "Falta"}
+                                  </button>
+                                </td>
                                 <td className="px-1 py-1 text-center">
                                   <button type="button" onClick={() => setManualDays(p => p.filter(d => d.id !== day.id))} className="text-muted-foreground hover:text-red-500 transition-colors">
                                     <X className="h-3.5 w-3.5" />

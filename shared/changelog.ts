@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 624,
+    titulo: "Lançamento manual de ponto: botão Falta por linha",
+    descricao: "Adicionado botão 'Falta' em cada linha do dialog de lançamento manual de ponto. Ao clicar, apaga todos os horários da linha (Entrada, Saída Int., Retorno, Saída) marcando o dia como falta. A linha fica destacada em vermelho com badge 'FALTA' na coluna do dia e os inputs ficam opacos. Clicar novamente no botão (que vira '✕ Falta' em vermelho sólido) desfaz a falta e re-preenche com a jornada padrão do colaborador.",
+    tipo: "feature",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 623,
     titulo: "Cálculo de Vale e Pagamento: batch insert + overlay de progresso",
     descricao: "gerarVale: substituídos INSERTs individuais por um único batch INSERT de payroll_advances e financial_events, eliminando N round-trips ao banco (N = total de funcionários). simularPagamento: substituídos 4 queries individuais por funcionário (VR diário, VA, rateio por obra, convênios) por 4 queries em batch antes do loop, e o INSERT final é agora um único batch INSERT de payroll_payments. Corrigidas aspas duplas em getEmployeeVrDiario (colunas camelCase). UI: adicionado overlay dialog com spinner, contador de tempo decorrido, barra de progresso animada e explicação de onde os resultados aparecem ao clicar em 'Calcular Vale' ou 'Simular Pagamento'.",
