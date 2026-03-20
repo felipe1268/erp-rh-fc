@@ -650,6 +650,13 @@ export default function FechamentoPonto() {
     },
     onError: (err) => toast.error("Erro: " + err.message),
   });
+  const resolveAllDuplicatasMut = trpc.fechamentoPonto.resolveAllDuplicatas.useMutation({
+    onSuccess: (data: any) => {
+      conflitos.refetch(); stats.refetch(); summary.refetch();
+      toast.success(data.message || `${data.excluidos} duplicata(s) excluída(s)!`, { duration: 8000 });
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
   const linkUnmatchedMut = trpc.fechamentoPonto.linkUnmatchedToEmployee.useMutation({
     onSuccess: (data) => {
       unmatchedData.refetch(); stats.refetch(); summary.refetch(); inconsistencies.refetch();
@@ -2015,16 +2022,30 @@ export default function FechamentoPonto() {
                         <CardTitle className="text-sm font-bold text-orange-800">Conflitos de Obra (Mesmo Dia)</CardTitle>
                         <Badge className="bg-orange-100 text-orange-700 text-xs">{conflitosList.length}</Badge>
                       </div>
-                      {!isConsolidado && conflitosList.length > 1 && (
+                      {!isConsolidado && conflitosList.filter((c: any) => c.isSameObraDuplicate).length > 0 && (
+                        <Button size="sm" variant="outline" className="gap-1.5 text-xs border-purple-400 text-purple-700 hover:bg-purple-50"
+                          disabled={resolveAllDuplicatasMut.isPending}
+                          onClick={() => {
+                            const qtd = conflitosList.filter((c: any) => c.isSameObraDuplicate).length;
+                            if (confirm(`Resolver ${qtd} batida(s) duplicada(s) automaticamente?\n\nRegra: em cada grupo, mantém o registro com MAIS HORAS (ou o lançamento manual, se houver). Os demais serão EXCLUÍDOS.\n\nEsta ação não pode ser desfeita.`)) {
+                              resolveAllDuplicatasMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
+                            }
+                          }}>
+                          <Copy className="h-3.5 w-3.5" />
+                          {resolveAllDuplicatasMut.isPending ? "Processando..." : `Resolver Duplicatas (${conflitosList.filter((c: any) => c.isSameObraDuplicate).length})`}
+                        </Button>
+                      )}
+                      {!isConsolidado && conflitosList.filter((c: any) => !c.isSameObraDuplicate).length > 1 && (
                         <Button size="sm" variant="outline" className="gap-1.5 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
                           disabled={resolveAllConflitosMut.isPending}
                           onClick={() => {
-                            if (confirm(`Confirmar DESLOCAMENTO para todos os ${conflitosList.length} conflitos de obra?`)) {
+                            const qtd = conflitosList.filter((c: any) => !c.isSameObraDuplicate).length;
+                            if (confirm(`Confirmar DESLOCAMENTO para ${qtd} conflito(s) de obras diferentes?`)) {
                               resolveAllConflitosMut.mutate({ companyId, companyIds, mesReferencia: mesAno, acao: "confirmar_deslocamento", justificativa: "Deslocamento confirmado em lote" });
                             }
                           }}>
                           <ListChecks className="h-3.5 w-3.5" />
-                          {resolveAllConflitosMut.isPending ? "Processando..." : `Resolver Todos (${conflitosList.length})`}
+                          {resolveAllConflitosMut.isPending ? "Processando..." : `Confirmar Deslocamentos (${conflitosList.filter((c: any) => !c.isSameObraDuplicate).length})`}
                         </Button>
                       )}
                     </div>

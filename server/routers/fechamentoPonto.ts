@@ -2493,6 +2493,106 @@ export const fechamentoPontoRouter = router({
     }),
 
   // ============================================================
+  // RESOLVER DUPLICATAS EM LOTE (mesma obra, mesmo funcionário, mesmo dia)
+  // ============================================================
+  resolveAllDuplicatas: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      mesReferencia: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const resolvidoPor = ctx.user?.name || "RH";
+
+      const consolidacao = await db.select().from(pontoConsolidacao)
+        .where(and(
+          companyFilter(pontoConsolidacao.companyId, input),
+          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
+          eq(pontoConsolidacao.status, "consolidado"),
+        )).limit(1);
+      if (consolidacao.length > 0) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado.' });
+      }
+
+      const mesStart = `${input.mesReferencia}-01`;
+      const mesEnd = `${input.mesReferencia}-31`;
+
+      // Buscar todos os registros do mês com campos necessários
+      const allRecs = await db.execute(sql`
+        SELECT id, "employeeId", "obraId", data, "horasTrabalhadas", "ajusteManual",
+               "entrada1", "saida1", "entrada2", "saida2"
+        FROM time_records
+        WHERE "companyId" IN (${sql.join((input.companyIds || [input.companyId]).map(id => sql`${id}`), sql`, `)})
+          AND data BETWEEN ${mesStart} AND ${mesEnd}
+        ORDER BY "employeeId", data, "ajusteManual" DESC
+      `);
+
+      // Agrupar por (employeeId, obraId, data)
+      const grupos: Record<string, any[]> = {};
+      for (const r of (allRecs as any[])) {
+        const key = `${r.employeeId}|${r.obraId}|${r.data}`;
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(r);
+      }
+
+      // Função para calcular minutos de trabalho de um registro
+      const calcMinutos = (r: any): number => {
+        let mins = 0;
+        if (r.entrada1 && r.saida1) {
+          const [h1, m1] = r.entrada1.split(':').map(Number);
+          const [h2, m2] = r.saida1.split(':').map(Number);
+          mins += (h2 * 60 + m2) - (h1 * 60 + m1);
+        }
+        if (r.entrada2 && r.saida2) {
+          const [h1, m1] = r.entrada2.split(':').map(Number);
+          const [h2, m2] = r.saida2.split(':').map(Number);
+          mins += (h2 * 60 + m2) - (h1 * 60 + m1);
+        }
+        return Math.max(mins, 0);
+      };
+
+      let resolved = 0;
+      const idsParaExcluir: number[] = [];
+
+      for (const [, recs] of Object.entries(grupos)) {
+        if (recs.length < 2) continue; // Só processa duplicatas
+
+        // Ordenar: prioridade 1 = manual (ajusteManual=1), prioridade 2 = mais horas
+        const sorted = [...recs].sort((a, b) => {
+          if ((b.ajusteManual || 0) !== (a.ajusteManual || 0)) return (b.ajusteManual || 0) - (a.ajusteManual || 0);
+          return calcMinutos(b) - calcMinutos(a);
+        });
+
+        // Manter o primeiro (melhor candidato), marcar o resto para exclusão
+        const [manter, ...excluir] = sorted;
+        // Atualizar justificativa do que será mantido
+        await db.execute(sql`
+          UPDATE time_records SET justificativa = ${`[Duplicata resolvida em lote por ${resolvidoPor}] Registro com mais horas/ajuste manual mantido`}
+          WHERE id = ${manter.id}
+        `);
+        for (const exc of excluir) {
+          idsParaExcluir.push(Number(exc.id));
+        }
+        resolved++;
+      }
+
+      // Excluir em lote
+      if (idsParaExcluir.length > 0) {
+        await db.execute(sql`
+          DELETE FROM time_records WHERE id IN (${sql.join(idsParaExcluir.map(id => sql`${id}`), sql`, `)})
+        `);
+      }
+
+      return {
+        success: true,
+        resolved,
+        excluidos: idsParaExcluir.length,
+        message: `${resolved} grupo(s) de duplicatas resolvido(s). ${idsParaExcluir.length} registro(s) duplicado(s) excluído(s). Em cada caso foi mantido o registro com mais horas ou o ajuste manual.`,
+      };
+    }),
+
+  // ============================================================
   // REGISTROS NÃO IDENTIFICADOS (UNMATCHED)
   // ============================================================
   getUnmatchedRecords: protectedProcedure

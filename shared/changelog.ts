@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 608,
+    titulo: "Fechamento de Ponto: resolução automática em lote de Batidas Duplicadas",
+    descricao: "Nova mutation resolveAllDuplicatas e botão 'Resolver Duplicatas (N)' no cabeçalho do card de conflitos. Para cada grupo de registros duplicados (mesmo funcionário, mesma obra, mesmo dia), o sistema mantém automaticamente o melhor registro — prioridade 1: lançamento manual (ajusteManual=1); prioridade 2: registro com mais horas trabalhadas. Os demais são excluídos. O botão 'Resolver Todos' agora foi dividido em dois: 'Resolver Duplicatas' (roxo, para batidas duplicadas da mesma obra) e 'Confirmar Deslocamentos' (laranja, para obras diferentes). Cada um aparece apenas quando há casos do seu tipo.",
+    tipo: "feature",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 607,
     titulo: "Fechamento de Ponto: correção do display de Batida Duplicada na mesma obra",
     descricao: "Bug corrigido: quando havia dois registros para o mesmo funcionário, mesma obra e mesmo dia (isSameObraDuplicate=true), o sistema exibia incorretamente a mensagem 'Deslocamento entre obras detectado — os horários não se sobrepõem' e o botão 'Confirmar' de deslocamento. Agora: (1) a mensagem de deslocamento só aparece quando são obras DIFERENTES; (2) o botão 'Confirmar Deslocamento' não aparece para duplicatas da mesma obra; (3) painéis de duplicata têm fundo/borda roxa em ambos os modos de visualização (tabela e cards); (4) na view de cards do funcionário, o badge e os controles de duplicata foram adicionados com botões para excluir o registro errado diretamente.",
