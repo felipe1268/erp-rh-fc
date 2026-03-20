@@ -1459,10 +1459,35 @@ export default function FolhaPagamento() {
               </Button>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Cálculo Interno — Vale / Adiantamento</h1>
-                <p className="text-muted-foreground text-sm">{formatMesAno(mesAno)} • {valeResult.totalFuncionarios} funcionários • {valeResult.percentual}% do salário + HE</p>
+                <p className="text-muted-foreground text-sm flex items-center gap-2">
+                  {formatMesAno(mesAno)} • {valeResult.totalFuncionarios} funcionários • {valeResult.percentual}% do salário
+                  {vale?.status === 'consolidado' && (
+                    <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-[11px] font-semibold px-2 py-0.5 rounded-full">
+                      <Lock className="h-3 w-3" /> Consolidado
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
-            <PrintActions title={`Cálculo Vale - ${formatMesAno(mesAno)}`} />
+            <div className="flex items-center gap-2 no-print">
+              {vale && vale.status !== 'consolidado' && (
+                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => consolidarMut.mutate({ folhaLancamentoId: vale.id })}
+                  disabled={consolidarMut.isPending}>
+                  <Lock className="h-4 w-4 mr-1" />
+                  {consolidarMut.isPending ? "Consolidando..." : "Consolidar Vale"}
+                </Button>
+              )}
+              {vale && vale.status === 'consolidado' && isAdmin && (
+                <Button size="sm" variant="outline" className="border-amber-400 text-amber-700 hover:bg-amber-50"
+                  onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: vale.id })}
+                  disabled={desconsolidarMut.isPending}>
+                  <Unlock className="h-4 w-4 mr-1" />
+                  {desconsolidarMut.isPending ? "Abrindo..." : "Desconsolidar"}
+                </Button>
+              )}
+              <PrintActions title={`Cálculo Vale - ${formatMesAno(mesAno)}`} />
+            </div>
           </div>
 
           {/* RESUMO CARDS */}
