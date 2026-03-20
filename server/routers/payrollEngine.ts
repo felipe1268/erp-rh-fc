@@ -2639,6 +2639,71 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         temDivergencia: cltSemFolha.length > 0 || pjSemFolha.length > 0,
       };
     }),
+
+  // ============================================================
+  // CONSOLIDAR / DESCONSOLIDAR VALE INTERNO (cálculo payroll_advances)
+  // Sem verificações de PDF contábil — é o fluxo interno de adiantamento.
+  // ============================================================
+  consolidarVale: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
+      const quem = ctx.user?.name || "Sistema";
+
+      // Atualiza payroll_periods
+      await db.execute(sql`
+        UPDATE payroll_periods
+        SET status = 'vale_consolidado',
+            "valeConsolidadoEm" = ${agora},
+            "valeConsolidadoPor" = ${quem}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+
+      // Se existir folhaLancamento tipo 'vale', consolida também
+      await db.execute(sql`
+        UPDATE folha_lancamentos
+        SET status = 'consolidado',
+            "consolidadoPor" = ${quem},
+            "consolidadoEm" = ${agora}
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND "tipoLancamento" = 'vale'
+          AND status != 'consolidado'
+      `);
+
+      return { success: true };
+    }),
+
+  desconsolidarVale: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // Reverte payroll_periods para vale_gerado
+      await db.execute(sql`
+        UPDATE payroll_periods
+        SET status = 'vale_gerado',
+            "valeConsolidadoEm" = NULL,
+            "valeConsolidadoPor" = NULL
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+          AND status = 'vale_consolidado'
+      `);
+
+      // Reverte folhaLancamento se existir
+      await db.execute(sql`
+        UPDATE folha_lancamentos
+        SET status = 'importado',
+            "consolidadoPor" = NULL,
+            "consolidadoEm" = NULL
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND "tipoLancamento" = 'vale'
+          AND status = 'consolidado'
+      `);
+
+      return { success: true };
+    }),
 });
 // ============================================================
 // HELPER FUNCTIONS

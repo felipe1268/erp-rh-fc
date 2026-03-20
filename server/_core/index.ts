@@ -203,6 +203,17 @@ async function startServer() {
         console.log("[ColFix] he_periods + he_period_employees Rev.641 OK");
       } catch (e: any) { console.warn("[ColFix] he_periods:", e?.message ?? e); }
     });
+    // Rev.642: colunas valeConsolidadoEm + valeConsolidadoPor em payroll_periods
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoEm" VARCHAR(32)`);
+        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoPor" VARCHAR(200)`);
+        console.log("[ColFix] payroll_periods valeConsolidado cols Rev.642 OK");
+      } catch (e: any) { console.warn("[ColFix] payroll_periods valeConsolidado:", e?.message ?? e); }
+    });
     // Rev.590: criar tabelas do módulo Medição de Contratos (se não existirem)
     import("../db").then(async ({ getDb }) => {
       try {

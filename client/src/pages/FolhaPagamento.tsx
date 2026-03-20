@@ -329,6 +329,15 @@ export default function FolhaPagamento() {
   const desconsolidarMut = trpc.folha.desconsolidarLancamento.useMutation({
     onSuccess: () => { toast.success("Lançamento desconsolidado!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); },
   });
+  // Consolidar/Desconsolidar VALE INTERNO (via payrollEngine — sem checagens de PDF contábil)
+  const consolidarValeMut = trpc.payrollEngine.consolidarVale.useMutation({
+    onSuccess: () => { toast.success("Vale consolidado e travado!"); payrollPeriod.refetch(); statusMes.refetch(); lancamentos.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const desconsolidarValeMut = trpc.payrollEngine.desconsolidarVale.useMutation({
+    onSuccess: () => { toast.success("Vale desconsolidado — pode ser recalculado."); payrollPeriod.refetch(); statusMes.refetch(); lancamentos.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const excluirMut = trpc.folha.excluirLancamento.useMutation({
     onSuccess: () => { toast.success("Lançamento excluído!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); setViewMode("resumo"); },
   });
@@ -1461,7 +1470,7 @@ export default function FolhaPagamento() {
                 <h1 className="text-2xl font-bold tracking-tight">Cálculo Interno — Vale / Adiantamento</h1>
                 <p className="text-muted-foreground text-sm flex items-center gap-2">
                   {formatMesAno(mesAno)} • {valeResult.totalFuncionarios} funcionários • {valeResult.percentual}% do salário
-                  {vale?.status === 'consolidado' && (
+                  {(payrollPeriod.data as any)?.status === 'vale_consolidado' && (
                     <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-[11px] font-semibold px-2 py-0.5 rounded-full">
                       <Lock className="h-3 w-3" /> Consolidado
                     </span>
@@ -1470,20 +1479,20 @@ export default function FolhaPagamento() {
               </div>
             </div>
             <div className="flex items-center gap-2 no-print">
-              {vale && vale.status !== 'consolidado' && (
+              {(payrollPeriod.data as any)?.status !== 'vale_consolidado' && (
                 <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={() => consolidarMut.mutate({ folhaLancamentoId: vale.id })}
-                  disabled={consolidarMut.isPending}>
+                  onClick={() => consolidarValeMut.mutate({ companyId, mesReferencia: mesAno })}
+                  disabled={consolidarValeMut.isPending}>
                   <Lock className="h-4 w-4 mr-1" />
-                  {consolidarMut.isPending ? "Consolidando..." : "Consolidar Vale"}
+                  {consolidarValeMut.isPending ? "Consolidando..." : "Consolidar Vale"}
                 </Button>
               )}
-              {vale && vale.status === 'consolidado' && isAdmin && (
+              {(payrollPeriod.data as any)?.status === 'vale_consolidado' && (
                 <Button size="sm" variant="outline" className="border-amber-400 text-amber-700 hover:bg-amber-50"
-                  onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: vale.id })}
-                  disabled={desconsolidarMut.isPending}>
+                  onClick={() => desconsolidarValeMut.mutate({ companyId, mesReferencia: mesAno })}
+                  disabled={desconsolidarValeMut.isPending}>
                   <Unlock className="h-4 w-4 mr-1" />
-                  {desconsolidarMut.isPending ? "Abrindo..." : "Desconsolidar"}
+                  {desconsolidarValeMut.isPending ? "Abrindo..." : "Desconsolidar"}
                 </Button>
               )}
               <PrintActions title={`Cálculo Vale - ${formatMesAno(mesAno)}`} />

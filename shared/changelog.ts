@@ -3976,6 +3976,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 642,
+    titulo: "Consolidar/Desconsolidar Vale — botão direto na tela de Cálculo do Vale",
+    descricao: "Corrigido bug onde o botão 'Consolidar Vale' não fazia nada: o problema era que os diálogos de confirmação estavam fora da árvore de renderização da view calculo_vale (early return). Solução: novos endpoints payrollEngine.consolidarVale e desconsolidarVale que atualizam diretamente payroll_periods.status para 'vale_consolidado' sem as verificações de PDF contábil (essas são para o fluxo de importação da contabilidade, não para o cálculo interno). Novas mutations consolidarValeMut e desconsolidarValeMut no frontend. ColFix: colunas valeConsolidadoEm + valeConsolidadoPor adicionadas a payroll_periods. Badge 'Consolidado' aparece no subtítulo. Desconsolidar disponível para todos os usuários (o vale interno não requer role admin).",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 641,
     titulo: "Módulo Hora Extra separado do Vale — novo fluxo com período configurável",
     descricao: "HE agora é um módulo independente do vale. Criadas tabelas he_periods (cabeçalho de período) e he_period_employees (por funcionário). Router horasExtras com calcularHE (detecção de sobreposição via overlap check), aprovar, cancelar e marcarPago. gerarVale passa a calcular apenas o adiantamento (% do salário bruto) zerando valorHorasExtras. Frontend: nova view 'he_modulo' em FolhaPagamento.tsx com seletor de datas, botão Calcular HE, listagem de períodos com status badge, detalhe por funcionário com link para fechamento-ponto, ações Aprovar/Cancelar. Card 'Hora Extra' roxo adicionado ao grid da view resumo. Grid expandido para 4 colunas.",
