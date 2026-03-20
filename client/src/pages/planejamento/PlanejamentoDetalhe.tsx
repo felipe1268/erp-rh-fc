@@ -112,7 +112,6 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "curva-s",              label: "Curva S",            Icon: TrendingUp },
   { id: "avanco",               label: "Avanço Semanal",     Icon: Activity },
   { id: "caminho-critico",      label: "Caminho Crítico",    Icon: AlertOctagon },
-  { id: "compras",              label: "Cronograma de Compras", Icon: ShoppingCart },
   { id: "prev-medicao",         label: "Prev. Medição",      Icon: ClipboardList },
   { id: "prog-semanal",         label: "Prog. Semanal",      Icon: CalendarClock },
   { id: "diagrama-rede",        label: "Diagrama de Rede",   Icon: Network },

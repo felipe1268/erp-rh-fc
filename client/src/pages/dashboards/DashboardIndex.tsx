@@ -57,18 +57,6 @@ const dashboards = [
     stats: "Custos & Encargos",
   },
   {
-    path: "/dashboards/horas-extras",
-    title: "Horas Extras",
-    desc: "Ranking por pessoa, obra e setor, custo mensal, % sobre folha e evolução anual.",
-    icon: Timer,
-    color: "#F59E0B",
-    bgLight: "bg-amber-50",
-    textColor: "text-amber-600",
-    borderColor: "border-amber-200",
-    hoverBg: "hover:bg-amber-50/80",
-    stats: "Custo & Produtividade",
-  },
-  {
     path: "/dashboards/epis",
     title: "EPIs",
     desc: "Estoque, entregas mensais, CAs vencidos, top EPIs e funcionários com mais entregas.",

@@ -129,7 +129,6 @@ const DEFAULT_MENU = [
     { label: "Funcionários", path: "/dashboards/funcionarios", visible: true },
     { label: "Cartão de Ponto", path: "/dashboards/cartao-ponto", visible: true },
     { label: "Folha de Pagamento", path: "/dashboards/folha-pagamento", visible: true },
-    { label: "Horas Extras", path: "/dashboards/horas-extras", visible: true },
     { label: "Aviso Prévio", path: "/dashboards/aviso-previo", visible: true },
     { label: "Férias", path: "/dashboards/ferias", visible: true },
     { label: "Efetivo por Obra", path: "/dashboards/efetivo-obra", visible: true },

@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 611,
+    titulo: "Remoção do Cronograma de Compras (Planejamento) e módulo Horas Extras",
+    descricao: "Aba 'Cronograma de Compras' removida do módulo Planejamento (será repensada futuramente). Módulo 'Horas Extras' removido da navegação lateral, do painel de configuração de menu e do índice de dashboards.",
+    tipo: "melhoria",
+    modulos: "Planejamento, Dashboards",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 610,
     titulo: "Curva S Financeira: cruzamento real EAP × Orçamento (BCWS)",
     descricao: "A Curva S Financeira agora é calculada pelo cruzamento real da EAP do cronograma com os valores de venda (vendaTotal) do orçamento vinculado ao projeto — sem necessidade de digitar Valor do Contrato manualmente. Cada atividade folha (não grupo, não marco) recebe o vendaTotal do seu item EAP correspondente no orçamento e o distribui linearmente pelas semanas do período planejado, gerando a curva BCWS (Valor Planejado). A curva inclui três estados: (1) sem orçamento vinculado — mostra instrução para configurar; (2) divergência EAP bilateral — bloqueia a curva e lista os itens sem correspondência, separados por 'no cronograma sem orçamento' e 'no orçamento sem cronograma'; (3) EAP consistente — renderiza o gráfico com Valor Planejado (azul), Valor Realizado BCWP (verde, avanço físico × total orçamento), Faturado Real (roxo, medições de contrato) e Tendência. Marcos (isMarco=true) e grupos (isGrupo=true) são excluídos da verificação de consistência.",
