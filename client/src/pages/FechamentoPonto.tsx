@@ -19,7 +19,7 @@ import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
-  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText, Copy, RefreshCw
+  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText, Copy
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -593,18 +593,6 @@ export default function FechamentoPonto() {
     },
     onError: (err) => toast.error(err.message),
   });
-  const correcaoRetroativaMut = trpc.fechamentoPonto.aplicarCorrecaoRetroativa.useMutation({
-    onSuccess: (data) => {
-      stats.refetch(); summary.refetch(); inconsistencies.refetch();
-      if (selectedEmployeeId) employeeDetail.refetch();
-      const partes = [];
-      if (data.corrigidasFerias > 0) partes.push(`${data.corrigidasFerias} dia(s) de férias corrigido(s)`);
-      if (data.corrigidasAviso > 0) partes.push(`${data.corrigidasAviso} registro(s) de aviso prévio recalculado(s)`);
-      if (data.total === 0) toast.info("Nenhum registro precisava de correção.");
-      else toast.success("Correção aplicada: " + partes.join(" e ") + ".");
-    },
-    onError: (err) => toast.error("Erro na correção: " + err.message),
-  });
   const desconsolidarMut = trpc.fechamentoPonto.desconsolidarMes.useMutation({
     onSuccess: () => {
       setShowDesconsolidarDialog(false);
@@ -1032,20 +1020,6 @@ export default function FechamentoPonto() {
             </Button>
           )}
 
-          {isAdmin && !isConsolidado && (stats.data?.totalRegistros || 0) > 0 && (
-            <Button
-              variant="outline"
-              className="text-blue-700 border-blue-300 hover:bg-blue-50"
-              disabled={correcaoRetroativaMut.isPending}
-              onClick={() => correcaoRetroativaMut.mutate({ companyId })}
-              title="Corrige faltas e atrasos de funcionários em férias ou aviso prévio sem precisar re-importar o DIXI"
-            >
-              {correcaoRetroativaMut.isPending
-                ? <><span className="animate-spin mr-2">⟳</span> Corrigindo...</>
-                : <><RefreshCw className="h-4 w-4 mr-2" /> Corrigir Férias / Aviso Prévio</>
-              }
-            </Button>
-          )}
 
           {/* Botão Imprimir / PDF */}
           {(stats.data?.totalRegistros || 0) > 0 && (

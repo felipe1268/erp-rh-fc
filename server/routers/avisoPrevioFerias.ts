@@ -6,6 +6,7 @@ import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm"
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
+import { corrigirPontoFuncionario } from "../utils/pontoCorrecaoAuto";
 
 // ============================================================
 // CÁLCULOS CLT - RESCISÃO TRABALHISTA
@@ -1050,6 +1051,8 @@ export const avisoPrevioFeriasRouter = router({
           criadoPorUserId: ctx.user.id,
         });
         
+        // Corrige automaticamente registros de ponto já lançados no período
+        corrigirPontoFuncionario(input.companyId, input.employeeId).catch(() => {});
         return { success: true, id: result[0].id, diasAviso, dataFim, previsao };
       }),
 
@@ -1116,6 +1119,13 @@ export const avisoPrevioFeriasRouter = router({
         }
 
         await db.update(terminationNotices).set(updateData).where(eq(terminationNotices.id, id));
+
+        // Corrige ponto automaticamente se redução de jornada ou datas mudaram
+        if (input.reducaoJornada || input.dataInicio || recalcular) {
+          const [noticeFetch] = await db.select({ companyId: terminationNotices.companyId, employeeId: terminationNotices.employeeId })
+            .from(terminationNotices).where(eq(terminationNotices.id, id));
+          if (noticeFetch) corrigirPontoFuncionario(noticeFetch.companyId, noticeFetch.employeeId).catch(() => {});
+        }
         return { success: true };
       }),
 
@@ -1854,7 +1864,11 @@ export const avisoPrevioFeriasRouter = router({
           aprovadoPorUserId: ctx.user.id,
           observacoes: input.observacoes || null,
         });
-        
+
+        // Corrige ponto automaticamente se já há período de gozo definido
+        if (input.dataInicio) {
+          corrigirPontoFuncionario(input.companyId, input.employeeId).catch(() => {});
+        }
         return { success: true };
       }),
 
@@ -1880,30 +1894,35 @@ export const avisoPrevioFeriasRouter = router({
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
         await db.update(vacationPeriods).set(updateData).where(eq(vacationPeriods.id, id));
 
+        // Busca companyId e employeeId para sincronização de status e correção de ponto
+        const [periodo] = await db.select({ companyId: vacationPeriods.companyId, employeeId: vacationPeriods.employeeId })
+          .from(vacationPeriods).where(eq(vacationPeriods.id, id));
+
         // Sincronizar status do colaborador com status de férias
-        if (input.status) {
-          const [periodo] = await db.select({ employeeId: vacationPeriods.employeeId })
-            .from(vacationPeriods).where(eq(vacationPeriods.id, id));
-          if (periodo) {
-            if (input.status === 'em_gozo') {
-              // Colaborador entra em férias
-              await db.update(employees).set({ status: 'Ferias' } as any)
-                .where(eq(employees.id, periodo.employeeId));
-            } else if (input.status === 'concluida') {
-              // Férias concluídas: verificar se não tem outra férias em_gozo antes de reverter
-              const outrasEmGozo = await db.select({ id: vacationPeriods.id })
-                .from(vacationPeriods)
-                .where(and(
-                  eq(vacationPeriods.employeeId, periodo.employeeId),
-                  eq(vacationPeriods.status, 'em_gozo'),
-                  isNull(vacationPeriods.deletedAt),
-                ));
-              if (outrasEmGozo.length === 0) {
-                await db.update(employees).set({ status: 'Ativo' } as any)
-                  .where(and(eq(employees.id, periodo.employeeId), eq(employees.status, 'Ferias')));
-              }
+        if (input.status && periodo) {
+          if (input.status === 'em_gozo') {
+            // Colaborador entra em férias
+            await db.update(employees).set({ status: 'Ferias' } as any)
+              .where(eq(employees.id, periodo.employeeId));
+          } else if (input.status === 'concluida') {
+            // Férias concluídas: verificar se não tem outra férias em_gozo antes de reverter
+            const outrasEmGozo = await db.select({ id: vacationPeriods.id })
+              .from(vacationPeriods)
+              .where(and(
+                eq(vacationPeriods.employeeId, periodo.employeeId),
+                eq(vacationPeriods.status, 'em_gozo'),
+                isNull(vacationPeriods.deletedAt),
+              ));
+            if (outrasEmGozo.length === 0) {
+              await db.update(employees).set({ status: 'Ativo' } as any)
+                .where(and(eq(employees.id, periodo.employeeId), eq(employees.status, 'Ferias')));
             }
           }
+        }
+
+        // Corrige ponto automaticamente se datas ou status mudaram
+        if (periodo && (input.dataInicio || input.dataFim || input.periodo2Inicio || input.periodo3Inicio || input.status)) {
+          corrigirPontoFuncionario(periodo.companyId, periodo.employeeId).catch(() => {});
         }
 
         return { success: true };
@@ -2146,6 +2165,9 @@ export const avisoPrevioFeriasRouter = router({
           aprovadoPor: ctx.user.name ?? 'Sistema',
           aprovadoPorUserId: ctx.user.id,
         } as any).where(eq(vacationPeriods.id, input.id));
+
+        // Corrige ponto automaticamente com as novas datas de gozo
+        corrigirPontoFuncionario(periodo.companyId, periodo.employeeId).catch(() => {});
 
         return { success: true, foiAlterada: !!foiAlterada };
       }),
