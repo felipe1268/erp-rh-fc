@@ -172,11 +172,9 @@ async function computeHEFromTimeRecords(
   mesReferencia: string,
   cargaHorariaDiaria: number
 ): Promise<{ heUtilMap: Map<number, number>; heFimMap: Map<number, number>; heMap: Map<number, number> }> {
-  const FIM_SEMANA = new Set(["sabado", "compensado", "feriado", "domingo"]);
-  const AUSENCIA = new Set(["falta", "ferias", "atestado", "licenca_maternidade", "licenca_paternidade", "afastamento"]);
-
+  // time_records does NOT have tipoDia — derive day type from date's weekday
   const trRaws = ((await db.execute(sql`
-    SELECT tr."employeeId", tr.data, tr."horasTrabalhadas", tr."tipoDia", e."jornadaTrabalho"
+    SELECT tr."employeeId", tr.data, tr."horasTrabalhadas", e."jornadaTrabalho"
     FROM time_records tr
     JOIN employees e ON e.id = tr."employeeId"
     WHERE tr."companyId" = ${companyId}
@@ -191,16 +189,19 @@ async function computeHEFromTimeRecords(
   const heMap = new Map<number, number>();
 
   for (const r of trRaws) {
-    if (AUSENCIA.has(String(r.tipoDia))) continue;
     const empId = Number(r.employeeId);
     const trabMins = parseTime(String(r.horasTrabalhadas)) || 0;
     if (trabMins <= 0) continue;
     const dateStr = r.data instanceof Date ? r.data.toISOString().slice(0, 10) : String(r.data).slice(0, 10);
+    // dow: 0=Sun, 1=Mon … 5=Fri, 6=Sat
+    const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
+    // Sundays: not expected to work — skip
+    if (dow === 0) continue;
     const expectedMins = getExpectedMins(r.jornadaTrabalho, dateStr, cargaHorariaDiaria);
     const heMins = Math.max(0, trabMins - expectedMins);
     if (heMins <= 0) continue;
-
-    if (FIM_SEMANA.has(String(r.tipoDia))) {
+    // Saturdays use the "fim de semana" (100%) rate; weekdays use the "util" (50%) rate
+    if (dow === 6) {
       heFimMap.set(empId, (heFimMap.get(empId) || 0) + heMins);
     } else {
       heUtilMap.set(empId, (heUtilMap.get(empId) || 0) + heMins);

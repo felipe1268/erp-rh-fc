@@ -3913,6 +3913,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 638,
+    titulo: "Bug fix: tipoDia não existe em time_records — derivar do dia da semana",
+    descricao: "computeHEFromTimeRecords e computeHeForRecord usavam tr.tipoDia que não existe na tabela time_records (existe apenas em timecard_daily). O erro 'Failed query: SELECT ... tipoDia' era gerado porque a coluna não existe no schema. Fix: removida a seleção de tipoDia; tipo do dia agora é derivado do dia da semana da data (dow=6 → sábado/100%, dow=1-5 → útil/50%, dow=0 → domingo/pula).",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento, Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 637,
     titulo: "HE no vale e pagamento: cálculo direto de time_records",
     descricao: "gerarVale e simularPagamento agora calculam HE diretamente de time_records, sem depender da tabela timecard_daily (que só é preenchida pelo 'Processar Ponto'). Nova função computeHEFromTimeRecords: faz JOIN com employees para obter jornadaTrabalho, calcula expected per-day via getExpectedMins, agrega por tipoDia (util/sab/compensado/feriado). Resultado: a coluna HE (R$) no cálculo do vale deixa de mostrar R$ 0,00 para todos os funcionários.",

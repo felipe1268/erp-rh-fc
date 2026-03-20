@@ -1358,15 +1358,19 @@ export const fechamentoPontoRouter = router({
       }).from(employees).where(eq(employees.id, input.employeeId)).limit(1);
 
       // Compute HE on-the-fly for each record (no need to run "Processar Ponto")
+      // Note: time_records does NOT have tipoDia — use day-of-week from date instead.
       const criteria = await getCriteriaMap(input.companyId);
       const empJornada = emp[0]?.jornadaTrabalho ?? null;
-      const AUSENCIA_TYPES = new Set(["falta", "ferias", "atestado", "licenca_maternidade", "licenca_paternidade", "afastamento"]);
 
       function computeHeForRecord(rec: any): string {
-        if (AUSENCIA_TYPES.has(rec.tipoDia)) return "0:00";
         const trabMins = hhmmToMins(rec.horasTrabalhadas);
         if (trabMins <= 0) return "0:00";
-        const expected = getExpectedMinsFromJornada(empJornada, rec.data)
+        // Skip Sundays (dow=0)
+        const dateStr = rec.data instanceof Date ? rec.data.toISOString().slice(0, 10) : String(rec.data || "").slice(0, 10);
+        if (!dateStr) return "0:00";
+        const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
+        if (dow === 0) return "0:00";
+        const expected = getExpectedMinsFromJornada(empJornada, dateStr)
           ?? (criteria.jornadaHorasDiarias * 60);
         const he = Math.max(0, trabMins - expected);
         return minutesToHHMM(he);
