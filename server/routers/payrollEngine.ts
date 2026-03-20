@@ -989,35 +989,34 @@ export const payrollEngineRouter = router({
       const primeiroDiaMes = `${year}-${String(month).padStart(2, '0')}-01`;
       const dia15Mes = `${year}-${String(month).padStart(2, '0')}-15`;
       const faltasRows = ((await db.execute(sql`
-        SELECT employeeId, SUM(isFalta) as totalFaltas
+        SELECT "employeeId", SUM("isFalta") as "totalFaltas"
         FROM timecard_daily 
-        WHERE companyId = ${input.companyId} 
-        AND mesCompetencia = ${input.mesReferencia}
-        AND data >= ${primeiroDiaMes}
-        AND data <= ${dia15Mes}
-        AND statusDia = 'registrado'
-        GROUP BY employeeId
+        WHERE "companyId" = ${input.companyId} 
+        AND "mesCompetencia" = ${input.mesReferencia}
+        AND data BETWEEN ${primeiroDiaMes}::date AND ${dia15Mes}::date
+        AND "statusDia" = 'registrado'
+        GROUP BY "employeeId"
       `)) as any).rows || [];
       const faltasMap = new Map<number, number>();
       for (const r of (faltasRows || [])) {
-        faltasMap.set(r.employeeId, r.totalFaltas || 0);
+        faltasMap.set(Number(r.employeeId), Number(r.totalFaltas) || 0);
       }
 
       // Get overtime (HE) values from time_records for the ponto period
       const heRows = ((await db.execute(sql`
-        SELECT employeeId, 
-          SUM(CASE WHEN horasExtras IS NOT NULL AND horasExtras != '' AND horasExtras != '0:00' 
-            THEN CAST(SUBSTRING_INDEX(horasExtras, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(horasExtras, ':', -1) AS UNSIGNED) 
-            ELSE 0 END) as totalMinutosHE
+        SELECT "employeeId", 
+          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00' 
+            THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
+            ELSE 0 END) as "totalMinutosHE"
         FROM timecard_daily 
-        WHERE companyId = ${input.companyId} 
-        AND mesCompetencia = ${input.mesReferencia}
-        AND statusDia = 'registrado'
-        GROUP BY employeeId
+        WHERE "companyId" = ${input.companyId} 
+        AND "mesCompetencia" = ${input.mesReferencia}
+        AND "statusDia" = 'registrado'
+        GROUP BY "employeeId"
       `)) as any).rows || [];
       const heMap = new Map<number, number>();
       for (const r of (heRows || [])) {
-        heMap.set(r.employeeId, r.totalMinutosHE || 0);
+        heMap.set(Number(r.employeeId), Number(r.totalMinutosHE) || 0);
       }
 
       // Clear existing advances for this month
@@ -1270,35 +1269,35 @@ export const payrollEngineRouter = router({
 
       // Get faltas from timecard_daily for the ponto period (registrado only)
       const faltasRows2 = ((await db.execute(sql`
-        SELECT employeeId, 
-          SUM(isFalta) as totalFaltas,
-          SUM(isAtraso) as totalAtrasos,
-          SUM(minutosAtraso) as totalMinutosAtraso
+        SELECT "employeeId", 
+          SUM("isFalta") as "totalFaltas",
+          SUM("isAtraso") as "totalAtrasos",
+          SUM("minutosAtraso") as "totalMinutosAtraso"
         FROM timecard_daily 
-        WHERE companyId = ${input.companyId} 
-        AND mesCompetencia = ${input.mesReferencia}
-        AND statusDia = 'registrado'
-        GROUP BY employeeId
+        WHERE "companyId" = ${input.companyId} 
+        AND "mesCompetencia" = ${input.mesReferencia}
+        AND "statusDia" = 'registrado'
+        GROUP BY "employeeId"
       `)) as any).rows || [];
       const faltasMap = new Map<number, any>();
       for (const r of (faltasRows2 || [])) {
-        faltasMap.set(r.employeeId, r);
+        faltasMap.set(Number(r.employeeId), r);
       }
 
       // Get HE values
       const heRows2 = ((await db.execute(sql`
-        SELECT employeeId, 
-          SUM(CASE WHEN horasExtras IS NOT NULL AND horasExtras != '' AND horasExtras != '0:00' 
-            THEN CAST(SUBSTRING_INDEX(horasExtras, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(horasExtras, ':', -1) AS UNSIGNED) 
-            ELSE 0 END) as totalMinutosHE
+        SELECT "employeeId", 
+          SUM(CASE WHEN "horasExtras" IS NOT NULL AND "horasExtras" != '' AND "horasExtras" != '0:00' 
+            THEN SPLIT_PART("horasExtras", ':', 1)::integer * 60 + SPLIT_PART("horasExtras", ':', 2)::integer
+            ELSE 0 END) as "totalMinutosHE"
         FROM timecard_daily 
-        WHERE companyId = ${input.companyId} 
-        AND mesCompetencia = ${input.mesReferencia}
-        GROUP BY employeeId
+        WHERE "companyId" = ${input.companyId} 
+        AND "mesCompetencia" = ${input.mesReferencia}
+        GROUP BY "employeeId"
       `)) as any).rows || [];
       const heMap = new Map<number, number>();
       for (const r of (heRows2 || [])) {
-        heMap.set(r.employeeId, r.totalMinutosHE || 0);
+        heMap.set(Number(r.employeeId), Number(r.totalMinutosHE) || 0);
       }
 
       // Clear existing payments for this month
