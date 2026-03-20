@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 633,
+    titulo: "Lançamento manual de ponto: tabela sem barras de rolagem",
+    descricao: "Removidas as barras de rolagem horizontal e vertical da tabela de dias lançados. A tabela agora cresce verticalmente conforme a quantidade de dias, sem limite de altura. Os inputs de horário foram compactados de 96px para 70px e o espaçamento das colunas foi reduzido para que todas as colunas (Entrada, Saída Int., Retorno, Saída, Entr. HE, Saída HE, Falta, Feriado) caibam na tela sem rolagem horizontal.",
+    tipo: "melhoria",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 632,
     titulo: "Lançamento manual de ponto: horários editáveis em sábado e domingo",
     descricao: "Removida a opacidade/bloqueio visual nos campos de horário de fins de semana. Sábados e domingos agora têm todos os campos (Entrada, Saída Int., Retorno, Saída, Entr. HE, Saída HE) completamente editáveis, permitindo lançar horas trabalhadas em dias não úteis normalmente.",

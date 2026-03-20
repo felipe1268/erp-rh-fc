@@ -3636,21 +3636,21 @@ export default function FechamentoPonto() {
                   </div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
-                    <div className="overflow-x-auto max-h-[340px] overflow-y-auto">
+                    <div>
                       <table className="w-full text-sm">
                         <thead className="bg-muted/40 sticky top-0 z-10">
                           <tr>
-                            <th className="px-2 py-1.5 text-left font-medium text-xs w-36">Data</th>
-                            <th className="px-2 py-1.5 text-center font-medium text-xs w-10 text-muted-foreground">Dia</th>
-                            <th className="px-2 py-1.5 text-center font-medium text-xs">Entrada</th>
-                            <th className="px-2 py-1.5 text-center font-medium text-xs">Saída Int.</th>
-                            <th className="px-2 py-1.5 text-center font-medium text-xs">Retorno</th>
-                            <th className="px-2 py-1.5 text-center font-medium text-xs">Saída</th>
-                            <th className="px-2 py-1.5 text-center font-medium text-xs text-blue-600">Entr. HE</th>
-                            <th className="px-2 py-1.5 text-center font-medium text-xs text-blue-600">Saída HE</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs w-14 text-red-600">Falta</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs w-16 text-orange-600">Feriado</th>
-                            <th className="px-1 py-1.5 w-7"></th>
+                            <th className="px-1 py-1.5 text-left font-medium text-xs w-32">Data</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs w-10 text-muted-foreground">Dia</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs">Entrada</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs">Saída Int.</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs">Retorno</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs">Saída</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs text-blue-600">Entr. HE</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs text-blue-600">Saída HE</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs w-12 text-red-600">Falta</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs w-12 text-orange-600">Feriado</th>
+                            <th className="px-1 py-1.5 w-6"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3690,7 +3690,7 @@ export default function FechamentoPonto() {
                               : idx % 2 === 0 ? "" : "bg-muted/10";
                             return (
                               <tr key={day.id} className={`border-t ${rowBg}`}>
-                                <td className="px-2 py-1">
+                                <td className="px-1 py-1">
                                   <Input type="date" value={day.data} className="h-7 text-xs w-full" onChange={e => {
                                     const newDate = e.target.value;
                                     const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
@@ -3714,12 +3714,12 @@ export default function FechamentoPonto() {
                                     {isOffSchedule && <span className="text-[9px] text-amber-700 font-bold leading-none">DIFER.</span>}
                                   </div>
                                 </td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada1} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida1} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada2} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida2} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada3 || ""} className={`h-7 text-xs w-24 font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida3 || ""} className={`h-7 text-xs w-24 font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada1} className={`h-7 text-xs w-[70px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida1} className={`h-7 text-xs w-[70px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada2} className={`h-7 text-xs w-[70px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida2} className={`h-7 text-xs w-[70px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada3 || ""} className={`h-7 text-xs w-[70px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida3 || ""} className={`h-7 text-xs w-[70px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: e.target.value } : d))} /></td>
                                 <td className="px-1 py-1 text-center">
                                   <button
                                     type="button"
