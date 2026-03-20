@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 627,
+    titulo: "Lançamento manual de ponto: cor azul para horas extras",
+    descricao: "Adicionada detecção de horas extras no lançamento manual de ponto. Quando o total de minutos trabalhados supera o total previsto na jornada cadastrada do colaborador, a linha fica azul (bg-blue-50) com badge 'H.E.' em azul, diferenciando visualmente de dias com horários apenas diferentes (âmbar). A detecção calcula os minutos reais (entrada1→saida1 + entrada2→saida2) vs. minutos da jornada esperada.",
+    tipo: "melhoria",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 626,
     titulo: "Lançamento manual de ponto: código de cores por conformidade com jornada",
     descricao: "Cada linha da tabela de lançamento manual agora tem cor de fundo baseada na conformidade com a jornada cadastrada do colaborador: verde (bg-green-50) com badge '✓ OK' quando os 4 horários batem exatamente com a jornada; âmbar (bg-amber-50) com badge 'DIFER.' quando os horários diferem da jornada (ex: saiu mais cedo, chegou mais tarde); vermelho (bg-red-100) com badge 'FALTA' para dias úteis sem horário; vermelho claro (bg-red-50) para fins de semana e feriados. O nome do dia de semana também muda de cor conforme o status.",

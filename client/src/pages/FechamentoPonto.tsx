@@ -3669,10 +3669,11 @@ export default function FechamentoPonto() {
                                 </td>
                                 <td className="px-1 py-1 text-center">
                                   <div className="flex flex-col items-center gap-0.5">
-                                    <span className={`text-xs font-bold ${isRed || isFaltaMarcada ? "text-red-600" : isOnSchedule ? "text-green-700" : isOffSchedule ? "text-amber-700" : "text-muted-foreground"}`}>{dow}</span>
+                                    <span className={`text-xs font-bold ${isRed || isFaltaMarcada ? "text-red-600" : isOnSchedule ? "text-green-700" : isHorasExtras ? "text-blue-700" : isOffSchedule ? "text-amber-700" : "text-muted-foreground"}`}>{dow}</span>
                                     {isHoliday && !isWeekend && <span className="text-[9px] text-red-500 leading-none">feriado</span>}
                                     {isFaltaMarcada && <span className="text-[9px] text-red-700 font-bold leading-none">FALTA</span>}
                                     {isOnSchedule && <span className="text-[9px] text-green-700 font-bold leading-none">✓ OK</span>}
+                                    {isHorasExtras && <span className="text-[9px] text-blue-700 font-bold leading-none">H.E.</span>}
                                     {isOffSchedule && <span className="text-[9px] text-amber-700 font-bold leading-none">DIFER.</span>}
                                   </div>
                                 </td>
