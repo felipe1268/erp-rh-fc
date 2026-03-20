@@ -3913,6 +3913,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 640,
+    titulo: "Vale: card 'Com Hora Extra' + cards clicáveis como filtros",
+    descricao: "Adicionado card 'Com Hora Extra' na tela de Cálculo Vale/Adiantamento mostrando quantos funcionários têm HE e o total em R$. Todos os cards clicáveis agora funcionam como filtros: clicar em 'Todos', 'Aprovados', 'Com Alerta' ou 'Com Hora Extra' filtra instantaneamente as duas tabelas abaixo. O filtro de card combina com o campo de busca por nome. Clicar no card ativo desativa o filtro (volta para 'todos').",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 639,
     titulo: "Vale: busca por nome + link para cartão de ponto",
     descricao: "Adicionado campo de busca na tela de Cálculo Vale/Adiantamento para filtrar funcionários por nome. Nomes nas tabelas de aprovados e com alerta tornados clicáveis: ao clicar, navega direto para o Fechamento de Ponto com o funcionário e mês pré-selecionados (?funcionario=ID&mes=YYYY-MM), permitindo verificar lançamentos e aferir o cartão sem precisar navegar manualmente.",

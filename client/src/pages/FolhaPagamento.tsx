@@ -79,6 +79,7 @@ export default function FolhaPagamento() {
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [valeSearch, setValeSearch] = useState("");
+  const [valeFilter, setValeFilter] = useState<"all" | "aprovados" | "alertas" | "he">("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterFuncao, setFilterFuncao] = useState<string>("all");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -1387,10 +1388,27 @@ export default function FolhaPagamento() {
 
   // ===== CÁLCULO VALE VIEW =====
   if (viewMode === "calculo_vale" && valeResult) {
-    const funcionariosComAlerta = valeResult.funcionarios?.filter((f: any) => f.temAlerta) || [];
-    const funcionariosSemAlerta = valeResult.funcionarios?.filter((f: any) => !f.temAlerta) || [];
+    const todosFunc = valeResult.funcionarios || [];
+    const funcionariosComAlerta = todosFunc.filter((f: any) => f.temAlerta);
+    const funcionariosSemAlerta = todosFunc.filter((f: any) => !f.temAlerta);
     const totalSemAlerta = funcionariosSemAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
     const totalComAlerta = funcionariosComAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
+    const comHE = todosFunc.filter((f: any) => (f.valorHE || 0) > 0);
+    const totalHE = comHE.reduce((s: number, f: any) => s + (f.valorHE || 0), 0);
+
+    const matchSearch = (f: any) => !valeSearch || f.nome?.toUpperCase().includes(valeSearch.toUpperCase());
+    const matchFilter = (f: any) => {
+      if (valeFilter === "aprovados") return !f.temAlerta;
+      if (valeFilter === "alertas") return !!f.temAlerta;
+      if (valeFilter === "he") return (f.valorHE || 0) > 0;
+      return true;
+    };
+    const rowVisible = (f: any) => matchSearch(f) && matchFilter(f);
+    const filteredComAlerta = funcionariosComAlerta.filter(rowVisible);
+    const filteredSemAlerta = funcionariosSemAlerta.filter(rowVisible);
+
+    const cardClass = (active: boolean) =>
+      `cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] ${active ? "ring-2 ring-primary ring-offset-1" : ""}`;
     
     return (
       <DashboardLayout>
@@ -1411,27 +1429,48 @@ export default function FolhaPagamento() {
           </div>
 
           {/* RESUMO CARDS */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-orange-700">{fmtNum(valeResult.totalFuncionarios)}</p>
-              <p className="text-xs text-muted-foreground">Funcionários</p>
-            </CardContent></Card>
-            <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-orange-700">{formatBRL(valeResult.totalVale)}</p>
-              <p className="text-xs text-muted-foreground">Total Vale (Geral)</p>
-            </CardContent></Card>
-            <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-green-700">{formatBRL(totalSemAlerta)}</p>
-              <p className="text-xs text-muted-foreground">Aprovados Automaticamente</p>
-            </CardContent></Card>
-            <Card className={funcionariosComAlerta.length > 0 ? "border-2 border-amber-400" : ""}><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-amber-600">{fmtNum(funcionariosComAlerta.length)}</p>
-              <p className="text-xs text-muted-foreground">Com Alerta (Decisão Pendente)</p>
-            </CardContent></Card>
-            <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-blue-700">{fmtNum(valeResult.diasUteis)}</p>
-              <p className="text-xs text-muted-foreground">Dias Úteis</p>
-            </CardContent></Card>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 no-print">
+            <Card className={cardClass(valeFilter === "all")} onClick={() => setValeFilter("all")}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-orange-700">{fmtNum(valeResult.totalFuncionarios)}</p>
+                <p className="text-xs text-muted-foreground">Todos os Funcionários</p>
+                {valeFilter === "all" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
+              </CardContent>
+            </Card>
+            <Card className={cardClass(false)}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-orange-700">{formatBRL(valeResult.totalVale)}</p>
+                <p className="text-xs text-muted-foreground">Total Vale (Geral)</p>
+              </CardContent>
+            </Card>
+            <Card className={cardClass(valeFilter === "aprovados")} onClick={() => setValeFilter(valeFilter === "aprovados" ? "all" : "aprovados")}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-green-700">{fmtNum(funcionariosSemAlerta.length)}</p>
+                <p className="text-xs text-muted-foreground">Aprovados Automaticamente</p>
+                {valeFilter === "aprovados" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
+              </CardContent>
+            </Card>
+            <Card className={`${cardClass(valeFilter === "alertas")} ${funcionariosComAlerta.length > 0 ? "border-2 border-amber-400" : ""}`} onClick={() => setValeFilter(valeFilter === "alertas" ? "all" : "alertas")}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-amber-600">{fmtNum(funcionariosComAlerta.length)}</p>
+                <p className="text-xs text-muted-foreground">Com Alerta (Decisão Pendente)</p>
+                {valeFilter === "alertas" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
+              </CardContent>
+            </Card>
+            <Card className={cardClass(valeFilter === "he")} onClick={() => setValeFilter(valeFilter === "he" ? "all" : "he")}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-purple-700">{fmtNum(comHE.length)}</p>
+                <p className="text-xs text-muted-foreground">Com Hora Extra</p>
+                <p className="text-[10px] text-purple-600 mt-0.5">{formatBRL(totalHE)}</p>
+                {valeFilter === "he" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
+              </CardContent>
+            </Card>
+            <Card className={cardClass(false)}>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-blue-700">{fmtNum(valeResult.diasUteis)}</p>
+                <p className="text-xs text-muted-foreground">Dias Úteis</p>
+              </CardContent>
+            </Card>
           </div>
 
           {/* ALERTAS - DECISÃO DO USUÁRIO */}
@@ -1477,7 +1516,7 @@ export default function FolhaPagamento() {
                       </tr>
                     </thead>
                     <tbody>
-                      {funcionariosComAlerta.filter((f: any) => !valeSearch || f.nome?.toUpperCase().includes(valeSearch.toUpperCase())).map((f: any, i: number) => (
+                      {filteredComAlerta.map((f: any, i: number) => (
                         <tr key={i} className="border-b border-amber-200 hover:bg-amber-100/50">
                           <td className="py-2 px-2 font-medium">
                             <button
@@ -1546,7 +1585,7 @@ export default function FolhaPagamento() {
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="font-semibold text-sm">Funcionários Aprovados ({funcionariosSemAlerta.filter((f: any) => !valeSearch || f.nome?.toUpperCase().includes(valeSearch.toUpperCase())).length})</span>
+                <span className="font-semibold text-sm">Funcionários Aprovados ({filteredSemAlerta.length})</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1561,7 +1600,7 @@ export default function FolhaPagamento() {
                     </tr>
                   </thead>
                   <tbody>
-                    {funcionariosSemAlerta.filter((f: any) => !valeSearch || f.nome?.toUpperCase().includes(valeSearch.toUpperCase())).map((f: any, i: number) => (
+                    {filteredSemAlerta.map((f: any, i: number) => (
                       <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-2 px-2 font-medium">
                           <button
