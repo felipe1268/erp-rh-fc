@@ -3796,6 +3796,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 622,
+    titulo: "Folha de Pagamento: correção massiva de SQL camelCase sem aspas (PostgreSQL)",
+    descricao: "Corrigidas todas as queries raw SQL do payrollEngine que usavam nomes de colunas camelCase sem aspas duplas — inválido no PostgreSQL (que converte identificadores não-quoted para lowercase). Procedures corrigidas: listPeriods, getPeriod, openPeriod, gerarVale, listarVales, decidirVale, simularPagamento, listarPagamentos, consolidarPagamento, travarCompetencia, resumoCompetencia, gerarContracheque e projeção financeira. Adicionalmente: CONCAT com SQL injection corrigido para usar parâmetro seguro em decidirVale.",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 621,
     titulo: "Corrigido bug 'Erro ao calcular vale' — SQL MySQL substituído por PostgreSQL",
     descricao: "Corrigidos dois bugs críticos na procedure gerarVale e simularPagamento do payrollEngine: (1) Query de faltas usava operador >= dentro do template sql do Drizzle/Neon que produzia 'data > = $3' (com espaço indevido) — substituído por BETWEEN ... AND ...; (2) Queries de horas extras usavam SUBSTRING_INDEX (função MySQL) e CAST ... AS UNSIGNED (sintaxe MySQL) que são inválidos no PostgreSQL/Neon — substituídos por SPLIT_PART e cast ::integer nativos do PostgreSQL; (3) Nomes de colunas camelCase agora entre aspas duplas para garantir compatibilidade com Neon; (4) Conversões Number() adicionadas nos .set() dos Maps para garantir tipos corretos.",
