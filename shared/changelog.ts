@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 632,
+    titulo: "Lançamento manual de ponto: horários editáveis em sábado e domingo",
+    descricao: "Removida a opacidade/bloqueio visual nos campos de horário de fins de semana. Sábados e domingos agora têm todos os campos (Entrada, Saída Int., Retorno, Saída, Entr. HE, Saída HE) completamente editáveis, permitindo lançar horas trabalhadas em dias não úteis normalmente.",
+    tipo: "melhoria",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 631,
     titulo: "Lançamento manual de ponto: colunas de Hora Extra (Entr. HE / Saída HE)",
     descricao: "Adicionadas duas colunas azuis por linha — 'Entr. HE' e 'Saída HE' — para registrar o período de hora extra após a jornada normal. Os campos são enviados ao backend como entrada3/saida3, que já eram suportados no cálculo de horas trabalhadas. Quando preenchidos, a linha exibe badge 'H.E.' azul e fundo azul automaticamente. Os botões Falta e Feriado também limpam os campos HE ao serem acionados.",
