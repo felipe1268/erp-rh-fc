@@ -57,7 +57,7 @@ export const homeDataRouter = router({
         .from(obraFuncionarios).where(and(companyFilter(obraFuncionarios.companyId, input), eq(obraFuncionarios.isActive, 1)));
       const homeEmpObraMap = new Map(homeAlocs.map(a => [a.employeeId, a.obraId]));
 
-      const aniversariantes = ativos
+      const aniversariantes = todosNaoDesligados
         .filter(e => {
           if (!e.dataNascimento) return false;
           const dn = toDateStr(e.dataNascimento);
@@ -74,6 +74,7 @@ export const homeDataRouter = router({
             id: e.id,
             nome: e.nomeCompleto,
             funcao: e.funcao,
+            status: e.status,
             obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null,
             dia,
             isHoje,
