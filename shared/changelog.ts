@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 613,
+    titulo: "Hotfix: correção de regressão crítica — Painel RH, Raio X e vínculos quebrados (Rev. 612)",
+    descricao: "Correção de regressão introduzida na Rev. 612: os 11 novos campos do módulo Aviso Prévio (fgtsReal, fgtsEditadoManualmente, fgtsEditadoEm, fgtsEditadoPor, descontosAcerto, descontosAcertoDesc, acrescimosAcerto, acrescimosAcertoDesc, novoEmpregoAtivo, novoEmpregoComunicadoEm, novoEmpregoCartaUrl) não estavam sendo criados no banco de dados de produção (Neon), fazendo com que todas as queries relacionadas ao módulo Aviso Prévio falhassem silenciosamente — resultado: Painel RH exibindo zeros, Raio X do funcionário não abrindo, vínculos/dados de funcionários sumiram. Correção: colunas adicionadas diretamente no Neon via ALTER TABLE e incluídas no bloco ColFix do startup para garantia futura.",
+    tipo: "bugfix",
+    modulos: "Aviso Prévio, Painel RH, Raio X",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 612,
     titulo: "Aviso Prévio: FGTS real editável, descontos/acréscimos de acerto e Novo Emprego (Súmula 276 TST)",
     descricao: "Três novas funcionalidades no módulo de Aviso Prévio: (1) FGTS Real editável — o RH pode informar o saldo real do FGTS conforme extrato CAIXA/eSocial; o sistema recalcula a Multa 40% sobre o valor real e registra quem editou, quando e o valor anterior (badge âmbar 'FGTS Real'). (2) Descontos e Acréscimos do Acerto — dois campos com valor + descrição para ajustar o total da rescisão (ex: dívida EPI, PLR, bônus). (3) Novo Emprego durante Aviso Prévio Trabalhado (Súmula 276 TST) — toggle que ativa o cenário legal onde o funcionário comprova novo emprego: Aviso Prévio Indenizado zerado, saldo de salário recalculado até a data da comunicação, prazo de pagamento = comunicação + 10 dias (Art. 477 §6º CLT), campo para link da carta/comprovante e badge 'Súmula 276 TST' no painel e na lista.",

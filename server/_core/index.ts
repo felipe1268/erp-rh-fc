@@ -115,6 +115,19 @@ async function startServer() {
         console.log("[ColFix] planejamento_atividades.disabled OK");
         await db.execute(sql`ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT`);
         console.log("[ColFix] epis.fotoUrl OK");
+        // Rev.612: novos campos Aviso Prévio
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsReal" VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoManualmente" SMALLINT DEFAULT 0`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoEm" TIMESTAMP WITHOUT TIME ZONE`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoPor" VARCHAR(255)`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "descontosAcerto" VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "descontosAcertoDesc" TEXT`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "acrescimosAcerto" VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "acrescimosAcertoDesc" TEXT`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoAtivo" SMALLINT DEFAULT 0`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoComunicadoEm" DATE`);
+        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoCartaUrl" TEXT`);
+        console.log("[ColFix] termination_notices Rev.612 OK");
         // Recuperar fotos já enviadas cujo fotoUrl não foi salvo no banco
         try {
           const fs = await import("fs");

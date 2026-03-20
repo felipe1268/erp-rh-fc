@@ -68,10 +68,15 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
 - `VITE_APP_ID` — OAuth App ID (optional)
 - `OWNER_OPEN_ID` — Owner user OpenID (optional)
 
-## Database
-- **Neon PostgreSQL** (production): `ep-young-water-ac67nuby.sa-east-1.aws.neon.tech`, db=`neondb`, project=`ERP INTEGRADO`
-- Neon uses pooler URL for app connections, direct URL for migrations
-- Priority: `NEON_DATABASE_URL` → `DATABASE_URL` (set in `server/_core/env.ts`)
+## Database — CRITICAL: Dois bancos diferentes
+- **Neon PostgreSQL** (produção FC Engenharia): `ep-young-water-ac67nuby.sa-east-1.aws.neon.tech`, db=`neondb`
+  - Conectado via `NEON_DATABASE_URL` — **ESTE É O BANCO DE PRODUÇÃO REAL**
+  - Toda query do app usa este banco (priority: `NEON_DATABASE_URL` > `DATABASE_URL` em `server/_core/env.ts`)
+  - **REGRA DE OURO #5**: Ao adicionar novas colunas, SEMPRE adicionar via ColFix em `server/_core/index.ts`
+    pois o `syncSchema` pode não rodar antes das queries falharem no startup. Ou adicionar diretamente
+    no Neon via `node -e "... process.env.NEON_DATABASE_URL ..."` ANTES de fazer o deploy.
+- **Replit PostgreSQL** (dev): acessível via `DATABASE_URL` — banco separado, vazio/irrelevante para produção
+- Neon usa pooler URL para conexões da app; syncSchema e ColFix também conectam ao Neon via getDb().
 
 ## Rev. 416 — Custo de MO nas Atividades (16/03/2026)
 - **Novas tabelas**: `cargo_categorias_custo` (cargo→categoria), `folha_mo_transferencias` (histórico), `planejamento_custos_mo` (custo real por atividade/mês)
