@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 628,
+    titulo: "Lançamento manual de ponto: removidos feriados automáticos",
+    descricao: "A detecção automática de feriados brasileiros foi removida do lançamento manual de ponto. Feriados agora são tratados como dias úteis normais — recebem os horários da jornada ao preencher o mês completo e seguem o mesmo código de cores (verde/âmbar/azul/vermelho) dos demais dias. O usuário decide manualmente se um feriado deve ter ponto ou não.",
+    tipo: "melhoria",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 627,
     titulo: "Lançamento manual de ponto: cor azul para horas extras",
     descricao: "Adicionada detecção de horas extras no lançamento manual de ponto. Quando o total de minutos trabalhados supera o total previsto na jornada cadastrada do colaborador, a linha fica azul (bg-blue-50) com badge 'H.E.' em azul, diferenciando visualmente de dias com horários apenas diferentes (âmbar). A detecção calcula os minutos reais (entrada1→saida1 + entrada2→saida2) vs. minutos da jornada esperada.",
