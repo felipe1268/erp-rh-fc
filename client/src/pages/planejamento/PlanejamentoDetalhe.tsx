@@ -590,7 +590,7 @@ export default function PlanejamentoDetalhe() {
           />
         )}
         {aba === "curva-s" && (
-          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} curvaMedicoes={curvaMedicoes} />
+          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} curvaMedicoes={curvaMedicoes} onEditarProjeto={abrirEditProjeto} />
         )}
         {aba === "avanco" && (
           <AvancoSemanal
@@ -3484,7 +3484,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
 // Paleta de cores para revisões anteriores (distintas, mas secundárias)
 const REV_COLORS = ["#7c3aed","#0891b2","#d97706","#be185d","#0d9488","#ea580c","#9333ea","#0284c7"];
 
-function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, revisaoAtiva, curvaMedicoes = [] }: any) {
+function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, revisaoAtiva, curvaMedicoes = [], onEditarProjeto }: any) {
   const [curvaTipo, setCurvaTipo] = useState<"trabalho" | "financeira">("trabalho");
 
   // Revisões anteriores com toggles
@@ -3741,7 +3741,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
               </p>
             </div>
             <button
-              onClick={abrirEditProjeto}
+              onClick={onEditarProjeto}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
             >
               <Settings className="h-4 w-4" /> Abrir Configurações do Projeto
