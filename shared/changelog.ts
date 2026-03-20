@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 607,
+    titulo: "Fechamento de Ponto: correção do display de Batida Duplicada na mesma obra",
+    descricao: "Bug corrigido: quando havia dois registros para o mesmo funcionário, mesma obra e mesmo dia (isSameObraDuplicate=true), o sistema exibia incorretamente a mensagem 'Deslocamento entre obras detectado — os horários não se sobrepõem' e o botão 'Confirmar' de deslocamento. Agora: (1) a mensagem de deslocamento só aparece quando são obras DIFERENTES; (2) o botão 'Confirmar Deslocamento' não aparece para duplicatas da mesma obra; (3) painéis de duplicata têm fundo/borda roxa em ambos os modos de visualização (tabela e cards); (4) na view de cards do funcionário, o badge e os controles de duplicata foram adicionados com botões para excluir o registro errado diretamente.",
+    tipo: "bugfix",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 606,
     titulo: "Fechamento de Ponto: botão Período Especial no detalhe do funcionário",
     descricao: "Novo botão 'Período Especial' no cabeçalho da tela de detalhe do funcionário no Fechamento de Ponto. Permite informar manualmente que o funcionário estava de férias ou aviso prévio em um intervalo de datas e corrige imediatamente os registros já lançados: (1) Férias — zera faltas e atrasos em todos os dias do período; (2) Aviso Prévio 2h/dia — recalcula a jornada esperada com redução de 2h e reprocessa HE, atrasos e faltas; (3) Aviso Prévio 7 dias corridos — nos últimos 7 dias do período informado, zera a jornada esperada (funcionário pode se ausentar). Registros com ajuste manual = 1 são preservados.",

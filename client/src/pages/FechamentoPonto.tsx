@@ -2094,7 +2094,7 @@ export default function FechamentoPonto() {
                                   </td>
                                   <td className="p-2 text-center">
                                     <div className="flex items-center justify-center gap-1">
-                                      {!isConsolidado && !isOverlap && (
+                                      {!isConsolidado && !isOverlap && !isDuplicate && (
                                         <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-green-700 hover:bg-green-50"
                                           onClick={(e) => {
                                             e.stopPropagation();
@@ -2104,6 +2104,9 @@ export default function FechamentoPonto() {
                                           }}>
                                           <CheckCircle className="h-3.5 w-3.5 mr-1" /> Confirmar
                                         </Button>
+                                      )}
+                                      {!isConsolidado && isDuplicate && (
+                                        <span className="text-xs text-purple-700 font-medium flex items-center gap-1"><Copy className="h-3 w-3" /> Excluir duplicata</span>
                                       )}
                                       {isOverlap && (
                                         <span className="text-xs text-red-600 font-medium">Resolver manual</span>
@@ -2115,7 +2118,7 @@ export default function FechamentoPonto() {
                                 {isExpanded && (
                                   <tr>
                                     <td colSpan={6} className="p-0">
-                                      <div className={`border-t p-4 ${isOverlap ? "bg-red-50/50 border-red-200" : "bg-green-50/50 border-green-200"}`}>
+                                      <div className={`border-t p-4 ${isOverlap ? "bg-red-50/50 border-red-200" : isDuplicate ? "bg-purple-50/50 border-purple-200" : "bg-green-50/50 border-green-200"}`}>
                                         {/* ALERTA: SOBREPOSIÇÃO REAL */}
                                         {isOverlap && (
                                           <div className="mb-3 p-3 bg-red-100 border border-red-300 rounded-lg flex items-start gap-2">
@@ -2172,7 +2175,7 @@ export default function FechamentoPonto() {
                                           </div>
                                         )}
                                         {/* ALERTA: DESLOCAMENTO SEM ANÁLISE DETALHADA */}
-                                        {!isOverlap && (!c.transferAnalysis || c.transferAnalysis.length === 0) && (
+                                        {!isOverlap && !isDuplicate && (!c.transferAnalysis || c.transferAnalysis.length === 0) && (
                                           <div className="mb-3 p-2 bg-green-100 border border-green-300 rounded-lg flex items-center gap-2">
                                             <MapPin className="h-4 w-4 text-green-700 flex-shrink-0" />
                                             <p className="text-xs text-green-800 font-medium">
@@ -2500,10 +2503,11 @@ export default function FechamentoPonto() {
                           const conflictKey = `${c.employeeId}|${c.data}`;
                           const isExpanded = expandedConflict === conflictKey;
                           const isOverlap = c.hasOverlap;
+                          const isDuplCard = c.isSameObraDuplicate;
                           return (
-                            <div key={idx} className={`bg-white border rounded-lg overflow-hidden transition-all ${isExpanded ? (isOverlap ? "border-red-400 shadow-md" : "border-green-400 shadow-md") : (isOverlap ? "border-red-200" : "border-green-200")} ${isOverlap ? "border-l-4 border-l-red-500" : "border-l-4 border-l-green-500"}`}>
+                            <div key={idx} className={`bg-white border rounded-lg overflow-hidden transition-all ${isExpanded ? (isOverlap ? "border-red-400 shadow-md" : isDuplCard ? "border-purple-400 shadow-md" : "border-green-400 shadow-md") : (isOverlap ? "border-red-200" : isDuplCard ? "border-purple-200" : "border-green-200")} ${isOverlap ? "border-l-4 border-l-red-500" : isDuplCard ? "border-l-4 border-l-purple-500" : "border-l-4 border-l-green-500"}`}>
                               <button
-                                className={`w-full p-3 flex items-center justify-between transition-colors text-left ${isOverlap ? "hover:bg-red-50/50" : "hover:bg-green-50/50"}`}
+                                className={`w-full p-3 flex items-center justify-between transition-colors text-left ${isOverlap ? "hover:bg-red-50/50" : isDuplCard ? "hover:bg-purple-50/50" : "hover:bg-green-50/50"}`}
                                 onClick={() => { setExpandedConflict(isExpanded ? null : conflictKey); setConflictJustificativa(""); }}
                               >
                                 <div>
@@ -2521,22 +2525,42 @@ export default function FechamentoPonto() {
                                 <div className="flex items-center gap-2">
                                   {isOverlap ? (
                                     <Badge className="bg-red-600 text-white text-xs"><XCircle className="h-3 w-3 mr-1" /> Sobreposição</Badge>
+                                  ) : isDuplCard ? (
+                                    <Badge className="bg-purple-600 text-white text-xs"><Copy className="h-3 w-3 mr-1" /> Batida Duplicada</Badge>
                                   ) : c.transferAnalysis && c.transferAnalysis.length > 0 ? (
                                     <Badge className="bg-blue-600 text-white text-xs"><ArrowRightLeft className="h-3 w-3 mr-1" /> Transferência</Badge>
                                   ) : (
                                     <Badge className="bg-green-600 text-white text-xs"><CheckCircle className="h-3 w-3 mr-1" /> Desloc. Válido</Badge>
                                   )}
-                                  <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""} ${isOverlap ? "text-red-600" : "text-green-600"}`} />
+                                  <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""} ${isOverlap ? "text-red-600" : isDuplCard ? "text-purple-600" : "text-green-600"}`} />
                                 </div>
                               </button>
                               {isExpanded && (
-                                <div className={`border-t p-4 space-y-3 ${isOverlap ? "border-red-200 bg-red-50/30" : "border-green-200 bg-green-50/30"}`}>
+                                <div className={`border-t p-4 space-y-3 ${isOverlap ? "border-red-200 bg-red-50/30" : isDuplCard ? "border-purple-200 bg-purple-50/30" : "border-green-200 bg-green-50/30"}`}>
                                   {isOverlap ? (
                                     <div className="p-2 bg-red-100 border border-red-300 rounded-lg flex items-center gap-2">
                                       <AlertCircle className="h-4 w-4 text-red-700 flex-shrink-0" />
                                       <p className="text-xs text-red-800 font-bold">
                                         SOBREPOSIÇÃO DE HORÁRIOS: O funcionário não pode estar em 2 obras ao mesmo tempo. Escolha qual obra manter.
                                       </p>
+                                    </div>
+                                  ) : isDuplCard ? (
+                                    <div className="p-3 bg-purple-50 border border-purple-300 rounded-lg">
+                                      <p className="text-xs text-purple-900 font-bold mb-1 flex items-center gap-1"><Copy className="h-3.5 w-3.5" /> Batida duplicada na mesma obra</p>
+                                      <p className="text-[11px] text-purple-700 mb-2">Existem {c.records?.length || 2} registros para o mesmo funcionário, obra e dia. Isso ocorre quando o arquivo DIXI foi importado mais de uma vez ou quando foi lançado manualmente em cima de um registro existente. Mantenha apenas o correto e exclua a duplicata.</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {(c.records || []).map((o: any, oi: number) => (
+                                          <Button key={`del-dup2-${oi}`} size="sm" variant="ghost" className="gap-1.5 text-xs text-red-600 hover:bg-red-50 border border-red-200"
+                                            onClick={() => {
+                                              if (confirm(`Excluir o ${oi === 0 ? "1º" : "2º"} registro (Entrada: ${o.entrada1 || "--:--"}, ${o.horasTrabalhadas || "0:00"}) para este funcionário neste dia?`)) {
+                                                resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "excluir_por_id", recordId: o.id, justificativa: `Batida duplicada removida (entrada: ${o.entrada1})` });
+                                              }
+                                            }}
+                                            disabled={resolveConflitoMut.isPending}>
+                                            <Trash2 className="h-3 w-3" /> Excluir {oi === 0 ? "1º" : "2º"} ({o.horasTrabalhadas || "0:00"})
+                                          </Button>
+                                        ))}
+                                      </div>
                                     </div>
                                   ) : c.transferAnalysis && c.transferAnalysis.length > 0 ? (
                                     <div className="p-3 bg-blue-50 border border-blue-300 rounded-lg space-y-2">
@@ -2591,7 +2615,7 @@ export default function FechamentoPonto() {
                                       </button>
                                     ))}
                                   </div>
-                                  {!isOverlap && (
+                                  {!isOverlap && !isDuplCard && (
                                     <div className="flex gap-2">
                                       <Button
                                         variant="outline"
