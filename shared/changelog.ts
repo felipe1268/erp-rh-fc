@@ -3913,6 +3913,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 636,
+    titulo: "H.Extra calculado automaticamente no cartão de ponto",
+    descricao: "getEmployeeDetail agora calcula o HE on-the-fly para cada registro no cartão de ponto, sem depender do 'Processar Ponto' da Gestão de Competências. Usa a jornada individual do funcionário (jornadaTrabalho) para calcular o esperado; fallback para jornadaHorasDiarias da empresa. Dias de ausência (falta, férias, atestado, licença, afastamento) retornam HE = 0:00 automaticamente.",
+    tipo: "melhoria",
+    modulos: "Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 635,
     titulo: "HE: atualização do time_records + percentuais distintos semana/fim-de-semana",
     descricao: "processarPonto agora atualiza time_records.horasExtras com o HE recalculado, fazendo a tela de detalhe do funcionário exibir o valor correto (antes sempre mostrava '-'). gerarVale e simularPagamento agora separam as HE por tipoDia: dias úteis recebem hePercentualDiurna (ex: 50%) e sábados/compensados/feriados recebem hePercentualDomingo (ex: 100%). Antes, ambos aplicavam apenas o percentual de dias úteis para todas as horas extras.",

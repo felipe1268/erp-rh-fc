@@ -26,6 +26,13 @@ function minutesToHHMM(mins: number): string {
   return `${mins < 0 ? "-" : ""}${h}:${String(m).padStart(2, "0")}`;
 }
 
+function hhmmToMins(t: string | null | undefined): number {
+  if (!t) return 0;
+  const [h, m] = t.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return 0;
+  return h * 60 + m;
+}
+
 // Returns expected NET work minutes for a given day from the employee's jornada JSON.
 // horasTrabalhadas = sum of punch intervals (lunch gap excluded), so we also subtract
 // the lunch break (intervalo) from the expected range to keep comparison consistent.
@@ -1350,6 +1357,21 @@ export const fechamentoPontoRouter = router({
         jornadaTrabalho: employees.jornadaTrabalho,
       }).from(employees).where(eq(employees.id, input.employeeId)).limit(1);
 
+      // Compute HE on-the-fly for each record (no need to run "Processar Ponto")
+      const criteria = await getCriteriaMap(input.companyId);
+      const empJornada = emp[0]?.jornadaTrabalho ?? null;
+      const AUSENCIA_TYPES = new Set(["falta", "ferias", "atestado", "licenca_maternidade", "licenca_paternidade", "afastamento"]);
+
+      function computeHeForRecord(rec: any): string {
+        if (AUSENCIA_TYPES.has(rec.tipoDia)) return "0:00";
+        const trabMins = hhmmToMins(rec.horasTrabalhadas);
+        if (trabMins <= 0) return "0:00";
+        const expected = getExpectedMinsFromJornada(empJornada, rec.data)
+          ?? (criteria.jornadaHorasDiarias * 60);
+        const he = Math.max(0, trabMins - expected);
+        return minutesToHHMM(he);
+      }
+
       // Group records by obra for display
       const byObra: Record<string, { obraId: number | null; obraNome: string; records: any[] }> = {};
       for (const r of recs) {
@@ -1361,13 +1383,13 @@ export const fechamentoPontoRouter = router({
             records: [],
           };
         }
-        byObra[obraKey].records.push(r.record);
+        byObra[obraKey].records.push({ ...r.record, horasExtras: computeHeForRecord(r.record) });
       }
 
       return {
         employee: emp[0] || null,
         recordsByObra: Object.values(byObra),
-        records: recs.map(r => r.record), // flat list for backward compat
+        records: recs.map(r => ({ ...r.record, horasExtras: computeHeForRecord(r.record) })), // flat list for backward compat
         inconsistencies: incons,
       };
     }),
