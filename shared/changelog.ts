@@ -3643,6 +3643,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-19 00:00:00",
   },
   {
+    version: 610,
+    titulo: "Curva S Financeira: cruzamento real EAP × Orçamento (BCWS)",
+    descricao: "A Curva S Financeira agora é calculada pelo cruzamento real da EAP do cronograma com os valores de venda (vendaTotal) do orçamento vinculado ao projeto — sem necessidade de digitar Valor do Contrato manualmente. Cada atividade folha (não grupo, não marco) recebe o vendaTotal do seu item EAP correspondente no orçamento e o distribui linearmente pelas semanas do período planejado, gerando a curva BCWS (Valor Planejado). A curva inclui três estados: (1) sem orçamento vinculado — mostra instrução para configurar; (2) divergência EAP bilateral — bloqueia a curva e lista os itens sem correspondência, separados por 'no cronograma sem orçamento' e 'no orçamento sem cronograma'; (3) EAP consistente — renderiza o gráfico com Valor Planejado (azul), Valor Realizado BCWP (verde, avanço físico × total orçamento), Faturado Real (roxo, medições de contrato) e Tendência. Marcos (isMarco=true) e grupos (isGrupo=true) são excluídos da verificação de consistência.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 609,
     titulo: "Curva S: ponto zero antes da primeira atividade",
     descricao: "A Curva S de Trabalho e a Curva S Financeira agora sempre iniciam em 0% (acumulado=0) na semana imediatamente anterior à primeira atividade do projeto. Antes, o gráfico começava diretamente na primeira semana com o valor já acumulado da primeira fatia de peso, fazendo a curva parecer que 'saltava' do zero para ~8-15% logo no primeiro ponto visível. A correção foi aplicada em gerarCurvaPlanejada (curva principal) e gerarCurva (curva por revisão em getCurvasTodasRevisoes).",

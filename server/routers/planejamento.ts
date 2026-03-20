@@ -2821,4 +2821,133 @@ REGRAS TÉCNICAS:
 
       return { resposta: rawText.trim(), atividades: null, hasMod: false };
     }),
+
+  // ── Curva S Financeira (EAP × Orçamento) ─────────────────────────────────
+  // Cruza cada atividade folha do cronograma com o item correspondente do
+  // orçamento (via eapCodigo), distribui vendaTotal pelas semanas e acumula.
+  // Retorna status: 'sem_orcamento' | 'divergencias' | 'ok'
+  getCurvaSFinanceira: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      revisaoId: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      // 1. Projeto + orcamentoId
+      const [projeto] = await db.select({
+        id:          planejamentoProjetos.id,
+        orcamentoId: planejamentoProjetos.orcamentoId,
+      })
+        .from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.id, input.projetoId))
+        .limit(1);
+
+      if (!projeto?.orcamentoId) {
+        return { status: "sem_orcamento" as const, divergencias: [], curva: [], totalVenda: 0 };
+      }
+
+      // 2. Atividades da revisão
+      const todasAtividades = await db.select({
+        id:           planejamentoAtividades.id,
+        eapCodigo:    planejamentoAtividades.eapCodigo,
+        nome:         planejamentoAtividades.nome,
+        dataInicio:   planejamentoAtividades.dataInicio,
+        dataFim:      planejamentoAtividades.dataFim,
+        isGrupo:      planejamentoAtividades.isGrupo,
+        isMarco:      planejamentoAtividades.isMarco,
+      })
+        .from(planejamentoAtividades)
+        .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+
+      // Folhas: não é grupo, não é marco, tem eapCodigo e datas válidas
+      const folhas = todasAtividades.filter(a =>
+        !a.isGrupo &&
+        !a.isMarco &&
+        a.eapCodigo &&
+        a.dataInicio &&
+        a.dataFim,
+      );
+
+      // 3. Itens do orçamento vinculado
+      const todosItens = await db.select({
+        eapCodigo: orcamentoItens.eapCodigo,
+        descricao: orcamentoItens.descricao,
+        vendaTotal: orcamentoItens.vendaTotal,
+      })
+        .from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, projeto.orcamentoId));
+
+      // 4. Determinar itens folha do orçamento (não são pai de nenhum outro item)
+      const todosEapOrc = todosItens.map(i => i.eapCodigo);
+      const leafItens   = todosItens.filter(i =>
+        !todosEapOrc.some(other => other !== i.eapCodigo && other.startsWith(i.eapCodigo + ".")),
+      );
+
+      // 5. Verificação bilateral de EAP
+      const eapLeafOrc    = new Set(leafItens.map(i => i.eapCodigo));
+      const eapFolhasSet  = new Set(folhas.map(a => a.eapCodigo!));
+
+      const semOrcamento  = folhas
+        .filter(a => !eapLeafOrc.has(a.eapCodigo!))
+        .map(a => ({ eapCodigo: a.eapCodigo!, nome: a.nome, tipo: "sem_orcamento" as const }));
+
+      const semCronograma = leafItens
+        .filter(i => !eapFolhasSet.has(i.eapCodigo))
+        .map(i => ({ eapCodigo: i.eapCodigo, nome: i.descricao ?? i.eapCodigo, tipo: "sem_cronograma" as const }));
+
+      const divergencias = [...semOrcamento, ...semCronograma].sort((a, b) =>
+        a.eapCodigo.localeCompare(b.eapCodigo, undefined, { numeric: true }),
+      );
+
+      if (divergencias.length > 0) {
+        return { status: "divergencias" as const, divergencias, curva: [], totalVenda: 0 };
+      }
+
+      // 6. Lookup eapCodigo → vendaTotal
+      const vendaMap   = new Map(leafItens.map(i => [i.eapCodigo, n(i.vendaTotal)]));
+      const totalVenda = leafItens.reduce((s, i) => s + n(i.vendaTotal), 0);
+
+      // 7. Distribuição linear de vendaTotal pelas semanas de cada atividade
+      const dates: Map<string, number> = new Map();
+      folhas.forEach(a => {
+        const parseDate = (v: any): Date => {
+          const s = toDateStr(v).slice(0, 10);
+          return new Date(s + "T12:00:00Z");
+        };
+        const inicio = parseDate(a.dataInicio);
+        const fim    = parseDate(a.dataFim);
+        if (isNaN(inicio.getTime()) || isNaN(fim.getTime())) return;
+
+        const inicioSeg  = new Date(toMondayStr(inicio) + "T12:00:00Z");
+        const fimSeg     = new Date(toMondayStr(fim)    + "T12:00:00Z");
+        const weeksDiff  = (fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000);
+        const dur        = Math.max(1, weeksDiff + 1);
+        const venda      = vendaMap.get(a.eapCodigo!) ?? 0;
+        const semValor   = venda / dur;
+
+        let cur = new Date(inicioSeg);
+        for (let i = 0; i < dur; i++) {
+          const key = toMondayStr(cur);
+          dates.set(key, (dates.get(key) ?? 0) + semValor);
+          cur = new Date(cur.getTime() + 7 * 86400000);
+        }
+      });
+
+      const sorted = [...dates.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      let acum = 0;
+      const pontos = sorted.map(([semana, val]) => {
+        acum += val;
+        return { semana, acumulado: +acum.toFixed(2) };
+      });
+
+      // Ponto zero antes da primeira atividade
+      if (pontos.length > 0) {
+        const primeiraDate = new Date(pontos[0].semana + "T12:00:00Z");
+        const semanaAntes  = new Date(primeiraDate.getTime() - 7 * 86400000);
+        pontos.unshift({ semana: toMondayStr(semanaAntes), acumulado: 0 });
+      }
+
+      return { status: "ok" as const, divergencias: [], curva: pontos, totalVenda };
+    }),
 });

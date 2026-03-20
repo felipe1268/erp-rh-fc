@@ -3530,6 +3530,12 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
     return m;
   }, [merged]);
 
+  // ── Curva S Financeira: cruzamento EAP × Orçamento ───────────────────────
+  const { data: curvaSFin, isLoading: curvaSFinLoading } = trpc.planejamento.getCurvaSFinanceira.useQuery(
+    { projetoId, revisaoId: revisaoAtiva?.id ?? 0 },
+    { enabled: !!projetoId && !!revisaoAtiva?.id },
+  );
+
   if (curvaLoading) return (
     <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
       <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -3728,16 +3734,23 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
 
       {/* ── ABA: FINANCEIRA ───────────────────────────────────────────────── */}
       {curvaTipo === "financeira" && (() => {
-        const contrato = n(proj?.valorContrato ?? 0);
-        const hasMedicoes = (curvaMedicoes as any[]).length > 0;
-        if (contrato <= 0 && !hasMedicoes) return (
+        // Estado 1: carregando
+        if (curvaSFinLoading) return (
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
+            <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm">Calculando Curva S Financeira...</p>
+          </div>
+        );
+
+        // Estado 2: sem orçamento vinculado ao projeto
+        if (!curvaSFin || curvaSFin.status === "sem_orcamento") return (
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-4 text-slate-400">
             <DollarSign className="h-12 w-12 opacity-20" />
             <div className="text-center">
-              <p className="text-sm font-semibold text-slate-600 mb-1">Valor do Contrato não configurado</p>
+              <p className="text-sm font-semibold text-slate-600 mb-1">Orçamento não vinculado</p>
               <p className="text-xs text-slate-400 max-w-sm">
-                Informe o <strong className="text-slate-500">Valor do Contrato</strong> nas configurações do projeto para visualizar a Curva S Financeira.
-                Lançamentos de Medição também aparecem aqui automaticamente.
+                Vincule um <strong className="text-slate-500">Orçamento</strong> a este projeto nas configurações para
+                que a Curva S Financeira seja calculada automaticamente cruzando o cronograma com os valores do orçamento.
               </p>
             </div>
             <button
@@ -3748,30 +3761,140 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
             </button>
           </div>
         );
-        if (merged.length === 0) return null;
 
-        // Escala % → R$ (só quando valorContrato > 0)
-        const finMerged = merged.map((row: any) => ({
-          ...row,
-          baseline:  (contrato > 0 && row.baseline  != null) ? +(contrato * row.baseline  / 100).toFixed(2) : null,
-          planejada: (contrato > 0 && row.planejada != null) ? +(contrato * row.planejada / 100).toFixed(2) : null,
-          realizada: (contrato > 0 && row.realizada != null) ? +(contrato * row.realizada / 100).toFixed(2) : null,
-          tendencia: (contrato > 0 && row.tendencia != null) ? +(contrato * row.tendencia / 100).toFixed(2) : null,
-        }));
+        // Estado 3: divergências EAP (bloqueio total — o usuário precisa corrigir)
+        if (curvaSFin.status === "divergencias") {
+          const semOrc  = curvaSFin.divergencias.filter((d: any) => d.tipo === "sem_orcamento");
+          const semCron = curvaSFin.divergencias.filter((d: any) => d.tipo === "sem_cronograma");
+          return (
+            <div className="space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-red-600 text-base font-bold">!</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-red-700 mb-1">Divergência na EAP — Curva S Financeira bloqueada</p>
+                    <p className="text-xs text-red-600">
+                      A EAP do cronograma e a EAP do orçamento devem ser 100% idênticas.
+                      Corrija as divergências abaixo para liberar a curva financeira.
+                    </p>
+                  </div>
+                </div>
 
-        // Mescla curvaMedicoes (faturado acumulado por competência "YYYY-MM")
+                {semOrc.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-red-700 mb-2 uppercase tracking-wide">
+                      No cronograma, sem item no orçamento ({semOrc.length})
+                    </p>
+                    <div className="rounded-lg overflow-hidden border border-red-200">
+                      <table className="w-full text-xs">
+                        <thead className="bg-red-100">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-red-700 font-semibold w-24">EAP</th>
+                            <th className="px-3 py-2 text-left text-red-700 font-semibold">Atividade</th>
+                            <th className="px-3 py-2 text-left text-red-700 font-semibold w-36">Ação necessária</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-red-100 bg-white">
+                          {semOrc.map((d: any) => (
+                            <tr key={d.eapCodigo}>
+                              <td className="px-3 py-2 font-mono text-red-600 font-semibold">{d.eapCodigo}</td>
+                              <td className="px-3 py-2 text-slate-700">{d.nome}</td>
+                              <td className="px-3 py-2 text-slate-500">Adicionar ao orçamento</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {semCron.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-red-700 mb-2 uppercase tracking-wide">
+                      No orçamento, sem atividade no cronograma ({semCron.length})
+                    </p>
+                    <div className="rounded-lg overflow-hidden border border-red-200">
+                      <table className="w-full text-xs">
+                        <thead className="bg-red-100">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-red-700 font-semibold w-24">EAP</th>
+                            <th className="px-3 py-2 text-left text-red-700 font-semibold">Item do Orçamento</th>
+                            <th className="px-3 py-2 text-left text-red-700 font-semibold w-36">Ação necessária</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-red-100 bg-white">
+                          {semCron.map((d: any) => (
+                            <tr key={d.eapCodigo}>
+                              <td className="px-3 py-2 font-mono text-red-600 font-semibold">{d.eapCodigo}</td>
+                              <td className="px-3 py-2 text-slate-700">{d.nome}</td>
+                              <td className="px-3 py-2 text-slate-500">Adicionar ao cronograma</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // Estado 4: EAP consistente → renderizar curva
+        const totalVenda = curvaSFin.totalVenda ?? 0;
+        const curvaSFinOk = curvaSFin.curva ?? [];
+        const hasMedicoes = (curvaMedicoes as any[]).length > 0;
+        if (curvaSFinOk.length === 0 && !hasMedicoes) return null;
+
+        // Construir dataset: planejada (R$) do EAP × Orçamento + realizada (% × totalVenda) + faturado (medições)
+        const finPlanMap: Record<string, number> = {};
+        curvaSFinOk.forEach((p: any) => { finPlanMap[p.semana] = p.acumulado; });
+
+        // Realizada e tendência: escala física (%) × totalVenda
+        const realMap: Record<string, number | null> = {};
+        const tendMap: Record<string, number | null> = {};
+        merged.forEach((row: any) => {
+          realMap[row.semana] = totalVenda > 0 && row.realizada != null
+            ? +(totalVenda * row.realizada / 100).toFixed(2) : null;
+          tendMap[row.semana] = totalVenda > 0 && row.tendencia != null
+            ? +(totalVenda * row.tendencia / 100).toFixed(2) : null;
+        });
+
+        // Medições (faturado acumulado por competência "YYYY-MM")
         const medMap: Record<string, number> = {};
         (curvaMedicoes as any[]).forEach((m: any) => { medMap[m.competencia] = m.valorAcumulado; });
-        const finFull = hasMedicoes ? finMerged.map((row: any) => {
-          const comp = String(row.semana ?? "").slice(0, 7);
-          const allComps = Object.keys(medMap).filter(k => k <= comp);
-          const lastComp = allComps.length ? allComps[allComps.length - 1] : null;
-          return { ...row, faturado: lastComp != null ? medMap[lastComp] : undefined };
-        }) : finMerged;
 
-        const finHasBaseline  = finFull.some((p: any) => p.baseline  != null);
+        // Union de todas as semanas (planejada + merged para realizada)
+        const allSemanasSet = new Set<string>([
+          ...curvaSFinOk.map((p: any) => p.semana),
+          ...merged.map((row: any) => row.semana),
+        ]);
+        const finFull = [...allSemanasSet].sort().map(semana => {
+          const comp      = semana.slice(0, 7);
+          const allComps  = Object.keys(medMap).filter(k => k <= comp);
+          const lastComp  = allComps.length ? allComps[allComps.length - 1] : null;
+          return {
+            semana,
+            planejada: finPlanMap[semana] ?? null,
+            realizada: realMap[semana]    ?? null,
+            tendencia: tendMap[semana]    ?? null,
+            faturado:  lastComp != null ? medMap[lastComp] : undefined,
+          };
+        });
+
         const finHasPlanejada = finFull.some((p: any) => p.planejada != null);
         const finHasFaturado  = finFull.some((p: any) => p.faturado  != null);
+        const finHasRealizada = finFull.some((p: any) => p.realizada != null);
+        const finHasTendencia = finFull.some((p: any) => p.tendencia != null);
+
+        // Label de semana: usa semanaLabel do trabalho quando disponível, senão numera por posição
+        const finSemanasOrdenadas = [...allSemanasSet].sort();
+        const finSemLabel: Record<string, string> = {};
+        finSemanasOrdenadas.forEach((s, i) => {
+          finSemLabel[s] = semanaLabel[s] ?? `Sem ${String(i + 1).padStart(2, "0")}`;
+        });
 
         const finTickFmt = (v: number) => {
           if (v >= 1_000_000) return (v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "M";
@@ -3784,26 +3907,24 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
             {/* Legenda */}
             <div className="flex flex-wrap gap-4 text-xs mb-3">
-              {finHasBaseline && (
-                <div className="flex items-center gap-1.5">
-                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#1e40af" strokeWidth="2" /></svg>
-                  <span className="text-slate-600">Baseline</span>
-                </div>
-              )}
               {finHasPlanejada && (
                 <div className="flex items-center gap-1.5">
-                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#ef4444" strokeWidth="3.5" /></svg>
-                  <span className="text-slate-600">Revisão Atual</span>
+                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#1e40af" strokeWidth="2.5" /></svg>
+                  <span className="text-slate-600">Valor Planejado (BCWS)</span>
                 </div>
               )}
-              <div className="flex items-center gap-1.5">
-                <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#22c55e" strokeWidth="2.5" /></svg>
-                <span className="text-slate-600">Realizado</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#16a34a" strokeWidth="2" strokeDasharray="5 3" /></svg>
-                <span className="text-slate-600">Tendência</span>
-              </div>
+              {finHasRealizada && (
+                <div className="flex items-center gap-1.5">
+                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#22c55e" strokeWidth="2.5" /></svg>
+                  <span className="text-slate-600">Valor Realizado (BCWP)</span>
+                </div>
+              )}
+              {finHasTendencia && (
+                <div className="flex items-center gap-1.5">
+                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#16a34a" strokeWidth="2" strokeDasharray="5 3" /></svg>
+                  <span className="text-slate-600">Tendência</span>
+                </div>
+              )}
               {finHasFaturado && (
                 <div className="flex items-center gap-1.5">
                   <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#7c3aed" strokeWidth="2.5" /></svg>
@@ -3813,63 +3934,58 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
             </div>
 
             <p className="text-sm font-semibold text-slate-700 mb-1">
-              Curva S Financeira — Evolução Acumulada (R$)
+              Curva S Financeira — Valor Acumulado (R$)
             </p>
             <p className="text-xs text-slate-400 mb-3">
-              {contrato > 0
-                ? <>Valores escalados pelo contrato: <strong>{fmt(contrato)}</strong></>
-                : "Exibindo medições lançadas. Configure o Valor do Contrato para ver as curvas planejadas."
-              }
+              Calculada pelo cruzamento EAP do cronograma × valores de venda do orçamento.
+              Total do orçamento: <strong className="text-slate-600">{fmt(totalVenda)}</strong>
             </p>
 
             <ResponsiveContainer width="100%" height={360}>
-              <LineChart data={finFull} margin={{ left: 10, right: 80, top: 5, bottom: merged.length > 10 ? 50 : 20 }}>
+              <LineChart data={finFull} margin={{ left: 10, right: 80, top: 5, bottom: finFull.length > 10 ? 50 : 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-30} textAnchor="end"
                   height={50} interval={Math.max(0, Math.floor(finFull.length / 10) - 1)}
-                  tickFormatter={(v: string) => semanaLabel[v] ?? v} />
+                  tickFormatter={(v: string) => finSemLabel[v] ?? v} />
                 <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10 }} width={72} />
                 <Tooltip
                   content={({ payload, label }: any) => {
                     if (!payload?.length) return null;
                     const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
-                    const base = get("baseline"); const plan = get("planejada");
+                    const plan = get("planejada");
                     const real = get("realizada"); const fat  = get("faturado"); const tend = get("tendencia");
-                    const ref = plan ?? base;
-                    const desvio = ref != null && real != null ? (real as number) - (ref as number) : null;
-                    const desvioFat = fat != null && real != null ? (fat as number) - (real as number) : null;
+                    const desvio    = plan != null && real != null ? (real as number) - (plan as number) : null;
+                    const desvioFat = fat  != null && plan != null ? (fat  as number) - (plan as number) : null;
                     const [y, m, d] = String(label).split("-");
                     return (
                       <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[230px]">
                         <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">
-                          {semanaLabel[label] ?? label} · {d}/{m}/{y}
+                          {finSemLabel[label] ?? label} · {d}/{m}/{y}
                         </p>
-                        {base != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Baseline</span><strong>{fmt(base)}</strong></p>}
-                        {plan != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#ef4444" }}>Revisão Atual</span><strong>{fmt(plan)}</strong></p>}
-                        {real != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado</span><strong>{fmt(real)}</strong></p>}
+                        {plan != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Planejado (BCWS)</span><strong>{fmt(plan)}</strong></p>}
+                        {real != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado (BCWP)</span><strong>{fmt(real)}</strong></p>}
                         {fat  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#7c3aed" }}>Faturado Real</span><strong>{fmt(fat)}</strong></p>}
                         {tend != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#16a34a" }}>Tendência</span><strong>{fmt(tend)}</strong></p>}
                         {desvioFat != null && (
                           <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvioFat >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                            <span>Fat. vs Físico</span><span>{desvioFat >= 0 ? "+" : ""}{fmt(desvioFat)}</span>
+                            <span>Fat. vs Planejado</span><span>{desvioFat >= 0 ? "+" : ""}{fmt(desvioFat)}</span>
                           </p>
                         )}
                         {desvio != null && !desvioFat && (
                           <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                            <span>Desvio</span><span>{desvio >= 0 ? "+" : ""}{fmt(desvio)}</span>
+                            <span>Realizado vs Planejado</span><span>{desvio >= 0 ? "+" : ""}{fmt(desvio)}</span>
                           </p>
                         )}
                       </div>
                     );
                   }}
                 />
-                {semanas.includes(hoje) && (
+                {finFull.some((p: any) => p.semana === hoje) && (
                   <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
                 )}
-                {finHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls />}
-                {finHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls />}
-                <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />
-                <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
+                {finHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#1e40af" strokeWidth={2.5} dot={false} connectNulls />}
+                {finHasRealizada && <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />}
+                {finHasTendencia && <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />}
                 {finHasFaturado && (
                   <Line type="stepAfter" dataKey="faturado" stroke="#7c3aed" strokeWidth={2.5}
                     dot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }} activeDot={{ r: 7 }} connectNulls />
@@ -3881,11 +3997,11 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
           {/* Interpretação financeira */}
           <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 text-xs text-slate-600 space-y-1">
             <p className="font-semibold text-slate-700 mb-2">Como interpretar</p>
-            {finHasBaseline  && <p>🔵 <strong>Baseline</strong>: Valor financeiro planejado no plano original (Rev 00).</p>}
-            {finHasPlanejada && <p>🔴 <strong>Revisão Atual</strong>: Valor financeiro previsto na revisão vigente.</p>}
-            {contrato > 0    && <p>🟢 <strong>Realizado</strong>: Avanço físico convertido em R$ pelo valor do contrato.</p>}
-            {finHasFaturado  && <p>🟣 <strong>Faturado Real</strong>: Valor efetivamente medido/faturado (Módulo Medição).</p>}
-            {!contrato       && <p>⚠️ Configure o <strong>Valor do Contrato</strong> nas configurações do projeto para ver as curvas planejada e realizada em R$.</p>}
+            {finHasPlanejada && <p>🔵 <strong>Valor Planejado (BCWS)</strong>: Quanto do orçamento deveria estar comprometido até esta semana segundo o cronograma.</p>}
+            {finHasRealizada && <p>🟢 <strong>Valor Realizado (BCWP)</strong>: Avanço físico registrado convertido em R$ pelo total do orçamento.</p>}
+            {finHasFaturado  && <p>🟣 <strong>Faturado Real</strong>: Valor efetivamente medido/faturado (Módulo Medição de Contratos).</p>}
+            {finHasTendencia && <p>🟢 <strong>Tendência</strong>: Projeção do realizado físico até o fim do projeto.</p>}
+            <p className="text-slate-400 pt-1">Curva calculada pelo cruzamento da EAP do cronograma com os valores de venda do orçamento vinculado.</p>
           </div>
         </>
         );
