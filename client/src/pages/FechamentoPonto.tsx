@@ -3469,12 +3469,15 @@ export default function FechamentoPonto() {
                           <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">Nenhum colaborador encontrado</CommandEmpty>
                           <CommandGroup>
                             {(employeesList.data || []).map((e: any) => (
-                              <CommandItem key={e.id} value={`${e.nomeCompleto || ""} ${e.funcao || ""}`} onSelect={() => { setManualData(p => ({ ...p, employeeId: e.id })); setManualEmpPopoverOpen(false); }} className="flex items-center justify-between py-2 cursor-pointer">
+                              <CommandItem key={e.id} value={`${e.nomeCompleto || ""} ${e.funcao || ""}`} onSelect={() => { setManualData(p => ({ ...p, employeeId: e.id, obraId: e.obraAtualId || 0 })); setManualEmpPopoverOpen(false); }} className="flex items-center justify-between py-2 cursor-pointer">
                                 <div className="flex items-center gap-2">
                                   <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs shrink-0">{(e.nomeCompleto || "").charAt(0)}</div>
                                   <div>
                                     <p className="font-medium text-sm">{e.nomeCompleto}</p>
-                                    <p className="text-xs text-muted-foreground">{e.funcao || ""}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {e.funcao || ""}
+                                      {e.obraAtualNome ? <span className="ml-1 text-purple-600">· {e.obraAtualNome}</span> : ""}
+                                    </p>
                                   </div>
                                 </div>
                                 {manualData.employeeId === e.id && <Check className="h-4 w-4 text-purple-600 shrink-0" />}
