@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 629,
+    titulo: "Lançamento manual de ponto: seletor de período ao gerar dias automaticamente",
+    descricao: "Substituído o botão 'Preencher mês completo' por 'Preencher período' que abre um popover com dois campos numéricos — 'De dia' e 'Até dia' — permitindo gerar apenas o intervalo desejado do mês (ex.: dia 16 ao dia 30). Os valores padrão são 1 e o último dia do mês. O botão Gerar aplica o range escolhido.",
+    tipo: "melhoria",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 628,
     titulo: "Lançamento manual de ponto: removidos feriados automáticos",
     descricao: "A detecção automática de feriados brasileiros foi removida do lançamento manual de ponto. Feriados agora são tratados como dias úteis normais — recebem os horários da jornada ao preencher o mês completo e seguem o mesmo código de cores (verde/âmbar/azul/vermelho) dos demais dias. O usuário decide manualmente se um feriado deve ter ponto ou não.",

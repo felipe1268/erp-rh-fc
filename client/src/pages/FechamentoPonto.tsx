@@ -549,6 +549,9 @@ export default function FechamentoPonto() {
   });
   const [manualEmpPopoverOpen, setManualEmpPopoverOpen] = useState(false);
   const [manualDays, setManualDays] = useState<Array<{id: string; data: string; entrada1: string; saida1: string; entrada2: string; saida2: string}>>([]);
+  const [showRangePopover, setShowRangePopover] = useState(false);
+  const [rangeFrom, setRangeFrom] = useState(1);
+  const [rangeTo, setRangeTo] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(); });
   const [manualSaving, setManualSaving] = useState(false);
   const [resolveData, setResolveData] = useState({ status: "justificado" as string, justificativa: "" });
   const [expandedConflict, setExpandedConflict] = useState<string | null>(null); // "empId|data"
@@ -655,13 +658,16 @@ export default function FechamentoPonto() {
     }
   }, [showManualDialog]);
 
-  const gerarDiasUteisDoMes = () => {
+  const gerarDiasUteisDoMes = (fromDay?: number, toDay?: number) => {
     const [y, m] = mesAno.split("-").map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const start = Math.max(1, fromDay ?? 1);
+    const end = Math.min(daysInMonth, toDay ?? daysInMonth);
     const emp = (employeesList.data || []).find((e: any) => e.id === manualData.employeeId);
     const jornada = emp?.jornadaTrabalho || null;
     const dias: typeof manualDays = [];
-    const d = new Date(y, m - 1, 1);
-    while (d.getMonth() === m - 1) {
+    const d = new Date(y, m - 1, start);
+    while (d.getDate() <= end && d.getMonth() === m - 1) {
       const dow = d.getDay();
       const dateStr = d.toISOString().split("T")[0];
       const isWeekend = dow === 0 || dow === 6;
@@ -3583,9 +3589,41 @@ export default function FechamentoPonto() {
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <Label>Dias lançados <span className="text-muted-foreground font-normal text-xs">({manualDays.length} {manualDays.length === 1 ? "dia" : "dias"})</span></Label>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50" onClick={gerarDiasUteisDoMes} type="button">
-                      <CalendarDays className="h-3.5 w-3.5" /> Preencher mês completo
-                    </Button>
+                    <Popover open={showRangePopover} onOpenChange={setShowRangePopover}>
+                      <PopoverTrigger asChild>
+                        <Button size="sm" variant="outline" className="text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50" type="button">
+                          <CalendarDays className="h-3.5 w-3.5" /> Preencher período
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-3" align="end">
+                        <p className="text-xs font-semibold mb-3 text-foreground">Gerar dias automaticamente</p>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="flex-1">
+                            <label className="text-[11px] text-muted-foreground mb-1 block">De dia</label>
+                            <input
+                              type="number" min={1} max={31} value={rangeFrom}
+                              onChange={e => setRangeFrom(Math.max(1, Math.min(31, Number(e.target.value))))}
+                              className="w-full border rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400"
+                            />
+                          </div>
+                          <span className="text-muted-foreground mt-4">→</span>
+                          <div className="flex-1">
+                            <label className="text-[11px] text-muted-foreground mb-1 block">Até dia</label>
+                            <input
+                              type="number" min={1} max={31} value={rangeTo}
+                              onChange={e => setRangeTo(Math.max(1, Math.min(31, Number(e.target.value))))}
+                              className="w-full border rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" className="flex-1 text-xs" type="button" onClick={() => setShowRangePopover(false)}>Cancelar</Button>
+                          <Button size="sm" className="flex-1 text-xs bg-purple-600 hover:bg-purple-700 text-white" type="button" onClick={() => { gerarDiasUteisDoMes(rangeFrom, rangeTo); setShowRangePopover(false); }}>
+                            Gerar
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                     <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => setManualDays(p => [...p, { id: String(Date.now()), data: "", entrada1: "", saida1: "", entrada2: "", saida2: "" }])} type="button">
                       <Plus className="h-3.5 w-3.5" /> Adicionar dia
                     </Button>
@@ -3594,7 +3632,7 @@ export default function FechamentoPonto() {
 
                 {manualDays.length === 0 ? (
                   <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground bg-muted/20">
-                    Clique em <strong>"Adicionar dia"</strong> para inserir um dia, ou <strong>"Preencher mês completo"</strong> para lançar todos os dias de {formatMesAno(mesAno)} — feriados e fins de semana aparecem em vermelho sem horário.
+                    Clique em <strong>"Adicionar dia"</strong> para inserir um dia, ou <strong>"Preencher período"</strong> para gerar dias automaticamente de {formatMesAno(mesAno)} — fins de semana aparecem sem horário.
                   </div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
