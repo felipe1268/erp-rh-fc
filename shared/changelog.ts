@@ -3814,6 +3814,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-20 00:00:00",
   },
   {
+    version: 626,
+    titulo: "Lançamento manual de ponto: código de cores por conformidade com jornada",
+    descricao: "Cada linha da tabela de lançamento manual agora tem cor de fundo baseada na conformidade com a jornada cadastrada do colaborador: verde (bg-green-50) com badge '✓ OK' quando os 4 horários batem exatamente com a jornada; âmbar (bg-amber-50) com badge 'DIFER.' quando os horários diferem da jornada (ex: saiu mais cedo, chegou mais tarde); vermelho (bg-red-100) com badge 'FALTA' para dias úteis sem horário; vermelho claro (bg-red-50) para fins de semana e feriados. O nome do dia de semana também muda de cor conforme o status.",
+    tipo: "melhoria",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-20 00:00:00",
+  },
+  {
     version: 625,
     titulo: "Transferência de EPI: seletor visual com foto e tamanho",
     descricao: "Substituído o Select padrão do campo EPI no dialog Nova Transferência por um picker customizado (Popover) que exibe: miniatura da foto do EPI (ou ícone padrão se não houver foto), nome, tamanho destacado em azul, e estoque em verde/vermelho. O item selecionado também exibe a foto e o tamanho no campo de trigger. Inclui busca em tempo real por nome, tamanho ou CA.",

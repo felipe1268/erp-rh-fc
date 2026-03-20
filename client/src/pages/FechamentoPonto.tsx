@@ -3616,35 +3616,54 @@ export default function FechamentoPonto() {
                           </tr>
                         </thead>
                         <tbody>
-                          {manualDays.map((day, idx) => {
+                          {(() => {
+                            const selectedEmp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
+                            return manualDays.map((day, idx) => {
                             const dow = day.data ? ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][new Date(day.data + "T12:00:00").getDay()] : "";
                             const dowNum = day.data ? new Date(day.data + "T12:00:00").getDay() : -1;
                             const isWeekend = [0, 6].includes(dowNum);
                             const [yrRow] = day.data ? day.data.split("-").map(Number) : [0];
                             const isHoliday = day.data ? getBrazilianHolidays(yrRow).has(day.data) : false;
                             const isRed = isWeekend || isHoliday;
-                            const isFaltaMarcada = day.data && !isWeekend && !isHoliday && !day.entrada1 && !day.saida1 && !day.entrada2 && !day.saida2;
+                            const isFaltaMarcada = !!(day.data && !isWeekend && !isHoliday && !day.entrada1 && !day.saida1 && !day.entrada2 && !day.saida2);
+                            // Schedule comparison for color coding
+                            const sched = selectedEmp?.jornadaTrabalho && day.data ? getScheduleForDay(selectedEmp.jornadaTrabalho, day.data) : null;
+                            const schedHasTimes = !!(sched?.entrada1 && sched?.saida2);
+                            const hasAnyTime = !!(day.entrada1 || day.saida1 || day.entrada2 || day.saida2);
+                            const isOnSchedule = !isRed && !isFaltaMarcada && hasAnyTime && schedHasTimes &&
+                              day.entrada1 === sched!.entrada1 &&
+                              day.saida1 === sched!.saida1 &&
+                              day.entrada2 === sched!.entrada2 &&
+                              day.saida2 === sched!.saida2;
+                            const isOffSchedule = !isRed && !isFaltaMarcada && hasAnyTime && schedHasTimes && !isOnSchedule;
+                            const rowBg = isFaltaMarcada ? "bg-red-100/70"
+                              : isRed ? "bg-red-50/60"
+                              : isOnSchedule ? "bg-green-50/80"
+                              : isOffSchedule ? "bg-amber-50/80"
+                              : idx % 2 === 0 ? "" : "bg-muted/10";
                             return (
-                              <tr key={day.id} className={`border-t ${isFaltaMarcada ? "bg-red-100/70" : isRed ? "bg-red-50/60" : idx % 2 === 0 ? "" : "bg-muted/10"}`}>
+                              <tr key={day.id} className={`border-t ${rowBg}`}>
                                 <td className="px-2 py-1">
                                   <Input type="date" value={day.data} className="h-7 text-xs w-full" onChange={e => {
                                     const newDate = e.target.value;
                                     const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
-                                    const sched = newDate && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, newDate) : null;
+                                    const sc = newDate && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, newDate) : null;
                                     setManualDays(p => p.map(d => d.id === day.id ? {
                                       ...d, data: newDate,
-                                      entrada1: d.entrada1 || sched?.entrada1 || "",
-                                      saida1: d.saida1 || sched?.saida1 || "",
-                                      entrada2: d.entrada2 || sched?.entrada2 || "",
-                                      saida2: d.saida2 || sched?.saida2 || "",
+                                      entrada1: d.entrada1 || sc?.entrada1 || "",
+                                      saida1: d.saida1 || sc?.saida1 || "",
+                                      entrada2: d.entrada2 || sc?.entrada2 || "",
+                                      saida2: d.saida2 || sc?.saida2 || "",
                                     } : d));
                                   }} />
                                 </td>
                                 <td className="px-1 py-1 text-center">
                                   <div className="flex flex-col items-center gap-0.5">
-                                    <span className={`text-xs font-bold ${isRed || isFaltaMarcada ? "text-red-600" : "text-muted-foreground"}`}>{dow}</span>
+                                    <span className={`text-xs font-bold ${isRed || isFaltaMarcada ? "text-red-600" : isOnSchedule ? "text-green-700" : isOffSchedule ? "text-amber-700" : "text-muted-foreground"}`}>{dow}</span>
                                     {isHoliday && !isWeekend && <span className="text-[9px] text-red-500 leading-none">feriado</span>}
                                     {isFaltaMarcada && <span className="text-[9px] text-red-700 font-bold leading-none">FALTA</span>}
+                                    {isOnSchedule && <span className="text-[9px] text-green-700 font-bold leading-none">✓ OK</span>}
+                                    {isOffSchedule && <span className="text-[9px] text-amber-700 font-bold leading-none">DIFER.</span>}
                                   </div>
                                 </td>
                                 <td className="px-1 py-1"><Input type="time" value={day.entrada1} className={`h-7 text-xs w-24 font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
@@ -3657,10 +3676,9 @@ export default function FechamentoPonto() {
                                     title={isFaltaMarcada ? "Desfazer falta (preencher horários)" : "Marcar como falta (apaga horários)"}
                                     onClick={() => {
                                       if (isFaltaMarcada) {
-                                        // Undo: re-fill with schedule
                                         const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
-                                        const sched = day.data && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, day.data) : null;
-                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: sched?.entrada1 || "", saida1: sched?.saida1 || "", entrada2: sched?.entrada2 || "", saida2: sched?.saida2 || "" } : d));
+                                        const sc = day.data && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, day.data) : null;
+                                        setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: sc?.entrada1 || "", saida1: sc?.saida1 || "", entrada2: sc?.entrada2 || "", saida2: sc?.saida2 || "" } : d));
                                       } else {
                                         setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: "", saida1: "", entrada2: "", saida2: "" } : d));
                                       }
@@ -3677,7 +3695,8 @@ export default function FechamentoPonto() {
                                 </td>
                               </tr>
                             );
-                          })}
+                          });
+                          })()}
                         </tbody>
                       </table>
                     </div>
