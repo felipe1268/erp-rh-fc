@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 671,
+    titulo: "Espelho de Ponto — total de HE agora inclui sábado e domingo",
+    descricao: "Corrigido bug no cálculo do resumo do Espelho de Ponto: o loop `useMemo` que soma HE/atrasos pulava fins de semana com `continue` antes de acumular os valores. Agora sábados e domingos contribuem para totalHEMins e totalAtrasoMins. A contagem de diasFalta e trabalhados permanece apenas para dias úteis (seg–sex).",
+    tipo: "bug",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 670,
     titulo: "Horas Extras — regra 60% seg–sáb / 100% domingo aplicada em todas as empresas",
     descricao: "Corrigida classificação do sábado em horasExtras.ts: antes era agrupado com domingo (HE 100%), agora vai para grupo de dias úteis (HE 60%). Default de fallback em folhaPagamento.ts corrigido de 50% para 60%. Banco de dados atualizado: todas as 4 empresas (60002, 60004, 60005, 90001) agora com he_dias_uteis=60 e he_domingos_feriados=100.",

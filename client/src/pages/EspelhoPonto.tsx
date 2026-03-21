@@ -346,11 +346,14 @@ export default function EspelhoPonto() {
     let trabalhados = 0, diasFalta = 0, totalHEMins = 0, totalAtrasoMins = 0, totalTrabMins = 0;
     for (const d of allDays) {
       const { dow } = dayInfo(d);
-      if (dow === 0 || dow === 6) continue;
+      const isWeekendDay = dow === 0 || dow === 6;
       const r = recordMap[d];
+      // HE e atrasos somam TODOS os dias (incluindo sábado/domingo)
+      if (r) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
+      // Dias trabalhados e faltas apenas para dias úteis (seg–sex)
+      if (isWeekendDay) continue;
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") diasFalta++;
       else { trabalhados++; totalTrabMins += parseHHMM(r.horasTrabalhadas); }
-      if (r) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
     }
     return { trabalhados, diasFalta, totalHEMins, totalAtrasoMins, totalTrabMins };
   }, [allDays, recordMap]);
