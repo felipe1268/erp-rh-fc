@@ -762,7 +762,7 @@ export default function Ferias() {
                                     <PenLine className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
-                                {f.status === "agendada" && (
+                                {(f.status === "agendada" || f.status === "pendente" || f.status === "vencida") && (
                                   <Button size="sm" variant="ghost" className="h-7 px-2 text-green-700 hover:bg-green-50 font-medium text-xs" title="Marcar como Em Gozo" onClick={() => {
                                     if (confirm(`Confirmar que ${f.employeeName} está em gozo de férias?`)) {
                                       updateFerias.mutate({ id: f.id, status: "em_gozo" });

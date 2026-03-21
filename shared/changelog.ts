@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 704,
+    titulo: "Férias — Botão 'Iniciar Gozo' para pendente e vencida",
+    descricao: "O botão 'Iniciar Gozo' agora aparece também para períodos em status 'pendente' e 'vencida', não apenas 'agendada'. Permite que o RH marque o funcionário como Em Gozo diretamente, sem precisar aguardar a mudança automática de status ou percorrer o fluxo completo.",
+    tipo: "melhoria",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 703,
     titulo: "Vale — 'Não Pagar' persistente e botão Reverter",
     descricao: "O status 'Não Pagar' agora é salvo no banco e sobrevive ao fechamento e recálculo. Ao reabrir o cálculo do mês, funcionários já rejeitados aparecem automaticamente em vermelho. Botão 'Reverter' individual permite reincluir o funcionário no vale sem precisar recalcular tudo. O checkbox 'Selecionar todos' exclui quem já está rejeitado. Mutação reverterVale também reinsere o evento financeiro do vale.",
