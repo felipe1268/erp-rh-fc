@@ -98,9 +98,11 @@ function getOcorrencia(dateStr: string, record: any | null): OcorrenciaTag {
 
 export default function EspelhoPonto() {
   const { selectedCompanyId, getCompanyIdsForQuery, isConstrutoras } = useCompany();
-  const companyId = Number(selectedCompanyId) || 0;
+  // Mesmo padrão do FechamentoPonto
+  const companyId = (selectedCompanyId && selectedCompanyId !== "construtoras")
+    ? parseInt(selectedCompanyId, 10)
+    : 0;
   const companyIds = getCompanyIdsForQuery();
-  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
 
   const def = useMemo(() => defaultPeriodo(), []);
   const [dataInicio, setDataInicio] = useState(def.inicio);
@@ -130,17 +132,20 @@ export default function EspelhoPonto() {
     }
   }, []);
 
-  // Employee list for autocomplete
-  const empListQuery = trpc.horasExtras.listarFuncionariosParaPonto.useQuery(
-    { companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined },
-    { enabled: queryCompanyId > 0 }
+  // Employee list — mesmo endpoint usado pelo FechamentoPonto
+  const empListQuery = trpc.employees.list.useQuery(
+    { companyId, companyIds, excludeTerminated: true },
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const empList: any[] = (empListQuery.data as any[]) || [];
 
   // Espelho query
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const espelhoQuery = trpc.horasExtras.getEspelhoPontoRange.useQuery(
-    queryParams ? { companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, ...queryParams } : { companyId: 0, employeeId: 0, dataInicio: "", dataFim: "" },
-    { enabled: !!queryParams }
+    queryParams
+      ? { companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, ...queryParams }
+      : { companyId: 0, employeeId: 0, dataInicio: "", dataFim: "" },
+    { enabled: !!queryParams && (queryCompanyId > 0 || companyIds.length > 0) }
   );
 
   const filteredEmps = useMemo(() => {
