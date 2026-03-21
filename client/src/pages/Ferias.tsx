@@ -638,31 +638,34 @@ export default function Ferias() {
           const prestes1 = (alertas.prestesVencer || []).filter((v: any) => (v.numeroPeriodo || 1) === 1);
           const hasAny = vencidas1.length > 0 || vencidas2.length > 0 || prestes2.length > 0 || prestes1.length > 0;
           if (!hasAny) return null;
-          const AlertCard = ({ icon: Icon, count, title, items, accentClass, textClass, overflowClass }: {
+          const AlertCard = ({ icon: Icon, count, title, items, borderClass, numClass, nameClass, dateClass }: {
             icon: any; count: number; title: string; items: any[];
-            accentClass: string; textClass: string; overflowClass: string;
+            borderClass: string; numClass: string; nameClass: string; dateClass: string;
           }) => (
-            <div className={`rounded-lg border-l-4 border border-l-current bg-white px-4 py-3 ${accentClass}`}>
-              <p className={`text-xs font-semibold flex items-center gap-1.5 ${textClass}`}>
-                <Icon className="h-3.5 w-3.5 shrink-0" /> {count} {title}
-              </p>
-              <div className="mt-1.5 space-y-0.5">
-                {items.slice(0, 5).map((v: any) => (
-                  <p key={v.id} className={`text-xs ${textClass} opacity-80`}>
-                    <span className="font-medium cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
-                    {" — "}Concessivo até {formatDate(v.periodoConcessivoFim)}
-                  </p>
-                ))}
-                {items.length > 5 && <p className={`text-[11px] ${overflowClass} mt-0.5`}>+ {items.length - 5} outros</p>}
-              </div>
-            </div>
+            <Card className={`shadow-sm border-l-4 ${borderClass}`}>
+              <CardContent className="px-4 py-3">
+                <p className={`text-xs font-semibold flex items-center gap-1.5 mb-2 ${numClass}`}>
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-base font-bold">{count}</span> {title}
+                </p>
+                <div className="space-y-0.5">
+                  {items.slice(0, 5).map((v: any) => (
+                    <p key={v.id} className="text-xs">
+                      <span className={`font-medium cursor-pointer hover:underline ${nameClass}`} onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
+                      <span className={`${dateClass}`}> — Concessivo até {formatDate(v.periodoConcessivoFim)}</span>
+                    </p>
+                  ))}
+                  {items.length > 5 && <p className={`text-[11px] ${dateClass} mt-1`}>+ {items.length - 5} outros</p>}
+                </div>
+              </CardContent>
+            </Card>
           );
           return (
-            <div className="space-y-1.5">
-              {vencidas1.length > 0 && <AlertCard icon={AlertTriangle} count={vencidas1.length} title="Férias Vencidas — 1º Período Concessivo Expirado (Art. 134 CLT)" items={vencidas1} accentClass="border-red-300 border-l-red-500" textClass="text-red-700" overflowClass="text-red-400" />}
-              {vencidas2.length > 0 && <AlertCard icon={AlertTriangle} count={vencidas2.length} title="Férias Vencidas — 2º Período Expirado — Risco de Pagamento em Dobro" items={vencidas2} accentClass="border-red-400 border-l-red-700" textClass="text-red-800" overflowClass="text-red-500" />}
-              {prestes1.length > 0 && <AlertCard icon={Clock} count={prestes1.length} title="Prestes a Vencer — 1º Período (próximos 60 dias)" items={prestes1} accentClass="border-amber-200 border-l-amber-400" textClass="text-amber-700" overflowClass="text-amber-400" />}
-              {prestes2.length > 0 && <AlertCard icon={Clock} count={prestes2.length} title="Prestes a Vencer — 2º Período (próximos 60 dias)" items={prestes2} accentClass="border-orange-200 border-l-orange-500" textClass="text-orange-700" overflowClass="text-orange-400" />}
+            <div className="space-y-2">
+              {vencidas1.length > 0 && <AlertCard icon={AlertTriangle} count={vencidas1.length} title="Férias Vencidas — 1º Período Concessivo Expirado (Art. 134 CLT)" items={vencidas1} borderClass="border-l-red-500" numClass="text-red-700" nameClass="text-red-700" dateClass="text-red-500" />}
+              {vencidas2.length > 0 && <AlertCard icon={AlertTriangle} count={vencidas2.length} title="Férias Vencidas — 2º Período Expirado — Risco de Pagamento em Dobro" items={vencidas2} borderClass="border-l-red-700" numClass="text-red-800" nameClass="text-red-800" dateClass="text-red-600" />}
+              {prestes1.length > 0 && <AlertCard icon={Clock} count={prestes1.length} title="Prestes a Vencer — 1º Período (próximos 60 dias)" items={prestes1} borderClass="border-l-amber-400" numClass="text-amber-700" nameClass="text-amber-700" dateClass="text-amber-500" />}
+              {prestes2.length > 0 && <AlertCard icon={Clock} count={prestes2.length} title="Prestes a Vencer — 2º Período (próximos 60 dias)" items={prestes2} borderClass="border-l-orange-500" numClass="text-orange-700" nameClass="text-orange-700" dateClass="text-orange-500" />}
             </div>
           );
         })()}

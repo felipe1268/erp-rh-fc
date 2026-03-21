@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 698,
+    titulo: "Férias — Alertas no estilo Card com borda colorida",
+    descricao: "Cards de alerta agora usam o mesmo componente Card com sombra e borda esquerda colorida dos cartões de estatística (Total, Vencidas, Em Gozo etc.), seguindo o padrão visual da página.",
+    tipo: "improvement",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 697,
     titulo: "Férias — Alertas com visual limpo e sem cargo duplicado",
     descricao: "Cards de alerta redesenhados: fundo branco com borda esquerda colorida, sem cargo (evitando o duplo '—'), tipografia compacta e espaçamento reduzido para leitura mais direta.",
