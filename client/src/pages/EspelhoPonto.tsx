@@ -356,7 +356,8 @@ export default function EspelhoPonto() {
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") diasFalta++;
       else { trabalhados++; totalTrabMins += parseHHMM(r.horasTrabalhadas); }
     }
-    return { trabalhados, diasFalta, totalHEMins, totalAtrasoMins, totalTrabMins };
+    const saldoHEMins = totalHEMins - totalAtrasoMins;
+    return { trabalhados, diasFalta, totalHEMins, totalAtrasoMins, totalTrabMins, saldoHEMins };
   }, [allDays, recordMap]);
 
   // Hide Ent.3/Saí.3 column when no records have a third shift
@@ -546,7 +547,7 @@ export default function EspelhoPonto() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { icon: Clock,       label: "Dias Trabalhados", value: `${summary.trabalhados}`, sub: minsToHHMM(summary.totalTrabMins, "0h") + " total", color: "text-slate-700", border: "border-t-slate-400" },
-                { icon: Clock,       label: "Hora Extra",        value: summary.totalHEMins > 0 ? minsToHHMM(summary.totalHEMins) : "—", sub: summary.totalHEMins > 0 ? "acumulada no período" : "nenhuma no período", color: summary.totalHEMins > 0 ? "text-blue-600" : "text-slate-400", border: summary.totalHEMins > 0 ? "border-t-blue-400" : "border-t-slate-200" },
+                { icon: Clock,       label: "Saldo HE",          value: summary.saldoHEMins !== 0 ? `${summary.saldoHEMins > 0 ? "+" : "-"}${minsToHHMM(Math.abs(summary.saldoHEMins))}` : "—", sub: summary.totalHEMins > 0 || summary.totalAtrasoMins > 0 ? `HE ${minsToHHMM(summary.totalHEMins, "0h")} − Atr. ${minsToHHMM(summary.totalAtrasoMins, "0h")}` : "nenhuma ocorrência", color: summary.saldoHEMins > 0 ? "text-blue-600" : summary.saldoHEMins < 0 ? "text-red-600" : "text-slate-400", border: summary.saldoHEMins > 0 ? "border-t-blue-400" : summary.saldoHEMins < 0 ? "border-t-red-400" : "border-t-slate-200" },
                 { icon: CalendarOff, label: "Faltas",            value: `${summary.diasFalta}`, sub: summary.diasFalta > 0 ? "dias sem registro" : "sem faltas", color: summary.diasFalta > 0 ? "text-red-600" : "text-slate-400", border: summary.diasFalta > 0 ? "border-t-red-400" : "border-t-slate-200" },
                 { icon: AlertCircle, label: "Atrasos",           value: summary.totalAtrasoMins > 0 ? minsToHHMM(summary.totalAtrasoMins) : "—", sub: summary.totalAtrasoMins > 0 ? "total acumulado" : "nenhum no período", color: summary.totalAtrasoMins > 0 ? "text-amber-600" : "text-slate-400", border: summary.totalAtrasoMins > 0 ? "border-t-amber-400" : "border-t-slate-200" },
               ].map(({ icon: Icon, label, value, sub, color, border }) => (
@@ -715,14 +716,15 @@ export default function EspelhoPonto() {
                   <span className="font-mono text-sm font-black text-slate-700">{minsToHHMM(summary.totalTrabMins, "0h00")}</span>
                 </div>
                 <div className="px-2 py-3 text-center">
-                  <span className={`font-mono text-sm font-black ${summary.totalHEMins > 0 ? "text-blue-600" : "text-slate-300"}`}>
-                    {summary.totalHEMins > 0 ? `+${minsToHHMM(summary.totalHEMins)}` : "—"}
+                  <span className={`font-mono text-sm font-black ${summary.saldoHEMins > 0 ? "text-blue-600" : summary.saldoHEMins < 0 ? "text-red-600" : "text-slate-300"}`}>
+                    {summary.saldoHEMins !== 0 ? `${summary.saldoHEMins > 0 ? "+" : "-"}${minsToHHMM(Math.abs(summary.saldoHEMins))}` : "—"}
                   </span>
                 </div>
                 <div className="px-2 py-3 col-span-3 flex items-center gap-1 flex-wrap">
+                  {summary.totalHEMins > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">HE +{minsToHHMM(summary.totalHEMins)}</span>}
+                  {summary.totalAtrasoMins > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Atr. -{minsToHHMM(summary.totalAtrasoMins)}</span>}
                   {summary.diasFalta > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{summary.diasFalta} falta(s)</span>}
-                  {summary.totalAtrasoMins > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Atr. {minsToHHMM(summary.totalAtrasoMins)}</span>}
-                  {summary.diasFalta === 0 && summary.totalAtrasoMins === 0 && <span className="text-[10px] text-slate-400">Sem ocorrências</span>}
+                  {summary.totalHEMins === 0 && summary.totalAtrasoMins === 0 && summary.diasFalta === 0 && <span className="text-[10px] text-slate-400">Sem ocorrências</span>}
                 </div>
               </div>
 

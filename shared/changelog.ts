@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 676,
+    titulo: "Espelho de Ponto — Saldo HE líquido (HE − Atrasos)",
+    descricao: "O card e o rodapé 'Total do Período' agora exibem o Saldo HE = HE positiva − Atrasos, com sinal + (azul) ou − (vermelho). Os badges de detalhe no rodapé mostram individualmente HE +Xh e Atr. -Yh para transparência do cálculo.",
+    tipo: "feature",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 675,
     titulo: "Espelho de Ponto — horas trabalhadas em sábado e domingo computadas como HE",
     descricao: "Corrigido bug em que registros manuais de sábado e domingo não mostravam badge H.Extra no Espelho de Ponto. getEspelhoPontoRange agora sobrescreve horasExtras = horasTrabalhadas para todo registro de fim de semana (dow=0 ou dow=6), corrigindo tanto histórico quanto novos lançamentos. manualEntry também corrigido: para fins de semana, expectedMins=0 e heMins=totalMinutes, sem atraso.",
