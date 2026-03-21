@@ -1665,7 +1665,6 @@ export default function FolhaPagamento() {
                       <th className="text-left py-2 px-2">Funcionário</th>
                       <th className="text-right py-2 px-2">Salário</th>
                       <th className="text-right py-2 px-2">Adiantamento ({valeResult.percentual}%)</th>
-                      <th className="text-right py-2 px-2">HE (R$)</th>
                       <th className="text-right py-2 px-2">Total Vale</th>
                       <th className="text-center py-2 px-2">Status</th>
                     </tr>
@@ -1684,7 +1683,6 @@ export default function FolhaPagamento() {
                         </td>
                         <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
                         <td className="text-right py-2 px-2">{formatBRL(f.valorAdiantamento)}</td>
-                        <td className="text-right py-2 px-2 text-orange-700 font-medium">{formatBRL(f.valorHE)}</td>
                         <td className="text-right py-2 px-2 font-bold">{formatBRL(f.valorTotalVale)}</td>
                         <td className="text-center py-2 px-2">
                           <Badge className="bg-green-100 text-green-700 text-[10px]">
@@ -1697,7 +1695,6 @@ export default function FolhaPagamento() {
                   <tfoot>
                     <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
                       <td className="py-2 px-2">TOTAL APROVADOS</td>
-                      <td className="text-right py-2 px-2">—</td>
                       <td className="text-right py-2 px-2">—</td>
                       <td className="text-right py-2 px-2">—</td>
                       <td className="text-right py-2 px-2 text-lg">{formatBRL(totalSemAlerta)}</td>
