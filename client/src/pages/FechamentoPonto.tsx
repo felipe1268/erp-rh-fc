@@ -1412,85 +1412,144 @@ export default function FechamentoPonto() {
                 {cardFilter === "conflitos" && conflitos.data && conflitos.data.length > 0 && (
                   <Card className="border-orange-300">
                     <CardHeader className="pb-3 bg-orange-50 rounded-t-lg">
-                      <CardTitle className="text-base flex items-center gap-2 text-orange-800">
-                        <AlertCircle className="h-5 w-5" />
-                        Conflitos de Obra no Mesmo Dia — {formatMesAno(mesAno)}
-                      </CardTitle>
-                      <p className="text-xs text-orange-600 mt-1">
-                        Funcionários que registraram ponto em 2+ obras no mesmo dia. Verifique cada caso.
-                      </p>
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <CardTitle className="text-base flex items-center gap-2 text-orange-800">
+                            <AlertCircle className="h-5 w-5" />
+                            Conflitos de Obra no Mesmo Dia — {formatMesAno(mesAno)}
+                          </CardTitle>
+                          <p className="text-xs text-orange-600 mt-1">
+                            Clique em uma linha para expandir e escolher a ação de resolução.
+                          </p>
+                        </div>
+                        {(() => {
+                          const validCount = (conflitos.data || []).filter((c: any) => !c.hasOverlap && !c.isSameObraDuplicate).length;
+                          if (validCount === 0) return null;
+                          return (
+                            <Button size="sm" variant="outline"
+                              className="border-green-600 text-green-700 hover:bg-green-50 text-xs"
+                              disabled={resolveAllConflitosMut.isPending}
+                              onClick={() => resolveAllConflitosMut.mutate({ companyId, companyIds, mesReferencia: mesAno, acao: "confirmar_deslocamento", justificativa: "Deslocamentos válidos confirmados em lote" })}>
+                              <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                              Confirmar {validCount} deslocamento{validCount > 1 ? "s" : ""} válido{validCount > 1 ? "s" : ""}
+                            </Button>
+                          );
+                        })()}
+                      </div>
                     </CardHeader>
-                    <CardContent className="pt-3">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b text-left bg-orange-50/50">
-                              <th className="p-2 font-medium">Funcionário</th>
-                              <th className="p-2 font-medium">Data</th>
-                              <th className="p-2 font-medium">Dia</th>
-                              <th className="p-2 font-medium">Status</th>
-                              <th className="p-2 font-medium">Obras em Conflito</th>
-                              <th className="p-2 font-medium text-center">Horas</th>
-                              <th className="p-2 font-medium text-center">Ações</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {conflitos.data.map((c: any, idx: number) => (
-                              <tr key={idx} className={`border-b last:border-0 hover:bg-orange-50/30 ${c.hasOverlap ? "border-l-4 border-l-red-500 bg-red-50/20" : c.isSameObraDuplicate ? "border-l-4 border-l-purple-500 bg-purple-50/20" : "border-l-4 border-l-green-500"}`}>
-                                <td className="p-2">
-                                  <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openPontoDetalhe(c.employeeId)}>
-                                    {c.employeeName}
-                                  </button>
-                                </td>
-                                <td className="p-2">{c.data ? new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td>
-                                <td className="p-2 text-muted-foreground">{dayOfWeek(c.data)}</td>
-                                <td className="p-2">
-                                  {c.hasOverlap ? (
-                                    <Badge className="text-xs bg-red-100 text-red-800 border border-red-300">
-                                      <XCircle className="h-3 w-3 mr-1" /> Sobreposição
-                                    </Badge>
-                                  ) : c.isSameObraDuplicate ? (
-                                    <Badge className="text-xs bg-purple-100 text-purple-800 border border-purple-300">
-                                      <Copy className="h-3 w-3 mr-1" /> Batida Duplicada
-                                    </Badge>
-                                  ) : (
-                                    <Badge className="text-xs bg-green-100 text-green-800 border border-green-300">
-                                      <CheckCircle className="h-3 w-3 mr-1" /> Válido
-                                    </Badge>
-                                  )}
-                                </td>
-                                <td className="p-2">
+                    <CardContent className="pt-3 px-3">
+                      <div className="space-y-2">
+                        {conflitos.data.map((c: any, idx: number) => {
+                          const key = `${c.employeeId}|${c.data}`;
+                          const isExpanded = expandedConflict === key;
+                          const isOverlap = c.hasOverlap;
+                          const isDupl = c.isSameObraDuplicate;
+                          const isValido = !isOverlap && !isDupl;
+                          return (
+                            <div key={idx} className={`border rounded-lg overflow-hidden ${isOverlap ? "border-l-4 border-l-red-500 border-red-200" : isDupl ? "border-l-4 border-l-purple-500 border-purple-200" : "border-l-4 border-l-green-500 border-green-200"}`}>
+                              {/* Linha clicável */}
+                              <button
+                                className={`w-full text-left p-3 flex items-center gap-3 transition-colors text-sm ${isExpanded ? (isOverlap ? "bg-red-50" : isDupl ? "bg-purple-50" : "bg-green-50") : "hover:bg-orange-50/40"}`}
+                                onClick={() => { setExpandedConflict(isExpanded ? null : key); setConflictJustificativa(""); }}>
+                                <div className="flex-1 grid grid-cols-[auto_auto_1fr_auto] items-center gap-3 min-w-0">
+                                  <span className="font-semibold text-blue-700 truncate max-w-[180px]">{c.employeeName}</span>
+                                  <span className="text-muted-foreground whitespace-nowrap">{c.data ? new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"} ({dayOfWeek(c.data)})</span>
                                   <div className="flex flex-wrap gap-1">
                                     {c.obras.map((o: any, i: number) => (
-                                      <Badge key={i} variant="outline" className={`text-xs ${c.hasOverlap ? "border-red-300 text-red-700 bg-red-50" : c.isSameObraDuplicate ? "border-purple-300 text-purple-700 bg-purple-50" : "border-green-300 text-green-700 bg-green-50"}`}>
+                                      <Badge key={i} variant="outline" className={`text-xs ${isOverlap ? "border-red-300 text-red-700 bg-red-50" : isDupl ? "border-purple-300 text-purple-700 bg-purple-50" : "border-green-300 text-green-700 bg-green-50"}`}>
                                         {o.obraNome || "Sem Obra"} ({o.horasTrabalhadas || "0:00"})
                                       </Badge>
                                     ))}
                                   </div>
-                                </td>
-                                <td className="p-2 text-center font-mono text-sm">
-                                  {c.obras.reduce((sum: number, o: any) => {
-                                    if (!o.horasTrabalhadas) return sum;
-                                    const [h, m] = o.horasTrabalhadas.split(":").map(Number);
-                                    return sum + (h || 0) * 60 + (m || 0);
-                                  }, 0) > 0 ? (() => {
-                                    const total = c.obras.reduce((sum: number, o: any) => {
-                                      if (!o.horasTrabalhadas) return sum;
-                                      const [h, m] = o.horasTrabalhadas.split(":").map(Number);
-                                      return sum + (h || 0) * 60 + (m || 0);
-                                    }, 0);
-                                    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-                                  })() : "-"}
-                                </td>
-                                <td className="p-2 text-center">
-                                  <Button variant="ghost" size="sm" title="Raio-X do Funcionário" onClick={() => openRaioX(c.employeeId)}>
-                                    <Users className="h-4 w-4" />
-                                  </Button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                                  {isOverlap ? (
+                                    <Badge className="text-xs bg-red-100 text-red-800 border border-red-300 shrink-0">
+                                      <XCircle className="h-3 w-3 mr-1" /> Sobreposição
+                                    </Badge>
+                                  ) : isDupl ? (
+                                    <Badge className="text-xs bg-purple-100 text-purple-800 border border-purple-300 shrink-0">
+                                      <Copy className="h-3 w-3 mr-1" /> Duplicada
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="text-xs bg-green-100 text-green-800 border border-green-300 shrink-0">
+                                      <CheckCircle className="h-3 w-3 mr-1" /> Válido
+                                    </Badge>
+                                  )}
+                                </div>
+                                <span className="text-muted-foreground text-xs">{isExpanded ? "▲" : "▼"}</span>
+                              </button>
+
+                              {/* Painel expandido de resolução */}
+                              {isExpanded && (
+                                <div className={`border-t p-3 space-y-3 ${isOverlap ? "bg-red-50/50" : isDupl ? "bg-purple-50/50" : "bg-green-50/50"}`}>
+                                  <div>
+                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Justificativa (opcional)</label>
+                                    <input
+                                      className="w-full text-sm border rounded px-2 py-1 bg-white"
+                                      placeholder="Motivo da resolução..."
+                                      value={conflictJustificativa}
+                                      onChange={e => setConflictJustificativa(e.target.value)}
+                                    />
+                                  </div>
+
+                                  {/* Deslocamento válido — confirmar tudo */}
+                                  {isValido && (
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                      <p className="text-xs text-green-700 flex-1">Horários sem sobreposição — funcionário trabalhou nas duas obras em turnos distintos.</p>
+                                      <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                                        disabled={resolveConflitoMut.isPending}
+                                        onClick={() => resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", justificativa: conflictJustificativa || "Deslocamento real entre obras confirmado" })}>
+                                        <CheckCircle className="h-3.5 w-3.5 mr-1" /> Confirmar Deslocamento
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  {/* Sobreposição — escolher qual obra manter */}
+                                  {isOverlap && (
+                                    <div>
+                                      <p className="text-xs text-red-700 mb-2">Horários sobrepostos — escolha qual obra manter (a outra será removida):</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {c.obras.map((o: any, i: number) => (
+                                          <Button key={i} size="sm" variant="outline" className="border-red-400 text-red-700 hover:bg-red-50 text-xs"
+                                            disabled={resolveConflitoMut.isPending}
+                                            onClick={() => resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: o.obraId, justificativa: conflictJustificativa || `Mantido na obra ${o.obraNome} (sobreposição resolvida)` })}>
+                                            Manter: {o.obraNome || "Sem Obra"}
+                                          </Button>
+                                        ))}
+                                        <Button size="sm" variant="outline" className="border-slate-400 text-slate-700 hover:bg-slate-50 text-xs"
+                                          disabled={resolveConflitoMut.isPending}
+                                          onClick={() => resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "marcar_falta", justificativa: conflictJustificativa || "Conflito de obra — registrado como falta" })}>
+                                          Registrar como Falta
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Batida duplicada — excluir por id */}
+                                  {isDupl && (
+                                    <div>
+                                      <p className="text-xs text-purple-700 mb-2">Batida duplicada na mesma obra — escolha qual registro remover:</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {c.obras.map((o: any, i: number) => (
+                                          <Button key={i} size="sm" variant="outline" className="border-purple-400 text-purple-700 hover:bg-purple-50 text-xs"
+                                            disabled={resolveConflitoMut.isPending}
+                                            onClick={() => resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "excluir_por_id", recordId: o.id, justificativa: conflictJustificativa || `Batida duplicada removida (entrada: ${o.entrada1})` })}>
+                                            Excluir: {o.obraNome} — {o.entrada1 || "?"} ({o.horasTrabalhadas || "0:00"})
+                                          </Button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="flex justify-end">
+                                    <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => openRaioX(c.employeeId)}>
+                                      <Users className="h-3.5 w-3.5 mr-1" /> Ver Raio-X
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>

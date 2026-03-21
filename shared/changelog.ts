@@ -4021,6 +4021,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 648,
+    titulo: "Fechamento de Ponto — resolução de conflitos de obra diretamente na tabela",
+    descricao: "A tabela de conflitos agora tem ações inline: (1) Clique em qualquer linha para expandir e ver as opções; (2) Conflito Válido (deslocamento sem sobreposição): botão 'Confirmar Deslocamento' resolve com rateio proporcional; (3) Sobreposição: botões 'Manter: [Obra X]' para cada obra + opção 'Registrar como Falta'; (4) Batida Duplicada: botões 'Excluir: [registro]' para remover o duplicado; (5) Campo de justificativa por linha; (6) Botão 'Confirmar N deslocamentos válidos' no cabeçalho para resolver todos os casos sem sobreposição em lote; (7) Após qualquer resolução o aviso some automaticamente.",
+    tipo: "melhoria",
+    modulos: "Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 647,
     titulo: "Espelho de Ponto — redesign didático + edição integrada ao Fechamento de Ponto",
     descricao: "Redesign completo do Espelho de Ponto com foco em legibilidade: (1) Layout de cartão de ponto clássico com colunas separadas por turno (Entrada 1, Saída 1, Entrada 2, Saída 2, Ent/Saí 3, Total, H. Extra, Ocorrência); (2) Ícone de lápis por linha (aparece no hover) — abre modal de edição inline para correção de qualquer dia; (3) Edição via trpc.fechamentoPonto.manualEntry — mesmo endpoint do módulo Fechamento de Ponto, garantindo integridade dos dados (ajuste manual sobrescreve DIXI, atualiza inconsistências); (4) Modal com 3 turnos, motivo do ajuste, observação e alerta sobre o ajuste manual; (5) Após salvar, dados são recarregados automaticamente; (6) Legenda integrada no cabeçalho da tabela; (7) Coluna H. Extra mostra atrasos negativos em âmbar quando aplicável.",
