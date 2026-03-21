@@ -3531,7 +3531,7 @@ export const payrollAdvances = pgTable("payroll_advances", {
         horasExtrasQtd: varchar({ length: 10 }).default('0'),
         valorTotalVale: varchar({ length: 20 }).notNull(),
         bloqueado: smallint().default(0).notNull(),
-        motivoBloqueio: varchar({ length: 255 }),
+        motivoBloqueio: text(),
         faltasNoPeriodo: integer().default(0),
         valorHora: varchar({ length: 20 }),
         cargaHorariaDiaria: integer().default(8),
