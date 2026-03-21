@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 708,
+    titulo: "Bugfix — Upload de recibo de férias corrigido",
+    descricao: "Corrigido erro 'No procedure found on path avisoPrevio.ferias.uploadReciboFerias': o procedimento estava registrado erroneamente dentro do router avisoPrevio e foi movido para o sub-router ferias, alinhando o caminho tRPC ao que o cliente espera. Colunas do vacation_periods também protegidas por ColFix no servidor.",
+    tipo: "bugfix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 707,
     titulo: "Férias — Acréscimos, descontos e anexo de recibo PDF",
     descricao: "No detalhe do período de férias, adicionadas seções de Acréscimos (bônus, gratificação + descrição) e Descontos (pensão alimentícia, outros descontos + descrição). Todos os valores são deduzidos/somados ao Valor Líquido e salvos no banco. Adicionada também a possibilidade de anexar o recibo de férias da contabilidade (PDF ou imagem) com download/substituição direto no painel.",
