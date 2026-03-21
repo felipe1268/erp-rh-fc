@@ -631,40 +631,86 @@ export default function Ferias() {
         </div>
 
         {/* Alerts */}
-        {alertas && ((alertas.vencidas?.length || 0) > 0 || (alertas.prestesVencer?.length || 0) > 0) && (
-          <div className="space-y-2">
-            {(alertas.vencidas?.length || 0) > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-sm font-semibold text-red-800 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" /> {alertas.vencidas.length} Férias Vencidas — Período Concessivo Expirado (Art. 134 CLT)
-                </p>
-                <div className="mt-2 space-y-1">
-                  {alertas.vencidas.slice(0, 5).map((v: any) => (
-                    <p key={v.id} className="text-xs text-red-700">
-                      <span className="font-medium cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
-                      {" — "}{v.employeeCargo} — Concessivo até {formatDate(v.periodoConcessivoFim)}
-                    </p>
-                  ))}
+        {alertas && (() => {
+          const vencidas1 = (alertas.vencidas || []).filter((v: any) => (v.numeroPeriodo || 1) === 1);
+          const vencidas2 = (alertas.vencidas || []).filter((v: any) => (v.numeroPeriodo || 1) >= 2);
+          const prestes2 = (alertas.prestesVencer || []).filter((v: any) => (v.numeroPeriodo || 1) >= 2);
+          const prestes1 = (alertas.prestesVencer || []).filter((v: any) => (v.numeroPeriodo || 1) === 1);
+          const hasAny = vencidas1.length > 0 || vencidas2.length > 0 || prestes2.length > 0 || prestes1.length > 0;
+          if (!hasAny) return null;
+          return (
+            <div className="space-y-2">
+              {/* 1º período vencido */}
+              {vencidas1.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-red-800 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" /> {vencidas1.length} Férias Vencidas — 1º Período Concessivo Expirado (Art. 134 CLT)
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {vencidas1.slice(0, 5).map((v: any) => (
+                      <p key={v.id} className="text-xs text-red-700">
+                        <span className="font-medium cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
+                        {" — "}{v.employeeCargo} — Concessivo até {formatDate(v.periodoConcessivoFim)}
+                      </p>
+                    ))}
+                    {vencidas1.length > 5 && <p className="text-xs text-red-500 mt-1">+ {vencidas1.length - 5} outros</p>}
+                  </div>
                 </div>
-              </div>
-            )}
-            {(alertas.prestesVencer?.length || 0) > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
-                  <Clock className="h-4 w-4" /> {alertas.prestesVencer.length} Férias Prestes a Vencer (próximos 60 dias)
-                </p>
-                <div className="mt-2 space-y-1">
-                  {alertas.prestesVencer.slice(0, 5).map((v: any) => (
-                    <p key={v.id} className="text-xs text-amber-700">
-                      <span className="font-medium cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
-                      {" — "}{v.employeeCargo} — Concessivo até {formatDate(v.periodoConcessivoFim)}
-                    </p>
-                  ))}
+              )}
+              {/* 2º período vencido — crítico */}
+              {vencidas2.length > 0 && (
+                <div className="bg-red-100 border border-red-400 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-red-900 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" /> {vencidas2.length} Férias Vencidas — 2º Período Expirado ⚠ Risco de Pagamento em Dobro
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {vencidas2.slice(0, 5).map((v: any) => (
+                      <p key={v.id} className="text-xs text-red-800">
+                        <span className="font-medium cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
+                        {" — "}{v.employeeCargo} — Concessivo até {formatDate(v.periodoConcessivoFim)}
+                      </p>
+                    ))}
+                    {vencidas2.length > 5 && <p className="text-xs text-red-600 mt-1">+ {vencidas2.length - 5} outros</p>}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+              {/* 1º período prestes a vencer */}
+              {prestes1.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                    <Clock className="h-4 w-4" /> {prestes1.length} Prestes a Vencer — 1º Período (próximos 60 dias)
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {prestes1.slice(0, 5).map((v: any) => (
+                      <p key={v.id} className="text-xs text-amber-700">
+                        <span className="font-medium cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
+                        {" — "}{v.employeeCargo} — Concessivo até {formatDate(v.periodoConcessivoFim)}
+                      </p>
+                    ))}
+                    {prestes1.length > 5 && <p className="text-xs text-amber-500 mt-1">+ {prestes1.length - 5} outros</p>}
+                  </div>
+                </div>
+              )}
+              {/* 2º período prestes a vencer — alerta forte */}
+              {prestes2.length > 0 && (
+                <div className="bg-orange-50 border border-orange-300 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-orange-800 flex items-center gap-2">
+                    <Clock className="h-4 w-4" /> {prestes2.length} Prestes a Vencer — 2º Período (próximos 60 dias) ⚠ Atenção
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {prestes2.slice(0, 5).map((v: any) => (
+                      <p key={v.id} className="text-xs text-orange-700">
+                        <span className="font-medium cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
+                        {" — "}{v.employeeCargo} — Concessivo até {formatDate(v.periodoConcessivoFim)}
+                      </p>
+                    ))}
+                    {prestes2.length > 5 && <p className="text-xs text-orange-500 mt-1">+ {prestes2.length - 5} outros</p>}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Tabs */}
         <Tabs value={tab} onValueChange={setTab}>

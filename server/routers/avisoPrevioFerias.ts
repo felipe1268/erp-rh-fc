@@ -1831,6 +1831,7 @@ export const avisoPrevioFeriasRouter = router({
           employeeId: vacationPeriods.employeeId,
           periodoConcessivoFim: vacationPeriods.periodoConcessivoFim,
           status: vacationPeriods.status,
+          numeroPeriodo: vacationPeriods.numeroPeriodo,
           employeeName: employees.nomeCompleto,
           employeeCargo: employees.cargo,
         })
@@ -1845,11 +1846,13 @@ export const avisoPrevioFeriasRouter = router({
           sql`${vacationPeriods.periodoConcessivoFim} < ${hoje}`,
         ));
         
+        // Prestes a vencer = todos os próximos 60 dias (1º e 2º período)
         const prestesVencer = await db.select({
           id: vacationPeriods.id,
           employeeId: vacationPeriods.employeeId,
           periodoConcessivoFim: vacationPeriods.periodoConcessivoFim,
           status: vacationPeriods.status,
+          numeroPeriodo: vacationPeriods.numeroPeriodo,
           employeeName: employees.nomeCompleto,
           employeeCargo: employees.cargo,
         })

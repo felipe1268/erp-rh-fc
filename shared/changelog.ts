@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 696,
+    titulo: "Férias — Alertas separados por 1º e 2º período",
+    descricao: "Os painéis de alerta no topo da página de Férias agora exibem até 4 seções distintas: (1) 1º período vencido — vermelho claro; (2) 2º período vencido — vermelho intenso com aviso de pagamento em dobro; (3) 1º período prestes a vencer em 60 dias — âmbar; (4) 2º período prestes a vencer — laranja. Cada seção exibe os primeiros 5 colaboradores e o total excedente.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 695,
     titulo: "Férias — Alerta vermelho restrito ao 2º período vencido",
     descricao: "Na lista de férias, o destaque vermelho agora só aparece quando é o 2º período aquisitivo (ou superior) que está vencido — situação mais grave (Art. 134 CLT). O 1º período vencido exibe fundo e texto em âmbar (laranja suave), mantendo visibilidade sem urgência crítica.",
