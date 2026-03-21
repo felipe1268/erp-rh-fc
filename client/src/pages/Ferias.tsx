@@ -1606,30 +1606,35 @@ export default function Ferias() {
               {(() => {
                 const bruto = parseFloat(selectedItem.valorTotal || "0");
                 if (!bruto) return null;
-                // Tabela INSS progressiva 2025 — Portaria Interministerial MPS/MF nº 6/2025 (DOU 13/01/2025)
+                // Tabela INSS progressiva 2026 — Portaria Interministerial MPS/MF nº 13/2026 (DOU 09/01/2026)
                 const FAIXAS = [
-                  { de: 0,       ate: 1518.00, aliq: 0.075, label: "1ª faixa" },
-                  { de: 1518.00, ate: 2793.88, aliq: 0.09,  label: "2ª faixa" },
-                  { de: 2793.88, ate: 4190.83, aliq: 0.12,  label: "3ª faixa" },
-                  { de: 4190.83, ate: 8157.41, aliq: 0.14,  label: "4ª faixa" },
+                  { de: 0,       ate: 1621.00, aliq: 0.075, deducao: 0,      label: "1ª faixa" },
+                  { de: 1621.00, ate: 2902.84, aliq: 0.09,  deducao: 24.32,  label: "2ª faixa" },
+                  { de: 2902.84, ate: 4354.27, aliq: 0.12,  deducao: 111.40, label: "3ª faixa" },
+                  { de: 4354.27, ate: 8475.55, aliq: 0.14,  deducao: 198.49, label: "4ª faixa" },
                 ];
-                const TETO = 951.62;
+                const TETO_BASE = 8475.55;
+                // Calcula INSS faixa a faixa (progressivo) e valida com "parcela a deduzir"
                 let inssTotal = 0;
-                const linhas: { label: string; de: number; ate: number; base: number; aliq: number; valor: number; ativa: boolean }[] = [];
+                const linhas: { label: string; de: number; ate: number; base: number; aliq: number; deducao: number; valor: number; ativa: boolean; inssSimplificado: number }[] = [];
                 let prev = 0;
+                let faixaAtiva = FAIXAS[FAIXAS.length - 1];
+                for (const f of FAIXAS) { if (bruto <= f.ate) { faixaAtiva = f; break; } }
                 for (const f of FAIXAS) {
                   const slice = Math.max(0, Math.min(bruto, f.ate) - prev);
                   const valor = slice * f.aliq;
-                  linhas.push({ label: f.label, de: f.de, ate: f.ate, base: slice, aliq: f.aliq, valor, ativa: slice > 0 });
+                  const inssSimplificado = f === faixaAtiva ? Math.max(0, bruto * f.aliq - f.deducao) : 0;
+                  linhas.push({ label: f.label, de: f.de, ate: f.ate, base: slice, aliq: f.aliq, deducao: f.deducao, valor, ativa: slice > 0, inssSimplificado });
                   inssTotal += valor;
                   prev = f.ate;
                   if (bruto <= f.ate) break;
                 }
-                if (bruto > 8157.41) inssTotal = TETO;
+                const INSS_TETO = Math.max(0, TETO_BASE * 0.14 - 198.49); // R$ 988,09
+                if (bruto > TETO_BASE) inssTotal = INSS_TETO;
                 const liquido = bruto - inssTotal;
                 return (
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Desconto INSS — Memória de Cálculo (Tabela 2025)</p>
+                    <p className="text-xs text-slate-500 uppercase font-semibold">Desconto INSS — Memória de Cálculo (Tabela 2026)</p>
 
                     {/* Linha de base */}
                     <div className="flex justify-between text-sm border-b border-slate-200 pb-2">
@@ -1637,15 +1642,16 @@ export default function Ferias() {
                       <span className="font-semibold">{formatMoeda(bruto)}</span>
                     </div>
 
-                    {/* Tabela de faixas */}
+                    {/* Tabela de faixas com parcela a deduzir */}
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="text-slate-400 border-b border-slate-200">
                             <th className="text-left pb-1 font-medium">Faixa</th>
-                            <th className="text-right pb-1 font-medium">Limite até</th>
-                            <th className="text-right pb-1 font-medium">Base tributada</th>
-                            <th className="text-right pb-1 font-medium">Alíquota</th>
+                            <th className="text-right pb-1 font-medium">Até</th>
+                            <th className="text-right pb-1 font-medium">Alíq.</th>
+                            <th className="text-right pb-1 font-medium">Base</th>
+                            <th className="text-right pb-1 font-medium">Parcela ded.</th>
                             <th className="text-right pb-1 font-medium">INSS</th>
                           </tr>
                         </thead>
@@ -1654,8 +1660,9 @@ export default function Ferias() {
                             <tr key={i} className={`border-b border-slate-100 ${l.ativa ? "text-slate-700" : "text-slate-300"}`}>
                               <td className="py-1">{l.label}</td>
                               <td className="text-right py-1">{formatMoeda(l.ate)}</td>
-                              <td className="text-right py-1">{l.ativa ? formatMoeda(l.base) : "—"}</td>
                               <td className="text-right py-1">{(l.aliq * 100).toFixed(1)}%</td>
+                              <td className="text-right py-1">{l.ativa ? formatMoeda(l.base) : "—"}</td>
+                              <td className="text-right py-1 text-slate-500">{l.ativa && l.deducao > 0 ? `− ${formatMoeda(l.deducao)}` : l.ativa ? "—" : "—"}</td>
                               <td className={`text-right py-1 font-medium ${l.ativa ? "text-red-600" : ""}`}>
                                 {l.ativa ? formatMoeda(l.valor) : "—"}
                               </td>
@@ -1664,6 +1671,19 @@ export default function Ferias() {
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Fórmula simplificada */}
+                    {linhas.find(l => l.ativa) && (() => {
+                      const f = linhas.find(l => l.ativa && l === linhas[linhas.length - 1] || l.ativa);
+                      const fAtiva = linhas.filter(l => l.ativa).pop();
+                      if (!fAtiva || fAtiva.deducao === 0) return null;
+                      return (
+                        <div className="bg-white border border-slate-200 rounded p-2 text-xs text-slate-600">
+                          <span className="font-medium">Fórmula simplificada:</span>{" "}
+                          {formatMoeda(bruto)} × {(fAtiva.aliq * 100).toFixed(1)}% − {formatMoeda(fAtiva.deducao)} = <span className="font-semibold text-red-600">{formatMoeda(Math.max(0, bruto * fAtiva.aliq - fAtiva.deducao))}</span>
+                        </div>
+                      );
+                    })()}
 
                     {/* Totais */}
                     <div className="space-y-1 pt-1 border-t border-slate-200">
@@ -1677,7 +1697,7 @@ export default function Ferias() {
                       </div>
                     </div>
 
-                    <p className="text-[10px] text-slate-400">* INSS progressivo conforme Portaria Interministerial MPS/MF nº 6/2025 (DOU 13/01/2025). Teto 2025: R$ 8.157,41 → INSS máx. R$ 951,62. Não inclui IRRF.</p>
+                    <p className="text-[10px] text-slate-400">* INSS progressivo conforme Portaria Interministerial MPS/MF nº 13/2026 (DOU 09/01/2026). Teto 2026: R$ 8.475,55 → INSS máx. R$ 988,09. Não inclui IRRF.</p>
                   </div>
                 );
               })()}

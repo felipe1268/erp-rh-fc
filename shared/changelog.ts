@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 687,
+    titulo: "Férias — Tabela INSS atualizada para 2026 + parcela a deduzir",
+    descricao: "Tabela INSS atualizada para os valores de 2026 (Portaria MPS/MF nº 13/2026, DOU 09/01/2026): faixas R$1.621/2.902,84/4.354,27/8.475,55, teto INSS R$988,09. Adicionada coluna 'Parcela a deduzir' na memória de cálculo e exibição da fórmula simplificada (salário × alíquota − dedução), para facilitar conferência com holerites e outros sistemas.",
+    tipo: "fix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 686,
     titulo: "Férias — Correção tabela INSS 2025 (Portaria MPS/MF nº 6/2025)",
     descricao: "Corrigidos os limites de faixa do INSS progressivo: eram valores de 2024 (R$1.412/2.666/4.000/7.786, teto R$908,86). Agora usam a tabela correta de 2025 publicada no DOU em 13/01/2025 (R$1.518/2.793,88/4.190,83/8.157,41, teto máximo R$951,62). O cálculo para R$3.476 cai de R$315,94 para R$310,53.",
