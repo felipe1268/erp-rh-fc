@@ -1524,15 +1524,15 @@ export default function FechamentoPonto() {
                                     </div>
                                   )}
 
-                                  {/* Batida duplicada — excluir por id */}
+                                  {/* Batida duplicada — excluir por id (usar c.records que tem id + entrada1) */}
                                   {isDupl && (
                                     <div>
                                       <p className="text-xs text-purple-700 mb-2">Batida duplicada na mesma obra — escolha qual registro remover:</p>
                                       <div className="flex flex-wrap gap-2">
-                                        {c.obras.map((o: any, i: number) => (
+                                        {(c.records || c.obras).map((o: any, i: number) => (
                                           <Button key={i} size="sm" variant="outline" className="border-purple-400 text-purple-700 hover:bg-purple-50 text-xs"
                                             disabled={resolveConflitoMut.isPending}
-                                            onClick={() => resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "excluir_por_id", recordId: o.id, justificativa: conflictJustificativa || `Batida duplicada removida (entrada: ${o.entrada1})` })}>
+                                            onClick={() => resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "excluir_por_id", recordId: o.id, justificativa: conflictJustificativa || `Batida duplicada removida (entrada: ${o.entrada1 || "?"})` })}>
                                             Excluir: {o.obraNome} — {o.entrada1 || "?"} ({o.horasTrabalhadas || "0:00"})
                                           </Button>
                                         ))}
