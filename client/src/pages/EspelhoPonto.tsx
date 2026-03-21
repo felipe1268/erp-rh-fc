@@ -335,6 +335,7 @@ export default function EspelhoPonto() {
 
   const recordMap: Record<string, any> = (espelhoQ.data?.records as any) || {};
   const empData: any = espelhoQ.data?.employee;
+  const avisoPrevio: any = (espelhoQ.data as any)?.avisoPrevio || null;
   const hasData = !!queryParams && !espelhoQ.isLoading && !!empData;
 
   const allDays = useMemo(
@@ -507,14 +508,21 @@ export default function EspelhoPonto() {
         {hasData && (
           <>
             {/* ── CABEÇALHO DO FUNCIONÁRIO ─────────────────────────── */}
-            <div className="bg-white rounded-xl border border-slate-200 px-5 py-4">
+            <div className={`bg-white rounded-xl border px-5 py-4 ${avisoPrevio ? "border-orange-300 ring-1 ring-orange-200" : "border-slate-200"}`}>
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
-                    <span className="text-sm font-bold text-slate-600">{initials(empData.nomeCompleto)}</span>
+                  <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${avisoPrevio ? "bg-orange-50 border-orange-200" : "bg-slate-100 border-slate-200"}`}>
+                    <span className={`text-sm font-bold ${avisoPrevio ? "text-orange-700" : "text-slate-600"}`}>{initials(empData.nomeCompleto)}</span>
                   </div>
                   <div>
-                    <h2 className="text-sm font-bold text-slate-900">{empData.nomeCompleto}</h2>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-sm font-bold text-slate-900">{empData.nomeCompleto}</h2>
+                      {avisoPrevio && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+                          ⚠ Aviso Prévio — {avisoPrevio.tipo === "empregador_indenizado" ? "Indenizado" : avisoPrevio.tipo === "pedido_demissao" ? "Pedido de Demissão" : "Trabalhado"} · até {fmtDate(avisoPrevio.dataFim)}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-3 mt-0.5 text-xs text-slate-500">
                       {empData.funcao && <span>{empData.funcao}</span>}
                       {empData.codigoInterno && <span>Mat. <strong>{empData.codigoInterno}</strong></span>}

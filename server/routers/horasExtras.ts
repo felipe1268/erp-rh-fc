@@ -367,6 +367,18 @@ export const horasExtrasRouter = router({
       const emp = empRows[0];
       if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
 
+      // Check if employee has active aviso prévio
+      const avisoRows = ((await db.execute(sql`
+        SELECT id, tipo, "dataInicio", "dataFim", "diasAviso", status
+        FROM termination_notices
+        WHERE "employeeId" = ${input.employeeId}
+          AND status = 'em_andamento'
+          AND "deletedAt" IS NULL
+        ORDER BY "dataInicio" DESC
+        LIMIT 1
+      `)) as any).rows || [];
+      const avisoPrevio = avisoRows[0] || null;
+
       // Get time records with deduplication (best record per day)
       const records = ((await db.execute(sql`
         SELECT DISTINCT ON (tr.data)
@@ -414,6 +426,12 @@ export const horasExtrasRouter = router({
         employee: emp,
         records: recordMap,
         summary: { diasTrabalhados, totalHEMins, totalFaltaMins, totalAtrasoMins, totalRegistros: records.length },
+        avisoPrevio: avisoPrevio ? {
+          tipo: avisoPrevio.tipo,
+          dataInicio: String(avisoPrevio.dataInicio).slice(0, 10),
+          dataFim: String(avisoPrevio.dataFim).slice(0, 10),
+          diasAviso: avisoPrevio.diasAviso,
+        } : null,
       };
     }),
 
