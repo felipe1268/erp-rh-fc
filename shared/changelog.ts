@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 666,
+    titulo: "Espelho de Ponto — Edição direta de horários: lápis visível + células clicáveis",
+    descricao: "Botão de editar (lápis) agora sempre visível em cada linha de dia útil (antes só aparecia ao passar o mouse). Células de horário (Ent.1, Saí.1, Ent.2, Saí.2) tornadas clicáveis — abrem o mesmo dialog de edição ao clicar. Dica da legenda atualizada para refletir o novo comportamento.",
+    tipo: "feature",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 665,
     titulo: "Espelho de Ponto — Coluna Obra e badge Dixi/Manual por dia",
     descricao: "Espelho de Ponto Individual: nova coluna 'Obra' exibindo o nome da obra onde o ponto foi registrado em cada linha do dia + badge de origem (Dixi em cinza, Manual em âmbar). Dado vem de time_records.obraId/fonte vinculado pela importação do AFD.",

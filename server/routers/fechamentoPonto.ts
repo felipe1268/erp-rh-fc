@@ -1252,6 +1252,9 @@ export const fechamentoPontoRouter = router({
       const jornadaTrabalho = empData[0]?.jornadaTrabalho ?? null;
       const expectedMins = getExpectedMinsFromJornada(jornadaTrabalho, input.data);
       const heMins = expectedMins !== null ? Math.max(0, totalMinutes - expectedMins) : 0;
+      const atrasoMins = expectedMins !== null && totalMinutes < expectedMins && totalMinutes > 0
+        ? Math.max(0, expectedMins - totalMinutes)
+        : 0;
 
       const existing = await db.select().from(timeRecords)
         .where(and(
@@ -1281,7 +1284,7 @@ export const fechamentoPontoRouter = router({
         horasExtras: minutesToHHMM(heMins),
         horasNoturnas: "0:00",
         faltas: "0",
-        atrasos: "0:00",
+        atrasos: atrasoMins > 0 ? minutesToHHMM(atrasoMins) : "0:00",
         fonte: "manual",
         ajusteManual: 1,
         ajustadoPor: ctx.user?.name || "RH",
