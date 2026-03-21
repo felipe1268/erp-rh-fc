@@ -657,11 +657,20 @@ export default function EspelhoPonto() {
                           : <span className="text-slate-200 text-base">—</span>}
                     </div>
 
-                    {/* Obra */}
-                    <div className="px-2 py-3 flex items-center min-w-0">
+                    {/* Obra + Fonte */}
+                    <div className="px-2 py-3 flex flex-col justify-center gap-0.5 min-w-0">
                       {rec?.obraNome
-                        ? <span className="text-xs text-slate-600 truncate" title={rec.obraNome}>{rec.obraNome}</span>
-                        : <span className="text-slate-200 text-base">—</span>}
+                        ? <span className="text-xs text-slate-600 truncate leading-tight" title={rec.obraNome}>{rec.obraNome}</span>
+                        : <span className="text-slate-200 text-sm">—</span>}
+                      {rec && (
+                        <span className={`text-[10px] font-semibold px-1.5 py-px rounded w-fit leading-tight ${
+                          rec.fonte === 'manual' || rec.ajusteManual
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-slate-100 text-slate-400'
+                        }`}>
+                          {rec.ajusteManual ? 'Manual' : rec.fonte === 'dixi' ? 'Dixi' : rec.fonte || 'manual'}
+                        </span>
+                      )}
                     </div>
 
                     {/* Ocorrência */}
