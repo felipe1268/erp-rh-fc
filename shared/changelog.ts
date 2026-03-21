@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 669,
+    titulo: "Espelho de Ponto — edição liberada para sábado e domingo",
+    descricao: "Botão de editar (lápis) e células de horário clicáveis agora disponíveis para todos os dias, incluindo sábados e domingos. Antes, a condição !isWeekend bloqueava a edição nesses dias.",
+    tipo: "feature",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 668,
     titulo: "Lançamento Manual — tabela de dias com scroll horizontal e inputs de horário corrigidos",
     descricao: "Tabela 'Dias lançados' agora com overflow-x-auto e largura mínima por coluna — não espreme mais os inputs. Inputs type=time com padding reduzido via inline style para mostrar HH:MM completo. Input de data mais compacto (112px). Largura dos inputs de horário definida como 98px com paddingLeft=5.",

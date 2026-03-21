@@ -625,16 +625,16 @@ export default function EspelhoPonto() {
                     </div>
 
                     {/* Entrada 1 — clicável */}
-                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => !isWeekend && openEdit(dateStr, rec)}>{T(rec?.entrada1)}</div>
+                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>{T(rec?.entrada1)}</div>
                     {/* Saída 1 — clicável */}
-                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => !isWeekend && openEdit(dateStr, rec)}>{T(rec?.saida1)}</div>
+                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>{T(rec?.saida1)}</div>
                     {/* Entrada 2 — clicável */}
-                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => !isWeekend && openEdit(dateStr, rec)}>{T(rec?.entrada2)}</div>
+                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>{T(rec?.entrada2)}</div>
                     {/* Saída 2 — clicável */}
-                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => !isWeekend && openEdit(dateStr, rec)}>{T(rec?.saida2)}</div>
+                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>{T(rec?.saida2)}</div>
                     {/* Turno 3 — só mostra se algum dia do período tem 3º turno */}
                     {hasThirdShift && (
-                      <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => !isWeekend && openEdit(dateStr, rec)}>
+                      <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>
                         {rec?.entrada3 || rec?.saida3
                           ? <span className="font-mono text-sm text-slate-600">{rec?.entrada3 || "—"} / {rec?.saida3 || "—"}</span>
                           : <span className="text-slate-200 text-base">—</span>}
@@ -682,15 +682,13 @@ export default function EspelhoPonto() {
 
                     {/* Editar — oculto na impressão */}
                     <div className="px-1 py-3 flex items-center justify-center no-print">
-                      {!isWeekend && (
-                        <button
-                          onClick={() => openEdit(dateStr, rec)}
-                          className="p-1.5 rounded-md hover:bg-blue-50 text-slate-300 hover:text-blue-600 transition-colors"
-                          title="Editar horários deste dia"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => openEdit(dateStr, rec)}
+                        className="p-1.5 rounded-md hover:bg-blue-50 text-slate-300 hover:text-blue-600 transition-colors"
+                        title="Editar horários deste dia"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
                 );
