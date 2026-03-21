@@ -62,8 +62,10 @@ async function computeHEForPeriod(
   dataFim: string,
   cargaHorariaDiaria: number
 ) {
+  // Agrupa por (employeeId, data) pegando o maior horasTrabalhadas — evita dupla contagem de importações
   const trRaws = ((await db.execute(sql`
-    SELECT tr."employeeId", tr.data, tr."horasTrabalhadas", e."jornadaTrabalho",
+    SELECT DISTINCT ON (tr."employeeId", tr.data)
+           tr."employeeId", tr.data, tr."horasTrabalhadas", e."jornadaTrabalho",
            e."nomeCompleto", e."valorHora", e."salarioBase", e."horasMensais"
     FROM time_records tr
     JOIN employees e ON e.id = tr."employeeId"
@@ -73,6 +75,7 @@ async function computeHEForPeriod(
       AND tr."horasTrabalhadas" IS NOT NULL
       AND tr."horasTrabalhadas" != ''
       AND tr."horasTrabalhadas" != '0:00'
+    ORDER BY tr."employeeId", tr.data, tr."horasTrabalhadas" DESC
   `)) as any).rows || [];
 
   const heUtilMap = new Map<number, number>();
@@ -86,13 +89,13 @@ async function computeHEForPeriod(
     if (trabMins <= 0) continue;
     const dateStr = r.data instanceof Date ? r.data.toISOString().slice(0, 10) : String(r.data).slice(0, 10);
     const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
-    if (dow === 0) continue; // Sundays: skip
 
     const expectedMins = getExpectedMins(r.jornadaTrabalho, dateStr, cargaHorariaDiaria);
     const heMins = Math.max(0, trabMins - expectedMins);
     if (heMins <= 0) continue;
 
-    if (dow === 6) {
+    // Domingo (0) e Sábado (6) → percentual de fim de semana/feriado
+    if (dow === 6 || dow === 0) {
       heFimMap.set(empId, (heFimMap.get(empId) || 0) + heMins);
     } else {
       heUtilMap.set(empId, (heUtilMap.get(empId) || 0) + heMins);
