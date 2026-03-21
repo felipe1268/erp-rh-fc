@@ -10,7 +10,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -100,6 +100,15 @@ export default function FolhaPagamento() {
   const [vinculacaoJustificativa, setVinculacaoJustificativa] = useState("");
   const [showVinculacaoPanel, setShowVinculacaoPanel] = useState(false);
   const [heObraFilter, setHeObraFilter] = useState<string>("all");
+  // Banco de Horas
+  const [heSubView, setHeSubView] = useState<"periodos" | "banco_horas">("periodos");
+  const [destinacaoMap, setDestinacaoMap] = useState<Record<number, "pagamento" | "banco_horas">>({});
+  const [heLancamentosEmpId, setHeLancamentosEmpId] = useState<number | null>(null);
+  const [heDebitarEmpId, setHeDebitarEmpId] = useState<number | null>(null);
+  const [heDebitarHoras, setHeDebitarHoras] = useState(0);
+  const [heDebitarMins, setHeDebitarMins] = useState(0);
+  const [heDebitarData, setHeDebitarData] = useState(new Date().toISOString().slice(0, 10));
+  const [heDebitarDesc, setHeDebitarDesc] = useState("");
   // MO alocação
 
   const [fecharFolhaResult, setFecharFolhaResult] = useState<{ count: number } | null>(null);
@@ -233,6 +242,54 @@ export default function FolhaPagamento() {
   });
   const heCancelarMut = trpc.horasExtras.cancelar.useMutation({
     onSuccess: () => { toast.success("Período cancelado. Você pode recalcular agora."); hePeriods.refetch(); if (heViewPeriodId) setHeViewPeriodId(null); },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+  // Banco de Horas queries
+  const saldoBanco = trpc.horasExtras.getSaldoBanco.useQuery(
+    { companyId },
+    { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "he_modulo" }
+  );
+  const alertasExpiracao = trpc.horasExtras.getAlertasExpiracao.useQuery(
+    { companyId },
+    { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "he_modulo" }
+  );
+  const lancamentosBanco = trpc.horasExtras.getLancamentos.useQuery(
+    { employeeId: heLancamentosEmpId!, companyId },
+    { enabled: !!heLancamentosEmpId && viewMode === "he_modulo" }
+  );
+  // Banco de Horas mutations
+  const setDestinacaoMut = trpc.horasExtras.setDestinacao.useMutation({
+    onError: (err) => toast.error(`Erro ao salvar destinação: ${err.message}`),
+  });
+  const setDestinacaoMassaMut = trpc.horasExtras.setDestinacaoMassa.useMutation({
+    onSuccess: () => heDetalhe.refetch(),
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+  const aprovarComDestinacaoMut = trpc.horasExtras.aprovarComDestinacao.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message || "Período aprovado e processado!");
+      hePeriods.refetch();
+      heDetalhe.refetch();
+      saldoBanco.refetch();
+      alertasExpiracao.refetch();
+    },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+  const heMarcarPagoMut = trpc.horasExtras.marcarPago.useMutation({
+    onSuccess: () => { toast.success("Pagamentos confirmados!"); hePeriods.refetch(); },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+  const debitarBancoMut = trpc.horasExtras.debitarBanco.useMutation({
+    onSuccess: () => {
+      toast.success("Débito registrado com sucesso!");
+      saldoBanco.refetch();
+      alertasExpiracao.refetch();
+      if (heLancamentosEmpId) lancamentosBanco.refetch();
+      setHeDebitarEmpId(null);
+      setHeDebitarHoras(0);
+      setHeDebitarMins(0);
+      setHeDebitarDesc("");
+    },
     onError: (err) => toast.error(`Erro: ${err.message}`),
   });
 
@@ -1972,15 +2029,41 @@ export default function FolhaPagamento() {
   if (viewMode === "he_modulo") {
     const periods = (hePeriods.data as any[]) || [];
     const detalhe = heDetalhe.data;
-    const selectedPeriod = detalhe?.period;
     const selectedEmps = (detalhe?.employees as any[]) || [];
-    const statusColor = (s: string) => s === 'aprovado' ? 'bg-green-100 text-green-700' : s === 'pago' ? 'bg-blue-100 text-blue-700' : s === 'cancelado' ? 'bg-gray-100 text-gray-500' : 'bg-purple-100 text-purple-700';
+    const saldos = (saldoBanco.data as any[]) || [];
+    const alertas = (alertasExpiracao.data as any[]) || [];
+    const lancamentos = (lancamentosBanco.data as any[]) || [];
+    const statusColor = (s: string) =>
+      s === "aprovado" ? "bg-green-100 text-green-700" :
+      s === "pago" ? "bg-blue-100 text-blue-700" :
+      s === "cancelado" ? "bg-gray-100 text-gray-500" :
+      "bg-purple-100 text-purple-700";
+    const minsToHHMM = (m: number) => `${Math.floor(Math.abs(m) / 60)}h${String(Math.abs(m) % 60).padStart(2, "0")}`;
+    const saldoMap = new Map<number, number>();
+    for (const s of saldos) saldoMap.set(Number(s.employeeId), Number(s.saldoMinutos));
+    const totalBancoMins = saldos.reduce((acc: number, s: any) => acc + Number(s.saldoMinutos), 0);
+
+    const handleSetDestinacao = (empRowId: number, dest: "pagamento" | "banco_horas") => {
+      setDestinacaoMap(prev => ({ ...prev, [empRowId]: dest }));
+      setDestinacaoMut.mutate({ hePeriodEmployeeId: empRowId, destinacao: dest });
+    };
+    const handleSetDestinacaoMassa = (dest: "pagamento" | "banco_horas") => {
+      if (!heViewPeriodId) return;
+      const newMap = { ...destinacaoMap };
+      for (const emp of selectedEmps) newMap[emp.id] = dest;
+      setDestinacaoMap(newMap);
+      setDestinacaoMassaMut.mutate({ hePeriodId: heViewPeriodId, destinacao: dest });
+    };
+    const debitarEmpNome = heDebitarEmpId ? (saldos.find((s: any) => Number(s.employeeId) === heDebitarEmpId)?.nomeCompleto || "Funcionário") : null;
+    const lancamentosEmpNome = heLancamentosEmpId ? (saldos.find((s: any) => Number(s.employeeId) === heLancamentosEmpId)?.nomeCompleto || "Funcionário") : null;
 
     return (
       <DashboardLayout>
         <PrintHeader />
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+
+          {/* HEADER */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="sm" onClick={() => { setViewMode("resumo"); setHeViewPeriodId(null); }}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
@@ -1989,149 +2072,469 @@ export default function FolhaPagamento() {
                 <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                   <TrendingUp className="h-6 w-6 text-purple-700" /> Módulo Hora Extra — {formatMesAno(mesAno)}
                 </h1>
-                <p className="text-sm text-muted-foreground">Período configurável · Detecção de sobreposição · Histórico rastreado</p>
+                <p className="text-sm text-muted-foreground">Período configurável · Banco de Horas · Histórico rastreado</p>
               </div>
             </div>
-            <PrintActions title={`Hora Extra - ${formatMesAno(mesAno)}`} />
+            <div className="flex gap-2 no-print">
+              <Button size="sm"
+                variant={heSubView === "periodos" ? "default" : "outline"}
+                className={heSubView === "periodos" ? "bg-purple-700 hover:bg-purple-800" : ""}
+                onClick={() => setHeSubView("periodos")}>
+                <Clock className="h-4 w-4 mr-1" /> Períodos HE
+              </Button>
+              <Button size="sm"
+                variant={heSubView === "banco_horas" ? "default" : "outline"}
+                className={heSubView === "banco_horas" ? "bg-blue-700 hover:bg-blue-800" : ""}
+                onClick={() => setHeSubView("banco_horas")}>
+                <Wallet className="h-4 w-4 mr-1" /> Banco de Horas
+                {saldos.length > 0 && <Badge className="ml-1 bg-blue-100 text-blue-700 text-[10px]">{saldos.length}</Badge>}
+              </Button>
+            </div>
           </div>
 
-          {/* CALCULAR NOVO PERÍODO */}
-          <Card className="border-purple-200">
-            <CardContent className="p-5">
-              <p className="font-semibold text-sm mb-3 flex items-center gap-2">
-                <Calculator className="h-4 w-4 text-purple-700" /> Calcular Novo Período de HE
-              </p>
-              <div className="flex flex-wrap items-end gap-4">
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Data Início</label>
-                  <input type="date" value={heDataInicio} onChange={e => setHeDataInicio(e.target.value)}
-                    className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Data Fim</label>
-                  <input type="date" value={heDataFim} onChange={e => setHeDataFim(e.target.value)}
-                    className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
-                </div>
-                <Button className="bg-purple-700 hover:bg-purple-800" disabled={heCalcularMut.isPending}
-                  onClick={() => heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: heDataInicio, dataFim: heDataFim })}>
-                  {heCalcularMut.isPending ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Calculando...</> : <><Zap className="h-4 w-4 mr-2" /> Calcular HE</>}
-                </Button>
-                <div className="text-xs text-muted-foreground">
-                  <p>Padrão sugerido: dia 16 do mês anterior → dia 15 do mês atual</p>
-                  <p className="text-amber-600 mt-0.5">Sobreposição com períodos ativos será bloqueada automaticamente</p>
-                </div>
+          {/* EXPIRY ALERT BANNER */}
+          {alertas.length > 0 && (
+            <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-sm no-print">
+              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <span className="font-semibold text-amber-800">Atenção — horas a vencer: </span>
+                <span className="text-amber-700">{alertas.length} funcionário(s) com horas em banco há mais de 12 meses. </span>
+                <button className="underline font-medium text-amber-800" onClick={() => setHeSubView("banco_horas")}>Ver alertas →</button>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* PERÍODOS REGISTRADOS */}
-          {hePeriods.isLoading ? (
-            <div className="text-center py-6 text-muted-foreground">Carregando períodos...</div>
-          ) : periods.length > 0 ? (
-            <Card>
-              <CardContent className="p-5">
-                <p className="font-semibold text-sm mb-3">Períodos Registrados — {formatMesAno(mesAno)}</p>
-                <div className="space-y-2">
-                  {periods.map((p: any) => (
-                    <div key={p.id} className={`border rounded-lg p-3 flex flex-wrap items-center gap-3 ${heViewPeriodId === p.id ? 'border-purple-400 bg-purple-50' : ''}`}>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium text-sm">{String(p.dataInicio).slice(0,10)} → {String(p.dataFim).slice(0,10)}</span>
-                        <span className="ml-3 text-sm text-muted-foreground">{p.totalFuncionarios} func · {formatBRL(Number(p.totalValorHE))}</span>
-                        <Badge className={`ml-2 text-[10px] ${statusColor(p.status)}`}>{p.status}</Badge>
-                        {p.criadoPor && <span className="ml-2 text-xs text-muted-foreground">por {p.criadoPor}</span>}
-                      </div>
-                      <div className="flex gap-2 no-print">
-                        <Button size="sm" variant="outline" className="h-7 text-xs"
-                          onClick={() => setHeViewPeriodId(heViewPeriodId === p.id ? null : p.id)}>
-                          <Eye className="h-3 w-3 mr-1" /> {heViewPeriodId === p.id ? 'Fechar' : 'Ver Detalhe'}
-                        </Button>
-                        {p.status === 'calculado' && (
-                          <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700"
-                            onClick={() => heAprovarMut.mutate({ hePeriodId: p.id, companyId })}
-                            disabled={heAprovarMut.isPending}>
-                            <CheckCircle className="h-3 w-3 mr-1" /> Aprovar
-                          </Button>
-                        )}
-                        {p.status !== 'pago' && p.status !== 'cancelado' && (
-                          <Button size="sm" variant="outline" className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50"
-                            onClick={() => { if (confirm('Cancelar este período de HE? Isso permite recalcular o mesmo intervalo de datas.')) heCancelarMut.mutate({ hePeriodId: p.id, companyId }); }}
-                            disabled={heCancelarMut.isPending}>
-                            <XCircle className="h-3 w-3 mr-1" /> Cancelar
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 text-center text-muted-foreground text-sm">
-              Nenhum período de HE calculado para {formatMesAno(mesAno)}. Use o formulário acima para calcular.
             </div>
           )}
 
-          {/* DETALHE DO PERÍODO SELECIONADO */}
-          {heViewPeriodId && (
-            heDetalhe.isLoading ? (
-              <div className="text-center py-6 text-muted-foreground">Carregando detalhe...</div>
-            ) : selectedPeriod ? (
+          {/* ============ SUB-VIEW: PERÍODOS ============ */}
+          {heSubView === "periodos" && (
+            <>
+              {/* CALCULAR NOVO PERÍODO */}
               <Card className="border-purple-200">
                 <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-4">
+                  <p className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <Calculator className="h-4 w-4 text-purple-700" /> Calcular Novo Período de HE
+                  </p>
+                  <div className="flex flex-wrap items-end gap-4">
                     <div>
-                      <p className="font-semibold text-sm">Detalhe: {String(selectedPeriod.dataInicio).slice(0,10)} → {String(selectedPeriod.dataFim).slice(0,10)}</p>
-                      <p className="text-xs text-muted-foreground">{selectedPeriod.totalFuncionarios} funcionários · Total HE: {formatBRL(Number(selectedPeriod.totalValorHE))}</p>
+                      <label className="text-xs text-muted-foreground block mb-1">Data Início</label>
+                      <input type="date" value={heDataInicio} onChange={e => setHeDataInicio(e.target.value)}
+                        className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
                     </div>
-                    <Badge className={statusColor(selectedPeriod.status)}>{selectedPeriod.status}</Badge>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b-2 border-gray-200">
-                          <th className="text-left py-2 px-2">Funcionário</th>
-                          <th className="text-right py-2 px-2">HE Dias Úteis</th>
-                          <th className="text-right py-2 px-2">HE Fim de Semana</th>
-                          <th className="text-right py-2 px-2">Total Horas</th>
-                          <th className="text-right py-2 px-2">Valor HE</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedEmps.map((e: any, i: number) => (
-                          <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-2 px-2 font-medium">
-                              <button className="text-left hover:text-blue-600 hover:underline focus:outline-none"
-                                onClick={() => setLocation(`/fechamento-ponto?funcionario=${e.employeeId}&mes=${mesAno}`)}>
-                                {e.nomeCompleto || e.nome}
-                              </button>
-                            </td>
-                            <td className="text-right py-2 px-2 text-xs text-muted-foreground">
-                              {e.heUtilMins > 0 ? `${Math.floor(e.heUtilMins/60)}h${String(e.heUtilMins%60).padStart(2,'0')}` : '—'}
-                            </td>
-                            <td className="text-right py-2 px-2 text-xs text-muted-foreground">
-                              {e.heFimMins > 0 ? `${Math.floor(e.heFimMins/60)}h${String(e.heFimMins%60).padStart(2,'0')}` : '—'}
-                            </td>
-                            <td className="text-right py-2 px-2">
-                              {Math.floor(e.heTotalMins/60)}h{String(e.heTotalMins%60).padStart(2,'0')}
-                            </td>
-                            <td className="text-right py-2 px-2 font-bold text-purple-700">{formatBRL(Number(e.valorHETotal))}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                          <td className="py-2 px-2" colSpan={4}>TOTAL</td>
-                          <td className="text-right py-2 px-2 text-lg text-purple-700">
-                            {formatBRL(selectedEmps.reduce((s: number, e: any) => s + Number(e.valorHETotal), 0))}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Data Fim</label>
+                      <input type="date" value={heDataFim} onChange={e => setHeDataFim(e.target.value)}
+                        className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                    </div>
+                    <Button className="bg-purple-700 hover:bg-purple-800" disabled={heCalcularMut.isPending}
+                      onClick={() => heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: heDataInicio, dataFim: heDataFim })}>
+                      {heCalcularMut.isPending
+                        ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Calculando...</>
+                        : <><Zap className="h-4 w-4 mr-2" /> Calcular HE</>}
+                    </Button>
+                    <div className="text-xs text-muted-foreground">
+                      <p>Padrão sugerido: dia 16 do mês anterior → dia 15 do mês atual</p>
+                      <p className="text-amber-600 mt-0.5">Sobreposição com períodos ativos será bloqueada automaticamente</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            ) : null
+
+              {/* PERÍODOS REGISTRADOS */}
+              {hePeriods.isLoading ? (
+                <div className="text-center py-6 text-muted-foreground">Carregando períodos...</div>
+              ) : periods.length > 0 ? (
+                <Card>
+                  <CardContent className="p-5">
+                    <p className="font-semibold text-sm mb-3">Períodos Registrados — {formatMesAno(mesAno)}</p>
+                    <div className="space-y-3">
+                      {periods.map((p: any) => {
+                        const isOpen = heViewPeriodId === p.id;
+                        const periodEmps = isOpen ? selectedEmps : [];
+                        const pagamentoCount = periodEmps.filter((e: any) => (destinacaoMap[e.id] ?? (e.destinacao || "pagamento")) === "pagamento").length;
+                        const bancoCount = periodEmps.filter((e: any) => (destinacaoMap[e.id] ?? (e.destinacao || "pagamento")) === "banco_horas").length;
+                        return (
+                          <div key={p.id} className={`border rounded-lg ${isOpen ? "border-purple-400 bg-purple-50/20" : "border-gray-200"}`}>
+                            {/* Period header row */}
+                            <div className="p-3 flex flex-wrap items-center gap-3">
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium text-sm">{String(p.dataInicio).slice(0, 10)} → {String(p.dataFim).slice(0, 10)}</span>
+                                <span className="ml-3 text-sm text-muted-foreground">{p.totalFuncionarios} func · {formatBRL(Number(p.totalValorHE))}</span>
+                                <Badge className={`ml-2 text-[10px] ${statusColor(p.status)}`}>{p.status}</Badge>
+                                {p.criadoPor && <span className="ml-2 text-xs text-muted-foreground">por {p.criadoPor}</span>}
+                              </div>
+                              <div className="flex gap-2 no-print flex-wrap">
+                                <Button size="sm" variant="outline" className="h-7 text-xs"
+                                  onClick={() => setHeViewPeriodId(isOpen ? null : p.id)}>
+                                  <Eye className="h-3 w-3 mr-1" /> {isOpen ? "Fechar" : "Revisar"}
+                                </Button>
+                                {p.status === "aprovado" && (
+                                  <Button size="sm" className="h-7 text-xs bg-blue-600 hover:bg-blue-700"
+                                    onClick={() => { if (confirm("Confirmar pagamento em dinheiro dos funcionários marcados como Pagar neste período?")) heMarcarPagoMut.mutate({ hePeriodId: p.id, companyId }); }}
+                                    disabled={heMarcarPagoMut.isPending}>
+                                    <CheckCircle className="h-3 w-3 mr-1" /> Confirmar Pagamento
+                                  </Button>
+                                )}
+                                {p.status !== "pago" && p.status !== "cancelado" && (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50"
+                                    onClick={() => { if (confirm("Cancelar este período? Isso permite recalcular o mesmo intervalo.")) heCancelarMut.mutate({ hePeriodId: p.id, companyId }); }}
+                                    disabled={heCancelarMut.isPending}>
+                                    <XCircle className="h-3 w-3 mr-1" /> Cancelar
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* EXPANDED DETAIL */}
+                            {isOpen && (
+                              <div className="border-t border-purple-200 p-4 space-y-4">
+                                {heDetalhe.isLoading ? (
+                                  <div className="text-center py-4 text-muted-foreground text-sm">Carregando funcionários...</div>
+                                ) : (
+                                  <>
+                                    {/* BATCH DESTINAÇÃO */}
+                                    {p.status === "calculado" && (
+                                      <div className="flex flex-wrap items-center gap-3 bg-gray-50 rounded-lg p-3">
+                                        <span className="text-sm font-medium text-gray-700">Destinação em massa:</span>
+                                        <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                                          onClick={() => handleSetDestinacaoMassa("pagamento")}
+                                          disabled={setDestinacaoMassaMut.isPending}>
+                                          💵 Pagar todos
+                                        </Button>
+                                        <Button size="sm" className="h-7 text-xs bg-blue-600 hover:bg-blue-700"
+                                          onClick={() => handleSetDestinacaoMassa("banco_horas")}
+                                          disabled={setDestinacaoMassaMut.isPending}>
+                                          🏦 Banco para todos
+                                        </Button>
+                                        {periodEmps.length > 0 && (
+                                          <span className="text-xs text-muted-foreground ml-auto">
+                                            {pagamentoCount > 0 && <span className="text-green-700 mr-3">💵 {pagamentoCount} para pagamento</span>}
+                                            {bancoCount > 0 && <span className="text-blue-700">🏦 {bancoCount} para banco</span>}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* EMPLOYEE TABLE */}
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="border-b-2 border-gray-200 text-left">
+                                            <th className="py-2 px-2">Funcionário</th>
+                                            <th className="text-right py-2 px-2">HE Úteis</th>
+                                            <th className="text-right py-2 px-2">HE Fim Sem.</th>
+                                            <th className="text-right py-2 px-2">Total HE</th>
+                                            <th className="text-right py-2 px-2">Valor HE</th>
+                                            <th className="text-right py-2 px-2">Saldo Banco</th>
+                                            <th className="text-center py-2 px-2">Destinação</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {periodEmps.map((e: any) => {
+                                            const dest = destinacaoMap[e.id] ?? (e.destinacao || "pagamento");
+                                            const saldo = saldoMap.get(Number(e.employeeId)) || 0;
+                                            return (
+                                              <tr key={e.id} className={`border-b border-gray-100 hover:bg-white/80 ${dest === "banco_horas" ? "bg-blue-50/30" : ""}`}>
+                                                <td className="py-2 px-2 font-medium">
+                                                  <button className="text-left hover:text-blue-600 hover:underline focus:outline-none"
+                                                    onClick={() => setLocation(`/fechamento-ponto?funcionario=${e.employeeId}&mes=${mesAno}`)}>
+                                                    {e.nomeCompleto || e.nome}
+                                                  </button>
+                                                </td>
+                                                <td className="text-right py-2 px-2 text-xs text-muted-foreground">
+                                                  {e.heUtilMins > 0 ? minsToHHMM(e.heUtilMins) : "—"}
+                                                </td>
+                                                <td className="text-right py-2 px-2 text-xs text-muted-foreground">
+                                                  {e.heFimMins > 0 ? minsToHHMM(e.heFimMins) : "—"}
+                                                </td>
+                                                <td className="text-right py-2 px-2 font-medium">{minsToHHMM(e.heTotalMins)}</td>
+                                                <td className="text-right py-2 px-2 font-bold text-purple-700">{formatBRL(Number(e.valorHETotal))}</td>
+                                                <td className="text-right py-2 px-2">
+                                                  {saldo > 0
+                                                    ? <span className="text-blue-600 font-medium text-xs">{minsToHHMM(saldo)}</span>
+                                                    : <span className="text-gray-300 text-xs">—</span>}
+                                                </td>
+                                                <td className="text-center py-2 px-2">
+                                                  {p.status === "calculado" ? (
+                                                    <div className="inline-flex rounded border overflow-hidden">
+                                                      <button
+                                                        className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${dest === "pagamento" ? "bg-green-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+                                                        onClick={() => handleSetDestinacao(e.id, "pagamento")}>
+                                                        💵 Pagar
+                                                      </button>
+                                                      <button
+                                                        className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${dest === "banco_horas" ? "bg-blue-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+                                                        onClick={() => handleSetDestinacao(e.id, "banco_horas")}>
+                                                        🏦 Banco
+                                                      </button>
+                                                    </div>
+                                                  ) : (
+                                                    <Badge className={`text-[10px] ${dest === "banco_horas" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                                                      {dest === "banco_horas" ? "🏦 Banco" : "💵 Pagamento"}
+                                                    </Badge>
+                                                  )}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                        <tfoot>
+                                          <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+                                            <td className="py-2 px-2" colSpan={4}>TOTAL</td>
+                                            <td className="text-right py-2 px-2 text-lg text-purple-700">
+                                              {formatBRL(periodEmps.reduce((s: number, e: any) => s + Number(e.valorHETotal), 0))}
+                                            </td>
+                                            <td colSpan={2} />
+                                          </tr>
+                                        </tfoot>
+                                      </table>
+                                    </div>
+
+                                    {/* APPROVE BUTTON */}
+                                    {p.status === "calculado" && periodEmps.length > 0 && (
+                                      <div className="flex items-center gap-3 pt-2 border-t no-print">
+                                        <Button className="bg-green-600 hover:bg-green-700"
+                                          onClick={() => aprovarComDestinacaoMut.mutate({ hePeriodId: p.id, companyId })}
+                                          disabled={aprovarComDestinacaoMut.isPending}>
+                                          {aprovarComDestinacaoMut.isPending
+                                            ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Processando...</>
+                                            : <><CheckCircle className="h-4 w-4 mr-2" /> Aprovar e Processar</>}
+                                        </Button>
+                                        <span className="text-xs text-muted-foreground">
+                                          Pagamentos serão registrados para confirmação · Banco de Horas será creditado imediatamente
+                                        </span>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 text-center text-muted-foreground text-sm">
+                  Nenhum período de HE calculado para {formatMesAno(mesAno)}. Use o formulário acima para calcular.
+                </div>
+              )}
+            </>
           )}
+
+          {/* ============ SUB-VIEW: BANCO DE HORAS ============ */}
+          {heSubView === "banco_horas" && (
+            <>
+              {/* SUMMARY CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="border-blue-200">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">Total em Banco</p>
+                    <p className="text-2xl font-bold text-blue-700 mt-1">{minsToHHMM(totalBancoMins)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">horas acumuladas</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-blue-200">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">Funcionários com Saldo</p>
+                    <p className="text-2xl font-bold text-blue-700 mt-1">{saldos.length}</p>
+                    <p className="text-xs text-muted-foreground mt-1">com banco ativo</p>
+                  </CardContent>
+                </Card>
+                <Card className={alertas.length > 0 ? "border-amber-300 bg-amber-50/30" : "border-gray-200"}>
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">Alertas de Expiração</p>
+                    <p className={`text-2xl font-bold mt-1 ${alertas.length > 0 ? "text-amber-600" : "text-gray-400"}`}>{alertas.length}</p>
+                    <p className="text-xs text-muted-foreground mt-1">há mais de 12 meses</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* EXPIRY ALERTS TABLE */}
+              {alertas.length > 0 && (
+                <Card className="border-amber-300">
+                  <CardContent className="p-5">
+                    <p className="font-semibold text-sm mb-3 flex items-center gap-2 text-amber-700">
+                      <AlertTriangle className="h-4 w-4" /> Horas a Vencer — créditos há mais de 12 meses em banco
+                    </p>
+                    <div className="space-y-2">
+                      {alertas.map((a: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between p-2 bg-amber-50 rounded border border-amber-200 text-sm flex-wrap gap-2">
+                          <span className="font-medium">{a.nomeCompleto}</span>
+                          <span className="text-amber-700">Saldo: {minsToHHMM(Number(a.saldoMinutos))} · Mais antigo: {String(a.creditoMaisAntigo).slice(0, 10)}</span>
+                          <Button size="sm" className="h-7 text-xs bg-orange-500 hover:bg-orange-600"
+                            onClick={() => { setHeDebitarEmpId(Number(a.employeeId)); setHeDebitarDesc(""); setHeDebitarHoras(0); setHeDebitarMins(0); }}>
+                            Debitar Horas
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* EMPLOYEE SALDO TABLE */}
+              {saldoBanco.isLoading ? (
+                <div className="text-center py-6 text-muted-foreground">Carregando saldos...</div>
+              ) : saldos.length > 0 ? (
+                <Card>
+                  <CardContent className="p-5">
+                    <p className="font-semibold text-sm mb-3">Saldo por Funcionário</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b-2 border-gray-200">
+                            <th className="text-left py-2 px-2">Funcionário</th>
+                            <th className="text-left py-2 px-2">Cargo</th>
+                            <th className="text-right py-2 px-2">Saldo</th>
+                            <th className="text-right py-2 px-2">Última Movim.</th>
+                            <th className="text-center py-2 px-2 no-print">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {saldos.map((s: any) => {
+                            const isExpiring = alertas.some((a: any) => Number(a.employeeId) === Number(s.employeeId));
+                            return (
+                              <tr key={s.employeeId} className={`border-b border-gray-100 hover:bg-gray-50 ${isExpiring ? "bg-amber-50/30" : ""}`}>
+                                <td className="py-2 px-2 font-medium">
+                                  {s.nomeCompleto}
+                                  {isExpiring && <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1 rounded">⚠ Vencendo</span>}
+                                </td>
+                                <td className="py-2 px-2 text-xs text-muted-foreground">{s.funcao || "—"}</td>
+                                <td className="text-right py-2 px-2 font-bold text-blue-700">{minsToHHMM(Number(s.saldoMinutos))}</td>
+                                <td className="text-right py-2 px-2 text-xs text-muted-foreground">
+                                  {s.ultimoLancamento ? new Date(s.ultimoLancamento).toLocaleDateString("pt-BR") : "—"}
+                                </td>
+                                <td className="text-center py-2 px-2 no-print">
+                                  <div className="flex justify-center gap-1">
+                                    <Button size="sm" variant="outline" className="h-7 text-xs"
+                                      onClick={() => { setHeLancamentosEmpId(heLancamentosEmpId === Number(s.employeeId) ? null : Number(s.employeeId)); }}>
+                                      {heLancamentosEmpId === Number(s.employeeId) ? "Fechar" : "Histórico"}
+                                    </Button>
+                                    <Button size="sm" className="h-7 text-xs bg-orange-500 hover:bg-orange-600"
+                                      onClick={() => { setHeDebitarEmpId(heDebitarEmpId === Number(s.employeeId) ? null : Number(s.employeeId)); setHeDebitarDesc(""); setHeDebitarHoras(0); setHeDebitarMins(0); }}>
+                                      Debitar
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center text-muted-foreground text-sm">
+                  Nenhum funcionário com saldo no banco de horas. Saldos aparecem após aprovação de períodos com destinação "Banco de Horas".
+                </div>
+              )}
+
+              {/* HISTORY PANEL */}
+              {heLancamentosEmpId && (
+                <Card className="border-gray-300">
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-semibold text-sm">Histórico — {lancamentosEmpNome}</p>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setHeLancamentosEmpId(null)}>Fechar</Button>
+                    </div>
+                    {lancamentosBanco.isLoading ? (
+                      <div className="text-center py-3 text-muted-foreground text-sm">Carregando histórico...</div>
+                    ) : lancamentos.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-200">
+                              <th className="text-left py-1.5 px-2">Data</th>
+                              <th className="text-left py-1.5 px-2">Tipo</th>
+                              <th className="text-right py-1.5 px-2">Horas</th>
+                              <th className="text-left py-1.5 px-2">Descrição</th>
+                              <th className="text-left py-1.5 px-2">Por</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lancamentos.map((l: any) => (
+                              <tr key={l.id} className="border-b border-gray-100">
+                                <td className="py-1.5 px-2 text-xs">{String(l.data).slice(0, 10)}</td>
+                                <td className="py-1.5 px-2">
+                                  <Badge className={`text-[10px] ${l.tipo === "credito" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
+                                    {l.tipo === "credito" ? "+ Crédito" : "− Débito"}
+                                  </Badge>
+                                </td>
+                                <td className="text-right py-1.5 px-2 font-medium">{minsToHHMM(Number(l.minutos))}</td>
+                                <td className="py-1.5 px-2 text-xs text-muted-foreground">{l.descricao || "—"}</td>
+                                <td className="py-1.5 px-2 text-xs text-muted-foreground">{l.criadoPor || "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-center text-muted-foreground text-sm py-3">Nenhum lançamento encontrado.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* DEBIT FORM */}
+              {heDebitarEmpId && (
+                <Card className="border-orange-300 bg-orange-50/20">
+                  <CardContent className="p-5">
+                    <p className="font-semibold text-sm mb-4 flex items-center gap-2 text-orange-700">
+                      <CreditCard className="h-4 w-4" /> Registrar Débito — {debitarEmpNome}
+                      <span className="ml-auto text-xs text-muted-foreground font-normal">
+                        Saldo atual: <strong className="text-blue-700">{minsToHHMM(saldoMap.get(heDebitarEmpId) || 0)}</strong>
+                      </span>
+                    </p>
+                    <div className="flex flex-wrap items-end gap-4">
+                      <div>
+                        <label className="text-xs text-muted-foreground block mb-1">Data do Afastamento</label>
+                        <input type="date" value={heDebitarData} onChange={e => setHeDebitarData(e.target.value)}
+                          className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground block mb-1">Horas</label>
+                        <input type="number" min="0" max="23" value={heDebitarHoras}
+                          onChange={e => setHeDebitarHoras(Math.max(0, parseInt(e.target.value) || 0))}
+                          className="border rounded px-3 py-1.5 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-orange-300" placeholder="0" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground block mb-1">Minutos</label>
+                        <input type="number" min="0" max="59" value={heDebitarMins}
+                          onChange={e => setHeDebitarMins(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                          className="border rounded px-3 py-1.5 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-orange-300" placeholder="0" />
+                      </div>
+                      <div className="flex-1 min-w-[200px]">
+                        <label className="text-xs text-muted-foreground block mb-1">Motivo</label>
+                        <input type="text" value={heDebitarDesc} onChange={e => setHeDebitarDesc(e.target.value)}
+                          className="border rounded px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-300"
+                          placeholder="Ex: Folga compensatória 20/03/2026" />
+                      </div>
+                      <Button className="bg-orange-600 hover:bg-orange-700"
+                        disabled={debitarBancoMut.isPending || (heDebitarHoras === 0 && heDebitarMins === 0) || heDebitarDesc.trim().length < 3}
+                        onClick={() => debitarBancoMut.mutate({
+                          employeeId: heDebitarEmpId,
+                          companyId,
+                          minutos: heDebitarHoras * 60 + heDebitarMins,
+                          descricao: heDebitarDesc,
+                          data: heDebitarData,
+                        })}>
+                        {debitarBancoMut.isPending ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Registrando...</> : "Registrar Débito"}
+                      </Button>
+                      <Button variant="outline" onClick={() => setHeDebitarEmpId(null)}>Cancelar</Button>
+                    </div>
+                    {(heDebitarHoras > 0 || heDebitarMins > 0) && (
+                      <p className="text-xs text-orange-700 mt-2">
+                        Total a debitar: <strong>{minsToHHMM(heDebitarHoras * 60 + heDebitarMins)}</strong> ·
+                        Saldo restante após débito: <strong>{minsToHHMM(Math.max(0, (saldoMap.get(heDebitarEmpId) || 0) - (heDebitarHoras * 60 + heDebitarMins)))}</strong>
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+
         </div>
         <PrintFooterLGPD />
       </DashboardLayout>

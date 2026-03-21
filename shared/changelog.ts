@@ -4011,4 +4011,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-20 00:00:00",
   },
+  {
+    version: 644,
+    titulo: "Banco de Horas — módulo completo com 6 melhorias no fluxo de HE",
+    descricao: "Implementação completa do Banco de Horas integrado ao módulo Hora Extra: (1) Decisão por funcionário — cada colaborador pode ter destinação 'Pagar' ou 'Banco de Horas' individualmente dentro do mesmo período; (2) Etapa única de aprovação — 'Aprovar e Processar' substitui as 2 etapas anteriores, creditando banco de horas imediatamente para os destinados ao banco; (3) Saldo visível na lista — ao revisar um período, o saldo atual de banco de horas de cada funcionário aparece inline na tabela; (4) Ações em massa + override individual — botões 'Pagar todos' / 'Banco para todos' com possibilidade de alterar funcionários individualmente; (5) Débito do banco pelo sistema — gestor lança débito de horas com data, motivo e funcionário, saldo atualizado automaticamente com validação de saldo suficiente; (6) Alertas de expiração — banner e lista de funcionários com créditos em banco há mais de 12 meses. Novas tabelas: banco_horas_saldo (saldo por funcionário), banco_horas_lancamentos (histórico completo de créditos e débitos). Coluna destinacao adicionada em he_period_employees. Nova aba 'Banco de Horas' no módulo HE com cards de resumo, histórico por funcionário e formulário de débito.",
+    tipo: "feature",
+    modulos: "Folha/HE",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
 ];

@@ -214,6 +214,40 @@ async function startServer() {
         console.log("[ColFix] payroll_periods valeConsolidado cols Rev.642 OK");
       } catch (e: any) { console.warn("[ColFix] payroll_periods valeConsolidado:", e?.message ?? e); }
     });
+    // Rev.644: Banco de Horas — novas tabelas + coluna destinacao em he_period_employees
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`ALTER TABLE he_period_employees ADD COLUMN IF NOT EXISTS "destinacao" TEXT NOT NULL DEFAULT 'pagamento'`);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS banco_horas_saldo (
+            id SERIAL PRIMARY KEY,
+            "employeeId" INTEGER NOT NULL,
+            "companyId" INTEGER NOT NULL,
+            "saldoMinutos" INTEGER NOT NULL DEFAULT 0,
+            "atualizadoEm" TIMESTAMP DEFAULT NOW(),
+            UNIQUE("employeeId", "companyId")
+          )
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS banco_horas_lancamentos (
+            id SERIAL PRIMARY KEY,
+            "employeeId" INTEGER NOT NULL,
+            "companyId" INTEGER NOT NULL,
+            "hePeriodId" INTEGER,
+            tipo TEXT NOT NULL,
+            minutos INTEGER NOT NULL,
+            descricao TEXT,
+            data DATE NOT NULL DEFAULT CURRENT_DATE,
+            "criadoEm" TIMESTAMP DEFAULT NOW(),
+            "criadoPor" TEXT
+          )
+        `);
+        console.log("[ColFix] banco_horas_saldo + banco_horas_lancamentos + he_period_employees.destinacao Rev.644 OK");
+      } catch (e: any) { console.warn("[ColFix] banco_horas Rev.644:", e?.message ?? e); }
+    });
     // Rev.590: criar tabelas do módulo Medição de Contratos (se não existirem)
     import("../db").then(async ({ getDb }) => {
       try {

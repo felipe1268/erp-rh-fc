@@ -320,4 +320,198 @@ export const horasExtrasRouter = router({
       `);
       return { ok: true };
     }),
+
+  // ============================================================
+  // BANCO DE HORAS — Rev.644
+  // ============================================================
+
+  // Set destinacao for a single employee in a period
+  setDestinacao: protectedProcedure
+    .input(z.object({
+      hePeriodEmployeeId: z.number(),
+      destinacao: z.enum(["pagamento", "banco_horas"]),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      await db.execute(sql`
+        UPDATE he_period_employees
+        SET destinacao = ${input.destinacao}
+        WHERE id = ${input.hePeriodEmployeeId}
+      `);
+      return { ok: true };
+    }),
+
+  // Set destinacao for all employees in a period (mass action)
+  setDestinacaoMassa: protectedProcedure
+    .input(z.object({
+      hePeriodId: z.number(),
+      destinacao: z.enum(["pagamento", "banco_horas"]),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      await db.execute(sql`
+        UPDATE he_period_employees
+        SET destinacao = ${input.destinacao}
+        WHERE "hePeriodId" = ${input.hePeriodId}
+      `);
+      return { ok: true };
+    }),
+
+  // Approve period and process banco de horas (merged approval + destinacao)
+  aprovarComDestinacao: protectedProcedure
+    .input(z.object({ hePeriodId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const periodRows = ((await db.execute(sql`
+        SELECT * FROM he_periods WHERE id = ${input.hePeriodId} AND "companyId" = ${input.companyId}
+      `)) as any).rows || [];
+      const period = periodRows[0];
+      if (!period) throw new TRPCError({ code: "NOT_FOUND", message: "Período não encontrado" });
+      if (period.status !== "calculado") throw new TRPCError({ code: "BAD_REQUEST", message: "Período já foi aprovado ou cancelado" });
+
+      const empRows = ((await db.execute(sql`
+        SELECT * FROM he_period_employees WHERE "hePeriodId" = ${input.hePeriodId}
+      `)) as any).rows || [];
+
+      let bancoCreditados = 0;
+      let pagamentos = 0;
+      const dataFimStr = String(period.dataFim).slice(0, 10);
+      const dataInicioStr = String(period.dataInicio).slice(0, 10);
+
+      for (const emp of empRows) {
+        if (emp.destinacao === "banco_horas") {
+          const mins = Number(emp.heTotalMins || 0);
+          if (mins <= 0) continue;
+          await db.execute(sql`
+            INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
+            VALUES (${emp.employeeId}, ${input.companyId}, ${mins}, NOW())
+            ON CONFLICT ("employeeId", "companyId") DO UPDATE SET
+              "saldoMinutos" = banco_horas_saldo."saldoMinutos" + EXCLUDED."saldoMinutos",
+              "atualizadoEm" = NOW()
+          `);
+          const descricao = `Crédito HE ${dataInicioStr} → ${dataFimStr}`;
+          await db.execute(sql`
+            INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", "hePeriodId", tipo, minutos, descricao, data, "criadoPor")
+            VALUES (${emp.employeeId}, ${input.companyId}, ${input.hePeriodId}, 'credito', ${mins},
+              ${descricao}, ${dataFimStr}::date, ${ctx.user.name || "Sistema"})
+          `);
+          bancoCreditados++;
+        } else {
+          pagamentos++;
+        }
+      }
+
+      await db.execute(sql`
+        UPDATE he_periods
+        SET status = 'aprovado', "aprovadoPor" = ${ctx.user.name || "Sistema"}, "aprovadoEm" = NOW()
+        WHERE id = ${input.hePeriodId}
+      `);
+
+      return {
+        ok: true,
+        bancoCreditados,
+        pagamentos,
+        message: `Período aprovado: ${pagamentos} para pagamento · ${bancoCreditados} creditados no banco de horas`,
+      };
+    }),
+
+  // Get banco de horas balances for all employees in a company
+  getSaldoBanco: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = ((await db.execute(sql`
+        SELECT bhs.*, e."nomeCompleto", e.funcao,
+          (SELECT MAX(bhl."criadoEm") FROM banco_horas_lancamentos bhl
+           WHERE bhl."employeeId" = bhs."employeeId" AND bhl."companyId" = bhs."companyId") as "ultimoLancamento"
+        FROM banco_horas_saldo bhs
+        JOIN employees e ON e.id = bhs."employeeId"
+        WHERE bhs."companyId" = ${input.companyId} AND bhs."saldoMinutos" > 0
+        ORDER BY bhs."saldoMinutos" DESC
+      `)) as any).rows || [];
+      return rows;
+    }),
+
+  // Get lancamentos history for a specific employee
+  getLancamentos: protectedProcedure
+    .input(z.object({ employeeId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = ((await db.execute(sql`
+        SELECT * FROM banco_horas_lancamentos
+        WHERE "employeeId" = ${input.employeeId} AND "companyId" = ${input.companyId}
+        ORDER BY data DESC, "criadoEm" DESC
+        LIMIT 50
+      `)) as any).rows || [];
+      return rows;
+    }),
+
+  // Debit hours from banco de horas (compensatory day off)
+  debitarBanco: protectedProcedure
+    .input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      minutos: z.number().positive(),
+      descricao: z.string().min(3),
+      data: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const saldoRows = ((await db.execute(sql`
+        SELECT "saldoMinutos" FROM banco_horas_saldo
+        WHERE "employeeId" = ${input.employeeId} AND "companyId" = ${input.companyId}
+      `)) as any).rows || [];
+      const saldo = Number(saldoRows[0]?.saldoMinutos || 0);
+      if (saldo < input.minutos) {
+        const h = Math.floor(saldo / 60);
+        const m = String(saldo % 60).padStart(2, "0");
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Saldo insuficiente: ${h}h${m} disponível` });
+      }
+
+      await db.execute(sql`
+        UPDATE banco_horas_saldo
+        SET "saldoMinutos" = "saldoMinutos" - ${input.minutos}, "atualizadoEm" = NOW()
+        WHERE "employeeId" = ${input.employeeId} AND "companyId" = ${input.companyId}
+      `);
+      await db.execute(sql`
+        INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, descricao, data, "criadoPor")
+        VALUES (${input.employeeId}, ${input.companyId}, 'debito', ${input.minutos},
+          ${input.descricao}, ${input.data}::date, ${ctx.user.name || "Sistema"})
+      `);
+      return { ok: true };
+    }),
+
+  // Get expiry alerts (credits older than N months with saldo > 0)
+  getAlertasExpiracao: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesesValidade: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const meses = input.mesesValidade ?? 12;
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - meses);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      const rows = ((await db.execute(sql`
+        SELECT bhl."employeeId", e."nomeCompleto", bhs."saldoMinutos",
+          MIN(bhl.data) as "creditoMaisAntigo"
+        FROM banco_horas_lancamentos bhl
+        JOIN employees e ON e.id = bhl."employeeId"
+        JOIN banco_horas_saldo bhs ON bhs."employeeId" = bhl."employeeId" AND bhs."companyId" = bhl."companyId"
+        WHERE bhl."companyId" = ${input.companyId}
+          AND bhl.tipo = 'credito'
+          AND bhl.data < ${cutoffStr}::date
+          AND bhs."saldoMinutos" > 0
+        GROUP BY bhl."employeeId", e."nomeCompleto", bhs."saldoMinutos"
+        ORDER BY MIN(bhl.data) ASC
+      `)) as any).rows || [];
+      return rows;
+    }),
 });
