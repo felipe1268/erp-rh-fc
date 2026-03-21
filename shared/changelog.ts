@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 684,
+    titulo: "Férias — Formatação BR nos campos de edição de valores",
+    descricao: "Ao abrir o modo 'Editar Valores', os campos agora exibem os valores com formatação brasileira (ex: 3.179,00 em vez de 3179.00). O parse ao salvar já tratava vírgula corretamente.",
+    tipo: "fix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 683,
     titulo: "Férias — Edição manual de valores (ADM Master)",
     descricao: "No diálogo de Detalhes de Férias, ADM Master agora vê o botão 'Editar Valores'. Ao clicar, os campos Férias, 1/3 Constitucional, Abono Pecuniário e Total Bruto tornam-se editáveis. O Total pode ser preenchido manualmente ou calculado automaticamente como soma dos itens. Ao salvar, os valores são gravados diretamente no banco e a lista é atualizada. O INSS e o Valor Líquido são recalculados em tela com base no novo Total Bruto.",

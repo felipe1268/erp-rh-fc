@@ -1513,11 +1513,17 @@ export default function Ferias() {
                   <p className="text-xs text-green-600 uppercase font-semibold">Valores</p>
                   {isMaster && !editingValues && (
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => {
+                      const fmtBRL = (v: string | null | undefined) => {
+                        if (!v) return "";
+                        const n = parseFloat(v);
+                        if (isNaN(n)) return v;
+                        return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                      };
                       setEditValores({
-                        valorFerias: selectedItem.valorFerias || "",
-                        valorTerco: selectedItem.valorTercoConstitucional || "",
-                        valorAbono: selectedItem.valorAbono || "",
-                        valorTotal: selectedItem.valorTotal || "",
+                        valorFerias: fmtBRL(selectedItem.valorFerias),
+                        valorTerco: fmtBRL(selectedItem.valorTercoConstitucional),
+                        valorAbono: fmtBRL(selectedItem.valorAbono),
+                        valorTotal: fmtBRL(selectedItem.valorTotal),
                       });
                       setEditingValues(true);
                     }}>
