@@ -310,6 +310,8 @@ export default function Ferias() {
   const [showDialog, setShowDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [editingValues, setEditingValues] = useState(false);
+  const [editValores, setEditValores] = useState<{ valorFerias: string; valorTerco: string; valorAbono: string; valorTotal: string; }>({ valorFerias: "", valorTerco: "", valorAbono: "", valorTotal: "" });
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [form, setForm] = useState<any>({});
 
@@ -1466,7 +1468,7 @@ export default function Ferias() {
 
         {/* Detail Dialog */}
         {selectedItem && (
-          <FullScreenDialog open={showDetailDialog} onClose={() => { setShowDetailDialog(false); setSelectedItem(null); }} title="Detalhes das Férias" icon={<Palmtree className="h-5 w-5 text-white" />}>
+          <FullScreenDialog open={showDetailDialog} onClose={() => { setShowDetailDialog(false); setSelectedItem(null); setEditingValues(false); }} title="Detalhes das Férias" icon={<Palmtree className="h-5 w-5 text-white" />}>
             <div className="w-full max-w-3xl mx-auto space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-muted/30 rounded-lg p-4">
@@ -1507,17 +1509,91 @@ export default function Ferias() {
                 </div>
               )}
               <div className="bg-green-50 rounded-lg p-4">
-                <p className="text-xs text-green-600 uppercase font-semibold mb-2">Valores</p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex justify-between"><span>Férias:</span><span className="font-medium">{formatMoeda(selectedItem.valorFerias)}</span></div>
-                  <div className="flex justify-between"><span>1/3 Constitucional:</span><span className="font-medium">{formatMoeda(selectedItem.valorTercoConstitucional)}</span></div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-green-600 uppercase font-semibold">Valores</p>
+                  {isMaster && !editingValues && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => {
+                      setEditValores({
+                        valorFerias: selectedItem.valorFerias || "",
+                        valorTerco: selectedItem.valorTercoConstitucional || "",
+                        valorAbono: selectedItem.valorAbono || "",
+                        valorTotal: selectedItem.valorTotal || "",
+                      });
+                      setEditingValues(true);
+                    }}>
+                      <PenLine className="h-3 w-3 mr-1" /> Editar Valores
+                    </Button>
+                  )}
+                  {editingValues && (
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingValues(false)}>Cancelar</Button>
+                      <Button size="sm" className="h-7 text-xs" disabled={updateFerias.isPending} onClick={() => {
+                        const parseVal = (v: string) => {
+                          const clean = v.replace(/[R$\s.]/g, "").replace(",", ".");
+                          return parseFloat(clean) || 0;
+                        };
+                        const vF = parseVal(editValores.valorFerias);
+                        const vT = parseVal(editValores.valorTerco);
+                        const vA = parseVal(editValores.valorAbono);
+                        const total = parseVal(editValores.valorTotal) || (vF + vT + vA);
+                        updateFerias.mutate({
+                          id: selectedItem.id,
+                          valorFerias: vF.toFixed(2),
+                          valorTercoConstitucional: vT.toFixed(2),
+                          valorAbono: vA.toFixed(2),
+                          valorTotal: total.toFixed(2),
+                        }, {
+                          onSuccess: () => {
+                            setSelectedItem((prev: any) => ({ ...prev, valorFerias: vF.toFixed(2), valorTercoConstitucional: vT.toFixed(2), valorAbono: vA.toFixed(2), valorTotal: total.toFixed(2) }));
+                            setEditingValues(false);
+                            refetch();
+                          }
+                        });
+                      }}>
+                        {updateFerias.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}Salvar
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <div className="border-t mt-2 pt-2 flex justify-between text-lg font-bold text-green-700">
-                  <span>TOTAL BRUTO:</span>
-                  <span>{formatMoeda(selectedItem.valorTotal)}</span>
-                </div>
-                {selectedItem.dataPagamento && (
-                  <p className="text-xs text-green-600 mt-2">Pagamento até: {formatDate(selectedItem.dataPagamento)} (2 dias antes do início)</p>
+                {editingValues ? (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="whitespace-nowrap text-slate-600 w-40">Férias:</span>
+                      <Input className="h-7 text-sm text-right" value={editValores.valorFerias} onChange={e => setEditValores(p => ({ ...p, valorFerias: e.target.value }))} placeholder="0,00" />
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="whitespace-nowrap text-slate-600 w-40">1/3 Constitucional:</span>
+                      <Input className="h-7 text-sm text-right" value={editValores.valorTerco} onChange={e => setEditValores(p => ({ ...p, valorTerco: e.target.value }))} placeholder="0,00" />
+                    </div>
+                    {(selectedItem.abonoPecuniario === 1 || parseFloat(editValores.valorAbono) > 0) && (
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="whitespace-nowrap text-slate-600 w-40">Abono Pecuniário:</span>
+                        <Input className="h-7 text-sm text-right" value={editValores.valorAbono} onChange={e => setEditValores(p => ({ ...p, valorAbono: e.target.value }))} placeholder="0,00" />
+                      </div>
+                    )}
+                    <div className="border-t pt-2 flex items-center justify-between gap-4">
+                      <span className="font-bold text-green-700 w-40">TOTAL BRUTO:</span>
+                      <Input className="h-7 text-sm text-right font-bold" value={editValores.valorTotal} onChange={e => setEditValores(p => ({ ...p, valorTotal: e.target.value }))} placeholder="0,00" />
+                    </div>
+                    <p className="text-[10px] text-slate-400">Informe os valores em formato numérico (ex: 2607,00). O total pode ser preenchido manualmente ou deixado em branco para ser calculado como soma dos itens.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="flex justify-between"><span>Férias:</span><span className="font-medium">{formatMoeda(selectedItem.valorFerias)}</span></div>
+                      <div className="flex justify-between"><span>1/3 Constitucional:</span><span className="font-medium">{formatMoeda(selectedItem.valorTercoConstitucional)}</span></div>
+                      {selectedItem.valorAbono && parseFloat(selectedItem.valorAbono) > 0 && (
+                        <div className="flex justify-between col-span-2"><span>Abono Pecuniário:</span><span className="font-medium">{formatMoeda(selectedItem.valorAbono)}</span></div>
+                      )}
+                    </div>
+                    <div className="border-t mt-2 pt-2 flex justify-between text-lg font-bold text-green-700">
+                      <span>TOTAL BRUTO:</span>
+                      <span>{formatMoeda(selectedItem.valorTotal)}</span>
+                    </div>
+                    {selectedItem.dataPagamento && (
+                      <p className="text-xs text-green-600 mt-2">Pagamento até: {formatDate(selectedItem.dataPagamento)} (2 dias antes do início)</p>
+                    )}
+                  </>
                 )}
               </div>
               {/* INSS + Líquido */}

@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 683,
+    titulo: "Férias — Edição manual de valores (ADM Master)",
+    descricao: "No diálogo de Detalhes de Férias, ADM Master agora vê o botão 'Editar Valores'. Ao clicar, os campos Férias, 1/3 Constitucional, Abono Pecuniário e Total Bruto tornam-se editáveis. O Total pode ser preenchido manualmente ou calculado automaticamente como soma dos itens. Ao salvar, os valores são gravados diretamente no banco e a lista é atualizada. O INSS e o Valor Líquido são recalculados em tela com base no novo Total Bruto.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 682,
     titulo: "Férias — Bloqueio de exclusão de períodos",
     descricao: "Removido o botão de exclusão (lixeira) da lista de férias em todos os perfis. Férias são obrigação legal (CLT) e não podem ser excluídas. Para desfazer ações acidentais, use o botão 'Reverter' (concluída → em_gozo) ou 'Cancelar' já disponíveis.",

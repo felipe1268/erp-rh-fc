@@ -2091,6 +2091,11 @@ export const avisoPrevioFeriasRouter = router({
         abonoPecuniario: z.number().optional(),
         status: z.string().optional(),
         observacoes: z.string().optional(),
+        valorFerias: z.string().optional(),
+        valorTercoConstitucional: z.string().optional(),
+        valorAbono: z.string().optional(),
+        valorTotal: z.string().optional(),
+        dataPagamento: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
