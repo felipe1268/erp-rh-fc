@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 667,
+    titulo: "Lançamento Manual — campos de horário mostram horas e minutos completos",
+    descricao: "Corrigido bug visual na tabela 'Dias lançados' do Lançamento Manual: inputs de horário (type=time) tinham largura de 70px, cortando os minutos e exibindo apenas as horas. Largura ajustada para 90px — agora exibe HH:MM completo.",
+    tipo: "bug",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 666,
     titulo: "Espelho de Ponto — Edição direta de horários: lápis visível + células clicáveis",
     descricao: "Botão de editar (lápis) agora sempre visível em cada linha de dia útil (antes só aparecia ao passar o mouse). Células de horário (Ent.1, Saí.1, Ent.2, Saí.2) tornadas clicáveis — abrem o mesmo dialog de edição ao clicar. Dica da legenda atualizada para refletir o novo comportamento.",
