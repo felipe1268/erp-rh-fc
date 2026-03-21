@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 700,
+    titulo: "Aviso Prévio — Balão fixo em todas as telas",
+    descricao: "Uma faixa fixa (sticky) aparece logo abaixo do cabeçalho em todas as páginas sempre que há funcionários em aviso prévio ativo (status = em_andamento). Exibe nomes e data de fim do aviso. Pode ser recolhido com o botão de seta, mantendo apenas o contador visível. Link 'Ver todos' navega diretamente para a tela de Aviso Prévio.",
+    tipo: "feature",
+    modulos: "RH/DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 699,
     titulo: "Vale — Exclusão manual de funcionários aprovados",
     descricao: "Na tela de cálculo de vale, a tabela 'Funcionários Aprovados' agora possui colunas de checkbox. O RH pode selecionar individualmente (ou todos) e clicar em 'Não Pagar Selecionados' para excluir manualmente do vale do mês. O valor do excluído aparece riscado antes da confirmação. As regras automáticas de bloqueio continuam ativas.",
