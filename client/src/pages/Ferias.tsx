@@ -330,6 +330,11 @@ export default function Ferias() {
   const [cancelarItem, setCancelarItem] = useState<any>(null);
   const [cancelarMotivo, setCancelarMotivo] = useState("");
 
+  // Dialog para reverter férias concluída → em gozo (todos)
+  const [showReverterDialog, setShowReverterDialog] = useState(false);
+  const [reverterItem, setReverterItem] = useState<any>(null);
+  const [reverterMotivo, setReverterMotivo] = useState("");
+
   // Queries
   // Query SEPARADA para stats (sem filtro) — garante que os cards nunca mudem ao clicar filtros
   const { data: allFeriasList = [] } = trpc.avisoPrevio.ferias.list.useQuery(
@@ -420,6 +425,16 @@ export default function Ferias() {
       setCancelarItem(null);
       setCancelarMotivo("");
       toast.success(`Conclusão cancelada! Status voltou para: ${data.novoStatus === 'vencida' ? 'Vencida' : 'Pendente'}`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const reverterParaEmGozo = trpc.avisoPrevio.ferias.reverterParaEmGozo.useMutation({
+    onSuccess: () => {
+      refetch(); refetchVencidas();
+      setShowReverterDialog(false);
+      setReverterItem(null);
+      setReverterMotivo("");
+      toast.success("Férias revertidas para Em Gozo!");
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -740,8 +755,17 @@ export default function Ferias() {
                                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Concluir
                                   </Button>
                                 )}
+                                {f.status === "concluida" && (
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-blue-600 hover:bg-blue-50 font-medium text-xs" title="Reverter para Em Gozo" onClick={() => {
+                                    setReverterItem(f);
+                                    setReverterMotivo("");
+                                    setShowReverterDialog(true);
+                                  }}>
+                                    <Undo2 className="h-3.5 w-3.5 mr-1" /> Reverter
+                                  </Button>
+                                )}
                                 {f.status === "concluida" && isMaster && (
-                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-orange-600 hover:bg-orange-50 font-medium text-xs" title="Cancelar Conclusão (ADM Master)" onClick={() => {
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-orange-600 hover:bg-orange-50 font-medium text-xs" title="Cancelar Conclusão por completo (ADM Master)" onClick={() => {
                                     setCancelarItem(f);
                                     setCancelarMotivo("");
                                     setShowCancelarDialog(true);
@@ -1492,13 +1516,57 @@ export default function Ferias() {
                   <div className="flex justify-between"><span>1/3 Constitucional:</span><span className="font-medium">{formatMoeda(selectedItem.valorTercoConstitucional)}</span></div>
                 </div>
                 <div className="border-t mt-2 pt-2 flex justify-between text-lg font-bold text-green-700">
-                  <span>TOTAL:</span>
+                  <span>TOTAL BRUTO:</span>
                   <span>{formatMoeda(selectedItem.valorTotal)}</span>
                 </div>
                 {selectedItem.dataPagamento && (
                   <p className="text-xs text-green-600 mt-2">Pagamento até: {formatDate(selectedItem.dataPagamento)} (2 dias antes do início)</p>
                 )}
               </div>
+              {/* INSS + Líquido */}
+              {(() => {
+                const bruto = parseFloat(selectedItem.valorTotal || "0");
+                if (!bruto) return null;
+                // Tabela INSS progressiva 2025
+                const faixas = [
+                  { ate: 1412.00, aliq: 0.075 },
+                  { ate: 2666.68, aliq: 0.09 },
+                  { ate: 4000.03, aliq: 0.12 },
+                  { ate: 7786.02, aliq: 0.14 },
+                ];
+                const TETO = 908.86;
+                let inss = 0;
+                let base = bruto;
+                let prev = 0;
+                for (const f of faixas) {
+                  if (base <= 0) break;
+                  const slice = Math.min(bruto, f.ate) - prev;
+                  if (slice <= 0) { prev = f.ate; continue; }
+                  inss += slice * f.aliq;
+                  prev = f.ate;
+                  if (bruto <= f.ate) break;
+                }
+                if (bruto > 7786.02) inss = TETO;
+                const liquido = bruto - inss;
+                return (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2">
+                    <p className="text-xs text-slate-500 uppercase font-semibold mb-2">Desconto INSS (Tabela 2025)</p>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">Valor Bruto</span>
+                      <span className="font-medium">{formatMoeda(bruto)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-red-700">
+                      <span>Desconto INSS</span>
+                      <span className="font-medium">− {formatMoeda(inss)}</span>
+                    </div>
+                    <div className="border-t pt-2 flex justify-between text-base font-bold text-slate-800">
+                      <span>Valor Líquido</span>
+                      <span className="text-green-700">{formatMoeda(liquido)}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">* Desconto INSS progressivo sobre o valor bruto. Não inclui IRRF. Verifique alíquota vigente.</p>
+                  </div>
+                );
+              })()}
             </div>
           </FullScreenDialog>
         )}
@@ -1633,6 +1701,50 @@ export default function Ferias() {
       )}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {/* ===== DIALOG: REVERTER FÉRIAS CONCLUÍDA → EM GOZO ===== */}
+      <Dialog open={showReverterDialog} onOpenChange={(open) => { if (!open) { setShowReverterDialog(false); setReverterItem(null); setReverterMotivo(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-700">
+              <Undo2 className="h-5 w-5" /> Reverter Férias para Em Gozo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-blue-800">O período voltará para o status "Em Gozo" para revisão dos dados e valores.</p>
+              <p className="text-xs text-blue-600 mt-1">Você poderá editar datas, conferir o cálculo de INSS e concluir novamente quando estiver correto.</p>
+            </div>
+            {reverterItem && (
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-sm font-medium">{reverterItem.employeeName}</p>
+                <p className="text-xs text-muted-foreground">Período: {formatDate(reverterItem.periodoAquisitivoInicio)} a {formatDate(reverterItem.periodoAquisitivoFim)}</p>
+                {reverterItem.valorTotal && <p className="text-sm text-muted-foreground mt-1">Valor: {formatMoeda(parseFloat(reverterItem.valorTotal || '0'))}</p>}
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium">Motivo da reversão <span className="text-red-500">*</span></label>
+              <Textarea
+                placeholder="Ex: Verificar valores e datas antes de concluir novamente..."
+                value={reverterMotivo}
+                onChange={(e) => setReverterMotivo(e.target.value)}
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowReverterDialog(false); setReverterItem(null); setReverterMotivo(""); }}>Cancelar</Button>
+            <Button
+              disabled={!reverterMotivo.trim() || reverterParaEmGozo.isPending}
+              onClick={() => { if (reverterItem) reverterParaEmGozo.mutate({ id: reverterItem.id, motivo: reverterMotivo.trim() }); }}
+            >
+              {reverterParaEmGozo.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
+              Reverter para Em Gozo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ===== DIALOG: CANCELAR CONCLUSÃO DE FÉRIAS (ADM Master) ===== */}
       <Dialog open={showCancelarDialog} onOpenChange={(open) => { if (!open) { setShowCancelarDialog(false); setCancelarItem(null); setCancelarMotivo(""); } }}>

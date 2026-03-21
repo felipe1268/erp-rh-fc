@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 680,
+    titulo: "Férias — Reverter concluída para Em Gozo + INSS e Valor Líquido",
+    descricao: "Nova mutação reverterParaEmGozo (disponível a todos os admins) reverte status 'concluída' → 'em_gozo' com registro de motivo. Botão 'Reverter' adicionado na lista. Diálogo de detalhes agora exibe seção de INSS calculado progressivamente (tabela 2025) e valor líquido para pagamento.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 679,
     titulo: "Fechamento de Ponto — bloqueio e alerta para funcionários inativos",
     descricao: "Upload Dixi passa a excluir funcionários Desligados/Afastados/Reclusos/Lista_Negra da lista de matching (registros vão para 'não identificados'). getSummary retorna alertaInativo para cada linha. Frontend exibe banner global contando inativos com registros, badge vermelho por linha e banner de aviso no detalhe do colaborador. Geração de HE (consolidarMes) já filtrava por Ativo/Ferias — confirmado sem alteração necessária.",

@@ -2327,6 +2327,30 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     // ============================================================
+    // REVERTER FÉRIAS CONCLUÍDA → EM GOZO (disponível a todos)
+    // ============================================================
+    reverterParaEmGozo: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        motivo: z.string().min(1, 'Motivo é obrigatório'),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [periodo] = await db.select().from(vacationPeriods).where(eq(vacationPeriods.id, input.id));
+        if (!periodo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Período de férias não encontrado.' });
+        if (periodo.status !== 'concluida') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas férias com status "Concluída" podem ser revertidas para Em Gozo.' });
+        }
+        const obsAnterior = periodo.observacoes || '';
+        const novaObs = `[REVERTIDA PARA EM GOZO] por ${ctx.user.name} em ${new Date().toLocaleDateString('pt-BR')}. Motivo: ${input.motivo}${obsAnterior ? '\n---\n' + obsAnterior : ''}`;
+        await db.update(vacationPeriods).set({
+          status: 'em_gozo',
+          observacoes: novaObs,
+        } as any).where(eq(vacationPeriods.id, input.id));
+        return { success: true };
+      }),
+
+    // ============================================================
     // RH DEFINE/ALTERA DATA DE FÉRIAS (com tracking de alteração)
     // ============================================================
     definirDataFerias: protectedProcedure
