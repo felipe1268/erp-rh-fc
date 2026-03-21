@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 701,
+    titulo: "Vale — Corrige erro ao rejeitar funcionário aprovado",
+    descricao: "Corrigido erro 'could not determine data type of parameter' ao clicar em Não Pagar Selecionados. O CONCAT() do PostgreSQL não conseguia inferir o tipo do parâmetro; substituído pelo operador || de concatenação de texto que usa o tipo da coluna como referência. Afetava tanto a rejeição quanto a aprovação manual de vale.",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 700,
     titulo: "Aviso Prévio — Balão fixo em todas as telas",
     descricao: "Uma faixa fixa (sticky) aparece logo abaixo do cabeçalho em todas as páginas sempre que há funcionários em aviso prévio ativo (status = em_andamento). Exibe nomes e data de fim do aviso. Pode ser recolhido com o botão de seta, mantendo apenas o contador visível. Link 'Ver todos' navega diretamente para a tela de Aviso Prévio.",

@@ -1299,7 +1299,7 @@ export const payrollEngineRouter = router({
           const aprovadoPorNome = ctx.user.name || "Usuário";
           await db.execute(sql`
             UPDATE payroll_advances SET status = 'calculado', bloqueado = 0,
-              "motivoBloqueio" = CONCAT(COALESCE("motivoBloqueio", ''), ${` [APROVADO por ${aprovadoPorNome}]`})
+              "motivoBloqueio" = COALESCE("motivoBloqueio", '') || ${` [APROVADO por ${aprovadoPorNome}]`}
             WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${decisao.employeeId}
           `);
           // Create financial event for approved
@@ -1322,7 +1322,7 @@ export const payrollEngineRouter = router({
           const rejeitadoPorNome = ctx.user.name || "Usuário";
           await db.execute(sql`
             UPDATE payroll_advances SET status = 'rejeitado',
-              "motivoBloqueio" = CONCAT(COALESCE("motivoBloqueio", ''), ${` [REJEITADO por ${rejeitadoPorNome}]`})
+              "motivoBloqueio" = COALESCE("motivoBloqueio", '') || ${` [REJEITADO por ${rejeitadoPorNome}]`}
             WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${decisao.employeeId}
           `);
           rejeitados++;
