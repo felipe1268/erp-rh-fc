@@ -4056,4 +4056,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-21 00:00:00",
   },
+  {
+    version: 657,
+    titulo: "Módulo PJ — botão Editar contrato totalmente funcional",
+    descricao: "Conclusão do botão Editar no Módulo PJ: (1) Botão de lápis (ícone Pencil, azul) adicionado na coluna de ações da tabela de contratos, entre Detalhes e Lixeira; (2) Ao clicar, o diálogo abre com título 'Editar Contrato PJ' e todos os campos preenchidos com os dados do contrato selecionado; (3) Campo Prestador exibido como texto read-only '(não pode ser alterado)' ao editar — impede troca de funcionário vinculado; (4) Botão de submit mostra 'Salvar Alterações' no modo edição e desabilita durante updateContrato.isPending; (5) Fechar/Cancelar o diálogo limpa corretamente editingContratoId evitando estado residual.",
+    tipo: "feature",
+    modulos: "PJ",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
 ];

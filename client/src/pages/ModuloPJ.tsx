@@ -17,7 +17,7 @@ import { formatCPF, formatMoeda, fmtNum, formatMoedaInput, parseMoedaBR } from "
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Briefcase, Plus, Search, DollarSign, AlertTriangle, FileText,
-  Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar,
+  Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
   Users, TrendingUp, FileSignature, Ban, Printer,
 } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -64,6 +64,7 @@ export default function ModuloPJ() {
   const [showPagamentoDialog, setShowPagamentoDialog] = useState(false);
   const [selectedContrato, setSelectedContrato] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [editingContratoId, setEditingContratoId] = useState<number | null>(null);
   const [pagForm, setPagForm] = useState<any>({});
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
 
@@ -106,7 +107,8 @@ export default function ModuloPJ() {
     onError: (e: any) => toast.error(e.message),
   });
   const updateContrato = trpc.pj.contratos.update.useMutation({
-    onSuccess: () => { refetchContratos(); toast.success("Contrato atualizado!"); },
+    onSuccess: () => { refetchContratos(); toast.success("Contrato atualizado!"); setShowContratoDialog(false); setEditingContratoId(null); setForm({}); },
+    onError: (e: any) => toast.error(e.message),
   });
   const deleteContrato = trpc.pj.contratos.delete.useMutation({
     onSuccess: () => { refetchContratos(); toast.success("Contrato excluído!"); },
@@ -231,25 +233,64 @@ export default function ModuloPJ() {
     };
   }, [contratos]);
 
+  const openEditContrato = (c: any) => {
+    setEditingContratoId(c.id);
+    setForm({
+      employeeId: c.employeeId,
+      cnpjPrestador: c.cnpjPrestador || "",
+      razaoSocialPrestador: c.razaoSocialPrestador || "",
+      objetoContrato: c.objetoContrato || "",
+      dataInicio: c.dataInicio?.slice(0, 10) || "",
+      dataFim: c.dataFim?.slice(0, 10) || "",
+      renovacaoAutomatica: c.renovacaoAutomatica || 0,
+      valorMensal: c.valorMensal || "",
+      percentualAdiantamento: c.percentualAdiantamento || 40,
+      percentualFechamento: c.percentualFechamento || 60,
+      diaAdiantamento: c.diaAdiantamento || 15,
+      diaFechamento: c.diaFechamento || 5,
+      observacoes: c.observacoes || "",
+    });
+    setShowContratoDialog(true);
+  };
+
   const handleSubmitContrato = () => {
-    if (!form.employeeId || !form.dataInicio || !form.dataFim || !form.valorMensal) {
+    if (!form.dataInicio || !form.dataFim || !form.valorMensal) {
       toast.error("Preencha os campos obrigatórios");
       return;
     }
-    createContrato.mutate({ companyId, companyIds, employeeId: form.employeeId,
-      cnpjPrestador: form.cnpjPrestador,
-      razaoSocialPrestador: form.razaoSocialPrestador,
-      objetoContrato: form.objetoContrato,
-      dataInicio: form.dataInicio,
-      dataFim: form.dataFim,
-      renovacaoAutomatica: form.renovacaoAutomatica || 0,
-      valorMensal: form.valorMensal,
-      percentualAdiantamento: form.percentualAdiantamento || 40,
-      percentualFechamento: form.percentualFechamento || 60,
-      diaAdiantamento: form.diaAdiantamento || 15,
-      diaFechamento: form.diaFechamento || 5,
-      observacoes: form.observacoes,
-    });
+    if (editingContratoId) {
+      updateContrato.mutate({
+        id: editingContratoId,
+        cnpjPrestador: form.cnpjPrestador,
+        razaoSocialPrestador: form.razaoSocialPrestador,
+        objetoContrato: form.objetoContrato,
+        dataInicio: form.dataInicio,
+        dataFim: form.dataFim,
+        renovacaoAutomatica: form.renovacaoAutomatica || 0,
+        valorMensal: form.valorMensal,
+        percentualAdiantamento: form.percentualAdiantamento || 40,
+        percentualFechamento: form.percentualFechamento || 60,
+        diaAdiantamento: form.diaAdiantamento || 15,
+        diaFechamento: form.diaFechamento || 5,
+        observacoes: form.observacoes,
+      });
+    } else {
+      if (!form.employeeId) { toast.error("Selecione o prestador"); return; }
+      createContrato.mutate({ companyId, companyIds, employeeId: form.employeeId,
+        cnpjPrestador: form.cnpjPrestador,
+        razaoSocialPrestador: form.razaoSocialPrestador,
+        objetoContrato: form.objetoContrato,
+        dataInicio: form.dataInicio,
+        dataFim: form.dataFim,
+        renovacaoAutomatica: form.renovacaoAutomatica || 0,
+        valorMensal: form.valorMensal,
+        percentualAdiantamento: form.percentualAdiantamento || 40,
+        percentualFechamento: form.percentualFechamento || 60,
+        diaAdiantamento: form.diaAdiantamento || 15,
+        diaFechamento: form.diaFechamento || 5,
+        observacoes: form.observacoes,
+      });
+    }
   };
 
   return (
@@ -422,6 +463,9 @@ export default function ModuloPJ() {
                               <div className="flex items-center justify-center gap-1">
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={() => { setSelectedContrato(c); setShowDetailDialog(true); }}>
                                   <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar contrato" onClick={() => openEditContrato(c)}>
+                                  <Pencil className="h-3.5 w-3.5" />
                                 </Button>
                                 {c.status === "pendente_assinatura" && (
                                   <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => { updateContrato.mutate({ id: c.id, status: "ativo" }); }}>
@@ -607,11 +651,17 @@ export default function ModuloPJ() {
         )}
 
         {/* Create Contrato Dialog */}
-        <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setForm({}); }} title="Novo Contrato PJ" icon={<FileSignature className="h-5 w-5 text-white" />}>
+        <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); }} title={editingContratoId ? "Editar Contrato PJ" : "Novo Contrato PJ"} icon={<FileSignature className="h-5 w-5 text-white" />}>
           <div className="w-full max-w-3xl mx-auto">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="text-sm font-medium">Prestador (Funcionário PJ) *</label>
+                {editingContratoId ? (
+                  <div className="flex items-center border rounded-md px-3 py-2 bg-muted/30 text-sm text-foreground">
+                    <span className="font-medium">{selectedEmp ? `${selectedEmp.nomeCompleto} — ${formatCPF(selectedEmp.cpf)}` : "—"}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">(não pode ser alterado)</span>
+                  </div>
+                ) : (
                 <div className="relative" style={{ zIndex: 60 }}>
                   <div className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 relative" style={{ zIndex: 61 }} onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}>
                     <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
@@ -650,6 +700,7 @@ export default function ModuloPJ() {
                     </>
                   )}
                 </div>
+                )}
               </div>
 
               <div>
@@ -732,9 +783,11 @@ export default function ModuloPJ() {
             </div>
 
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => { setShowContratoDialog(false); setForm({}); }}>Cancelar</Button>
-              <Button onClick={handleSubmitContrato} disabled={createContrato.isPending}>
-                {createContrato.isPending ? "Salvando..." : "Criar Contrato"}
+              <Button variant="outline" onClick={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); }}>Cancelar</Button>
+              <Button onClick={handleSubmitContrato} disabled={createContrato.isPending || updateContrato.isPending}>
+                {createContrato.isPending || updateContrato.isPending
+                  ? "Salvando..."
+                  : editingContratoId ? "Salvar Alterações" : "Criar Contrato"}
               </Button>
             </div>
           </div>
