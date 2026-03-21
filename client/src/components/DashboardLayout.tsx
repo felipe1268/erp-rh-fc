@@ -908,8 +908,8 @@ function DashboardLayoutContent({
       sections = customSections;
     }
 
-    // Filter admin-only paths for non-admin users
-    if (!isAdminUser) {
+    // Filter admin-only paths: only master user can see/access these
+    if (!isMasterUser) {
       sections = sections.map(s => ({
         ...s,
         items: s.items.filter(item => !adminOnlyPaths.includes(item.path)),

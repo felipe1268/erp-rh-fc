@@ -1,15 +1,27 @@
 import { Toaster } from "@/components/ui/sonner";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
 import { ModuleProvider } from "./contexts/ModuleContext";
 import { ModuleConfigProvider } from "./contexts/ModuleConfigContext";
 import { PermissionsProvider } from "./contexts/PermissionsContext";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, ComponentType } from "react";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "./_core/hooks/useAuth";
+
+function MasterOnlyGuard({ component: Component }: { component: ComponentType }) {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  if (!user) return null;
+  if (user.role !== 'admin_master') {
+    setLocation("/");
+    return null;
+  }
+  return <Component />;
+}
 
 // ============================================================
 // LAZY LOADING - Cada página é carregada sob demanda
@@ -224,18 +236,18 @@ function Router() {
         <Route path={"/convencoes-coletivas"} component={ConvencoesColetivas} />
         <Route path={"/processos-trabalhistas"} component={ProcessosTrabalhistas} />
         <Route path={"/epis"} component={Epis} />
-        <Route path={"/usuarios"} component={Usuarios} />
-        <Route path={"/grupos-usuarios"} component={GruposUsuarios} />
-        <Route path={"/auditoria"} component={Auditoria} />
+        <Route path={"/usuarios"} component={() => <MasterOnlyGuard component={Usuarios} />} />
+        <Route path={"/grupos-usuarios"} component={() => <MasterOnlyGuard component={GruposUsuarios} />} />
+        <Route path={"/auditoria"} component={() => <MasterOnlyGuard component={Auditoria} />} />
         <Route path={"/fechamento-ponto"} component={FechamentoPonto} />
         <Route path={"/espelho-ponto"} component={EspelhoPonto} />
         <Route path={"/folha-pagamento"} component={FolhaPagamento} />
         <Route path={"/gestao-competencias"} component={PayrollCompetencias} />
         <Route path={"/controle-documentos"} component={ControleDocumentos} />
         <Route path={"/vale-alimentacao"} component={ValeAlimentacao} />
-        <Route path={"/configuracoes"} component={Configuracoes} />
+        <Route path={"/configuracoes"} component={() => <MasterOnlyGuard component={Configuracoes} />} />
         <Route path={"/migracao"} component={Migration} />
-        <Route path={"/lixeira"} component={Lixeira} />
+        <Route path={"/lixeira"} component={() => <MasterOnlyGuard component={Lixeira} />} />
         <Route path={"/aviso-previo"} component={AvisoPrevio} />
         <Route path={"/ferias"} component={Ferias} />
         <Route path={"/cipa"} component={CipaCompleta} />

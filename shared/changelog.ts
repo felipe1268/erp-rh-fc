@@ -4057,6 +4057,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 658,
+    titulo: "Segurança — Acesso a Usuários, Auditoria, Configurações e Lixeira restrito ao Admin Master",
+    descricao: "Restrição completa de acesso às seções administrativas: (1) Dropdown do usuário no ModuleHub agora exibe a seção 'Administração' (Usuários e Permissões, Auditoria do Sistema, Configurações, Revisões do Sistema, Lixeira) exclusivamente para usuários com role 'admin_master'; (2) Sidebar do DashboardLayout filtra os adminOnlyPaths apenas para usuários master (antes filtrava apenas para não-admins, agora filtra para qualquer um que não seja admin_master); (3) Rotas /usuarios, /grupos-usuarios, /auditoria, /configuracoes e /lixeira protegidas por guard MasterOnlyGuard em App.tsx — usuários não-master são redirecionados para '/' ao tentar acessar diretamente via URL.",
+    tipo: "seguranca",
+    modulos: "Sistema",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 657,
     titulo: "Módulo PJ — botão Editar contrato totalmente funcional",
     descricao: "Conclusão do botão Editar no Módulo PJ: (1) Botão de lápis (ícone Pencil, azul) adicionado na coluna de ações da tabela de contratos, entre Detalhes e Lixeira; (2) Ao clicar, o diálogo abre com título 'Editar Contrato PJ' e todos os campos preenchidos com os dados do contrato selecionado; (3) Campo Prestador exibido como texto read-only '(não pode ser alterado)' ao editar — impede troca de funcionário vinculado; (4) Botão de submit mostra 'Salvar Alterações' no modo edição e desabilita durante updateContrato.isPending; (5) Fechar/Cancelar o diálogo limpa corretamente editingContratoId evitando estado residual.",
