@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 668,
+    titulo: "Lançamento Manual — tabela de dias com scroll horizontal e inputs de horário corrigidos",
+    descricao: "Tabela 'Dias lançados' agora com overflow-x-auto e largura mínima por coluna — não espreme mais os inputs. Inputs type=time com padding reduzido via inline style para mostrar HH:MM completo. Input de data mais compacto (112px). Largura dos inputs de horário definida como 98px com paddingLeft=5.",
+    tipo: "bug",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 667,
     titulo: "Lançamento Manual — campos de horário mostram horas e minutos completos",
     descricao: "Corrigido bug visual na tabela 'Dias lançados' do Lançamento Manual: inputs de horário (type=time) tinham largura de 70px, cortando os minutos e exibindo apenas as horas. Largura ajustada para 90px — agora exibe HH:MM completo.",
