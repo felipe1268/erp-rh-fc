@@ -97,10 +97,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupPermissions = (data?.groupPermissions as GroupPermissions | null | undefined) ?? null;
   const rawModuleAccess = (data?.moduleAccess ?? {}) as Record<string, unknown>;
 
-  // Normaliza o mapa raw → Record<string, ModulePerm>
+  // Flag: o grupo do usuário tem permissões no novo sistema (module_access)
+  const groupHasNewSystem = rawModuleAccess.__groupHasNewSystem === true;
+
+  // Normaliza o mapa raw → Record<string, ModulePerm> (exclui flags internas)
   const normalizedAccess = useMemo<Record<string, ModulePerm | null>>(() => {
     const result: Record<string, ModulePerm | null> = {};
     for (const [moduleId, val] of Object.entries(rawModuleAccess)) {
+      if (moduleId.startsWith("__")) continue;
       result[moduleId] = normalizeModulePerm(moduleId, val);
     }
     return result;
@@ -132,13 +136,13 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const canAccessModule = (moduleId: ActiveModuleId | string): boolean => {
     if (isAdminMaster) return true;
     if (normalizedAccess[moduleId] != null) return true;
-    // Fallback grupo
-    if (hasGroup) {
+    // Fallback grupo legado — apenas quando o grupo NÃO usa o novo sistema de module_access
+    if (hasGroup && !groupHasNewSystem) {
       const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
       if (!mod) return false;
       return mod.features.some(f => groupRouteMap.has(f.route) && !!groupRouteMap.get(f.route)?.canView);
     }
-    // Fallback legado
+    // Fallback legado (sem grupo)
     if (permissions.length === 0) return false;
     const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
     if (!mod) return false;
@@ -217,7 +221,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const accessibleModules = useMemo(() => {
     if (isAdminMaster) return MODULE_DEFINITIONS.map(m => m.id);
     return MODULE_DEFINITIONS.filter(m => canAccessModule(m.id)).map(m => m.id);
-  }, [isAdminMaster, normalizedAccess, permMap, groupRouteMap, hasGroup]);
+  }, [isAdminMaster, normalizedAccess, permMap, groupRouteMap, hasGroup, groupHasNewSystem]);
 
   const canAccessRoute = (route: string): boolean => {
     if (isAdminMaster) return true;
@@ -258,8 +262,25 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupCanAccessRoute = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true;
-    if (groupRouteMap.has(route)) return !!groupRouteMap.get(route)?.canView;
+
     const basePath = route.split("?")[0];
+
+    // Novo sistema (module_access salvo via Usuarios.tsx): tem prioridade total
+    if (groupHasNewSystem) {
+      // Features compartilhadas (empresas, obras, setores…) — visíveis se houver ALGUM módulo liberado
+      if (SHARED_FEATURES.some(f => f.route === route || f.route === basePath)) {
+        return Object.keys(normalizedAccess).length > 0;
+      }
+      // Verifica qual módulo "dona" desta rota
+      const mod = MODULE_DEFINITIONS.find(m =>
+        m.features.some(f => f.route === route || f.route === basePath)
+      );
+      if (mod) return normalizedAccess[mod.id] != null;
+      return false;
+    }
+
+    // Sistema legado (user_group_permissions salvo via GruposUsuarios.tsx)
+    if (groupRouteMap.has(route)) return !!groupRouteMap.get(route)?.canView;
     return groupRouteMap.has(basePath) && !!groupRouteMap.get(basePath)?.canView;
   };
 

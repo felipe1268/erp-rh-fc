@@ -4057,6 +4057,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 659,
+    titulo: "Bugfix — Permissões de grupo: novo sistema (module_access) agora controla sidebar e ModuleHub corretamente",
+    descricao: "Correção do bug crítico de permissões de grupo: o sistema anterior tinha dois subsistemas desconectados — (1) novo sistema: user_groups.module_access JSON salvo pelo Usuarios.tsx via setGroupModuleAccess; (2) sistema legado: tabela user_group_permissions lida por groupCanAccessRoute no sidebar. Quando admin configurava grupo em Usuarios.tsx, só salvava no novo sistema, mas groupCanAccessRoute lia apenas do sistema legado (sempre vazio para grupos configurados pelo novo UI), resultando em sidebar vazio/errado. Fix: (a) backend getMyPermissions agora injeta flag __groupHasNewSystem no moduleAccess quando o grupo tem module_access configurado; (b) PermissionsContext extrai esse flag e atualiza groupCanAccessRoute para usar normalizedAccess (novo sistema) com prioridade total quando groupHasNewSystem=true, respeitando SHARED_FEATURES; (c) canAccessModule também ignora o fallback legado groupRouteMap quando o grupo usa novo sistema, evitando que módulos do sistema antigo vazem para o toggle de módulos da sidebar.",
+    tipo: "bugfix",
+    modulos: "Sistema, Usuários",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 658,
     titulo: "Segurança — Acesso a Usuários, Auditoria, Configurações e Lixeira restrito ao Admin Master",
     descricao: "Restrição completa de acesso às seções administrativas: (1) Dropdown do usuário no ModuleHub agora exibe a seção 'Administração' (Usuários e Permissões, Auditoria do Sistema, Configurações, Revisões do Sistema, Lixeira) exclusivamente para usuários com role 'admin_master'; (2) Sidebar do DashboardLayout filtra os adminOnlyPaths apenas para usuários master (antes filtrava apenas para não-admins, agora filtra para qualquer um que não seja admin_master); (3) Rotas /usuarios, /grupos-usuarios, /auditoria, /configuracoes e /lixeira protegidas por guard MasterOnlyGuard em App.tsx — usuários não-master são redirecionados para '/' ao tentar acessar diretamente via URL.",

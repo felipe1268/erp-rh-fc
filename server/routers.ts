@@ -1242,11 +1242,15 @@ export const appRouter = router({
               }
             }
           }
+          // Rastrear se o moduleAccess veio de algum grupo (novo sistema)
+          const groupHasNewSystem = Object.keys(moduleAccess).length > 0;
           // 2. Fallback: moduleAccess individual do usuário
           if (Object.keys(moduleAccess).length === 0) {
             const [u] = await db.select({ modulesAccess: users.modulesAccess }).from(users).where(eq(users.id, ctx.user.id));
             if (u?.modulesAccess) moduleAccess = JSON.parse(u.modulesAccess);
           }
+          // Expor o flag para o frontend
+          (moduleAccess as any).__groupHasNewSystem = groupHasNewSystem && groupPerms.groups.length > 0;
         }
       } catch {}
       return {
