@@ -1079,17 +1079,17 @@ function DashboardLayoutContent({
 
   // Lista de módulos disponíveis, filtrada e ordenada igual à tela inicial
   const ALL_MODULE_DEFS = [
-    { id: "rh-dp",       label: "RH & DP",       icon: Users,       color: "text-blue-400",    bg: "bg-blue-500/20",    path: "/painel/rh",          canSee: () => (permIsAdminMaster || canAccessModule("rh-dp")) && isModEnabled("rh-dp") },
-    { id: "sst",         label: "SST",            icon: Shield,      color: "text-emerald-400", bg: "bg-emerald-500/20", path: "/painel/sst",          canSee: () => (permIsAdminMaster || canAccessModule("sst")) && isModEnabled("sst") },
-    { id: "juridico",    label: "Jurídico",       icon: Gavel,       color: "text-slate-300",   bg: "bg-slate-400/20",   path: "/painel/juridico",    canSee: () => (permIsAdminMaster || canAccessModule("juridico")) && isModEnabled("juridico") },
-    { id: "avaliacao",   label: "Avaliação",      icon: Star,        color: "text-amber-400",   bg: "bg-amber-500/20",   path: "/avaliacao-desempenho", canSee: () => isModEnabled("avaliacao") },
-    { id: "terceiros",   label: "Terceiros",      icon: HardHat,     color: "text-orange-400",  bg: "bg-orange-500/20",  path: "/terceiros/painel",   canSee: () => isModEnabled("terceiros") },
-    { id: "parceiros",   label: "Parceiros",      icon: Handshake,   color: "text-purple-400",  bg: "bg-purple-500/20",  path: "/parceiros/painel",   canSee: () => isModEnabled("parceiros") },
-    { id: "orcamento",   label: "Orçamento",      icon: Calculator,  color: "text-cyan-400",    bg: "bg-cyan-500/20",    path: "/orcamento/painel",   canSee: () => isModEnabled("orcamento") },
-    { id: "planejamento",label: "Planejamento",   icon: Target,      color: "text-green-400",   bg: "bg-green-500/20",   path: "/planejamento",       canSee: () => isModEnabled("planejamento") },
-    { id: "cadastro",    label: "Cadastro",       icon: BookOpen,    color: "text-indigo-400",  bg: "bg-indigo-500/20",  path: "/empresas",           canSee: () => isModEnabled("cadastro") },
-    { id: "compras",        label: "Compras",        icon: ShoppingCart,color: "text-rose-400",    bg: "bg-rose-500/20",    path: "/compras/solicitacoes", canSee: () => permIsAdminMaster || isModEnabled("compras") },
-    { id: "almoxarifado",   label: "Almoxarifado",   icon: Warehouse,   color: "text-emerald-400", bg: "bg-emerald-500/20", path: "/almoxarifado",         canSee: () => permIsAdminMaster || isModEnabled("almoxarifado") },
+    { id: "rh-dp",        label: "RH & DP",      icon: Users,       color: "text-blue-400",    bg: "bg-blue-500/20",    path: "/painel/rh",            canSee: () => (permIsAdminMaster || canAccessModule("rh-dp"))        && isModEnabled("rh-dp") },
+    { id: "sst",          label: "SST",           icon: Shield,      color: "text-emerald-400", bg: "bg-emerald-500/20", path: "/painel/sst",            canSee: () => (permIsAdminMaster || canAccessModule("sst"))          && isModEnabled("sst") },
+    { id: "juridico",     label: "Jurídico",      icon: Gavel,       color: "text-slate-300",   bg: "bg-slate-400/20",   path: "/painel/juridico",       canSee: () => (permIsAdminMaster || canAccessModule("juridico"))     && isModEnabled("juridico") },
+    { id: "avaliacao",    label: "Avaliação",     icon: Star,        color: "text-amber-400",   bg: "bg-amber-500/20",   path: "/avaliacao-desempenho",  canSee: () => (permIsAdminMaster || canAccessModule("avaliacao"))    && isModEnabled("avaliacao") },
+    { id: "terceiros",    label: "Terceiros",     icon: HardHat,     color: "text-orange-400",  bg: "bg-orange-500/20",  path: "/terceiros/painel",      canSee: () => (permIsAdminMaster || canAccessModule("terceiros"))    && isModEnabled("terceiros") },
+    { id: "parceiros",    label: "Parceiros",     icon: Handshake,   color: "text-purple-400",  bg: "bg-purple-500/20",  path: "/parceiros/painel",      canSee: () => (permIsAdminMaster || canAccessModule("parceiros"))    && isModEnabled("parceiros") },
+    { id: "orcamento",    label: "Orçamento",     icon: Calculator,  color: "text-cyan-400",    bg: "bg-cyan-500/20",    path: "/orcamento/painel",      canSee: () => (permIsAdminMaster || canAccessModule("orcamento"))    && isModEnabled("orcamento") },
+    { id: "planejamento", label: "Planejamento",  icon: Target,      color: "text-green-400",   bg: "bg-green-500/20",   path: "/planejamento",          canSee: () => (permIsAdminMaster || canAccessModule("planejamento")) && isModEnabled("planejamento") },
+    { id: "cadastro",     label: "Cadastro",      icon: BookOpen,    color: "text-indigo-400",  bg: "bg-indigo-500/20",  path: "/empresas",              canSee: () => (permIsAdminMaster || canAccessModule("cadastro"))     && isModEnabled("cadastro") },
+    { id: "compras",      label: "Compras",       icon: ShoppingCart,color: "text-rose-400",    bg: "bg-rose-500/20",    path: "/compras/solicitacoes",  canSee: () => (permIsAdminMaster || canAccessModule("compras"))      && isModEnabled("compras") },
+    { id: "almoxarifado", label: "Almoxarifado",  icon: Warehouse,   color: "text-emerald-400", bg: "bg-emerald-500/20", path: "/almoxarifado",          canSee: () => (permIsAdminMaster || canAccessModule("almoxarifado")) && isModEnabled("almoxarifado") },
   ];
   const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
   const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :

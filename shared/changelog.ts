@@ -4093,6 +4093,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 663,
+    titulo: "Bugfix: dropdown switcher de módulos na sidebar não respeitava permissões de grupo",
+    descricao: "O dropdown de troca de módulo (Select expandido e DropdownMenu colapsado) usava canSee() que para 8 módulos (avaliacao, terceiros, parceiros, orcamento, planejamento, cadastro, compras, almoxarifado) verificava apenas isModEnabled() sem checar canAccessModule(). Resultado: módulos apareciam no switcher mesmo quando o grupo do usuário não tinha acesso a eles. Correção: ALL_MODULE_DEFS padronizado — todos os 11 módulos agora usam (permIsAdminMaster || canAccessModule(id)) && isModEnabled(id) como critério canSee().",
+    tipo: "bugfix",
+    modulos: "Controle de Acesso, Sidebar",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 662,
     titulo: "Correção completa do controle de acesso por página — nível custom agora respeitado em sidebar e ModuleHub",
     descricao: "BUGFIX CRÍTICO: groupCanAccessRoute verificava apenas normalizedAccess[mod.id] != null (nível módulo), ignorando completamente perm.level === 'custom' + perm.pages[id].view. Resultado: mesmo que o admin liberasse só 2 páginas de um grupo, TODAS as rotas do módulo passavam. Correções aplicadas: (1) Criado ROUTE_TO_PAGEID em shared/modulePages.ts — mapeamento explícito de rota URL → page ID do MODULE_PAGE_CONFIG para todos os módulos (rh-dp, sst, juridico, avaliacao, terceiros, parceiros, orcamento, planejamento, cadastro, financeiro, compras, almoxarifado, medicao); (2) groupCanAccessRoute reescrito: quando level=admin/viewer → acesso total ao módulo; quando level=custom → usa ROUTE_TO_PAGEID para encontrar o pageId da rota e verifica perm.pages[pageId].view; rota sem mapeamento → nega por segurança; (3) canAccessModule corrigido: nível custom agora exige que ao menos uma página tenha view=true para o módulo aparecer no ModuleHub. Lei de ouro: critério definido é sempre respeitado.",
