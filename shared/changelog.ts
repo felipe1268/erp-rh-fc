@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 699,
+    titulo: "Vale — Exclusão manual de funcionários aprovados",
+    descricao: "Na tela de cálculo de vale, a tabela 'Funcionários Aprovados' agora possui colunas de checkbox. O RH pode selecionar individualmente (ou todos) e clicar em 'Não Pagar Selecionados' para excluir manualmente do vale do mês. O valor do excluído aparece riscado antes da confirmação. As regras automáticas de bloqueio continuam ativas.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 698,
     titulo: "Férias — Alertas no estilo Card com borda colorida",
     descricao: "Cards de alerta agora usam o mesmo componente Card com sombra e borda esquerda colorida dos cartões de estatística (Total, Vencidas, Em Gozo etc.), seguindo o padrão visual da página.",

@@ -80,6 +80,7 @@ export default function FolhaPagamento() {
   const [searchTerm, setSearchTerm] = useState("");
   const [valeSearch, setValeSearch] = useState("");
   const [valeFilter, setValeFilter] = useState<"all" | "aprovados" | "alertas" | "he">("all");
+  const [valeExcluirSel, setValeExcluirSel] = useState<Set<number>>(new Set());
 
   // HE Módulo state
   const prevMes = mesSelecionado === 1 ? 12 : mesSelecionado - 1;
@@ -1715,14 +1716,53 @@ export default function FolhaPagamento() {
           {/* TABELA DE FUNCIONÁRIOS APROVADOS */}
           <Card>
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 no-print">
                 <CheckCircle className="h-4 w-4 text-green-600" />
                 <span className="font-semibold text-sm">Funcionários Aprovados ({filteredSemAlerta.length})</span>
+                {valeExcluirSel.size > 0 && (
+                  <>
+                    <span className="ml-2 text-xs text-muted-foreground">{valeExcluirSel.size} selecionado(s)</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="ml-auto border-red-400 text-red-700 hover:bg-red-50 h-7 px-3 text-xs"
+                      disabled={decidirValeMut.isPending}
+                      onClick={() => {
+                        if (!confirm(`Confirmar exclusão manual de ${valeExcluirSel.size} funcionário(s) do vale deste mês?`)) return;
+                        const decisoes = Array.from(valeExcluirSel).map(id => ({ employeeId: id, pagar: false }));
+                        decidirValeMut.mutate(
+                          { companyId, companyIds, mesReferencia: mesAno, decisoes },
+                          { onSuccess: () => setValeExcluirSel(new Set()) }
+                        );
+                      }}
+                    >
+                      <XCircle className="h-3 w-3 mr-1" /> Não Pagar Selecionados
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => setValeExcluirSel(new Set())}>
+                      Limpar
+                    </Button>
+                  </>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b-2 border-gray-200">
+                      <th className="py-2 px-2 w-8 no-print">
+                        <input
+                          type="checkbox"
+                          className="rounded"
+                          checked={filteredSemAlerta.length > 0 && filteredSemAlerta.every((f: any) => valeExcluirSel.has(f.employeeId))}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setValeExcluirSel(new Set(filteredSemAlerta.map((f: any) => f.employeeId)));
+                            } else {
+                              setValeExcluirSel(new Set());
+                            }
+                          }}
+                          title="Selecionar todos"
+                        />
+                      </th>
                       <th className="text-left py-2 px-2">Funcionário</th>
                       <th className="text-right py-2 px-2">Salário</th>
                       <th className="text-right py-2 px-2">Adiantamento ({valeResult.percentual}%)</th>
@@ -1731,30 +1771,55 @@ export default function FolhaPagamento() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredSemAlerta.map((f: any, i: number) => (
-                      <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-2 px-2 font-medium">
-                          <button
-                            className="text-left hover:text-blue-600 hover:underline focus:outline-none"
-                            onClick={() => setLocation(`/fechamento-ponto?funcionario=${f.employeeId}&mes=${mesAno}`)}
-                            title="Abrir cartão de ponto"
-                          >
-                            {f.nome}
-                          </button>
-                        </td>
-                        <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
-                        <td className="text-right py-2 px-2">{formatBRL(f.valorAdiantamento)}</td>
-                        <td className="text-right py-2 px-2 font-bold">{formatBRL(f.valorTotalVale)}</td>
-                        <td className="text-center py-2 px-2">
-                          <Badge className="bg-green-100 text-green-700 text-[10px]">
-                            <CheckCircle className="h-3 w-3 mr-0.5" /> OK
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredSemAlerta.map((f: any, i: number) => {
+                      const isSel = valeExcluirSel.has(f.employeeId);
+                      return (
+                        <tr key={i} className={`border-b border-gray-100 hover:bg-gray-50 ${isSel ? "bg-red-50/40" : ""}`}>
+                          <td className="py-2 px-2 no-print">
+                            <input
+                              type="checkbox"
+                              className="rounded"
+                              checked={isSel}
+                              onChange={e => {
+                                setValeExcluirSel(prev => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(f.employeeId);
+                                  else next.delete(f.employeeId);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </td>
+                          <td className="py-2 px-2 font-medium">
+                            <button
+                              className="text-left hover:text-blue-600 hover:underline focus:outline-none"
+                              onClick={() => setLocation(`/fechamento-ponto?funcionario=${f.employeeId}&mes=${mesAno}`)}
+                              title="Abrir cartão de ponto"
+                            >
+                              {f.nome}
+                            </button>
+                          </td>
+                          <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
+                          <td className="text-right py-2 px-2">{formatBRL(f.valorAdiantamento)}</td>
+                          <td className={`text-right py-2 px-2 font-bold ${isSel ? "line-through text-muted-foreground" : ""}`}>{formatBRL(f.valorTotalVale)}</td>
+                          <td className="text-center py-2 px-2">
+                            {isSel ? (
+                              <Badge className="bg-red-100 text-red-600 text-[10px]">
+                                <XCircle className="h-3 w-3 mr-0.5" /> Excluir
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-green-100 text-green-700 text-[10px]">
+                                <CheckCircle className="h-3 w-3 mr-0.5" /> OK
+                              </Badge>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+                      <td className="py-2 px-2 no-print"></td>
                       <td className="py-2 px-2">TOTAL APROVADOS</td>
                       <td className="text-right py-2 px-2">—</td>
                       <td className="text-right py-2 px-2">—</td>
