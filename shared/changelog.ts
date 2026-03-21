@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 693,
+    titulo: "Férias — Data Fim calculada automaticamente ao definir datas",
+    descricao: "No diálogo 'Definir Data de Férias', a Data Fim agora é calculada automaticamente: ao preencher a Data Início ou alterar os Dias de Gozo, o campo Data Fim é preenchido (início + dias − 1). O campo Data Fim ainda pode ser editado manualmente se necessário.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 692,
     titulo: "Férias — Coluna Valor Líquido adicionada na listagem",
     descricao: "Adicionada coluna 'Valor Líquido' na tabela de listagem de férias. Exibe em verde o valor salvo após clicar em 'Salvar Líquido' no detalhe. Mostra '-' enquanto o valor não foi confirmado.",

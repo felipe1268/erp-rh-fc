@@ -1443,15 +1443,34 @@ export default function Ferias() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Data Início *</label>
-                    <Input type="date" value={definirForm.dataInicio || ""} onChange={e => setDefinirForm({ ...definirForm, dataInicio: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Data Fim *</label>
-                    <Input type="date" value={definirForm.dataFim || ""} onChange={e => setDefinirForm({ ...definirForm, dataFim: e.target.value })} />
+                    <Input type="date" value={definirForm.dataInicio || ""} onChange={e => {
+                      const inicio = e.target.value;
+                      const dias = definirForm.diasGozo || 30;
+                      let fim = definirForm.dataFim || "";
+                      if (inicio) {
+                        const d = new Date(inicio + "T00:00:00");
+                        d.setDate(d.getDate() + dias - 1);
+                        fim = d.toISOString().slice(0, 10);
+                      }
+                      setDefinirForm({ ...definirForm, dataInicio: inicio, dataFim: fim });
+                    }} />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Dias de Gozo</label>
-                    <Input type="number" value={definirForm.diasGozo || 30} onChange={e => setDefinirForm({ ...definirForm, diasGozo: parseInt(e.target.value) || 30 })} />
+                    <Input type="number" min={1} max={90} value={definirForm.diasGozo || 30} onChange={e => {
+                      const dias = parseInt(e.target.value) || 30;
+                      let fim = definirForm.dataFim || "";
+                      if (definirForm.dataInicio) {
+                        const d = new Date(definirForm.dataInicio + "T00:00:00");
+                        d.setDate(d.getDate() + dias - 1);
+                        fim = d.toISOString().slice(0, 10);
+                      }
+                      setDefinirForm({ ...definirForm, diasGozo: dias, dataFim: fim });
+                    }} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Data Fim <span className="text-xs text-muted-foreground font-normal">(calculada automaticamente)</span></label>
+                    <Input type="date" value={definirForm.dataFim || ""} onChange={e => setDefinirForm({ ...definirForm, dataFim: e.target.value })} />
                   </div>
                 </div>
 
