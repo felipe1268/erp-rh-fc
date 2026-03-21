@@ -2222,7 +2222,7 @@ export default function FolhaPagamento() {
               </DialogTitle>
               <DialogDescription>
                 {calcType === "vale"
-                  ? "Calculando adiantamentos (40% salário + HE) para todos os funcionários CLT ativos."
+                  ? "Calculando adiantamentos (40% do salário) para todos os funcionários CLT ativos."
                   : "Calculando folha completa: salário bruto, descontos, INSS, FGTS, rateio por obra."}
               </DialogDescription>
             </DialogHeader>
@@ -2249,8 +2249,8 @@ export default function FolhaPagamento() {
               <div className="text-center text-xs text-muted-foreground space-y-1 bg-blue-50 rounded-lg p-3 w-full">
                 <p className="font-medium text-blue-700">Como funciona:</p>
                 {calcType === "vale" ? <>
-                  <p>1. Busca faltas e horas extras do ponto (1 a 15)</p>
-                  <p>2. Calcula 40% do salário + HE para cada funcionário</p>
+                  <p>1. Busca faltas e ausências do ponto (1 a 15)</p>
+                  <p>2. Calcula 40% do salário para cada funcionário</p>
                   <p>3. Registra adiantamentos e lança no Financeiro</p>
                   <p className="font-medium text-blue-700 mt-1">Os resultados aparecerão em "Calcular Vale → Ver Resultado"</p>
                 </> : <>
