@@ -20,7 +20,7 @@ import {
   Users, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
   Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square, Undo2,
-  ChevronDown,
+  ChevronDown, Trash2,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -432,6 +432,13 @@ export default function Ferias() {
   });
   const updateFerias = trpc.avisoPrevio.ferias.update.useMutation({
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Férias atualizadas!"); },
+  });
+  const removeReciboFerias = trpc.avisoPrevio.ferias.removeReciboFerias.useMutation({
+    onSuccess: () => {
+      setSelectedItem((prev: any) => prev ? { ...prev, reciboUrl: null, reciboNome: null } : prev);
+      toast.success("Recibo removido.");
+    },
+    onError: () => toast.error("Erro ao remover recibo."),
   });
   const uploadReciboFerias = trpc.avisoPrevio.ferias.uploadReciboFerias.useMutation({
     onSuccess: (data: any) => {
@@ -1897,23 +1904,36 @@ export default function Ferias() {
                             {selectedItem.reciboNome || "Recibo.pdf"}
                           </a>
                           <span className="text-[10px] text-slate-400">Clique para abrir</span>
-                          <label className="ml-auto cursor-pointer text-[10px] text-slate-500 hover:text-slate-700 underline">
-                            Substituir
-                            <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                setReciboUploading(true);
-                                const reader = new FileReader();
-                                reader.onload = async (ev) => {
-                                  const base64 = (ev.target?.result as string).split(",")[1];
-                                  await uploadReciboFerias.mutateAsync({ id: selectedItem.id, fileBase64: base64, mimeType: file.type as any, fileName: file.name });
-                                  setReciboUploading(false);
-                                };
-                                reader.readAsDataURL(file);
+                          <div className="ml-auto flex items-center gap-2">
+                            <label className="cursor-pointer text-[10px] text-slate-500 hover:text-slate-700 underline">
+                              Substituir
+                              <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  setReciboUploading(true);
+                                  const reader = new FileReader();
+                                  reader.onload = async (ev) => {
+                                    const base64 = (ev.target?.result as string).split(",")[1];
+                                    await uploadReciboFerias.mutateAsync({ id: selectedItem.id, fileBase64: base64, mimeType: file.type as any, fileName: file.name });
+                                    setReciboUploading(false);
+                                  };
+                                  reader.readAsDataURL(file);
+                                }}
+                              />
+                            </label>
+                            <button
+                              onClick={() => {
+                                if (confirm("Excluir o recibo anexado?")) {
+                                  removeReciboFerias.mutate({ id: selectedItem.id });
+                                }
                               }}
-                            />
-                          </label>
+                              className="text-red-400 hover:text-red-600 transition-colors"
+                              title="Excluir recibo"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <label className={`flex items-center gap-2 cursor-pointer border-2 border-dashed border-slate-300 rounded p-3 hover:border-blue-400 transition-colors ${reciboUploading ? "opacity-50 pointer-events-none" : ""}`}>

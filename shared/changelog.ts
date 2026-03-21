@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 709,
+    titulo: "Férias — Botão excluir recibo anexado",
+    descricao: "Adicionado botão de lixeira (vermelho) ao lado de 'Substituir' na seção Recibo de Férias (Contabilidade). Ao clicar, o sistema pede confirmação e remove o recibo do banco (recibo_url e recibo_nome ficam nulos), retornando o painel ao estado de upload vazio.",
+    tipo: "melhoria",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 708,
     titulo: "Bugfix — Upload de recibo de férias corrigido",
     descricao: "Corrigido erro 'No procedure found on path avisoPrevio.ferias.uploadReciboFerias': o procedimento estava registrado erroneamente dentro do router avisoPrevio e foi movido para o sub-router ferias, alinhando o caminho tRPC ao que o cliente espera. Colunas do vacation_periods também protegidas por ColFix no servidor.",

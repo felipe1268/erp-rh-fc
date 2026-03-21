@@ -2213,6 +2213,29 @@ export const avisoPrevioFeriasRouter = router({
         return { success: true, url, nome: input.fileName };
       }),
 
+    removeReciboFerias: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        await db.execute(sql`
+          UPDATE vacation_periods SET
+            recibo_url = NULL,
+            recibo_nome = NULL,
+            "updatedAt" = NOW()
+          WHERE id = ${input.id}
+        `);
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'REMOVE_RECIBO_FERIAS',
+          module: 'ferias',
+          entityType: 'vacationPeriods',
+          entityId: input.id,
+          details: `Recibo de férias removido por ${ctx.user.name}`,
+        });
+        return { success: true };
+      }),
+
     // ============================================================
     // GERAR PERÍODOS PARA TODOS OS ATIVOS DE UMA VEZ
     // ============================================================
