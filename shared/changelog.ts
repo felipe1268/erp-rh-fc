@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 712,
+    titulo: "Vale — Alerta aprovado sai da lista; Consolidar bloqueado com alertas pendentes",
+    descricao: "Ao clicar 'Pagar' em um funcionário com alerta, ele migra para a lista de aprovados (não volta como alerta em recálculos). 'Consolidar Vale' fica desabilitado enquanto houver alertas pendentes, com aviso indicando a quantidade a resolver. Aprovações manuais são preservadas mesmo ao recalcular.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 711,
     titulo: "Vale — Valor proporcional visível em funcionários com alerta de férias",
     descricao: "Funcionários em alerta (retorno de férias com menos de 10 dias trabalhados na quinzena) agora exibem o valor proporcional real no campo 'Total Vale', em vez de R$ 0,00. O valor é salvo no banco e usado corretamente quando o RH clica em 'Pagar'. AlertaTipo 'ferias_proporcional' distingue esses casos dos demais alertas.",

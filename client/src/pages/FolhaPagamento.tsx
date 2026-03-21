@@ -1554,12 +1554,21 @@ export default function FolhaPagamento() {
             </div>
             <div className="flex items-center gap-2 no-print">
               {(payrollPeriod.data as any)?.status !== 'vale_consolidado' && (
-                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={() => consolidarValeMut.mutate({ companyId, mesReferencia: mesAno })}
-                  disabled={consolidarValeMut.isPending}>
-                  <Lock className="h-4 w-4 mr-1" />
-                  {consolidarValeMut.isPending ? "Consolidando..." : "Consolidar Vale"}
-                </Button>
+                <div className="flex flex-col items-end gap-0.5">
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                    onClick={() => consolidarValeMut.mutate({ companyId, mesReferencia: mesAno })}
+                    disabled={consolidarValeMut.isPending || funcionariosComAlerta.length > 0}
+                    title={funcionariosComAlerta.length > 0 ? `Resolva os ${funcionariosComAlerta.length} alerta(s) pendente(s) antes de consolidar` : undefined}>
+                    <Lock className="h-4 w-4 mr-1" />
+                    {consolidarValeMut.isPending ? "Consolidando..." : "Consolidar Vale"}
+                  </Button>
+                  {funcionariosComAlerta.length > 0 && (
+                    <span className="text-[10px] text-amber-600 font-medium flex items-center gap-0.5">
+                      <AlertTriangle className="h-2.5 w-2.5" />
+                      {funcionariosComAlerta.length} alerta(s) pendente(s) — resolva antes de consolidar
+                    </span>
+                  )}
+                </div>
               )}
               {(payrollPeriod.data as any)?.status === 'vale_consolidado' && (
                 <Button size="sm" variant="outline" className="border-amber-400 text-amber-700 hover:bg-amber-50"

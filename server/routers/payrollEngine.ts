@@ -1197,6 +1197,14 @@ export const payrollEngineRouter = router({
       `)) as any).rows || [];
       const rejeitadosSet = new Set<number>((rejeitadosRows as any[]).map((r: any) => Number(r.employeeId)));
 
+      // Preserve manually-approved alerts across recalc (decidirVale sets status='calculado' + motivoBloqueio LIKE '%[APROVADO%')
+      const aprovadosAlertaRows = ((await db.execute(sql`
+        SELECT "employeeId" FROM payroll_advances
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+          AND status = 'calculado' AND "motivoBloqueio" LIKE '%[APROVADO%'
+      `)) as any).rows || [];
+      const aprovadosAlertaSet = new Set<number>((aprovadosAlertaRows as any[]).map((r: any) => Number(r.employeeId)));
+
       // Clear existing advances for this month
       await db.execute(sql`
         DELETE FROM payroll_advances WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
@@ -1265,9 +1273,13 @@ export const payrollEngineRouter = router({
         }
 
         const bloqueado = motivosBloqueio.length > 0;
-        const motivoBloqueio = motivosBloqueio.join(" | ");
+        // Se o RH já aprovou manualmente este alerta em uma decisão anterior, ignorar o bloqueio
+        const foiAprovadoManualmente = aprovadosAlertaSet.has(emp.id);
+        const motivoBloqueio = foiAprovadoManualmente
+          ? motivosBloqueio.join(" | ") + " [APROVADO MANUALMENTE]"
+          : motivosBloqueio.join(" | ");
 
-        if (bloqueado) {
+        if (bloqueado && !foiAprovadoManualmente) {
           // Registra o bloqueio mas com o VALOR PROPORCIONAL visível para o RH decidir
           bloqueados++;
           const alertaTipo = motivosBloqueio.length > 1 ? "multiplo"
@@ -1287,10 +1299,11 @@ export const payrollEngineRouter = router({
           continue; // Não gera evento financeiro — RH decide
         }
 
-        // Aprovado automaticamente (ou previously rejeitado — status will be fixed below)
+        // Aprovado automaticamente, aprovado manualmente ou previously rejeitado
+        const savedMotivo = foiAprovadoManualmente ? motivoBloqueio : null;
         advanceInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
           ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
-          ${0}, ${null},
+          ${0}, ${savedMotivo},
           ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'calculado'})`);
 
         const isRejeitado = rejeitadosSet.has(emp.id);
@@ -1301,13 +1314,17 @@ export const payrollEngineRouter = router({
           totalVale += valorTotalVale;
         }
 
-        const alertaFerias = diasFeriasNoMes > 0
+        // foiAprovadoManualmente → sem alerta (já resolvido pelo RH)
+        // diasFeriasNoMes > 0 sem aprovação manual → não bloqueia, mas indica proporcional
+        const temAlertaInfo = !foiAprovadoManualmente && diasFeriasNoMes > 0;
+        const alertaFerias = temAlertaInfo
           ? `Férias no mês: ${diasFeriasNoMes} dia(s) — salário proporcional (${diasTrabalhados}/${diasNoMes} dias trabalhados)`
           : "";
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
           valorAdiantamento, valorHE, valorTotalVale,
-          temAlerta: diasFeriasNoMes > 0, alertaTipo: diasFeriasNoMes > 0 ? "ferias_proporcional" : "", alertaMotivo: alertaFerias,
+          temAlerta: temAlertaInfo, alertaTipo: temAlertaInfo ? "ferias_proporcional" : "",
+          alertaMotivo: alertaFerias,
           bloqueado: false, faltas, minutosHE, status: isRejeitado ? 'rejeitado' : 'calculado',
         });
       }
