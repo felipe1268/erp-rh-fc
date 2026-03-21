@@ -1500,6 +1500,7 @@ export default function FolhaPagamento() {
     const funcionariosComAlerta = todosFunc.filter((f: any) => f.temAlerta);
     const funcionariosSemAlerta = todosFunc.filter((f: any) => !f.temAlerta);
     const totalSemAlerta = funcionariosSemAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
+    const totalSemAlertaEfetivo = funcionariosSemAlerta.filter((f: any) => !valeExcluirSel.has(f.employeeId)).reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
     const totalComAlerta = funcionariosComAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
     const comHE = todosFunc.filter((f: any) => (f.valorHE || 0) > 0);
     const totalHE = comHE.reduce((s: number, f: any) => s + (f.valorHE || 0), 0);
@@ -1801,7 +1802,7 @@ export default function FolhaPagamento() {
                           </td>
                           <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
                           <td className="text-right py-2 px-2">{formatBRL(f.valorAdiantamento)}</td>
-                          <td className={`text-right py-2 px-2 font-bold ${isSel ? "line-through text-muted-foreground" : ""}`}>{formatBRL(f.valorTotalVale)}</td>
+                          <td className={`text-right py-2 px-2 font-bold ${isSel ? "line-through text-red-500" : ""}`}>{formatBRL(f.valorTotalVale)}</td>
                           <td className="text-center py-2 px-2">
                             {isSel ? (
                               <Badge className="bg-red-100 text-red-600 text-[10px]">
@@ -1823,7 +1824,16 @@ export default function FolhaPagamento() {
                       <td className="py-2 px-2">TOTAL APROVADOS</td>
                       <td className="text-right py-2 px-2">—</td>
                       <td className="text-right py-2 px-2">—</td>
-                      <td className="text-right py-2 px-2 text-lg">{formatBRL(totalSemAlerta)}</td>
+                      <td className="text-right py-2 px-2">
+                        {valeExcluirSel.size > 0 ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-sm line-through text-red-400">{formatBRL(totalSemAlerta)}</span>
+                            <span className="text-lg text-[#1B2A4A]">{formatBRL(totalSemAlertaEfetivo)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-lg">{formatBRL(totalSemAlerta)}</span>
+                        )}
+                      </td>
                       <td></td>
                     </tr>
                   </tfoot>

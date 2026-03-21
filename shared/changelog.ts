@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 702,
+    titulo: "Vale — Valor em vermelho e total descontado ao marcar 'Não Pagar'",
+    descricao: "Ao selecionar um funcionário para 'Não Pagar', o valor do Total Vale aparece em vermelho com linha riscada. O TOTAL APROVADOS no rodapé é recalculado em tempo real, exibindo o valor original riscado em vermelho acima e o novo total efetivo abaixo. Ambos os feedbacks são visuais apenas (antes da confirmação).",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 701,
     titulo: "Vale — Corrige erro ao rejeitar funcionário aprovado",
     descricao: "Corrigido erro 'could not determine data type of parameter' ao clicar em Não Pagar Selecionados. O CONCAT() do PostgreSQL não conseguia inferir o tipo do parâmetro; substituído pelo operador || de concatenação de texto que usa o tipo da coluna como referência. Afetava tanto a rejeição quanto a aprovação manual de vale.",
