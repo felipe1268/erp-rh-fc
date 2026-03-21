@@ -4057,6 +4057,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 660,
+    titulo: "Módulo PJ — Gerar Contrato FC Engenharia, Upload Assinado e Aba de Documentos do Prestador",
+    descricao: "Módulo PJ: (1) Labels 'Funcionário PJ' trocados por 'Prestador' em todo o módulo; (2) Template de contrato padrão atualizado com o modelo FC Engenharia completo (confidencialidade, não-concorrência, cláusulas completas), usando placeholders [CONTRATANTE_*] e [CONTRATADA_*] que já são substituídos automaticamente na view de impressão; (3) Botão 'Gerar / Imprimir Contrato' na tabela (ícone FileText roxo) e no detail dialog abre ContratoPJView em nova aba com todos os campos preenchidos e botão de impressão/PDF; (4) ContratoPJView agora usa o modelo do backend como fallback direto (sem depender do router docs.templates inexistente), com mais substituições: [PERCENTUAL_ADIANTAMENTO], [DIA_ADIANTAMENTO], [PERCENTUAL_FECHAMENTO], [DIA_FECHAMENTO], [VALOR_ADIANTAMENTO], [VALOR_FECHAMENTO], [DATA_ASSINATURA], [PRESTADOR_NOME], [PRESTADOR_CPF]; (5) Detail dialog reestruturado em 3 abas: Informações, Contrato Assinado e Documentos; (6) Aba 'Contrato Assinado': upload de arquivo (PDF/DOC/imagem) que chama uploadContrato mutation, mostrando link se já existir; (7) Aba 'Documentos': nova tabela pj_documentos (id, companyId, employeeId, contractId, nome, tipo, url, storageKey, criadoPor, createdAt, deletedAt) com ColFix CREATE TABLE IF NOT EXISTS; CRUD completo via trpc.pj.documentos.{list, upload, delete}; categorias: RG, CPF, CNPJ, DAS, NF, seguro, etc.",
+    tipo: "feature",
+    modulos: "PJ",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 659,
     titulo: "Bugfix — Permissões de grupo: novo sistema (module_access) agora controla sidebar e ModuleHub corretamente",
     descricao: "Correção do bug crítico de permissões de grupo: o sistema anterior tinha dois subsistemas desconectados — (1) novo sistema: user_groups.module_access JSON salvo pelo Usuarios.tsx via setGroupModuleAccess; (2) sistema legado: tabela user_group_permissions lida por groupCanAccessRoute no sidebar. Quando admin configurava grupo em Usuarios.tsx, só salvava no novo sistema, mas groupCanAccessRoute lia apenas do sistema legado (sempre vazio para grupos configurados pelo novo UI), resultando em sidebar vazio/errado. Fix: (a) backend getMyPermissions agora injeta flag __groupHasNewSystem no moduleAccess quando o grupo tem module_access configurado; (b) PermissionsContext extrai esse flag e atualiza groupCanAccessRoute para usar normalizedAccess (novo sistema) com prioridade total quando groupHasNewSystem=true, respeitando SHARED_FEATURES; (c) canAccessModule também ignora o fallback legado groupRouteMap quando o grupo usa novo sistema, evitando que módulos do sistema antigo vazem para o toggle de módulos da sidebar.",

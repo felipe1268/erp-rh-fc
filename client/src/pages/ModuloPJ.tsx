@@ -18,7 +18,8 @@ import { removeAccents } from "@/lib/searchUtils";
 import {
   Briefcase, Plus, Search, DollarSign, AlertTriangle, FileText,
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
-  Users, TrendingUp, FileSignature, Ban, Printer,
+  Users, TrendingUp, FileSignature, Ban, Printer, Upload, FolderOpen,
+  ExternalLink, File,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -67,6 +68,11 @@ export default function ModuloPJ() {
   const [editingContratoId, setEditingContratoId] = useState<number | null>(null);
   const [pagForm, setPagForm] = useState<any>({});
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [uploadingAssinado, setUploadingAssinado] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [detailTab, setDetailTab] = useState("info");
+  const [novoDocNome, setNovoDocNome] = useState("");
+  const [novoDocTipo, setNovoDocTipo] = useState("outro");
 
   // Mês referência para pagamentos
   const now = new Date();
@@ -126,6 +132,30 @@ export default function ModuloPJ() {
   });
   const deletePagamento = trpc.pj.pagamentos.delete.useMutation({
     onSuccess: () => { refetchPagamentos(); toast.success("Lançamento excluído!"); },
+  });
+
+  const uploadContratoAssinado = trpc.pj.contratos.uploadContrato.useMutation({
+    onSuccess: (data: any) => {
+      refetchContratos();
+      if (selectedContrato) setSelectedContrato((prev: any) => ({ ...prev, contratoAssinadoUrl: data.url }));
+      toast.success("Contrato assinado enviado com sucesso!");
+      setUploadingAssinado(false);
+    },
+    onError: (e: any) => { toast.error(e.message); setUploadingAssinado(false); },
+  });
+
+  const { data: pjDocs = [], refetch: refetchDocs } = trpc.pj.documentos.list.useQuery(
+    { employeeId: selectedContrato?.employeeId || 0, companyId },
+    { enabled: showDetailDialog && !!selectedContrato?.employeeId && companyId > 0 }
+  );
+
+  const uploadDocPJ = trpc.pj.documentos.upload.useMutation({
+    onSuccess: () => { refetchDocs(); toast.success("Documento enviado!"); setUploadingDoc(false); setNovoDocNome(""); setNovoDocTipo("outro"); },
+    onError: (e: any) => { toast.error(e.message); setUploadingDoc(false); },
+  });
+
+  const deleteDocPJ = trpc.pj.documentos.delete.useMutation({
+    onSuccess: () => { refetchDocs(); toast.success("Documento removido!"); },
   });
 
   // Relatório PJ para exportação PDF
@@ -467,6 +497,9 @@ export default function ModuloPJ() {
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar contrato" onClick={() => openEditContrato(c)}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-600" title="Visualizar / Imprimir Contrato" onClick={() => window.open(`/contrato-pj/${c.id}`, "_blank")}>
+                                  <FileText className="h-3.5 w-3.5" />
+                                </Button>
                                 {c.status === "pendente_assinatura" && (
                                   <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => { updateContrato.mutate({ id: c.id, status: "ativo" }); }}>
                                     Ativar
@@ -598,54 +631,209 @@ export default function ModuloPJ() {
 
         {/* Detail Dialog */}
         {selectedContrato && (
-          <FullScreenDialog open={showDetailDialog} onClose={() => { setShowDetailDialog(false); setSelectedContrato(null); }} title={`Contrato ${selectedContrato.numeroContrato}`} icon={<FileSignature className="h-5 w-5 text-white" />}>
-            <div className="w-full max-w-3xl mx-auto space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-muted/30 rounded-lg p-4">
-                  <p className="text-xs text-muted-foreground uppercase">Prestador</p>
-                  <p className="font-semibold text-lg">{selectedContrato.employeeName}</p>
-                  <p className="text-sm text-muted-foreground">{selectedContrato.razaoSocialPrestador}</p>
-                  <p className="text-sm text-muted-foreground">{formatCNPJ(selectedContrato.cnpjPrestador)}</p>
-                </div>
-                <div className="bg-muted/30 rounded-lg p-4">
-                  <p className="text-xs text-muted-foreground uppercase">Status</p>
-                  <p className="font-semibold text-lg">{STATUS_CONTRATO[selectedContrato.status]?.label}</p>
-                  <p className="text-sm text-muted-foreground">Vigência: {formatDate(selectedContrato.dataInicio)} — {formatDate(selectedContrato.dataFim)}</p>
-                </div>
+          <FullScreenDialog open={showDetailDialog} onClose={() => { setShowDetailDialog(false); setSelectedContrato(null); setDetailTab("info"); }} title={`Contrato ${selectedContrato.numeroContrato}`} icon={<FileSignature className="h-5 w-5 text-white" />}>
+            <div className="w-full max-w-3xl mx-auto space-y-4">
+
+              {/* Botão Gerar Contrato */}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" className="gap-2 border-purple-300 text-purple-700 hover:bg-purple-50" onClick={() => window.open(`/contrato-pj/${selectedContrato.id}`, "_blank")}>
+                  <FileText className="h-4 w-4" /> Gerar / Imprimir Contrato
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => { setShowDetailDialog(false); openEditContrato(selectedContrato); }}>
+                  <Pencil className="h-4 w-4" /> Editar
+                </Button>
               </div>
-              <div className="bg-purple-50 rounded-lg p-4">
-                <p className="text-xs text-purple-600 uppercase font-semibold mb-2">Valores e Pagamento</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-2xl font-bold text-purple-700">{formatMoeda(selectedContrato.valorMensal)}</p>
-                    <p className="text-xs text-muted-foreground">Valor Mensal</p>
+
+              {/* Tabs */}
+              <Tabs value={detailTab} onValueChange={setDetailTab}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="info" className="flex-1">Informações</TabsTrigger>
+                  <TabsTrigger value="assinatura" className="flex-1">Contrato Assinado</TabsTrigger>
+                  <TabsTrigger value="documentos" className="flex-1"><FolderOpen className="h-3.5 w-3.5 mr-1" />Documentos</TabsTrigger>
+                </TabsList>
+
+                {/* Aba Info */}
+                <TabsContent value="info" className="space-y-4 mt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <p className="text-xs text-muted-foreground uppercase">Prestador</p>
+                      <p className="font-semibold text-lg">{selectedContrato.employeeName}</p>
+                      <p className="text-sm text-muted-foreground">{selectedContrato.razaoSocialPrestador}</p>
+                      <p className="text-sm text-muted-foreground">{formatCNPJ(selectedContrato.cnpjPrestador)}</p>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <p className="text-xs text-muted-foreground uppercase">Status</p>
+                      <p className="font-semibold text-lg">{STATUS_CONTRATO[selectedContrato.status]?.label}</p>
+                      <p className="text-sm text-muted-foreground">Vigência: {formatDate(selectedContrato.dataInicio)} — {formatDate(selectedContrato.dataFim)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-lg font-bold text-amber-600">
-                      {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualAdiantamento || 40) / 100)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Adiantamento ({selectedContrato.percentualAdiantamento || 40}%) — Dia {selectedContrato.diaAdiantamento || 15}</p>
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <p className="text-xs text-purple-600 uppercase font-semibold mb-2">Valores e Pagamento</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-2xl font-bold text-purple-700">{formatMoeda(selectedContrato.valorMensal)}</p>
+                        <p className="text-xs text-muted-foreground">Valor Mensal</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-amber-600">
+                          {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualAdiantamento || 40) / 100)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Adiantamento ({selectedContrato.percentualAdiantamento || 40}%) — Dia {selectedContrato.diaAdiantamento || 15}</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-green-600">
+                          {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualFechamento || 60) / 100)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Fechamento ({selectedContrato.percentualFechamento || 60}%) — Dia {selectedContrato.diaFechamento || 5}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-lg font-bold text-green-600">
-                      {formatMoeda(parseFloat(selectedContrato.valorMensal || "0") * (selectedContrato.percentualFechamento || 60) / 100)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Fechamento ({selectedContrato.percentualFechamento || 60}%) — Dia {selectedContrato.diaFechamento || 5}</p>
+                  {selectedContrato.objetoContrato && (
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <p className="text-xs text-blue-600 uppercase font-semibold">Objeto do Contrato</p>
+                      <p className="text-sm mt-1">{selectedContrato.objetoContrato}</p>
+                    </div>
+                  )}
+                  {selectedContrato.observacoes && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-xs text-gray-600 uppercase font-semibold">Observações</p>
+                      <p className="text-sm mt-1">{selectedContrato.observacoes}</p>
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* Aba Contrato Assinado */}
+                <TabsContent value="assinatura" className="space-y-4 mt-4">
+                  <div className="border rounded-lg p-5 space-y-4">
+                    <div>
+                      <p className="text-sm font-semibold mb-1">Contrato Assinado</p>
+                      <p className="text-xs text-muted-foreground mb-3">Após assinar o contrato gerado, envie aqui o arquivo assinado (PDF, DOCX, imagem).</p>
+
+                      {selectedContrato.contratoAssinadoUrl && (
+                        <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-green-800">Contrato assinado enviado</p>
+                          </div>
+                          <Button size="sm" variant="outline" className="gap-1.5 border-green-300 text-green-700 shrink-0" onClick={() => window.open(selectedContrato.contratoAssinadoUrl, "_blank")}>
+                            <ExternalLink className="h-3.5 w-3.5" /> Visualizar
+                          </Button>
+                        </div>
+                      )}
+
+                      <label className="cursor-pointer">
+                        <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setUploadingAssinado(true);
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            const base64 = (reader.result as string).split(",")[1];
+                            uploadContratoAssinado.mutate({
+                              id: selectedContrato.id,
+                              fileBase64: base64,
+                              fileName: file.name,
+                              tipoAssinatura: "digital",
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }} />
+                        <div className={`flex items-center justify-center gap-3 border-2 border-dashed rounded-lg p-6 transition-colors ${uploadingAssinado ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/50 cursor-pointer"}`}>
+                          {uploadingAssinado ? (
+                            <><RefreshCw className="h-5 w-5 animate-spin text-blue-500" /><span className="text-sm text-blue-600">Enviando...</span></>
+                          ) : (
+                            <><Upload className="h-5 w-5 text-gray-400" /><span className="text-sm text-gray-600">{selectedContrato.contratoAssinadoUrl ? "Substituir contrato assinado" : "Clique para enviar o contrato assinado"}</span></>
+                          )}
+                        </div>
+                      </label>
+                    </div>
                   </div>
-                </div>
-              </div>
-              {selectedContrato.objetoContrato && (
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <p className="text-xs text-blue-600 uppercase font-semibold">Objeto do Contrato</p>
-                  <p className="text-sm mt-1">{selectedContrato.objetoContrato}</p>
-                </div>
-              )}
-              {selectedContrato.observacoes && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-600 uppercase font-semibold">Observações</p>
-                  <p className="text-sm mt-1">{selectedContrato.observacoes}</p>
-                </div>
-              )}
+                </TabsContent>
+
+                {/* Aba Documentos */}
+                <TabsContent value="documentos" className="space-y-4 mt-4">
+                  <div className="border rounded-lg p-5 space-y-4">
+                    <p className="text-sm font-semibold">Documentos do Prestador</p>
+                    <p className="text-xs text-muted-foreground">Armazene aqui documentos relacionados ao prestador: RG, CPF, CNPJ, comprovante de endereço, DAS, NF, etc.</p>
+
+                    {/* Upload novo documento */}
+                    <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
+                      <p className="text-xs font-medium uppercase text-muted-foreground">Novo Documento</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input placeholder="Nome do documento" value={novoDocNome} onChange={e => setNovoDocNome(e.target.value)} className="text-sm" />
+                        <Select value={novoDocTipo} onValueChange={setNovoDocTipo}>
+                          <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="rg">RG</SelectItem>
+                            <SelectItem value="cpf">CPF</SelectItem>
+                            <SelectItem value="cnpj">CNPJ</SelectItem>
+                            <SelectItem value="comprovante_endereco">Comprov. Endereço</SelectItem>
+                            <SelectItem value="das">DAS / Guia</SelectItem>
+                            <SelectItem value="nota_fiscal">Nota Fiscal</SelectItem>
+                            <SelectItem value="seguro">Apólice Seguro</SelectItem>
+                            <SelectItem value="contrato_assinado">Contrato Assinado</SelectItem>
+                            <SelectItem value="outro">Outro</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <label className={`block cursor-pointer ${!novoDocNome ? "opacity-50 pointer-events-none" : ""}`}>
+                        <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx" className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !novoDocNome) return;
+                          setUploadingDoc(true);
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            const base64 = (reader.result as string).split(",")[1];
+                            uploadDocPJ.mutate({
+                              companyId,
+                              employeeId: selectedContrato.employeeId,
+                              contractId: selectedContrato.id,
+                              nome: novoDocNome,
+                              tipo: novoDocTipo,
+                              fileBase64: base64,
+                              fileName: file.name,
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }} />
+                        <div className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg p-3 transition-colors ${uploadingDoc ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/50"}`}>
+                          {uploadingDoc ? (
+                            <><RefreshCw className="h-4 w-4 animate-spin text-blue-500" /><span className="text-xs text-blue-600">Enviando...</span></>
+                          ) : (
+                            <><Upload className="h-4 w-4 text-gray-400" /><span className="text-xs text-gray-600">{novoDocNome ? "Clique para selecionar o arquivo" : "Informe o nome do documento antes"}</span></>
+                          )}
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Lista de documentos */}
+                    {(pjDocs as any[]).length === 0 ? (
+                      <div className="text-center py-6 text-muted-foreground text-sm">
+                        <File className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                        Nenhum documento cadastrado
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {(pjDocs as any[]).map((doc: any) => (
+                          <div key={doc.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/20">
+                            <File className="h-4 w-4 text-blue-500 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{doc.nome}</p>
+                              <p className="text-xs text-muted-foreground">{doc.tipo} • {doc.criadoPor} • {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("pt-BR") : "-"}</p>
+                            </div>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => window.open(doc.url, "_blank")}>
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 shrink-0" onClick={() => { if (confirm("Remover documento?")) deleteDocPJ.mutate({ id: doc.id }); }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
           </FullScreenDialog>
         )}
@@ -655,7 +843,7 @@ export default function ModuloPJ() {
           <div className="w-full max-w-3xl mx-auto">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="text-sm font-medium">Prestador (Funcionário PJ) *</label>
+                <label className="text-sm font-medium">Prestador *</label>
                 {editingContratoId ? (
                   <div className="flex items-center border rounded-md px-3 py-2 bg-muted/30 text-sm text-foreground">
                     <span className="font-medium">{selectedEmp ? `${selectedEmp.nomeCompleto} — ${formatCPF(selectedEmp.cpf)}` : "—"}</span>
@@ -669,7 +857,7 @@ export default function ModuloPJ() {
                       <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Digite nome ou CPF..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
                     ) : (
                       <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
-                        {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Selecione um funcionário PJ..."}
+                        {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Selecione um prestador..."}
                       </span>
                     )}
                     {form.employeeId && (
@@ -685,7 +873,7 @@ export default function ModuloPJ() {
                         {filteredEmps.length === 0 ? (
                           <div className="p-3 text-sm text-muted-foreground text-center">
                             {pjEmployees.length === 0
-                              ? "Nenhum funcionário PJ cadastrado"
+                              ? "Nenhum prestador cadastrado"
                               : pjEmployeesSemContrato.length === 0
                                 ? "Todos os prestadores PJ já possuem contrato ativo"
                                 : `Nenhum resultado para "${empSearch}"`}

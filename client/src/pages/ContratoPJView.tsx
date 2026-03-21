@@ -101,12 +101,8 @@ export default function ContratoPJView() {
     { enabled: !!contratoId }
   );
 
-  // Buscar o template editável do contrato PJ (usar companyId do contrato, não do contexto)
-  const contratoCompanyId = contrato?.companyId || companyId;
-  const { data: template } = (trpc as any).docs.templates.getByTipo.useQuery(
-    { companyId: contratoCompanyId, tipo: 'contrato_pj' },
-    { enabled: contratoCompanyId > 0 }
-  );
+  // Template padrão do backend (fallback)
+  const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery();
 
   const handlePrint = () => {
     window.print();
@@ -154,6 +150,15 @@ export default function ContratoPJView() {
   const cidadePrestador = contrato.cidadePrestador || cidadeEmpresa;
   const estadoPrestador = contrato.estadoPrestador || estadoEmpresa;
 
+  const percAdiantamento = contrato?.percentualAdiantamento || 40;
+  const percFechamento = contrato?.percentualFechamento || 60;
+  const diaAdiantamento = contrato?.diaAdiantamento || 20;
+  const diaFechamento = contrato?.diaFechamento || 5;
+  const valorAdiantamento = formatMoeda(valorMensal * percAdiantamento / 100);
+  const valorFechamento = formatMoeda(valorMensal * percFechamento / 100);
+  const hoje = new Date();
+  const dataAssinatura = hoje.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+
   // Substituir placeholders no template
   function replacePlaceholders(text: string): string {
     return text
@@ -171,9 +176,18 @@ export default function ContratoPJView() {
       .replace(/\[OBJETO_CONTRATO\]/g, contrato.objetoContrato || contrato.employeeCargo || "engenharia civil")
       .replace(/\[VALOR_MENSAL\]/g, formatMoeda(valorMensal))
       .replace(/\[VALOR_EXTENSO\]/g, valorPorExtenso(valorMensal))
+      .replace(/\[VALOR_ADIANTAMENTO\]/g, valorAdiantamento)
+      .replace(/\[VALOR_FECHAMENTO\]/g, valorFechamento)
+      .replace(/\[PERCENTUAL_ADIANTAMENTO\]/g, String(percAdiantamento))
+      .replace(/\[PERCENTUAL_FECHAMENTO\]/g, String(percFechamento))
+      .replace(/\[DIA_ADIANTAMENTO\]/g, String(diaAdiantamento))
+      .replace(/\[DIA_FECHAMENTO\]/g, String(diaFechamento))
       .replace(/\[DATA_INICIO\]/g, formatDateExtenso(contrato.dataInicio))
       .replace(/\[DATA_FIM\]/g, formatDate(contrato.dataFim))
-      .replace(/\[FORO_COMARCA\]/g, cidadeEmpresa + " - " + estadoEmpresa);
+      .replace(/\[DATA_ASSINATURA\]/g, dataAssinatura)
+      .replace(/\[FORO_COMARCA\]/g, cidadeEmpresa + " - " + estadoEmpresa)
+      .replace(/\[PRESTADOR_NOME\]/g, contrato.employeeName || nomePrestador)
+      .replace(/\[PRESTADOR_CPF\]/g, contrato.employeeCpf || "_______________");
   }
 
   // Renderizar o texto do template com formatação
@@ -245,7 +259,7 @@ export default function ContratoPJView() {
     });
   }
 
-  const templateText = template?.conteudo || '';
+  const templateText = modeloPadrao?.modelo || '';
 
   return (
     <>

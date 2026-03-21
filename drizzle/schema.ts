@@ -2220,6 +2220,26 @@ export const pjMedicoes = pgTable("pj_medicoes", {
         index("pjm_status").on(table.status),
 ]);
 
+export const pjDocumentos = pgTable("pj_documentos", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        contractId: integer(),
+        nome: varchar({ length: 255 }).notNull(),
+        tipo: varchar({ length: 100 }).default('outro'),
+        url: text().notNull(),
+        storageKey: text(),
+        criadoPor: varchar({ length: 255 }),
+        criadoPorUserId: integer(),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        deletedAt: timestamp({ mode: 'string' }),
+},
+(table) => [
+        index("pjd_company").on(table.companyId),
+        index("pjd_employee").on(table.employeeId),
+        index("pjd_contract").on(table.contractId),
+]);
+
 export const pjPayments = pgTable("pj_payments", {
         id: serial().notNull(),
         contractId: integer().notNull(),

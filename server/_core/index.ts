@@ -105,6 +105,21 @@ async function startServer() {
         console.log("[ColFix] planejamento_revisoes.diferencas OK");
         await db.execute(sql`ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS module_access TEXT`);
         console.log("[ColFix] user_groups.module_access OK");
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS pj_documentos (
+          id SERIAL NOT NULL,
+          company_id INTEGER NOT NULL,
+          employee_id INTEGER NOT NULL,
+          contract_id INTEGER,
+          nome VARCHAR(255) NOT NULL,
+          tipo VARCHAR(100) DEFAULT 'outro',
+          url TEXT NOT NULL,
+          storage_key TEXT,
+          criado_por VARCHAR(255),
+          criado_por_user_id INTEGER,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+          deleted_at TIMESTAMP
+        )`);
+        console.log("[ColFix] pj_documentos OK");
         await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_marco BOOLEAN DEFAULT FALSE`);
         console.log("[ColFix] planejamento_atividades.is_marco OK");
         await db.execute(sql`ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT`);
