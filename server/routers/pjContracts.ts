@@ -314,7 +314,7 @@ export const pjContractsRouter = router({
           .where(companyFilter(pjContracts.companyId, input));
         const numero = `PJ-${ano}-${String((countResult?.total || 0) + 1).padStart(4, '0')}`;
         
-        const [result] = await db.insert(pjContracts).values({
+        const inserted = await db.insert(pjContracts).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
           numeroContrato: numero,
@@ -333,9 +333,9 @@ export const pjContractsRouter = router({
           criadoPor: ctx.user.name ?? 'Sistema',
           criadoPorUserId: ctx.user.id,
           observacoes: input.observacoes || null,
-        });
+        }).returning({ id: pjContracts.id });
         
-        return { success: true, id: result[0].id, numeroContrato: numero };
+        return { success: true, id: inserted[0]?.id, numeroContrato: numero };
       }),
 
     update: protectedProcedure
