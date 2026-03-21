@@ -4128,4 +4128,12 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-21 00:00:00",
   },
+  {
+    version: 665,
+    titulo: "Espelho de Ponto — Coluna Obra por dia",
+    descricao: "Espelho de Ponto Individual: nova coluna 'Obra' exibindo o nome da obra onde o ponto foi registrado em cada linha do dia. Dado vem de time_records.obraId vinculado pela importação do AFD.",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
 ];

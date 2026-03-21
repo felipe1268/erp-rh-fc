@@ -363,8 +363,8 @@ export default function EspelhoPonto() {
 
   // Grid template: conditionally include 3rd-shift column
   const gridCols = hasThirdShift
-    ? "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem"
-    : "7rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem";
+    ? "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem minmax(8rem,1fr) 7rem 2.5rem"
+    : "7rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem minmax(8rem,1fr) 7rem 2.5rem";
 
   function handleSelectEmp(emp: any) { setEmployeeId(Number(emp.id)); setSearchQuery(""); setShowDropdown(false); }
   function handleBuscar() { if (!employeeId || !dataInicio || !dataFim) return; setQueryParams({ employeeId, dataInicio, dataFim }); }
@@ -578,6 +578,7 @@ export default function EspelhoPonto() {
                 {hasThirdShift && <div className="px-2 py-3 text-center">Ent. 3 / Saí. 3</div>}
                 <div className="px-2 py-3 text-center">Total</div>
                 <div className="px-2 py-3 text-center">H. Extra</div>
+                <div className="px-2 py-3">Obra</div>
                 <div className="px-2 py-3 text-center">Ocorrência</div>
                 <div className="px-2 py-3 no-print" />
               </div>
@@ -601,7 +602,7 @@ export default function EspelhoPonto() {
                       <span className="text-xs text-slate-300 font-medium">{name}</span>
                       <span className="text-base font-bold text-slate-200">{String(num).padStart(2,"0")}/{monthNum}</span>
                     </div>
-                    {Array(hasThirdShift ? 8 : 7).fill(null).map((_,i) => (
+                    {Array(hasThirdShift ? 9 : 8).fill(null).map((_,i) => (
                       <div key={i} className="px-2 py-2 text-center">
                         <span className="text-slate-200 text-base">—</span>
                       </div>
@@ -656,6 +657,13 @@ export default function EspelhoPonto() {
                           : <span className="text-slate-200 text-base">—</span>}
                     </div>
 
+                    {/* Obra */}
+                    <div className="px-2 py-3 flex items-center min-w-0">
+                      {rec?.obraNome
+                        ? <span className="text-xs text-slate-600 truncate" title={rec.obraNome}>{rec.obraNome}</span>
+                        : <span className="text-slate-200 text-base">—</span>}
+                    </div>
+
                     {/* Ocorrência */}
                     <div className="px-2 py-3 flex items-center justify-center">
                       {cfg.badge
@@ -693,7 +701,7 @@ export default function EspelhoPonto() {
                     {summary.totalHEMins > 0 ? `+${minsToHHMM(summary.totalHEMins)}` : "—"}
                   </span>
                 </div>
-                <div className="px-2 py-3 col-span-2 flex items-center gap-1 flex-wrap">
+                <div className="px-2 py-3 col-span-3 flex items-center gap-1 flex-wrap">
                   {summary.diasFalta > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{summary.diasFalta} falta(s)</span>}
                   {summary.totalAtrasoMins > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Atr. {minsToHHMM(summary.totalAtrasoMins)}</span>}
                   {summary.diasFalta === 0 && summary.totalAtrasoMins === 0 && <span className="text-[10px] text-slate-400">Sem ocorrências</span>}
