@@ -379,6 +379,40 @@ export const horasExtrasRouter = router({
       `)) as any).rows || [];
       const avisoPrevio = avisoRows[0] || null;
 
+      // Check vacation periods overlapping with the requested range
+      const feriaRows = ((await db.execute(sql`
+        SELECT "dataInicio", "dataFim", "periodo2Inicio", "periodo2Fim", "periodo3Inicio", "periodo3Fim", status
+        FROM vacation_periods
+        WHERE "employeeId" = ${input.employeeId}
+          AND "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND status NOT IN ('cancelada', 'pendente')
+          AND (
+            ("dataInicio" IS NOT NULL AND "dataFim" IS NOT NULL AND "dataInicio" <= ${input.dataFim} AND "dataFim" >= ${input.dataInicio})
+            OR ("periodo2Inicio" IS NOT NULL AND "periodo2Fim" IS NOT NULL AND "periodo2Inicio" <= ${input.dataFim} AND "periodo2Fim" >= ${input.dataInicio})
+            OR ("periodo3Inicio" IS NOT NULL AND "periodo3Fim" IS NOT NULL AND "periodo3Inicio" <= ${input.dataFim} AND "periodo3Fim" >= ${input.dataInicio})
+          )
+      `)) as any).rows || [];
+
+      // Build Set of vacation date strings (YYYY-MM-DD) within the requested range
+      const feriasDates = new Set<string>();
+      for (const vp of feriaRows) {
+        const ranges = [
+          [vp.dataInicio, vp.dataFim],
+          [vp.periodo2Inicio, vp.periodo2Fim],
+          [vp.periodo3Inicio, vp.periodo3Fim],
+        ];
+        for (const [ini, fim] of ranges) {
+          if (!ini || !fim) continue;
+          const start = new Date(String(ini) + "T12:00:00Z");
+          const end   = new Date(String(fim) + "T12:00:00Z");
+          const rangeStart = new Date(input.dataInicio + "T12:00:00Z");
+          const rangeEnd   = new Date(input.dataFim   + "T12:00:00Z");
+          for (let d = new Date(Math.max(start.getTime(), rangeStart.getTime())); d <= new Date(Math.min(end.getTime(), rangeEnd.getTime())); d.setUTCDate(d.getUTCDate() + 1)) {
+            feriasDates.add(d.toISOString().slice(0, 10));
+          }
+        }
+      }
+
       // Get time records with deduplication (best record per day)
       const records = ((await db.execute(sql`
         SELECT DISTINCT ON (tr.data)
@@ -434,6 +468,7 @@ export const horasExtrasRouter = router({
         employee: emp,
         records: recordMap,
         summary: { diasTrabalhados, totalHEMins, totalFaltaMins, totalAtrasoMins, totalRegistros: records.length },
+        feriasDates: Array.from(feriasDates),
         avisoPrevio: avisoPrevio ? {
           tipo: avisoPrevio.tipo,
           dataInicio: String(avisoPrevio.dataInicio).slice(0, 10),

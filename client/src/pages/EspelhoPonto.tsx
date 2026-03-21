@@ -64,12 +64,13 @@ function getBatidas(r: any): string[] {
   return [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean);
 }
 
-type DayStatus = "normal" | "he" | "falta" | "incompleto" | "atraso" | "sabado" | "domingo";
+type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo";
 
-function getDayStatus(dateStr: string, rec: any | null): DayStatus {
+function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>): DayStatus {
   const { dow, isSun, isSat } = dayInfo(dateStr);
   if (isSun) return "domingo";
   if (isSat) return "sabado";
+  if (feriasDates?.has(dateStr)) return "ferias";
   if (!rec?.horasTrabalhadas || rec.horasTrabalhadas === "0:00" || rec.horasTrabalhadas === "") return "falta";
   const bat = getBatidas(rec);
   if (bat.length > 0 && bat.length % 2 !== 0) return "incompleto";
@@ -82,6 +83,7 @@ const STATUS_STYLE: Record<DayStatus, { row: string; badge: string; label: strin
   normal:     { row: "",                badge: "bg-green-100 text-green-700",   label: "Normal" },
   he:         { row: "bg-blue-50/40",   badge: "bg-blue-100 text-blue-700",     label: "H. Extra" },
   falta:      { row: "bg-red-50/30",    badge: "bg-red-100 text-red-700",       label: "Falta" },
+  ferias:     { row: "bg-teal-50/40",   badge: "bg-teal-100 text-teal-700",     label: "Férias" },
   incompleto: { row: "bg-orange-50/30", badge: "bg-orange-100 text-orange-700", label: "Incompleto" },
   atraso:     { row: "bg-amber-50/20",  badge: "bg-amber-100 text-amber-700",   label: "Atraso" },
   sabado:     { row: "bg-slate-50/60",  badge: "bg-slate-100 text-slate-500",   label: "Sábado" },
@@ -336,6 +338,10 @@ export default function EspelhoPonto() {
   const recordMap: Record<string, any> = (espelhoQ.data?.records as any) || {};
   const empData: any = espelhoQ.data?.employee;
   const avisoPrevio: any = (espelhoQ.data as any)?.avisoPrevio || null;
+  const feriasDatesSet = useMemo(
+    () => new Set<string>(((espelhoQ.data as any)?.feriasDates as string[]) || []),
+    [espelhoQ.data]
+  );
   const hasData = !!queryParams && !espelhoQ.isLoading && !!empData;
 
   const allDays = useMemo(
@@ -344,21 +350,23 @@ export default function EspelhoPonto() {
   );
 
   const summary = useMemo(() => {
-    let trabalhados = 0, diasFalta = 0, totalHEMins = 0, totalAtrasoMins = 0, totalTrabMins = 0;
+    let trabalhados = 0, diasFalta = 0, diasFerias = 0, totalHEMins = 0, totalAtrasoMins = 0, totalTrabMins = 0;
     for (const d of allDays) {
       const { dow } = dayInfo(d);
       const isWeekendDay = dow === 0 || dow === 6;
       const r = recordMap[d];
-      // HE e atrasos somam TODOS os dias (incluindo sábado/domingo)
-      if (r) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
+      const isFerias = feriasDatesSet.has(d);
+      // HE e atrasos somam TODOS os dias (incluindo sábado/domingo), mas não férias
+      if (r && !isFerias) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
       // Dias trabalhados e faltas apenas para dias úteis (seg–sex)
       if (isWeekendDay) continue;
+      if (isFerias) { diasFerias++; continue; }
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") diasFalta++;
       else { trabalhados++; totalTrabMins += parseHHMM(r.horasTrabalhadas); }
     }
     const saldoHEMins = totalHEMins - totalAtrasoMins;
-    return { trabalhados, diasFalta, totalHEMins, totalAtrasoMins, totalTrabMins, saldoHEMins };
-  }, [allDays, recordMap]);
+    return { trabalhados, diasFalta, diasFerias, totalHEMins, totalAtrasoMins, totalTrabMins, saldoHEMins };
+  }, [allDays, recordMap, feriasDatesSet]);
 
   // Hide Ent.3/Saí.3 column when no records have a third shift
   const hasThirdShift = useMemo(
@@ -599,8 +607,9 @@ export default function EspelhoPonto() {
               {allDays.map((dateStr) => {
                 const { name, num, monthNum, isSun, isSat } = dayInfo(dateStr);
                 const rec = recordMap[dateStr] || null;
-                const s = getDayStatus(dateStr, rec);
+                const s = getDayStatus(dateStr, rec, feriasDatesSet);
                 const cfg = STATUS_STYLE[s];
+                const isFerias = s === "ferias";
                 const isWeekend = isSun || isSat;
                 const heM = rec ? parseHHMM(rec.horasExtras) : 0;
                 const atrasM = rec ? parseHHMM(rec.atrasos) : 0;
@@ -636,17 +645,17 @@ export default function EspelhoPonto() {
                       </div>
                     </div>
 
-                    {/* Entrada 1 — clicável */}
-                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>{T(rec?.entrada1)}</div>
+                    {/* Entrada 1 — clicável (bloqueado em férias) */}
+                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>{isFerias ? <span className="text-teal-300 text-xs">—</span> : T(rec?.entrada1)}</div>
                     {/* Saída 1 — clicável */}
-                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>{T(rec?.saida1)}</div>
+                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>{isFerias ? <span className="text-teal-300 text-xs">—</span> : T(rec?.saida1)}</div>
                     {/* Entrada 2 — clicável */}
-                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>{T(rec?.entrada2)}</div>
+                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>{isFerias ? <span className="text-teal-300 text-xs">—</span> : T(rec?.entrada2)}</div>
                     {/* Saída 2 — clicável */}
-                    <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>{T(rec?.saida2)}</div>
+                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>{isFerias ? <span className="text-teal-300 text-xs">—</span> : T(rec?.saida2)}</div>
                     {/* Turno 3 — só mostra se algum dia do período tem 3º turno */}
                     {hasThirdShift && (
-                      <div className="px-2 py-3 text-center no-print cursor-pointer hover:bg-blue-50/60 rounded transition-colors" onClick={() => openEdit(dateStr, rec)}>
+                      <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>
                         {rec?.entrada3 || rec?.saida3
                           ? <span className="font-mono text-sm text-slate-600">{rec?.entrada3 || "—"} / {rec?.saida3 || "—"}</span>
                           : <span className="text-slate-200 text-base">—</span>}
@@ -692,12 +701,13 @@ export default function EspelhoPonto() {
                         : <span className="text-xs text-slate-300">{isWeekend ? cfg.label : ""}</span>}
                     </div>
 
-                    {/* Editar — oculto na impressão */}
+                    {/* Editar — oculto na impressão, bloqueado em férias */}
                     <div className="px-1 py-3 flex items-center justify-center no-print">
                       <button
-                        onClick={() => openEdit(dateStr, rec)}
-                        className="p-1.5 rounded-md hover:bg-blue-50 text-slate-300 hover:text-blue-600 transition-colors"
-                        title="Editar horários deste dia"
+                        onClick={() => !isFerias && openEdit(dateStr, rec)}
+                        disabled={isFerias}
+                        className={`p-1.5 rounded-md transition-colors ${isFerias ? "cursor-not-allowed opacity-30 text-teal-400" : "hover:bg-blue-50 text-slate-300 hover:text-blue-600"}`}
+                        title={isFerias ? "Funcionário em férias — edição bloqueada" : "Editar horários deste dia"}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>

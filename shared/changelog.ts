@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 678,
+    titulo: "Espelho de Ponto — cruzamento com férias: badge Férias e edição bloqueada",
+    descricao: "getEspelhoPontoRange consulta vacation_periods (status != cancelada/pendente) e retorna feriasDates. No frontend, dias de férias exibem badge verde-azulado 'Férias' em vez de 'Falta', não são contabilizados no resumo de faltas, as células de horário não abrem o diálogo de edição e o botão lápis fica desabilitado com tooltip explicativo.",
+    tipo: "feature",
+    modulos: "Ponto Eletrônico, Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 677,
     titulo: "Lançamento Manual — colunas Entr. HE e Saída HE reintroduzidas",
     descricao: "Colunas 'Entr. HE' e 'Saída HE' (entrada3/saida3) reincluídas na tabela de dias lançados do lançamento manual de ponto. Os campos são enviados ao backend que já calcula HE = horas trabalhadas no período HE, acumuladas ao total do dia.",
