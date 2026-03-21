@@ -241,6 +241,135 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// MAPEAMENTO ROTA → PAGE_ID
+// Liga cada path de rota ao ID de página em MODULE_PAGE_CONFIG.
+// Usado por groupCanAccessRoute para checar permissão por página (nível "custom").
+// Formato: { moduleId: { "/path/rota": "page_id" } }
+// Rotas sem mapeamento (null/undefined) = acesso liberado se o módulo estiver configurado.
+// ──────────────────────────────────────────────────────────────────────────────
+export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
+  "rh-dp": {
+    "/colaboradores":                   "colaboradores",
+    "/obras/efetivo":                   "colaboradores",
+    "/relogios-ponto":                  "ponto",
+    "/convencoes-coletivas":            "dissidio",
+    "/fechamento-ponto":                "ponto",
+    "/folha-pagamento":                 "folha",
+    "/controle-documentos":             "controle_documentos",
+    "/vale-alimentacao":                "vale_alimentacao",
+    "/solicitacao-he":                  "hora_extra",
+    "/apontamentos-campo":              "apontamentos",
+    "/crachas":                         "crachas",
+    "/aviso-previo":                    "aviso_previo",
+    "/ferias":                          "ferias",
+    "/modulo-pj":                       "contratos_pj",
+    "/pj-medicoes":                     "contratos_pj",
+    "/relatorios/raio-x":               "relatorios",
+    "/relatorios/ponto":                "relatorios",
+    "/relatorios/folha":                "relatorios",
+    "/relatorios/divergencias":         "relatorios",
+    "/relatorios/custo-obra":           "relatorios",
+    "/dashboards":                      "dashboards",
+    "/dashboards/funcionarios":         "dashboards",
+    "/dashboards/cartao-ponto":         "dashboards",
+    "/dashboards/folha-pagamento":      "dashboards",
+    "/dashboards/horas-extras":         "dashboards",
+    "/dashboards/aviso-previo":         "dashboards",
+    "/dashboards/ferias":               "dashboards",
+    "/dashboards/efetivo-obra":         "dashboards",
+    "/dashboards/perfil-tempo-casa":    "dashboards",
+    "/dashboards/controle-documentos":  "dashboards",
+    "/dashboards/apontamentos":         "dashboards",
+    "/feriados":                        "dissidio",
+    "/dissidio":                        "dissidio",
+    "/comparativo-convencoes":          "comparativo",
+    "/dixi-ponto":                      "ponto",
+  },
+  "sst": {
+    "/epis":             "epi",
+    "/cipa":             "cipa",
+    "/dashboards/epis":  "dashboards",
+    "/controle-documentos": "epi",
+  },
+  "juridico": {
+    "/processos-trabalhistas":  "processos",
+    "/convencoes-coletivas":    "convencoes",
+    "/dashboards/juridico":     "dashboards",
+  },
+  "avaliacao": {
+    "/avaliacao-desempenho":      "avaliacoes",
+    "/habilidades":               "habilidades",
+    "/dashboards/habilidades":    "dashboards",
+  },
+  "terceiros": {
+    "/terceiros/painel":       "painel",
+    "/terceiros/empresas":     "empresas",
+    "/terceiros/funcionarios": "trabalhadores",
+    "/terceiros/obrigacoes":   "obrigacoes",
+    "/terceiros/conformidade": "conformidade",
+    "/terceiros/alertas":      "alertas",
+    "/terceiros/aprovacao":    "documentos",
+    "/terceiros/validacao-ia": "documentos",
+  },
+  "parceiros": {
+    "/parceiros/cadastro":       "cadastro",
+    "/parceiros/lancamentos":    "lancamentos",
+    "/parceiros/aprovacoes":     "aprovacoes",
+    "/parceiros/pagamentos":     "pagamentos",
+    "/parceiros/guia-descontos": "guia_descontos",
+  },
+  "orcamento": {
+    "/orcamento/painel":   "lista",
+    "/orcamento/lista":    "lista",
+    "/orcamento/importar": "importacao",
+  },
+  "planejamento": {
+    "/planejamento": "projetos",
+  },
+  "cadastro": {
+    "/habilidades":            "habilidades",
+    "/habilidades/importacao": "habilidades",
+    "/obras":                  "obras",
+    "/empresas":               "empresas",
+    "/setores":                "departamentos",
+    "/funcoes":                "cargos",
+    "/relogios-ponto":         "relogios",
+    "/convencoes-coletivas":   "convencoes",
+  },
+  "financeiro": {
+    "/financeiro":                  "lancamentos",
+    "/financeiro/lancamentos":      "lancamentos",
+    "/financeiro/receitas":         "receitas",
+    "/financeiro/contas-a-pagar":   "contas_pagar",
+    "/financeiro/contas-a-receber": "contas_receber",
+    "/financeiro/dre":              "dre",
+    "/financeiro/fluxo-de-caixa":   "fluxo_caixa",
+    "/financeiro/obrigacoes-fiscais":"obrigacoes_fiscais",
+    "/financeiro/plano-de-contas":  "plano_contas",
+    "/financeiro/centros-de-custo": "centros_custo",
+    "/financeiro/conciliacao":      "conciliacao",
+  },
+  "compras": {
+    "/compras/painel":        "solicitacoes",
+    "/compras/solicitacoes":  "solicitacoes",
+    "/compras/cotacoes":      "cotacoes",
+    "/compras/ordens":        "ordens",
+    "/compras/aprovacoes":    "aprovacoes",
+    "/compras/recebimentos":  "recebimentos",
+    "/compras/emergencial":   "emergencial",
+    "/compras/financeiro":    "financeiro",
+    "/compras/realocacao":    "realocacao",
+    "/compras/fornecedores":  "fornecedores",
+  },
+  "almoxarifado": {
+    "/almoxarifado":                  "estoque",
+    "/almoxarifado/movimentacoes":    "movimentacoes",
+    "/almoxarifado/inventario":       "inventario",
+  },
+  "medicao": {},
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Tipos de permissão usados no JSON modulesAccess
 // ──────────────────────────────────────────────────────────────────────────────
 

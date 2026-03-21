@@ -1,7 +1,7 @@
 import { createContext, useContext, ReactNode, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { MODULE_DEFINITIONS, SHARED_FEATURES, ADMIN_FEATURES, type ActiveModuleId } from "../../../shared/modules";
-import { normalizeModulePerm, type ModulePerm } from "../../../shared/modulePages";
+import { normalizeModulePerm, ROUTE_TO_PAGEID, type ModulePerm } from "../../../shared/modulePages";
 
 interface GroupRoutePermission {
   rota: string;
@@ -135,7 +135,13 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   // ── Acesso ao módulo ──────────────────────────────────────────────────────
   const canAccessModule = (moduleId: ActiveModuleId | string): boolean => {
     if (isAdminMaster) return true;
-    if (normalizedAccess[moduleId] != null) return true;
+    const perm = normalizedAccess[moduleId];
+    if (perm != null) {
+      // admin/viewer: acesso total ao módulo
+      if (perm.level === "admin" || perm.level === "viewer") return true;
+      // custom: o módulo só é acessível se ao menos UMA página tem view=true
+      return Object.values(perm.pages || {}).some(p => p.view);
+    }
     // Fallback grupo legado — apenas quando o grupo NÃO usa o novo sistema de module_access
     if (hasGroup && !groupHasNewSystem) {
       const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
@@ -271,12 +277,32 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       if (SHARED_FEATURES.some(f => f.route === route || f.route === basePath)) {
         return Object.keys(normalizedAccess).length > 0;
       }
-      // Verifica qual módulo "dona" desta rota
+
+      // Verifica qual módulo "dono" desta rota
       const mod = MODULE_DEFINITIONS.find(m =>
         m.features.some(f => f.route === route || f.route === basePath)
       );
-      if (mod) return normalizedAccess[mod.id] != null;
-      return false;
+      if (!mod) return false;
+
+      const perm = normalizedAccess[mod.id];
+      if (!perm) return false;
+
+      // admin/viewer: todas as rotas do módulo são acessíveis
+      if (perm.level === "admin" || perm.level === "viewer") return true;
+
+      // custom: checar permissão específica desta rota via ROUTE_TO_PAGEID
+      const moduleRouteMap = ROUTE_TO_PAGEID[mod.id];
+      if (!moduleRouteMap) {
+        // Módulo sem mapeamento de rotas: permitir se o módulo estiver liberado
+        return true;
+      }
+      // Tenta o basePath primeiro, depois a rota completa (com query string)
+      const pageId = moduleRouteMap[basePath] ?? moduleRouteMap[route];
+      if (!pageId) {
+        // Rota dentro do módulo sem mapeamento de página específico → nega por segurança
+        return false;
+      }
+      return perm.pages?.[pageId]?.view === true;
     }
 
     // Sistema legado (user_group_permissions salvo via GruposUsuarios.tsx)

@@ -4093,6 +4093,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 662,
+    titulo: "Correção completa do controle de acesso por página — nível custom agora respeitado em sidebar e ModuleHub",
+    descricao: "BUGFIX CRÍTICO: groupCanAccessRoute verificava apenas normalizedAccess[mod.id] != null (nível módulo), ignorando completamente perm.level === 'custom' + perm.pages[id].view. Resultado: mesmo que o admin liberasse só 2 páginas de um grupo, TODAS as rotas do módulo passavam. Correções aplicadas: (1) Criado ROUTE_TO_PAGEID em shared/modulePages.ts — mapeamento explícito de rota URL → page ID do MODULE_PAGE_CONFIG para todos os módulos (rh-dp, sst, juridico, avaliacao, terceiros, parceiros, orcamento, planejamento, cadastro, financeiro, compras, almoxarifado, medicao); (2) groupCanAccessRoute reescrito: quando level=admin/viewer → acesso total ao módulo; quando level=custom → usa ROUTE_TO_PAGEID para encontrar o pageId da rota e verifica perm.pages[pageId].view; rota sem mapeamento → nega por segurança; (3) canAccessModule corrigido: nível custom agora exige que ao menos uma página tenha view=true para o módulo aparecer no ModuleHub. Lei de ouro: critério definido é sempre respeitado.",
+    tipo: "bugfix",
+    modulos: "Controle de Acesso, ModuleHub, Sidebar",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 661,
     titulo: "Bugfix crítico: controle de acesso no ModuleHub — módulos sem definição bypassavam permissões de grupo",
     descricao: "5 módulos ativos no ModuleHub (planejamento, cadastro, financeiro, compras, avaliacao) não tinham entrada em MODULE_DEFINITIONS no shared/modules.ts. O filtro do ModuleHub verificava: MODULE_DEFINITIONS.find(md => md.id === m.id) → quando retornava undefined (módulo sem definição), o bloco if(modDef) não executava e o módulo passava sem nenhuma verificação de permissão — aparecendo para TODOS os usuários independente do grupo. Correções: (1) ActiveModuleId expandido com os 6 IDs faltantes (avaliacao, planejamento, cadastro, financeiro, compras, medicao); (2) MODULE_DEFINITIONS recebeu 5 novas entradas com suas rotas específicas; (3) ModuleHub agora bloqueia módulos sem definição (!modDef → return false) e adiciona canAccessModule() como verificação primária antes da verificação por rota.",
