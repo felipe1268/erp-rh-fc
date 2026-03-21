@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 689,
+    titulo: "Férias — Ajuste de arredondamento soma diretamente no líquido",
+    descricao: "Corrigido comportamento do campo 'Ajuste arredondamento': o valor é somado diretamente ao Valor Líquido (não altera o INSS calculado). O Total INSS descontado permanece fixo; a linha de ajuste aparece abaixo do INSS e o Valor Líquido reflete o resultado final.",
+    tipo: "fix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 688,
     titulo: "Férias — Campo de ajuste de arredondamento no INSS",
     descricao: "Adicionado campo 'Ajuste arredondamento' na seção de INSS do detalhe de férias. Aceita valores positivos (aumentar INSS) ou negativos (ex: -0,01 para reduzir). O Total INSS e o Valor Líquido são recalculados em tempo real. A linha de ajuste só aparece quando o valor for diferente de zero. O campo é resetado ao fechar o diálogo.",

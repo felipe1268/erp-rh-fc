@@ -1633,8 +1633,7 @@ export default function Ferias() {
                 const INSS_TETO = Math.max(0, TETO_BASE * 0.14 - 198.49); // R$ 988,09
                 if (bruto > TETO_BASE) inssTotal = INSS_TETO;
                 const ajusteNum = parseFloat(inssAjuste.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
-                const inssFinal = Math.max(0, inssTotal + ajusteNum);
-                const liquido = bruto - inssFinal;
+                const liquido = bruto - inssTotal + ajusteNum;
                 return (
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
                     <p className="text-xs text-slate-500 uppercase font-semibold">Desconto INSS — Memória de Cálculo (Tabela 2026)</p>
@@ -1688,36 +1687,36 @@ export default function Ferias() {
                       );
                     })()}
 
-                    {/* Campo de ajuste de arredondamento */}
+                    {/* Totais */}
+                    <div className="space-y-1 pt-1 border-t border-slate-200">
+                      <div className="flex justify-between text-sm font-semibold text-red-700">
+                        <span>Total INSS descontado</span>
+                        <span>− {formatMoeda(inssTotal)}</span>
+                      </div>
+                    </div>
+
+                    {/* Campo de ajuste de arredondamento — soma direta no líquido */}
                     <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded p-2">
-                      <span className="text-xs text-amber-800 font-medium whitespace-nowrap">Ajuste arredondamento:</span>
+                      <span className="text-xs text-amber-800 font-medium whitespace-nowrap">Ajuste no líquido:</span>
                       <Input
                         className="h-7 text-xs text-right w-28 border-amber-300 focus:border-amber-500"
                         value={inssAjuste}
                         onChange={e => setInssAjuste(e.target.value)}
                         placeholder="0,00"
-                        title="Use valores positivos para aumentar o INSS ou negativos (ex: -0,01) para reduzir"
+                        title="Valor somado diretamente ao líquido. Positivo aumenta, negativo reduz."
                       />
-                      <span className="text-[10px] text-amber-600 leading-tight">Use negativo (ex: −0,01) para reduzir<br/>ou positivo para aumentar o desconto.</span>
+                      <span className="text-[10px] text-amber-600 leading-tight">Somado direto ao Valor Líquido.<br/>Positivo aumenta, negativo reduz.</span>
                     </div>
 
-                    {/* Totais */}
-                    <div className="space-y-1 pt-1 border-t border-slate-200">
-                      <div className="flex justify-between text-sm text-slate-500">
-                        <span>INSS calculado</span>
-                        <span>− {formatMoeda(inssTotal)}</span>
-                      </div>
+                    {/* Valor Líquido */}
+                    <div className="border-t border-slate-200 pt-2 space-y-1">
                       {ajusteNum !== 0 && (
                         <div className="flex justify-between text-sm text-amber-700">
                           <span>Ajuste arredondamento</span>
                           <span className="font-medium">{ajusteNum > 0 ? "+" : "−"} {formatMoeda(Math.abs(ajusteNum))}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-sm font-semibold text-red-700 border-t border-slate-100 pt-1">
-                        <span>Total INSS descontado</span>
-                        <span>− {formatMoeda(inssFinal)}</span>
-                      </div>
-                      <div className="flex justify-between text-base font-bold text-slate-800 pt-1 border-t border-slate-200">
+                      <div className="flex justify-between text-base font-bold text-slate-800">
                         <span>Valor Líquido</span>
                         <span className="text-green-700">{formatMoeda(liquido)}</span>
                       </div>
