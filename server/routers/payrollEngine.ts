@@ -1233,12 +1233,11 @@ export const payrollEngineRouter = router({
       }
 
       // Re-apply 'rejeitado' status to previously-rejected employees
-      if (rejeitadosSet.size > 0) {
-        const ids = Array.from(rejeitadosSet);
+      for (const empId of rejeitadosSet) {
         await db.execute(sql`
           UPDATE payroll_advances SET status = 'rejeitado'
           WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
-            AND "employeeId" = ANY(${ids}::int[])
+            AND "employeeId" = ${empId}
         `);
       }
 
