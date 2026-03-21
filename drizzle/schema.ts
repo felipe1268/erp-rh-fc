@@ -2832,8 +2832,8 @@ export const vacationPeriods = pgTable("vacation_periods", {
         valorTercoConstitucional: varchar({ length: 20 }),
         valorAbono: varchar({ length: 20 }),
         valorTotal: varchar({ length: 20 }),
-        ajusteInss: varchar({ length: 20 }),
-        valorLiquido: varchar({ length: 20 }),
+        ajusteInss: varchar("ajuste_inss", { length: 20 }),
+        valorLiquido: varchar("valor_liquido", { length: 20 }),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataPagamento: date({ mode: 'string' }),
         status: text().default('pendente').notNull(),

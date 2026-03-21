@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 691,
+    titulo: "Férias — Correção mapeamento colunas ajuste_inss / valor_liquido",
+    descricao: "Corrigido erro no mapeamento Drizzle: as colunas ajuste_inss e valor_liquido foram criadas em snake_case no banco mas o schema procurava por camelCase. Adicionado mapeamento explícito no schema (varchar('ajuste_inss') e varchar('valor_liquido')). Restaurada a listagem de férias que ficou vazia por causa deste erro de query.",
+    tipo: "fix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 690,
     titulo: "Férias — Botão Salvar Líquido persiste ajuste e valor no banco",
     descricao: "Adicionado botão 'Salvar Líquido' na seção INSS do detalhe de férias. Ao clicar, salva no banco o ajusteInss e o valorLiquido calculado. Ao reabrir o diálogo, o ajuste salvo é carregado automaticamente. Colunas ajuste_inss e valor_liquido adicionadas na tabela vacation_periods.",
