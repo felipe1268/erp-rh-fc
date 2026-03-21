@@ -20,6 +20,7 @@ import {
   Users, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
   Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square, Undo2,
+  ChevronDown,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -294,6 +295,41 @@ function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirDat
         )}
       </div>
     </FullScreenDialog>
+  );
+}
+
+function AlertCard({ icon: Icon, count, title, items, borderClass, numClass, nameClass, dateClass, onSelectEmployee }: {
+  icon: any; count: number; title: string; items: any[];
+  borderClass: string; numClass: string; nameClass: string; dateClass: string;
+  onSelectEmployee: (id: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card className={`shadow-sm border-l-4 ${borderClass} cursor-pointer select-none`}>
+      <CardContent className="px-4 py-3">
+        <button
+          className="w-full flex items-center justify-between gap-2 text-left"
+          onClick={() => setOpen(o => !o)}
+        >
+          <span className={`text-xs font-semibold flex items-center gap-1.5 ${numClass}`}>
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-base font-bold">{count}</span>
+            <span>{title}</span>
+          </span>
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${numClass} ${open ? "rotate-180" : ""}`} />
+        </button>
+        {open && (
+          <div className="mt-2 space-y-0.5 border-t pt-2">
+            {items.map((v: any) => (
+              <p key={v.id} className="text-xs">
+                <span className={`font-medium cursor-pointer hover:underline ${nameClass}`} onClick={() => onSelectEmployee(v.employeeId)}>{v.employeeName}</span>
+                <span className={`${dateClass}`}> — Concessivo até {formatDate(v.periodoConcessivoFim)}</span>
+              </p>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -638,34 +674,12 @@ export default function Ferias() {
           const prestes1 = (alertas.prestesVencer || []).filter((v: any) => (v.numeroPeriodo || 1) === 1);
           const hasAny = vencidas1.length > 0 || vencidas2.length > 0 || prestes2.length > 0 || prestes1.length > 0;
           if (!hasAny) return null;
-          const AlertCard = ({ icon: Icon, count, title, items, borderClass, numClass, nameClass, dateClass }: {
-            icon: any; count: number; title: string; items: any[];
-            borderClass: string; numClass: string; nameClass: string; dateClass: string;
-          }) => (
-            <Card className={`shadow-sm border-l-4 ${borderClass}`}>
-              <CardContent className="px-4 py-3">
-                <p className={`text-xs font-semibold flex items-center gap-1.5 mb-2 ${numClass}`}>
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="text-base font-bold">{count}</span> {title}
-                </p>
-                <div className="space-y-0.5">
-                  {items.slice(0, 5).map((v: any) => (
-                    <p key={v.id} className="text-xs">
-                      <span className={`font-medium cursor-pointer hover:underline ${nameClass}`} onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
-                      <span className={`${dateClass}`}> — Concessivo até {formatDate(v.periodoConcessivoFim)}</span>
-                    </p>
-                  ))}
-                  {items.length > 5 && <p className={`text-[11px] ${dateClass} mt-1`}>+ {items.length - 5} outros</p>}
-                </div>
-              </CardContent>
-            </Card>
-          );
           return (
-            <div className="space-y-2">
-              {vencidas1.length > 0 && <AlertCard icon={AlertTriangle} count={vencidas1.length} title="Férias Vencidas — 1º Período Concessivo Expirado (Art. 134 CLT)" items={vencidas1} borderClass="border-l-red-500" numClass="text-red-700" nameClass="text-red-700" dateClass="text-red-500" />}
-              {vencidas2.length > 0 && <AlertCard icon={AlertTriangle} count={vencidas2.length} title="Férias Vencidas — 2º Período Expirado — Risco de Pagamento em Dobro" items={vencidas2} borderClass="border-l-red-700" numClass="text-red-800" nameClass="text-red-800" dateClass="text-red-600" />}
-              {prestes1.length > 0 && <AlertCard icon={Clock} count={prestes1.length} title="Prestes a Vencer — 1º Período (próximos 60 dias)" items={prestes1} borderClass="border-l-amber-400" numClass="text-amber-700" nameClass="text-amber-700" dateClass="text-amber-500" />}
-              {prestes2.length > 0 && <AlertCard icon={Clock} count={prestes2.length} title="Prestes a Vencer — 2º Período (próximos 60 dias)" items={prestes2} borderClass="border-l-orange-500" numClass="text-orange-700" nameClass="text-orange-700" dateClass="text-orange-500" />}
+            <div className="grid grid-cols-2 gap-2">
+              {vencidas1.length > 0 && <AlertCard icon={AlertTriangle} count={vencidas1.length} title="Férias Vencidas — 1º Período Concessivo Expirado (Art. 134 CLT)" items={vencidas1} borderClass="border-l-red-500" numClass="text-red-700" nameClass="text-red-700" dateClass="text-red-500" onSelectEmployee={setGanttEmployeeId} />}
+              {vencidas2.length > 0 && <AlertCard icon={AlertTriangle} count={vencidas2.length} title="Férias Vencidas — 2º Período Expirado — Risco de Pagamento em Dobro" items={vencidas2} borderClass="border-l-red-700" numClass="text-red-800" nameClass="text-red-800" dateClass="text-red-600" onSelectEmployee={setGanttEmployeeId} />}
+              {prestes1.length > 0 && <AlertCard icon={Clock} count={prestes1.length} title="Prestes a Vencer — 1º Período (próximos 60 dias)" items={prestes1} borderClass="border-l-amber-400" numClass="text-amber-700" nameClass="text-amber-700" dateClass="text-amber-500" onSelectEmployee={setGanttEmployeeId} />}
+              {prestes2.length > 0 && <AlertCard icon={Clock} count={prestes2.length} title="Prestes a Vencer — 2º Período (próximos 60 dias)" items={prestes2} borderClass="border-l-orange-500" numClass="text-orange-700" nameClass="text-orange-700" dateClass="text-orange-500" onSelectEmployee={setGanttEmployeeId} />}
             </div>
           );
         })()}
