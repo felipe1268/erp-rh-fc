@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 697,
+    titulo: "Férias — Alertas com visual limpo e sem cargo duplicado",
+    descricao: "Cards de alerta redesenhados: fundo branco com borda esquerda colorida, sem cargo (evitando o duplo '—'), tipografia compacta e espaçamento reduzido para leitura mais direta.",
+    tipo: "improvement",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 696,
     titulo: "Férias — Alertas separados por 1º e 2º período",
     descricao: "Os painéis de alerta no topo da página de Férias agora exibem até 4 seções distintas: (1) 1º período vencido — vermelho claro; (2) 2º período vencido — vermelho intenso com aviso de pagamento em dobro; (3) 1º período prestes a vencer em 60 dias — âmbar; (4) 2º período prestes a vencer — laranja. Cada seção exibe os primeiros 5 colaboradores e o total excedente.",
