@@ -7,9 +7,13 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Search, RefreshCw, User, ChevronDown, FileText,
-  Clock, AlertCircle, CalendarOff, TrendingDown, Info
+  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info,
 } from "lucide-react";
+import { toast } from "sonner";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,8 +23,8 @@ function parseHHMM(str: string | null | undefined): number {
   return (p[0] || 0) * 60 + (p[1] || 0);
 }
 
-function minsToHHMM(m: number): string {
-  if (m <= 0) return "0h00";
+function minsToHHMM(m: number, fallback = "—"): string {
+  if (m <= 0) return fallback;
   return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
 }
 
@@ -48,7 +52,12 @@ const PT_MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","
 function dayInfo(d: string) {
   const dt = new Date(d + "T12:00:00Z");
   const dow = dt.getUTCDay();
-  return { dow, name: PT_DAYS[dow], num: dt.getUTCDate(), month: PT_MONTHS[dt.getUTCMonth()], isSun: dow === 0, isSat: dow === 6 };
+  return {
+    dow, name: PT_DAYS[dow], num: dt.getUTCDate(),
+    month: PT_MONTHS[dt.getUTCMonth()], year: dt.getUTCFullYear(),
+    isSun: dow === 0, isSat: dow === 6,
+    monthNum: String(dt.getUTCMonth() + 1).padStart(2, "0"),
+  };
 }
 
 function getBatidas(r: any): string[] {
@@ -57,7 +66,7 @@ function getBatidas(r: any): string[] {
 
 type DayStatus = "normal" | "he" | "falta" | "incompleto" | "atraso" | "sabado" | "domingo";
 
-function status(dateStr: string, rec: any | null): DayStatus {
+function getDayStatus(dateStr: string, rec: any | null): DayStatus {
   const { dow, isSun, isSat } = dayInfo(dateStr);
   if (isSun) return "domingo";
   if (isSat) return "sabado";
@@ -69,29 +78,202 @@ function status(dateStr: string, rec: any | null): DayStatus {
   return "normal";
 }
 
-// Muted, low-saturation color system
-const CFG: Record<DayStatus, { leftBorder: string; rowBg: string; pill: string; label: string }> = {
-  normal:     { leftBorder: "border-l-slate-200",  rowBg: "",                  pill: "",                                          label: "" },
-  he:         { leftBorder: "border-l-sky-300",    rowBg: "bg-sky-50/30",      pill: "bg-sky-100 text-sky-700",                   label: "Hora Extra" },
-  falta:      { leftBorder: "border-l-red-300",    rowBg: "bg-red-50/30",      pill: "bg-red-100 text-red-700",                   label: "Falta" },
-  incompleto: { leftBorder: "border-l-orange-300", rowBg: "bg-orange-50/20",   pill: "bg-orange-100 text-orange-700",             label: "Incompleto" },
-  atraso:     { leftBorder: "border-l-amber-300",  rowBg: "bg-amber-50/20",    pill: "bg-amber-100 text-amber-700",               label: "Atraso" },
-  sabado:     { leftBorder: "border-l-slate-150",  rowBg: "bg-slate-50/60",    pill: "bg-slate-100 text-slate-400",               label: "Sábado" },
-  domingo:    { leftBorder: "border-l-transparent",rowBg: "bg-slate-50/30",    pill: "",                                          label: "Domingo" },
+const STATUS_STYLE: Record<DayStatus, { row: string; badge: string; label: string }> = {
+  normal:     { row: "",                badge: "bg-green-100 text-green-700",   label: "Normal" },
+  he:         { row: "bg-blue-50/40",   badge: "bg-blue-100 text-blue-700",     label: "H. Extra" },
+  falta:      { row: "bg-red-50/30",    badge: "bg-red-100 text-red-700",       label: "Falta" },
+  incompleto: { row: "bg-orange-50/30", badge: "bg-orange-100 text-orange-700", label: "Incompleto" },
+  atraso:     { row: "bg-amber-50/20",  badge: "bg-amber-100 text-amber-700",   label: "Atraso" },
+  sabado:     { row: "bg-slate-50/60",  badge: "bg-slate-100 text-slate-500",   label: "Sábado" },
+  domingo:    { row: "bg-slate-50/30",  badge: "",                              label: "Domingo" },
 };
 
 function initials(name: string) {
   const p = name.trim().split(" ").filter(Boolean);
-  return p.length === 1 ? p[0].slice(0,2).toUpperCase() : (p[0][0]+p[p.length-1][0]).toUpperCase();
+  return p.length === 1 ? p[0].slice(0, 2).toUpperCase() : (p[0][0] + p[p.length - 1][0]).toUpperCase();
 }
-
 function fmtDate(d: string) { return d.split("-").reverse().join("/"); }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Edit Dialog ──────────────────────────────────────────────────────────────
+
+interface EditForm {
+  entrada1: string; saida1: string;
+  entrada2: string; saida2: string;
+  entrada3: string; saida3: string;
+  justificativa: string;
+  motivoAjuste: string;
+}
+
+interface EditDialogProps {
+  open: boolean;
+  onClose: () => void;
+  dateStr: string;
+  record: any | null;
+  employeeId: number;
+  companyId: number;
+  onSaved: () => void;
+}
+
+function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onSaved }: EditDialogProps) {
+  const { name, num, monthNum, month, year, dow } = dayInfo(dateStr);
+  const mesReferencia = `${year}-${monthNum}`;
+
+  const [form, setForm] = useState<EditForm>({
+    entrada1: record?.entrada1 || "",
+    saida1:   record?.saida1   || "",
+    entrada2: record?.entrada2 || "",
+    saida2:   record?.saida2   || "",
+    entrada3: record?.entrada3 || "",
+    saida3:   record?.saida3   || "",
+    justificativa: record?.justificativa || "",
+    motivoAjuste: "Correção manual",
+  });
+
+  // Reset form when record/dateStr changes
+  useEffect(() => {
+    setForm({
+      entrada1: record?.entrada1 || "",
+      saida1:   record?.saida1   || "",
+      entrada2: record?.entrada2 || "",
+      saida2:   record?.saida2   || "",
+      entrada3: record?.entrada3 || "",
+      saida3:   record?.saida3   || "",
+      justificativa: record?.justificativa || "",
+      motivoAjuste: "Correção manual",
+    });
+  }, [dateStr, record]);
+
+  const saveMut = trpc.fechamentoPonto.manualEntry.useMutation({
+    onSuccess: () => {
+      toast.success(`Ponto de ${name} ${num}/${month} salvo com sucesso`);
+      onSaved();
+      onClose();
+    },
+    onError: (err) => {
+      toast.error(`Erro ao salvar: ${err.message}`);
+    },
+  });
+
+  function handleSave() {
+    saveMut.mutate({
+      companyId,
+      employeeId,
+      mesReferencia,
+      data: dateStr,
+      entrada1: form.entrada1 || undefined,
+      saida1:   form.saida1   || undefined,
+      entrada2: form.entrada2 || undefined,
+      saida2:   form.saida2   || undefined,
+      entrada3: form.entrada3 || undefined,
+      saida3:   form.saida3   || undefined,
+      justificativa: form.justificativa || undefined,
+      motivoAjuste:  form.motivoAjuste  || undefined,
+    });
+  }
+
+  const f = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(prev => ({ ...prev, [field]: e.target.value }));
+
+  const TimeInput = ({ label, field }: { label: string; field: keyof EditForm }) => (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
+      <input
+        type="time"
+        value={form[field] as string}
+        onChange={f(field)}
+        className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full"
+      />
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Pencil className="h-4 w-4 text-slate-500" />
+            Editar Ponto — {name}, {String(num).padStart(2,"0")}/{monthNum}/{year}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Info note */}
+          <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            <Info className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+            <span>Esta edição será gravada como <strong>ajuste manual</strong> e sincronizada com o Fechamento de Ponto, substituindo o registro original.</span>
+          </div>
+
+          {/* Turno 1 */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 1</p>
+            <div className="grid grid-cols-2 gap-3">
+              <TimeInput label="Entrada" field="entrada1" />
+              <TimeInput label="Saída"   field="saida1" />
+            </div>
+          </div>
+
+          {/* Turno 2 */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 2 <span className="font-normal normal-case">(intervalo)</span></p>
+            <div className="grid grid-cols-2 gap-3">
+              <TimeInput label="Entrada" field="entrada2" />
+              <TimeInput label="Saída"   field="saida2" />
+            </div>
+          </div>
+
+          {/* Turno 3 (optional) */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 3 <span className="font-normal normal-case">(opcional)</span></p>
+            <div className="grid grid-cols-2 gap-3">
+              <TimeInput label="Entrada" field="entrada3" />
+              <TimeInput label="Saída"   field="saida3" />
+            </div>
+          </div>
+
+          {/* Motivo */}
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Motivo do ajuste</label>
+            <input
+              type="text"
+              value={form.motivoAjuste}
+              onChange={f("motivoAjuste")}
+              placeholder="Ex: Correção de batida, esquecimento de registro..."
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+            />
+          </div>
+
+          {/* Observação */}
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Observação <span className="font-normal normal-case">(opcional)</span></label>
+            <textarea
+              value={form.justificativa}
+              onChange={f("justificativa")}
+              rows={2}
+              placeholder="Justificativa adicional..."
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 resize-none"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} className="flex-1">
+            <X className="h-4 w-4 mr-1.5" /> Cancelar
+          </Button>
+          <Button onClick={handleSave} disabled={saveMut.isPending} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white">
+            {saveMut.isPending ? <><RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />Salvando…</> : <><Save className="h-4 w-4 mr-1.5" />Salvar Ajuste</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function EspelhoPonto() {
   const { selectedCompanyId, getCompanyIdsForQuery, isConstrutoras } = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== "construtoras") ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== "construtoras")
+    ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
 
@@ -102,6 +284,11 @@ export default function EspelhoPonto() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [queryParams, setQueryParams] = useState<{ employeeId: number; dataInicio: string; dataFim: string } | null>(null);
+
+  // Edit dialog state
+  const [editDate, setEditDate] = useState<string | null>(null);
+  const [editRecord, setEditRecord] = useState<any | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -155,32 +342,23 @@ export default function EspelhoPonto() {
     [queryParams]
   );
 
-  // Summary with per-day HE list
-  const { summary, heDays, totalHorasTrabMins } = useMemo(() => {
-    let trabalhados = 0, diasFalta = 0, totalHEMins = 0, totalAtrasoMins = 0, totalHorasTrabMins = 0;
-    const heDays: { date: string; mins: number }[] = [];
-    for (const dateStr of allDays) {
-      const { dow } = dayInfo(dateStr);
+  const summary = useMemo(() => {
+    let trabalhados = 0, diasFalta = 0, totalHEMins = 0, totalAtrasoMins = 0, totalTrabMins = 0;
+    for (const d of allDays) {
+      const { dow } = dayInfo(d);
       if (dow === 0 || dow === 6) continue;
-      const r = recordMap[dateStr];
+      const r = recordMap[d];
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") diasFalta++;
-      else { trabalhados++; totalHorasTrabMins += parseHHMM(r.horasTrabalhadas); }
-      if (r) {
-        const he = parseHHMM(r.horasExtras);
-        totalHEMins += he;
-        if (he > 0) heDays.push({ date: dateStr, mins: he });
-        totalAtrasoMins += parseHHMM(r.atrasos);
-      }
+      else { trabalhados++; totalTrabMins += parseHHMM(r.horasTrabalhadas); }
+      if (r) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
     }
-    return {
-      summary: { trabalhados, diasFalta, totalHEMins, totalAtrasoMins },
-      heDays,
-      totalHorasTrabMins,
-    };
+    return { trabalhados, diasFalta, totalHEMins, totalAtrasoMins, totalTrabMins };
   }, [allDays, recordMap]);
 
   function handleSelectEmp(emp: any) { setEmployeeId(Number(emp.id)); setSearchQuery(""); setShowDropdown(false); }
   function handleBuscar() { if (!employeeId || !dataInicio || !dataFim) return; setQueryParams({ employeeId, dataInicio, dataFim }); }
+  function handleEditSaved() { espelhoQ.refetch(); }
+  function openEdit(dateStr: string, record: any | null) { setEditDate(dateStr); setEditRecord(record); }
 
   function setQuickPeriod(tipo: "periodo" | "mes" | "30d") {
     const n = new Date();
@@ -188,31 +366,49 @@ export default function EspelhoPonto() {
     else if (tipo === "mes") {
       const y = n.getFullYear(), m = n.getMonth()+1;
       setDataInicio(`${y}-${String(m).padStart(2,"0")}-01`);
-      setDataFim(`${y}-${String(m).padStart(2,"0")}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`);
+      setDataFim(`${y}-${String(m).padStart(2,"0")}-${new Date(y,m,0).getDate()}`);
     } else {
       const p = new Date(n); p.setDate(p.getDate()-30);
       setDataInicio(p.toISOString().slice(0,10)); setDataFim(n.toISOString().slice(0,10));
     }
   }
 
+  // Cell helper — shows time or dash
+  const T = (v: string | null | undefined) =>
+    v ? <span className="font-mono text-sm text-slate-700">{v}</span>
+       : <span className="text-slate-300 text-sm">—</span>;
+
   return (
     <DashboardLayout>
       <PrintHeader />
 
-      <div className="max-w-5xl mx-auto space-y-4">
+      {/* Edit Dialog */}
+      {editDate && (
+        <EditDialog
+          open={!!editDate}
+          onClose={() => setEditDate(null)}
+          dateStr={editDate}
+          record={editRecord}
+          employeeId={employeeId!}
+          companyId={queryCompanyId || companyId}
+          onSaved={handleEditSaved}
+        />
+      )}
 
-        {/* ── FILTROS ───────────────────────────────────────────────── */}
-        <div className="no-print bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
+      <div className="max-w-6xl mx-auto space-y-4">
+
+        {/* ── FILTROS ─────────────────────────────────────────────── */}
+        <div className="no-print bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
             <FileText className="h-4 w-4 text-slate-400" />
-            <span className="text-sm font-semibold text-slate-700">Espelho de Ponto Individual</span>
-            <span className="text-xs text-slate-400 ml-1">— período livre</span>
+            <h1 className="text-sm font-bold text-slate-800">Espelho de Ponto Individual</h1>
+            <span className="text-xs text-slate-400">— selecione o funcionário e o período</span>
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
-            {/* Employee */}
+            {/* Employee autocomplete */}
             <div className="flex-1 min-w-[260px] relative">
-              <label className="text-[11px] font-medium text-slate-500 block mb-1">Funcionário</label>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Funcionário</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                 <input
@@ -223,17 +419,16 @@ export default function EspelhoPonto() {
                   onFocus={() => setShowDropdown(true)}
                   onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
                   placeholder={empListQ.isLoading ? "Carregando…" : "Nome ou matrícula…"}
-                  className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 transition-all bg-white"
+                  className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
                 />
                 <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 pointer-events-none" />
               </div>
-
               {showDropdown && filteredEmps.length > 0 && (
-                <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                  <div className="max-h-64 overflow-y-auto">
-                    {filteredEmps.slice(0, 40).map((e: any) => (
+                <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredEmps.slice(0,40).map((e: any) => (
                       <button key={e.id} onMouseDown={() => handleSelectEmp(e)}
-                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100/80 last:border-0">
+                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100 last:border-0">
                         <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center shrink-0">
                           <span className="text-white text-[9px] font-bold">{initials(e.nomeCompleto)}</span>
                         </div>
@@ -248,48 +443,46 @@ export default function EspelhoPonto() {
               )}
             </div>
 
-            {/* Dates */}
             <div>
-              <label className="text-[11px] font-medium text-slate-500 block mb-1">De</label>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Data início</label>
               <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-                className="py-2 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400 transition-all" />
+                className="py-2 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-300" />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-slate-500 block mb-1">Até</label>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Data fim</label>
               <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-                className="py-2 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400 transition-all" />
+                className="py-2 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-300" />
             </div>
 
             <Button onClick={handleBuscar} disabled={!employeeId || espelhoQ.isLoading}
               className="bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-5 h-9">
-              {espelhoQ.isLoading ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Buscando…</> : <><Search className="h-3.5 w-3.5 mr-1.5" />Buscar</>}
+              {espelhoQ.isLoading
+                ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Buscando…</>
+                : <><Search className="h-3.5 w-3.5 mr-1.5" />Buscar</>}
             </Button>
           </div>
 
-          {/* Quick period */}
-          <div className="flex items-center gap-2 pt-1">
-            <span className="text-[11px] text-slate-400">Atalhos:</span>
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-xs text-slate-400">Atalhos:</span>
             {([["Período 16→15","periodo"],["Mês atual","mes"],["Últimos 30 dias","30d"]] as const).map(([l,t]) => (
               <button key={t} onClick={() => setQuickPeriod(t as any)}
-                className="text-[11px] px-2.5 py-1 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+                className="text-xs px-2.5 py-1 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
                 {l}
               </button>
             ))}
           </div>
         </div>
 
-        {/* ── EMPTY ─────────────────────────────────────────────────── */}
+        {/* ── EMPTY STATE ──────────────────────────────────────────── */}
         {!queryParams && (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="flex flex-col items-center py-24 text-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
               <FileText className="h-7 w-7 text-slate-300" />
             </div>
-            <p className="text-sm text-slate-500 font-medium">Selecione um funcionário e o período desejado</p>
-            <p className="text-xs text-slate-400 mt-1">O espelho de ponto será exibido aqui</p>
+            <p className="text-sm text-slate-500 font-medium">Selecione um funcionário e o período</p>
           </div>
         )}
 
-        {/* ── LOADING ───────────────────────────────────────────────── */}
         {queryParams && espelhoQ.isLoading && (
           <div className="flex flex-col items-center py-20 text-slate-400">
             <RefreshCw className="h-7 w-7 animate-spin mb-2" />
@@ -299,26 +492,26 @@ export default function EspelhoPonto() {
 
         {hasData && (
           <>
-            {/* ── FICHA DO FUNCIONÁRIO ──────────────────────────────── */}
-            <div className="bg-white rounded-xl border border-slate-200 px-6 py-4">
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+            {/* ── CABEÇALHO DO FUNCIONÁRIO ─────────────────────────── */}
+            <div className="bg-white rounded-xl border border-slate-200 px-5 py-4">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
                     <span className="text-sm font-bold text-slate-600">{initials(empData.nomeCompleto)}</span>
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-slate-900">{empData.nomeCompleto}</h2>
+                    <h2 className="text-sm font-bold text-slate-900">{empData.nomeCompleto}</h2>
                     <div className="flex flex-wrap gap-3 mt-0.5 text-xs text-slate-500">
                       {empData.funcao && <span>{empData.funcao}</span>}
-                      {empData.codigoInterno && <span className="text-slate-400">Mat. <span className="text-slate-600 font-medium">{empData.codigoInterno}</span></span>}
-                      {empData.cpf && <span className="text-slate-400">CPF <span className="text-slate-600 font-medium">{empData.cpf}</span></span>}
+                      {empData.codigoInterno && <span>Mat. <strong>{empData.codigoInterno}</strong></span>}
+                      {empData.cpf && <span>CPF {empData.cpf}</span>}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Competência</p>
-                    <p className="text-sm font-semibold text-slate-700 mt-0.5">{fmtDate(queryParams!.dataInicio)} a {fmtDate(queryParams!.dataFim)}</p>
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="text-right text-xs">
+                    <p className="text-slate-400 font-medium">Período</p>
+                    <p className="text-slate-700 font-bold mt-0.5">{fmtDate(queryParams!.dataInicio)} a {fmtDate(queryParams!.dataFim)}</p>
                   </div>
                   <div className="no-print">
                     <PrintActions title="Espelho de Ponto" />
@@ -327,222 +520,176 @@ export default function EspelhoPonto() {
               </div>
             </div>
 
-            {/* ── CARDS RESUMO ─────────────────────────────────────── */}
+            {/* ── RESUMO ───────────────────────────────────────────── */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                {
-                  icon: Clock, label: "Horas Trabalhadas",
-                  value: minsToHHMM(totalHorasTrabMins),
-                  sub: `${summary.trabalhados} dias úteis`,
-                  border: "border-t-slate-400",
-                },
-                {
-                  icon: TrendingDown, label: "Hora Extra Total",
-                  value: summary.totalHEMins > 0 ? minsToHHMM(summary.totalHEMins) : "—",
-                  sub: `${heDays.length} dia(s) com HE`,
-                  border: summary.totalHEMins > 0 ? "border-t-sky-400" : "border-t-slate-200",
-                },
-                {
-                  icon: CalendarOff, label: "Faltas",
-                  value: `${summary.diasFalta}`,
-                  sub: summary.diasFalta === 1 ? "1 dia sem registro" : `${summary.diasFalta} dias sem registro`,
-                  border: summary.diasFalta > 0 ? "border-t-red-400" : "border-t-slate-200",
-                },
-                {
-                  icon: AlertCircle, label: "Atrasos",
-                  value: summary.totalAtrasoMins > 0 ? minsToHHMM(summary.totalAtrasoMins) : "—",
-                  sub: "total acumulado",
-                  border: summary.totalAtrasoMins > 0 ? "border-t-amber-400" : "border-t-slate-200",
-                },
-              ].map(({ icon: Icon, label, value, sub, border }) => (
+                { icon: Clock,       label: "Dias Trabalhados", value: `${summary.trabalhados}`, sub: minsToHHMM(summary.totalTrabMins, "0h") + " total", color: "text-slate-700", border: "border-t-slate-400" },
+                { icon: Clock,       label: "Hora Extra",        value: summary.totalHEMins > 0 ? minsToHHMM(summary.totalHEMins) : "—", sub: summary.totalHEMins > 0 ? "acumulada no período" : "nenhuma no período", color: summary.totalHEMins > 0 ? "text-blue-600" : "text-slate-400", border: summary.totalHEMins > 0 ? "border-t-blue-400" : "border-t-slate-200" },
+                { icon: CalendarOff, label: "Faltas",            value: `${summary.diasFalta}`, sub: summary.diasFalta > 0 ? "dias sem registro" : "sem faltas", color: summary.diasFalta > 0 ? "text-red-600" : "text-slate-400", border: summary.diasFalta > 0 ? "border-t-red-400" : "border-t-slate-200" },
+                { icon: AlertCircle, label: "Atrasos",           value: summary.totalAtrasoMins > 0 ? minsToHHMM(summary.totalAtrasoMins) : "—", sub: summary.totalAtrasoMins > 0 ? "total acumulado" : "nenhum no período", color: summary.totalAtrasoMins > 0 ? "text-amber-600" : "text-slate-400", border: summary.totalAtrasoMins > 0 ? "border-t-amber-400" : "border-t-slate-200" },
+              ].map(({ icon: Icon, label, value, sub, color, border }) => (
                 <div key={label} className={`bg-white rounded-xl border border-slate-200 border-t-2 ${border} px-4 py-3`}>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <Icon className="h-3.5 w-3.5 text-slate-400" />
-                    <span className="text-[11px] font-medium text-slate-500">{label}</span>
-                  </div>
-                  <p className="text-2xl font-black text-slate-800 leading-none">{value}</p>
-                  <p className="text-[10px] text-slate-400 mt-1">{sub}</p>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">{label}</p>
+                  <p className={`text-2xl font-black leading-none ${color}`}>{value}</p>
+                  <p className="text-[11px] text-slate-400 mt-1">{sub}</p>
                 </div>
               ))}
             </div>
 
-            {/* ── TABELA DIÁRIA ─────────────────────────────────────── */}
+            {/* ── CARTÃO DE PONTO ──────────────────────────────────── */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
 
-              {/* Header */}
-              <div className="grid grid-cols-[4.5rem_1fr_5.5rem_5.5rem_7rem] border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                <div className="px-4 py-2.5">Dia</div>
-                <div className="px-3 py-2.5">Batidas</div>
-                <div className="px-3 py-2.5 text-right">Trabalhado</div>
-                <div className="px-3 py-2.5 text-center">HE</div>
-                <div className="px-4 py-2.5 text-center">Ocorrência</div>
+              {/* Legenda */}
+              <div className="no-print px-5 py-3 border-b border-slate-100 flex items-center gap-4 flex-wrap">
+                <span className="text-xs font-semibold text-slate-500">Legenda:</span>
+                {[
+                  ["bg-blue-100 text-blue-700","Hora Extra"],
+                  ["bg-red-100 text-red-700","Falta"],
+                  ["bg-orange-100 text-orange-700","Incompleto"],
+                  ["bg-amber-100 text-amber-700","Atraso"],
+                  ["bg-slate-100 text-slate-500","Fim de semana"],
+                ].map(([cls, lbl]) => (
+                  <span key={lbl} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{lbl}</span>
+                ))}
+                <span className="ml-auto no-print text-[11px] text-slate-400 flex items-center gap-1">
+                  <Pencil className="h-3 w-3" /> Clique no lápis para editar um dia
+                </span>
               </div>
 
-              {/* Body */}
+              {/* Table header */}
+              <div className="grid border-b-2 border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-widest text-slate-500"
+                style={{ gridTemplateColumns: "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem" }}>
+                <div className="px-4 py-2.5">Data</div>
+                <div className="px-2 py-2.5 text-center">Ent. 1</div>
+                <div className="px-2 py-2.5 text-center">Saí. 1</div>
+                <div className="px-2 py-2.5 text-center">Ent. 2</div>
+                <div className="px-2 py-2.5 text-center">Saí. 2</div>
+                <div className="px-2 py-2.5 text-center">Ent. 3 / Saí. 3</div>
+                <div className="px-2 py-2.5 text-center">Total</div>
+                <div className="px-2 py-2.5 text-center">H. Extra</div>
+                <div className="px-2 py-2.5 text-center">Ocorrência</div>
+                <div className="px-2 py-2.5 no-print" />
+              </div>
+
+              {/* Rows */}
               {allDays.map((dateStr) => {
-                const { name, num, month, isSun, isSat } = dayInfo(dateStr);
+                const { name, num, monthNum, isSun, isSat } = dayInfo(dateStr);
                 const rec = recordMap[dateStr] || null;
-                const s = status(dateStr, rec);
-                const cfg = CFG[s];
-                const batidas = rec ? getBatidas(rec) : [];
+                const s = getDayStatus(dateStr, rec);
+                const cfg = STATUS_STYLE[s];
+                const isWeekend = isSun || isSat;
                 const heM = rec ? parseHHMM(rec.horasExtras) : 0;
                 const atrasM = rec ? parseHHMM(rec.atrasos) : 0;
-                const isWeekend = isSun || isSat;
 
-                // Sunday: compact dim row
-                if (isSun) return (
-                  <div key={dateStr} className="grid grid-cols-[4.5rem_1fr_5.5rem_5.5rem_7rem] border-b border-slate-50 bg-slate-50/40 border-l-2 border-l-transparent">
-                    <div className="px-4 py-1.5 flex items-center gap-1.5">
-                      <div className="text-center">
-                        <div className="text-[9px] text-slate-300 font-semibold uppercase">{name}</div>
-                        <div className="text-sm font-bold text-slate-200">{num}</div>
+                // Very compact weekend (sunday with no record)
+                if (isSun && !rec) return (
+                  <div key={dateStr}
+                    className={`grid border-b border-slate-50 ${cfg.row}`}
+                    style={{ gridTemplateColumns: "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem" }}>
+                    <div className="px-4 py-1.5 flex items-center gap-2">
+                      <span className="text-xs text-slate-300 font-medium">{name}</span>
+                      <span className="text-sm font-bold text-slate-200">{String(num).padStart(2,"0")}/{monthNum}</span>
+                    </div>
+                    {Array(8).fill(null).map((_,i) => (
+                      <div key={i} className="px-2 py-1.5 text-center">
+                        <span className="text-slate-200 text-sm">—</span>
                       </div>
-                    </div>
-                    <div className="px-3 py-1.5 flex items-center">
-                      <span className="text-[11px] text-slate-300">—</span>
-                    </div>
-                    <div className="px-3 py-1.5 flex items-center justify-end">
-                      <span className="text-[11px] text-slate-300">—</span>
-                    </div>
-                    <div className="px-3 py-1.5 flex items-center justify-center">
-                      <span className="text-[11px] text-slate-300">—</span>
-                    </div>
-                    <div className="px-4 py-1.5 flex items-center justify-center">
-                      <span className="text-[9px] text-slate-300">Domingo</span>
-                    </div>
+                    ))}
+                    <div className="px-2 py-1.5 no-print" />
                   </div>
                 );
 
                 return (
                   <div key={dateStr}
-                    className={`grid grid-cols-[4.5rem_1fr_5.5rem_5.5rem_7rem] border-b border-slate-100 border-l-2 ${cfg.leftBorder} ${cfg.rowBg} transition-colors`}>
+                    className={`group grid border-b border-slate-100 hover:brightness-97 transition-all ${cfg.row}`}
+                    style={{ gridTemplateColumns: "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem" }}>
 
-                    {/* Day */}
-                    <div className="px-4 py-2.5 flex items-center">
-                      <div className="text-center">
-                        <div className={`text-[9px] font-bold uppercase tracking-wide ${isWeekend ? "text-slate-300" : "text-slate-400"}`}>{name}</div>
-                        <div className={`text-xl font-black leading-tight ${isWeekend ? "text-slate-300" : "text-slate-800"}`}>{num}</div>
-                        <div className={`text-[9px] ${isWeekend ? "text-slate-200" : "text-slate-300"}`}>{month}</div>
+                    {/* Data */}
+                    <div className="px-4 py-2.5 flex items-center gap-1.5">
+                      <div>
+                        <span className={`text-[10px] font-bold uppercase tracking-wide ${isWeekend ? "text-slate-300" : "text-slate-400"}`}>{name}</span>
+                        <span className={`text-sm font-bold ml-1.5 ${isWeekend ? "text-slate-300" : "text-slate-800"}`}>{String(num).padStart(2,"0")}/{monthNum}</span>
                       </div>
                     </div>
 
-                    {/* Batidas */}
-                    <div className="px-3 py-2.5 flex items-center flex-wrap gap-1">
-                      {batidas.length > 0 ? (
-                        batidas.map((b, i) => (
-                          <span key={i} className="flex items-center gap-0.5">
-                            <span className={`font-mono text-xs px-1.5 py-0.5 rounded ${
-                              i % 2 === 0
-                                ? "bg-slate-100 text-slate-700"
-                                : "bg-slate-100 text-slate-500"
-                            }`}>{b}</span>
-                            {i < batidas.length - 1 && (
-                              <span className="text-slate-300 text-[10px] select-none">{i % 2 === 0 ? "→" : "·"}</span>
-                            )}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-slate-300 italic">sem registro</span>
-                      )}
+                    {/* Entrada 1 */}
+                    <div className="px-2 py-2.5 text-center">{T(rec?.entrada1)}</div>
+                    {/* Saída 1 */}
+                    <div className="px-2 py-2.5 text-center">{T(rec?.saida1)}</div>
+                    {/* Entrada 2 */}
+                    <div className="px-2 py-2.5 text-center">{T(rec?.entrada2)}</div>
+                    {/* Saída 2 */}
+                    <div className="px-2 py-2.5 text-center">{T(rec?.saida2)}</div>
+                    {/* Turno 3 combinado */}
+                    <div className="px-2 py-2.5 text-center">
+                      {rec?.entrada3 || rec?.saida3
+                        ? <span className="font-mono text-xs text-slate-600">{rec?.entrada3 || "—"} / {rec?.saida3 || "—"}</span>
+                        : <span className="text-slate-200 text-sm">—</span>}
                     </div>
 
-                    {/* Horas Trabalhadas */}
-                    <div className="px-3 py-2.5 flex items-center justify-end">
+                    {/* Total */}
+                    <div className="px-2 py-2.5 text-center">
                       {rec?.horasTrabalhadas && rec.horasTrabalhadas !== "0:00" && rec.horasTrabalhadas !== ""
-                        ? <span className="font-mono text-sm font-semibold text-slate-700">{rec.horasTrabalhadas}</span>
-                        : <span className="text-sm text-slate-300">—</span>}
+                        ? <span className="font-mono text-sm font-bold text-slate-700">{rec.horasTrabalhadas}</span>
+                        : <span className="text-slate-300 text-sm">—</span>}
                     </div>
 
                     {/* HE */}
-                    <div className="px-3 py-2.5 flex items-center justify-center">
+                    <div className="px-2 py-2.5 text-center">
                       {heM > 0
-                        ? <span className="font-mono text-sm font-bold text-sky-600">+{minsToHHMM(heM)}</span>
-                        : <span className="text-sm text-slate-200">—</span>}
+                        ? <span className="font-mono text-sm font-bold text-blue-600">+{minsToHHMM(heM)}</span>
+                        : atrasM > 0
+                          ? <span className="font-mono text-xs text-amber-600">-{minsToHHMM(atrasM)}</span>
+                          : <span className="text-slate-200 text-sm">—</span>}
                     </div>
 
                     {/* Ocorrência */}
-                    <div className="px-4 py-2.5 flex items-center justify-center">
-                      {s === "normal" ? null : (
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${cfg.pill}`}>
-                          {s === "atraso" ? `Atraso ${minsToHHMM(atrasM)}` : cfg.label}
-                        </span>
+                    <div className="px-2 py-2.5 flex items-center justify-center">
+                      {cfg.badge
+                        ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg.badge}`}>{cfg.label}</span>
+                        : <span className="text-[10px] text-slate-300">{isWeekend ? cfg.label : ""}</span>}
+                    </div>
+
+                    {/* Editar — oculto na impressão */}
+                    <div className="px-1 py-2.5 flex items-center justify-center no-print">
+                      {!isWeekend && (
+                        <button
+                          onClick={() => openEdit(dateStr, rec)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+                          title="Editar este dia"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                       )}
                     </div>
                   </div>
                 );
               })}
 
-              {/* Footer totais */}
-              <div className="grid grid-cols-[4.5rem_1fr_5.5rem_5.5rem_7rem] bg-slate-50 border-t-2 border-slate-200">
-                <div className="px-4 py-3 col-span-2 flex items-center">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total do período</span>
+              {/* TOTAIS */}
+              <div className="grid bg-slate-50 border-t-2 border-slate-200 font-semibold"
+                style={{ gridTemplateColumns: "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem" }}>
+                <div className="px-4 py-3 col-span-6 flex items-center">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total do Período</span>
                 </div>
-                <div className="px-3 py-3 flex items-center justify-end">
-                  <span className="font-mono text-sm font-bold text-slate-700">{minsToHHMM(totalHorasTrabMins)}</span>
+                <div className="px-2 py-3 text-center">
+                  <span className="font-mono text-sm font-black text-slate-700">{minsToHHMM(summary.totalTrabMins, "0h00")}</span>
                 </div>
-                <div className="px-3 py-3 flex items-center justify-center">
-                  <span className={`font-mono text-sm font-bold ${summary.totalHEMins > 0 ? "text-sky-600" : "text-slate-300"}`}>
+                <div className="px-2 py-3 text-center">
+                  <span className={`font-mono text-sm font-black ${summary.totalHEMins > 0 ? "text-blue-600" : "text-slate-300"}`}>
                     {summary.totalHEMins > 0 ? `+${minsToHHMM(summary.totalHEMins)}` : "—"}
                   </span>
                 </div>
-                <div className="px-4 py-3 flex items-center justify-center flex-col gap-0.5">
-                  {summary.diasFalta > 0 && <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-red-100 text-red-700">{summary.diasFalta} falta(s)</span>}
-                  {summary.totalAtrasoMins > 0 && <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-100 text-amber-700">Atr. {minsToHHMM(summary.totalAtrasoMins)}</span>}
-                  {summary.diasFalta === 0 && summary.totalAtrasoMins === 0 && <span className="text-[10px] text-slate-400">—</span>}
+                <div className="px-2 py-3 col-span-2 flex items-center gap-1 flex-wrap">
+                  {summary.diasFalta > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{summary.diasFalta} falta(s)</span>}
+                  {summary.totalAtrasoMins > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Atr. {minsToHHMM(summary.totalAtrasoMins)}</span>}
+                  {summary.diasFalta === 0 && summary.totalAtrasoMins === 0 && <span className="text-[10px] text-slate-400">Sem ocorrências</span>}
                 </div>
               </div>
             </div>
 
-            {/* ── DEMONSTRATIVO HE ─────────────────────────────────── */}
-            {heDays.length > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
-                  <Info className="h-4 w-4 text-sky-500" />
-                  <span className="text-sm font-semibold text-slate-700">Demonstrativo de Hora Extra</span>
-                  <span className="ml-auto text-xs text-slate-400">{heDays.length} dia(s) com HE no período</span>
-                </div>
-                <div className="divide-y divide-slate-50">
-                  {heDays.map(({ date, mins }) => {
-                    const rec = recordMap[date];
-                    const { name, num, month } = dayInfo(date);
-                    const batidas = rec ? getBatidas(rec) : [];
-                    const trabM = parseHHMM(rec?.horasTrabalhadas);
-                    const normM = Math.max(0, trabM - mins);
-                    return (
-                      <div key={date} className="grid grid-cols-[7rem_1fr_6rem_6rem_6rem] gap-0 px-5 py-2.5 bg-sky-50/20 hover:bg-sky-50/40 transition-colors text-sm">
-                        <div className="font-medium text-slate-700">{name}, {num}/{month}</div>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {batidas.map((b, i) => (
-                            <span key={i} className="font-mono text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{b}</span>
-                          ))}
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block">Normal</span>
-                          <span className="font-mono text-xs font-semibold text-slate-600">{minsToHHMM(normM)}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block">HE</span>
-                          <span className="font-mono text-xs font-bold text-sky-600">+{minsToHHMM(mins)}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400 block">Total</span>
-                          <span className="font-mono text-xs font-semibold text-slate-700">{rec?.horasTrabalhadas || "—"}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {/* HE subtotal */}
-                  <div className="grid grid-cols-[7rem_1fr_6rem_6rem_6rem] gap-0 px-5 py-2.5 bg-slate-50 text-xs">
-                    <div className="col-span-3 font-semibold text-slate-500 uppercase tracking-wider text-[10px] flex items-center">Total de HE no período</div>
-                    <div className="text-right font-mono font-black text-sky-600">{minsToHHMM(summary.totalHEMins)}</div>
-                    <div />
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* ── ASSINATURAS ──────────────────────────────────────── */}
-            <div className="grid grid-cols-3 gap-10 mt-8 pt-4">
+            <div className="grid grid-cols-3 gap-10 mt-6 pt-4">
               {["Assinatura da Diretoria","Assinatura da Chefia Imediata","Assinatura do Funcionário"].map(l => (
                 <div key={l} className="text-center">
                   <div className="border-b border-slate-300 mb-2 pb-10" />

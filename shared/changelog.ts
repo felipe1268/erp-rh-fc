@@ -4021,6 +4021,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 647,
+    titulo: "Espelho de Ponto — redesign didático + edição integrada ao Fechamento de Ponto",
+    descricao: "Redesign completo do Espelho de Ponto com foco em legibilidade: (1) Layout de cartão de ponto clássico com colunas separadas por turno (Entrada 1, Saída 1, Entrada 2, Saída 2, Ent/Saí 3, Total, H. Extra, Ocorrência); (2) Ícone de lápis por linha (aparece no hover) — abre modal de edição inline para correção de qualquer dia; (3) Edição via trpc.fechamentoPonto.manualEntry — mesmo endpoint do módulo Fechamento de Ponto, garantindo integridade dos dados (ajuste manual sobrescreve DIXI, atualiza inconsistências); (4) Modal com 3 turnos, motivo do ajuste, observação e alerta sobre o ajuste manual; (5) Após salvar, dados são recarregados automaticamente; (6) Legenda integrada no cabeçalho da tabela; (7) Coluna H. Extra mostra atrasos negativos em âmbar quando aplicável.",
+    tipo: "melhoria",
+    modulos: "Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 646,
     titulo: "Módulo Hora Extra — tabelas he_periods, he_period_employees, banco_horas",
     descricao: "Implementação completa do módulo HE como entidade separada da Folha/Vale: (1) Criadas tabelas he_periods (períodos de HE com status calculado→aprovado→pago→cancelado), he_period_employees (HE por funcionário com destinação pagamento/banco_horas), banco_horas_saldo (saldo de banco de horas por funcionário), banco_horas_lancamentos (histórico de créditos e débitos); (2) Router horasExtrasRouter com endpoints: calcularHE (detecção de sobreposição de períodos), listarPeriods, getDetalhe, aprovar, marcarPago, cancelar, setDestinacao, setDestinacaoMassa, aprovarComDestinacao, getSaldoBanco, getLancamentos, debitarBanco, getAlertasExpiracao; (3) simularPagamento: HE removida do cálculo (valorHE=0) — HE é agora módulo autônomo; (4) Esquema Drizzle atualizado com as 4 novas tabelas. Frontend: módulo he_modulo já existente no FolhaPagamento.tsx com sub-tabs Períodos HE e Banco de Horas.",
