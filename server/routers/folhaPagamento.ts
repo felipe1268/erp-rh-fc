@@ -1852,7 +1852,7 @@ export const folhaPagamentoRouter = router({
           eq(systemCriteria.categoria, 'horas_extras')
         ));
       const criterioMap = new Map(criteriosHE.map(c => [c.chave, c.valor]));
-      const pctDiasUteis = parseFloat(criterioMap.get('he_dias_uteis') || '50');
+      const pctDiasUteis = parseFloat(criterioMap.get('he_dias_uteis') || '60');
       const pctDomFeriados = parseFloat(criterioMap.get('he_domingos_feriados') || '100');
 
       // Buscar salário/hora da folha (mais preciso que cadastro)

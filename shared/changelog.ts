@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 670,
+    titulo: "Horas Extras — regra 60% seg–sáb / 100% domingo aplicada em todas as empresas",
+    descricao: "Corrigida classificação do sábado em horasExtras.ts: antes era agrupado com domingo (HE 100%), agora vai para grupo de dias úteis (HE 60%). Default de fallback em folhaPagamento.ts corrigido de 50% para 60%. Banco de dados atualizado: todas as 4 empresas (60002, 60004, 60005, 90001) agora com he_dias_uteis=60 e he_domingos_feriados=100.",
+    tipo: "feature",
+    modulos: "Horas Extras, Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 669,
     titulo: "Espelho de Ponto — edição liberada para sábado e domingo",
     descricao: "Botão de editar (lápis) e células de horário clicáveis agora disponíveis para todos os dias, incluindo sábados e domingos. Antes, a condição !isWeekend bloqueava a edição nesses dias.",

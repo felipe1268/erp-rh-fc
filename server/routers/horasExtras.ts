@@ -94,8 +94,8 @@ async function computeHEForPeriod(
     const heMins = Math.max(0, trabMins - expectedMins);
     if (heMins <= 0) continue;
 
-    // Domingo (0) e Sábado (6) → percentual de fim de semana/feriado
-    if (dow === 6 || dow === 0) {
+    // Apenas domingo (0) → HE 100%. Sábado (6) e dias úteis → HE 60%
+    if (dow === 0) {
       heFimMap.set(empId, (heFimMap.get(empId) || 0) + heMins);
     } else {
       heUtilMap.set(empId, (heUtilMap.get(empId) || 0) + heMins);
