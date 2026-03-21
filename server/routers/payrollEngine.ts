@@ -1155,7 +1155,9 @@ export const payrollEngineRouter = router({
 
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
-        const salarioBruto = valorHora * criteria.cargaHorariaDiaria * diasUteis;
+        // CLT horista: salário = valorHora × horasMensais (padrão 220h — convenção legal CLT)
+        const horasMensais = emp.horasMensais ? Number(emp.horasMensais) : 220;
+        const salarioBruto = valorHora * horasMensais;
         const percentual = criteria.percentualAdiantamento;
         const valorAdiantamento = salarioBruto * (percentual / 100);
         const faltas = faltasMap.get(emp.id) || 0;
@@ -1539,7 +1541,9 @@ export const payrollEngineRouter = router({
 
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
-        const salarioBruto = valorHora * criteria.cargaHorariaDiaria * diasUteis;
+        // CLT horista: salário = valorHora × horasMensais (padrão 220h — convenção legal CLT)
+        const horasMensaisEmp = emp.horasMensais ? Number(emp.horasMensais) : 220;
+        const salarioBruto = valorHora * horasMensaisEmp;
         // HE = 0 — Hora Extra é módulo separado (he_periods)
         const valorHE = 0;
         const totalProventos = salarioBruto;
