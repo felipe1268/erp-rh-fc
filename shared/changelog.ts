@@ -4119,4 +4119,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-21 00:00:00",
   },
+  {
+    version: 664,
+    titulo: "Módulo PJ: auto-fill CNPJ/Razão Social, botão Gerar Contrato, campo Motivo, revisões ISO e aba de histórico",
+    descricao: "Schema: adicionados campos revisao (varchar 10, default '01') e revisao_motivo (text) em pj_contracts; criada tabela pj_contract_revisoes com contractId, revisaoNum, motivo, snapshot (JSON), criadoPor, criadoEm. Backend: create now sets revisao='01' e cria registro inicial de revisão; update incrementa revisão automaticamente ao detectar mudança em campos relevantes (CNPJ, valor, datas, objeto), salva snapshot do contrato anterior e registra motivo; novos procedures getLastByEmployee (retorna último contrato do prestador para auto-fill) e revisoes.list (histórico cronológico); list e getById agora retornam revisao e revisaoMotivo. Frontend: auto-fill de CNPJ/Razão Social e Objeto do Contrato ao selecionar prestador (via useEffect + getLastByEmployee, sem sobrescrever valores já preenchidos); campo 'Motivo da Alteração (Revisão ISO)' exibido no formulário de edição; banner verde pós-criação com botão 'Gerar / Imprimir Contrato'; coluna Rev. (ex: Rev.01) na tabela de contratos; aba 'Revisões ISO' no dialog de detalhes com timeline vertical mostrando revisaoNum, motivo, autor e data de cada alteração; dica de localização do template: server/routers/pjContracts.ts → MODELO_CONTRATO_PJ.",
+    tipo: "feature",
+    modulos: "Módulo PJ",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
 ];

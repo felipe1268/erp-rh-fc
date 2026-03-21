@@ -1,7 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { pjContracts, pjPayments, pjDocumentos, employees, companies } from "../../drizzle/schema";
+import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, employees, companies } from "../../drizzle/schema";
 import { eq, and, sql, isNull, desc, asc, lte, gte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -205,6 +205,7 @@ export const pjContractsRouter = router({
           status: pjContracts.status,
           alertaVencimentoEnviado: pjContracts.alertaVencimentoEnviado,
           observacoes: pjContracts.observacoes,
+          revisao: pjContracts.revisao,
           createdAt: pjContracts.createdAt,
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
@@ -244,6 +245,8 @@ export const pjContractsRouter = router({
           status: pjContracts.status,
           contratoAnteriorId: pjContracts.contratoAnteriorId,
           observacoes: pjContracts.observacoes,
+          revisao: pjContracts.revisao,
+          revisaoMotivo: pjContracts.revisaoMotivo,
           createdAt: pjContracts.createdAt,
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
@@ -404,7 +407,7 @@ export const pjContractsRouter = router({
           .where(companyFilter(pjContracts.companyId, input));
         const numero = `PJ-${ano}-${String((countResult?.total || 0) + 1).padStart(4, '0')}`;
         
-        const inserted = await db.insert(pjContracts).values({
+        const [inserted] = await db.insert(pjContracts).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
           numeroContrato: numero,
@@ -420,12 +423,24 @@ export const pjContractsRouter = router({
           diaAdiantamento: input.diaAdiantamento,
           diaFechamento: input.diaFechamento,
           status: 'pendente_assinatura',
+          revisao: '01',
           criadoPor: ctx.user.name ?? 'Sistema',
           criadoPorUserId: ctx.user.id,
           observacoes: input.observacoes || null,
-        }).returning({ id: pjContracts.id });
+        }).returning({ id: pjContracts.id, employeeId: pjContracts.employeeId, companyId: pjContracts.companyId });
+
+        // Criar registro inicial de revisão ISO
+        await db.insert(pjContractRevisoes).values({
+          contractId: inserted.id,
+          companyId: inserted.companyId,
+          employeeId: inserted.employeeId,
+          revisaoNum: '01',
+          motivo: 'Criação do contrato',
+          criadoPor: ctx.user.name ?? 'Sistema',
+          criadoPorUserId: ctx.user.id,
+        });
         
-        return { success: true, id: inserted[0]?.id, numeroContrato: numero };
+        return { success: true, id: inserted.id, numeroContrato: numero };
       }),
 
     update: protectedProcedure
@@ -445,14 +460,46 @@ export const pjContractsRouter = router({
         tipoAssinatura: z.string().optional(),
         status: z.string().optional(),
         observacoes: z.string().optional(),
+        motivoAlteracao: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        const { id, ...rest } = input;
+        const { id, motivoAlteracao, ...rest } = input;
+
+        // Buscar contrato atual para snapshot e revisão
+        const [atual] = await db.select().from(pjContracts).where(eq(pjContracts.id, id));
+        if (!atual) throw new TRPCError({ code: "NOT_FOUND" });
+
         const updateData: any = {};
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
+
+        // Incrementar revisão ISO somente se houve alteração de campos relevantes (exceto status simples)
+        const camposRelevantes = ['cnpjPrestador','razaoSocialPrestador','objetoContrato','dataInicio','dataFim','valorMensal','percentualAdiantamento','percentualFechamento','diaAdiantamento','diaFechamento','observacoes'];
+        const houveMudancaRelevante = camposRelevantes.some(c => updateData[c] !== undefined && updateData[c] !== (atual as any)[c]);
+
+        let novaRevisao = atual.revisao || '01';
+        if (houveMudancaRelevante || motivoAlteracao) {
+          const numAtual = parseInt(novaRevisao || '01', 10);
+          novaRevisao = String(numAtual + 1).padStart(2, '0');
+          updateData.revisao = novaRevisao;
+          if (motivoAlteracao) updateData.revisaoMotivo = motivoAlteracao;
+
+          // Criar registro de revisão ISO
+          await db.insert(pjContractRevisoes).values({
+            contractId: id,
+            companyId: atual.companyId,
+            employeeId: atual.employeeId,
+            revisaoNum: novaRevisao,
+            motivo: motivoAlteracao || 'Atualização de contrato',
+            snapshot: JSON.stringify(atual),
+            criadoPor: ctx.user.name ?? 'Sistema',
+            criadoPorUserId: ctx.user.id,
+          });
+        }
+
+        updateData.updatedAt = sql`NOW()`;
         await db.update(pjContracts).set(updateData).where(eq(pjContracts.id, id));
-        return { success: true };
+        return { success: true, revisao: novaRevisao };
       }),
 
     /** Upload contrato assinado */
@@ -531,6 +578,44 @@ export const pjContractsRouter = router({
           deletedByUserId: ctx.user.id,
         } as any).where(eq(pjContracts.id, input.id));
         return { success: true };
+      }),
+
+    /** Buscar último contrato do prestador (para auto-preenchimento de CNPJ/Razão Social) */
+    getLastByEmployee: protectedProcedure
+      .input(z.object({ employeeId: z.number(), companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const [row] = await db.select({
+          cnpjPrestador: pjContracts.cnpjPrestador,
+          razaoSocialPrestador: pjContracts.razaoSocialPrestador,
+          objetoContrato: pjContracts.objetoContrato,
+          valorMensal: pjContracts.valorMensal,
+          percentualAdiantamento: pjContracts.percentualAdiantamento,
+          percentualFechamento: pjContracts.percentualFechamento,
+          diaAdiantamento: pjContracts.diaAdiantamento,
+          diaFechamento: pjContracts.diaFechamento,
+        })
+        .from(pjContracts)
+        .where(and(
+          eq(pjContracts.employeeId, input.employeeId),
+          eq(pjContracts.companyId, input.companyId),
+          isNull(pjContracts.deletedAt),
+        ))
+        .orderBy(desc(pjContracts.createdAt))
+        .limit(1);
+        return row || null;
+      }),
+
+    /** Listar revisões ISO de um contrato */
+    revisoes: protectedProcedure
+      .input(z.object({ contractId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const rows = await db.select()
+          .from(pjContractRevisoes)
+          .where(eq(pjContractRevisoes.contractId, input.contractId))
+          .orderBy(desc(pjContractRevisoes.criadoEm));
+        return rows;
       }),
   }),
 

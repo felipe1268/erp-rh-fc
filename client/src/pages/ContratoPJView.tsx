@@ -307,6 +307,9 @@ export default function ContratoPJView() {
             <div className="text-right">
               <p className="text-[9pt] text-gray-400">Contrato nº</p>
               <p className="text-[11pt] font-bold text-blue-900">{contrato.numeroContrato || "S/N"}</p>
+              {(contrato as any).revisao && (
+                <p className="text-[9pt] text-gray-400 mt-1">Rev. {(contrato as any).revisao}</p>
+              )}
             </div>
           </div>
 

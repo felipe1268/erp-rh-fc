@@ -21,7 +21,7 @@ import {
   Users, TrendingUp, FileSignature, Ban, Printer, Upload, FolderOpen,
   ExternalLink, File,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 
 function formatDate(d: string | null | undefined) {
@@ -73,6 +73,8 @@ export default function ModuloPJ() {
   const [detailTab, setDetailTab] = useState("info");
   const [novoDocNome, setNovoDocNome] = useState("");
   const [novoDocTipo, setNovoDocTipo] = useState("outro");
+  const [motivoAlteracao, setMotivoAlteracao] = useState("");
+  const [createdContratoId, setCreatedContratoId] = useState<number | null>(null);
 
   // Mês referência para pagamentos
   const now = new Date();
@@ -109,11 +111,11 @@ export default function ModuloPJ() {
 
   // Mutations
   const createContrato = trpc.pj.contratos.create.useMutation({
-    onSuccess: (data: any) => { refetchContratos(); toast.success(`Contrato ${data.numeroContrato} criado!`); setShowContratoDialog(false); setForm({}); },
+    onSuccess: (data: any) => { refetchContratos(); toast.success(`Contrato ${data.numeroContrato} criado!`); setCreatedContratoId(data.id); setForm({}); },
     onError: (e: any) => toast.error(e.message),
   });
   const updateContrato = trpc.pj.contratos.update.useMutation({
-    onSuccess: () => { refetchContratos(); toast.success("Contrato atualizado!"); setShowContratoDialog(false); setEditingContratoId(null); setForm({}); },
+    onSuccess: (data: any) => { refetchContratos(); toast.success(`Contrato atualizado! (Rev. ${data.revisao || '—'})`); setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); },
     onError: (e: any) => toast.error(e.message),
   });
   const deleteContrato = trpc.pj.contratos.delete.useMutation({
@@ -157,6 +159,28 @@ export default function ModuloPJ() {
   const deleteDocPJ = trpc.pj.documentos.delete.useMutation({
     onSuccess: () => { refetchDocs(); toast.success("Documento removido!"); },
   });
+
+  // Auto-fill: último contrato do prestador selecionado (para preencher CNPJ/Razão Social)
+  const { data: lastContratoData } = trpc.pj.contratos.getLastByEmployee.useQuery(
+    { employeeId: form.employeeId || 0, companyId },
+    { enabled: !!form.employeeId && !editingContratoId && companyId > 0 }
+  );
+  useEffect(() => {
+    if (!editingContratoId && form.employeeId && lastContratoData) {
+      setForm((prev: any) => ({
+        ...prev,
+        cnpjPrestador: prev.cnpjPrestador || lastContratoData.cnpjPrestador || "",
+        razaoSocialPrestador: prev.razaoSocialPrestador || lastContratoData.razaoSocialPrestador || "",
+        objetoContrato: prev.objetoContrato || lastContratoData.objetoContrato || "",
+      }));
+    }
+  }, [lastContratoData]);
+
+  // Revisões ISO do contrato em detalhe
+  const { data: revisoes = [] } = trpc.pj.contratos.revisoes.useQuery(
+    { contractId: selectedContrato?.id || 0 },
+    { enabled: showDetailDialog && !!selectedContrato?.id && detailTab === "revisoes" }
+  );
 
   // Relatório PJ para exportação PDF
   const { data: relatorio } = trpc.pj.relatorioPJ.useQuery(
@@ -265,6 +289,8 @@ export default function ModuloPJ() {
 
   const openEditContrato = (c: any) => {
     setEditingContratoId(c.id);
+    setMotivoAlteracao("");
+    setCreatedContratoId(null);
     setForm({
       employeeId: c.employeeId,
       cnpjPrestador: c.cnpjPrestador || "",
@@ -303,6 +329,7 @@ export default function ModuloPJ() {
         diaAdiantamento: form.diaAdiantamento || 15,
         diaFechamento: form.diaFechamento || 5,
         observacoes: form.observacoes,
+        motivoAlteracao: motivoAlteracao || undefined,
       });
     } else {
       if (!form.employeeId) { toast.error("Selecione o prestador"); return; }
@@ -445,7 +472,7 @@ export default function ModuloPJ() {
                   <SelectItem value="encerrado">Encerrado</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={() => { setForm({}); setShowContratoDialog(true); }}>
+              <Button onClick={() => { setForm({}); setCreatedContratoId(null); setMotivoAlteracao(""); setEditingContratoId(null); setShowContratoDialog(true); }}>
                 <Plus className="h-4 w-4 mr-2" /> Novo Contrato
               </Button>
             </div>
@@ -457,6 +484,7 @@ export default function ModuloPJ() {
                     <thead>
                       <tr className="border-b bg-muted/30">
                         <th className="p-3 text-left font-medium">Nº Contrato</th>
+                        <th className="p-3 text-center font-medium">Rev.</th>
                         <th className="p-3 text-left font-medium">Prestador</th>
                         <th className="p-3 text-left font-medium">CNPJ</th>
                         <th className="p-3 text-left font-medium">Vigência</th>
@@ -468,12 +496,15 @@ export default function ModuloPJ() {
                     </thead>
                     <tbody>
                       {filtered.length === 0 ? (
-                        <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">Nenhum contrato encontrado</td></tr>
+                        <tr><td colSpan={9} className="py-12 text-center text-muted-foreground">Nenhum contrato encontrado</td></tr>
                       ) : filtered.map((c: any) => {
                         const st = STATUS_CONTRATO[c.status] || STATUS_CONTRATO.ativo;
                         return (
                           <tr key={c.id} className="border-b last:border-0 hover:bg-muted/20">
                             <td className="p-3 font-mono text-xs font-semibold">{c.numeroContrato}</td>
+                            <td className="p-3 text-center">
+                              <span className="text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">Rev.{c.revisao || '01'}</span>
+                            </td>
                             <td className="p-3">
                               <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(c.employeeId)}>{c.employeeName}</div>
                               <div className="text-xs text-muted-foreground">{c.razaoSocialPrestador || c.employeeCargo}</div>
@@ -650,6 +681,7 @@ export default function ModuloPJ() {
                   <TabsTrigger value="info" className="flex-1">Informações</TabsTrigger>
                   <TabsTrigger value="assinatura" className="flex-1">Contrato Assinado</TabsTrigger>
                   <TabsTrigger value="documentos" className="flex-1"><FolderOpen className="h-3.5 w-3.5 mr-1" />Documentos</TabsTrigger>
+                  <TabsTrigger value="revisoes" className="flex-1">Revisões ISO</TabsTrigger>
                 </TabsList>
 
                 {/* Aba Info */}
@@ -833,13 +865,58 @@ export default function ModuloPJ() {
                     )}
                   </div>
                 </TabsContent>
+
+                {/* Aba Revisões ISO */}
+                <TabsContent value="revisoes" className="space-y-4 mt-4">
+                  <div className="border rounded-lg p-5 space-y-4">
+                    <div>
+                      <p className="text-sm font-semibold">Controle de Revisões ISO</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Histórico de todas as revisões do contrato conforme padrão ISO. Cada alteração relevante gera uma nova revisão numerada.</p>
+                    </div>
+                    {(revisoes as any[]).length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        <RefreshCw className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        Nenhuma revisão registrada
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {(revisoes as any[]).map((rev: any, i: number) => (
+                          <div key={rev.id} className={`flex gap-4 p-3 rounded-lg border ${i === 0 ? "bg-blue-50 border-blue-200" : "bg-muted/20 border-transparent"}`}>
+                            <div className="shrink-0 flex flex-col items-center">
+                              <div className={`text-xs font-bold font-mono px-2 py-1 rounded ${i === 0 ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"}`}>
+                                Rev.{rev.revisaoNum}
+                              </div>
+                              {i < (revisoes as any[]).length - 1 && <div className="w-px flex-1 bg-gray-200 mt-2" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium">{rev.motivo || "Alteração de contrato"}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {rev.criadoPor} — {rev.criadoEm ? new Date(rev.criadoEm).toLocaleString("pt-BR") : "-"}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="pt-2 border-t">
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-medium">Revisão atual:</span>{" "}
+                        <span className="font-mono font-bold text-blue-700">Rev.{selectedContrato?.revisao || '01'}</span>
+                        {selectedContrato?.revisaoMotivo && <span className="ml-2 text-gray-500">— {selectedContrato.revisaoMotivo}</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Modelo do contrato: <code className="bg-muted px-1 rounded text-xs">server/routers/pjContracts.ts → MODELO_CONTRATO_PJ</code>
+                      </p>
+                    </div>
+                  </div>
+                </TabsContent>
               </Tabs>
             </div>
           </FullScreenDialog>
         )}
 
         {/* Create Contrato Dialog */}
-        <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); }} title={editingContratoId ? "Editar Contrato PJ" : "Novo Contrato PJ"} icon={<FileSignature className="h-5 w-5 text-white" />}>
+        <FullScreenDialog open={showContratoDialog} onClose={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); setCreatedContratoId(null); }} title={editingContratoId ? "Editar Contrato PJ" : "Novo Contrato PJ"} icon={<FileSignature className="h-5 w-5 text-white" />}>
           <div className="w-full max-w-3xl mx-auto">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
@@ -968,15 +1045,48 @@ export default function ModuloPJ() {
                 <label className="text-sm font-medium">Observações</label>
                 <Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} rows={2} />
               </div>
+
+              {/* Campo Motivo da Alteração (somente ao editar) */}
+              {editingContratoId && (
+                <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <label className="text-sm font-medium text-amber-800">Motivo da Alteração (Revisão ISO)</label>
+                  <p className="text-xs text-amber-600 mb-2">Descreva o motivo desta alteração. Ao salvar, uma nova revisão será gerada automaticamente.</p>
+                  <Input
+                    value={motivoAlteracao}
+                    onChange={e => setMotivoAlteracao(e.target.value)}
+                    placeholder="Ex: Reajuste de valor mensal, correção de data de vencimento..."
+                    className="bg-white"
+                  />
+                </div>
+              )}
             </div>
 
+            {/* Banner pós-criação: botão Gerar Contrato */}
+            {createdContratoId && !editingContratoId && (
+              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-green-800 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" /> Contrato criado com sucesso!
+                  </p>
+                  <p className="text-xs text-green-600 mt-0.5">Visualize, imprima e assine o contrato gerado. Depois, envie o arquivo assinado pelo botão "Detalhes".</p>
+                </div>
+                <Button variant="default" className="shrink-0 bg-green-700 hover:bg-green-800" onClick={() => window.open(`/contrato-pj/${createdContratoId}`, "_blank")}>
+                  <FileText className="h-4 w-4 mr-2" /> Gerar / Imprimir Contrato
+                </Button>
+              </div>
+            )}
+
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); }}>Cancelar</Button>
-              <Button onClick={handleSubmitContrato} disabled={createContrato.isPending || updateContrato.isPending}>
-                {createContrato.isPending || updateContrato.isPending
-                  ? "Salvando..."
-                  : editingContratoId ? "Salvar Alterações" : "Criar Contrato"}
+              <Button variant="outline" onClick={() => { setShowContratoDialog(false); setEditingContratoId(null); setForm({}); setMotivoAlteracao(""); setCreatedContratoId(null); }}>
+                {createdContratoId ? "Fechar" : "Cancelar"}
               </Button>
+              {!createdContratoId && (
+                <Button onClick={handleSubmitContrato} disabled={createContrato.isPending || updateContrato.isPending}>
+                  {createContrato.isPending || updateContrato.isPending
+                    ? "Salvando..."
+                    : editingContratoId ? "Salvar Alterações" : "Criar Contrato"}
+                </Button>
+              )}
             </div>
           </div>
         </FullScreenDialog>

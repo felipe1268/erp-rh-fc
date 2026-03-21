@@ -2171,6 +2171,8 @@ export const pjContracts = pgTable("pj_contracts", {
         alertaVencimentoEnviado: smallint().default(0),
         contratoAnteriorId: integer(),
         observacoes: text(),
+        revisao: varchar({ length: 10 }).default('01'),
+        revisaoMotivo: text(),
         criadoPor: varchar({ length: 255 }),
         criadoPorUserId: integer(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
@@ -2184,6 +2186,23 @@ export const pjContracts = pgTable("pj_contracts", {
         index("pjc_employee").on(table.employeeId),
         index("pjc_status").on(table.status),
         index("pjc_vencimento").on(table.dataFim),
+]);
+
+export const pjContractRevisoes = pgTable("pj_contract_revisoes", {
+        id: serial().notNull(),
+        contractId: integer().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        revisaoNum: varchar({ length: 10 }).notNull(),
+        motivo: text(),
+        snapshot: text(),
+        criadoPor: varchar({ length: 255 }),
+        criadoPorUserId: integer(),
+        criadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("pjcr_contract").on(table.contractId),
+        index("pjcr_company").on(table.companyId),
 ]);
 
 export const pjMedicoes = pgTable("pj_medicoes", {
