@@ -717,8 +717,8 @@ export default function Ferias() {
                             </td>
                             <td className="p-3">
                               <div className="flex items-center justify-center gap-1">
-                                {(f.status === "pendente" || f.status === "vencida") && (
-                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Definir Data" onClick={() => handleDefinirData(f)}>
+                                {(f.status === "pendente" || f.status === "vencida" || f.status === "em_gozo") && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Editar período de férias" onClick={() => handleDefinirData(f)}>
                                     <PenLine className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
