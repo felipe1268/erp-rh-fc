@@ -1606,14 +1606,14 @@ export default function Ferias() {
               {(() => {
                 const bruto = parseFloat(selectedItem.valorTotal || "0");
                 if (!bruto) return null;
-                // Tabela INSS progressiva 2025
+                // Tabela INSS progressiva 2025 — Portaria Interministerial MPS/MF nº 6/2025 (DOU 13/01/2025)
                 const FAIXAS = [
-                  { de: 0,       ate: 1412.00, aliq: 0.075, label: "1ª faixa" },
-                  { de: 1412.00, ate: 2666.68, aliq: 0.09,  label: "2ª faixa" },
-                  { de: 2666.68, ate: 4000.03, aliq: 0.12,  label: "3ª faixa" },
-                  { de: 4000.03, ate: 7786.02, aliq: 0.14,  label: "4ª faixa" },
+                  { de: 0,       ate: 1518.00, aliq: 0.075, label: "1ª faixa" },
+                  { de: 1518.00, ate: 2793.88, aliq: 0.09,  label: "2ª faixa" },
+                  { de: 2793.88, ate: 4190.83, aliq: 0.12,  label: "3ª faixa" },
+                  { de: 4190.83, ate: 8157.41, aliq: 0.14,  label: "4ª faixa" },
                 ];
-                const TETO = 908.86;
+                const TETO = 951.62;
                 let inssTotal = 0;
                 const linhas: { label: string; de: number; ate: number; base: number; aliq: number; valor: number; ativa: boolean }[] = [];
                 let prev = 0;
@@ -1625,7 +1625,7 @@ export default function Ferias() {
                   prev = f.ate;
                   if (bruto <= f.ate) break;
                 }
-                if (bruto > 7786.02) inssTotal = TETO;
+                if (bruto > 8157.41) inssTotal = TETO;
                 const liquido = bruto - inssTotal;
                 return (
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
@@ -1677,7 +1677,7 @@ export default function Ferias() {
                       </div>
                     </div>
 
-                    <p className="text-[10px] text-slate-400">* INSS calculado de forma progressiva sobre o total bruto de férias. Não inclui IRRF. Teto 2025: R$ 908,86. Verifique alíquota vigente.</p>
+                    <p className="text-[10px] text-slate-400">* INSS progressivo conforme Portaria Interministerial MPS/MF nº 6/2025 (DOU 13/01/2025). Teto 2025: R$ 8.157,41 → INSS máx. R$ 951,62. Não inclui IRRF.</p>
                   </div>
                 );
               })()}

@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 686,
+    titulo: "Férias — Correção tabela INSS 2025 (Portaria MPS/MF nº 6/2025)",
+    descricao: "Corrigidos os limites de faixa do INSS progressivo: eram valores de 2024 (R$1.412/2.666/4.000/7.786, teto R$908,86). Agora usam a tabela correta de 2025 publicada no DOU em 13/01/2025 (R$1.518/2.793,88/4.190,83/8.157,41, teto máximo R$951,62). O cálculo para R$3.476 cai de R$315,94 para R$310,53.",
+    tipo: "fix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 685,
     titulo: "Férias — Memória de cálculo INSS por faixa no detalhe",
     descricao: "A seção de INSS no diálogo de Detalhes agora exibe a memória de cálculo completa: tabela com as 4 faixas progressivas 2025, mostrando limite, base tributada em cada faixa, alíquota e valor calculado. Faixas inativas (acima do salário) aparecem em cinza. Facilita conferência com outros sistemas.",
