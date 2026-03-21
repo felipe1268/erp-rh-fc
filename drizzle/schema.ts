@@ -2834,6 +2834,13 @@ export const vacationPeriods = pgTable("vacation_periods", {
         valorTotal: varchar({ length: 20 }),
         ajusteInss: varchar("ajuste_inss", { length: 20 }),
         valorLiquido: varchar("valor_liquido", { length: 20 }),
+        bonusValor: varchar("bonus_valor", { length: 20 }),
+        bonusDesc: text("bonus_desc"),
+        pensaoDesconto: varchar("pensao_desconto", { length: 20 }),
+        outrosDescontos: varchar("outros_descontos", { length: 20 }),
+        outrosDescontosDesc: text("outros_descontos_desc"),
+        reciboUrl: text("recibo_url"),
+        reciboNome: varchar("recibo_nome", { length: 255 }),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataPagamento: date({ mode: 'string' }),
         status: text().default('pendente').notNull(),

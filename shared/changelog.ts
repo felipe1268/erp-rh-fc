@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 707,
+    titulo: "Férias — Acréscimos, descontos e anexo de recibo PDF",
+    descricao: "No detalhe do período de férias, adicionadas seções de Acréscimos (bônus, gratificação + descrição) e Descontos (pensão alimentícia, outros descontos + descrição). Todos os valores são deduzidos/somados ao Valor Líquido e salvos no banco. Adicionada também a possibilidade de anexar o recibo de férias da contabilidade (PDF ou imagem) com download/substituição direto no painel.",
+    tipo: "melhoria",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 706,
     titulo: "Vale — Salário horista proporcional aos dias reais do mês",
     descricao: "Implementado cálculo proporcional do salário horista: 220h é a referência para 30 dias. Meses com 28, 29 ou 31 dias são ajustados proporcionalmente (220h × diasNoMes / 30). Exemplos: Fevereiro/28 dias = 205,33h; Janeiro/Março/31 dias = 227,33h; Abril/Junho/30 dias = 220h (sem alteração). Corrigido em gerarVale e simularPagamento.",

@@ -1566,6 +1566,48 @@ export const avisoPrevioFeriasRouter = router({
         return { success: true, url };
       }),
 
+    uploadReciboFerias: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        fileBase64: z.string(),
+        mimeType: z.enum(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']),
+        fileName: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [periodo] = await db.select({ id: vacationPeriods.id, companyId: vacationPeriods.companyId })
+          .from(vacationPeriods)
+          .where(eq(vacationPeriods.id, input.id));
+        if (!periodo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Período de férias não encontrado' });
+
+        const ext = input.mimeType === 'application/pdf' ? 'pdf'
+          : input.mimeType === 'image/png' ? 'png' : 'jpg';
+        const randomSuffix = Math.random().toString(36).substring(2, 10);
+        const fileKey = `ferias/${periodo.companyId}/${input.id}/recibo-ferias-${randomSuffix}.${ext}`;
+
+        const buffer = Buffer.from(input.fileBase64, 'base64');
+        const { url } = await storagePut(fileKey, buffer, input.mimeType);
+
+        await db.execute(sql`
+          UPDATE vacation_periods SET
+            recibo_url = ${url},
+            recibo_nome = ${input.fileName},
+            "updatedAt" = NOW()
+          WHERE id = ${input.id}
+        `);
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'UPLOAD_RECIBO_FERIAS',
+          module: 'ferias',
+          entityType: 'vacationPeriods',
+          entityId: input.id,
+          details: `Recibo de férias enviado por ${ctx.user.name} — arquivo: ${input.fileName}`,
+        });
+        return { success: true, url, nome: input.fileName };
+      }),
+
     /** Gerar dados para PDF do Aviso Prévio */
     gerarPdf: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -1739,6 +1781,13 @@ export const avisoPrevioFeriasRouter = router({
           valorTotal: vacationPeriods.valorTotal,
           ajusteInss: vacationPeriods.ajusteInss,
           valorLiquido: vacationPeriods.valorLiquido,
+          bonusValor: vacationPeriods.bonusValor,
+          bonusDesc: vacationPeriods.bonusDesc,
+          pensaoDesconto: vacationPeriods.pensaoDesconto,
+          outrosDescontos: vacationPeriods.outrosDescontos,
+          outrosDescontosDesc: vacationPeriods.outrosDescontosDesc,
+          reciboUrl: vacationPeriods.reciboUrl,
+          reciboNome: vacationPeriods.reciboNome,
           numeroPeriodo: vacationPeriods.numeroPeriodo,
           dataPagamento: vacationPeriods.dataPagamento,
           status: vacationPeriods.status,
@@ -2104,6 +2153,11 @@ export const avisoPrevioFeriasRouter = router({
         valorTotal: z.string().optional(),
         ajusteInss: z.string().optional(),
         valorLiquido: z.string().optional(),
+        bonusValor: z.string().optional(),
+        bonusDesc: z.string().optional(),
+        pensaoDesconto: z.string().optional(),
+        outrosDescontos: z.string().optional(),
+        outrosDescontosDesc: z.string().optional(),
         dataPagamento: z.string().optional(),
       }))
       .mutation(async ({ input }) => {

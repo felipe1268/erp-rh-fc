@@ -349,13 +349,22 @@ export default function Ferias() {
   const [editingValues, setEditingValues] = useState(false);
   const [editValores, setEditValores] = useState<{ valorFerias: string; valorTerco: string; valorAbono: string; valorTotal: string; }>({ valorFerias: "", valorTerco: "", valorAbono: "", valorTotal: "" });
   const [inssAjuste, setInssAjuste] = useState<string>("0,00");
+  const [bonusValor, setBonusValor] = useState<string>("0,00");
+  const [bonusDesc, setBonusDesc] = useState<string>("");
+  const [pensaoDesconto, setPensaoDesconto] = useState<string>("0,00");
+  const [outrosDescontos, setOutrosDescontos] = useState<string>("0,00");
+  const [outrosDescontosDesc, setOutrosDescontosDesc] = useState<string>("");
+  const [reciboUploading, setReciboUploading] = useState(false);
 
   // Carrega ajuste salvo quando o item de férias é aberto no detalhe
   useEffect(() => {
-    if (selectedItem?.ajusteInss) {
-      setInssAjuste(selectedItem.ajusteInss);
-    } else if (selectedItem) {
-      setInssAjuste("0,00");
+    if (selectedItem) {
+      setInssAjuste(selectedItem.ajusteInss || "0,00");
+      setBonusValor(selectedItem.bonusValor || "0,00");
+      setBonusDesc(selectedItem.bonusDesc || "");
+      setPensaoDesconto(selectedItem.pensaoDesconto || "0,00");
+      setOutrosDescontos(selectedItem.outrosDescontos || "0,00");
+      setOutrosDescontosDesc(selectedItem.outrosDescontosDesc || "");
     }
   }, [selectedItem?.id]);
 
@@ -423,6 +432,14 @@ export default function Ferias() {
   });
   const updateFerias = trpc.avisoPrevio.ferias.update.useMutation({
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Férias atualizadas!"); },
+  });
+  const uploadReciboFerias = trpc.avisoPrevio.ferias.uploadReciboFerias.useMutation({
+    onSuccess: (data: any) => {
+      setSelectedItem((prev: any) => prev ? { ...prev, reciboUrl: data.url, reciboNome: data.nome } : prev);
+      refetch();
+      toast.success("Recibo anexado com sucesso!");
+    },
+    onError: (e: any) => toast.error(e.message),
   });
   const deleteFerias = trpc.avisoPrevio.ferias.delete.useMutation({
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Férias excluídas!"); },
@@ -1688,7 +1705,11 @@ export default function Ferias() {
                 const INSS_TETO = Math.max(0, TETO_BASE * 0.14 - 198.49); // R$ 988,09
                 if (bruto > TETO_BASE) inssTotal = INSS_TETO;
                 const ajusteNum = parseFloat(inssAjuste.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
-                const liquido = bruto - inssTotal + ajusteNum;
+                const parseMoeda = (v: string) => parseFloat((v || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
+                const bonusNum = parseMoeda(bonusValor);
+                const pensaoNum = parseMoeda(pensaoDesconto);
+                const outrosDescNum = parseMoeda(outrosDescontos);
+                const liquido = bruto - inssTotal + bonusNum - pensaoNum - outrosDescNum + ajusteNum;
                 return (
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
                     <p className="text-xs text-slate-500 uppercase font-semibold">Desconto INSS — Memória de Cálculo (Tabela 2026)</p>
@@ -1742,7 +1763,7 @@ export default function Ferias() {
                       );
                     })()}
 
-                    {/* Totais */}
+                    {/* Totais INSS */}
                     <div className="space-y-1 pt-1 border-t border-slate-200">
                       <div className="flex justify-between text-sm font-semibold text-red-700">
                         <span>Total INSS descontado</span>
@@ -1750,9 +1771,58 @@ export default function Ferias() {
                       </div>
                     </div>
 
-                    {/* Campo de ajuste de arredondamento — soma direta no líquido */}
+                    {/* Acréscimos (bônus, etc.) */}
+                    <div className="border border-green-200 bg-green-50 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-green-800 uppercase">Acréscimos</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-600 w-24 shrink-0">Bônus / outros:</span>
+                        <Input
+                          className="h-7 text-xs text-right w-28 border-green-300 focus:border-green-500"
+                          value={bonusValor}
+                          onChange={e => setBonusValor(e.target.value)}
+                          placeholder="0,00"
+                        />
+                        <Input
+                          className="h-7 text-xs flex-1 border-green-300 focus:border-green-500"
+                          value={bonusDesc}
+                          onChange={e => setBonusDesc(e.target.value)}
+                          placeholder="Descrição (ex: bônus, gratificação...)"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Descontos adicionais */}
+                    <div className="border border-red-200 bg-red-50 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-red-800 uppercase">Descontos</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-600 w-24 shrink-0">Pensão aliment.:</span>
+                        <Input
+                          className="h-7 text-xs text-right w-28 border-red-300 focus:border-red-500"
+                          value={pensaoDesconto}
+                          onChange={e => setPensaoDesconto(e.target.value)}
+                          placeholder="0,00"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-600 w-24 shrink-0">Outros desc.:</span>
+                        <Input
+                          className="h-7 text-xs text-right w-28 border-red-300 focus:border-red-500"
+                          value={outrosDescontos}
+                          onChange={e => setOutrosDescontos(e.target.value)}
+                          placeholder="0,00"
+                        />
+                        <Input
+                          className="h-7 text-xs flex-1 border-red-300 focus:border-red-500"
+                          value={outrosDescontosDesc}
+                          onChange={e => setOutrosDescontosDesc(e.target.value)}
+                          placeholder="Descrição (ex: adiantamento, EPI...)"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Ajuste de arredondamento */}
                     <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded p-2">
-                      <span className="text-xs text-amber-800 font-medium whitespace-nowrap">Ajuste no líquido:</span>
+                      <span className="text-xs text-amber-800 font-medium whitespace-nowrap">Ajuste arredondamento:</span>
                       <Input
                         className="h-7 text-xs text-right w-28 border-amber-300 focus:border-amber-500"
                         value={inssAjuste}
@@ -1760,17 +1830,15 @@ export default function Ferias() {
                         placeholder="0,00"
                         title="Valor somado diretamente ao líquido. Positivo aumenta, negativo reduz."
                       />
-                      <span className="text-[10px] text-amber-600 leading-tight">Somado direto ao Valor Líquido.<br/>Positivo aumenta, negativo reduz.</span>
+                      <span className="text-[10px] text-amber-600 leading-tight">Positivo aumenta, negativo reduz.</span>
                     </div>
 
                     {/* Valor Líquido */}
                     <div className="border-t border-slate-200 pt-2 space-y-1">
-                      {ajusteNum !== 0 && (
-                        <div className="flex justify-between text-sm text-amber-700">
-                          <span>Ajuste arredondamento</span>
-                          <span className="font-medium">{ajusteNum > 0 ? "+" : "−"} {formatMoeda(Math.abs(ajusteNum))}</span>
-                        </div>
-                      )}
+                      {bonusNum > 0 && <div className="flex justify-between text-xs text-green-700"><span>+ {bonusDesc || "Bônus"}</span><span>+ {formatMoeda(bonusNum)}</span></div>}
+                      {pensaoNum > 0 && <div className="flex justify-between text-xs text-red-600"><span>− Pensão alimentícia</span><span>− {formatMoeda(pensaoNum)}</span></div>}
+                      {outrosDescNum > 0 && <div className="flex justify-between text-xs text-red-600"><span>− {outrosDescontosDesc || "Outros descontos"}</span><span>− {formatMoeda(outrosDescNum)}</span></div>}
+                      {ajusteNum !== 0 && <div className="flex justify-between text-xs text-amber-700"><span>Ajuste arredondamento</span><span>{ajusteNum > 0 ? "+" : "−"} {formatMoeda(Math.abs(ajusteNum))}</span></div>}
                       <div className="flex justify-between items-center">
                         <span className="text-base font-bold text-slate-800">Valor Líquido</span>
                         <div className="flex items-center gap-3">
@@ -1780,12 +1848,29 @@ export default function Ferias() {
                             className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white px-3"
                             disabled={updateFerias.isPending}
                             onClick={() => {
-                              const ajusteStr = inssAjuste.trim() === "" || inssAjuste === "0,00" ? "0,00" : inssAjuste;
                               updateFerias.mutate(
-                                { id: selectedItem.id, ajusteInss: ajusteStr, valorLiquido: formatMoeda(liquido) },
+                                {
+                                  id: selectedItem.id,
+                                  ajusteInss: inssAjuste || "0,00",
+                                  valorLiquido: formatMoeda(liquido),
+                                  bonusValor: bonusValor || "0,00",
+                                  bonusDesc: bonusDesc || "",
+                                  pensaoDesconto: pensaoDesconto || "0,00",
+                                  outrosDescontos: outrosDescontos || "0,00",
+                                  outrosDescontosDesc: outrosDescontosDesc || "",
+                                },
                                 {
                                   onSuccess: () => {
-                                    setSelectedItem((prev: any) => prev ? { ...prev, ajusteInss: ajusteStr, valorLiquido: formatMoeda(liquido) } : prev);
+                                    setSelectedItem((prev: any) => prev ? {
+                                      ...prev,
+                                      ajusteInss: inssAjuste,
+                                      valorLiquido: formatMoeda(liquido),
+                                      bonusValor,
+                                      bonusDesc,
+                                      pensaoDesconto,
+                                      outrosDescontos,
+                                      outrosDescontosDesc,
+                                    } : prev);
                                     refetch();
                                   },
                                 }
@@ -1800,6 +1885,57 @@ export default function Ferias() {
                     </div>
 
                     <p className="text-[10px] text-slate-400">* INSS progressivo conforme Portaria Interministerial MPS/MF nº 13/2026 (DOU 09/01/2026). Teto 2026: R$ 8.475,55 → INSS máx. R$ 988,09. Não inclui IRRF.</p>
+
+                    {/* Anexo — Recibo de Férias da Contabilidade */}
+                    <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-slate-700 uppercase">Recibo de Férias (Contabilidade)</p>
+                      {selectedItem.reciboUrl ? (
+                        <div className="flex items-center gap-2">
+                          <a href={selectedItem.reciboUrl} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline font-medium">
+                            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline fill="none" stroke="white" strokeWidth="2" points="14 2 14 8 20 8"/></svg>
+                            {selectedItem.reciboNome || "Recibo.pdf"}
+                          </a>
+                          <span className="text-[10px] text-slate-400">Clique para abrir</span>
+                          <label className="ml-auto cursor-pointer text-[10px] text-slate-500 hover:text-slate-700 underline">
+                            Substituir
+                            <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setReciboUploading(true);
+                                const reader = new FileReader();
+                                reader.onload = async (ev) => {
+                                  const base64 = (ev.target?.result as string).split(",")[1];
+                                  await uploadReciboFerias.mutateAsync({ id: selectedItem.id, fileBase64: base64, mimeType: file.type as any, fileName: file.name });
+                                  setReciboUploading(false);
+                                };
+                                reader.readAsDataURL(file);
+                              }}
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <label className={`flex items-center gap-2 cursor-pointer border-2 border-dashed border-slate-300 rounded p-3 hover:border-blue-400 transition-colors ${reciboUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                          {reciboUploading ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" /> : <svg className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>}
+                          <span className="text-xs text-slate-500">{reciboUploading ? "Enviando..." : "Clique para anexar o recibo de férias (PDF, imagem)"}</span>
+                          <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setReciboUploading(true);
+                              const reader = new FileReader();
+                              reader.onload = async (ev) => {
+                                const base64 = (ev.target?.result as string).split(",")[1];
+                                await uploadReciboFerias.mutateAsync({ id: selectedItem.id, fileBase64: base64, mimeType: file.type as any, fileName: file.name });
+                                setReciboUploading(false);
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
                   </div>
                 );
               })()}
