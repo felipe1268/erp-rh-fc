@@ -1602,47 +1602,82 @@ export default function Ferias() {
                   </>
                 )}
               </div>
-              {/* INSS + Líquido */}
+              {/* INSS + Líquido — Memória de Cálculo */}
               {(() => {
                 const bruto = parseFloat(selectedItem.valorTotal || "0");
                 if (!bruto) return null;
                 // Tabela INSS progressiva 2025
-                const faixas = [
-                  { ate: 1412.00, aliq: 0.075 },
-                  { ate: 2666.68, aliq: 0.09 },
-                  { ate: 4000.03, aliq: 0.12 },
-                  { ate: 7786.02, aliq: 0.14 },
+                const FAIXAS = [
+                  { de: 0,       ate: 1412.00, aliq: 0.075, label: "1ª faixa" },
+                  { de: 1412.00, ate: 2666.68, aliq: 0.09,  label: "2ª faixa" },
+                  { de: 2666.68, ate: 4000.03, aliq: 0.12,  label: "3ª faixa" },
+                  { de: 4000.03, ate: 7786.02, aliq: 0.14,  label: "4ª faixa" },
                 ];
                 const TETO = 908.86;
-                let inss = 0;
-                let base = bruto;
+                let inssTotal = 0;
+                const linhas: { label: string; de: number; ate: number; base: number; aliq: number; valor: number; ativa: boolean }[] = [];
                 let prev = 0;
-                for (const f of faixas) {
-                  if (base <= 0) break;
-                  const slice = Math.min(bruto, f.ate) - prev;
-                  if (slice <= 0) { prev = f.ate; continue; }
-                  inss += slice * f.aliq;
+                for (const f of FAIXAS) {
+                  const slice = Math.max(0, Math.min(bruto, f.ate) - prev);
+                  const valor = slice * f.aliq;
+                  linhas.push({ label: f.label, de: f.de, ate: f.ate, base: slice, aliq: f.aliq, valor, ativa: slice > 0 });
+                  inssTotal += valor;
                   prev = f.ate;
                   if (bruto <= f.ate) break;
                 }
-                if (bruto > 7786.02) inss = TETO;
-                const liquido = bruto - inss;
+                if (bruto > 7786.02) inssTotal = TETO;
+                const liquido = bruto - inssTotal;
                 return (
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2">
-                    <p className="text-xs text-slate-500 uppercase font-semibold mb-2">Desconto INSS (Tabela 2025)</p>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">Valor Bruto</span>
-                      <span className="font-medium">{formatMoeda(bruto)}</span>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+                    <p className="text-xs text-slate-500 uppercase font-semibold">Desconto INSS — Memória de Cálculo (Tabela 2025)</p>
+
+                    {/* Linha de base */}
+                    <div className="flex justify-between text-sm border-b border-slate-200 pb-2">
+                      <span className="text-slate-600 font-medium">Valor Bruto (base de cálculo)</span>
+                      <span className="font-semibold">{formatMoeda(bruto)}</span>
                     </div>
-                    <div className="flex justify-between text-sm text-red-700">
-                      <span>Desconto INSS</span>
-                      <span className="font-medium">− {formatMoeda(inss)}</span>
+
+                    {/* Tabela de faixas */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-slate-400 border-b border-slate-200">
+                            <th className="text-left pb-1 font-medium">Faixa</th>
+                            <th className="text-right pb-1 font-medium">Limite até</th>
+                            <th className="text-right pb-1 font-medium">Base tributada</th>
+                            <th className="text-right pb-1 font-medium">Alíquota</th>
+                            <th className="text-right pb-1 font-medium">INSS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {linhas.map((l, i) => (
+                            <tr key={i} className={`border-b border-slate-100 ${l.ativa ? "text-slate-700" : "text-slate-300"}`}>
+                              <td className="py-1">{l.label}</td>
+                              <td className="text-right py-1">{formatMoeda(l.ate)}</td>
+                              <td className="text-right py-1">{l.ativa ? formatMoeda(l.base) : "—"}</td>
+                              <td className="text-right py-1">{(l.aliq * 100).toFixed(1)}%</td>
+                              <td className={`text-right py-1 font-medium ${l.ativa ? "text-red-600" : ""}`}>
+                                {l.ativa ? formatMoeda(l.valor) : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                    <div className="border-t pt-2 flex justify-between text-base font-bold text-slate-800">
-                      <span>Valor Líquido</span>
-                      <span className="text-green-700">{formatMoeda(liquido)}</span>
+
+                    {/* Totais */}
+                    <div className="space-y-1 pt-1 border-t border-slate-200">
+                      <div className="flex justify-between text-sm text-red-700">
+                        <span className="font-medium">Total INSS descontado</span>
+                        <span className="font-semibold">− {formatMoeda(inssTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-base font-bold text-slate-800 pt-1 border-t border-slate-200">
+                        <span>Valor Líquido</span>
+                        <span className="text-green-700">{formatMoeda(liquido)}</span>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1">* Desconto INSS progressivo sobre o valor bruto. Não inclui IRRF. Verifique alíquota vigente.</p>
+
+                    <p className="text-[10px] text-slate-400">* INSS calculado de forma progressiva sobre o total bruto de férias. Não inclui IRRF. Teto 2025: R$ 908,86. Verifique alíquota vigente.</p>
                   </div>
                 );
               })()}

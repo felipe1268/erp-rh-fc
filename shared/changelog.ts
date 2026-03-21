@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 685,
+    titulo: "Férias — Memória de cálculo INSS por faixa no detalhe",
+    descricao: "A seção de INSS no diálogo de Detalhes agora exibe a memória de cálculo completa: tabela com as 4 faixas progressivas 2025, mostrando limite, base tributada em cada faixa, alíquota e valor calculado. Faixas inativas (acima do salário) aparecem em cinza. Facilita conferência com outros sistemas.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 684,
     titulo: "Férias — Formatação BR nos campos de edição de valores",
     descricao: "Ao abrir o modo 'Editar Valores', os campos agora exibem os valores com formatação brasileira (ex: 3.179,00 em vez de 3179.00). O parse ao salvar já tratava vírgula corretamente.",
