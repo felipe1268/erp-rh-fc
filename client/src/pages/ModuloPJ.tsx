@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
-import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
+import { formatCPF, formatMoeda, fmtNum, formatMoedaInput, parseMoedaBR } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Briefcase, Plus, Search, DollarSign, AlertTriangle, FileText,
@@ -653,7 +653,17 @@ export default function ModuloPJ() {
               </div>
               <div>
                 <label className="text-sm font-medium">Valor Mensal (R$) *</label>
-                <Input type="number" step="0.01" value={form.valorMensal || ""} onChange={e => setForm({ ...form, valorMensal: e.target.value })} placeholder="0.00" />
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.valorMensal ? formatMoedaInput(String(parseFloat(form.valorMensal) || "").replace(".", ",")) : ""}
+                  onChange={e => {
+                    const fmt = formatMoedaInput(e.target.value);
+                    const raw = parseMoedaBR(fmt);
+                    setForm({ ...form, valorMensal: raw > 0 ? String(raw) : "" });
+                  }}
+                  placeholder="0,00"
+                />
               </div>
               <div>
                 <label className="text-sm font-medium">Renovação Automática</label>
