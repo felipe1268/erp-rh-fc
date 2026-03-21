@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 672,
+    titulo: "Funcionários — percentuais de HE padronizados para todos os ativos",
+    descricao: "Atualização em massa: 598 funcionários ativos tiveram heNormal50 ajustado para 60% (dias úteis e sábado) e heInterjornada ajustado para 60%. Os campos he100 (100%) e heFeriado (100%) já estavam corretos. Também atualizado he_interjornada nos system_criteria das 4 empresas para 60%. Verificação pós-update confirmou 0 divergências.",
+    tipo: "feature",
+    modulos: "Funcionários, Horas Extras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 671,
     titulo: "Espelho de Ponto — total de HE agora inclui sábado e domingo",
     descricao: "Corrigido bug no cálculo do resumo do Espelho de Ponto: o loop `useMemo` que soma HE/atrasos pulava fins de semana com `continue` antes de acumular os valores. Agora sábados e domingos contribuem para totalHEMins e totalAtrasoMins. A contagem de diasFalta e trabalhados permanece apenas para dias úteis (seg–sex).",
