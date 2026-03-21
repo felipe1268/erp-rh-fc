@@ -713,6 +713,7 @@ export default function Ferias() {
                         <th className="p-3 text-left font-medium">Fim Gozo</th>
                         <th className="p-3 text-center font-medium">Dias</th>
                         <th className="p-3 text-right font-medium">Valor Total</th>
+                        <th className="p-3 text-right font-medium">Valor Líquido</th>
                         <th className="p-3 text-left font-medium">Pagamento</th>
                         <th className="p-3 text-center font-medium">Status</th>
                         <th className="p-3 text-center font-medium">Ações</th>
@@ -720,7 +721,7 @@ export default function Ferias() {
                     </thead>
                     <tbody>
                       {filtered.length === 0 ? (
-                        <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">Nenhuma férias encontrada</td></tr>
+                        <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Nenhuma férias encontrada</td></tr>
                       ) : filtered.map((f: any) => {
                         const st = STATUS_LABELS[f.status] || STATUS_LABELS.pendente;
                         const isVencida = (f.vencida || f.status === "vencida") && f.status !== "concluida";
@@ -739,6 +740,9 @@ export default function Ferias() {
                             <td className="p-3">{formatDate(f.dataFim)}</td>
                             <td className="p-3 text-center font-semibold">{f.diasGozo || 30}</td>
                             <td className="p-3 text-right font-semibold">{formatMoeda(f.valorTotal)}</td>
+                            <td className="p-3 text-right font-semibold text-green-700">
+                              {f.valorLiquido ? formatMoeda(f.valorLiquido) : <span className="text-muted-foreground font-normal">-</span>}
+                            </td>
                             <td className="p-3 text-xs">{formatDate(f.dataPagamento)}</td>
                             <td className="p-3 text-center">
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>

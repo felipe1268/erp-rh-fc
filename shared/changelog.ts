@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 692,
+    titulo: "Férias — Coluna Valor Líquido adicionada na listagem",
+    descricao: "Adicionada coluna 'Valor Líquido' na tabela de listagem de férias. Exibe em verde o valor salvo após clicar em 'Salvar Líquido' no detalhe. Mostra '-' enquanto o valor não foi confirmado.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 691,
     titulo: "Férias — Correção mapeamento colunas ajuste_inss / valor_liquido",
     descricao: "Corrigido erro no mapeamento Drizzle: as colunas ajuste_inss e valor_liquido foram criadas em snake_case no banco mas o schema procurava por camelCase. Adicionado mapeamento explícito no schema (varchar('ajuste_inss') e varchar('valor_liquido')). Restaurada a listagem de férias que ficou vazia por causa deste erro de query.",
