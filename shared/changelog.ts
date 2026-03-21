@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 674,
+    titulo: "Lançamento Manual — removidas colunas Entr. HE e Saída HE",
+    descricao: "As colunas 'Entr. HE' e 'Saída HE' foram removidas da tabela de dias lançados no lançamento manual de ponto, simplificando o formulário. Os campos entrada3/saida3 continuam existindo no banco e sendo enviados quando preenchidos programaticamente, mas não são mais exibidos na interface.",
+    tipo: "improvement",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 673,
     titulo: "Espelho de Ponto — badge de Aviso Prévio no cabeçalho do funcionário",
     descricao: "Quando o funcionário consultado tem aviso prévio ativo (status=em_andamento), o cabeçalho do espelho agora exibe um badge laranja com o tipo (Trabalhado / Indenizado / Pedido de Demissão) e a data de término. O card de fundo também ganha borda laranja para chamar atenção visual.",
