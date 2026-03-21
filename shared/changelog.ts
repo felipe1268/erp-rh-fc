@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 711,
+    titulo: "Vale — Valor proporcional visível em funcionários com alerta de férias",
+    descricao: "Funcionários em alerta (retorno de férias com menos de 10 dias trabalhados na quinzena) agora exibem o valor proporcional real no campo 'Total Vale', em vez de R$ 0,00. O valor é salvo no banco e usado corretamente quando o RH clica em 'Pagar'. AlertaTipo 'ferias_proporcional' distingue esses casos dos demais alertas.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 710,
     titulo: "Vale — Salário proporcional para quem retorna de férias no mês",
     descricao: "Para horistas com período de férias sobreposto ao mês de referência: salário calculado proporcionalmente aos dias trabalhados (diasNoMes − diasDeFerias). Fórmula: salário = valorHora × (horasMensais × diasTrabalhados / 30). Vale = salário proporcional × 40%. Bloqueio por menos de 10 dias na quinzena também considera os dias úteis de férias em 1-15.",

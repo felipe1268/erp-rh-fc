@@ -1268,19 +1268,23 @@ export const payrollEngineRouter = router({
         const motivoBloqueio = motivosBloqueio.join(" | ");
 
         if (bloqueado) {
-          // Registra o bloqueio para visibilidade do RH, mas sem gerar evento financeiro
+          // Registra o bloqueio mas com o VALOR PROPORCIONAL visível para o RH decidir
           bloqueados++;
+          const alertaTipo = motivosBloqueio.length > 1 ? "multiplo"
+            : diasFeriasNoMes > 0 ? "ferias_proporcional"
+            : faltas > 0 ? "faltas_excessivas"
+            : "admissao_recente";
           advanceInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
-            ${formatMoney(0)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(0)},
+            ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
             ${1}, ${motivoBloqueio},
             ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'alerta'})`);
           results.push({
             employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
-            valorAdiantamento: 0, valorHE: 0, valorTotalVale: 0,
-            temAlerta: true, alertaTipo: motivosBloqueio.length > 1 ? "multiplo" : (faltas > 0 ? "faltas_excessivas" : "admissao_recente"),
-            alertaMotivo: motivoBloqueio, bloqueado: true, faltas, minutosHE, status: 'alerta',
+            valorAdiantamento, valorHE, valorTotalVale,
+            temAlerta: true, alertaTipo, alertaMotivo: motivoBloqueio,
+            bloqueado: true, faltas, minutosHE, status: 'alerta',
           });
-          continue; // Não gera vale nem evento financeiro
+          continue; // Não gera evento financeiro — RH decide
         }
 
         // Aprovado automaticamente (ou previously rejeitado — status will be fixed below)
