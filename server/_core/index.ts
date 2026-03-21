@@ -248,6 +248,45 @@ async function startServer() {
         console.log("[ColFix] banco_horas_saldo + banco_horas_lancamentos + he_period_employees.destinacao Rev.644 OK");
       } catch (e: any) { console.warn("[ColFix] banco_horas Rev.644:", e?.message ?? e); }
     });
+
+    // Rev.650: Limpeza automática de batidas duplicadas (mesmo employeeId+obraId+data)
+    // Mantém o registro com mais horas trabalhadas (ou com ajusteManual=1)
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        const result = await db.execute(sql`
+          WITH ranked AS (
+            SELECT
+              id,
+              ROW_NUMBER() OVER (
+                PARTITION BY "employeeId", "obraId", data, "companyId"
+                ORDER BY
+                  COALESCE("ajusteManual", 0) DESC,
+                  CASE
+                    WHEN "horasTrabalhadas" IS NULL OR "horasTrabalhadas" = '0:00' THEN 0
+                    ELSE (
+                      CAST(split_part("horasTrabalhadas", ':', 1) AS INT) * 60 +
+                      CAST(split_part("horasTrabalhadas", ':', 2) AS INT)
+                    )
+                  END DESC,
+                  id ASC
+              ) AS rn
+            FROM time_records
+          )
+          DELETE FROM time_records
+          WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
+        `);
+        const deleted = (result as any).rowCount ?? 0;
+        if (deleted > 0) {
+          console.log(`[ColFix] Batidas duplicadas removidas: ${deleted} registro(s) excluído(s) (mantido o com mais horas)`);
+        } else {
+          console.log("[ColFix] Batidas duplicadas: nenhuma encontrada");
+        }
+      } catch (e: any) { console.warn("[ColFix] Dedup batidas:", e?.message ?? e); }
+    });
+
     // Rev.590: criar tabelas do módulo Medição de Contratos (se não existirem)
     import("../db").then(async ({ getDb }) => {
       try {
