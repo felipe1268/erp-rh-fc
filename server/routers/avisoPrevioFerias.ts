@@ -1739,6 +1739,7 @@ export const avisoPrevioFeriasRouter = router({
           valorTotal: vacationPeriods.valorTotal,
           ajusteInss: vacationPeriods.ajusteInss,
           valorLiquido: vacationPeriods.valorLiquido,
+          numeroPeriodo: vacationPeriods.numeroPeriodo,
           dataPagamento: vacationPeriods.dataPagamento,
           status: vacationPeriods.status,
           vencida: vacationPeriods.vencida,

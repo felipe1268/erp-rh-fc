@@ -724,17 +724,21 @@ export default function Ferias() {
                         <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Nenhuma férias encontrada</td></tr>
                       ) : filtered.map((f: any) => {
                         const st = STATUS_LABELS[f.status] || STATUS_LABELS.pendente;
-                        const isVencida = (f.vencida || f.status === "vencida") && f.status !== "concluida";
+                        const estaVencidaOuExpirada = (f.vencida || f.status === "vencida") && f.status !== "concluida";
+                        // Vermelho apenas no 2º período (ou superior) — 1º período não exige alerta vermelho
+                        const isVencida = estaVencidaOuExpirada && (f.numeroPeriodo || 1) >= 2;
+                        const isPrimeiroVencido = estaVencidaOuExpirada && (f.numeroPeriodo || 1) < 2;
                         return (
-                          <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? "bg-red-50/50" : ""}`}>
+                          <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? "bg-red-50/50" : isPrimeiroVencido ? "bg-amber-50/40" : ""}`}>
                             <td className="p-3">
                               <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(f.employeeId)}>{f.employeeName}</div>
                               <div className="text-xs text-muted-foreground">{f.employeeCargo}</div>
                             </td>
                             <td className="p-3 text-xs">{formatDate(f.periodoAquisitivoInicio)} a {formatDate(f.periodoAquisitivoFim)}</td>
                             <td className="p-3">
-                              <span className={isVencida ? "text-red-600 font-semibold" : ""}>{formatDate(f.periodoConcessivoFim)}</span>
+                              <span className={isVencida ? "text-red-600 font-semibold" : isPrimeiroVencido ? "text-amber-600 font-semibold" : ""}>{formatDate(f.periodoConcessivoFim)}</span>
                               {isVencida && <Badge variant="destructive" className="ml-1 text-[10px]">VENCIDA</Badge>}
+                              {isPrimeiroVencido && <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-700 border border-amber-300">VENCIDA</Badge>}
                             </td>
                             <td className="p-3">{formatDate(f.dataInicio)}</td>
                             <td className="p-3">{formatDate(f.dataFim)}</td>
