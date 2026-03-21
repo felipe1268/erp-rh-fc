@@ -1388,10 +1388,8 @@ export const payrollEngineRouter = router({
         faltasMap.set(Number(r.employeeId), r);
       }
 
-      // Get HE values — computed directly from time_records (no processarPonto needed)
-      const { heUtilMap, heFimMap, heMap } = await computeHEFromTimeRecords(
-        db, input.companyId, input.mesReferencia, criteria.cargaHorariaDiaria
-      );
+      // HE is now a SEPARATE MODULE (he_periods) — simularPagamento = salário base only
+      // HE is tracked and paid via the dedicated HE module in Folha → Hora Extra
 
       // Clear existing payments for this month
       await db.execute(sql`
@@ -1463,13 +1461,9 @@ export const payrollEngineRouter = router({
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
         const salarioBruto = valorHora * criteria.cargaHorariaDiaria * diasUteis;
-        const minutosHE = heMap.get(emp.id) || 0;
-        const minutosHE_util = heUtilMap.get(emp.id) || 0;
-        const minutosHE_fim = heFimMap.get(emp.id) || 0;
-        const valorHE_util = (minutosHE_util / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
-        const valorHE_fim = (minutosHE_fim / 60) * valorHora * (1 + criteria.hePercentualDomingo / 100);
-        const valorHE = valorHE_util + valorHE_fim;
-        const totalProventos = salarioBruto + valorHE;
+        // HE = 0 — Hora Extra é módulo separado (he_periods)
+        const valorHE = 0;
+        const totalProventos = salarioBruto;
 
         const adv = advMap.get(emp.id);
         const descontoAdiantamento = adv ? parseBRL(adv.valorTotalVale) : 0;

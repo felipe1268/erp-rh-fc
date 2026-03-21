@@ -4021,6 +4021,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 646,
+    titulo: "Módulo Hora Extra — tabelas he_periods, he_period_employees, banco_horas",
+    descricao: "Implementação completa do módulo HE como entidade separada da Folha/Vale: (1) Criadas tabelas he_periods (períodos de HE com status calculado→aprovado→pago→cancelado), he_period_employees (HE por funcionário com destinação pagamento/banco_horas), banco_horas_saldo (saldo de banco de horas por funcionário), banco_horas_lancamentos (histórico de créditos e débitos); (2) Router horasExtrasRouter com endpoints: calcularHE (detecção de sobreposição de períodos), listarPeriods, getDetalhe, aprovar, marcarPago, cancelar, setDestinacao, setDestinacaoMassa, aprovarComDestinacao, getSaldoBanco, getLancamentos, debitarBanco, getAlertasExpiracao; (3) simularPagamento: HE removida do cálculo (valorHE=0) — HE é agora módulo autônomo; (4) Esquema Drizzle atualizado com as 4 novas tabelas. Frontend: módulo he_modulo já existente no FolhaPagamento.tsx com sub-tabs Períodos HE e Banco de Horas.",
+    tipo: "feature",
+    modulos: "Folha/HE",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 645,
     titulo: "Espelho de Ponto individual — filtro de período livre",
     descricao: "Nova página '/espelho-ponto' com visualização individual do cartão de ponto para qualquer período (sem travamento por mês). Funcionalidades: (1) Busca de funcionário com autocomplete por nome ou matrícula; (2) Filtro de período livre (data início + data fim) com 3 atalhos rápidos — Período HE atual (16→15), Mês atual, Últimos 30 dias; (3) Cards de resumo com dias trabalhados, hora extra acumulada, faltas e atrasos; (4) Tabela diária com código de cor por tipo de ocorrência (Normal, HE, Falta, Incompleto, Atraso, Fim de Semana); (5) Batidas exibidas em sequência (entrada=verde, saída=vermelho); (6) Coluna de Obra por dia; (7) Rodapé de totais com HE, faltas e atrasos consolidados; (8) Bloco de assinaturas para impressão; (9) Suporte a URL params (?funcionario=ID&mes=YYYY-MM) para navegação a partir de outros módulos. Link 'Espelho de Ponto' adicionado ao menu lateral (seção Operacional).",

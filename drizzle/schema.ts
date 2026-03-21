@@ -1661,6 +1661,76 @@ export const heSolicitacaoAtividades = pgTable("he_solicitacao_atividades", {
         index("he_sol_atv_atv").on(table.atividadeId),
 ]);
 
+// ── HE PERIODS — Rev.646 ─────────────────────────────────────────────────────
+export const hePeriods = pgTable("he_periods", {
+  id:                serial().primaryKey(),
+  companyId:         integer("companyId").notNull(),
+  mesReferencia:     text("mesReferencia").notNull(),
+  dataInicio:        date("dataInicio", { mode: "string" }).notNull(),
+  dataFim:           date("dataFim", { mode: "string" }).notNull(),
+  status:            text().notNull().default("calculado"),
+  totalFuncionarios: integer("totalFuncionarios").default(0),
+  totalHEMins:       integer("totalHEMins").default(0),
+  totalValorHE:      numeric("totalValorHE", { precision: 15, scale: 2 }).default("0"),
+  criadoPor:         text("criadoPor"),
+  aprovadoPor:       text("aprovadoPor"),
+  aprovadoEm:        timestamp("aprovadoEm"),
+  pagoPor:           text("pagoPor"),
+  pagoEm:            timestamp("pagoEm"),
+  criadoEm:          timestamp("criadoEm").defaultNow(),
+}, (t) => [
+  index("he_periods_company").on(t.companyId),
+  index("he_periods_mes").on(t.mesReferencia),
+  index("he_periods_status").on(t.status),
+]);
+
+export const hePeriodEmployees = pgTable("he_period_employees", {
+  id:           serial().primaryKey(),
+  hePeriodId:   integer("hePeriodId").notNull(),
+  companyId:    integer("companyId").notNull(),
+  employeeId:   integer("employeeId").notNull(),
+  nome:         text(),
+  heUtilMins:   integer("heUtilMins").default(0),
+  heFimMins:    integer("heFimMins").default(0),
+  heTotalMins:  integer("heTotalMins").default(0),
+  valorHEUtil:  numeric("valorHEUtil",  { precision: 15, scale: 2 }).default("0"),
+  valorHEFim:   numeric("valorHEFim",   { precision: 15, scale: 2 }).default("0"),
+  valorHETotal: numeric("valorHETotal", { precision: 15, scale: 2 }).default("0"),
+  salarioBruto: numeric("salarioBruto", { precision: 15, scale: 2 }).default("0"),
+  valorHora:    numeric("valorHora",    { precision: 15, scale: 4 }).default("0"),
+  destinacao:   text().default("pagamento"),
+}, (t) => [
+  index("he_pe_period").on(t.hePeriodId),
+  index("he_pe_emp").on(t.employeeId),
+  index("he_pe_company").on(t.companyId),
+]);
+
+export const bancoHorasSaldo = pgTable("banco_horas_saldo", {
+  employeeId:   integer("employeeId").notNull(),
+  companyId:    integer("companyId").notNull(),
+  saldoMinutos: integer("saldoMinutos").notNull().default(0),
+  atualizadoEm: timestamp("atualizadoEm").defaultNow(),
+}, (t) => [
+  // composite PK (employeeId, companyId) — enforced at DB level via PRIMARY KEY
+]);
+
+export const bancoHorasLancamentos = pgTable("banco_horas_lancamentos", {
+  id:          serial().primaryKey(),
+  employeeId:  integer("employeeId").notNull(),
+  companyId:   integer("companyId").notNull(),
+  hePeriodId:  integer("hePeriodId"),
+  tipo:        text().notNull(),
+  minutos:     integer().notNull(),
+  descricao:   text().notNull(),
+  data:        date({ mode: "string" }).notNull(),
+  criadoPor:   text("criadoPor"),
+  criadoEm:    timestamp("criadoEm").defaultNow(),
+}, (t) => [
+  index("bhl_emp").on(t.employeeId),
+  index("bhl_company").on(t.companyId),
+  index("bhl_data").on(t.data),
+]);
+
 export const hydrants = pgTable("hydrants", {
         id: serial().notNull(),
         companyId: integer().notNull(),
