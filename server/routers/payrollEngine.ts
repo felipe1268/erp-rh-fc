@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances } from "../../drizzle/schema";
+import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances, vacationPeriods } from "../../drizzle/schema";
 import { eq, and, sql, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -1122,6 +1122,71 @@ export const payrollEngineRouter = router({
         faltasMap.set(Number(r.employeeId), Number(r.totalFaltas) || 0);
       }
 
+      // ── Férias no mês: salário proporcional ───────────────────────────────
+      // Fórmula: salário = valorHora × (horasMensais × diasTrabalhados / 30)
+      //          diasTrabalhados = diasNoMes − diasDeFerias (calendário)
+      // Buscar períodos de férias que se sobrepõem com o mês inteiro de referência
+      const ultimoDiaMes = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`;
+      const feriasRows = ((await db.execute(sql`
+        SELECT "employeeId", "dataInicio", "dataFim"
+        FROM vacation_periods
+        WHERE "companyId" = ${input.companyId}
+          AND "deletedAt" IS NULL
+          AND status IN ('em_gozo', 'concluida')
+          AND "dataInicio" <= ${ultimoDiaMes}::date
+          AND ("dataFim" >= ${primeiroDiaMes}::date OR "dataFim" IS NULL)
+      `)) as any).rows || [];
+
+      // Helper: conta dias de calendário entre duas datas inclusive
+      function diasCalendarioEntre(start: Date, end: Date): number {
+        const msPerDay = 1000 * 60 * 60 * 24;
+        const diffMs = end.getTime() - start.getTime();
+        return Math.round(diffMs / msPerDay) + 1;
+      }
+
+      // Helper: conta dias úteis (não-domingo) entre duas datas inclusive
+      function diasUteisEntre(start: Date, end: Date): number {
+        let count = 0;
+        const d = new Date(start);
+        d.setHours(12, 0, 0, 0);
+        const endClone = new Date(end);
+        endClone.setHours(12, 0, 0, 0);
+        while (d <= endClone) {
+          if (d.getDay() !== 0) count++;
+          d.setDate(d.getDate() + 1);
+        }
+        return count;
+      }
+
+      const dia1 = new Date(`${primeiroDiaMes}T12:00:00Z`);
+      const dia15 = new Date(`${dia15Mes}T12:00:00Z`);
+      const diaFim = new Date(`${ultimoDiaMes}T12:00:00Z`);
+
+      // feriasMesMap: employeeId → dias de calendário de férias no mês (para salário proporcional)
+      // feriasQuinzenaMap: employeeId → dias úteis de férias na quinzena 1-15 (para regra de bloqueio)
+      const feriasMesMap = new Map<number, number>();
+      const feriasQuinzenaMap = new Map<number, number>();
+
+      for (const row of feriasRows as any[]) {
+        const empId = Number(row.employeeId);
+        const vacStart = new Date(`${row.dataInicio}T12:00:00Z`);
+        const vacEnd = row.dataFim ? new Date(`${row.dataFim}T12:00:00Z`) : diaFim;
+
+        // Overlap com mês inteiro → dias de calendário (para salário proporcional)
+        const mesStart = vacStart < dia1 ? dia1 : vacStart;
+        const mesEnd = vacEnd > diaFim ? diaFim : vacEnd;
+        if (mesStart <= mesEnd) {
+          feriasMesMap.set(empId, (feriasMesMap.get(empId) || 0) + diasCalendarioEntre(mesStart, mesEnd));
+        }
+
+        // Overlap com quinzena 1-15 → dias úteis (para regra de bloqueio)
+        const q15Start = vacStart < dia1 ? dia1 : vacStart;
+        const q15End = vacEnd > dia15 ? dia15 : vacEnd;
+        if (q15Start <= q15End) {
+          feriasQuinzenaMap.set(empId, (feriasQuinzenaMap.get(empId) || 0) + diasUteisEntre(q15Start, q15End));
+        }
+      }
+
       // HE is now a SEPARATE MODULE (he_periods / horasExtras router).
       // Vale = pure advance only — no HE included here.
 
@@ -1158,24 +1223,35 @@ export const payrollEngineRouter = router({
 
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
-        // CLT horista: 220h = referência de 30 dias. Proporcional ao número real de dias do mês.
         const horasMensaisBase = emp.horasMensais ? Number(emp.horasMensais) : 220;
-        const horasMensais = horasMensaisBase * diasNoMes / 30;
-        const salarioBruto = valorHora * horasMensais;
         const percentual = criteria.percentualAdiantamento;
-        const valorAdiantamento = salarioBruto * (percentual / 100);
         const faltas = faltasMap.get(emp.id) || 0;
         const minutosHE = 0;
         const valorHE = 0;
+
+        // ── Férias: salário proporcional ao mês ───────────────────────────
+        // Fórmula: salário = valorHora × (horasMensais × diasTrabalhados / 30)
+        //          diasTrabalhados = diasNoMes − diasDeFerias (calendário)
+        const diasFeriasNoMes = feriasMesMap.get(emp.id) || 0;
+        const diasTrabalhados = Math.max(0, diasNoMes - diasFeriasNoMes);
+        const salarioBruto = valorHora * (horasMensaisBase * diasTrabalhados / 30);
+        const valorAdiantamento = salarioBruto * (percentual / 100);
         const valorTotalVale = valorAdiantamento;
+
+        // Para regra de bloqueio: férias úteis na quinzena 1-15
+        const diasFeriasQuinzena = feriasQuinzenaMap.get(emp.id) || 0;
+        const diasTrabalhadosNaQuinzena = Math.max(0, diasUteisFirstHalf - faltas - diasFeriasQuinzena);
 
         // ── Regras de bloqueio ────────────────────────────────────────────
         const motivosBloqueio: string[] = [];
 
-        // 1) Menos de 10 dias trabalhados por faltas
-        const diasTrabalhadosQuinzena = diasUteisFirstHalf - faltas;
-        if (diasTrabalhadosQuinzena < 10) {
-          motivosBloqueio.push(`Menos de 10 dias trabalhados na quinzena (${diasTrabalhadosQuinzena} dias — ${faltas} falta(s))`);
+        // 1) Menos de 10 dias trabalhados por faltas + férias na quinzena
+        if (diasTrabalhadosNaQuinzena < 10) {
+          const detalhes = [
+            faltas > 0 ? `${faltas} falta(s)` : null,
+            diasFeriasQuinzena > 0 ? `${diasFeriasQuinzena} dia(s) de férias` : null,
+          ].filter(Boolean).join(", ");
+          motivosBloqueio.push(`Menos de 10 dias trabalhados na quinzena (${diasTrabalhadosNaQuinzena} dias${detalhes ? ` — ${detalhes}` : ""})`);
         }
 
         // 2) Admitido no mês de referência (menos de 10 dias disponíveis)
@@ -1221,9 +1297,13 @@ export const payrollEngineRouter = router({
           totalVale += valorTotalVale;
         }
 
+        const alertaFerias = diasFeriasNoMes > 0
+          ? `Férias no mês: ${diasFeriasNoMes} dia(s) — salário proporcional (${diasTrabalhados}/${diasNoMes} dias trabalhados)`
+          : "";
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
-          valorAdiantamento, valorHE, valorTotalVale, temAlerta: false, alertaTipo: "", alertaMotivo: "",
+          valorAdiantamento, valorHE, valorTotalVale,
+          temAlerta: diasFeriasNoMes > 0, alertaTipo: diasFeriasNoMes > 0 ? "ferias_proporcional" : "", alertaMotivo: alertaFerias,
           bloqueado: false, faltas, minutosHE, status: isRejeitado ? 'rejeitado' : 'calculado',
         });
       }

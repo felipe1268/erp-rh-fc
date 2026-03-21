@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 710,
+    titulo: "Vale — Salário proporcional para quem retorna de férias no mês",
+    descricao: "Para horistas com período de férias sobreposto ao mês de referência: salário calculado proporcionalmente aos dias trabalhados (diasNoMes − diasDeFerias). Fórmula: salário = valorHora × (horasMensais × diasTrabalhados / 30). Vale = salário proporcional × 40%. Bloqueio por menos de 10 dias na quinzena também considera os dias úteis de férias em 1-15.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 709,
     titulo: "Férias — Botão excluir recibo anexado",
     descricao: "Adicionado botão de lixeira (vermelho) ao lado de 'Substituir' na seção Recibo de Férias (Contabilidade). Ao clicar, o sistema pede confirmação e remove o recibo do banco (recibo_url e recibo_nome ficam nulos), retornando o painel ao estado de upload vazio.",
