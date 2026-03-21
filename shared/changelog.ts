@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 675,
+    titulo: "Espelho de Ponto — horas trabalhadas em sábado e domingo computadas como HE",
+    descricao: "Corrigido bug em que registros manuais de sábado e domingo não mostravam badge H.Extra no Espelho de Ponto. getEspelhoPontoRange agora sobrescreve horasExtras = horasTrabalhadas para todo registro de fim de semana (dow=0 ou dow=6), corrigindo tanto histórico quanto novos lançamentos. manualEntry também corrigido: para fins de semana, expectedMins=0 e heMins=totalMinutes, sem atraso.",
+    tipo: "bugfix",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 674,
     titulo: "Lançamento Manual — removidas colunas Entr. HE e Saída HE",
     descricao: "As colunas 'Entr. HE' e 'Saída HE' foram removidas da tabela de dias lançados no lançamento manual de ponto, simplificando o formulário. Os campos entrada3/saida3 continuam existindo no banco e sendo enviados quando preenchidos programaticamente, mas não são mais exibidos na interface.",

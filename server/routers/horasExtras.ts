@@ -397,19 +397,27 @@ export const horasExtrasRouter = router({
       `)) as any).rows || [];
 
       // Build record map keyed by date string
-      const recordMap: Record<string, any> = {};
-      for (const r of records) {
-        const dateStr = String(r.data).slice(0, 10);
-        recordMap[dateStr] = r;
-      }
-
-      // Compute summary stats
+      // For weekend days (sab=6, dom=0): ALL worked hours = hora extra
       const parseHHMM = (s: string | null | undefined): number => {
         if (!s || s === "0:00" || s === "") return 0;
         const p = s.split(":").map(Number);
         return (p[0] || 0) * 60 + (p[1] || 0);
       };
+      const minsToHHMM = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
 
+      const recordMap: Record<string, any> = {};
+      for (const r of records) {
+        const dateStr = String(r.data).slice(0, 10);
+        const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
+        const isWeekend = dow === 0 || dow === 6;
+        if (isWeekend) {
+          const trabMins = parseHHMM(r.horasTrabalhadas);
+          r.horasExtras = trabMins > 0 ? minsToHHMM(trabMins) : "0:00";
+        }
+        recordMap[dateStr] = r;
+      }
+
+      // Compute summary stats
       let diasTrabalhados = 0;
       let totalHEMins = 0;
       let totalFaltaMins = 0;

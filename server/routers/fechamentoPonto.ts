@@ -1250,9 +1250,12 @@ export const fechamentoPontoRouter = router({
       const empData = await db.select({ jornadaTrabalho: employees.jornadaTrabalho })
         .from(employees).where(eq(employees.id, input.employeeId)).limit(1);
       const jornadaTrabalho = empData[0]?.jornadaTrabalho ?? null;
-      const expectedMins = getExpectedMinsFromJornada(jornadaTrabalho, input.data);
-      const heMins = expectedMins !== null ? Math.max(0, totalMinutes - expectedMins) : 0;
-      const atrasoMins = expectedMins !== null && totalMinutes < expectedMins && totalMinutes > 0
+      const dow = new Date(input.data + "T12:00:00Z").getUTCDay();
+      const isWeekendDay = dow === 0 || dow === 6;
+      // Weekend: 100% das horas trabalhadas = hora extra
+      const expectedMins = isWeekendDay ? 0 : getExpectedMinsFromJornada(jornadaTrabalho, input.data);
+      const heMins = isWeekendDay ? totalMinutes : (expectedMins !== null ? Math.max(0, totalMinutes - expectedMins) : 0);
+      const atrasoMins = !isWeekendDay && expectedMins !== null && totalMinutes < expectedMins && totalMinutes > 0
         ? Math.max(0, expectedMins - totalMinutes)
         : 0;
 
