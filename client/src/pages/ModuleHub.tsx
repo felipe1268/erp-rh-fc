@@ -302,7 +302,7 @@ export default function ModuleHub() {
   const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany } = useCompany();
   const { setActiveModule } = useModule();
   const { isModuleEnabled } = useModuleConfig();
-  const { hasGroup, groupCanAccessRoute, isAdminMaster } = usePermissions();
+  const { hasGroup, groupCanAccessRoute, canAccessModule, isAdminMaster } = usePermissions();
   const { isMenuItemVisible } = useMenuVisibility();
   const [mounted, setMounted] = useState(false);
 
@@ -354,12 +354,14 @@ export default function ModuleHub() {
     if (!isModuleEnabled(hubToConfigKey[m.id] ?? m.id)) return false;
     // Se o usuário pertence a um grupo (e não é admin_master), filtrar por permissões do grupo
     if (hasGroup && !isAdminMaster) {
-      // Verificar se o grupo tem acesso a pelo menos uma rota deste módulo
       const modDef = MODULE_DEFINITIONS.find(md => md.id === m.id);
-      if (modDef) {
-        const hasAnyRoute = modDef.features.some(f => groupCanAccessRoute(f.route));
-        if (!hasAnyRoute) return false;
-      }
+      // Módulo sem definição = sem controle de acesso → bloquear para usuários de grupo
+      if (!modDef) return false;
+      // Verificar acesso ao módulo (novo sistema tem prioridade total via canAccessModule)
+      if (!canAccessModule(m.id)) return false;
+      // Validação adicional via rota (sistema legado ou fallback)
+      const hasAnyRoute = modDef.features.some(f => groupCanAccessRoute(f.route));
+      if (!hasAnyRoute) return false;
     }
     // Verificar visibilidade no Painel de Controle do Menu
     const modDef2 = MODULE_DEFINITIONS.find(md => md.id === m.id);

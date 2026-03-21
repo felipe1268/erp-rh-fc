@@ -4092,4 +4092,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-21 00:00:00",
   },
+  {
+    version: 661,
+    titulo: "Bugfix crítico: controle de acesso no ModuleHub — módulos sem definição bypassavam permissões de grupo",
+    descricao: "5 módulos ativos no ModuleHub (planejamento, cadastro, financeiro, compras, avaliacao) não tinham entrada em MODULE_DEFINITIONS no shared/modules.ts. O filtro do ModuleHub verificava: MODULE_DEFINITIONS.find(md => md.id === m.id) → quando retornava undefined (módulo sem definição), o bloco if(modDef) não executava e o módulo passava sem nenhuma verificação de permissão — aparecendo para TODOS os usuários independente do grupo. Correções: (1) ActiveModuleId expandido com os 6 IDs faltantes (avaliacao, planejamento, cadastro, financeiro, compras, medicao); (2) MODULE_DEFINITIONS recebeu 5 novas entradas com suas rotas específicas; (3) ModuleHub agora bloqueia módulos sem definição (!modDef → return false) e adiciona canAccessModule() como verificação primária antes da verificação por rota.",
+    tipo: "bugfix",
+    modulos: "Controle de Acesso, ModuleHub",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
 ];

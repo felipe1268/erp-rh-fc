@@ -79,7 +79,20 @@ export const EMPLOYEE_STATUS_MANUAL = [
 // REGRA: Toda funcionalidade listada na sidebar DEVE ter entrada aqui
 // ============================================================
 
-export type ActiveModuleId = "rh-dp" | "sst" | "juridico" | "terceiros" | "parceiros" | "orcamento" | "almoxarifado";
+export type ActiveModuleId =
+  | "rh-dp"
+  | "sst"
+  | "juridico"
+  | "avaliacao"
+  | "terceiros"
+  | "parceiros"
+  | "planejamento"
+  | "cadastro"
+  | "financeiro"
+  | "compras"
+  | "orcamento"
+  | "medicao"
+  | "almoxarifado";
 
 export interface ModuleFeature {
   key: string;
@@ -248,9 +261,80 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     color: "orange",
     icon: "Package",
     features: [
-      { key: "almoxarifado-painel",       label: "Painel",              route: "/almoxarifado",                   icon: "LayoutDashboard" },
-      { key: "almoxarifado-movimentacoes", label: "Movimentações",       route: "/almoxarifado/movimentacoes",     icon: "ArrowLeftRight" },
-      { key: "almoxarifado-inventario",   label: "Inventário Semanal",  route: "/almoxarifado/inventario",        icon: "ClipboardList" },
+      { key: "almoxarifado-painel",        label: "Painel",             route: "/almoxarifado",               icon: "LayoutDashboard" },
+      { key: "almoxarifado-movimentacoes", label: "Movimentações",      route: "/almoxarifado/movimentacoes", icon: "ArrowLeftRight" },
+      { key: "almoxarifado-inventario",    label: "Inventário Semanal", route: "/almoxarifado/inventario",    icon: "ClipboardList" },
+    ],
+  },
+  {
+    id: "avaliacao",
+    label: "Avaliação",
+    description: "Avaliação de Desempenho — questionários, ciclos, ranking e competências.",
+    color: "purple",
+    icon: "ClipboardCheck",
+    features: [
+      { key: "avaliacao-desempenho", label: "Avaliação de Desempenho", route: "/avaliacao-desempenho", icon: "ClipboardCheck" },
+    ],
+  },
+  {
+    id: "planejamento",
+    label: "Planejamento",
+    description: "Projetos vinculados a orçamentos, Curva S, avanço físico semanal, revisões de cronograma e REFIS.",
+    color: "green",
+    icon: "CalendarRange",
+    features: [
+      { key: "planejamento-lista",   label: "Projetos",          route: "/planejamento",     icon: "CalendarRange" },
+      { key: "planejamento-detalhe", label: "Detalhe do Projeto", route: "/planejamento/:id", icon: "FileBarChart" },
+    ],
+  },
+  {
+    id: "cadastro",
+    label: "Cadastro",
+    description: "Empresas, obras, setores, funções, habilidades e dados mestre do sistema.",
+    color: "slate",
+    icon: "BookOpen",
+    features: [
+      { key: "cadastro-habilidades",        label: "Habilidades",             route: "/habilidades",             icon: "Star" },
+      { key: "cadastro-habilidades-import", label: "Importação de Habilidades", route: "/habilidades/importacao", icon: "Upload" },
+    ],
+  },
+  {
+    id: "financeiro",
+    label: "Financeiro",
+    description: "Contas a pagar e receber, fluxo de caixa, DRE e relatórios financeiros.",
+    color: "emerald",
+    icon: "DollarSign",
+    features: [
+      { key: "financeiro-painel",            label: "Painel",               route: "/financeiro",                        icon: "LayoutDashboard" },
+      { key: "financeiro-lancamentos",       label: "Lançamentos",          route: "/financeiro/lancamentos",            icon: "Receipt" },
+      { key: "financeiro-contas-pagar",      label: "Contas a Pagar",       route: "/financeiro/contas-a-pagar",         icon: "ArrowDownCircle" },
+      { key: "financeiro-contas-receber",    label: "Contas a Receber",     route: "/financeiro/contas-a-receber",       icon: "ArrowUpCircle" },
+      { key: "financeiro-dre",               label: "DRE",                  route: "/financeiro/dre",                    icon: "BarChart3" },
+      { key: "financeiro-fluxo",             label: "Fluxo de Caixa",       route: "/financeiro/fluxo-de-caixa",         icon: "TrendingUp" },
+      { key: "financeiro-plano-contas",      label: "Plano de Contas",      route: "/financeiro/plano-de-contas",        icon: "ListTree" },
+      { key: "financeiro-centros-custo",     label: "Centros de Custo",     route: "/financeiro/centros-de-custo",       icon: "Layers" },
+      { key: "financeiro-obrigacoes-fiscais",label: "Obrigações Fiscais",   route: "/financeiro/obrigacoes-fiscais",     icon: "FileText" },
+      { key: "financeiro-conciliacao",       label: "Conciliação Bancária", route: "/financeiro/conciliacao",            icon: "GitMerge" },
+    ],
+  },
+  {
+    id: "compras",
+    label: "Compras",
+    description: "Solicitações, cotações, ordens de compra, aprovações e recebimentos.",
+    color: "rose",
+    icon: "ShoppingCart",
+    features: [
+      { key: "compras-painel",         label: "Painel",              route: "/compras/painel",         icon: "LayoutDashboard" },
+      { key: "compras-solicitacoes",   label: "Solicitações (SC)",   route: "/compras/solicitacoes",   icon: "ClipboardList" },
+      { key: "compras-cotacoes",       label: "Cotações",            route: "/compras/cotacoes",       icon: "FileSearch" },
+      { key: "compras-ordens",         label: "Ordens de Compra",    route: "/compras/ordens",         icon: "ShoppingBag" },
+      { key: "compras-aprovacoes",     label: "Aprovações",          route: "/compras/aprovacoes",     icon: "CheckCircle" },
+      { key: "compras-recebimentos",   label: "Recebimentos",        route: "/compras/recebimentos",   icon: "PackageCheck" },
+      { key: "compras-emergencial",    label: "Emergencial",         route: "/compras/emergencial",    icon: "Zap" },
+      { key: "compras-financeiro",     label: "Financeiro Compras",  route: "/compras/financeiro",     icon: "DollarSign" },
+      { key: "compras-realocacao",     label: "Realocação",          route: "/compras/realocacao",     icon: "ArrowLeftRight" },
+      { key: "compras-comissoes",      label: "Comissões",           route: "/compras/comissoes",      icon: "Percent" },
+      { key: "compras-configuracoes",  label: "Configurações",       route: "/compras/configuracoes",  icon: "Settings2" },
     ],
   },
 ];
