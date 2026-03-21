@@ -148,6 +148,13 @@
       "when": 1774100423528,
       "tag": "0020_boring_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1774115887075,
+      "tag": "0021_long_dragon_man",
+      "breakpoints": true
     }
   ]
 }

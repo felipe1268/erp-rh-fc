@@ -21,7 +21,7 @@ import {
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
   Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square, Undo2,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 function formatDate(d: string | null | undefined) {
@@ -313,6 +313,16 @@ export default function Ferias() {
   const [editingValues, setEditingValues] = useState(false);
   const [editValores, setEditValores] = useState<{ valorFerias: string; valorTerco: string; valorAbono: string; valorTotal: string; }>({ valorFerias: "", valorTerco: "", valorAbono: "", valorTotal: "" });
   const [inssAjuste, setInssAjuste] = useState<string>("0,00");
+
+  // Carrega ajuste salvo quando o item de férias é aberto no detalhe
+  useEffect(() => {
+    if (selectedItem?.ajusteInss) {
+      setInssAjuste(selectedItem.ajusteInss);
+    } else if (selectedItem) {
+      setInssAjuste("0,00");
+    }
+  }, [selectedItem?.id]);
+
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [form, setForm] = useState<any>({});
 
@@ -1716,9 +1726,31 @@ export default function Ferias() {
                           <span className="font-medium">{ajusteNum > 0 ? "+" : "−"} {formatMoeda(Math.abs(ajusteNum))}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-base font-bold text-slate-800">
-                        <span>Valor Líquido</span>
-                        <span className="text-green-700">{formatMoeda(liquido)}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-base font-bold text-slate-800">Valor Líquido</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-base font-bold text-green-700">{formatMoeda(liquido)}</span>
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white px-3"
+                            disabled={updateFerias.isPending}
+                            onClick={() => {
+                              const ajusteStr = inssAjuste.trim() === "" || inssAjuste === "0,00" ? "0,00" : inssAjuste;
+                              updateFerias.mutate(
+                                { id: selectedItem.id, ajusteInss: ajusteStr, valorLiquido: formatMoeda(liquido) },
+                                {
+                                  onSuccess: () => {
+                                    setSelectedItem((prev: any) => prev ? { ...prev, ajusteInss: ajusteStr, valorLiquido: formatMoeda(liquido) } : prev);
+                                    refetch();
+                                  },
+                                }
+                              );
+                            }}
+                          >
+                            {updateFerias.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                            Salvar Líquido
+                          </Button>
+                        </div>
                       </div>
                     </div>
 

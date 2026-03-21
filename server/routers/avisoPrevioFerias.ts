@@ -2095,6 +2095,8 @@ export const avisoPrevioFeriasRouter = router({
         valorTercoConstitucional: z.string().optional(),
         valorAbono: z.string().optional(),
         valorTotal: z.string().optional(),
+        ajusteInss: z.string().optional(),
+        valorLiquido: z.string().optional(),
         dataPagamento: z.string().optional(),
       }))
       .mutation(async ({ input }) => {

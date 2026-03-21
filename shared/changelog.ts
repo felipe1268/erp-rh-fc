@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 690,
+    titulo: "Férias — Botão Salvar Líquido persiste ajuste e valor no banco",
+    descricao: "Adicionado botão 'Salvar Líquido' na seção INSS do detalhe de férias. Ao clicar, salva no banco o ajusteInss e o valorLiquido calculado. Ao reabrir o diálogo, o ajuste salvo é carregado automaticamente. Colunas ajuste_inss e valor_liquido adicionadas na tabela vacation_periods.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 689,
     titulo: "Férias — Ajuste de arredondamento soma diretamente no líquido",
     descricao: "Corrigido comportamento do campo 'Ajuste arredondamento': o valor é somado diretamente ao Valor Líquido (não altera o INSS calculado). O Total INSS descontado permanece fixo; a linha de ajuste aparece abaixo do INSS e o Valor Líquido reflete o resultado final.",
