@@ -1153,10 +1153,14 @@ export const payrollEngineRouter = router({
         if (dow !== 0) diasUteisFirstHalf++;
       }
 
+      // Dias reais do mês (28, 29, 30 ou 31) para cálculo proporcional do horista
+      const diasNoMes = new Date(year, month, 0).getDate();
+
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
-        // CLT horista: salário = valorHora × horasMensais (padrão 220h — convenção legal CLT)
-        const horasMensais = emp.horasMensais ? Number(emp.horasMensais) : 220;
+        // CLT horista: 220h = referência de 30 dias. Proporcional ao número real de dias do mês.
+        const horasMensaisBase = emp.horasMensais ? Number(emp.horasMensais) : 220;
+        const horasMensais = horasMensaisBase * diasNoMes / 30;
         const salarioBruto = valorHora * horasMensais;
         const percentual = criteria.percentualAdiantamento;
         const valorAdiantamento = salarioBruto * (percentual / 100);
@@ -1539,10 +1543,14 @@ export const payrollEngineRouter = router({
 
       const paymentInsertRows: any[] = [];
 
+      // Dias reais do mês para cálculo proporcional do horista (220h = ref 30 dias)
+      const diasNoMesSim = new Date(year, month, 0).getDate();
+
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
-        // CLT horista: salário = valorHora × horasMensais (padrão 220h — convenção legal CLT)
-        const horasMensaisEmp = emp.horasMensais ? Number(emp.horasMensais) : 220;
+        // CLT horista: 220h = referência de 30 dias. Proporcional ao número real de dias do mês.
+        const horasMensaisBaseEmp = emp.horasMensais ? Number(emp.horasMensais) : 220;
+        const horasMensaisEmp = horasMensaisBaseEmp * diasNoMesSim / 30;
         const salarioBruto = valorHora * horasMensaisEmp;
         // HE = 0 — Hora Extra é módulo separado (he_periods)
         const valorHE = 0;

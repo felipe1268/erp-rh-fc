@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 706,
+    titulo: "Vale — Salário horista proporcional aos dias reais do mês",
+    descricao: "Implementado cálculo proporcional do salário horista: 220h é a referência para 30 dias. Meses com 28, 29 ou 31 dias são ajustados proporcionalmente (220h × diasNoMes / 30). Exemplos: Fevereiro/28 dias = 205,33h; Janeiro/Março/31 dias = 227,33h; Abril/Junho/30 dias = 220h (sem alteração). Corrigido em gerarVale e simularPagamento.",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 705,
     titulo: "Vale — Cálculo do salário corrigido para 220h mensais (CLT horista)",
     descricao: "Corrigido o cálculo do salário bruto no vale/adiantamento. O sistema calculava incorretamente como valorHora × cargaHorária × diasÚteis (variável por mês). O correto para CLT horista é valorHora × horasMensais do cadastro (convenção legal: 220h). Agora ELIAS (R$9,95/h × 220h = R$2.189,00 → vale R$875,60) e todos os demais CLT são calculados com o salário correto. Corrigido em gerarVale e simularPagamento.",
