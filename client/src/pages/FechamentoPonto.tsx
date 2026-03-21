@@ -1422,19 +1422,34 @@ export default function FechamentoPonto() {
                             Clique em uma linha para expandir e escolher a ação de resolução.
                           </p>
                         </div>
-                        {(() => {
-                          const validCount = (conflitos.data || []).filter((c: any) => !c.hasOverlap && !c.isSameObraDuplicate).length;
-                          if (validCount === 0) return null;
-                          return (
-                            <Button size="sm" variant="outline"
-                              className="border-green-600 text-green-700 hover:bg-green-50 text-xs"
-                              disabled={resolveAllConflitosMut.isPending}
-                              onClick={() => resolveAllConflitosMut.mutate({ companyId, companyIds, mesReferencia: mesAno, acao: "confirmar_deslocamento", justificativa: "Deslocamentos válidos confirmados em lote" })}>
-                              <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                              Confirmar {validCount} deslocamento{validCount > 1 ? "s" : ""} válido{validCount > 1 ? "s" : ""}
-                            </Button>
-                          );
-                        })()}
+                        <div className="flex flex-wrap gap-2">
+                          {(() => {
+                            const duplCount = (conflitos.data || []).filter((c: any) => c.isSameObraDuplicate).length;
+                            if (duplCount === 0) return null;
+                            return (
+                              <Button size="sm" variant="outline"
+                                className="border-purple-600 text-purple-700 hover:bg-purple-50 text-xs"
+                                disabled={resolveAllDuplicatasMut.isPending}
+                                onClick={() => resolveAllDuplicatasMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
+                                <Copy className="h-3.5 w-3.5 mr-1" />
+                                {resolveAllDuplicatasMut.isPending ? "Processando..." : `Limpar ${duplCount} duplicata${duplCount > 1 ? "s" : ""} (manter maior)`}
+                              </Button>
+                            );
+                          })()}
+                          {(() => {
+                            const validCount = (conflitos.data || []).filter((c: any) => !c.hasOverlap && !c.isSameObraDuplicate).length;
+                            if (validCount === 0) return null;
+                            return (
+                              <Button size="sm" variant="outline"
+                                className="border-green-600 text-green-700 hover:bg-green-50 text-xs"
+                                disabled={resolveAllConflitosMut.isPending}
+                                onClick={() => resolveAllConflitosMut.mutate({ companyId, companyIds, mesReferencia: mesAno, acao: "confirmar_deslocamento", justificativa: "Deslocamentos válidos confirmados em lote" })}>
+                                <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                Confirmar {validCount} deslocamento{validCount > 1 ? "s" : ""} válido{validCount > 1 ? "s" : ""}
+                              </Button>
+                            );
+                          })()}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-3 px-3">

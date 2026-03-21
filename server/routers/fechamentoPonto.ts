@@ -2982,6 +2982,20 @@ export const fechamentoPontoRouter = router({
         }
       }
 
+      // Antes de inserir: remover registros DIXI existentes para os mesmos (employeeId, obraId, data)
+      // Isso evita duplicatas quando o usuário vincula um registro que já foi importado via upload normal
+      if (newTimeRecords.length > 0) {
+        for (const rec of newTimeRecords) {
+          await db.delete(timeRecords).where(and(
+            companyFilter(timeRecords.companyId, input),
+            eq(timeRecords.employeeId, rec.employeeId),
+            eq(timeRecords.data, rec.data),
+            rec.obraId != null ? eq(timeRecords.obraId, rec.obraId) : sql`${timeRecords.obraId} IS NULL`,
+            eq(timeRecords.fonte, "dixi"),
+          ));
+        }
+      }
+
       // Inserir registros de ponto
       if (newTimeRecords.length > 0) {
         const batchSize = 50;
