@@ -681,8 +681,8 @@ export default function EspelhoPonto() {
 
               {/* TOTAIS */}
               <div className="grid bg-slate-50 border-t-2 border-slate-200 font-semibold"
-                style={{ gridTemplateColumns: "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem" }}>
-                <div className="px-4 py-3 col-span-6 flex items-center">
+                style={{ gridTemplateColumns: gridCols }}>
+                <div className={`px-4 py-3 flex items-center ${hasThirdShift ? "col-span-6" : "col-span-5"}`}>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total do Período</span>
                 </div>
                 <div className="px-2 py-3 text-center">
@@ -699,6 +699,34 @@ export default function EspelhoPonto() {
                   {summary.diasFalta === 0 && summary.totalAtrasoMins === 0 && <span className="text-[10px] text-slate-400">Sem ocorrências</span>}
                 </div>
               </div>
+
+              {/* RESUMO HE por tipo de dia */}
+              {summary.totalHEMins > 0 && (() => {
+                const pUtil = parseFloat(empData?.heNormal50 || "50");
+                const pDom  = parseFloat(empData?.he100 || "100");
+                let heUtil = 0, heSab = 0, heDom = 0;
+                for (const d of allDays) {
+                  const r = recordMap[d];
+                  if (!r) continue;
+                  const he = parseHHMM(r.horasExtras);
+                  if (he <= 0) continue;
+                  const dow = new Date(d + "T12:00:00Z").getUTCDay();
+                  if (dow === 0) heDom += he;
+                  else if (dow === 6) heSab += he;
+                  else heUtil += he;
+                }
+                const parts: string[] = [];
+                if (heUtil > 0) parts.push(`${minsToHHMM(heUtil)} a ${pUtil}% (dias úteis)`);
+                if (heSab  > 0) parts.push(`${minsToHHMM(heSab)} a ${pUtil}% (sábados)`);
+                if (heDom  > 0) parts.push(`${minsToHHMM(heDom)} a ${pDom}% (domingos)`);
+                if (parts.length === 0) return null;
+                return (
+                  <div className="px-4 py-2.5 bg-blue-50 border-t border-blue-100 flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">HE</span>
+                    <span className="text-xs text-blue-700 font-medium">= {parts.join(" + ")}</span>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* ── ASSINATURAS ──────────────────────────────────────── */}

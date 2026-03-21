@@ -358,7 +358,8 @@ export const horasExtrasRouter = router({
 
       // Get employee info
       const empRows = ((await db.execute(sql`
-        SELECT id, "nomeCompleto", funcao, "codigoInterno", cpf, "salarioBase", "valorHora", "horasMensais"
+        SELECT id, "nomeCompleto", funcao, "codigoInterno", cpf, "salarioBase", "valorHora", "horasMensais",
+               "heNormal50", "he100", "heFeriado", "heNoturna"
         FROM employees
         WHERE id = ${input.employeeId}
           AND "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
