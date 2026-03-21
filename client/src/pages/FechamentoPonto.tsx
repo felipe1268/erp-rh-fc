@@ -3720,6 +3720,8 @@ export default function FechamentoPonto() {
                             <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Saída Int.</th>
                             <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Retorno</th>
                             <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Saída</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs text-blue-600" style={{minWidth:100}}>Entr. HE</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs text-blue-600" style={{minWidth:100}}>Saída HE</th>
                             <th className="px-1 py-1.5 text-center font-medium text-xs w-16 text-red-600">Falta</th>
                             <th className="px-1 py-1.5 text-center font-medium text-xs w-20 text-orange-600">Feriado</th>
                             <th className="px-1 py-1.5 w-6"></th>
@@ -3790,6 +3792,8 @@ export default function FechamentoPonto() {
                                 <td className="px-1 py-1"><Input type="time" value={day.saida1} className={`h-7 text-xs font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
                                 <td className="px-1 py-1"><Input type="time" value={day.entrada2} className={`h-7 text-xs font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
                                 <td className="px-1 py-1"><Input type="time" value={day.saida2} className={`h-7 text-xs font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.entrada3 || ""} className={`h-7 text-xs font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: e.target.value } : d))} /></td>
+                                <td className="px-1 py-1"><Input type="time" value={day.saida3 || ""} className={`h-7 text-xs font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: e.target.value } : d))} /></td>
                                 <td className="px-1 py-1 text-center">
                                   <button
                                     type="button"

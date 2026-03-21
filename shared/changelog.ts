@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 677,
+    titulo: "Lançamento Manual — colunas Entr. HE e Saída HE reintroduzidas",
+    descricao: "Colunas 'Entr. HE' e 'Saída HE' (entrada3/saida3) reincluídas na tabela de dias lançados do lançamento manual de ponto. Os campos são enviados ao backend que já calcula HE = horas trabalhadas no período HE, acumuladas ao total do dia.",
+    tipo: "feature",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 676,
     titulo: "Espelho de Ponto — Saldo HE líquido (HE − Atrasos)",
     descricao: "O card e o rodapé 'Total do Período' agora exibem o Saldo HE = HE positiva − Atrasos, com sinal + (azul) ou − (vermelho). Os badges de detalhe no rodapé mostram individualmente HE +Xh e Atr. -Yh para transparência do cálculo.",
