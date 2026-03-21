@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 682,
+    titulo: "Férias — Bloqueio de exclusão de períodos",
+    descricao: "Removido o botão de exclusão (lixeira) da lista de férias em todos os perfis. Férias são obrigação legal (CLT) e não podem ser excluídas. Para desfazer ações acidentais, use o botão 'Reverter' (concluída → em_gozo) ou 'Cancelar' já disponíveis.",
+    tipo: "fix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 681,
     titulo: "HE — Excluir períodos cancelados (ADM Master)",
     descricao: "ADM Master pode excluir permanentemente períodos de HE com status 'cancelado'. Botão 'Excluir' aparece apenas nessas linhas e apenas para o perfil ADM Master. Backend valida o status antes de deletar (he_period_employees + he_periods). Usuários comuns continuam vendo apenas o botão 'Cancelar' para períodos ativos.",

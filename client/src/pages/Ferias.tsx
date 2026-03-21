@@ -17,7 +17,7 @@ import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Palmtree, Plus, Search, Calendar, DollarSign, AlertTriangle,
-  Users, Trash2, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
+  Users, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
   Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square, Undo2,
 } from "lucide-react";
@@ -775,9 +775,6 @@ export default function Ferias() {
                                 )}
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={() => { setSelectedItem(f); setShowDetailDialog(true); }}>
                                   <Eye className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir?")) deleteFerias.mutate({ id: f.id }); }}>
-                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
                             </td>
