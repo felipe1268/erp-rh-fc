@@ -161,6 +161,17 @@ async function startServer() {
           )
         `);
         console.log("[ColFix] pj_contracts revisao + pj_contract_revisoes Rev.664 OK");
+        // Rev.707: vacation_periods — colunas de ajuste/líquido + acréscimos/descontos/recibo
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS ajuste_inss VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS valor_liquido VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS bonus_valor VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS bonus_desc TEXT`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS pensao_desconto VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS outros_descontos VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS outros_descontos_desc TEXT`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_url TEXT`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_nome VARCHAR(255)`);
+        console.log("[ColFix] vacation_periods Rev.707 OK");
         // Recuperar fotos já enviadas cujo fotoUrl não foi salvo no banco
         try {
           const fs = await import("fs");
