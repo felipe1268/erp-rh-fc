@@ -3720,8 +3720,8 @@ export default function FechamentoPonto() {
                             <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Saída Int.</th>
                             <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Retorno</th>
                             <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Saída</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs w-10 text-red-600">Falta</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs w-10 text-orange-600">Fer.</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs w-16 text-red-600">Falta</th>
+                            <th className="px-1 py-1.5 text-center font-medium text-xs w-20 text-orange-600">Feriado</th>
                             <th className="px-1 py-1.5 w-6"></th>
                           </tr>
                         </thead>
