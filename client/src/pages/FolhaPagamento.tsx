@@ -160,6 +160,7 @@ export default function FolhaPagamento() {
       setCalcType(null);
       setCalcElapsed(0);
       setValeResult(data);
+      setValeExcluirSel(new Set()); // rejeitados are now in data.funcionarios[].status
       setViewMode("calculo_vale");
       toast.success(`Vale calculado: ${data.totalFuncionarios ?? ''} funcionários — R$ ${data.totalVale ? Number(data.totalVale).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''}`);
       payrollPeriod.refetch();
@@ -213,10 +214,17 @@ export default function FolhaPagamento() {
   const decidirValeMut = trpc.payrollEngine.decidirVale.useMutation({
     onSuccess: (data) => {
       toast.success(data.message);
-      // Recalculate vale to refresh the view
       gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
     },
     onError: (err) => toast.error(`Erro ao registrar decisão: ${err.message}`),
+  });
+
+  const reverterValeMut = trpc.payrollEngine.reverterVale.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
+    },
+    onError: (err) => toast.error(`Erro ao reverter vale: ${err.message}`),
   });
 
   // ===== HE MÓDULO =====
@@ -1500,7 +1508,10 @@ export default function FolhaPagamento() {
     const funcionariosComAlerta = todosFunc.filter((f: any) => f.temAlerta);
     const funcionariosSemAlerta = todosFunc.filter((f: any) => !f.temAlerta);
     const totalSemAlerta = funcionariosSemAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
-    const totalSemAlertaEfetivo = funcionariosSemAlerta.filter((f: any) => !valeExcluirSel.has(f.employeeId)).reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
+    const totalSemAlertaEfetivo = funcionariosSemAlerta
+      .filter((f: any) => f.status !== 'rejeitado' && !valeExcluirSel.has(f.employeeId))
+      .reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
+    const hasAnyExcluidos = funcionariosSemAlerta.some((f: any) => f.status === 'rejeitado') || valeExcluirSel.size > 0;
     const totalComAlerta = funcionariosComAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
     const comHE = todosFunc.filter((f: any) => (f.valorHE || 0) > 0);
     const totalHE = comHE.reduce((s: number, f: any) => s + (f.valorHE || 0), 0);
@@ -1753,10 +1764,10 @@ export default function FolhaPagamento() {
                         <input
                           type="checkbox"
                           className="rounded"
-                          checked={filteredSemAlerta.length > 0 && filteredSemAlerta.every((f: any) => valeExcluirSel.has(f.employeeId))}
+                          checked={filteredSemAlerta.filter((f: any) => f.status !== 'rejeitado').length > 0 && filteredSemAlerta.filter((f: any) => f.status !== 'rejeitado').every((f: any) => valeExcluirSel.has(f.employeeId))}
                           onChange={e => {
                             if (e.target.checked) {
-                              setValeExcluirSel(new Set(filteredSemAlerta.map((f: any) => f.employeeId)));
+                              setValeExcluirSel(new Set(filteredSemAlerta.filter((f: any) => f.status !== 'rejeitado').map((f: any) => f.employeeId)));
                             } else {
                               setValeExcluirSel(new Set());
                             }
@@ -1774,22 +1785,26 @@ export default function FolhaPagamento() {
                   <tbody>
                     {filteredSemAlerta.map((f: any, i: number) => {
                       const isSel = valeExcluirSel.has(f.employeeId);
+                      const isRejeitado = f.status === 'rejeitado';
+                      const isHighlighted = isSel || isRejeitado;
                       return (
-                        <tr key={i} className={`border-b border-gray-100 hover:bg-gray-50 ${isSel ? "bg-red-50/40" : ""}`}>
+                        <tr key={i} className={`border-b border-gray-100 hover:bg-gray-50 ${isHighlighted ? "bg-red-50/40" : ""}`}>
                           <td className="py-2 px-2 no-print">
-                            <input
-                              type="checkbox"
-                              className="rounded"
-                              checked={isSel}
-                              onChange={e => {
-                                setValeExcluirSel(prev => {
-                                  const next = new Set(prev);
-                                  if (e.target.checked) next.add(f.employeeId);
-                                  else next.delete(f.employeeId);
-                                  return next;
-                                });
-                              }}
-                            />
+                            {!isRejeitado && (
+                              <input
+                                type="checkbox"
+                                className="rounded"
+                                checked={isSel}
+                                onChange={e => {
+                                  setValeExcluirSel(prev => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(f.employeeId);
+                                    else next.delete(f.employeeId);
+                                    return next;
+                                  });
+                                }}
+                              />
+                            )}
                           </td>
                           <td className="py-2 px-2 font-medium">
                             <button
@@ -1802,9 +1817,20 @@ export default function FolhaPagamento() {
                           </td>
                           <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
                           <td className="text-right py-2 px-2">{formatBRL(f.valorAdiantamento)}</td>
-                          <td className={`text-right py-2 px-2 font-bold ${isSel ? "line-through text-red-500" : ""}`}>{formatBRL(f.valorTotalVale)}</td>
+                          <td className={`text-right py-2 px-2 font-bold ${isHighlighted ? "line-through text-red-500" : ""}`}>{formatBRL(f.valorTotalVale)}</td>
                           <td className="text-center py-2 px-2">
-                            {isSel ? (
+                            {isRejeitado ? (
+                              <button
+                                className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5"
+                                onClick={() => {
+                                  if (!confirm(`Reverter vale de ${f.nome}? O funcionário voltará a receber o adiantamento.`)) return;
+                                  reverterValeMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId });
+                                }}
+                                disabled={reverterValeMut.isPending}
+                              >
+                                <RefreshCw className="h-3 w-3 mr-0.5" /> Reverter
+                              </button>
+                            ) : isSel ? (
                               <Badge className="bg-red-100 text-red-600 text-[10px]">
                                 <XCircle className="h-3 w-3 mr-0.5" /> Excluir
                               </Badge>
@@ -1825,7 +1851,7 @@ export default function FolhaPagamento() {
                       <td className="text-right py-2 px-2">—</td>
                       <td className="text-right py-2 px-2">—</td>
                       <td className="text-right py-2 px-2">
-                        {valeExcluirSel.size > 0 ? (
+                        {hasAnyExcluidos ? (
                           <div className="flex flex-col items-end gap-0.5">
                             <span className="text-sm line-through text-red-400">{formatBRL(totalSemAlerta)}</span>
                             <span className="text-lg text-[#1B2A4A]">{formatBRL(totalSemAlertaEfetivo)}</span>

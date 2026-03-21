@@ -1125,6 +1125,13 @@ export const payrollEngineRouter = router({
       // HE is now a SEPARATE MODULE (he_periods / horasExtras router).
       // Vale = pure advance only — no HE included here.
 
+      // Preserve manually-rejected employees across recalc
+      const rejeitadosRows = ((await db.execute(sql`
+        SELECT "employeeId" FROM payroll_advances
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'rejeitado'
+      `)) as any).rows || [];
+      const rejeitadosSet = new Set<number>((rejeitadosRows as any[]).map((r: any) => Number(r.employeeId)));
+
       // Clear existing advances for this month
       await db.execute(sql`
         DELETE FROM payroll_advances WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
@@ -1189,26 +1196,29 @@ export const payrollEngineRouter = router({
             employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
             valorAdiantamento: 0, valorHE: 0, valorTotalVale: 0,
             temAlerta: true, alertaTipo: motivosBloqueio.length > 1 ? "multiplo" : (faltas > 0 ? "faltas_excessivas" : "admissao_recente"),
-            alertaMotivo: motivoBloqueio, bloqueado: true, faltas, minutosHE,
+            alertaMotivo: motivoBloqueio, bloqueado: true, faltas, minutosHE, status: 'alerta',
           });
           continue; // Não gera vale nem evento financeiro
         }
 
-        // Aprovado automaticamente
+        // Aprovado automaticamente (ou previously rejeitado — status will be fixed below)
         advanceInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
           ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
           ${0}, ${null},
           ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'calculado'})`);
 
-        eventInsertRows.push(sql`(${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
-          ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
-          ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})`);
+        const isRejeitado = rejeitadosSet.has(emp.id);
+        if (!isRejeitado) {
+          eventInsertRows.push(sql`(${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
+            ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
+            ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})`);
+          totalVale += valorTotalVale;
+        }
 
-        totalVale += valorTotalVale;
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
           valorAdiantamento, valorHE, valorTotalVale, temAlerta: false, alertaTipo: "", alertaMotivo: "",
-          bloqueado: false, faltas, minutosHE,
+          bloqueado: false, faltas, minutosHE, status: isRejeitado ? 'rejeitado' : 'calculado',
         });
       }
 
@@ -1219,6 +1229,16 @@ export const payrollEngineRouter = router({
             "valorAdiantamento", "valorHorasExtras", "horasExtrasQtd", "valorTotalVale", "bloqueado", "motivoBloqueio",
             "faltasNoPeriodo", "valorHora", "cargaHorariaDiaria", "diasUteisNoMes", status)
           VALUES ${sql.join(advanceInsertRows, sql`,`)}
+        `);
+      }
+
+      // Re-apply 'rejeitado' status to previously-rejected employees
+      if (rejeitadosSet.size > 0) {
+        const ids = Array.from(rejeitadosSet);
+        await db.execute(sql`
+          UPDATE payroll_advances SET status = 'rejeitado'
+          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+            AND "employeeId" = ANY(${ids}::int[])
         `);
       }
 
@@ -1334,6 +1354,37 @@ export const payrollEngineRouter = router({
         rejeitados,
         message: `Decisão registrada: ${aprovados} aprovados, ${rejeitados} rejeitados`,
       };
+    }),
+
+  reverterVale: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string(), employeeId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const revertidoPorNome = ctx.user.name || "Usuário";
+      await db.execute(sql`
+        UPDATE payroll_advances SET status = 'calculado', bloqueado = 0,
+          "motivoBloqueio" = COALESCE("motivoBloqueio", '') || ${` [REVERTIDO por ${revertidoPorNome}]`}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${input.employeeId}
+      `);
+      // Re-add financial event for this employee
+      const criteria = await getPayrollCriteria(db, input.companyId);
+      const { year, month } = parseMesRef(input.mesReferencia);
+      const dataPrevista = `${year}-${String(month).padStart(2, "0")}-${String(criteria.diaAdiantamento).padStart(2, "0")}`;
+      const advRows = ((await db.execute(sql`
+        SELECT "valorTotalVale" FROM payroll_advances
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${input.employeeId}
+      `)) as any).rows || [];
+      const adv = (advRows as any[])?.[0];
+      if (adv) {
+        const empRows = ((await db.execute(sql`SELECT "nomeCompleto" FROM employees WHERE id = ${input.employeeId}`)) as any).rows || [];
+        const empName = (empRows as any[])?.[0]?.nomeCompleto || 'Funcionário';
+        await db.execute(sql`
+          INSERT INTO financial_events ("companyId", tipo, categoria, "mesCompetencia", "dataPrevista", valor, status, "employeeId", "employeeName", descricao, "origemTipo", "criadoPor")
+          VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${adv.valorTotalVale}, 'consolidado', ${input.employeeId}, ${empName}, ${`Vale ${input.mesReferencia} - ${empName} (revertido)`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
+        `);
+      }
+      return { message: "Vale revertido com sucesso" };
     }),
 
   // ============================================================

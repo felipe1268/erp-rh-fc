@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 703,
+    titulo: "Vale — 'Não Pagar' persistente e botão Reverter",
+    descricao: "O status 'Não Pagar' agora é salvo no banco e sobrevive ao fechamento e recálculo. Ao reabrir o cálculo do mês, funcionários já rejeitados aparecem automaticamente em vermelho. Botão 'Reverter' individual permite reincluir o funcionário no vale sem precisar recalcular tudo. O checkbox 'Selecionar todos' exclui quem já está rejeitado. Mutação reverterVale também reinsere o evento financeiro do vale.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 702,
     titulo: "Vale — Valor em vermelho e total descontado ao marcar 'Não Pagar'",
     descricao: "Ao selecionar um funcionário para 'Não Pagar', o valor do Total Vale aparece em vermelho com linha riscada. O TOTAL APROVADOS no rodapé é recalculado em tempo real, exibindo o valor original riscado em vermelho acima e o novo total efetivo abaixo. Ambos os feedbacks são visuais apenas (antes da confirmação).",
