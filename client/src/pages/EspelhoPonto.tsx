@@ -664,34 +664,42 @@ export default function EspelhoPonto() {
 
                     {/* Total */}
                     <div className="px-2 py-3 text-center">
-                      {rec?.horasTrabalhadas && rec.horasTrabalhadas !== "0:00" && rec.horasTrabalhadas !== ""
-                        ? <span className="font-mono text-base font-bold text-slate-700">{rec.horasTrabalhadas}</span>
-                        : <span className="text-slate-300 text-base">—</span>}
+                      {isFerias
+                        ? <span className="text-teal-300 text-xs">—</span>
+                        : rec?.horasTrabalhadas && rec.horasTrabalhadas !== "0:00" && rec.horasTrabalhadas !== ""
+                          ? <span className="font-mono text-base font-bold text-slate-700">{rec.horasTrabalhadas}</span>
+                          : <span className="text-slate-300 text-base">—</span>}
                     </div>
 
                     {/* HE */}
                     <div className="px-2 py-3 text-center">
-                      {heM > 0
-                        ? <span className="font-mono text-base font-bold text-blue-600">+{minsToHHMM(heM)}</span>
-                        : atrasM > 0
-                          ? <span className="font-mono text-sm text-amber-600">-{minsToHHMM(atrasM)}</span>
-                          : <span className="text-slate-200 text-base">—</span>}
+                      {isFerias
+                        ? <span className="text-teal-300 text-xs">—</span>
+                        : heM > 0
+                          ? <span className="font-mono text-base font-bold text-blue-600">+{minsToHHMM(heM)}</span>
+                          : atrasM > 0
+                            ? <span className="font-mono text-sm text-amber-600">-{minsToHHMM(atrasM)}</span>
+                            : <span className="text-slate-200 text-base">—</span>}
                     </div>
 
-                    {/* Obra + Fonte */}
+                    {/* Obra + Fonte (oculto em férias) */}
                     <div className="px-2 py-3 flex flex-col justify-center gap-0.5 min-w-0">
-                      {rec?.obraNome
-                        ? <span className="text-xs text-slate-600 truncate leading-tight" title={rec.obraNome}>{rec.obraNome}</span>
-                        : <span className="text-slate-200 text-sm">—</span>}
-                      {rec && (
-                        <span className={`text-[10px] font-semibold px-1.5 py-px rounded w-fit leading-tight ${
-                          rec.fonte === 'manual' || rec.ajusteManual
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-slate-100 text-slate-400'
-                        }`}>
-                          {rec.ajusteManual ? 'Manual' : rec.fonte === 'dixi' ? 'Dixi' : rec.fonte || 'manual'}
-                        </span>
-                      )}
+                      {isFerias
+                        ? <span className="text-teal-300 text-xs">—</span>
+                        : <>
+                          {rec?.obraNome
+                            ? <span className="text-xs text-slate-600 truncate leading-tight" title={rec.obraNome}>{rec.obraNome}</span>
+                            : <span className="text-slate-200 text-sm">—</span>}
+                          {rec && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-px rounded w-fit leading-tight ${
+                              rec.fonte === 'manual' || rec.ajusteManual
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-slate-100 text-slate-400'
+                            }`}>
+                              {rec.ajusteManual ? 'Manual' : rec.fonte === 'dixi' ? 'Dixi' : rec.fonte || 'manual'}
+                            </span>
+                          )}
+                        </>}
                     </div>
 
                     {/* Ocorrência */}

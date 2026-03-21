@@ -1241,6 +1241,36 @@ export const fechamentoPontoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
 
+      // Bloqueia lançamento em dia de férias
+      const feriasAtivas = await db.select({
+        dataInicio: vacationPeriods.dataInicio,
+        dataFim: vacationPeriods.dataFim,
+        periodo2Inicio: vacationPeriods.periodo2Inicio,
+        periodo2Fim: vacationPeriods.periodo2Fim,
+        periodo3Inicio: vacationPeriods.periodo3Inicio,
+        periodo3Fim: vacationPeriods.periodo3Fim,
+      }).from(vacationPeriods).where(
+        and(
+          companyFilter(vacationPeriods.companyId, input),
+          eq(vacationPeriods.employeeId, input.employeeId),
+          sql`${vacationPeriods.status} NOT IN ('cancelada', 'pendente')`,
+          isNull(vacationPeriods.deletedAt),
+        )
+      );
+      const inRange = (d: string, start: string | null, end: string | null) =>
+        start && end ? d >= start && d <= end : false;
+      const emFerias = feriasAtivas.some(f =>
+        inRange(input.data, f.dataInicio, f.dataFim) ||
+        inRange(input.data, f.periodo2Inicio, f.periodo2Fim) ||
+        inRange(input.data, f.periodo3Inicio, f.periodo3Fim)
+      );
+      if (emFerias) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `O dia ${input.data} está dentro de um período de férias do funcionário. Não é permitido lançar ponto neste dia.`,
+        });
+      }
+
       let totalMinutes = 0;
       if (input.entrada1 && input.saida1) totalMinutes += diffMinutes(input.entrada1, input.saida1);
       if (input.entrada2 && input.saida2) totalMinutes += diffMinutes(input.entrada2, input.saida2);
