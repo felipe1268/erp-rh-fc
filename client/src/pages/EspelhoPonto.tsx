@@ -375,8 +375,8 @@ export default function EspelhoPonto() {
 
   // Cell helper — shows time or dash
   const T = (v: string | null | undefined) =>
-    v ? <span className="font-mono text-sm text-slate-700">{v}</span>
-       : <span className="text-slate-300 text-sm">—</span>;
+    v ? <span className="font-mono text-base text-slate-700">{v}</span>
+       : <span className="text-slate-300 text-base">—</span>;
 
   return (
     <DashboardLayout>
@@ -557,18 +557,18 @@ export default function EspelhoPonto() {
               </div>
 
               {/* Table header */}
-              <div className="grid border-b-2 border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-widest text-slate-500"
+              <div className="grid border-b-2 border-slate-300 bg-slate-100 text-xs font-bold uppercase tracking-widest text-slate-500"
                 style={{ gridTemplateColumns: "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem" }}>
-                <div className="px-4 py-2.5">Data</div>
-                <div className="px-2 py-2.5 text-center">Ent. 1</div>
-                <div className="px-2 py-2.5 text-center">Saí. 1</div>
-                <div className="px-2 py-2.5 text-center">Ent. 2</div>
-                <div className="px-2 py-2.5 text-center">Saí. 2</div>
-                <div className="px-2 py-2.5 text-center">Ent. 3 / Saí. 3</div>
-                <div className="px-2 py-2.5 text-center">Total</div>
-                <div className="px-2 py-2.5 text-center">H. Extra</div>
-                <div className="px-2 py-2.5 text-center">Ocorrência</div>
-                <div className="px-2 py-2.5 no-print" />
+                <div className="px-4 py-3">Data</div>
+                <div className="px-2 py-3 text-center">Ent. 1</div>
+                <div className="px-2 py-3 text-center">Saí. 1</div>
+                <div className="px-2 py-3 text-center">Ent. 2</div>
+                <div className="px-2 py-3 text-center">Saí. 2</div>
+                <div className="px-2 py-3 text-center">Ent. 3 / Saí. 3</div>
+                <div className="px-2 py-3 text-center">Total</div>
+                <div className="px-2 py-3 text-center">H. Extra</div>
+                <div className="px-2 py-3 text-center">Ocorrência</div>
+                <div className="px-2 py-3 no-print" />
               </div>
 
               {/* Rows */}
@@ -584,74 +584,74 @@ export default function EspelhoPonto() {
                 // Very compact weekend (sunday with no record)
                 if (isSun && !rec) return (
                   <div key={dateStr}
-                    className={`grid border-b border-slate-50 ${cfg.row}`}
+                    className={`grid border-b border-slate-100 ${cfg.row}`}
                     style={{ gridTemplateColumns: "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem" }}>
-                    <div className="px-4 py-1.5 flex items-center gap-2">
+                    <div className="px-4 py-2 flex items-center gap-2">
                       <span className="text-xs text-slate-300 font-medium">{name}</span>
-                      <span className="text-sm font-bold text-slate-200">{String(num).padStart(2,"0")}/{monthNum}</span>
+                      <span className="text-base font-bold text-slate-200">{String(num).padStart(2,"0")}/{monthNum}</span>
                     </div>
                     {Array(8).fill(null).map((_,i) => (
-                      <div key={i} className="px-2 py-1.5 text-center">
-                        <span className="text-slate-200 text-sm">—</span>
+                      <div key={i} className="px-2 py-2 text-center">
+                        <span className="text-slate-200 text-base">—</span>
                       </div>
                     ))}
-                    <div className="px-2 py-1.5 no-print" />
+                    <div className="px-2 py-2 no-print" />
                   </div>
                 );
 
                 return (
                   <div key={dateStr}
-                    className={`group grid border-b border-slate-100 hover:brightness-97 transition-all ${cfg.row}`}
+                    className={`group grid border-b border-slate-200 hover:brightness-97 transition-all ${cfg.row}`}
                     style={{ gridTemplateColumns: "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem 7rem 2.5rem" }}>
 
                     {/* Data */}
-                    <div className="px-4 py-2.5 flex items-center gap-1.5">
+                    <div className="px-4 py-3 flex items-center gap-1.5">
                       <div>
-                        <span className={`text-[10px] font-bold uppercase tracking-wide ${isWeekend ? "text-slate-300" : "text-slate-400"}`}>{name}</span>
-                        <span className={`text-sm font-bold ml-1.5 ${isWeekend ? "text-slate-300" : "text-slate-800"}`}>{String(num).padStart(2,"0")}/{monthNum}</span>
+                        <span className={`text-xs font-bold uppercase tracking-wide ${isWeekend ? "text-slate-300" : "text-slate-400"}`}>{name}</span>
+                        <span className={`text-base font-bold ml-1.5 ${isWeekend ? "text-slate-300" : "text-slate-800"}`}>{String(num).padStart(2,"0")}/{monthNum}</span>
                       </div>
                     </div>
 
                     {/* Entrada 1 */}
-                    <div className="px-2 py-2.5 text-center">{T(rec?.entrada1)}</div>
+                    <div className="px-2 py-3 text-center">{T(rec?.entrada1)}</div>
                     {/* Saída 1 */}
-                    <div className="px-2 py-2.5 text-center">{T(rec?.saida1)}</div>
+                    <div className="px-2 py-3 text-center">{T(rec?.saida1)}</div>
                     {/* Entrada 2 */}
-                    <div className="px-2 py-2.5 text-center">{T(rec?.entrada2)}</div>
+                    <div className="px-2 py-3 text-center">{T(rec?.entrada2)}</div>
                     {/* Saída 2 */}
-                    <div className="px-2 py-2.5 text-center">{T(rec?.saida2)}</div>
+                    <div className="px-2 py-3 text-center">{T(rec?.saida2)}</div>
                     {/* Turno 3 combinado */}
-                    <div className="px-2 py-2.5 text-center">
+                    <div className="px-2 py-3 text-center">
                       {rec?.entrada3 || rec?.saida3
-                        ? <span className="font-mono text-xs text-slate-600">{rec?.entrada3 || "—"} / {rec?.saida3 || "—"}</span>
-                        : <span className="text-slate-200 text-sm">—</span>}
+                        ? <span className="font-mono text-sm text-slate-600">{rec?.entrada3 || "—"} / {rec?.saida3 || "—"}</span>
+                        : <span className="text-slate-200 text-base">—</span>}
                     </div>
 
                     {/* Total */}
-                    <div className="px-2 py-2.5 text-center">
+                    <div className="px-2 py-3 text-center">
                       {rec?.horasTrabalhadas && rec.horasTrabalhadas !== "0:00" && rec.horasTrabalhadas !== ""
-                        ? <span className="font-mono text-sm font-bold text-slate-700">{rec.horasTrabalhadas}</span>
-                        : <span className="text-slate-300 text-sm">—</span>}
+                        ? <span className="font-mono text-base font-bold text-slate-700">{rec.horasTrabalhadas}</span>
+                        : <span className="text-slate-300 text-base">—</span>}
                     </div>
 
                     {/* HE */}
-                    <div className="px-2 py-2.5 text-center">
+                    <div className="px-2 py-3 text-center">
                       {heM > 0
-                        ? <span className="font-mono text-sm font-bold text-blue-600">+{minsToHHMM(heM)}</span>
+                        ? <span className="font-mono text-base font-bold text-blue-600">+{minsToHHMM(heM)}</span>
                         : atrasM > 0
-                          ? <span className="font-mono text-xs text-amber-600">-{minsToHHMM(atrasM)}</span>
-                          : <span className="text-slate-200 text-sm">—</span>}
+                          ? <span className="font-mono text-sm text-amber-600">-{minsToHHMM(atrasM)}</span>
+                          : <span className="text-slate-200 text-base">—</span>}
                     </div>
 
                     {/* Ocorrência */}
-                    <div className="px-2 py-2.5 flex items-center justify-center">
+                    <div className="px-2 py-3 flex items-center justify-center">
                       {cfg.badge
-                        ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg.badge}`}>{cfg.label}</span>
-                        : <span className="text-[10px] text-slate-300">{isWeekend ? cfg.label : ""}</span>}
+                        ? <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${cfg.badge}`}>{cfg.label}</span>
+                        : <span className="text-xs text-slate-300">{isWeekend ? cfg.label : ""}</span>}
                     </div>
 
                     {/* Editar — oculto na impressão */}
-                    <div className="px-1 py-2.5 flex items-center justify-center no-print">
+                    <div className="px-1 py-3 flex items-center justify-center no-print">
                       {!isWeekend && (
                         <button
                           onClick={() => openEdit(dateStr, rec)}
