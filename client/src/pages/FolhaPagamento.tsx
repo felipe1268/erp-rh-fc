@@ -240,6 +240,10 @@ export default function FolhaPagamento() {
     onSuccess: () => { toast.success("Período de HE aprovado!"); hePeriods.refetch(); heDetalhe.refetch(); },
     onError: (err) => toast.error(`Erro: ${err.message}`),
   });
+  const heDeletearCanceladoMut = trpc.horasExtras.deletarCancelado.useMutation({
+    onSuccess: () => { toast.success("Período excluído com sucesso."); hePeriods.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const heCancelarMut = trpc.horasExtras.cancelar.useMutation({
     onSuccess: () => { toast.success("Período cancelado. Você pode recalcular agora."); hePeriods.refetch(); if (heViewPeriodId) setHeViewPeriodId(null); },
     onError: (err) => toast.error(`Erro: ${err.message}`),
@@ -2178,6 +2182,13 @@ export default function FolhaPagamento() {
                                     onClick={() => { if (confirm("Cancelar este período? Isso permite recalcular o mesmo intervalo.")) heCancelarMut.mutate({ hePeriodId: p.id, companyId }); }}
                                     disabled={heCancelarMut.isPending}>
                                     <XCircle className="h-3 w-3 mr-1" /> Cancelar
+                                  </Button>
+                                )}
+                                {isMaster && p.status === "cancelado" && (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs border-red-500 text-red-700 hover:bg-red-50"
+                                    onClick={() => { if (confirm("Excluir permanentemente este período cancelado? Esta ação não pode ser desfeita.")) heDeletearCanceladoMut.mutate({ hePeriodId: p.id, companyId }); }}
+                                    disabled={heDeletearCanceladoMut.isPending}>
+                                    <Trash2 className="h-3 w-3 mr-1" /> Excluir
                                   </Button>
                                 )}
                               </div>

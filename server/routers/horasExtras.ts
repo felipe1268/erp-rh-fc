@@ -321,6 +321,28 @@ export const horasExtrasRouter = router({
       return { ok: true };
     }),
 
+  deletarCancelado: protectedProcedure
+    .input(z.object({ hePeriodId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin_master') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas ADM Master pode excluir períodos de HE.' });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      // Verifica se está cancelado antes de deletar
+      const rows = ((await db.execute(sql`
+        SELECT id, status FROM he_periods WHERE id = ${input.hePeriodId} AND "companyId" = ${input.companyId}
+      `)) as any).rows || [];
+      if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND', message: 'Período não encontrado.' });
+      if (rows[0].status !== 'cancelado') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas períodos com status "cancelado" podem ser excluídos.' });
+      }
+      // Deleta funcionários vinculados e depois o período
+      await db.execute(sql`DELETE FROM he_period_employees WHERE "hePeriodId" = ${input.hePeriodId}`);
+      await db.execute(sql`DELETE FROM he_periods WHERE id = ${input.hePeriodId} AND "companyId" = ${input.companyId}`);
+      return { ok: true };
+    }),
+
   // ============================================================
   // ESPELHO DE PONTO — Rev.645
   // ============================================================

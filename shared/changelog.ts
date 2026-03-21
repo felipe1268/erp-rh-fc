@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 681,
+    titulo: "HE — Excluir períodos cancelados (ADM Master)",
+    descricao: "ADM Master pode excluir permanentemente períodos de HE com status 'cancelado'. Botão 'Excluir' aparece apenas nessas linhas e apenas para o perfil ADM Master. Backend valida o status antes de deletar (he_period_employees + he_periods). Usuários comuns continuam vendo apenas o botão 'Cancelar' para períodos ativos.",
+    tipo: "feature",
+    modulos: "Folha/HE",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 680,
     titulo: "Férias — Reverter concluída para Em Gozo + INSS e Valor Líquido",
     descricao: "Nova mutação reverterParaEmGozo (disponível a todos os admins) reverte status 'concluída' → 'em_gozo' com registro de motivo. Botão 'Reverter' adicionado na lista. Diálogo de detalhes agora exibe seção de INSS calculado progressivamente (tabela 2025) e valor líquido para pagamento.",
