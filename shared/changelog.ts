@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 694,
+    titulo: "Vale/Adiantamento — Bloqueio para férias, afastados e < 10 dias trabalhados",
+    descricao: "Geração de vale agora exclui: (1) funcionários em férias (status=Ferias) e afastados — anteriormente incluídos indevidamente; (2) funcionários com menos de 10 dias trabalhados na quinzena, seja por admissão no mês de referência ou por faltas. Bloqueados aparecem em 'Com Alerta' para visibilidade do RH, mas sem gerar evento financeiro.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 693,
     titulo: "Férias — Data Fim calculada automaticamente ao definir datas",
     descricao: "No diálogo 'Definir Data de Férias', a Data Fim agora é calculada automaticamente: ao preencher a Data Início ou alterar os Dias de Gozo, o campo Data Fim é preenchido (início + dias − 1). O campo Data Fim ainda pode ser editado manualmente se necessário.",

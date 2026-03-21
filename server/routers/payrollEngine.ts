@@ -1087,7 +1087,7 @@ export const payrollEngineRouter = router({
       const { year, month } = parseMesRef(input.mesReferencia);
       const diasUteis = getDiasUteisNoMes(year, month);
 
-      // Get active CLT employees
+      // Get active CLT employees — exclui Ferias, Afastado e demais inativos
       const empList = await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
@@ -1099,7 +1099,7 @@ export const payrollEngineRouter = router({
         and(
           companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
-          sql`${employees.status} IN ('Ativo', 'Ferias')`,
+          eq(employees.status, "Ativo"),
           sql`${employees.deletedAt} IS NULL`,
           sql`${employees.valorHora} IS NOT NULL AND ${employees.valorHora} != ''`,
         )
@@ -1139,46 +1139,75 @@ export const payrollEngineRouter = router({
       const advanceInsertRows: any[] = [];
       const eventInsertRows: any[] = [];
 
+      // Dias úteis na primeira quinzena (1–15) — exclui domingos (construção civil trabalha sábado)
+      let diasUteisFirstHalf = 0;
+      for (let d = 1; d <= 15; d++) {
+        const dow = new Date(year, month - 1, d).getDay();
+        if (dow !== 0) diasUteisFirstHalf++;
+      }
+
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
         const salarioBruto = valorHora * criteria.cargaHorariaDiaria * diasUteis;
         const percentual = criteria.percentualAdiantamento;
         const valorAdiantamento = salarioBruto * (percentual / 100);
         const faltas = faltasMap.get(emp.id) || 0;
-        // HE is now a SEPARATE MODULE — vale = adiantamento only
         const minutosHE = 0;
         const valorHE = 0;
         const valorTotalVale = valorAdiantamento;
 
-        const alertas: string[] = [];
-        if (faltas >= 10) alertas.push(`${faltas} faltas nos 15 primeiros dias do mês (01/${String(month).padStart(2,'0')} a 15/${String(month).padStart(2,'0')})`);
-        if (emp.dataAdmissao) {
-          const admDay = new Date(emp.dataAdmissao + "T12:00:00Z").getUTCDate();
-          const admMonth = new Date(emp.dataAdmissao + "T12:00:00Z").getUTCMonth() + 1;
-          const admYear = new Date(emp.dataAdmissao + "T12:00:00Z").getUTCFullYear();
-          if (admYear === year && admMonth === month && admDay > 10) alertas.push(`Admitido após dia 10 do mês (${emp.dataAdmissao})`);
+        // ── Regras de bloqueio ────────────────────────────────────────────
+        const motivosBloqueio: string[] = [];
+
+        // 1) Menos de 10 dias trabalhados por faltas
+        const diasTrabalhadosQuinzena = diasUteisFirstHalf - faltas;
+        if (diasTrabalhadosQuinzena < 10) {
+          motivosBloqueio.push(`Menos de 10 dias trabalhados na quinzena (${diasTrabalhadosQuinzena} dias — ${faltas} falta(s))`);
         }
 
-        const temAlerta = alertas.length > 0;
-        const alertaTipo = temAlerta ? (alertas.length > 1 ? "multiplo" : (faltas >= 10 ? "faltas_excessivas" : "admissao_recente")) : "";
-        const alertaMotivo = alertas.join(" | ");
-        if (temAlerta) bloqueados++;
+        // 2) Admitido no mês de referência (menos de 10 dias disponíveis)
+        if (emp.dataAdmissao) {
+          const admDate = new Date(emp.dataAdmissao + "T12:00:00Z");
+          const admYear = admDate.getUTCFullYear();
+          const admMonth = admDate.getUTCMonth() + 1;
+          if (admYear === year && admMonth === month) {
+            motivosBloqueio.push(`Admitido no mês de referência (${emp.dataAdmissao}) — menos de 10 dias trabalhados`);
+          }
+        }
 
+        const bloqueado = motivosBloqueio.length > 0;
+        const motivoBloqueio = motivosBloqueio.join(" | ");
+
+        if (bloqueado) {
+          // Registra o bloqueio para visibilidade do RH, mas sem gerar evento financeiro
+          bloqueados++;
+          advanceInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
+            ${formatMoney(0)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(0)},
+            ${1}, ${motivoBloqueio},
+            ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'alerta'})`);
+          results.push({
+            employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
+            valorAdiantamento: 0, valorHE: 0, valorTotalVale: 0,
+            temAlerta: true, alertaTipo: motivosBloqueio.length > 1 ? "multiplo" : (faltas > 0 ? "faltas_excessivas" : "admissao_recente"),
+            alertaMotivo: motivoBloqueio, bloqueado: true, faltas, minutosHE,
+          });
+          continue; // Não gera vale nem evento financeiro
+        }
+
+        // Aprovado automaticamente
         advanceInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
           ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
-          ${temAlerta ? 1 : 0}, ${alertaMotivo || null},
-          ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${temAlerta ? 'alerta' : 'calculado'})`);
+          ${0}, ${null},
+          ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'calculado'})`);
 
-        if (!temAlerta) {
-          eventInsertRows.push(sql`(${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
-            ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
-            ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})`);
-        }
+        eventInsertRows.push(sql`(${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
+          ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
+          ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})`);
 
         totalVale += valorTotalVale;
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
-          valorAdiantamento, valorHE, valorTotalVale, temAlerta, alertaTipo, alertaMotivo,
+          valorAdiantamento, valorHE, valorTotalVale, temAlerta: false, alertaTipo: "", alertaMotivo: "",
           bloqueado: false, faltas, minutosHE,
         });
       }
