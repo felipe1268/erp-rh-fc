@@ -34,6 +34,7 @@ const Obras = lazy(() => import("./pages/Obras"));
 const Clientes = lazy(() => import("./pages/Clientes"));
 const ObraEfetivo = lazy(() => import("./pages/ObraEfetivo"));
 const FechamentoPonto = lazy(() => import("./pages/FechamentoPonto"));
+const EspelhoPonto = lazy(() => import("./pages/EspelhoPonto"));
 const FolhaPagamento = lazy(() => import("./pages/FolhaPagamento"));
 const PayrollCompetencias = lazy(() => import("./pages/PayrollCompetencias"));
 const ControleDocumentos = lazy(() => import("./pages/ControleDocumentos"));
@@ -227,6 +228,7 @@ function Router() {
         <Route path={"/grupos-usuarios"} component={GruposUsuarios} />
         <Route path={"/auditoria"} component={Auditoria} />
         <Route path={"/fechamento-ponto"} component={FechamentoPonto} />
+        <Route path={"/espelho-ponto"} component={EspelhoPonto} />
         <Route path={"/folha-pagamento"} component={FolhaPagamento} />
         <Route path={"/gestao-competencias"} component={PayrollCompetencias} />
         <Route path={"/controle-documentos"} component={ControleDocumentos} />

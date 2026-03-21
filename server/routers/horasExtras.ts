@@ -322,6 +322,101 @@ export const horasExtrasRouter = router({
     }),
 
   // ============================================================
+  // ESPELHO DE PONTO — Rev.645
+  // ============================================================
+
+  // List active employees for autocomplete
+  listarFuncionariosParaPonto: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const ids = resolveCompanyIds(input);
+      const rows = ((await db.execute(sql`
+        SELECT id, "nomeCompleto", funcao, "codigoInterno", cpf
+        FROM employees
+        WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND (status IS NULL OR status = 'ativo')
+        ORDER BY "nomeCompleto" ASC
+      `)) as any).rows || [];
+      return rows;
+    }),
+
+  // Get espelho de ponto for a custom date range (any period, not month-locked)
+  getEspelhoPontoRange: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      employeeId: z.number(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const ids = resolveCompanyIds(input);
+
+      // Get employee info
+      const empRows = ((await db.execute(sql`
+        SELECT id, "nomeCompleto", funcao, "codigoInterno", cpf, "salarioBase", "valorHora", "horasMensais"
+        FROM employees
+        WHERE id = ${input.employeeId}
+          AND "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+      `)) as any).rows || [];
+      const emp = empRows[0];
+      if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+
+      // Get time records with deduplication (best record per day)
+      const records = ((await db.execute(sql`
+        SELECT DISTINCT ON (tr.data)
+          tr.id, tr.data, tr."entrada1", tr."saida1", tr."entrada2", tr."saida2",
+          tr."entrada3", tr."saida3", tr."horasTrabalhadas", tr."horasExtras",
+          tr."horasNoturnas", tr.faltas, tr.atrasos, tr.justificativa, tr.fonte,
+          tr."ajusteManual", tr."ajustadoPor", tr."batidasBrutas", tr."obraId",
+          o.nome as "obraNome"
+        FROM time_records tr
+        LEFT JOIN obras o ON tr."obraId" = o.id
+        WHERE tr."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND tr."employeeId" = ${input.employeeId}
+          AND tr.data >= ${input.dataInicio}::date
+          AND tr.data <= ${input.dataFim}::date
+        ORDER BY tr.data ASC, tr."horasTrabalhadas" DESC NULLS LAST, tr."ajusteManual" DESC NULLS LAST
+      `)) as any).rows || [];
+
+      // Build record map keyed by date string
+      const recordMap: Record<string, any> = {};
+      for (const r of records) {
+        const dateStr = String(r.data).slice(0, 10);
+        recordMap[dateStr] = r;
+      }
+
+      // Compute summary stats
+      const parseHHMM = (s: string | null | undefined): number => {
+        if (!s || s === "0:00" || s === "") return 0;
+        const p = s.split(":").map(Number);
+        return (p[0] || 0) * 60 + (p[1] || 0);
+      };
+
+      let diasTrabalhados = 0;
+      let totalHEMins = 0;
+      let totalFaltaMins = 0;
+      let totalAtrasoMins = 0;
+
+      for (const r of records) {
+        if (r.horasTrabalhadas && r.horasTrabalhadas !== "0:00" && r.horasTrabalhadas !== "") diasTrabalhados++;
+        totalHEMins += parseHHMM(r.horasExtras);
+        totalFaltaMins += parseHHMM(r.faltas);
+        totalAtrasoMins += parseHHMM(r.atrasos);
+      }
+
+      return {
+        employee: emp,
+        records: recordMap,
+        summary: { diasTrabalhados, totalHEMins, totalFaltaMins, totalAtrasoMins, totalRegistros: records.length },
+      };
+    }),
+
+  // ============================================================
   // BANCO DE HORAS — Rev.644
   // ============================================================
 

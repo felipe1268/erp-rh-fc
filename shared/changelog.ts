@@ -4020,4 +4020,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-21 00:00:00",
   },
+  {
+    version: 645,
+    titulo: "Espelho de Ponto individual — filtro de período livre",
+    descricao: "Nova página '/espelho-ponto' com visualização individual do cartão de ponto para qualquer período (sem travamento por mês). Funcionalidades: (1) Busca de funcionário com autocomplete por nome ou matrícula; (2) Filtro de período livre (data início + data fim) com 3 atalhos rápidos — Período HE atual (16→15), Mês atual, Últimos 30 dias; (3) Cards de resumo com dias trabalhados, hora extra acumulada, faltas e atrasos; (4) Tabela diária com código de cor por tipo de ocorrência (Normal, HE, Falta, Incompleto, Atraso, Fim de Semana); (5) Batidas exibidas em sequência (entrada=verde, saída=vermelho); (6) Coluna de Obra por dia; (7) Rodapé de totais com HE, faltas e atrasos consolidados; (8) Bloco de assinaturas para impressão; (9) Suporte a URL params (?funcionario=ID&mes=YYYY-MM) para navegação a partir de outros módulos. Link 'Espelho de Ponto' adicionado ao menu lateral (seção Operacional).",
+    tipo: "feature",
+    modulos: "Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
 ];
