@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 688,
+    titulo: "Férias — Campo de ajuste de arredondamento no INSS",
+    descricao: "Adicionado campo 'Ajuste arredondamento' na seção de INSS do detalhe de férias. Aceita valores positivos (aumentar INSS) ou negativos (ex: -0,01 para reduzir). O Total INSS e o Valor Líquido são recalculados em tempo real. A linha de ajuste só aparece quando o valor for diferente de zero. O campo é resetado ao fechar o diálogo.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 687,
     titulo: "Férias — Tabela INSS atualizada para 2026 + parcela a deduzir",
     descricao: "Tabela INSS atualizada para os valores de 2026 (Portaria MPS/MF nº 13/2026, DOU 09/01/2026): faixas R$1.621/2.902,84/4.354,27/8.475,55, teto INSS R$988,09. Adicionada coluna 'Parcela a deduzir' na memória de cálculo e exibição da fórmula simplificada (salário × alíquota − dedução), para facilitar conferência com holerites e outros sistemas.",
