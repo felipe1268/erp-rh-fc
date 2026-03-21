@@ -670,7 +670,12 @@ export const fechamentoPontoRouter = router({
         jornadaTrabalho: employees.jornadaTrabalho,
         matricula: employees.matricula,
         codigoInterno: employees.codigoInterno,
-      }).from(employees).where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
+        status: employees.status,
+      }).from(employees).where(and(
+        companyFilter(employees.companyId, input),
+        sql`${employees.deletedAt} IS NULL`,
+        sql`${employees.status} NOT IN ('Desligado', 'Afastado', 'Recluso', 'Lista_Negra')`,
+      ));
 
       // Get all dixi devices for this company (to match SN -> obra)
       const devices = await db.select().from(dixiDevices).where(companyFilter(dixiDevices.companyId, input));
@@ -1100,8 +1105,10 @@ export const fechamentoPontoRouter = router({
         for (const o of obraRows) obraNameMap[o.id] = o.nome;
       }
 
+      const STATUS_INATIVOS = ['Desligado', 'Afastado', 'Recluso', 'Lista_Negra'];
       return Object.values(byEmployee).map((emp: any) => {
         const obraIdsArr = Array.from(emp.obraIds) as number[];
+        const statusInativo = STATUS_INATIVOS.includes(emp.employeeStatus);
         return {
           ...emp,
           obraIds: obraIdsArr,
@@ -1111,6 +1118,7 @@ export const fechamentoPontoRouter = router({
           horasExtras: minutesToHHMM(emp.totalMinutosExtras),
           atrasos: minutesToHHMM(emp.totalMinutosAtrasos),
           emAvisoPrevio: avisoPrevioEmployeeIds.has(emp.employeeId),
+          alertaInativo: statusInativo,
         };
       });
     }),
@@ -1391,6 +1399,7 @@ export const fechamentoPontoRouter = router({
         cpf: employees.cpf,
         funcao: employees.funcao,
         jornadaTrabalho: employees.jornadaTrabalho,
+        status: employees.status,
       }).from(employees).where(eq(employees.id, input.employeeId)).limit(1);
 
       // Compute HE on-the-fly for each record (no need to run "Processar Ponto")

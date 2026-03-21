@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 679,
+    titulo: "Fechamento de Ponto — bloqueio e alerta para funcionários inativos",
+    descricao: "Upload Dixi passa a excluir funcionários Desligados/Afastados/Reclusos/Lista_Negra da lista de matching (registros vão para 'não identificados'). getSummary retorna alertaInativo para cada linha. Frontend exibe banner global contando inativos com registros, badge vermelho por linha e banner de aviso no detalhe do colaborador. Geração de HE (consolidarMes) já filtrava por Ativo/Ferias — confirmado sem alteração necessária.",
+    tipo: "feature",
+    modulos: "Ponto Eletrônico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-21 00:00:00",
+  },
+  {
     version: 678,
     titulo: "Espelho de Ponto — cruzamento com férias: badge Férias e edição bloqueada",
     descricao: "getEspelhoPontoRange consulta vacation_periods (status != cancelada/pendente) e retorna feriasDates. No frontend, dias de férias exibem badge verde-azulado 'Férias' em vez de 'Falta', não são contabilizados no resumo de faltas, as células de horário não abrem o diálogo de edição e o botão lápis fica desabilitado com tooltip explicativo.",

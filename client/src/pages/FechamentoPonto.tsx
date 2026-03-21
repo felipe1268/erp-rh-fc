@@ -831,6 +831,11 @@ export default function FechamentoPonto() {
     return summary.data.filter((e: any) => e.multiplasObras).length;
   }, [summary.data]);
 
+  const inativoCount = useMemo(() => {
+    if (!summary.data) return 0;
+    return summary.data.filter((e: any) => e.alertaInativo).length;
+  }, [summary.data]);
+
   const conflitosCount = useMemo(() => (conflitos.data || []).length, [conflitos.data]);
 
   const filteredSummary = useMemo(() => {
@@ -1350,6 +1355,20 @@ export default function FechamentoPonto() {
           </div>
         )}
 
+        {inativoCount > 0 && (
+          <div className="bg-rose-50 border-2 border-rose-400 rounded-xl p-4 flex items-start gap-3">
+            <AlertCircle className="h-6 w-6 text-rose-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-bold text-rose-800 text-base">Funcionários Inativos com Registros de Ponto</p>
+              <p className="text-sm text-rose-700 mt-1">
+                <strong>{inativoCount} funcionário(s)</strong> com status Desligado, Afastado ou Recluso possuem registros de ponto neste período.
+                Estes registros <strong>não</strong> são processados ao gerar horas extras. Verifique e remova os lançamentos indevidos.
+              </p>
+            </div>
+            <Badge className="text-sm px-3 py-1 shrink-0 bg-rose-600 text-white">{inativoCount}</Badge>
+          </div>
+        )}
+
         {/* Tab buttons */}
         {viewMode !== "detalhe" && (stats.data?.totalRegistros || 0) > 0 && (
           <div className="flex gap-2 border-b pb-2">
@@ -1743,15 +1762,18 @@ export default function FechamentoPonto() {
                             {filteredSummary.map((emp: any) => {
                               const hasConflict = (conflitos.data || []).some((c: any) => c.employeeId === emp.employeeId);
                               return (
-                                <tr key={emp.employeeId} className={`border-b last:border-0 hover:bg-muted/30 ${emp.temAjusteManual ? "bg-purple-50" : ""} ${hasConflict ? "bg-orange-50" : emp.multiplasObras ? "bg-red-50" : ""}`}>
+                                <tr key={emp.employeeId} className={`border-b last:border-0 hover:bg-muted/30 ${emp.alertaInativo ? "bg-rose-50 border-l-4 border-l-rose-400" : emp.temAjusteManual ? "bg-purple-50" : ""} ${hasConflict ? "bg-orange-50" : emp.multiplasObras && !emp.alertaInativo ? "bg-red-50" : ""}`}>
                                   <td className="p-2">
                                     <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openPontoDetalhe(emp.employeeId)}>
                                       {emp.employeeName}
                                     </button>
-                                    {emp.temAjusteManual && (
+                                    {emp.alertaInativo && (
+                                      <Badge className="ml-2 text-xs bg-rose-600 text-white border-0"><AlertCircle className="h-3 w-3 mr-1" /> {emp.employeeStatus || "Inativo"}</Badge>
+                                    )}
+                                    {!emp.alertaInativo && emp.temAjusteManual && (
                                       <Badge variant="outline" className="ml-2 text-xs text-purple-600 border-purple-300"><PenLine className="h-3 w-3 mr-1" /> Ajuste</Badge>
                                     )}
-                                    {emp.emAvisoPrevio && (
+                                    {!emp.alertaInativo && emp.emAvisoPrevio && (
                                       <Badge variant="outline" className="ml-2 text-xs text-amber-600 border-amber-300 bg-amber-50">⚠ Aviso Prévio</Badge>
                                     )}
                                   </td>
@@ -2557,6 +2579,21 @@ export default function FechamentoPonto() {
               <Card><CardContent className="py-8 text-center text-muted-foreground">Carregando...</CardContent></Card>
             ) : (
               <>
+                {/* Alerta funcionário inativo */}
+                {(() => {
+                  const st = employeeDetail.data?.employee?.status;
+                  const inativos = ['Desligado', 'Afastado', 'Recluso', 'Lista_Negra'];
+                  if (!st || !inativos.includes(st)) return null;
+                  return (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 mb-2">
+                      <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
+                      <div>
+                        <p className="font-semibold text-sm">Funcionário com status "{st}" — registros de ponto detectados</p>
+                        <p className="text-xs text-rose-700 mt-0.5">Este colaborador está inativo no sistema mas possui registros de ponto neste período. Verifique e remova os registros caso sejam indevidos.</p>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* Resumo Totalizador do Colaborador */}
                 {(() => {
                   const allRecs = employeeDetail.data?.records || [];
