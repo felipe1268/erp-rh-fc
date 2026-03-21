@@ -143,6 +143,24 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoComunicadoEm" DATE`);
         await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoCartaUrl" TEXT`);
         console.log("[ColFix] termination_notices Rev.612 OK");
+        // Rev.664: Módulo PJ — revisões ISO
+        await db.execute(sql`ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisao" VARCHAR(10) DEFAULT '01'`);
+        await db.execute(sql`ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisaoMotivo" TEXT`);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS pj_contract_revisoes (
+            id SERIAL NOT NULL,
+            "contractId" INTEGER NOT NULL,
+            "companyId" INTEGER NOT NULL,
+            "employeeId" INTEGER NOT NULL,
+            "revisaoNum" VARCHAR(10) NOT NULL,
+            motivo TEXT,
+            snapshot TEXT,
+            "criadoPor" VARCHAR(255),
+            "criadoPorUserId" INTEGER,
+            "criadoEm" TIMESTAMP DEFAULT now() NOT NULL
+          )
+        `);
+        console.log("[ColFix] pj_contracts revisao + pj_contract_revisoes Rev.664 OK");
         // Recuperar fotos já enviadas cujo fotoUrl não foi salvo no banco
         try {
           const fs = await import("fs");
