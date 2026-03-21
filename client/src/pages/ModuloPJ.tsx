@@ -85,7 +85,20 @@ export default function ModuloPJ() {
     { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
   );
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
-  const pjEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.tipoContrato === "PJ" && e.status === "Ativo" && !e.deletedAt), [empList]);
+  // IDs com contrato ativo — não podem aparecer para criação de novo contrato
+  const empIdsComContratoAtivo = useMemo(
+    () => new Set((contratos as any[]).filter(c => c.status === "ativo").map(c => c.employeeId)),
+    [contratos]
+  );
+  const pjEmployees = useMemo(
+    () => (empList as any[]).filter((e: any) => e.tipoContrato === "PJ" && e.status === "Ativo" && !e.deletedAt),
+    [empList]
+  );
+  // Lista disponível para novo contrato: só quem não tem contrato ativo
+  const pjEmployeesSemContrato = useMemo(
+    () => pjEmployees.filter((e: any) => !empIdsComContratoAtivo.has(e.id)),
+    [pjEmployees, empIdsComContratoAtivo]
+  );
 
   // Mutations
   const createContrato = trpc.pj.contratos.create.useMutation({
@@ -188,7 +201,7 @@ export default function ModuloPJ() {
   const [empSearch, setEmpSearch] = useState("");
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
   const selectedEmp = pjEmployees.find((e: any) => e.id === form.employeeId);
-  const filteredEmps = pjEmployees.filter((e: any) => {
+  const filteredEmps = pjEmployeesSemContrato.filter((e: any) => {
     if (!empSearch) return true;
     const s = removeAccents(empSearch);
     return (e.nomeCompleto || "").toLowerCase().includes(s) || (e.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, ""));
@@ -621,7 +634,11 @@ export default function ModuloPJ() {
                       <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 62 }}>
                         {filteredEmps.length === 0 ? (
                           <div className="p-3 text-sm text-muted-foreground text-center">
-                            {pjEmployees.length === 0 ? "Nenhum funcionário PJ cadastrado" : `Nenhum resultado para "${empSearch}"`}
+                            {pjEmployees.length === 0
+                              ? "Nenhum funcionário PJ cadastrado"
+                              : pjEmployeesSemContrato.length === 0
+                                ? "Todos os prestadores PJ já possuem contrato ativo"
+                                : `Nenhum resultado para "${empSearch}"`}
                           </div>
                         ) : filteredEmps.slice(0, 20).map((e: any) => (
                           <div key={e.id} className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between" onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
