@@ -74,15 +74,17 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
 - **#5**: Novas colunas via ColFix em `server/_core/index.ts` (syncSchema pode falhar antes).
 - **#10**: Todo bugfix deve TAMBÉM corrigir dados existentes no banco (ColFix retroativo).
 - **#11**: Excluir obra = cascata TOTAL. Nada do projeto deletado pode ser reaproveitado. `deleteObra()` em `server/db.ts` remove TODOS os dados filhos (37 tabelas) antes de soft-delete da obra. ColFix de startup limpa órfãos retroativamente.
+- **#12**: O banco é SEMPRE Neon (`NEON_DATABASE_URL`). Nunca usar `DATABASE_URL` local como fallback. Consultas de debug/verificação devem usar `process.env.NEON_DATABASE_URL`.
 
-## Database — CRITICAL: Dois bancos diferentes
-- **Neon PostgreSQL** (produção FC Engenharia): `ep-young-water-ac67nuby.sa-east-1.aws.neon.tech`, db=`neondb`
-  - Conectado via `NEON_DATABASE_URL` — **ESTE É O BANCO DE PRODUÇÃO REAL**
-  - Toda query do app usa este banco (priority: `NEON_DATABASE_URL` > `DATABASE_URL` em `server/_core/env.ts`)
+## Database — CRITICAL: Somente Neon
+- **Neon PostgreSQL** (único banco): `ep-young-water-ac67nuby.sa-east-1.aws.neon.tech`, db=`neondb`
+  - Conectado via `NEON_DATABASE_URL` — **ESTE É O ÚNICO BANCO DO SISTEMA**
+  - Toda query do app usa este banco. NÃO há fallback para `DATABASE_URL` local.
   - **REGRA DE OURO #5**: Ao adicionar novas colunas, SEMPRE adicionar via ColFix em `server/_core/index.ts`
     pois o `syncSchema` pode não rodar antes das queries falharem no startup. Ou adicionar diretamente
     no Neon via `node -e "... process.env.NEON_DATABASE_URL ..."` ANTES de fazer o deploy.
-- **Replit PostgreSQL** (dev): acessível via `DATABASE_URL` — banco separado, vazio/irrelevante para produção
+  - **REGRA DE OURO #12**: O banco é SEMPRE Neon. Nunca usar `DATABASE_URL` local do Replit como fallback.
+    Consultas de debug/verificação devem usar `process.env.NEON_DATABASE_URL` diretamente.
 - Neon usa pooler URL para conexões da app; syncSchema e ColFix também conectam ao Neon via getDb().
 
 ## Rev. 416 — Custo de MO nas Atividades (16/03/2026)

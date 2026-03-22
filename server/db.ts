@@ -36,7 +36,7 @@ import { normalizeCidadeInput } from '../shared/normalizeCidade';
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
-  const dbUrl = ENV.databaseUrl || process.env.DATABASE_URL;
+  const dbUrl = ENV.databaseUrl;
   if (!_db && dbUrl) {
     try {
       const pool = new Pool({

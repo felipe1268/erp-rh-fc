@@ -432,7 +432,7 @@ async function startServer() {
     (async () => {
       try {
         const { Pool } = await import("pg");
-        const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL });
+        const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL });
         await pool.query(`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "dataBaixa" date`);
         const r = await pool.query(`UPDATE termination_notices SET status='aguardando_pagamento', "updatedAt"=NOW() WHERE status='concluido' AND "dataBaixa" IS NULL AND "deletedAt" IS NULL`);
         await pool.end();
