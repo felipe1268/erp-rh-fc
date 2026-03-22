@@ -171,6 +171,8 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS outros_descontos_desc TEXT`);
         await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_url TEXT`);
         await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_nome VARCHAR(255)`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_he VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_dsr_he VARCHAR(20)`);
         console.log("[ColFix] vacation_periods Rev.707 OK");
         // Sincronizar flag vencida e status para períodos concessivos expirados
         const hoje = new Date().toISOString().split('T')[0];

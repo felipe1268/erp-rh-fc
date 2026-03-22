@@ -1737,8 +1737,14 @@ export default function Ferias() {
                         if (isNaN(n)) return v;
                         return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                       };
-                      const mHE  = mediaHEData?.mediaHE    ?? 0;
-                      const mDSR = mediaHEData?.mediaDSRHE ?? 0;
+                      const mHE_auto  = mediaHEData?.mediaHE    ?? 0;
+                      const mDSR_auto = mediaHEData?.mediaDSRHE ?? 0;
+                      // Usar valor salvo manualmente se existir, senão usar o calculado
+                      const pvInit = (s: string | null | undefined) => parseFloat((s || "0").replace(/\./g, "").replace(",", ".")) || 0;
+                      const mHE_saved  = pvInit(selectedItem.mediaHE);
+                      const mDSR_saved = pvInit(selectedItem.mediaDSRHE);
+                      const mHE  = mHE_saved  > 0 ? mHE_saved  : mHE_auto;
+                      const mDSR = mDSR_saved > 0 ? mDSR_saved : mDSR_auto;
                       const salario = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
                       const diasGozo = selectedItem.diasGozo || 30;
                       // Calcular ferias e terco com base HE se valores ainda não foram salvos manualmente
@@ -1798,15 +1804,19 @@ export default function Ferias() {
                         const vT = parseVal(editValores.valorTerco);
                         const vA = parseVal(editValores.valorAbono);
                         const total = parseVal(editValores.valorTotal) || (vF + vT + vA);
+                        const mHESave = parseVal(editValores.mediaHE).toFixed(2);
+                        const mDSRSave = parseVal(editValores.mediaDSRHE).toFixed(2);
                         updateFerias.mutate({
                           id: selectedItem.id,
                           valorFerias: vF.toFixed(2),
                           valorTercoConstitucional: vT.toFixed(2),
                           valorAbono: vA.toFixed(2),
                           valorTotal: total.toFixed(2),
+                          mediaHE: mHESave,
+                          mediaDSRHE: mDSRSave,
                         }, {
                           onSuccess: () => {
-                            setSelectedItem((prev: any) => ({ ...prev, valorFerias: vF.toFixed(2), valorTercoConstitucional: vT.toFixed(2), valorAbono: vA.toFixed(2), valorTotal: total.toFixed(2) }));
+                            setSelectedItem((prev: any) => ({ ...prev, valorFerias: vF.toFixed(2), valorTercoConstitucional: vT.toFixed(2), valorAbono: vA.toFixed(2), valorTotal: total.toFixed(2), mediaHE: mHESave, mediaDSRHE: mDSRSave }));
                             setEditingValues(false);
                             refetch();
                           }

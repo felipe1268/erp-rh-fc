@@ -4678,6 +4678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 729,
+    titulo: "Férias — Persistência de Média HE e DSR no banco de dados",
+    descricao: "Novas colunas media_he e media_dsr_he na tabela vacation_periods (ColFix aplicado). O formulário 'Editar Valores' agora salva os valores de Média de HE e Média DSR das HE junto com os demais campos ao clicar em Salvar. Ao reabrir o formulário, os valores salvos manualmente são restaurados (prioridade sobre o cálculo automático). O histórico de edições manuais fica preservado independentemente de alterações nos dados de HE.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 728,
     titulo: "Fluxo de Caixa — Separação por 1º Período vs 2º+ Período",
     descricao: "No Fluxo de Caixa Prévio de Férias, cada card de mês agora exibe dois subtotais distintos: 1º Período (funcionários em primeira fase aquisitiva — pagamento pode ser prorrogado antes do vencimento) e 2º+ Período (funcionários em segunda fase ou mais — sem possibilidade de prorrogação, pagamento obrigatório). O backend enriquece cada entrada com numeroPeriodo (índice do período aquisitivo, base 1) e calcula totalPrimeiroPeriodo, totalSegundoPeriodoMais, qtdFuncionarios1p e qtdFuncionarios2p por mês. O dialog de detalhes do mês foi reestruturado: cards de resumo separados (azul = 1º período / vermelho = 2º+ período) e tabelas agrupadas por período com subtotais e TOTAL GERAL. Cada linha na prévia do card também mostra o número do período (1º per., 2º per.) ao lado do valor.",

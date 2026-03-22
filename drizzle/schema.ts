@@ -2836,6 +2836,8 @@ export const vacationPeriods = pgTable("vacation_periods", {
         valorTercoConstitucional: varchar({ length: 20 }),
         valorAbono: varchar({ length: 20 }),
         valorTotal: varchar({ length: 20 }),
+        mediaHE: varchar("media_he", { length: 20 }),
+        mediaDSRHE: varchar("media_dsr_he", { length: 20 }),
         ajusteInss: varchar("ajuste_inss", { length: 20 }),
         valorLiquido: varchar("valor_liquido", { length: 20 }),
         bonusValor: varchar("bonus_valor", { length: 20 }),

@@ -1980,6 +1980,8 @@ export const avisoPrevioFeriasRouter = router({
         valorTercoConstitucional: z.string().optional(),
         valorAbono: z.string().optional(),
         valorTotal: z.string().optional(),
+        mediaHE: z.string().optional(),
+        mediaDSRHE: z.string().optional(),
         ajusteInss: z.string().optional(),
         valorLiquido: z.string().optional(),
         bonusValor: z.string().optional(),
