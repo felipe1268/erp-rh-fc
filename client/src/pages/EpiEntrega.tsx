@@ -36,7 +36,9 @@ interface ItemEntrega {
 }
 
 export default function EpiEntrega() {
-  const { companyId, companyIds } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  const companyId = isConstrutoras ? 0 : (selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0);
+  const companyIds = getCompanyIdsForQuery();
   const { toast } = useToast();
   const utils = trpc.useUtils();
 
@@ -73,23 +75,10 @@ export default function EpiEntrega() {
     { enabled: !!companyId }
   );
 
-  const { data: allEmployeesRaw = [] } = trpc.employees.list.useQuery(
+  const { data: allEmployees = [] } = trpc.employees.list.useQuery(
     { companyId, companyIds, excludeTerminated: true },
-    { enabled: !!companyId || (companyIds && companyIds.length > 0) }
-  );
-
-  const { data: enrolledFaces = [] } = trpc.faceRecognition.getEnrolledEmployees.useQuery(
-    { companyId, companyIds },
     { enabled: !!companyId }
   );
-
-  const allEmployees = useMemo(() => {
-    const enrolledSet = new Set((enrolledFaces as any[]).map((e: any) => e.id));
-    return (allEmployeesRaw as any[]).map((emp: any) => ({
-      ...emp,
-      faceId: enrolledSet.has(emp.id) ? true : null,
-    }));
-  }, [allEmployeesRaw, enrolledFaces]);
 
   const createDelivery = trpc.faceRecognition.createDeliveryWithFace.useMutation({
     onSuccess: () => setStep("concluido"),
@@ -689,29 +678,21 @@ export default function EpiEntrega() {
                     {all.length === 0 ? "Carregando funcionários..." : "Nenhum funcionário encontrado"}
                   </p>
                 );
-                return filtrados.map((emp: any) => {
-                  const temBio = !!emp.faceId;
-                  return (
-                    <button
-                      key={emp.id}
-                      className={`w-full text-left p-2 rounded-lg border transition-colors ${
-                        enrollEmployee?.id === emp.id ? "border-green-500 bg-green-50" : temBio ? "border-gray-100 bg-gray-50 opacity-50" : "border-gray-100 hover:bg-gray-50"
-                      }`}
-                      onClick={() => !temBio && setEnrollEmployee(emp)}
-                      disabled={temBio}
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-900">{emp.nomeCompleto}</p>
-                        {temBio ? (
-                          <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Biometria OK</span>
-                        ) : enrollEmployee?.id === emp.id ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                        ) : null}
-                      </div>
-                      <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
-                    </button>
-                  );
-                });
+                return filtrados.map((emp: any) => (
+                  <button
+                    key={emp.id}
+                    className={`w-full text-left p-2 rounded-lg border transition-colors ${
+                      enrollEmployee?.id === emp.id ? "border-green-500 bg-green-50" : "border-gray-100 hover:bg-gray-50"
+                    }`}
+                    onClick={() => setEnrollEmployee(emp)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-900">{emp.nomeCompleto}</p>
+                      {enrollEmployee?.id === emp.id && <CheckCircle className="h-4 w-4 text-green-600" />}
+                    </div>
+                    <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
+                  </button>
+                ));
               })()}
             </div>
             <div className="flex-shrink-0 space-y-2">
