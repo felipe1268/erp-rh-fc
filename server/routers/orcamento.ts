@@ -29,6 +29,7 @@ import {
   comprasSolicitacoesItens,
   comprasCotacoesItens,
   terceiroContratoItens,
+  comprasRiscoDebitos,
 } from "../../drizzle/schema";
 
 const ENCARGOS_DEFAULTS = [
@@ -2159,7 +2160,14 @@ export const orcamentoRouter = router({
 
       const oid = input.id;
 
-      // Deletar dados relacionados em cascata
+      await db.update(planejamentoProjetos)
+        .set({ orcamentoId: null })
+        .where(eq(planejamentoProjetos.orcamentoId, oid));
+      await db.update(comprasRiscoDebitos)
+        .set({ orcamentoId: null })
+        .where(eq(comprasRiscoDebitos.orcamentoId, oid));
+
+      await db.delete(orcamentoRevisoes)         .where(eq(orcamentoRevisoes.orcamentoId,         oid));
       await db.delete(orcamentoItens)            .where(eq(orcamentoItens.orcamentoId,            oid));
       await db.delete(orcamentoInsumos)          .where(eq(orcamentoInsumos.orcamentoId,          oid));
       await db.delete(orcamentoBdi)              .where(eq(orcamentoBdi.orcamentoId,              oid));
@@ -2171,7 +2179,6 @@ export const orcamentoRouter = router({
       await db.delete(bdiTributos)               .where(eq(bdiTributos.orcamentoId,               oid));
       await db.delete(bdiTaxaComercializacao)    .where(eq(bdiTaxaComercializacao.orcamentoId,    oid));
 
-      // Deletar o orçamento principal
       await db.delete(orcamentos).where(eq(orcamentos.id, oid));
 
       return { success: true };

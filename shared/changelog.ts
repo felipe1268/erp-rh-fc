@@ -4857,4 +4857,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 743,
+    titulo: "Exclusão de orçamento limpa todas as referências",
+    descricao: "Ao excluir um orçamento, o sistema agora limpa automaticamente todos os vínculos: planejamento_projetos.orcamento_id é setado para NULL, orcamento_revisoes são deletadas, e compras_risco_debitos.orcamento_id é limpo. Impede que referências órfãs causem bugs futuros (como valores errados na Curva S Financeira).",
+    tipo: "bugfix",
+    modulos: "Orçamento, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];
