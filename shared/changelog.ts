@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 714,
+    titulo: "Férias — Status 'Vencida' corrigido para períodos com concessivo expirado",
+    descricao: "Períodos de férias com 'Concessivo Até' anterior à data atual e status ainda 'pendente' agora são automaticamente marcados como 'Vencida'. A correção ocorre em três camadas: (1) ColFix no startup atualiza o banco; (2) endpoint list retorna status dinâmico baseado na data; (3) filtro 'vencida' inclui períodos vencidos por data mesmo sem a flag atualizada.",
+    tipo: "correcao",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 713,
     titulo: "Férias — Valores manuais não são mais sobrescritos pelo recálculo automático",
     descricao: "O endpoint de listagem de férias recalculava automaticamente os valores (Férias, 1/3 Constitucional, Total Bruto) usando o salário atual, sobrescrevendo edições manuais do usuário. Corrigido: se o valor já estiver salvo no banco (valorFerias > 0), o recálculo é ignorado e o valor manual é respeitado.",

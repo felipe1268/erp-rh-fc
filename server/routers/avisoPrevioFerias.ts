@@ -1712,8 +1712,9 @@ export const avisoPrevioFeriasRouter = router({
         ];
         if (input.status) {
           if (input.status === 'vencida') {
-            // Vencida = status 'vencida' OU flag vencida=1, MAS excluir concluídas/canceladas
-            conditions.push(sql`(${vacationPeriods.status} = 'vencida' OR ${vacationPeriods.vencida} = 1)`);
+            // Vencida = status 'vencida' OU flag vencida=1 OU (pendente com concessivo expirado)
+            const hoje = new Date().toISOString().split('T')[0];
+            conditions.push(sql`(${vacationPeriods.status} = 'vencida' OR ${vacationPeriods.vencida} = 1 OR (${vacationPeriods.status} = 'pendente' AND ${vacationPeriods.periodoConcessivoFim} < ${hoje}))`);
             conditions.push(sql`${vacationPeriods.status} NOT IN ('concluida', 'cancelada')`);
           } else {
             conditions.push(eq(vacationPeriods.status, input.status as any));
@@ -1763,8 +1764,17 @@ export const avisoPrevioFeriasRouter = router({
         .where(and(...conditions))
         .orderBy(desc(vacationPeriods.periodoConcessivoFim));
         
+        // Corrigir status/vencida dinamicamente com base na data atual
+        const hojeStr = new Date().toISOString().split('T')[0];
+        const rowsComStatus = rows.map(r => {
+          const isPendente = r.status === 'pendente';
+          const estaVencida = isPendente && r.periodoConcessivoFim && r.periodoConcessivoFim < hojeStr;
+          if (estaVencida) return { ...r, vencida: 1, status: 'vencida' as any };
+          return r;
+        });
+
         // Recálculo apenas quando valores não foram definidos manualmente no banco
-        const recalculated = rows.map(r => {
+        const recalculated = rowsComStatus.map(r => {
           try {
             // Se o usuário já salvou valores manualmente, respeitar esses valores
             const temValorManual = r.valorFerias && parseFloat(r.valorFerias) > 0;

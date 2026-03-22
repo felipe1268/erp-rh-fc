@@ -172,6 +172,15 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_url TEXT`);
         await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_nome VARCHAR(255)`);
         console.log("[ColFix] vacation_periods Rev.707 OK");
+        // Sincronizar flag vencida e status para períodos concessivos expirados
+        const hoje = new Date().toISOString().split('T')[0];
+        const vencResult = await db.execute(sql`
+          UPDATE vacation_periods SET vencida = 1, status = 'vencida'
+          WHERE status = 'pendente' AND "periodoConcessivoFim" IS NOT NULL AND "periodoConcessivoFim" < ${hoje}
+            AND "deletedAt" IS NULL
+        `);
+        const vencCount = (vencResult as any).rowCount || 0;
+        if (vencCount > 0) console.log(`[ColFix] vacation_periods: ${vencCount} período(s) expirado(s) marcado(s) como vencida`);
         // Recuperar fotos já enviadas cujo fotoUrl não foi salvo no banco
         try {
           const fs = await import("fs");
