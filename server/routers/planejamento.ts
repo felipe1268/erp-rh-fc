@@ -3029,12 +3029,60 @@ REGRAS TÉCNICAS:
         }
       }
 
+      const bcwpSorted = [...bcwpMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      const lastBcwpSemana = bcwpSorted.length > 0 ? bcwpSorted[bcwpSorted.length - 1][0] : null;
+
+      const receitaSorted = [...receitaMap.entries()].filter(([, v]) => v > 0).sort((a, b) => a[0].localeCompare(b[0]));
+      const lastReceitaSemana = receitaSorted.length > 0 ? receitaSorted[receitaSorted.length - 1][0] : null;
+
+      const tendenciaMap = new Map<string, number>();
+      if (bcwpSorted.length >= 2) {
+        const pts = bcwpSorted.map(([sem, val], i) => ({ i, sem, val }));
+        const nn = pts.length;
+        const xs = pts.map(p => p.i);
+        const ys = pts.map(p => p.val);
+        const sumX  = xs.reduce((a, b) => a + b, 0);
+        const sumY  = ys.reduce((a, b) => a + b, 0);
+        const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
+        const sumX2 = xs.reduce((s, x) => s + x * x, 0);
+        const denom = nn * sumX2 - sumX * sumX;
+        if (denom !== 0) {
+          const slope = (nn * sumXY - sumX * sumY) / denom;
+          const inter = (sumY - slope * sumX) / nn;
+
+          pts.forEach(p => {
+            tendenciaMap.set(p.sem, +Math.max(0, (inter + slope * p.i)).toFixed(2));
+          });
+
+          const lastIdx = nn - 1;
+          const lastDate = new Date(pts[lastIdx].sem + "T12:00:00Z");
+          for (let w = 1; w <= 52; w++) {
+            const proj = inter + slope * (lastIdx + w);
+            if (proj >= totalVenda * 1.05) break;
+            const d = new Date(lastDate.getTime() + w * 7 * 86400000);
+            const key = toMondayStr(d);
+            tendenciaMap.set(key, +Math.max(0, Math.min(totalVenda, proj)).toFixed(2));
+          }
+        }
+      }
+
       const curvaCompleta = pontos.map(p => ({
         semana: p.semana,
         acumulado: p.acumulado,
-        bcwp: bcwpMap.get(p.semana) ?? null,
-        receita: receitaMap.get(p.semana) ?? null,
+        bcwp: (lastBcwpSemana && p.semana <= lastBcwpSemana) ? (bcwpMap.get(p.semana) ?? null) : null,
+        receita: (lastReceitaSemana && p.semana <= lastReceitaSemana) ? (receitaMap.get(p.semana) ?? null) : null,
+        tendencia: tendenciaMap.get(p.semana) ?? null,
       }));
+
+      if (tendenciaMap.size > 0) {
+        const lastPonto = pontos[pontos.length - 1]?.semana ?? "";
+        for (const [sem, val] of tendenciaMap) {
+          if (sem > lastPonto) {
+            curvaCompleta.push({ semana: sem, acumulado: null as any, bcwp: null, receita: null, tendencia: val });
+          }
+        }
+        curvaCompleta.sort((a, b) => a.semana.localeCompare(b.semana));
+      }
 
       return { status: "ok" as const, divergencias: [], curva: curvaCompleta, totalVenda };
     }),

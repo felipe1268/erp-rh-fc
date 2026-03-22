@@ -3761,56 +3761,20 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
         const hasMedicoes = (curvaMedicoes as any[]).length > 0;
         if (curvaSFinOk.length === 0 && !hasMedicoes) return null;
 
-        const finPlanMap: Record<string, number> = {};
-        const bcwpMap: Record<string, number | null> = {};
-        const receitaMap: Record<string, number | null> = {};
-        curvaSFinOk.forEach((p: any) => {
-          finPlanMap[p.semana] = p.acumulado;
-          bcwpMap[p.semana] = p.bcwp ?? null;
-          receitaMap[p.semana] = p.receita ?? null;
-        });
-
-        const realMap: Record<string, number | null> = {};
-        const tendMap: Record<string, number | null> = {};
-        merged.forEach((row: any) => {
-          realMap[row.semana] = totalVenda > 0 && row.realizada != null
-            ? +(totalVenda * row.realizada / 100).toFixed(2) : null;
-          tendMap[row.semana] = totalVenda > 0 && row.tendencia != null
-            ? +(totalVenda * row.tendencia / 100).toFixed(2) : null;
-        });
-
-        const medMap: Record<string, number> = {};
-        (curvaMedicoes as any[]).forEach((m: any) => { medMap[m.competencia] = m.valorAcumulado; });
-
-        const allSemanasSet = new Set<string>([
-          ...curvaSFinOk.map((p: any) => p.semana),
-          ...merged.map((row: any) => row.semana),
-        ]);
-        const finFull = [...allSemanasSet].sort().map(semana => {
-          const comp      = semana.slice(0, 7);
-          const allComps  = Object.keys(medMap).filter(k => k <= comp);
-          const lastComp  = allComps.length ? allComps[allComps.length - 1] : null;
-
-          const bcwpVal = bcwpMap[semana];
-          const realVal = realMap[semana];
-          const receitaVal = receitaMap[semana];
-          const faturadoMed = lastComp != null ? medMap[lastComp] : undefined;
-
-          return {
-            semana,
-            planejada: finPlanMap[semana] ?? null,
-            realizada: bcwpVal ?? realVal ?? null,
-            tendencia: tendMap[semana]    ?? null,
-            receita:   receitaVal ?? (faturadoMed != null ? faturadoMed : null),
-          };
-        });
+        const finFull = curvaSFinOk.map((p: any) => ({
+          semana:    p.semana,
+          planejada: p.acumulado ?? null,
+          realizada: p.bcwp ?? null,
+          tendencia: p.tendencia ?? null,
+          receita:   p.receita ?? null,
+        }));
 
         const finHasPlanejada = finFull.some((p: any) => p.planejada != null);
         const finHasReceita   = finFull.some((p: any) => p.receita  != null);
         const finHasRealizada = finFull.some((p: any) => p.realizada != null);
         const finHasTendencia = finFull.some((p: any) => p.tendencia != null);
 
-        // Label de semana: usa semanaLabel do trabalho quando disponível, senão numera por posição
+        const allSemanasSet = new Set<string>(finFull.map((p: any) => p.semana));
         const finSemanasOrdenadas = [...allSemanasSet].sort();
         const finSemLabel: Record<string, string> = {};
         finSemanasOrdenadas.forEach((s, i) => {
