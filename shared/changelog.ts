@@ -4848,4 +4848,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 742,
+    titulo: "Curva S Financeira — Cálculo automático de pesos na importação",
+    descricao: "O peso financeiro (peso%) de cada atividade folha agora é calculado automaticamente ao salvar/importar o cronograma, proporcional à duração (dias) de cada atividade. Não é mais necessário clicar em 'Calcular Pesos'. Curva S Financeira reescrita: não bloqueia mais por divergência de EAP; usa totalVenda do orçamento vinculado (ou valorContrato como fallback). Dados retroativos corrigidos nas 4 revisões existentes.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

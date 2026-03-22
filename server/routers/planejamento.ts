@@ -522,6 +522,19 @@ export const planejamentoRouter = router({
         isMarco:             a.isMarco ?? false,
       }));
 
+      const allPesosZero = rows.every(r => parseFloat(r.pesoFinanceiro) === 0 || r.isGrupo);
+      if (allPesosZero) {
+        const folhas = rows.filter(r => !r.isGrupo && (r.duracaoDias ?? 0) > 0);
+        const totalDias = folhas.reduce((s, r) => s + (r.duracaoDias ?? 0), 0);
+        if (totalDias > 0) {
+          for (const r of rows) {
+            if (r.isGrupo) { r.pesoFinanceiro = "0"; continue; }
+            const dur = r.duracaoDias ?? 0;
+            r.pesoFinanceiro = String(+((dur / totalDias) * 100).toFixed(4));
+          }
+        }
+      }
+
       await db.transaction(async (tx) => {
         await tx.delete(planejamentoAtividades)
           .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
@@ -2867,10 +2880,10 @@ REGRAS TÉCNICAS:
       let totalVenda = 0;
 
       if (projeto?.orcamentoId) {
-        const todosItens = await db.select({ vendaTotal: orcamentoItens.vendaTotal })
-          .from(orcamentoItens)
-          .where(eq(orcamentoItens.orcamentoId, projeto.orcamentoId));
-        totalVenda = todosItens.reduce((s, i) => s + n(i.vendaTotal), 0);
+        const [orc] = await db.select({ totalVenda: orcamentos.totalVenda })
+          .from(orcamentos)
+          .where(eq(orcamentos.id, projeto.orcamentoId));
+        if (orc) totalVenda = n(orc.totalVenda);
       }
 
       if (totalVenda === 0) {
