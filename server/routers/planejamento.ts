@@ -900,14 +900,6 @@ export const planejamentoRouter = router({
           acum = Math.min(100, acum + val);
           return { semana, acumulado: +acum.toFixed(2) };
         });
-        // Prepend ponto zero: semana ANTERIOR à primeira atividade, com acumulado=0
-        // Garante que a curva S sempre comece em 0% no eixo Y
-        if (pontos.length > 0) {
-          const primeiraDate   = new Date(pontos[0].semana + "T12:00:00Z");
-          const semanaAntes    = new Date(primeiraDate.getTime() - 7 * 86400000);
-          const semanaAntesStr = toMondayStr(semanaAntes);
-          pontos.unshift({ semana: semanaAntesStr, acumulado: 0 });
-        }
         return pontos;
       }
 
