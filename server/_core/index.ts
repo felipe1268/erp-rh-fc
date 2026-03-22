@@ -599,32 +599,45 @@ async function startServer() {
         console.log("[ColFix] obras + obra_funcionarios adicionais Rev.730 OK");
       } catch (e: any) { console.warn("[ColFix] adicionais Rev.730:", e?.message ?? e); }
     });
-    // Rev.738: ColFix — restaurar empresas deletadas que ainda possuem funcionários ativos
+    // Rev.738: ColFix — migrar funcionários órfãos (vinculados a empresa deletada) para empresa ativa
     import("../db").then(async ({ getDb }) => {
       try {
         const db = await getDb();
         if (!db) return;
         const { sql } = await import("drizzle-orm");
-        // Buscar empresas deletadas que possuem funcionários não-deletados
-        const rows = await db.execute(sql`
-          SELECT DISTINCT c.id, c."razaoSocial"
-          FROM companies c
-          INNER JOIN employees e ON e."companyId" = c.id AND e."deletedAt" IS NULL
-          WHERE c."deletedAt" IS NOT NULL
+        const orphans = await db.execute(sql`
+          SELECT e.id, e."companyId" AS old_cid
+          FROM employees e
+          INNER JOIN companies c ON c.id = e."companyId"
+          WHERE e."deletedAt" IS NULL AND c."deletedAt" IS NOT NULL
         `);
-        const lista = (rows as any).rows ?? (rows as any) ?? [];
+        const lista = (orphans as any).rows ?? (orphans as any) ?? [];
         if (!lista.length) {
-          console.log("[ColFix] Empresas com funcionários: todas OK");
+          console.log("[ColFix] Funcionários órfãos: nenhum encontrado");
           return;
         }
-        let restauradas = 0;
-        for (const row of lista) {
-          await db.execute(sql`UPDATE companies SET "deletedAt" = NULL WHERE id = ${row.id}`);
-          restauradas++;
-          console.log(`[ColFix] Empresa ${row.id} (${row.razaoSocial}) restaurada — tinha funcionários ativos`);
+        const activeRes = await db.execute(sql`SELECT id FROM companies WHERE "deletedAt" IS NULL ORDER BY id LIMIT 1`);
+        const activeRows = (activeRes as any).rows ?? (activeRes as any) ?? [];
+        if (!activeRows.length) { console.warn("[ColFix] Nenhuma empresa ativa para migração"); return; }
+        const targetId = activeRows[0].id;
+        const oldIds = [...new Set(lista.map((r: any) => r.old_cid))];
+        for (const oldCid of oldIds) {
+          const tables = ['employees','asos','warnings','vacation_periods','termination_notices',
+            'obra_funcionarios','epi_deliveries','epis','payroll_periods','he_periods',
+            'he_period_employees','ponto_registros','ponto_descontos','banco_horas_saldo',
+            'banco_horas_lancamentos','pj_contracts','processos_trabalhistas'];
+          for (const tbl of tables) {
+            try {
+              await db.execute(sql.raw(`UPDATE "${tbl}" SET "companyId" = ${targetId} WHERE "companyId" = ${oldCid}`));
+            } catch { /* tabela pode não ter companyId */ }
+          }
         }
-        console.log(`[ColFix] ${restauradas} empresa(s) restaurada(s) com funcionários ativos`);
-      } catch (e: any) { console.warn("[ColFix] Restaurar empresas:", e?.message ?? e); }
+        // Atualizar user_companies links
+        for (const oldCid of oldIds) {
+          await db.execute(sql`UPDATE user_companies SET "companyId" = ${targetId} WHERE "companyId" = ${oldCid}`);
+        }
+        console.log(`[ColFix] ${lista.length} funcionário(s) migrado(s) de empresa(s) deletada(s) para empresa ${targetId}`);
+      } catch (e: any) { console.warn("[ColFix] Migrar órfãos:", e?.message ?? e); }
     });
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
