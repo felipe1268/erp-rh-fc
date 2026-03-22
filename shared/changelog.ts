@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 713,
+    titulo: "Férias — Valores manuais não são mais sobrescritos pelo recálculo automático",
+    descricao: "O endpoint de listagem de férias recalculava automaticamente os valores (Férias, 1/3 Constitucional, Total Bruto) usando o salário atual, sobrescrevendo edições manuais do usuário. Corrigido: se o valor já estiver salvo no banco (valorFerias > 0), o recálculo é ignorado e o valor manual é respeitado.",
+    tipo: "correcao",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 712,
     titulo: "Vale — Alerta aprovado sai da lista; Consolidar bloqueado com alertas pendentes",
     descricao: "Ao clicar 'Pagar' em um funcionário com alerta, ele migra para a lista de aprovados (não volta como alerta em recálculos). 'Consolidar Vale' fica desabilitado enquanto houver alertas pendentes, com aviso indicando a quantidade a resolver. Aprovações manuais são preservadas mesmo ao recalcular.",

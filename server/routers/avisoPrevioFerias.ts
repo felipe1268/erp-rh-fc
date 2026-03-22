@@ -1763,9 +1763,13 @@ export const avisoPrevioFeriasRouter = router({
         .where(and(...conditions))
         .orderBy(desc(vacationPeriods.periodoConcessivoFim));
         
-        // Recálculo em tempo real dos valores de férias usando salário atual
+        // Recálculo apenas quando valores não foram definidos manualmente no banco
         const recalculated = rows.map(r => {
           try {
+            // Se o usuário já salvou valores manualmente, respeitar esses valores
+            const temValorManual = r.valorFerias && parseFloat(r.valorFerias) > 0;
+            if (temValorManual) return r;
+
             const salAtual = parseBRL(r.employeeSalario || '0');
             const diasGozo = r.diasGozo || 30;
             const abono = r.abonoPecuniario ? 1 : 0;
