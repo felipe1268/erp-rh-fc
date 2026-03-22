@@ -73,10 +73,23 @@ export default function EpiEntrega() {
     { enabled: !!companyId }
   );
 
-  const { data: allEmployees = [] } = trpc.faceRecognition.getEnrolledEmployees.useQuery(
+  const { data: allEmployeesRaw = [] } = trpc.employees.list.useQuery(
+    { companyId, companyIds, excludeTerminated: true },
+    { enabled: !!companyId || (companyIds && companyIds.length > 0) }
+  );
+
+  const { data: enrolledFaces = [] } = trpc.faceRecognition.getEnrolledEmployees.useQuery(
     { companyId, companyIds },
     { enabled: !!companyId }
   );
+
+  const allEmployees = useMemo(() => {
+    const enrolledSet = new Set((enrolledFaces as any[]).map((e: any) => e.id));
+    return (allEmployeesRaw as any[]).map((emp: any) => ({
+      ...emp,
+      faceId: enrolledSet.has(emp.id) ? true : null,
+    }));
+  }, [allEmployeesRaw, enrolledFaces]);
 
   const createDelivery = trpc.faceRecognition.createDeliveryWithFace.useMutation({
     onSuccess: () => setStep("concluido"),

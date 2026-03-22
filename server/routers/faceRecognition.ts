@@ -13,7 +13,7 @@ export const faceRecognitionRouter = router({
       const db = (await getDb())!;
       const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
 
-      const result = await db.execute(sql`
+      const raw = await db.execute(sql`
         SELECT
           e.id,
           e."nomeCompleto",
@@ -32,8 +32,8 @@ export const faceRecognitionRouter = router({
         ORDER BY e."nomeCompleto"
       `);
 
-      const data = Array.isArray(result) ? result : (result as any).rows || [];
-      console.log(`[getEnrolledEmployees] isArray=${Array.isArray(result)} hasRows=${!!(result as any).rows} dataLen=${data.length} keys=${Object.keys(result).slice(0,5)}`);
+      const data = Array.isArray(raw) ? raw : ((raw as any).rows ?? []);
+      console.log(`[getEnrolledEmployees] count=${data.length} isArr=${Array.isArray(raw)} rawType=${typeof raw} rawKeys=${Object.keys(raw).join(',')}`);
       return data;
     }),
 
