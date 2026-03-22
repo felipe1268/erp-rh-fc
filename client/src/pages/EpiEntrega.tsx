@@ -56,6 +56,7 @@ export default function EpiEntrega() {
   const [enrollEmployee, setEnrollEmployee] = useState<any | null>(null);
   const [enrollDescriptor, setEnrollDescriptor] = useState<Float32Array | null>(null);
   const [enrollFoto, setEnrollFoto] = useState<string | null>(null);
+  const [enrollSearch, setEnrollSearch] = useState("");
 
   const { data: faceDescriptors = [] } = trpc.faceRecognition.getFaceDescriptors.useQuery(
     { companyId, companyIds },
@@ -633,66 +634,78 @@ export default function EpiEntrega() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showEnrollDialog} onOpenChange={setShowEnrollDialog}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+      <Dialog open={showEnrollDialog} onOpenChange={(open) => { setShowEnrollDialog(open); if (!open) setEnrollSearch(""); }}>
+        <DialogContent className="max-w-lg" style={{ maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="text-base flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
               Cadastrar Biometria
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            {enrollFoto && (
-              <div className="flex justify-center">
-                <img src={enrollFoto} className="w-20 h-20 rounded-full object-cover border-2 border-green-200" alt="Captura" />
+          <div className="flex flex-col gap-3 min-h-0 flex-1">
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {enrollFoto && (
+                <img src={enrollFoto} className="w-14 h-14 rounded-full object-cover border-2 border-green-200 flex-shrink-0" alt="Captura" />
+              )}
+              <div className="flex-1">
+                <p className="text-sm text-gray-600">Selecione o funcionário para vincular esta foto:</p>
+                {enrollEmployee && (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                    <span className="text-sm text-green-700 font-medium">{enrollEmployee.nomeCompleto}</span>
+                  </div>
+                )}
               </div>
-            )}
-            <p className="text-sm text-gray-600 text-center">
-              Selecione o funcionário para vincular esta foto:
-            </p>
+            </div>
             <Input
               placeholder="Buscar funcionário por nome ou número..."
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              value={enrollSearch}
+              onChange={(e) => setEnrollSearch(e.target.value)}
+              className="flex-shrink-0"
             />
-            <div className="max-h-60 overflow-y-auto space-y-1 border rounded-lg p-1">
-              {(allEmployees as any[])
-                .filter((e: any) => !e.faceId)
-                .filter((e: any) => {
-                  if (!searchText.trim()) return true;
-                  const lower = searchText.toLowerCase();
+            <div className="flex-1 overflow-y-auto space-y-1 border rounded-lg p-1.5 min-h-[200px]">
+              {(() => {
+                const semBio = (allEmployees as any[]).filter((e: any) => !e.faceId);
+                const filtrados = semBio.filter((e: any) => {
+                  if (!enrollSearch.trim()) return true;
+                  const lower = enrollSearch.toLowerCase();
                   return e.nomeCompleto?.toLowerCase().includes(lower) || e.numeroInterno?.toLowerCase().includes(lower);
-                })
-                .map((emp: any) => (
-                <button
-                  key={emp.id}
-                  className={`w-full text-left p-2.5 rounded-lg border transition-colors ${
-                    enrollEmployee?.id === emp.id ? "border-green-500 bg-green-50" : "border-gray-100 hover:bg-gray-50"
-                  }`}
-                  onClick={() => setEnrollEmployee(emp)}
-                >
-                  <p className="text-sm font-medium text-gray-900">{emp.nomeCompleto}</p>
-                  <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
-                </button>
-              ))}
+                });
+                if (filtrados.length === 0) return (
+                  <p className="text-center text-sm text-gray-400 py-8">
+                    {semBio.length === 0 ? "Todos os funcionários já possuem biometria cadastrada" : "Nenhum funcionário encontrado"}
+                  </p>
+                );
+                return filtrados.map((emp: any) => (
+                  <button
+                    key={emp.id}
+                    className={`w-full text-left p-2 rounded-lg border transition-colors ${
+                      enrollEmployee?.id === emp.id ? "border-green-500 bg-green-50" : "border-gray-100 hover:bg-gray-50"
+                    }`}
+                    onClick={() => setEnrollEmployee(emp)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-900">{emp.nomeCompleto}</p>
+                      {enrollEmployee?.id === emp.id && <CheckCircle className="h-4 w-4 text-green-600" />}
+                    </div>
+                    <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
+                  </button>
+                ));
+              })()}
             </div>
-            {enrollEmployee && (
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 border border-green-200 text-sm">
-                <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
-                <span className="text-green-800 font-medium">{enrollEmployee.nomeCompleto}</span>
-              </div>
-            )}
-            <Button
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
-              disabled={!enrollEmployee || enrollFaceMutation.isPending}
-              onClick={confirmEnroll}
-            >
-              <Camera className="h-4 w-4 mr-2" />
-              {enrollFaceMutation.isPending ? "Cadastrando..." : "Cadastrar e Selecionar"}
-            </Button>
-            <p className="text-xs text-gray-400 text-center">
-              A foto será salva como foto de perfil do funcionário
-            </p>
+            <div className="flex-shrink-0 space-y-2">
+              <Button
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                disabled={!enrollEmployee || enrollFaceMutation.isPending}
+                onClick={confirmEnroll}
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                {enrollFaceMutation.isPending ? "Cadastrando..." : "Cadastrar e Selecionar"}
+              </Button>
+              <p className="text-xs text-gray-400 text-center">
+                A foto será salva como foto de perfil do funcionário
+              </p>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
