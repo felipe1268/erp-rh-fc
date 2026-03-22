@@ -18,7 +18,7 @@ import {
 import {
   CheckCircle, Plus, Minus, Trash2,
   Package, User, ArrowRight, ArrowLeft, FileText,
-  Search, Home, PenTool,
+  Search, PenTool,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -180,11 +180,11 @@ export default function EpiEntrega() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/painel/sst")}
           className="text-gray-500 shrink-0"
         >
-          <Home className="h-4 w-4 mr-1" />
-          Início
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Voltar
         </Button>
       </div>
 
