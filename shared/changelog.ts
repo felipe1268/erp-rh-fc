@@ -4678,6 +4678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 728,
+    titulo: "Fluxo de Caixa — Separação por 1º Período vs 2º+ Período",
+    descricao: "No Fluxo de Caixa Prévio de Férias, cada card de mês agora exibe dois subtotais distintos: 1º Período (funcionários em primeira fase aquisitiva — pagamento pode ser prorrogado antes do vencimento) e 2º+ Período (funcionários em segunda fase ou mais — sem possibilidade de prorrogação, pagamento obrigatório). O backend enriquece cada entrada com numeroPeriodo (índice do período aquisitivo, base 1) e calcula totalPrimeiroPeriodo, totalSegundoPeriodoMais, qtdFuncionarios1p e qtdFuncionarios2p por mês. O dialog de detalhes do mês foi reestruturado: cards de resumo separados (azul = 1º período / vermelho = 2º+ período) e tabelas agrupadas por período com subtotais e TOTAL GERAL. Cada linha na prévia do card também mostra o número do período (1º per., 2º per.) ao lado do valor.",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 727,
     titulo: "Férias — Média de HE + DSR integrada ao cálculo (Art. 142 CLT)",
     descricao: "Novo painel 'Média de HE — Art. 142 CLT' na tela de detalhe das férias: busca automaticamente as horas extras pagas mês a mês no período aquisitivo (he_period_employees JOIN he_periods, somente destinacao=pagamento), calcula a média de HE e a média de DSR das HE (valorHEUtil × domingos/dias_úteis do mês), exibe memória de cálculo mês a mês com detalhes expansíveis. Aviso amarelo quando o período aquisitivo tem meses sem dados no sistema (anterior a jan/2026). No formulário 'Editar Valores': nova seção 'Base de Cálculo Art. 142' com campos editáveis de Média HE e Média DSR HE; ao alterar qualquer um deles, ferias/terco/total recalculam em cascata (base = salário + mediaHE + mediaDSR; férias = base × diasGozo/30; 1/3 = férias/3). RH pode sobrescrever qualquer valor. Nova procedure mediaHEFerias no backend (avisoPrevioFeriasRouter.ferias.mediaHEFerias).",

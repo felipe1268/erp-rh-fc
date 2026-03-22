@@ -1155,15 +1155,35 @@ export default function Ferias() {
                       </div>
                       <p className="text-2xl font-bold mt-1">{formatMoeda(m.valorTotal)}</p>
                       {m.totalFuncionarios > 0 && (
-                        <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0">
-                          <p>Salário: {formatMoeda(m.totalSalarioBase)} | 1/3: {formatMoeda(m.totalTercoConstitucional)}</p>
-                        </div>
+                        <>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            <p>Salário: {formatMoeda(m.totalSalarioBase)} | 1/3: {formatMoeda(m.totalTercoConstitucional)}</p>
+                          </div>
+                          {/* Breakdown por período */}
+                          {(parseFloat(m.totalPrimeiroPeriodo || "0") > 0 || parseFloat(m.totalSegundoPeriodoMais || "0") > 0) && (
+                            <div className="mt-1.5 space-y-0.5">
+                              {parseFloat(m.totalPrimeiroPeriodo || "0") > 0 && (
+                                <div className="flex items-center justify-between text-[10px] bg-blue-50 rounded px-1.5 py-0.5 border border-blue-200">
+                                  <span className="text-blue-700 font-medium">1º Período <span className="font-normal text-blue-500">({m.qtdFuncionarios1p} func.) ↔ pode prorrogar</span></span>
+                                  <span className="font-bold text-blue-800">{formatMoeda(m.totalPrimeiroPeriodo)}</span>
+                                </div>
+                              )}
+                              {parseFloat(m.totalSegundoPeriodoMais || "0") > 0 && (
+                                <div className="flex items-center justify-between text-[10px] bg-red-50 rounded px-1.5 py-0.5 border border-red-200">
+                                  <span className="text-red-700 font-medium">2º+ Período <span className="font-normal text-red-500">({m.qtdFuncionarios2p} func.) ✕ sem prorrogação</span></span>
+                                  <span className="font-bold text-red-800">{formatMoeda(m.totalSegundoPeriodoMais)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
                       )}
-                      <p className="text-xs text-muted-foreground">{m.totalFuncionarios} funcionário(s)</p>
+                      <p className="text-xs text-muted-foreground mt-1">{m.totalFuncionarios} funcionário(s)</p>
                       {m.funcionarios?.slice(0, 3).map((f: any) => (
-                        <div key={f.id} className="mt-2 text-xs border-t pt-1">
+                        <div key={f.id + "_" + f.numeroPeriodo} className="mt-1.5 text-xs border-t pt-1">
                           <span className="font-medium">{f.nome}</span>
                           <span className="text-muted-foreground ml-1">{formatMoeda(f.valorEstimado)}</span>
+                          <span className="text-[9px] ml-1 text-slate-400">{f.numeroPeriodo}º per.</span>
                           {f.vencida && <Badge variant="destructive" className="ml-1 text-[9px]">VENCIDA</Badge>}
                         </div>
                       ))}
@@ -1358,90 +1378,105 @@ export default function Ferias() {
             <div className="flex-1 overflow-y-auto">
             {fluxoMesSelecionado && (
               <div className="space-y-4 p-1">
-                {/* Resumo do mês */}
-                <div className="grid grid-cols-3 gap-3">
+                {/* Resumo do mês — cards de topo */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
                     <p className="text-xs text-green-600 font-semibold uppercase">Total do Mês</p>
                     <p className="text-xl font-bold text-green-700 mt-1">{formatMoeda(fluxoMesSelecionado.valorTotal)}</p>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold uppercase">Funcionários</p>
-                    <p className="text-xl font-bold text-blue-700 mt-1">{fluxoMesSelecionado.totalFuncionarios}</p>
+                  <div className="bg-slate-50 rounded-lg p-3 text-center border border-slate-200">
+                    <p className="text-xs text-slate-600 font-semibold uppercase">Funcionários</p>
+                    <p className="text-xl font-bold text-slate-700 mt-1">{fluxoMesSelecionado.totalFuncionarios}</p>
                   </div>
-                  <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
-                    <p className="text-xs text-amber-600 font-semibold uppercase">Média por Func.</p>
-                    <p className="text-xl font-bold text-amber-700 mt-1">
-                      {fluxoMesSelecionado.totalFuncionarios > 0
-                        ? formatMoeda(parseFloat(fluxoMesSelecionado.valorTotal) / fluxoMesSelecionado.totalFuncionarios)
-                        : "R$ 0,00"}
-                    </p>
+                  <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold uppercase">1º Período</p>
+                    <p className="text-base font-bold text-blue-700 mt-1">{formatMoeda(fluxoMesSelecionado.totalPrimeiroPeriodo || "0")}</p>
+                    <p className="text-[10px] text-blue-500">{fluxoMesSelecionado.qtdFuncionarios1p || 0} func. · pode prorrogar</p>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
+                    <p className="text-xs text-red-600 font-semibold uppercase">2º+ Período</p>
+                    <p className="text-base font-bold text-red-700 mt-1">{formatMoeda(fluxoMesSelecionado.totalSegundoPeriodoMais || "0")}</p>
+                    <p className="text-[10px] text-red-500">{fluxoMesSelecionado.qtdFuncionarios2p || 0} func. · sem prorrogação</p>
                   </div>
                 </div>
 
-                {/* Tabela detalhada */}
+                {/* Tabela detalhada agrupada por período */}
                 {fluxoMesSelecionado.funcionarios?.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left bg-muted/30">
-                          <th className="py-2 px-3 font-medium text-muted-foreground">#</th>
-                          <th className="py-2 px-3 font-medium text-muted-foreground">Funcionário</th>
-                          <th className="py-2 px-3 font-medium text-muted-foreground">Cargo</th>
-                          <th className="py-2 px-3 font-medium text-muted-foreground text-right">Salário Base</th>
-                          <th className="py-2 px-3 font-medium text-muted-foreground text-right">Férias (30d)</th>
-                          <th className="py-2 px-3 font-medium text-muted-foreground text-right">1/3 Const.</th>
-                          <th className="py-2 px-3 font-medium text-muted-foreground text-right">Total</th>
-                          <th className="py-2 px-3 font-medium text-muted-foreground text-center">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {fluxoMesSelecionado.funcionarios.map((f: any, i: number) => {
-                          const salario = typeof f.salario === 'string' ? parseFloat(f.salario.replace(/[^\d.,]/g, '').replace(',', '.')) || 0 : (f.salario || 0);
-                          const valorFerias = salario;
-                          const terco = salario / 3;
-                          const total = parseFloat(f.valorEstimado || "0");
-                          return (
-                            <tr key={f.id} className="border-b hover:bg-muted/20">
-                              <td className="py-2 px-3 text-muted-foreground">{i + 1}</td>
-                              <td className="py-2 px-3 font-medium">{f.nome}</td>
-                              <td className="py-2 px-3 text-muted-foreground">{f.cargo || "-"}</td>
-                              <td className="py-2 px-3 text-right">{formatMoeda(salario)}</td>
-                              <td className="py-2 px-3 text-right">{formatMoeda(valorFerias)}</td>
-                              <td className="py-2 px-3 text-right">{formatMoeda(terco)}</td>
-                              <td className="py-2 px-3 text-right font-bold text-green-700">{formatMoeda(total)}</td>
-                              <td className="py-2 px-3 text-center">
-                                {f.vencida ? (
-                                  <Badge variant="destructive" className="text-[10px]">VENCIDA</Badge>
-                                ) : (
-                                  <Badge className="bg-green-100 text-green-700 text-[10px]">Prevista</Badge>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-blue-200 bg-blue-50/50">
-                          <td colSpan={4} className="py-1.5 px-3 text-sm text-blue-700">Salário Base (antecipado)</td>
-                          <td className="py-1.5 px-3 text-right font-semibold text-blue-700">{formatMoeda(fluxoMesSelecionado.totalSalarioBase)}</td>
-                          <td></td>
-                          <td></td>
-                          <td></td>
-                        </tr>
-                        <tr className="bg-orange-50/50">
-                          <td colSpan={4} className="py-1.5 px-3 text-sm text-orange-600">1/3 Constitucional (custo adicional)</td>
-                          <td></td>
-                          <td className="py-1.5 px-3 text-right font-semibold text-orange-600">{formatMoeda(fluxoMesSelecionado.totalTercoConstitucional)}</td>
-                          <td></td>
-                          <td></td>
-                        </tr>
-                        <tr className="border-t-2 border-green-300 bg-green-50">
-                          <td colSpan={6} className="py-2 px-3 font-bold text-green-800">TOTAL GERAL DO MÊS</td>
-                          <td className="py-2 px-3 text-right font-bold text-green-800 text-lg">{formatMoeda(fluxoMesSelecionado.valorTotal)}</td>
-                          <td></td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                    {/* Grupo 1º Período */}
+                    {(() => {
+                      const func1p = (fluxoMesSelecionado.funcionarios as any[]).filter((f: any) => f.numeroPeriodo === 1);
+                      const func2p = (fluxoMesSelecionado.funcionarios as any[]).filter((f: any) => f.numeroPeriodo > 1);
+                      const renderGrupo = (funcs: any[], titulo: string, cor: 'blue' | 'red') => {
+                        if (funcs.length === 0) return null;
+                        const subtotal = funcs.reduce((s: number, f: any) => s + parseFloat(f.valorEstimado || "0"), 0);
+                        const bgHead = cor === 'blue' ? 'bg-blue-100 border-blue-300' : 'bg-red-100 border-red-300';
+                        const txtHead = cor === 'blue' ? 'text-blue-800' : 'text-red-800';
+                        const bgTotal = cor === 'blue' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700';
+                        return (
+                          <table className="w-full text-sm mb-4 border rounded-lg overflow-hidden">
+                            <thead>
+                              <tr className={`border-b text-left ${bgHead}`}>
+                                <th colSpan={8} className={`py-2 px-3 font-semibold ${txtHead}`}>{titulo}</th>
+                              </tr>
+                              <tr className="border-b text-left bg-muted/20">
+                                <th className="py-1.5 px-3 font-medium text-muted-foreground text-xs">#</th>
+                                <th className="py-1.5 px-3 font-medium text-muted-foreground text-xs">Funcionário</th>
+                                <th className="py-1.5 px-3 font-medium text-muted-foreground text-xs">Cargo</th>
+                                <th className="py-1.5 px-3 font-medium text-muted-foreground text-xs text-right">Salário Base</th>
+                                <th className="py-1.5 px-3 font-medium text-muted-foreground text-xs text-right">Férias (30d)</th>
+                                <th className="py-1.5 px-3 font-medium text-muted-foreground text-xs text-right">1/3 Const.</th>
+                                <th className="py-1.5 px-3 font-medium text-muted-foreground text-xs text-right">Total</th>
+                                <th className="py-1.5 px-3 font-medium text-muted-foreground text-xs text-center">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {funcs.map((f: any, i: number) => {
+                                const salario = typeof f.salario === 'string' ? parseFloat(f.salario.replace(/[^\d.,]/g, '').replace(',', '.')) || 0 : (f.salario || 0);
+                                const terco = salario / 3;
+                                const total = parseFloat(f.valorEstimado || "0");
+                                return (
+                                  <tr key={f.id + "_" + f.numeroPeriodo} className="border-b hover:bg-muted/10">
+                                    <td className="py-1.5 px-3 text-muted-foreground text-xs">{i + 1}</td>
+                                    <td className="py-1.5 px-3 font-medium text-xs">{f.nome}</td>
+                                    <td className="py-1.5 px-3 text-muted-foreground text-xs">{f.cargo || "-"}</td>
+                                    <td className="py-1.5 px-3 text-right text-xs">{formatMoeda(salario)}</td>
+                                    <td className="py-1.5 px-3 text-right text-xs">{formatMoeda(salario)}</td>
+                                    <td className="py-1.5 px-3 text-right text-xs">{formatMoeda(terco)}</td>
+                                    <td className="py-1.5 px-3 text-right font-bold text-xs">{formatMoeda(total)}</td>
+                                    <td className="py-1.5 px-3 text-center">
+                                      {f.vencida ? (
+                                        <Badge variant="destructive" className="text-[9px]">VENCIDA</Badge>
+                                      ) : (
+                                        <Badge className="bg-green-100 text-green-700 text-[9px]">Prevista</Badge>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr className={`border-t-2 ${bgTotal}`}>
+                                <td colSpan={6} className="py-1.5 px-3 text-xs font-semibold">Subtotal {titulo}</td>
+                                <td className="py-1.5 px-3 text-right font-bold text-sm">{formatMoeda(subtotal)}</td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        );
+                      };
+                      return (
+                        <>
+                          {renderGrupo(func1p, "1º Período — pode prorrogar o pagamento", 'blue')}
+                          {renderGrupo(func2p, "2º+ Período — sem possibilidade de prorrogação", 'red')}
+                          {/* Total geral */}
+                          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 mt-1">
+                            <span className="font-bold text-green-800">TOTAL GERAL DO MÊS</span>
+                            <span className="font-bold text-green-800 text-xl">{formatMoeda(fluxoMesSelecionado.valorTotal)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">

@@ -1825,7 +1825,8 @@ export const avisoPrevioFeriasRouter = router({
             if (!func.dataAdmissao) continue;
             const periodos = calcularPeriodosFerias(func.dataAdmissao);
             
-            for (const p of periodos) {
+            for (let pi = 0; pi < periodos.length; pi++) {
+              const p = periodos[pi];
               if (!p.adquirido) continue;
               const fimConcessivo = new Date(p.fimConcessivo);
               if (fimConcessivo >= inicioMes && fimConcessivo <= new Date(input.ano, mes + 3, 0)) {
@@ -1838,7 +1839,7 @@ export const avisoPrevioFeriasRouter = router({
                 const dbStatus = dbStatusMap[func.id]?.[periodoKey];
                 let fStatus = 'prevista';
                 if (dbStatus && dbStatus !== 'pendente') {
-                  fStatus = dbStatus; // agendada, em_gozo, concluida, vencida, cancelada
+                  fStatus = dbStatus;
                 } else if (p.vencida) {
                   fStatus = 'vencida';
                 }
@@ -1854,12 +1855,21 @@ export const avisoPrevioFeriasRouter = router({
                   fimConcessivo: p.fimConcessivo,
                   vencida: p.vencida,
                   status: fStatus,
+                  numeroPeriodo: pi + 1,       // 1 = 1º período, 2 = 2º período, etc.
+                  inicioPeriodo: p.inicio,
+                  fimPeriodo: p.fim,
                 });
                 break;
               }
             }
           }
           
+          // Separar por período: 1º (mais flexível) vs 2º+ (sem possibilidade de prorrogação)
+          const func1p = funcionariosNoMes.filter(f => f.numeroPeriodo === 1);
+          const func2p = funcionariosNoMes.filter(f => f.numeroPeriodo > 1);
+          const total1p = func1p.reduce((s: number, f: any) => s + parseFloat(f.valorEstimado), 0);
+          const total2p = func2p.reduce((s: number, f: any) => s + parseFloat(f.valorEstimado), 0);
+
           const totalSalarioBase = funcionariosNoMes.reduce((s, f) => s + parseFloat(f.salarioBase), 0);
           const totalTerco = funcionariosNoMes.reduce((s, f) => s + parseFloat(f.tercoConstitucional), 0);
           meses.push({
@@ -1870,6 +1880,11 @@ export const avisoPrevioFeriasRouter = router({
             totalSalarioBase: totalSalarioBase.toFixed(2),
             totalTercoConstitucional: totalTerco.toFixed(2),
             funcionarios: funcionariosNoMes,
+            // Separação 1º vs 2º+ período
+            totalPrimeiroPeriodo: total1p.toFixed(2),
+            totalSegundoPeriodoMais: total2p.toFixed(2),
+            qtdFuncionarios1p: func1p.length,
+            qtdFuncionarios2p: func2p.length,
           });
         }
         
