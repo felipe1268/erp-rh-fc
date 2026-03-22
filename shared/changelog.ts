@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 723,
+    titulo: "EPIs — Salvar Ficha como PDF digital sem precisar imprimir",
+    descricao: "Botão 'Salvar PDF' na ficha de entrega de EPI gera um PDF completo com todos os dados (funcionário, EPI, tabela, política de cobrança, declaração, obrigações NR-6) e as assinaturas digitais embutidas como imagens. O PDF é salvo automaticamente no sistema (S3) e também baixado localmente. O botão 'Ver PDF Salvo' aparece sempre que houver uma ficha salva. O antigo botão 'Upload Assinada' foi removido — o fluxo agora é totalmente digital. Geração programática com jsPDF incluindo stamp de auditoria digital.",
+    tipo: "feature",
+    modulos: "SST / EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 722,
     titulo: "EPIs — Assinatura digital dupla: funcionário e responsável pela entrega na ficha de EPI",
     descricao: "Ficha de entrega de EPI (ficha_epi) agora suporta dois pads de assinatura digital: um para o funcionário (recebedor) e outro para o responsável pela entrega (entregador). Cada assinatura tem seu próprio termo legal, hash SHA-256, GPS e auditoria completa. Nova coluna assinatura_responsavel_url adicionada via ColFix no banco de produção. O componente EpiAssinatura ganhou prop tipoAssinante ('funcionario' | 'responsavel') que adapta cor, título e texto do termo. A ficha exibe a imagem de cada assinatura assim que coletada e oculta o botão correspondente.",

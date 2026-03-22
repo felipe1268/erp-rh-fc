@@ -15,7 +15,7 @@ import { removeAccents } from "@/lib/searchUtils";
 import {
   Plus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
-  DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText,
+  DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText, FileDown,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
   Building2, ArrowLeftRight, Warehouse, TrendingUp,
   Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool, Users, Ban,
@@ -39,6 +39,7 @@ import EpiEstoqueMinimo from "./EpiEstoqueMinimo";
 import EpiIA from "./EpiIA";
 import EpiDrillDown, { type DrillDownType } from "./EpiDrillDown";
 import EpiAssinatura from "./EpiAssinatura";
+import { generateFichaEpiPdf } from "@/lib/epiReceiptPdf";
 import EpiCapacidade from "./EpiCapacidade";
 import EpiDescontos from "./EpiDescontos";
 
@@ -178,6 +179,7 @@ export default function Epis() {
   const [fichaSignature, setFichaSignature] = useState<string | null>(null);
   const [showResponsavelSignPad, setShowResponsavelSignPad] = useState(false);
   const [responsavelSignature, setResponsavelSignature] = useState<string | null>(null);
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
 
   // Queries
   // Quando Construtoras selecionado, companyId=0 mas companyIds tem os IDs do pool
@@ -1602,7 +1604,58 @@ export default function Epis() {
               <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
             </Button>
             <h1 className="text-xl font-bold">Ficha de Entrega de EPI</h1>
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex gap-2 flex-wrap justify-end">
+              <Button
+                size="sm"
+                className="bg-[#1B2A4A] hover:bg-[#243660] text-white"
+                disabled={isSavingPdf || uploadFichaMut.isPending}
+                onClick={async () => {
+                  setIsSavingPdf(true);
+                  try {
+                    const bdiPct = bdiQ.data?.bdiPercentual ?? 40;
+                    const valorUnit = epi?.valorProduto
+                      ? (parseFloat(String(epi.valorProduto)) * (1 + bdiPct / 100))
+                          .toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                      : undefined;
+                    const vidaUtil = epi?.tempoMinimoTroca
+                      ? `${epi.tempoMinimoTroca} dias`
+                      : undefined;
+                    const base64 = await generateFichaEpiPdf({
+                      nomeFunc: fichaDelivery.nomeFunc || emp?.nomeCompleto || "",
+                      funcaoFunc: fichaDelivery.funcaoFunc || emp?.funcao,
+                      cpfFunc: emp?.cpf,
+                      matriculaFunc: emp?.codigoInterno,
+                      obraNome: fichaDelivery.obraNome || emp?.obraAtualNome,
+                      nomeEpi: fichaDelivery.nomeEpi || epi?.nome || "",
+                      caEpi: fichaDelivery.caEpi || epi?.ca,
+                      quantidade: fichaDelivery.quantidade,
+                      vidaUtil,
+                      valorUnit,
+                      motivo: fichaDelivery.motivo || "Entrega regular",
+                      dataEntrega: fichaDelivery.dataEntrega,
+                      emitidoPor: user?.name || user?.email,
+                      empresaNome: selectedCompany?.razaoSocial,
+                      empresaCnpj: selectedCompany?.cnpj,
+                      textoDeclaracao: formTextQ.data?.texto,
+                      assinaturaFuncUrl: fichaDelivery.assinaturaUrl || fichaSignature,
+                      assinaturaResponsavelUrl: fichaDelivery.assinaturaResponsavelUrl || responsavelSignature,
+                    });
+                    const nomeFunc = fichaDelivery.nomeFunc || emp?.nomeCompleto || "Funcionario";
+                    const fileName = `Ficha_EPI_${nomeFunc.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`;
+                    uploadFichaMut.mutate(
+                      { deliveryId: fichaDelivery.id, fileBase64: base64, fileName },
+                      { onSuccess: () => toast.success("Ficha salva com sucesso no sistema!") }
+                    );
+                  } catch (err: any) {
+                    toast.error("Erro ao gerar PDF: " + (err?.message || "tente novamente"));
+                  } finally {
+                    setIsSavingPdf(false);
+                  }
+                }}
+              >
+                <FileDown className="h-4 w-4 mr-1" />
+                {isSavingPdf || uploadFichaMut.isPending ? "Salvando..." : "Salvar PDF"}
+              </Button>
               <Button variant="outline" size="sm" onClick={() => {
                 const nomeFunc = fichaDelivery.nomeFunc || emp?.nomeCompleto || 'Funcionario';
                 const oldTitle = document.title;
@@ -1612,27 +1665,9 @@ export default function Epis() {
               }}>
                 <Printer className="h-4 w-4 mr-1" /> Imprimir
               </Button>
-              <Button variant="outline" size="sm" onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.pdf,.jpg,.jpeg,.png';
-                input.onchange = async (e: any) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    const base64 = (reader.result as string).split(',')[1];
-                    uploadFichaMut.mutate({ deliveryId: fichaDelivery.id, fileBase64: base64, fileName: file.name });
-                  };
-                  reader.readAsDataURL(file);
-                };
-                input.click();
-              }}>
-                <Upload className="h-4 w-4 mr-1" /> Upload Assinada
-              </Button>
               {fichaDelivery.fichaUrl && (
                 <Button variant="outline" size="sm" onClick={() => window.open(fichaDelivery.fichaUrl, '_blank')}>
-                  <Eye className="h-4 w-4 mr-1" /> Ver Assinada
+                  <Eye className="h-4 w-4 mr-1" /> Ver PDF Salvo
                 </Button>
               )}
             </div>
