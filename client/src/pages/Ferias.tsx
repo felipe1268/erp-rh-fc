@@ -1642,25 +1642,54 @@ export default function Ferias() {
                 </div>
                 {mediaHEData ? (
                   <>
-                    {mediaHEData.dadosParciais && (
+                    {mediaHEData.dadosParciais && !editingValues && (
                       <div className="mb-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                         ⚠️ Dados parciais: {mediaHEData.mesesComDados} de {mediaHEData.mesesNoPeriodo} meses do período aquisitivo encontrados no sistema. A média foi calculada com os meses disponíveis. O RH pode ajustar manualmente ao editar os valores.
                       </div>
                     )}
-                    <div className="grid grid-cols-3 gap-2 text-xs mb-2">
-                      <div className="bg-white border rounded p-2 text-center">
-                        <p className="text-slate-400 text-[10px]">Meses com HE</p>
-                        <p className="font-bold text-slate-800">{mediaHEData.mesesComDados}/{mediaHEData.mesesNoPeriodo}</p>
+                    {(() => {
+                      const pvP = (s: string) => parseFloat((s || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
+                      const mHE_auto  = mediaHEData.mediaHE    ?? 0;
+                      const mDSR_auto = mediaHEData.mediaDSRHE ?? 0;
+                      const mHE_disp  = editingValues ? pvP(editValores.mediaHE)   : mHE_auto;
+                      const mDSR_disp = editingValues ? pvP(editValores.mediaDSRHE) : mDSR_auto;
+                      const isManualHE  = editingValues && Math.abs(mHE_disp  - mHE_auto)  > 0.001;
+                      const isManualDSR = editingValues && Math.abs(mDSR_disp - mDSR_auto) > 0.001;
+                      return (
+                        <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                          <div className="bg-white border rounded p-2 text-center">
+                            <p className="text-slate-400 text-[10px]">Meses com HE</p>
+                            <p className="font-bold text-slate-800">{mediaHEData.mesesComDados}/{mediaHEData.mesesNoPeriodo}</p>
+                          </div>
+                          <div className={`border rounded p-2 text-center transition-colors ${isManualHE ? "bg-amber-50 border-amber-300" : "bg-white"}`}>
+                            <p className="text-slate-400 text-[10px]">Média HE/mês</p>
+                            <p className={`font-bold ${isManualHE ? "text-amber-700" : "text-blue-700"}`}>{formatMoeda(mHE_disp)}</p>
+                            {editingValues && (
+                              <p className={`text-[9px] mt-0.5 ${isManualHE ? "text-amber-600" : "text-green-600"}`}>
+                                {isManualHE ? "✏ editado manualmente" : "⚙ calculado auto"}
+                              </p>
+                            )}
+                          </div>
+                          <div className={`border rounded p-2 text-center transition-colors ${isManualDSR ? "bg-amber-50 border-amber-300" : "bg-white"}`}>
+                            <p className="text-slate-400 text-[10px]">Média DSR das HE</p>
+                            <p className={`font-bold ${isManualDSR ? "text-amber-700" : "text-blue-700"}`}>{formatMoeda(mDSR_disp)}</p>
+                            {editingValues && (
+                              <p className={`text-[9px] mt-0.5 ${isManualDSR ? "text-amber-600" : "text-green-600"}`}>
+                                {isManualDSR ? "✏ editado manualmente" : "⚙ calculado auto"}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {editingValues && (
+                      <div className="mb-2 text-[10px] bg-blue-50 border border-blue-200 rounded px-2 py-1 text-blue-700">
+                        ℹ️ Os valores do painel acima acompanham o que está sendo editado no formulário abaixo em tempo real.
+                        {(Math.abs((parseFloat((editValores.mediaHE || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0) - (mediaHEData.mediaHE ?? 0)) > 0.001 ||
+                          Math.abs((parseFloat((editValores.mediaDSRHE || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0) - (mediaHEData.mediaDSRHE ?? 0)) > 0.001)
+                          && <span className="ml-1 font-semibold text-amber-700">⚠ Valor(es) diferem do cálculo automático.</span>}
                       </div>
-                      <div className="bg-white border rounded p-2 text-center">
-                        <p className="text-slate-400 text-[10px]">Média HE/mês</p>
-                        <p className="font-bold text-blue-700">{formatMoeda(mediaHEData.mediaHE)}</p>
-                      </div>
-                      <div className="bg-white border rounded p-2 text-center">
-                        <p className="text-slate-400 text-[10px]">Média DSR das HE</p>
-                        <p className="font-bold text-blue-700">{formatMoeda(mediaHEData.mediaDSRHE)}</p>
-                      </div>
-                    </div>
+                    )}
                     {mediaHEData.detalhes.length > 0 && (
                       <details className="text-[10px] text-slate-500">
                         <summary className="cursor-pointer hover:text-slate-700 select-none">Ver detalhes mês a mês</summary>
