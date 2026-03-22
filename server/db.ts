@@ -1375,14 +1375,72 @@ export async function updateObra(id: number, data: Partial<InsertObra>) {
 export async function deleteObra(id: number, userId?: number, userName?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  // Soft-delete the obra
+
+  // GOLDEN RULE #11: Excluir obra = cascata TOTAL. Nada do projeto deletado pode ser reaproveitado.
+  // Hard-delete ALL child data before soft-deleting the obra itself.
+
+  // 1) Planejamento: delete all dependents first, then projetos
+  const projRows = await db.execute(sql`SELECT id FROM planejamento_projetos WHERE obra_id = ${id}`);
+  const projIds = ((projRows as any).rows ?? projRows ?? []).map((r: any) => r.id);
+  if (projIds.length > 0) {
+    for (const pid of projIds) {
+      await db.execute(sql`DELETE FROM planejamento_refis WHERE projeto_id = ${pid}`);
+      await db.execute(sql`DELETE FROM planejamento_avancos WHERE projeto_id = ${pid}`);
+      await db.execute(sql`DELETE FROM planejamento_medicoes WHERE projeto_id = ${pid}`);
+      await db.execute(sql`DELETE FROM planejamento_atividades WHERE projeto_id = ${pid}`);
+      await db.execute(sql`DELETE FROM planejamento_revisoes WHERE projeto_id = ${pid}`);
+      try { await db.execute(sql`DELETE FROM ia_cronograma_chat WHERE projeto_id = ${pid}`); } catch (_) {}
+      try { await db.execute(sql`DELETE FROM ia_cronograma_alertas WHERE projeto_id = ${pid}`); } catch (_) {}
+      try { await db.execute(sql`DELETE FROM ia_cronograma_cenarios WHERE projeto_id = ${pid}`); } catch (_) {}
+      try { await db.execute(sql`DELETE FROM ia_cronograma_monitoramento WHERE projeto_id = ${pid}`); } catch (_) {}
+    }
+    await db.execute(sql`DELETE FROM planejamento_projetos WHERE obra_id = ${id}`);
+  }
+
+  // 2) Orçamentos: delete all children then orçamentos
+  const orcRows = await db.execute(sql`SELECT id FROM orcamentos WHERE "obraId" = ${id}`);
+  const orcIds = ((orcRows as any).rows ?? orcRows ?? []).map((r: any) => r.id);
+  if (orcIds.length > 0) {
+    for (const oid of orcIds) {
+      await db.execute(sql`DELETE FROM orcamento_itens WHERE "orcamentoId" = ${oid}`);
+      await db.execute(sql`DELETE FROM orcamento_insumos WHERE "orcamentoId" = ${oid}`);
+      await db.execute(sql`DELETE FROM orcamento_bdi WHERE "orcamentoId" = ${oid}`);
+      try { await db.execute(sql`DELETE FROM orcamento_revisoes WHERE "orcamentoId" = ${oid}`); } catch (_) {}
+    }
+    await db.execute(sql`DELETE FROM orcamentos WHERE "obraId" = ${id}`);
+  }
+
+  // 3) All direct child tables with "obraId" (camelCase)
+  const camelCaseTables = [
+    'obra_funcionarios', 'obra_horas_rateio', 'manual_obra_assignments', 'obra_sns',
+    'time_records', 'time_inconsistencies', 'unmatched_dixi_records', 'timecard_daily',
+    'employee_site_history', 'epi_deliveries', 'epi_estoque_obra', 'epi_estoque_minimo',
+    'convencao_coletiva', 'dixi_afd_importacoes', 'dixi_afd_marcacoes', 'dixi_devices',
+    'eval_avaliacoes', 'eval_avaliadores', 'eval_surveys',
+    'field_notes', 'financial_events', 'funcionarios_terceiros',
+    'he_solicitacoes', 'meal_benefit_configs',
+  ];
+  for (const t of camelCaseTables) {
+    try { await db.execute(sql.raw(`DELETE FROM ${t} WHERE "obraId" = ${id}`)); } catch (_) {}
+  }
+
+  // 4) All direct child tables with "obra_id" (snake_case)
+  const snakeCaseTables = [
+    'purchase_requests', 'purchase_orders', 'purchase_receipts',
+    'purchase_accounts_payable', 'purchase_approval_rules', 'purchase_spending_limits',
+    'budget_reallocations', 'buyer_commissions', 'emergency_metrics',
+    'terceiro_contratos', 'terceiro_medicoes',
+  ];
+  for (const t of snakeCaseTables) {
+    try { await db.execute(sql.raw(`DELETE FROM ${t} WHERE obra_id = ${id}`)); } catch (_) {}
+  }
+
+  // 5) Soft-delete the obra itself (keeps in lixeira for audit trail)
   await db.update(obras).set({
     deletedAt: sql`NOW()`,
     deletedBy: userName || null,
     deletedByUserId: userId || null,
   } as any).where(eq(obras.id, id));
-  // Also deactivate all obra_funcionarios for this obra so employees don't appear as orphans
-  await db.execute(sql`UPDATE obra_funcionarios SET "isActive" = 0 WHERE "obraId" = ${id}`);
 }
 
 export async function restoreObra(id: number) {

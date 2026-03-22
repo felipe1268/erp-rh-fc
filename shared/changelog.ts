@@ -4929,4 +4929,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 751,
+    titulo: "Exclusão de obra com cascata total (Golden Rule #11)",
+    descricao: "Ao excluir uma obra, agora TODOS os dados filhos são removidos em cascata: planejamento (projetos + atividades + revisões), orçamentos (itens + insumos + BDI), alocações de funcionários, SNs, registros de ponto, inconsistências, EPIs, estoque de obra, convênio coletivo, dispositivos Dixi, avaliações, notas de campo, eventos financeiros, terceirizados, solicitações de HE, configurações de refeição, requisições de compras, ordens de compra, recebimentos, contas a pagar, regras de aprovação, limites de gastos, realocações de orçamento, comissões e métricas de emergência. Obra deletada = tábula rasa. Cleanup retroativo aplicado no startup (ColFix).",
+    tipo: "bugfix",
+    modulos: "Obras, Planejamento, Orçamento, Compras, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

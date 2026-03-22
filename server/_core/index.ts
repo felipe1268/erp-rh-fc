@@ -676,7 +676,82 @@ async function startServer() {
         } else {
           console.log("[ColFix] Orçamentos/planejamentos fantasmas: nenhum encontrado");
         }
-      } catch (e: any) { console.warn("[ColFix] Limpeza fantasmas:", e?.message ?? e); }
+        // GOLDEN RULE #11: Limpar dados órfãos de obras excluídas (cascata retroativa)
+        const deletedObras2 = await db2.execute(sql2`SELECT id FROM obras WHERE "deletedAt" IS NOT NULL`);
+        const delObraIds = ((deletedObras2 as any).rows ?? deletedObras2 ?? []).map((r: any) => r.id);
+        if (delObraIds.length > 0) {
+          let totalCleaned = 0;
+          for (const oid of delObraIds) {
+            // Planejamento cascade (same order as deleteObra)
+            const pRows = await db2.execute(sql2`SELECT id FROM planejamento_projetos WHERE obra_id = ${oid}`);
+            const pIds = ((pRows as any).rows ?? pRows ?? []).map((r: any) => r.id);
+            for (const pid of pIds) {
+              try { await db2.execute(sql2`DELETE FROM planejamento_refis WHERE projeto_id = ${pid}`); } catch (_) {}
+              try { await db2.execute(sql2`DELETE FROM planejamento_avancos WHERE projeto_id = ${pid}`); } catch (_) {}
+              try { await db2.execute(sql2`DELETE FROM planejamento_medicoes WHERE projeto_id = ${pid}`); } catch (_) {}
+              const a1 = await db2.execute(sql2`DELETE FROM planejamento_atividades WHERE projeto_id = ${pid}`);
+              totalCleaned += (a1 as any).rowCount ?? 0;
+              try { await db2.execute(sql2`DELETE FROM planejamento_revisoes WHERE projeto_id = ${pid}`); } catch (_) {}
+              try { await db2.execute(sql2`DELETE FROM ia_cronograma_chat WHERE projeto_id = ${pid}`); } catch (_) {}
+              try { await db2.execute(sql2`DELETE FROM ia_cronograma_alertas WHERE projeto_id = ${pid}`); } catch (_) {}
+              try { await db2.execute(sql2`DELETE FROM ia_cronograma_cenarios WHERE projeto_id = ${pid}`); } catch (_) {}
+              try { await db2.execute(sql2`DELETE FROM ia_cronograma_monitoramento WHERE projeto_id = ${pid}`); } catch (_) {}
+            }
+            if (pIds.length > 0) {
+              const d1 = await db2.execute(sql2`DELETE FROM planejamento_projetos WHERE obra_id = ${oid}`);
+              totalCleaned += (d1 as any).rowCount ?? 0;
+            }
+            // Orçamentos cascade
+            const oRows = await db2.execute(sql2`SELECT id FROM orcamentos WHERE "obraId" = ${oid}`);
+            const oIds = ((oRows as any).rows ?? oRows ?? []).map((r: any) => r.id);
+            for (const ocid of oIds) {
+              try { await db2.execute(sql2`DELETE FROM orcamento_itens WHERE "orcamentoId" = ${ocid}`); } catch (_) {}
+              try { await db2.execute(sql2`DELETE FROM orcamento_insumos WHERE "orcamentoId" = ${ocid}`); } catch (_) {}
+              try { await db2.execute(sql2`DELETE FROM orcamento_bdi WHERE "orcamentoId" = ${ocid}`); } catch (_) {}
+              try { await db2.execute(sql2`DELETE FROM orcamento_revisoes WHERE "orcamentoId" = ${ocid}`); } catch (_) {}
+            }
+            if (oIds.length > 0) {
+              try { await db2.execute(sql2`DELETE FROM orcamentos WHERE "obraId" = ${oid}`); } catch (_) {}
+            }
+            // Direct child tables (camelCase obraId)
+            const ccTables = [
+              'obra_funcionarios','obra_horas_rateio','manual_obra_assignments','obra_sns',
+              'time_records','time_inconsistencies','unmatched_dixi_records','timecard_daily',
+              'employee_site_history','epi_deliveries','epi_estoque_obra','epi_estoque_minimo',
+              'convencao_coletiva','dixi_afd_importacoes','dixi_afd_marcacoes','dixi_devices',
+              'eval_avaliacoes','eval_avaliadores','eval_surveys',
+              'field_notes','financial_events','funcionarios_terceiros',
+              'he_solicitacoes','meal_benefit_configs',
+            ];
+            for (const t of ccTables) {
+              try {
+                const dr = await db2.execute(sql2.raw(`DELETE FROM ${t} WHERE "obraId" = ${oid}`));
+                totalCleaned += (dr as any).rowCount ?? 0;
+              } catch (_) {}
+            }
+            // Direct child tables (snake_case obra_id)
+            const scTables = [
+              'purchase_requests','purchase_orders','purchase_receipts',
+              'purchase_accounts_payable','purchase_approval_rules','purchase_spending_limits',
+              'budget_reallocations','buyer_commissions','emergency_metrics',
+              'terceiro_contratos','terceiro_medicoes',
+            ];
+            for (const t of scTables) {
+              try {
+                const dr = await db2.execute(sql2.raw(`DELETE FROM ${t} WHERE obra_id = ${oid}`));
+                totalCleaned += (dr as any).rowCount ?? 0;
+              } catch (_) {}
+            }
+          }
+          if (totalCleaned > 0) {
+            console.log(`[ColFix] Obras deletadas: ${delObraIds.length} obras, ${totalCleaned} registros órfãos removidos`);
+          } else {
+            console.log(`[ColFix] Obras deletadas: ${delObraIds.length} obras, nenhum dado órfão`);
+          }
+        } else {
+          console.log("[ColFix] Obras deletadas: nenhuma na lixeira");
+        }
+      } catch (e: any) { console.warn("[ColFix] Limpeza fantasmas + obras deletadas:", e?.message ?? e); }
     });
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));

@@ -68,6 +68,13 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
 - `VITE_APP_ID` — OAuth App ID (optional)
 - `OWNER_OPEN_ID` — Owner user OpenID (optional)
 
+## Golden Rules
+- **#0**: Verificar comportamento real no banco ANTES de declarar bug.
+- **#1**: Toda mudança = `APP_VERSION_NUMBER` em `shared/version.ts` + entrada em `shared/changelog.ts`.
+- **#5**: Novas colunas via ColFix em `server/_core/index.ts` (syncSchema pode falhar antes).
+- **#10**: Todo bugfix deve TAMBÉM corrigir dados existentes no banco (ColFix retroativo).
+- **#11**: Excluir obra = cascata TOTAL. Nada do projeto deletado pode ser reaproveitado. `deleteObra()` em `server/db.ts` remove TODOS os dados filhos (37 tabelas) antes de soft-delete da obra. ColFix de startup limpa órfãos retroativamente.
+
 ## Database — CRITICAL: Dois bancos diferentes
 - **Neon PostgreSQL** (produção FC Engenharia): `ep-young-water-ac67nuby.sa-east-1.aws.neon.tech`, db=`neondb`
   - Conectado via `NEON_DATABASE_URL` — **ESTE É O BANCO DE PRODUÇÃO REAL**
