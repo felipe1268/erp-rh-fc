@@ -1740,6 +1740,25 @@ export default function Ferias() {
                   )}
                   {editingValues && (
                     <div className="flex gap-2">
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800" title="Zera Média de HE e DSR e recalcula usando apenas o salário base" onClick={() => {
+                        const salario = parseFloat(selectedItem.employeeSalario || "0") || 0;
+                        const diasGozo = selectedItem.diasGozo || 30;
+                        const fmtN = (n: number) => n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                        const ferias = salario > 0 ? (salario / 30) * diasGozo : 0;
+                        const terco = ferias / 3;
+                        const abono = parseFloat((editValores.valorAbono || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
+                        const total = ferias + terco + abono;
+                        setEditValores(p => ({
+                          ...p,
+                          mediaHE: "0,00",
+                          mediaDSRHE: "0,00",
+                          valorFerias: fmtN(ferias),
+                          valorTerco: fmtN(terco),
+                          valorTotal: fmtN(total),
+                        }));
+                      }}>
+                        <Undo2 className="h-3 w-3 mr-1" /> Sem HE/DSR
+                      </Button>
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingValues(false)}>Cancelar</Button>
                       <Button size="sm" className="h-7 text-xs" disabled={updateFerias.isPending} onClick={() => {
                         const parseVal = (v: string) => {
