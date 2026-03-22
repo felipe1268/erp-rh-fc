@@ -2093,10 +2093,10 @@ export const obras = pgTable("obras", {
         convencaoId: integer(),
         convencaoDivergencias: text("convencao_divergencias"),
         responsavelId: integer(),
-        insalubridadeGrau: varchar({ length: 20 }).default('none'),
+        insalubridadeGrau: varchar("insalubridade_grau", { length: 20 }).default('none'),
         periculosidade: smallint().default(0),
-        adicionalNoturnoAtivo: smallint().default(0),
-        condicoesVigenciaInicio: date({ mode: 'string' }),
+        adicionalNoturnoAtivo: smallint("adicional_noturno_ativo").default(0),
+        condicoesVigenciaInicio: date("condicoes_vigencia_inicio", { mode: 'string' }),
 },
 (table) => [
         index("idx_obra_company").on(table.companyId),

@@ -4821,4 +4821,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 739,
+    titulo: "Bugfix — Painel RH: dados zerados (schema obras snake_case)",
+    descricao: "Colunas insalubridade_grau, adicional_noturno_ativo e condicoes_vigencia_inicio na tabela obras estavam sem mapeamento explícito no schema Drizzle (usava camelCase). A query SELECT gerava nomes inexistentes no banco NEON, causando erro silencioso em homeData.getData e zerando todos os KPIs do Painel RH. Corrigido mapeamento no schema.",
+    tipo: "bugfix",
+    modulos: "Painel RH, Schema",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];
