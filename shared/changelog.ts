@@ -4741,6 +4741,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-22 00:00:00",
   },
   {
+    version: 736,
+    titulo: "Férias — mediaHE, mediaDSRHE e arredondamentoProvento retornados pela query de listagem",
+    descricao: "A query de listagem de vacation_periods não incluía os campos mediaHE, mediaDSRHE e arredondamentoProvento no SELECT. Ao fechar e reabrir o detalhe, o useEffect carregava de selectedItem, que não possuía esses campos (undefined → '0,00'). Adicionados os 3 campos ao SELECT. Resultado: Média de HE, Média DSR e Arredondamento de provento agora persistem corretamente ao fechar e reabrir o detalhe.",
+    tipo: "bugfix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 735,
     titulo: "Férias — Valores com bonus persistem ao fechar/abrir o detalhe",
     descricao: "Correção de 3 bugs relacionados ao bonusValor (Acréscimos) e arredondamentoProvento: 1) Botão 'Salvar' do bloco Editar Valores agora inclui bonusValor e arredondamentoProvento na mutation — antes só eram salvos via 'Salvar Líquido', então ao fechar e reabrir a tela os campos zeravam. 2) Ao abrir 'Editar Valores' com bonusValor > 0 já salvo no banco, inicialização agora recalcula Férias/1/3/Total da base incluindo o bonus — antes iniciava com valores antigos do banco sem o bonus. 3) Modo visualização (sem edição): Férias, 1/3 e Total Bruto agora são computados com o bonus quando bonusValor > 0 — antes exibiam o valor salvo no banco que podia estar desatualizado. INSS no modo visualização também usa o bruto recomputado com bonus.",
