@@ -3858,7 +3858,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
               <LineChart data={finFull} margin={{ left: 10, right: 80, top: 5, bottom: finFull.length > 10 ? 50 : 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-30} textAnchor="end"
-                  height={50} interval={Math.max(0, Math.floor(finFull.length / 10) - 1)}
+                  height={50} interval={0}
                   tickFormatter={(v: string) => finSemLabel[v] ?? v} />
                 <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10 }} width={72} />
                 <Tooltip
