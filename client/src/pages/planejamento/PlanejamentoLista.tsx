@@ -114,9 +114,9 @@ export default function PlanejamentoLista() {
 
   const obrasDisponiveis = useMemo(() =>
     (obras as any[]).filter((o: any) =>
-      !obraIdsComPlanejamento.has(o.id)
+      !obraIdsComPlanejamento.has(o.id) && obraIdsComOrcamento.has(o.id)
     ),
-  [obras, obraIdsComPlanejamento]);
+  [obras, obraIdsComPlanejamento, obraIdsComOrcamento]);
 
   const obraSelecionada = useMemo(() =>
     (obras as any[]).find((o: any) => String(o.id) === form.obraId) ?? null,
@@ -485,8 +485,8 @@ export default function PlanejamentoLista() {
                   <div>
                     <p className="font-semibold mb-0.5">Nenhuma obra disponível para planejamento</p>
                     <p className="text-amber-700 leading-relaxed">
-                      Todas as obras já possuem planejamento ou não há obras cadastradas.
-                      Cadastre uma nova obra primeiro.
+                      Para criar um planejamento, a obra precisa ter um <strong>orçamento cadastrado e vinculado</strong>.
+                      Acesse <strong>Orçamento</strong> no menu, cadastre o orçamento da obra e volte aqui.
                     </p>
                   </div>
                 </div>

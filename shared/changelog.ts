@@ -4940,10 +4940,10 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 752,
-    titulo: "Planejamento sem orçamento obrigatório",
-    descricao: "Agora é possível criar um planejamento para qualquer obra, mesmo sem orçamento cadastrado. Se a obra tiver orçamento, a EAP é auto-importada com pesos calculados; se não tiver, o projeto é criado vazio e as atividades podem ser cadastradas manualmente no Cronograma. A Curva S funciona para qualquer projeto que tenha atividades com datas preenchidas.",
+    titulo: "Banco exclusivamente Neon + limpeza de dados fantasmas",
+    descricao: "Removido fallback para DATABASE_URL local do Replit. O sistema agora conecta exclusivamente ao Neon (NEON_DATABASE_URL). Limpeza de orçamento fantasma (CUSTO_755_09_2025_R02 com obraId=9 inexistente) e 4 obras demo/teste removidas. Planejamento mantém regra: só obras com orçamento vinculado podem criar projeto de planejamento.",
     tipo: "melhoria",
-    modulos: "Planejamento",
+    modulos: "Sistema, Orçamento, Planejamento",
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },

@@ -98,7 +98,6 @@ export const planejamentoRouter = router({
         });
       }
 
-      // Orçamento é OPCIONAL — auto-vincula se existir, mas permite criar sem
       const [orcamentoVinculado] = await db
         .select({
           id: orcamentos.id,
@@ -112,10 +111,14 @@ export const planejamentoRouter = router({
           eq(orcamentos.obraId, input.obraId),
           sql`${orcamentos.deletedAt} IS NULL`,
         ))
-        .limit(1)
-        .catch(() => [undefined as any]);
+        .limit(1);
+      if (!orcamentoVinculado) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Não é possível criar um planejamento sem orçamento vinculado. Cadastre primeiro o orçamento da obra.",
+        });
+      }
 
-      // Regra: 1 planejamento por obra
       const [existe] = await db.select({ id: planejamentoProjetos.id })
         .from(planejamentoProjetos)
         .where(and(
@@ -130,7 +133,7 @@ export const planejamentoRouter = router({
         });
       }
 
-      const orcId = orcamentoVinculado?.id ?? null;
+      const orcId = orcamentoVinculado.id;
 
       const [projeto] = await db.insert(planejamentoProjetos).values({
         companyId:             input.companyId,
@@ -158,7 +161,7 @@ export const planejamentoRouter = router({
         status:      "aprovada",
       }).returning();
 
-      if (orcId) try {
+      try {
         const eapItens = await db.select({
           eapCodigo: orcamentoItens.eapCodigo,
           descricao: orcamentoItens.descricao,
@@ -173,7 +176,7 @@ export const planejamentoRouter = router({
         .orderBy(asc(orcamentoItens.ordem));
 
         if (eapItens.length > 0) {
-          const totalCusto = parseFloat(orcamentoVinculado?.totalCusto ?? "0") || 1;
+          const totalCusto = parseFloat(orcamentoVinculado.totalCusto ?? "0") || 1;
 
           const folhas = eapItens.filter(it => {
             const niv = it.nivel ?? 1;
