@@ -2959,15 +2959,18 @@ REGRAS TÉCNICAS:
         ));
 
       const bcwpMap = new Map<string, number>();
+      let lastRealAvancoSemana = "";
       if (avancosDB.length > 0) {
         const ultimoPctPorAtiv = new Map<number, Map<string, number>>();
         avancosDB.forEach(av => {
           const sem = toMondayStr(new Date(av.semana + "T12:00:00Z"));
           if (!ultimoPctPorAtiv.has(av.atividadeId)) ultimoPctPorAtiv.set(av.atividadeId, new Map());
           ultimoPctPorAtiv.get(av.atividadeId)!.set(sem, n(av.percentualAcumulado));
+          if (sem > lastRealAvancoSemana) lastRealAvancoSemana = sem;
         });
 
         allSemanas.forEach(sem => {
+          if (sem > lastRealAvancoSemana) return;
           let totalEV = 0;
           for (const [ativId, valorAtiv] of valorPorAtiv) {
             const pctMap = ultimoPctPorAtiv.get(ativId);
