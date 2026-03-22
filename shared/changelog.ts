@@ -4920,4 +4920,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 750,
+    titulo: "Campos Cliente e Engenheiro/Responsável editáveis na obra",
+    descricao: "Corrigido bug onde os campos Cliente e Engenheiro/Responsável ficavam travados (somente leitura) ao editar uma obra existente. Agora ambos os campos são editáveis tanto na criação quanto na edição, permitindo alterar o cliente e o responsável a qualquer momento.",
+    tipo: "bugfix",
+    modulos: "Obras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];
