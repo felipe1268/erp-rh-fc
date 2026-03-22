@@ -177,6 +177,25 @@ Módulos atualmente registrados (Rev. 394): `rh`, `sst`, `juridico`, `avaliacao`
 > Esta seção é OBRIGATÓRIA de ler antes de qualquer mudança nos módulos listados.
 > Objetivo: impedir que bugs já corrigidos voltem e manter consistência nas melhorias.
 
+### PROTOCOLO OBRIGATÓRIO ANTES DE QUALQUER MUDANÇA
+
+**Antes de implementar qualquer ajuste, devo:**
+1. Verificar se o arquivo/módulo afetado aparece nesta seção de anti-regressão
+2. Se aparecer → **PARAR e avisar o usuário** com:
+   - O que será alterado
+   - Qual bug/melhoria anterior pode ser afetado
+   - Qual o risco de regressão
+   - Aguardar confirmação explícita antes de prosseguir
+3. Se não aparecer → implementar normalmente, mas documentar aqui se criar novo padrão importante
+
+**Arquivos de alto risco (qualquer mudança exige aviso prévio):**
+- `server/routers/avisoPrevioFerias.ts` → BUG-001 (férias vencidas na rescisão)
+- `server/routers/payrollEngine.ts` → BUG-002 (vale férias, aprovações manuais, consolidar)
+- `client/src/pages/FolhaPagamento.tsx` → BUG-002 (botão consolidar bloqueado com alertas)
+- `client/src/pages/Ferias.tsx` → BUG-003, BUG-004, BUG-005 (valores manuais, status, editar)
+- `server/_core/index.ts` → ColFix (startup crítico — não remover nenhum bloco existente)
+- `shared/version.ts` e `shared/changelog.ts` → controle de versão
+
 ---
 
 ### REGRAS DE OURO ABSOLUTAS (violar = breaking change)
