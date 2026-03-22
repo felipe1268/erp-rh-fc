@@ -1,4 +1,3 @@
-import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
@@ -131,7 +130,6 @@ function CorCapaceteField({ value, onChange }: { value: string; onChange: (v: st
 }
 
 export default function Epis() {
-  const [, navigate] = useLocation();
   const { selectedCompanyId, selectedCompany, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = isConstrutoras ? 0 : (selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0);
   const companyIds = getCompanyIdsForQuery();
@@ -1975,7 +1973,7 @@ export default function Epis() {
               </>
             )}
             {viewMode === "entregas" && (
-              <Button size="sm" onClick={() => navigate("/epi-entrega")} className="bg-[#1B2A4A] hover:bg-[#243660]">
+              <Button size="sm" onClick={() => setViewMode("nova_entrega")} className="bg-[#1B2A4A] hover:bg-[#243660]">
                 <Plus className="h-4 w-4 mr-1" /> Nova Entrega
               </Button>
             )}
@@ -2318,7 +2316,7 @@ export default function Epis() {
                 <p className="text-muted-foreground text-sm mt-1">
                   Registre as entregas de EPIs aos funcionários.
                 </p>
-                <Button onClick={() => navigate("/epi-entrega")} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
+                <Button onClick={() => setViewMode("nova_entrega")} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
                   <Plus className="h-4 w-4 mr-2" /> Nova Entrega
                 </Button>
               </CardContent>
