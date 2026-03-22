@@ -117,10 +117,13 @@ export default function EpiEntrega() {
   const filteredEmployees = useMemo(() => {
     if (!searchText.trim()) return allEmployees;
     const lower = searchText.toLowerCase();
+    const digitsOnly = searchText.replace(/\D/g, '');
     return (allEmployees as any[]).filter((e: any) =>
       e.nomeCompleto?.toLowerCase().includes(lower) ||
-      e.numeroInterno?.toLowerCase().includes(lower) ||
-      e.cargo?.toLowerCase().includes(lower)
+      e.codigoInterno?.toLowerCase().includes(lower) ||
+      e.funcao?.toLowerCase().includes(lower) ||
+      e.cpf?.toLowerCase().includes(lower) ||
+      (digitsOnly.length >= 3 && (e.cpf?.replace(/\D/g, '') || '').includes(digitsOnly))
     );
   }, [allEmployees, searchText]);
 
@@ -315,7 +318,7 @@ export default function EpiEntrega() {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{emp.nomeCompleto}</p>
-                        <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
+                        <p className="text-xs text-gray-500">{emp.codigoInterno} · {emp.funcao || emp.cargo || "—"}</p>
                       </div>
                       <div className="flex items-center gap-1.5">
                         {emp.faceId ? (
@@ -660,7 +663,7 @@ export default function EpiEntrega() {
               </div>
             </div>
             <Input
-              placeholder="Buscar funcionário por nome ou número..."
+              placeholder="Buscar por nome, CPF ou código interno..."
               value={enrollSearch}
               onChange={(e) => setEnrollSearch(e.target.value)}
               className="flex-shrink-0"
@@ -671,7 +674,12 @@ export default function EpiEntrega() {
                 const filtrados = all.filter((e: any) => {
                   if (!enrollSearch.trim()) return true;
                   const lower = enrollSearch.toLowerCase();
-                  return e.nomeCompleto?.toLowerCase().includes(lower) || e.numeroInterno?.toLowerCase().includes(lower);
+                  const cpfClean = e.cpf?.replace(/\D/g, '') || '';
+                  const searchClean = enrollSearch.replace(/\D/g, '');
+                  return e.nomeCompleto?.toLowerCase().includes(lower)
+                    || e.codigoInterno?.toLowerCase().includes(lower)
+                    || e.cpf?.toLowerCase().includes(lower)
+                    || (searchClean.length >= 3 && cpfClean.includes(searchClean));
                 });
                 if (filtrados.length === 0) return (
                   <p className="text-center text-sm text-gray-400 py-8">
@@ -690,7 +698,7 @@ export default function EpiEntrega() {
                       <p className="text-sm font-medium text-gray-900">{emp.nomeCompleto}</p>
                       {enrollEmployee?.id === emp.id && <CheckCircle className="h-4 w-4 text-green-600" />}
                     </div>
-                    <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
+                    <p className="text-xs text-gray-500">{emp.codigoInterno} · {emp.funcao || emp.cargo || "—"}</p>
                   </button>
                 ));
               })()}
