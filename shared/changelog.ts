@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 720,
+    titulo: "EPIs — Foto do EPI exibida ao selecionar no formulário de entrega",
+    descricao: "No formulário 'Registrar Entrega de EPI', ao selecionar um EPI aparece automaticamente um card com sua foto, CA, estoque disponível e valor unitário. Se não houver foto cadastrada, exibe ícone de capacete. O estoque aparece em verde (disponível) ou vermelho (zerado).",
+    tipo: "melhoria",
+    modulos: "SST / EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 719,
     titulo: "EPIs — Foto do funcionário exibida ao selecionar no formulário de entrega",
     descricao: "No formulário 'Registrar Entrega de EPI', ao selecionar um funcionário aparece automaticamente um card com sua foto, nome, função e obra atual. Caso não tenha foto cadastrada, exibe a inicial do nome e um aviso. Quando há foto, um ícone de confirmação verde aparece indicando que a identidade foi verificada visualmente.",

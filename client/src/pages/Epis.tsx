@@ -1229,6 +1229,36 @@ export default function Epis() {
                   searchPlaceholder="Buscar por nome ou CA..."
                   emptyMessage="Nenhum EPI encontrado."
                 />
+                {/* FOTO DO EPI — confirmação visual do item */}
+                {entregaForm.epiId && (() => {
+                  const epiSel = episList.find((e: any) => String(e.id) === entregaForm.epiId);
+                  if (!epiSel) return null;
+                  return (
+                    <div className="mt-2 flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                      {epiSel.fotoUrl ? (
+                        <img
+                          src={epiSel.fotoUrl}
+                          alt={epiSel.nome}
+                          className="w-14 h-14 rounded-lg object-contain border border-gray-200 bg-white flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0 border border-gray-200">
+                          <HardHat className="h-6 w-6 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-900 truncate">{epiSel.nome}</p>
+                        {epiSel.ca && <p className="text-xs text-gray-500">CA: {epiSel.ca}</p>}
+                        <p className="text-xs text-gray-500">
+                          Estoque: <span className={`font-medium ${(epiSel.quantidadeEstoque ?? 0) > 0 ? "text-green-600" : "text-red-500"}`}>{epiSel.quantidadeEstoque ?? 0} unid.</span>
+                          {epiSel.valorProduto && (
+                            <span className="ml-2 text-gray-400">· {parseFloat(String(epiSel.valorProduto)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <Label>Funcionário *</Label>
