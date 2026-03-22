@@ -4965,4 +4965,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 755,
+    titulo: "Cruzamento Orçamento × Cronograma: filtro de itens-folha",
+    descricao: "Corrigido o cruzamento entre orçamento e cronograma (Prev. Medição, Crono. Financeiro) para usar apenas itens-folha do orçamento, eliminando dupla contagem de valores acumulados nos títulos de grupo/seção. Antes, itens-pai (ex: 'REVESTIMENTOS INTERNOS:', 'ESQUADRIAS:') somavam valores já incluídos nos sub-itens, inflando ou distorcendo a distribuição financeira mensal. Agora a query identifica automaticamente os itens sem sub-itens (folhas) via prefixo EAP.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

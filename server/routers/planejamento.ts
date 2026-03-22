@@ -1014,7 +1014,6 @@ export const planejamentoRouter = router({
         }
       }
 
-      console.log(`[getCurvaS] projetoId=${input.projetoId} revisaoId=${input.revisaoId} baselineId=${input.baselineId} → baseline=${curvaBaseline.length}pts planejada=${curvaPlanejada.length}pts realizada=${curvaRealizada.length}pts tendencia=${curvaTendencia.length}pts (atividades=${atividades.length}, folhas=${folhasParaCurva.length})`);
       return { curvaPlanejada, curvaBaseline, curvaRealizada, curvaTendencia };
     }),
 
@@ -1376,10 +1375,26 @@ export const planejamentoRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
 
-      // Cruzamento correto: para cada ITEM do orçamento, pega UMA atividade com nome igual.
-      // Isso evita multiplicar valores quando várias atividades têm o mesmo nome.
+      // Cruzamento orçamento × cronograma: usa apenas itens-FOLHA do orçamento
+      // (sem sub-itens) para evitar dupla contagem de valores acumulados em itens-pai.
+      // Para cada item-folha, busca UMA atividade do cronograma com nome igual.
       const rows = await db.execute(sql`
-        WITH matched AS (
+        WITH orc_scope AS (
+          SELECT i.*
+          FROM orcamento_itens i
+          JOIN planejamento_projetos p ON p.orcamento_id = i."orcamentoId" AND p.id = ${input.projetoId}
+          WHERE (i."vendaTotal"::numeric > 0 OR i."custoTotalMat"::numeric > 0)
+        ),
+        folhas AS (
+          SELECT o.*
+          FROM orc_scope o
+          WHERE NOT EXISTS (
+            SELECT 1 FROM orc_scope c
+            WHERE c."eapCodigo" LIKE o."eapCodigo" || '.%'
+              AND c.id != o.id
+          )
+        ),
+        matched AS (
           SELECT DISTINCT ON (i.id)
             i.id                                   AS item_id,
             i."eapCodigo"                          AS eap,
@@ -1395,17 +1410,13 @@ export const planejamentoRouter = router({
             a.data_inicio::text                    AS data_inicio,
             a.data_fim::text                       AS data_fim,
             a.ordem                                AS ordem
-          FROM orcamento_itens i
-          JOIN planejamento_projetos p
-            ON p.orcamento_id = i."orcamentoId"
-            AND p.id = ${input.projetoId}
+          FROM folhas i
           JOIN planejamento_atividades a
             ON a.projeto_id = ${input.projetoId}
             AND NOT a.is_grupo
             AND LOWER(REGEXP_REPLACE(TRIM(a.nome), '[\\s]+', ' ', 'g'))
               = LOWER(REGEXP_REPLACE(TRIM(i.descricao), '[\\s]+', ' ', 'g'))
-          WHERE (i."vendaTotal"::numeric > 0 OR i."custoTotalMat"::numeric > 0)
-            AND a.data_inicio IS NOT NULL
+          WHERE a.data_inicio IS NOT NULL
             AND a.data_fim IS NOT NULL
           ORDER BY i.id, a.ordem ASC
         )
