@@ -3636,7 +3636,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
           <LineChart data={merged} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-30} textAnchor="end"
-              height={50} interval={Math.max(0, Math.floor(merged.length / 10) - 1)}
+              height={50} interval={0}
               tickFormatter={v => semanaLabel[v] ?? v} />
             <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
             <Tooltip
