@@ -21,7 +21,7 @@ import {
   Package, User, ArrowRight, ArrowLeft, FileText, ShieldCheck,
   Search, UserPlus, X, Home,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { generateEpiReceiptPdf } from "@/lib/epiReceiptPdf";
 
@@ -37,7 +37,7 @@ interface ItemEntrega {
 }
 
 export default function EpiEntrega() {
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = isConstrutoras ? 0 : (selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0);
   const companyIds = getCompanyIdsForQuery();
