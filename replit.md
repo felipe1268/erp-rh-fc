@@ -212,6 +212,7 @@ Módulos atualmente registrados (Rev. 394): `rh`, `sst`, `juridico`, `avaliacao`
 | 7 | **Não sobrescrever dados manuais** | Antes de recalcular qualquer valor (salário, férias, rescisão), verificar se há valor manual salvo (`> 0`) — se houver, respeitar e não sobrescrever |
 | 8 | **Status inativos específicos** | Status que indicam funcionário inativo: `'Desligado'`, `'Afastado'`, `'Recluso'`, `'Lista_Negra'`; em férias: `'Ferias'`; ativo = `'Ativo'`. Não inventar outros |
 | 9 | **Company IDs fixos** | FC Engenharia employees: `companyId = 60002`. Obras: `companyId = 1`. CF Hotelaria: `60004`. Julio Ferraz: `60005`. Locnow: `90001` |
+| 10 | **CORREÇÃO RETROATIVA OBRIGATÓRIA** | Todo bugfix ou melhoria que altera como dados são calculados ou armazenados DEVE também corrigir os registros já existentes no banco. Nunca corrigir apenas o código (novos lançamentos) e deixar os registros históricos com dados errados. Usar ColFix ou migration SQL no startup para propagar a correção a todos os registros pertinentes. |
 
 ---
 
