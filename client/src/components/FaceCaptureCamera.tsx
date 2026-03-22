@@ -106,7 +106,13 @@ export function FaceCaptureCamera({
       startDetectionLoop();
     } catch (e: any) {
       setStatus("error");
-      setStatusMsg(e?.message?.includes("Permission") ? "Permissão de câmera negada" : "Erro ao acessar câmera");
+      if (e?.name === "NotAllowedError" || e?.message?.includes("Permission")) {
+        setStatusMsg("PERMISSAO_NEGADA");
+      } else if (e?.name === "NotFoundError") {
+        setStatusMsg("Nenhuma câmera encontrada neste dispositivo");
+      } else {
+        setStatusMsg("Erro ao acessar câmera: " + (e?.message || "desconhecido"));
+      }
     }
   }, [facingMode]);
 
@@ -313,12 +319,36 @@ export function FaceCaptureCamera({
 
       <canvas ref={captureRef} className="hidden" />
 
-      <div className={`flex items-center gap-2 text-sm font-medium ${statusColor}`}>
-        {status === "loading" && <Loader2 className="h-4 w-4 animate-spin" />}
-        {status === "error" && <AlertCircle className="h-4 w-4" />}
-        {status === "captured" && matchResult && <CheckCircle className="h-4 w-4" />}
-        <span>{statusMsg}</span>
-      </div>
+      {statusMsg === "PERMISSAO_NEGADA" ? (
+        <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
+            <AlertCircle className="h-4 w-4" />
+            Câmera bloqueada pelo navegador
+          </div>
+          <p className="text-xs text-amber-700">Para liberar, siga um dos passos:</p>
+          <ol className="text-xs text-amber-700 list-decimal ml-4 space-y-1">
+            <li>Clique no <strong>ícone de cadeado</strong> na barra de endereço do navegador</li>
+            <li>Encontre <strong>"Câmera"</strong> e mude para <strong>"Permitir"</strong></li>
+            <li>Recarregue a página</li>
+          </ol>
+          <div className="flex gap-2 pt-1">
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => { stopCamera(); startCamera(); }}>
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Tentar Novamente
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => window.location.reload()}>
+              Recarregar Página
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className={`flex items-center gap-2 text-sm font-medium ${statusColor}`}>
+          {status === "loading" && <Loader2 className="h-4 w-4 animate-spin" />}
+          {status === "error" && <AlertCircle className="h-4 w-4" />}
+          {status === "captured" && matchResult && <CheckCircle className="h-4 w-4" />}
+          <span>{statusMsg}</span>
+        </div>
+      )}
 
       {matchResult && status === "captured" && (
         <div className="w-full rounded-lg border border-green-200 bg-green-50 p-3 text-sm">
