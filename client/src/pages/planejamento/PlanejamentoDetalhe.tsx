@@ -6263,15 +6263,12 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
       const meta   = x.meta  * fcM;
       const mat    = x.mat   * fcMat;
       const mdo    = x.mdo   * fcMdo;
-      // Componentes BDI proporcionais à Venda mensal
       const admCentral = venda * bdiAdmPct;
       const impostos   = venda * bdiImpostosPct;
       const risco      = venda * bdiRiscoPct;
       const comissao   = venda * bdiComissaoPct;
-      // Custo Total = Custo da Obra (CD+CI) + Despesas Indiretas (exceto Lucro)
-      const custoTotal = custo + admCentral + impostos + risco + comissao;
-      // Lucro Previsto via BDI (L-01 Lucro Bruto = % de Venda)
       const lucro      = bdiLucroPct > 0 ? venda * bdiLucroPct : venda - custo;
+      const custoTotal = venda - lucro;
       const margemMeta = venda - meta;
       return { mes: x.mes, nomeMes: x.nomeMes, venda, meta, custo, mat, mdo, admCentral, impostos, risco, comissao, custoTotal, lucro, margemMeta };
     });

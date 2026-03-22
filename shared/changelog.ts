@@ -4974,4 +4974,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 756,
+    titulo: "Cronograma de Medições: fórmula C. Total corrigida",
+    descricao: "Corrigida a fórmula do 'C. Total' no Cronograma de Medições. Antes, somava Custo Direto (R$ 8,2M) + componentes BDI sobre Venda (R$ 9,5M), resultando em R$ 10,2M — valor inexistente no orçamento. Agora C. Total = Venda - Lucro, que é a definição correta de custo total (preço de venda menos a margem de lucro). Isso garante que o total da coluna nunca exceda o valor de venda do orçamento.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];
