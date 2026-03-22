@@ -1773,7 +1773,9 @@ export default function Ferias() {
                   <div className="space-y-2 text-sm">
                     {(() => {
                       const pv = (s: string) => parseFloat((s || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
-                      const fmt = (n: number) => n > 0 ? n.toFixed(2).replace(".", ",") : "0,00";
+                      const fmt = (n: number) => n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                      // Formata BRL ao sair do campo: parse → formata
+                      const fmtBlur = (raw: string) => fmt(pv(raw));
                       const salario = parseFloat(selectedItem.employeeSalario || "0") || 0;
                       const diasGozo = selectedItem.diasGozo || 30;
 
@@ -1807,6 +1809,10 @@ export default function Ferias() {
                                 const v = e.target.value;
                                 const { ferias, terco, total } = recalcFromHE(v, editValores.mediaDSRHE, editValores.valorAbono);
                                 setEditValores(p => ({ ...p, mediaHE: v, valorFerias: ferias, valorTerco: terco, valorTotal: total }));
+                              }} onBlur={e => {
+                                const f = fmtBlur(e.target.value);
+                                const { ferias, terco, total } = recalcFromHE(f, editValores.mediaDSRHE, editValores.valorAbono);
+                                setEditValores(p => ({ ...p, mediaHE: f, valorFerias: ferias, valorTerco: terco, valorTotal: total }));
                               }} placeholder="0,00" />
                             </div>
                             <div className="flex items-center justify-between gap-4">
@@ -1815,6 +1821,10 @@ export default function Ferias() {
                                 const v = e.target.value;
                                 const { ferias, terco, total } = recalcFromHE(editValores.mediaHE, v, editValores.valorAbono);
                                 setEditValores(p => ({ ...p, mediaDSRHE: v, valorFerias: ferias, valorTerco: terco, valorTotal: total }));
+                              }} onBlur={e => {
+                                const f = fmtBlur(e.target.value);
+                                const { ferias, terco, total } = recalcFromHE(editValores.mediaHE, f, editValores.valorAbono);
+                                setEditValores(p => ({ ...p, mediaDSRHE: f, valorFerias: ferias, valorTerco: terco, valorTotal: total }));
                               }} placeholder="0,00" />
                             </div>
                             <div className="flex items-center justify-between gap-4 border-t border-blue-200 pt-1">
@@ -1829,6 +1839,9 @@ export default function Ferias() {
                             <Input className="h-7 text-sm text-right" value={editValores.valorFerias} onChange={e => {
                               const v = e.target.value;
                               setEditValores(p => ({ ...p, valorFerias: v, valorTotal: recalcTotal(v, p.valorTerco, p.valorAbono) }));
+                            }} onBlur={e => {
+                              const f = fmtBlur(e.target.value);
+                              setEditValores(p => ({ ...p, valorFerias: f, valorTotal: recalcTotal(f, p.valorTerco, p.valorAbono) }));
                             }} placeholder="0,00" />
                           </div>
                           <div className="flex items-center justify-between gap-4">
@@ -1836,6 +1849,9 @@ export default function Ferias() {
                             <Input className="h-7 text-sm text-right" value={editValores.valorTerco} onChange={e => {
                               const v = e.target.value;
                               setEditValores(p => ({ ...p, valorTerco: v, valorTotal: recalcTotal(p.valorFerias, v, p.valorAbono) }));
+                            }} onBlur={e => {
+                              const f = fmtBlur(e.target.value);
+                              setEditValores(p => ({ ...p, valorTerco: f, valorTotal: recalcTotal(p.valorFerias, f, p.valorAbono) }));
                             }} placeholder="0,00" />
                           </div>
                           {(selectedItem.abonoPecuniario === 1 || parseFloat(editValores.valorAbono) > 0) && (
@@ -1844,6 +1860,9 @@ export default function Ferias() {
                               <Input className="h-7 text-sm text-right" value={editValores.valorAbono} onChange={e => {
                                 const v = e.target.value;
                                 setEditValores(p => ({ ...p, valorAbono: v, valorTotal: recalcTotal(p.valorFerias, p.valorTerco, v) }));
+                              }} onBlur={e => {
+                                const f = fmtBlur(e.target.value);
+                                setEditValores(p => ({ ...p, valorAbono: f, valorTotal: recalcTotal(p.valorFerias, p.valorTerco, f) }));
                               }} placeholder="0,00" />
                             </div>
                           )}
