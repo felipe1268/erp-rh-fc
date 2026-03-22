@@ -932,7 +932,6 @@ export const planejamentoRouter = router({
       const semanasComAvanco = [...new Set(avancos.map(av => av.semana))].sort();
 
       const curvaRealizada = semanasComAvanco.map(semana => {
-        // Para cada atividade, pegar o último avanço <= semana
         const latestMap: Record<number, { val: number; sem: string }> = {};
         avancos
           .filter(av => av.semana <= semana)
@@ -949,6 +948,13 @@ export const planejamentoRouter = router({
         });
         return { semana, acumulado: +Math.min(100, soma).toFixed(2) };
       });
+
+      if (curvaRealizada.length > 0 && curvaBaseline.length > 0) {
+        const primeiraPlan = curvaBaseline[0].semana;
+        if (curvaRealizada[0].semana > primeiraPlan) {
+          curvaRealizada.unshift({ semana: primeiraPlan, acumulado: 0 });
+        }
+      }
 
       // Linha de tendência por regressão linear
       let curvaTendencia: { semana: string; acumulado: number }[] = [];
@@ -3033,7 +3039,6 @@ REGRAS TÉCNICAS:
       }
 
       const bcwpSorted = [...bcwpMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-      const lastBcwpSemana = bcwpSorted.length > 0 ? bcwpSorted[bcwpSorted.length - 1][0] : null;
 
       const receitaSorted = [...receitaMap.entries()].filter(([, v]) => v > 0).sort((a, b) => a[0].localeCompare(b[0]));
       const lastReceitaSemana = receitaSorted.length > 0 ? receitaSorted[receitaSorted.length - 1][0] : null;
@@ -3071,10 +3076,17 @@ REGRAS TÉCNICAS:
         }
       }
 
+      if (lastRealAvancoSemana && pontos.length > 0) {
+        const primeiraSemana = pontos[0].semana;
+        if (!bcwpMap.has(primeiraSemana)) {
+          bcwpMap.set(primeiraSemana, 0);
+        }
+      }
+
       const curvaCompleta = pontos.map(p => ({
         semana: p.semana,
         acumulado: p.acumulado,
-        bcwp: (lastBcwpSemana && p.semana <= lastBcwpSemana) ? (bcwpMap.get(p.semana) ?? null) : null,
+        bcwp: (lastRealAvancoSemana && p.semana <= lastRealAvancoSemana) ? (bcwpMap.get(p.semana) ?? null) : null,
         receita: (lastReceitaSemana && p.semana <= lastReceitaSemana) ? (receitaMap.get(p.semana) ?? null) : null,
         tendencia: tendenciaMap.get(p.semana) ?? null,
       }));
