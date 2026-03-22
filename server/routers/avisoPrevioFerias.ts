@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, createAuditLog } from "../db";
-import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios } from "../../drizzle/schema";
+import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -21,6 +21,22 @@ import {
 } from "../utils/rescisaoCalc";
 import { corrigirPontoFuncionario } from "../utils/pontoCorrecaoAuto";
 import { storagePut } from "../storage";
+
+/** Conta domingos em um mês (ano, mês 1-12) */
+function contarDomingos(ano: number, mes: number): number {
+  let count = 0;
+  const dt = new Date(ano, mes - 1, 1);
+  while (dt.getMonth() === mes - 1) {
+    if (dt.getDay() === 0) count++;
+    dt.setDate(dt.getDate() + 1);
+  }
+  return count;
+}
+
+/** Dias totais em um mês */
+function diasNoMes(ano: number, mes: number): number {
+  return new Date(ano, mes, 0).getDate();
+}
 
 /** Calcula período aquisitivo de férias */
 function calcularPeriodosFerias(dataAdmissao: string) {
@@ -2440,6 +2456,111 @@ export const avisoPrevioFeriasRouter = router({
         }
 
         return Object.values(grouped);
+      }),
+
+    // ============================================================
+    // MÉDIA DE HE + DSR PARA BASE DE CÁLCULO DAS FÉRIAS (Art. 142 CLT)
+    // ============================================================
+    mediaHEFerias: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        companyId: z.number(),
+        periodoAquisitivoInicio: z.string(), // YYYY-MM-DD
+        periodoAquisitivoFim: z.string(),    // YYYY-MM-DD
+      }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+
+        // Extrair mês-ano de início e fim do período aquisitivo (YYYY-MM)
+        const mesInicio = input.periodoAquisitivoInicio.substring(0, 7);
+        const mesFim    = input.periodoAquisitivoFim.substring(0, 7);
+
+        // Calcular total de meses no período aquisitivo (sempre ~12, pode ser menor em período proporcional)
+        const [anoI, mesI] = mesInicio.split("-").map(Number);
+        const [anoF, mesF] = mesFim.split("-").map(Number);
+        const mesesNoPeriodo = (anoF - anoI) * 12 + (mesF - mesI) + 1;
+
+        // Buscar entradas de HE do funcionário dentro do período aquisitivo
+        const heRows = await db
+          .select({
+            mesReferencia: hePeriods.mesReferencia,
+            valorHEUtil:   hePeriodEmployees.valorHEUtil,
+            valorHEFim:    hePeriodEmployees.valorHEFim,
+            valorHETotal:  hePeriodEmployees.valorHETotal,
+            salarioBruto:  hePeriodEmployees.salarioBruto,
+            destinacao:    hePeriodEmployees.destinacao,
+          })
+          .from(hePeriodEmployees)
+          .innerJoin(hePeriods, eq(hePeriodEmployees.hePeriodId, hePeriods.id))
+          .where(and(
+            eq(hePeriodEmployees.employeeId, input.employeeId),
+            eq(hePeriodEmployees.companyId, input.companyId),
+            sql`${hePeriods.mesReferencia} >= ${mesInicio}`,
+            sql`${hePeriods.mesReferencia} <= ${mesFim}`,
+          ))
+          .orderBy(asc(hePeriods.mesReferencia));
+
+        // Filtrar apenas "pagamento" (excluir banco de horas)
+        const hePagamento = heRows.filter(r => (r.destinacao || "pagamento") === "pagamento");
+
+        // Calcular média de HE e DSR por mês com dado disponível
+        let somaHE  = 0;
+        let somaDSR = 0;
+        const detalhes: Array<{
+          mes: string;
+          valorHE: number;
+          valorHEUtil: number;
+          dsr: number;
+          domingos: number;
+          diasUteis: number;
+        }> = [];
+
+        for (const row of hePagamento) {
+          const vHETotal = parseFloat(row.valorHETotal || "0");
+          const vHEUtil  = parseFloat(row.valorHEUtil  || "0");
+
+          // DSR das HE: só dias úteis geram DSR
+          // DSR_HE = valorHEUtil × (domingos_do_mês / dias_úteis_do_mês)
+          const [anoMes, mesMes] = row.mesReferencia.split("-").map(Number);
+          const domingos  = contarDomingos(anoMes, mesMes);
+          const totalDias = diasNoMes(anoMes, mesMes);
+          const diasUteis = totalDias - domingos;
+          const dsr = diasUteis > 0 ? vHEUtil * (domingos / diasUteis) : 0;
+
+          somaHE  += vHETotal;
+          somaDSR += dsr;
+
+          detalhes.push({
+            mes:         row.mesReferencia,
+            valorHE:     vHETotal,
+            valorHEUtil: vHEUtil,
+            dsr:         Math.round(dsr * 100) / 100,
+            domingos,
+            diasUteis,
+          });
+        }
+
+        const mesesComDados = hePagamento.length;
+        const divisor = mesesComDados > 0 ? mesesComDados : 1;
+        const mediaHE    = somaHE  / divisor;
+        const mediaDSRHE = somaDSR / divisor;
+
+        // Último salário bruto disponível no período (para referência)
+        const ultimoSalario = hePagamento.length > 0
+          ? parseFloat(hePagamento[hePagamento.length - 1].salarioBruto || "0")
+          : 0;
+
+        return {
+          mediaHE:       Math.round(mediaHE    * 100) / 100,
+          mediaDSRHE:    Math.round(mediaDSRHE * 100) / 100,
+          mesesComDados,
+          mesesNoPeriodo,
+          dadosParciais: mesesComDados < mesesNoPeriodo,
+          mesInicio,
+          mesFim,
+          salarioBrutoReferencia: ultimoSalario,
+          detalhes,
+        };
       }),
 
     // ============================================================

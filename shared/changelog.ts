@@ -4678,6 +4678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 727,
+    titulo: "Férias — Média de HE + DSR integrada ao cálculo (Art. 142 CLT)",
+    descricao: "Novo painel 'Média de HE — Art. 142 CLT' na tela de detalhe das férias: busca automaticamente as horas extras pagas mês a mês no período aquisitivo (he_period_employees JOIN he_periods, somente destinacao=pagamento), calcula a média de HE e a média de DSR das HE (valorHEUtil × domingos/dias_úteis do mês), exibe memória de cálculo mês a mês com detalhes expansíveis. Aviso amarelo quando o período aquisitivo tem meses sem dados no sistema (anterior a jan/2026). No formulário 'Editar Valores': nova seção 'Base de Cálculo Art. 142' com campos editáveis de Média HE e Média DSR HE; ao alterar qualquer um deles, ferias/terco/total recalculam em cascata (base = salário + mediaHE + mediaDSR; férias = base × diasGozo/30; 1/3 = férias/3). RH pode sobrescrever qualquer valor. Nova procedure mediaHEFerias no backend (avisoPrevioFeriasRouter.ferias.mediaHEFerias).",
+    tipo: "feature",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 726,
     titulo: "Advertências — Assinaturas Digitais (funcionário, aplicador e testemunhas)",
     descricao: "Módulo de assinaturas digitais para advertências escritas, suspensões e justa causa. Novas colunas assinaturaFuncionarioUrl e assinaturaAplicadorUrl na tabela warnings (ColFix Rev.726 aplicado em Neon). Mutation salvarAssinatura no router de documentos, com upload para S3. Componente AdvAssinaturas.tsx com canvas de assinatura por dedo/mouse para funcionário, aplicador e testemunhas (cada testemunha exige digitar o nome antes de desbloquear o pad). Integração em ControleDocumentos.tsx: botão 'Assinaturas Digitais' no preview da advertência e ícone de caneta (PenTool) na tabela de advertências para acesso rápido ao modal.",

@@ -347,7 +347,7 @@ export default function Ferias() {
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [editingValues, setEditingValues] = useState(false);
-  const [editValores, setEditValores] = useState<{ valorFerias: string; valorTerco: string; valorAbono: string; valorTotal: string; }>({ valorFerias: "", valorTerco: "", valorAbono: "", valorTotal: "" });
+  const [editValores, setEditValores] = useState<{ valorFerias: string; valorTerco: string; valorAbono: string; valorTotal: string; mediaHE: string; mediaDSRHE: string; }>({ valorFerias: "", valorTerco: "", valorAbono: "", valorTotal: "", mediaHE: "0,00", mediaDSRHE: "0,00" });
   const [inssAjuste, setInssAjuste] = useState<string>("0,00");
   const [bonusValor, setBonusValor] = useState<string>("0,00");
   const [bonusDesc, setBonusDesc] = useState<string>("");
@@ -421,6 +421,17 @@ export default function Ferias() {
   );
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
+
+  // Média de HE + DSR do período aquisitivo para cálculo de férias (Art. 142 CLT)
+  const { data: mediaHEData, isLoading: mediaHELoading } = trpc.avisoPrevio.ferias.mediaHEFerias.useQuery(
+    {
+      employeeId: selectedItem?.employeeId ?? 0,
+      companyId: selectedItem?.companyId ?? companyId,
+      periodoAquisitivoInicio: selectedItem?.periodoAquisitivoInicio ?? "",
+      periodoAquisitivoFim: selectedItem?.periodoAquisitivoFim ?? "",
+    },
+    { enabled: !!selectedItem?.employeeId && !!selectedItem?.periodoAquisitivoInicio }
+  );
 
   // tRPC utils for invalidation
   const utils = trpc.useUtils();
@@ -1588,6 +1599,69 @@ export default function Ferias() {
                   </div>
                 </div>
               )}
+              {/* PAINEL: MEMÓRIA DE CÁLCULO HE — Art. 142 CLT */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-semibold text-slate-700 uppercase">Média de HE — Art. 142 CLT</p>
+                  {mediaHELoading && <span className="text-[10px] text-slate-400 animate-pulse">Calculando...</span>}
+                </div>
+                {mediaHEData ? (
+                  <>
+                    {mediaHEData.dadosParciais && (
+                      <div className="mb-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                        ⚠️ Dados parciais: {mediaHEData.mesesComDados} de {mediaHEData.mesesNoPeriodo} meses do período aquisitivo encontrados no sistema. A média foi calculada com os meses disponíveis. O RH pode ajustar manualmente ao editar os valores.
+                      </div>
+                    )}
+                    <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                      <div className="bg-white border rounded p-2 text-center">
+                        <p className="text-slate-400 text-[10px]">Meses com HE</p>
+                        <p className="font-bold text-slate-800">{mediaHEData.mesesComDados}/{mediaHEData.mesesNoPeriodo}</p>
+                      </div>
+                      <div className="bg-white border rounded p-2 text-center">
+                        <p className="text-slate-400 text-[10px]">Média HE/mês</p>
+                        <p className="font-bold text-blue-700">{formatMoeda(mediaHEData.mediaHE)}</p>
+                      </div>
+                      <div className="bg-white border rounded p-2 text-center">
+                        <p className="text-slate-400 text-[10px]">Média DSR das HE</p>
+                        <p className="font-bold text-blue-700">{formatMoeda(mediaHEData.mediaDSRHE)}</p>
+                      </div>
+                    </div>
+                    {mediaHEData.detalhes.length > 0 && (
+                      <details className="text-[10px] text-slate-500">
+                        <summary className="cursor-pointer hover:text-slate-700 select-none">Ver detalhes mês a mês</summary>
+                        <table className="w-full mt-1 border-collapse">
+                          <thead>
+                            <tr className="bg-slate-100">
+                              <th className="text-left px-1 py-0.5">Mês</th>
+                              <th className="text-right px-1 py-0.5">HE Total</th>
+                              <th className="text-right px-1 py-0.5">HE Útil</th>
+                              <th className="text-right px-1 py-0.5">Dom.</th>
+                              <th className="text-right px-1 py-0.5">DSR HE</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {mediaHEData.detalhes.map((d: any) => (
+                              <tr key={d.mes} className="border-t border-slate-100">
+                                <td className="px-1 py-0.5">{d.mes}</td>
+                                <td className="text-right px-1 py-0.5">{formatMoeda(d.valorHE)}</td>
+                                <td className="text-right px-1 py-0.5">{formatMoeda(d.valorHEUtil)}</td>
+                                <td className="text-right px-1 py-0.5">{d.domingos}</td>
+                                <td className="text-right px-1 py-0.5">{formatMoeda(d.dsr)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </details>
+                    )}
+                    {mediaHEData.mesesComDados === 0 && (
+                      <p className="text-[10px] text-slate-400">Nenhum registro de horas extras encontrado no período aquisitivo. Média = R$ 0,00.</p>
+                    )}
+                  </>
+                ) : !mediaHELoading && (
+                  <p className="text-[10px] text-slate-400">Carregando dados de horas extras...</p>
+                )}
+              </div>
+
               <div className="bg-green-50 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-green-600 uppercase font-semibold">Valores</p>
@@ -1599,15 +1673,30 @@ export default function Ferias() {
                         if (isNaN(n)) return v;
                         return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                       };
-                      const vF = parseFloat(selectedItem.valorFerias || "0") || 0;
-                      const vT = parseFloat(selectedItem.valorTercoConstitucional || "0") || 0;
+                      const mHE  = mediaHEData?.mediaHE    ?? 0;
+                      const mDSR = mediaHEData?.mediaDSRHE ?? 0;
+                      const salario = parseFloat(selectedItem.employeeSalario || "0") || 0;
+                      const diasGozo = selectedItem.diasGozo || 30;
+                      // Calcular ferias e terco com base HE se valores ainda não foram salvos manualmente
+                      const temValorSalvo = parseFloat(selectedItem.valorFerias || "0") > 0;
+                      let vF: number, vT: number;
+                      if (!temValorSalvo && (mHE > 0 || mDSR > 0) && salario > 0) {
+                        const base = salario + mHE + mDSR;
+                        vF = (base / 30) * diasGozo;
+                        vT = vF / 3;
+                      } else {
+                        vF = parseFloat(selectedItem.valorFerias || "0") || 0;
+                        vT = parseFloat(selectedItem.valorTercoConstitucional || "0") || 0;
+                      }
                       const vA = parseFloat(selectedItem.valorAbono || "0") || 0;
                       const totalCalculado = vF + vT + vA;
                       setEditValores({
-                        valorFerias: fmtBRL(selectedItem.valorFerias),
-                        valorTerco: fmtBRL(selectedItem.valorTercoConstitucional),
+                        valorFerias: fmtBRL(vF.toFixed(2)),
+                        valorTerco: fmtBRL(vT.toFixed(2)),
                         valorAbono: fmtBRL(selectedItem.valorAbono),
                         valorTotal: totalCalculado > 0 ? fmtBRL(totalCalculado.toFixed(2)) : fmtBRL(selectedItem.valorTotal),
+                        mediaHE:    fmtBRL(mHE.toFixed(2)),
+                        mediaDSRHE: fmtBRL(mDSR.toFixed(2)),
                       });
                       setEditingValues(true);
                     }}>
@@ -1648,13 +1737,58 @@ export default function Ferias() {
                 {editingValues ? (
                   <div className="space-y-2 text-sm">
                     {(() => {
-                      const pv = (s: string) => parseFloat(s.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
-                      const recalcTotal = (ferias: string, terco: string, abono: string) => {
-                        const t = pv(ferias) + pv(terco) + pv(abono);
-                        return t > 0 ? t.toFixed(2).replace(".", ",") : "";
+                      const pv = (s: string) => parseFloat((s || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
+                      const fmt = (n: number) => n > 0 ? n.toFixed(2).replace(".", ",") : "0,00";
+                      const salario = parseFloat(selectedItem.employeeSalario || "0") || 0;
+                      const diasGozo = selectedItem.diasGozo || 30;
+
+                      // Recalcula ferias + terco + total a partir de mediaHE e mediaDSRHE
+                      const recalcFromHE = (heStr: string, dsrStr: string, abonoStr: string) => {
+                        const base = salario + pv(heStr) + pv(dsrStr);
+                        const ferias = base > 0 ? (base / 30) * diasGozo : 0;
+                        const terco  = ferias / 3;
+                        const total  = ferias + terco + pv(abonoStr);
+                        return { ferias: fmt(ferias), terco: fmt(terco), total: fmt(total) };
                       };
+
+                      // Recalcula total quando ferias/terco/abono mudam diretamente
+                      const recalcTotal = (f: string, t: string, a: string) => {
+                        const sum = pv(f) + pv(t) + pv(a);
+                        return sum > 0 ? fmt(sum) : "0,00";
+                      };
+
                       return (
                         <>
+                          {/* SEÇÃO: BASE DE CÁLCULO (Art. 142 CLT) */}
+                          <div className="bg-blue-50 border border-blue-200 rounded p-2 space-y-2 mb-1">
+                            <p className="text-[10px] font-semibold text-blue-700 uppercase">Base de Cálculo — Art. 142 CLT</p>
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="whitespace-nowrap text-slate-600 text-xs w-40">Salário Base:</span>
+                              <Input className="h-7 text-sm text-right bg-slate-100" value={salario > 0 ? fmt(salario) : "—"} readOnly />
+                            </div>
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="whitespace-nowrap text-slate-600 text-xs w-40">Média de HE:</span>
+                              <Input className="h-7 text-sm text-right" value={editValores.mediaHE} onChange={e => {
+                                const v = e.target.value;
+                                const { ferias, terco, total } = recalcFromHE(v, editValores.mediaDSRHE, editValores.valorAbono);
+                                setEditValores(p => ({ ...p, mediaHE: v, valorFerias: ferias, valorTerco: terco, valorTotal: total }));
+                              }} placeholder="0,00" />
+                            </div>
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="whitespace-nowrap text-slate-600 text-xs w-40">Média DSR das HE:</span>
+                              <Input className="h-7 text-sm text-right" value={editValores.mediaDSRHE} onChange={e => {
+                                const v = e.target.value;
+                                const { ferias, terco, total } = recalcFromHE(editValores.mediaHE, v, editValores.valorAbono);
+                                setEditValores(p => ({ ...p, mediaDSRHE: v, valorFerias: ferias, valorTerco: terco, valorTotal: total }));
+                              }} placeholder="0,00" />
+                            </div>
+                            <div className="flex items-center justify-between gap-4 border-t border-blue-200 pt-1">
+                              <span className="whitespace-nowrap text-blue-800 text-xs font-semibold w-40">Base das Férias:</span>
+                              <Input className="h-7 text-sm text-right font-semibold bg-blue-100" value={fmt(salario + pv(editValores.mediaHE) + pv(editValores.mediaDSRHE))} readOnly />
+                            </div>
+                          </div>
+
+                          {/* SEÇÃO: VALORES FINAIS */}
                           <div className="flex items-center justify-between gap-4">
                             <span className="whitespace-nowrap text-slate-600 w-40">Férias:</span>
                             <Input className="h-7 text-sm text-right" value={editValores.valorFerias} onChange={e => {
@@ -1682,7 +1816,7 @@ export default function Ferias() {
                             <span className="font-bold text-green-700 w-40">TOTAL BRUTO:</span>
                             <Input className="h-7 text-sm text-right font-bold bg-green-50" value={editValores.valorTotal} readOnly placeholder="Calculado automaticamente" />
                           </div>
-                          <p className="text-[10px] text-slate-400">O total é calculado automaticamente como soma dos itens acima.</p>
+                          <p className="text-[10px] text-slate-400">Altere Média de HE para recalcular automaticamente. Ou ajuste Férias e 1/3 diretamente.</p>
                         </>
                       );
                     })()}
