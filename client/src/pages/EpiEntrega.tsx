@@ -214,7 +214,7 @@ export default function EpiEntrega() {
     createDelivery.mutate({
       companyId,
       employeeId: funcionario.id,
-      obraId: obraId ? Number(obraId) : undefined,
+      obraId: obraId && obraId !== "central" ? Number(obraId) : undefined,
       itens: itens.map((i) => ({
         epiId: i.epiId,
         quantidade: i.quantidade,
@@ -432,7 +432,7 @@ export default function EpiEntrega() {
                 <SelectValue placeholder="Selecione a obra..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Almoxarifado Central</SelectItem>
+                <SelectItem value="central">Almoxarifado Central</SelectItem>
                 {(obras as any[]).map((o: any) => (
                   <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                 ))}
@@ -515,7 +515,7 @@ export default function EpiEntrega() {
                 <span className="text-gray-400">#{funcionario.numeroInterno}</span>
               </div>
 
-              {obraId && (obras as any[]).find((o: any) => o.id === Number(obraId)) && (
+              {obraId && obraId !== "central" && (obras as any[]).find((o: any) => o.id === Number(obraId)) && (
                 <div className="text-xs text-gray-500">
                   Obra: {(obras as any[]).find((o: any) => o.id === Number(obraId))?.nome}
                 </div>
