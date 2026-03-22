@@ -19,8 +19,9 @@ import {
 import {
   Camera, CheckCircle, Plus, Minus, Trash2,
   Package, User, ArrowRight, ArrowLeft, FileText, ShieldCheck,
-  Search, UserPlus, X,
+  Search, UserPlus, X, Home,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { generateEpiReceiptPdf } from "@/lib/epiReceiptPdf";
 
@@ -36,6 +37,7 @@ interface ItemEntrega {
 }
 
 export default function EpiEntrega() {
+  const navigate = useNavigate();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = isConstrutoras ? 0 : (selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0);
   const companyIds = getCompanyIdsForQuery();
@@ -256,9 +258,20 @@ export default function EpiEntrega() {
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Entrega de EPI</h1>
-        <p className="text-sm text-gray-500 mt-1">Registre a entrega com identificação do funcionário — NR-6</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Entrega de EPI</h1>
+          <p className="text-sm text-gray-500 mt-1">Registre a entrega com identificação do funcionário — NR-6</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate("/")}
+          className="text-gray-500 shrink-0"
+        >
+          <Home className="h-4 w-4 mr-1" />
+          Início
+        </Button>
       </div>
 
       <div className="flex gap-1 text-xs">
