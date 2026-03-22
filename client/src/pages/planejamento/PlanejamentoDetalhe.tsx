@@ -8955,8 +8955,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             </p>
             <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
               {cfHasBaseline  && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} /> Baseline</span>}
-              {cfHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Revisão Atual</span>}
-              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Realizado</span>
+              {cfHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Faturamento Previsto</span>}
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Faturamento Realizado (Físico)</span>
               <span className="flex items-center gap-1.5">
                 <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 2" /></svg>
                 Tendência
@@ -9067,8 +9067,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             </p>
             <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
               {cfFinHasBaseline  && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} /> Baseline</span>}
-              {cfFinHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Revisão Atual</span>}
-              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Realizado (Físico×Contrato)</span>
+              {cfFinHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Faturamento Previsto</span>}
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Faturamento Realizado (Físico)</span>
               {cfHasFaturado && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#7c3aed" }} /> Faturado Real</span>}
               <span className="flex items-center gap-1.5">
                 <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 2" /></svg>
@@ -9086,11 +9086,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   <p className="text-base font-bold text-slate-700">{fmt(totalContrato)}</p>
                 </div>
                 <div className="px-4 py-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Revisão Atual</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturamento Previsto</p>
                   <p className="text-base font-bold text-red-600">{fmt(prevAcumFin)}</p>
                 </div>
                 <div className="px-4 py-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Realizado (Físico)</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturamento Realizado (Físico)</p>
                   <p className="text-base font-bold text-emerald-700">{fmt(realAcumFin)}</p>
                 </div>
                 {cfHasFaturado && (
@@ -9149,8 +9149,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                               {label}{row?.semana ? ` · ${d}/${m}/${y}` : ""}
                             </p>
                             {base  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Baseline</span><strong>{brl(base)}</strong></p>}
-                            {plan  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#ef4444" }}>Revisão Atual</span><strong>{brl(plan)}</strong></p>}
-                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado (Físico)</span><strong>{brl(real)}</strong></p>}
+                            {plan  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#ef4444" }}>Faturamento Previsto</span><strong>{brl(plan)}</strong></p>}
+                            {real  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Faturamento Realizado (Físico)</span><strong>{brl(real)}</strong></p>}
                             {fat   != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#7c3aed" }}>Faturado Real</span><strong>{brl(fat)}</strong></p>}
                             {tend  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#16a34a" }}>Tendência</span><strong>{brl(tend)}</strong></p>}
                             {desvioFatR != null && (
