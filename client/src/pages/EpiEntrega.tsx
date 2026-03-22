@@ -634,25 +634,35 @@ export default function EpiEntrega() {
       </Dialog>
 
       <Dialog open={showEnrollDialog} onOpenChange={setShowEnrollDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
               Cadastrar Biometria
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {enrollFoto && (
               <div className="flex justify-center">
-                <img src={enrollFoto} className="w-24 h-24 rounded-full object-cover border-2 border-green-200" alt="Captura" />
+                <img src={enrollFoto} className="w-20 h-20 rounded-full object-cover border-2 border-green-200" alt="Captura" />
               </div>
             )}
             <p className="text-sm text-gray-600 text-center">
               Selecione o funcionário para vincular esta foto:
             </p>
-            <div className="max-h-48 overflow-y-auto space-y-1">
+            <Input
+              placeholder="Buscar funcionário por nome ou número..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+            <div className="max-h-60 overflow-y-auto space-y-1 border rounded-lg p-1">
               {(allEmployees as any[])
                 .filter((e: any) => !e.faceId)
+                .filter((e: any) => {
+                  if (!searchText.trim()) return true;
+                  const lower = searchText.toLowerCase();
+                  return e.nomeCompleto?.toLowerCase().includes(lower) || e.numeroInterno?.toLowerCase().includes(lower);
+                })
                 .map((emp: any) => (
                 <button
                   key={emp.id}
@@ -666,6 +676,12 @@ export default function EpiEntrega() {
                 </button>
               ))}
             </div>
+            {enrollEmployee && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 border border-green-200 text-sm">
+                <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                <span className="text-green-800 font-medium">{enrollEmployee.nomeCompleto}</span>
+              </div>
+            )}
             <Button
               className="w-full bg-green-600 hover:bg-green-700 text-white"
               disabled={!enrollEmployee || enrollFaceMutation.isPending}
