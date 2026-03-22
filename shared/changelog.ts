@@ -4741,6 +4741,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-22 00:00:00",
   },
   {
+    version: 735,
+    titulo: "Férias — Valores com bonus persistem ao fechar/abrir o detalhe",
+    descricao: "Correção de 3 bugs relacionados ao bonusValor (Acréscimos) e arredondamentoProvento: 1) Botão 'Salvar' do bloco Editar Valores agora inclui bonusValor e arredondamentoProvento na mutation — antes só eram salvos via 'Salvar Líquido', então ao fechar e reabrir a tela os campos zeravam. 2) Ao abrir 'Editar Valores' com bonusValor > 0 já salvo no banco, inicialização agora recalcula Férias/1/3/Total da base incluindo o bonus — antes iniciava com valores antigos do banco sem o bonus. 3) Modo visualização (sem edição): Férias, 1/3 e Total Bruto agora são computados com o bonus quando bonusValor > 0 — antes exibiam o valor salvo no banco que podia estar desatualizado. INSS no modo visualização também usa o bruto recomputado com bonus.",
+    tipo: "bugfix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 734,
     titulo: "Férias — INSS ao vivo + Arredondamento de Provento (incide no INSS)",
     descricao: "1) INSS em tempo real: durante edição dos valores base (editingValues=true), a seção de INSS lê editValores.valorTotal em vez do valorTotal salvo no banco — sem precisar clicar Salvar para ver o INSS atualizado. 2) Novo campo 'Arredondamento de provento' (campo azul no topo do bloco INSS): somado ao Total Bruto ANTES do cálculo do INSS (inssBase = bruto + arredondamentoNum), exatamente como o contador faz no recibo. Exibição: quando preenchido, mostra breakdown 'Total Bruto (férias) + Arredondamento de provento = Base de cálculo do INSS'. 3) Novo campo arredondamento_provento na tabela vacation_periods (ColFix Rev.734), aceito na mutation updateFerias, carregado no useEffect e salvo no botão Salvar Líquido.",

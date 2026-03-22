@@ -1748,10 +1748,16 @@ export default function Ferias() {
                       const mDSR = mDSR_saved > 0 ? mDSR_saved : mDSR_auto;
                       const salario = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
                       const diasGozo = selectedItem.diasGozo || 30;
-                      // Calcular ferias e terco com base HE se valores ainda não foram salvos manualmente
+                      // Calcular ferias e terco: sempre recalcula da base quando há bonus ou HE não salvo
+                      const bonusNum = parseFloat((bonusValor || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
                       const temValorSalvo = parseFloat(selectedItem.valorFerias || "0") > 0;
                       let vF: number, vT: number;
-                      if (!temValorSalvo && (mHE > 0 || mDSR > 0) && salario > 0) {
+                      if (bonusNum > 0 && salario > 0) {
+                        // Sempre recalcula da base quando há acréscimo para garantir consistência
+                        const base = salario + mHE + mDSR + bonusNum;
+                        vF = (base / 30) * diasGozo;
+                        vT = vF / 3;
+                      } else if (!temValorSalvo && (mHE > 0 || mDSR > 0) && salario > 0) {
                         const base = salario + mHE + mDSR;
                         vF = (base / 30) * diasGozo;
                         vT = vF / 3;
@@ -1807,6 +1813,8 @@ export default function Ferias() {
                         const total = parseVal(editValores.valorTotal) || (vF + vT + vA);
                         const mHESave = parseVal(editValores.mediaHE).toFixed(2);
                         const mDSRSave = parseVal(editValores.mediaDSRHE).toFixed(2);
+                        const bonusValorSave = parseFloat((bonusValor || "0").replace(/[R$\s.]/g, "").replace(",", ".")).toFixed(2);
+                        const arredSave = parseFloat((arredondamentoProvento || "0").replace(/[R$\s.]/g, "").replace(",", ".")).toFixed(2);
                         updateFerias.mutate({
                           id: selectedItem.id,
                           valorFerias: vF.toFixed(2),
@@ -1815,9 +1823,11 @@ export default function Ferias() {
                           valorTotal: total.toFixed(2),
                           mediaHE: mHESave,
                           mediaDSRHE: mDSRSave,
+                          bonusValor: bonusValorSave,
+                          arredondamentoProvento: arredSave,
                         }, {
                           onSuccess: () => {
-                            setSelectedItem((prev: any) => ({ ...prev, valorFerias: vF.toFixed(2), valorTercoConstitucional: vT.toFixed(2), valorAbono: vA.toFixed(2), valorTotal: total.toFixed(2), mediaHE: mHESave, mediaDSRHE: mDSRSave }));
+                            setSelectedItem((prev: any) => ({ ...prev, valorFerias: vF.toFixed(2), valorTercoConstitucional: vT.toFixed(2), valorAbono: vA.toFixed(2), valorTotal: total.toFixed(2), mediaHE: mHESave, mediaDSRHE: mDSRSave, bonusValor: bonusValorSave, arredondamentoProvento: arredSave }));
                             setEditingValues(false);
                             refetch();
                           }
@@ -1966,17 +1976,41 @@ export default function Ferias() {
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="flex justify-between"><span>Férias:</span><span className="font-medium">{formatMoeda(selectedItem.valorFerias)}</span></div>
-                      <div className="flex justify-between"><span>1/3 Constitucional:</span><span className="font-medium">{formatMoeda(selectedItem.valorTercoConstitucional)}</span></div>
-                      {selectedItem.valorAbono && parseFloat(selectedItem.valorAbono) > 0 && (
-                        <div className="flex justify-between col-span-2"><span>Abono Pecuniário:</span><span className="font-medium">{formatMoeda(selectedItem.valorAbono)}</span></div>
-                      )}
-                    </div>
-                    <div className="border-t mt-2 pt-2 flex justify-between text-lg font-bold text-green-700">
-                      <span>TOTAL BRUTO:</span>
-                      <span>{formatMoeda(selectedItem.valorTotal)}</span>
-                    </div>
+                    {(() => {
+                      const pv = (s: string) => parseFloat((s || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
+                      const fmt = (n: number) => "R$ " + n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                      const bonusViewNum = pv(bonusValor);
+                      let vFv = parseFloat(selectedItem.valorFerias || "0") || 0;
+                      let vTv = parseFloat(selectedItem.valorTercoConstitucional || "0") || 0;
+                      if (bonusViewNum > 0) {
+                        const sal = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
+                        const mhe = parseFloat(selectedItem.mediaHE || "0") || 0;
+                        const mdsr = parseFloat(selectedItem.mediaDSRHE || "0") || 0;
+                        const dias = selectedItem.diasGozo || 30;
+                        if (sal > 0) {
+                          const base = sal + mhe + mdsr + bonusViewNum;
+                          vFv = (base / 30) * dias;
+                          vTv = vFv / 3;
+                        }
+                      }
+                      const vAv = parseFloat(selectedItem.valorAbono || "0") || 0;
+                      const totalView = vFv + vTv + vAv;
+                      return (
+                        <>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="flex justify-between"><span>Férias:</span><span className="font-medium">{fmt(vFv)}</span></div>
+                            <div className="flex justify-between"><span>1/3 Constitucional:</span><span className="font-medium">{fmt(vTv)}</span></div>
+                            {vAv > 0 && (
+                              <div className="flex justify-between col-span-2"><span>Abono Pecuniário:</span><span className="font-medium">{fmt(vAv)}</span></div>
+                            )}
+                          </div>
+                          <div className="border-t mt-2 pt-2 flex justify-between text-lg font-bold text-green-700">
+                            <span>TOTAL BRUTO:</span>
+                            <span>{fmt(totalView)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                     {selectedItem.dataPagamento && (
                       <p className="text-xs text-green-600 mt-2">Pagamento até: {formatDate(selectedItem.dataPagamento)} (2 dias antes do início)</p>
                     )}
@@ -1992,9 +2026,25 @@ export default function Ferias() {
                 const ajusteNum = parseFloat(inssAjuste.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
                 const arredondamentoNum = parseMoeda(arredondamentoProvento);
                 // Lê o TOTAL BRUTO em tempo real durante edição (sem esperar Salvar)
+                // Em view mode: se há bonusValor, recomputa bruto com o bonus incluído na base
                 const bruto = editingValues
-                  ? (parseMoeda(editValores.valorTotal))
-                  : parseFloat(selectedItem.valorTotal || "0");
+                  ? parseMoeda(editValores.valorTotal)
+                  : (() => {
+                      if (bonusNum > 0) {
+                        const sal = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
+                        const mhe = parseFloat(selectedItem.mediaHE || "0") || 0;
+                        const mdsr = parseFloat(selectedItem.mediaDSRHE || "0") || 0;
+                        const dias = selectedItem.diasGozo || 30;
+                        if (sal > 0) {
+                          const base = sal + mhe + mdsr + bonusNum;
+                          const f = (base / 30) * dias;
+                          const t = f / 3;
+                          const a = parseFloat(selectedItem.valorAbono || "0") || 0;
+                          return f + t + a;
+                        }
+                      }
+                      return parseFloat(selectedItem.valorTotal || "0");
+                    })();
                 // Arredondamento de provento adiciona à base ANTES do INSS (igual ao recibo do contador)
                 const inssBase = bruto + arredondamentoNum;
                 if (!inssBase) return null;
