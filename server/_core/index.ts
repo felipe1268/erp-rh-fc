@@ -438,6 +438,72 @@ async function startServer() {
           console.log("[AvisoPrevioMigration] Nenhum aviso a migrar (coluna dataBaixa OK)");
       } catch (e: any) { console.warn("[AvisoPrevioMigration] Aviso:", e?.message ?? e); }
     })();
+    // Rev.716 — BUG-001 retroativo: recalcular termination_notices em_andamento com férias vencidas reais
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        const { calcularRescisaoCompleta, parseBRL } = await import("../utils/rescisaoCalc");
+
+        // Buscar todos os avisos em andamento ou aguardando pagamento
+        const avisos = ((await db.execute(sql`
+          SELECT tn.id, tn."employeeId", tn."tipo", tn."dataInicio", tn."dataFim",
+                 tn."salarioBase", e."dataAdmissao"
+          FROM termination_notices tn
+          JOIN employees e ON e.id = tn."employeeId"
+          WHERE tn.status IN ('em_andamento', 'aguardando_pagamento')
+            AND tn."deletedAt" IS NULL
+        `)) as any).rows || [];
+
+        let atualizados = 0;
+        for (const aviso of avisos) {
+          try {
+            const dataAdmissao = aviso.dataAdmissao || new Date().toISOString().split('T')[0];
+            const salarioBase = parseBRL(aviso.salarioBase);
+            const dataDesligFinal = aviso.dataInicio;
+            const dataFim = aviso.dataFim;
+            if (!dataFim) continue;
+
+            const dtFimAviso = new Date(dataFim + 'T00:00:00');
+            const dtDataSaida = new Date(dtFimAviso);
+            dtDataSaida.setDate(dtDataSaida.getDate() + 1);
+            const diasTrabalhadosMes = dtDataSaida.getDate();
+
+            // Contagem REAL de férias vencidas do banco
+            const vpRows = ((await db.execute(sql`
+              SELECT COUNT(*)::int AS total FROM vacation_periods
+              WHERE "employeeId" = ${aviso.employeeId}
+                AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
+                AND "periodoConcessivoFim" IS NOT NULL
+                AND "periodoConcessivoFim" < ${dataFim}
+                AND "deletedAt" IS NULL
+            `)) as any).rows || [];
+            const periodosVencidosReal = Number(vpRows[0]?.total ?? 0);
+
+            const previsao = calcularRescisaoCompleta({
+              salarioBase,
+              dataAdmissao,
+              dataDesligamento: dataDesligFinal,
+              dataFimAviso: dataFim,
+              tipo: aviso.tipo,
+              vrDiario: 0,
+              diasTrabalhadosMes,
+              periodosVencidosOverride: periodosVencidosReal,
+            });
+
+            await db.execute(sql`
+              UPDATE termination_notices
+              SET "valorEstimadoTotal" = ${previsao.total},
+                  "previsaoRescisao" = ${JSON.stringify(previsao)}
+              WHERE id = ${aviso.id}
+            `);
+            atualizados++;
+          } catch { /* ignora falha individual */ }
+        }
+        console.log(`[ColFix] BUG-001 retroativo: ${atualizados}/${avisos.length} rescisão(ões) recalculada(s) com férias reais`);
+      } catch (e: any) { console.warn("[ColFix] BUG-001 retroativo:", e?.message ?? e); }
+    });
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
     // Iniciar job de verificação de prazos de rescisão (Art. 477 §6º CLT)

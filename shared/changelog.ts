@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 717,
+    titulo: "Rescisão — Correção retroativa de rescisões existentes (BUG-001)",
+    descricao: "Correção retroativa aplicada a todos os registros de aviso prévio com status 'em_andamento' e 'aguardando_pagamento': valorEstimadoTotal e previsaoRescisao agora refletem a contagem real de férias vencidas do banco (vacation_periods). Além disso, as funções CLT de rescisão foram extraídas para módulo utilitário compartilhado (rescisaoCalc.ts), permitindo uso no startup sem dependência circular. A regra de correção retroativa obrigatória foi formalizada na memória permanente do sistema.",
+    tipo: "bugfix",
+    modulos: "Rescisão",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 716,
     titulo: "Rescisão — Férias vencidas calculadas com base em períodos reais do banco",
     descricao: "Bug corrigido: calcularRescisaoCompleta usava fórmula matemática pura (anos completos de serviço) para contar férias vencidas, ignorando períodos já concluídos/pagos registrados no módulo Férias. Agora consulta vacation_periods no banco e conta apenas períodos com status diferente de 'concluida', 'cancelada' e 'em_gozo' que estejam com o concessivo vencido. Impacto: funcionários com múltiplos períodos de férias quitados (ex: Francisco Eudice) não terão mais férias vencidas inflacionadas na rescisão. Correção aplicada em todas as procedures: calcular, comparativo, create, update, recalcularTodos e getById.",
