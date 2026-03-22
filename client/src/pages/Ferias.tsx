@@ -1643,25 +1643,45 @@ export default function Ferias() {
                 </div>
                 {editingValues ? (
                   <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="whitespace-nowrap text-slate-600 w-40">Férias:</span>
-                      <Input className="h-7 text-sm text-right" value={editValores.valorFerias} onChange={e => setEditValores(p => ({ ...p, valorFerias: e.target.value }))} placeholder="0,00" />
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="whitespace-nowrap text-slate-600 w-40">1/3 Constitucional:</span>
-                      <Input className="h-7 text-sm text-right" value={editValores.valorTerco} onChange={e => setEditValores(p => ({ ...p, valorTerco: e.target.value }))} placeholder="0,00" />
-                    </div>
-                    {(selectedItem.abonoPecuniario === 1 || parseFloat(editValores.valorAbono) > 0) && (
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="whitespace-nowrap text-slate-600 w-40">Abono Pecuniário:</span>
-                        <Input className="h-7 text-sm text-right" value={editValores.valorAbono} onChange={e => setEditValores(p => ({ ...p, valorAbono: e.target.value }))} placeholder="0,00" />
-                      </div>
-                    )}
-                    <div className="border-t pt-2 flex items-center justify-between gap-4">
-                      <span className="font-bold text-green-700 w-40">TOTAL BRUTO:</span>
-                      <Input className="h-7 text-sm text-right font-bold" value={editValores.valorTotal} onChange={e => setEditValores(p => ({ ...p, valorTotal: e.target.value }))} placeholder="0,00" />
-                    </div>
-                    <p className="text-[10px] text-slate-400">Informe os valores em formato numérico (ex: 2607,00). O total pode ser preenchido manualmente ou deixado em branco para ser calculado como soma dos itens.</p>
+                    {(() => {
+                      const pv = (s: string) => parseFloat(s.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
+                      const recalcTotal = (ferias: string, terco: string, abono: string) => {
+                        const t = pv(ferias) + pv(terco) + pv(abono);
+                        return t > 0 ? t.toFixed(2).replace(".", ",") : "";
+                      };
+                      return (
+                        <>
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="whitespace-nowrap text-slate-600 w-40">Férias:</span>
+                            <Input className="h-7 text-sm text-right" value={editValores.valorFerias} onChange={e => {
+                              const v = e.target.value;
+                              setEditValores(p => ({ ...p, valorFerias: v, valorTotal: recalcTotal(v, p.valorTerco, p.valorAbono) }));
+                            }} placeholder="0,00" />
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="whitespace-nowrap text-slate-600 w-40">1/3 Constitucional:</span>
+                            <Input className="h-7 text-sm text-right" value={editValores.valorTerco} onChange={e => {
+                              const v = e.target.value;
+                              setEditValores(p => ({ ...p, valorTerco: v, valorTotal: recalcTotal(p.valorFerias, v, p.valorAbono) }));
+                            }} placeholder="0,00" />
+                          </div>
+                          {(selectedItem.abonoPecuniario === 1 || parseFloat(editValores.valorAbono) > 0) && (
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="whitespace-nowrap text-slate-600 w-40">Abono Pecuniário:</span>
+                              <Input className="h-7 text-sm text-right" value={editValores.valorAbono} onChange={e => {
+                                const v = e.target.value;
+                                setEditValores(p => ({ ...p, valorAbono: v, valorTotal: recalcTotal(p.valorFerias, p.valorTerco, v) }));
+                              }} placeholder="0,00" />
+                            </div>
+                          )}
+                          <div className="border-t pt-2 flex items-center justify-between gap-4">
+                            <span className="font-bold text-green-700 w-40">TOTAL BRUTO:</span>
+                            <Input className="h-7 text-sm text-right font-bold bg-green-50" value={editValores.valorTotal} readOnly placeholder="Calculado automaticamente" />
+                          </div>
+                          <p className="text-[10px] text-slate-400">O total é calculado automaticamente como soma dos itens acima.</p>
+                        </>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <>
