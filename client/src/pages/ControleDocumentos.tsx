@@ -2,6 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import AdvAssinaturas from "./AdvAssinaturas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
@@ -935,6 +936,8 @@ export default function ControleDocumentos() {
   const [advEmployeeCount, setAdvEmployeeCount] = useState<{total: number; proximaAcao: string; sugestaoTipo: string} | null>(null);
   const [showAdvPreview, setShowAdvPreview] = useState(false);
   const [previewAdvData, setPreviewAdvData] = useState<any>(null);
+  const [showAdvAssinaturas, setShowAdvAssinaturas] = useState(false);
+  const [advAssinaturasData, setAdvAssinaturasData] = useState<any>(null);
 
   // ============ FORM STATES ============
   const [asoForm, setAsoForm] = useState<any>({});
@@ -1882,11 +1885,28 @@ export default function ControleDocumentos() {
                                   sequencia: idxAdv + 1,
                                   anteriores,
                                   employeeId: a.employeeId,
+                                  assinaturaFuncionarioUrl: (a as any).assinaturaFuncionarioUrl,
+                                  assinaturaAplicadorUrl: (a as any).assinaturaAplicadorUrl,
                                 });
                                 setLastCreatedAdvId(a.id);
                                 setShowAdvPreview(true);
                               }}>
                                 <Eye className="h-3.5 w-3.5" />
+                              </Button>}
+                              {a.tipoAdvertencia !== "Verbal" && <Button size="icon" variant="ghost" className="h-7 w-7 text-violet-600 hover:text-violet-800 hover:bg-violet-50" title="Assinaturas Digitais" onClick={() => {
+                                let testemunhasArr: {nome: string; doc: string; assinaturaUrl?: string}[] = [];
+                                try { testemunhasArr = JSON.parse(a.testemunhas || "[]"); } catch { testemunhasArr = []; }
+                                setAdvAssinaturasData({
+                                  advertenciaId: a.id,
+                                  nomeFuncionario: a.nomeCompleto,
+                                  nomeAplicador: a.aplicadoPor || authUser?.name || "Responsável",
+                                  testemunhasIniciais: testemunhasArr,
+                                  assinaturaFuncionarioUrl: (a as any).assinaturaFuncionarioUrl,
+                                  assinaturaAplicadorUrl: (a as any).assinaturaAplicadorUrl,
+                                });
+                                setShowAdvAssinaturas(true);
+                              }}>
+                                <PenTool className="h-3.5 w-3.5" />
                               </Button>}
                               {a.tipoAdvertencia !== "Verbal" && <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Imprimir Documento CLT" onClick={() => {
                                 const userName = authUser?.name || authUser?.username || "Usuário";
@@ -2449,6 +2469,19 @@ export default function ControleDocumentos() {
               </div>
               <div className="flex items-center gap-2">
                 <Button size="sm" className="gap-2 bg-white text-blue-800 hover:bg-blue-50" onClick={() => {
+                  setAdvAssinaturasData({
+                    advertenciaId: lastCreatedAdvId || a.id,
+                    nomeFuncionario: a.nomeCompleto,
+                    nomeAplicador: a.aplicadoPor || authUser?.name || "Responsável",
+                    testemunhasIniciais: testemunhasArr,
+                    assinaturaFuncionarioUrl: a.assinaturaFuncionarioUrl,
+                    assinaturaAplicadorUrl: a.assinaturaAplicadorUrl,
+                  });
+                  setShowAdvAssinaturas(true);
+                }}>
+                  <PenTool className="h-4 w-4" /> Assinaturas Digitais
+                </Button>
+                <Button size="sm" className="gap-2 bg-white text-blue-800 hover:bg-blue-50" onClick={() => {
                   const userName = authUser?.name || authUser?.username || "Usuário";
                   const dataEmissao = nowBrasilia();
                   const t1 = testemunhasArr[0] || { nome: "", doc: "" };
@@ -2613,6 +2646,22 @@ export default function ControleDocumentos() {
 
       {/* ===================== RAIO-X DO FUNCIONÁRIO ===================== */}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {/* ===================== ASSINATURAS DIGITAIS — ADVERTÊNCIA ===================== */}
+      {showAdvAssinaturas && advAssinaturasData && (
+        <AdvAssinaturas
+          open={showAdvAssinaturas}
+          onClose={() => { setShowAdvAssinaturas(false); setAdvAssinaturasData(null); }}
+          advertenciaId={advAssinaturasData.advertenciaId}
+          nomeFuncionario={advAssinaturasData.nomeFuncionario}
+          nomeAplicador={advAssinaturasData.nomeAplicador}
+          testemunhasIniciais={advAssinaturasData.testemunhasIniciais || []}
+          assinaturaFuncionarioUrl={advAssinaturasData.assinaturaFuncionarioUrl}
+          assinaturaAplicadorUrl={advAssinaturasData.assinaturaAplicadorUrl}
+          onUpdate={() => refetchAdv()}
+        />
+      )}
+
           <PrintFooterLGPD />
     </DashboardLayout>
   );

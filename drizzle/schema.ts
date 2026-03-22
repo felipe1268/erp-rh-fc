@@ -2952,6 +2952,8 @@ export const warnings = pgTable("warnings", {
         deletedAt: timestamp({ mode: 'string' }),
         deletedBy: varchar({ length: 255 }),
         deletedByUserId: integer(),
+        assinaturaFuncionarioUrl: text("assinatura_funcionario_url"),
+        assinaturaAplicadorUrl:   text("assinatura_aplicador_url"),
 });
 
 

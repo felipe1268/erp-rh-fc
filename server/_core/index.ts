@@ -517,6 +517,17 @@ async function startServer() {
         console.log("[ColFix] epi_deliveries biometria + assinatura_responsavel Rev.722 OK");
       } catch (e: any) { console.warn("[ColFix] epi_deliveries biometria:", e?.message ?? e); }
     });
+    // Rev.726: ColFix — colunas de assinatura digital em warnings (advertências)
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_funcionario_url TEXT`);
+        await db.execute(sql`ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_aplicador_url TEXT`);
+        console.log("[ColFix] warnings assinatura_funcionario_url + assinatura_aplicador_url Rev.726 OK");
+      } catch (e: any) { console.warn("[ColFix] warnings assinaturas:", e?.message ?? e); }
+    });
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
     // Iniciar job de verificação de prazos de rescisão (Art. 477 §6º CLT)

@@ -4677,4 +4677,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-21 00:00:00",
   },
+  {
+    version: 726,
+    titulo: "Advertências — Assinaturas Digitais (funcionário, aplicador e testemunhas)",
+    descricao: "Módulo de assinaturas digitais para advertências escritas, suspensões e justa causa. Novas colunas assinaturaFuncionarioUrl e assinaturaAplicadorUrl na tabela warnings (ColFix Rev.726 aplicado em Neon). Mutation salvarAssinatura no router de documentos, com upload para S3. Componente AdvAssinaturas.tsx com canvas de assinatura por dedo/mouse para funcionário, aplicador e testemunhas (cada testemunha exige digitar o nome antes de desbloquear o pad). Integração em ControleDocumentos.tsx: botão 'Assinaturas Digitais' no preview da advertência e ícone de caneta (PenTool) na tabela de advertências para acesso rápido ao modal.",
+    tipo: "feature",
+    modulos: "Controle de Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

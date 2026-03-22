@@ -707,6 +707,8 @@ export const controleDocumentosRouter = router({
             aplicadoPor: warnings.aplicadoPor,
             diasSuspensao: warnings.diasSuspensao,
             origemModulo: warnings.origemModulo,
+            assinaturaFuncionarioUrl: (warnings as any).assinaturaFuncionarioUrl,
+            assinaturaAplicadorUrl:   (warnings as any).assinaturaAplicadorUrl,
           })
           .from(warnings)
           .innerJoin(employees, eq(warnings.employeeId, employees.id))
@@ -801,6 +803,36 @@ export const controleDocumentosRouter = router({
         const key = `documentos/advertencias/${input.id}-${Date.now()}.${ext}`;
         const { url } = await storagePut(key, buffer, ext === "pdf" ? "application/pdf" : "application/octet-stream");
         await db.update(warnings).set({ documentoUrl: url }).where(eq(warnings.id, input.id));
+        return { url };
+      }),
+
+    salvarAssinatura: protectedProcedure
+      .input(z.object({
+        advertenciaId: z.number(),
+        tipoAssinante: z.enum(["funcionario", "aplicador", "testemunha1", "testemunha2", "testemunha3"]),
+        base64Png: z.string(),
+        nomeAssinante: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const base64Data = input.base64Png.replace(/^data:image\/png;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const key = `documentos/advertencias/assinaturas/${input.advertenciaId}-${input.tipoAssinante}-${Date.now()}.png`;
+        const { url } = await storagePut(key, buffer, "image/png");
+
+        if (input.tipoAssinante === "funcionario") {
+          await db.execute(sql`UPDATE warnings SET assinatura_funcionario_url = ${url} WHERE id = ${input.advertenciaId}`);
+        } else if (input.tipoAssinante === "aplicador") {
+          await db.execute(sql`UPDATE warnings SET assinatura_aplicador_url = ${url} WHERE id = ${input.advertenciaId}`);
+        } else {
+          const idx = parseInt(input.tipoAssinante.replace("testemunha", "")) - 1;
+          const [adv] = await db.select({ testemunhas: warnings.testemunhas }).from(warnings).where(eq(warnings.id, input.advertenciaId));
+          let arr: any[] = [];
+          try { arr = JSON.parse(adv?.testemunhas || "[]"); } catch { arr = []; }
+          while (arr.length <= idx) arr.push({ nome: "", doc: "" });
+          arr[idx] = { ...arr[idx], assinaturaUrl: url, nome: input.nomeAssinante || arr[idx]?.nome || "" };
+          await db.update(warnings).set({ testemunhas: JSON.stringify(arr) } as any).where(eq(warnings.id, input.advertenciaId));
+        }
         return { url };
       }),
   }),
