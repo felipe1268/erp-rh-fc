@@ -4741,6 +4741,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-22 00:00:00",
   },
   {
+    version: 737,
+    titulo: "Férias — BUG-002 retroativo: recalcula vacation_periods com acréscimos (bonusValor) na base + Salvar Líquido salva valorTotal correto",
+    descricao: "1) ColFix BUG-002 retroativo (server startup): todos os vacation_periods que têm bonus_valor > 0 têm valorFerias, valorTercoConstitucional e valorTotal recalculados incluindo o acréscimo na base (base = salario + mediaHE + mediaDSR + bonus). Propagação automática para todos os funcionários com acréscimo salvo. 2) Botão 'Salvar Líquido': quando bonusNum > 0, agora também salva valorFerias, valorTercoConstitucional e valorTotal recomputados com o bonus — antes apenas salvava valorLiquido e campos INSS.",
+    tipo: "bugfix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 736,
     titulo: "Férias — mediaHE, mediaDSRHE e arredondamentoProvento retornados pela query de listagem",
     descricao: "A query de listagem de vacation_periods não incluía os campos mediaHE, mediaDSRHE e arredondamentoProvento no SELECT. Ao fechar e reabrir o detalhe, o useEffect carregava de selectedItem, que não possuía esses campos (undefined → '0,00'). Adicionados os 3 campos ao SELECT. Resultado: Média de HE, Média DSR e Arredondamento de provento agora persistem corretamente ao fechar e reabrir o detalhe.",

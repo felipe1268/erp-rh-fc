@@ -508,6 +508,59 @@ async function startServer() {
         console.log(`[ColFix] BUG-001 retroativo: ${atualizados}/${avisos.length} rescisão(ões) recalculada(s) com férias reais`);
       } catch (e: any) { console.warn("[ColFix] BUG-001 retroativo:", e?.message ?? e); }
     });
+    // Rev.737 — BUG-002 retroativo: recalcular vacation_periods com bonus_valor > 0 (acréscimos na base)
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+
+        const rows = ((await db.execute(sql`
+          SELECT vp.id, vp."diasGozo", vp.bonus_valor, vp.media_he, vp.media_dsr_he, vp."valorAbono",
+                 e."salarioBase"
+          FROM vacation_periods vp
+          JOIN employees e ON e.id = vp."employeeId"
+          WHERE vp.bonus_valor IS NOT NULL
+            AND vp.bonus_valor NOT IN ('0', '0.00', '0,00', '')
+            AND vp."deletedAt" IS NULL
+        `)) as any).rows || [];
+
+        const parseBRL = (v: string) => {
+          if (!v) return 0;
+          const s = v.replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".");
+          return parseFloat(s) || 0;
+        };
+
+        let atualizados = 0;
+        for (const r of rows) {
+          try {
+            const salario = parseBRL(r.salarioBase || "0");
+            if (salario <= 0) continue;
+            const mHE    = parseFloat(r.media_he     || "0") || 0;
+            const mDSR   = parseFloat(r.media_dsr_he || "0") || 0;
+            const bonus  = parseFloat(r.bonus_valor  || "0") || 0;
+            const dias   = Number(r.diasGozo) || 30;
+            const abono  = parseFloat(r.valorAbono   || "0") || 0;
+            if (bonus <= 0) continue;
+
+            const base    = salario + mHE + mDSR + bonus;
+            const vFerias = (base / 30) * dias;
+            const vTerco  = vFerias / 3;
+            const vTotal  = vFerias + vTerco + abono;
+
+            await db.execute(sql`
+              UPDATE vacation_periods
+              SET "valorFerias"               = ${vFerias.toFixed(2)},
+                  "valorTercoConstitucional"  = ${vTerco.toFixed(2)},
+                  "valorTotal"                = ${vTotal.toFixed(2)}
+              WHERE id = ${r.id}
+            `);
+            atualizados++;
+          } catch { /* ignora falha individual */ }
+        }
+        console.log(`[ColFix] BUG-002 retroativo: ${atualizados}/${rows.length} férias recalculada(s) com acréscimos na base`);
+      } catch (e: any) { console.warn("[ColFix] BUG-002 retroativo:", e?.message ?? e); }
+    });
     // Rev.721: ColFix — colunas de biometria facial em epi_deliveries (Neon DB)
     import("../db").then(async ({ getDb }) => {
       try {

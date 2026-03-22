@@ -2199,6 +2199,23 @@ export default function Ferias() {
                             className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white px-3"
                             disabled={updateFerias.isPending}
                             onClick={() => {
+                              // Recomputa valorFerias/Terco/Total com bonus para salvar no banco
+                              const salLiq = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
+                              const mheLiq = parseFloat(selectedItem.mediaHE || "0") || 0;
+                              const mdsrLiq = parseFloat(selectedItem.mediaDSRHE || "0") || 0;
+                              const diasLiq = selectedItem.diasGozo || 30;
+                              const abonoLiq = parseFloat(selectedItem.valorAbono || "0") || 0;
+                              let vFeriasLiq: string | undefined;
+                              let vTercoLiq: string | undefined;
+                              let vTotalLiq: string | undefined;
+                              if (bonusNum > 0 && salLiq > 0) {
+                                const baseLiq = salLiq + mheLiq + mdsrLiq + bonusNum;
+                                const fLiq = (baseLiq / 30) * diasLiq;
+                                const tLiq = fLiq / 3;
+                                vFeriasLiq = fLiq.toFixed(2);
+                                vTercoLiq  = tLiq.toFixed(2);
+                                vTotalLiq  = (fLiq + tLiq + abonoLiq).toFixed(2);
+                              }
                               updateFerias.mutate(
                                 {
                                   id: selectedItem.id,
@@ -2210,6 +2227,7 @@ export default function Ferias() {
                                   pensaoDesconto: pensaoDesconto || "0,00",
                                   outrosDescontos: outrosDescontos || "0,00",
                                   outrosDescontosDesc: outrosDescontosDesc || "",
+                                  ...(vFeriasLiq ? { valorFerias: vFeriasLiq, valorTercoConstitucional: vTercoLiq, valorTotal: vTotalLiq } : {}),
                                 },
                                 {
                                   onSuccess: () => {
@@ -2223,6 +2241,7 @@ export default function Ferias() {
                                       pensaoDesconto,
                                       outrosDescontos,
                                       outrosDescontosDesc,
+                                      ...(vFeriasLiq ? { valorFerias: vFeriasLiq, valorTercoConstitucional: vTercoLiq, valorTotal: vTotalLiq } : {}),
                                     } : prev);
                                     refetch();
                                   },
