@@ -8161,10 +8161,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     (curvaMedicoes as any[]).forEach((m: any) => { medMap[m.competencia] = m.valorAcumulado; });
     // Competencias disponíveis ordenadas
     const comps = Object.keys(medMap).sort();
+    const lastConsolidada = comps[comps.length - 1];
     return curvaFinanceira.map((row: any) => {
       if (!row.semana) return row;
-      const rowComp = String(row.semana).substring(0, 7); // "YYYY-MM"
-      // Última competência <= competência desta semana
+      const rowComp = String(row.semana).substring(0, 7);
+      if (rowComp > lastConsolidada) return row;
       const applicable = comps.filter(c => c <= rowComp);
       if (!applicable.length) return row;
       const lastComp = applicable[applicable.length - 1];
