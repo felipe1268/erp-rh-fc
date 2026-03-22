@@ -506,9 +506,5 @@ export async function generateFichaEpiPdf(params: FichaEpiParams): Promise<strin
   const pdfBase64 = pdf.output("datauristring");
   const base64Only = pdfBase64.split(",")[1];
 
-  // Also trigger download
-  const filename = `Ficha_EPI_${nomeFunc.replace(/\s+/g, "_")}_${agora.toISOString().split("T")[0]}.pdf`;
-  pdf.save(filename);
-
   return base64Only;
 }

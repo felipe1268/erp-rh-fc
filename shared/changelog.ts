@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 725,
+    titulo: "EPIs — Salvar PDF não faz mais download automático",
+    descricao: "O botão 'Salvar PDF' na ficha de entrega de EPI agora apenas salva o arquivo no sistema (S3). O download automático foi removido — se o usuário quiser baixar, pode usar o botão 'Ver PDF Salvo' manualmente. Ícone do botão atualizado de 'baixar' para 'salvar'.",
+    tipo: "bugfix",
+    modulos: "SST / EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 724,
     titulo: "Almoxarifado — Valor unitário, precificação do inventário e correção de estoque",
     descricao: "Campo 'Valor Unitário (R$)' adicionado ao formulário de item do almoxarifado, com botão de estimativa de preço por IA (modelo de linguagem que analisa nome, unidade e categoria). Tabela ganha duas novas colunas: 'Valor Unit.' e 'Total Estoque' (qtd × valor). Novo KPI 'Valor Total em Estoque' no dashboard. Rodapé da tabela mostra o total dos itens filtrados. Campo 'Corrigir Estoque Atual' no modal de edição permite ajuste direto do saldo sem precisar criar uma movimentação manual.",

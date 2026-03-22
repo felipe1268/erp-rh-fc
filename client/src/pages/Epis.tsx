@@ -15,7 +15,7 @@ import { removeAccents } from "@/lib/searchUtils";
 import {
   Plus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
-  DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText, FileDown,
+  DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText, FileDown, Save,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
   Building2, ArrowLeftRight, Warehouse, TrendingUp,
   Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool, Users, Ban,
@@ -1653,7 +1653,7 @@ export default function Epis() {
                   }
                 }}
               >
-                <FileDown className="h-4 w-4 mr-1" />
+                <Save className="h-4 w-4 mr-1" />
                 {isSavingPdf || uploadFichaMut.isPending ? "Salvando..." : "Salvar PDF"}
               </Button>
               <Button variant="outline" size="sm" onClick={() => {
