@@ -1989,6 +1989,7 @@ export const avisoPrevioFeriasRouter = router({
         pensaoDesconto: z.string().optional(),
         outrosDescontos: z.string().optional(),
         outrosDescontosDesc: z.string().optional(),
+        arredondamentoProvento: z.string().optional(),
         dataPagamento: z.string().optional(),
       }))
       .mutation(async ({ input }) => {

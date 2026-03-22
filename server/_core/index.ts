@@ -174,6 +174,8 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_he VARCHAR(20)`);
         await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_dsr_he VARCHAR(20)`);
         console.log("[ColFix] vacation_periods Rev.707 OK");
+        // Rev.734: arredondamento_provento — ajuste de arredondamento de proventos (incide no INSS)
+        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS arredondamento_provento VARCHAR(20)`);
         // Sincronizar flag vencida e status para períodos concessivos expirados
         const hoje = new Date().toISOString().split('T')[0];
         const vencResult = await db.execute(sql`

@@ -2852,6 +2852,7 @@ export const vacationPeriods = pgTable("vacation_periods", {
         pensaoDesconto: varchar("pensao_desconto", { length: 20 }),
         outrosDescontos: varchar("outros_descontos", { length: 20 }),
         outrosDescontosDesc: text("outros_descontos_desc"),
+        arredondamentoProvento: varchar("arredondamento_provento", { length: 20 }),
         reciboUrl: text("recibo_url"),
         reciboNome: varchar("recibo_nome", { length: 255 }),
         // you can use { mode: 'date' }, if you want to have Date as type for this column

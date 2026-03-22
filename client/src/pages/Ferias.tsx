@@ -349,6 +349,7 @@ export default function Ferias() {
   const [editingValues, setEditingValues] = useState(false);
   const [editValores, setEditValores] = useState<{ valorFerias: string; valorTerco: string; valorAbono: string; valorTotal: string; mediaHE: string; mediaDSRHE: string; }>({ valorFerias: "", valorTerco: "", valorAbono: "", valorTotal: "", mediaHE: "0,00", mediaDSRHE: "0,00" });
   const [inssAjuste, setInssAjuste] = useState<string>("0,00");
+  const [arredondamentoProvento, setArredondamentoProvento] = useState<string>("0,00");
   const [bonusValor, setBonusValor] = useState<string>("0,00");
   const [bonusDesc, setBonusDesc] = useState<string>("");
   const [pensaoDesconto, setPensaoDesconto] = useState<string>("0,00");
@@ -360,6 +361,7 @@ export default function Ferias() {
   useEffect(() => {
     if (selectedItem) {
       setInssAjuste(selectedItem.ajusteInss || "0,00");
+      setArredondamentoProvento(selectedItem.arredondamentoProvento || "0,00");
       setBonusValor(selectedItem.bonusValor || "0,00");
       setBonusDesc(selectedItem.bonusDesc || "");
       setPensaoDesconto(selectedItem.pensaoDesconto || "0,00");
@@ -1988,9 +1990,13 @@ export default function Ferias() {
                 const pensaoNum = parseMoeda(pensaoDesconto);
                 const outrosDescNum = parseMoeda(outrosDescontos);
                 const ajusteNum = parseFloat(inssAjuste.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
-                const bruto = parseFloat(selectedItem.valorTotal || "0");
-                // Acréscimos já estão embutidos no TOTAL BRUTO via BASE DE CÁLCULO (recalcFromHE inclui bonus na base)
-                const inssBase = bruto;
+                const arredondamentoNum = parseMoeda(arredondamentoProvento);
+                // Lê o TOTAL BRUTO em tempo real durante edição (sem esperar Salvar)
+                const bruto = editingValues
+                  ? (parseMoeda(editValores.valorTotal))
+                  : parseFloat(selectedItem.valorTotal || "0");
+                // Arredondamento de provento adiciona à base ANTES do INSS (igual ao recibo do contador)
+                const inssBase = bruto + arredondamentoNum;
                 if (!inssBase) return null;
                 // Tabela INSS progressiva 2026 — Portaria Interministerial MPS/MF nº 13/2026 (DOU 09/01/2026)
                 const FAIXAS = [
@@ -2022,10 +2028,37 @@ export default function Ferias() {
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
                     <p className="text-xs text-slate-500 uppercase font-semibold">Desconto INSS — Memória de Cálculo (Tabela 2026)</p>
 
+                    {/* Arredondamento de Provento (incide no INSS — igual ao recibo do contador) */}
+                    <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded p-2">
+                      <span className="text-xs text-blue-800 font-medium whitespace-nowrap">Arredondamento de provento:</span>
+                      <Input
+                        className="h-7 text-xs text-right w-28 border-blue-300 focus:border-blue-500"
+                        value={arredondamentoProvento}
+                        onChange={e => setArredondamentoProvento(e.target.value)}
+                        placeholder="0,00"
+                        title="Valor adicionado ao bruto ANTES do cálculo do INSS. Equivalente ao arredondamento de provento do recibo."
+                      />
+                      <span className="text-[10px] text-blue-600 leading-tight">Soma aos proventos antes do INSS.</span>
+                    </div>
+
                     {/* Linha de base */}
-                    <div className="flex justify-between text-sm border-b border-slate-200 pb-2">
-                      <span className="text-slate-600 font-medium">Total Bruto — base de cálculo do INSS{bonusNum > 0 ? <span className="text-green-700 font-normal"> (incl. {bonusDesc || "acréscimos"})</span> : ""}</span>
-                      <span className="font-semibold">{formatMoeda(inssBase)}</span>
+                    <div className="flex flex-col border-b border-slate-200 pb-2 gap-0.5">
+                      {arredondamentoNum !== 0 && (
+                        <div className="flex justify-between text-xs text-slate-500">
+                          <span>Total Bruto (férias)</span>
+                          <span>{formatMoeda(bruto)}</span>
+                        </div>
+                      )}
+                      {arredondamentoNum !== 0 && (
+                        <div className="flex justify-between text-xs text-blue-700">
+                          <span>+ Arredondamento de provento</span>
+                          <span>+ {formatMoeda(arredondamentoNum)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-600 font-medium">Base de cálculo do INSS{bonusNum > 0 ? <span className="text-green-700 font-normal"> (incl. {bonusDesc || "acréscimos"})</span> : ""}</span>
+                        <span className="font-semibold">{formatMoeda(inssBase)}</span>
+                      </div>
                     </div>
 
                     {/* Tabela de faixas com parcela a deduzir */}
@@ -2139,6 +2172,7 @@ export default function Ferias() {
                                 {
                                   id: selectedItem.id,
                                   ajusteInss: inssAjuste || "0,00",
+                                  arredondamentoProvento: arredondamentoProvento || "0,00",
                                   valorLiquido: formatMoeda(liquido),
                                   bonusValor: bonusValor || "0,00",
                                   bonusDesc: bonusDesc || "",
@@ -2151,6 +2185,7 @@ export default function Ferias() {
                                     setSelectedItem((prev: any) => prev ? {
                                       ...prev,
                                       ajusteInss: inssAjuste,
+                                      arredondamentoProvento,
                                       valorLiquido: formatMoeda(liquido),
                                       bonusValor,
                                       bonusDesc,
