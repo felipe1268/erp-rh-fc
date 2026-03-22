@@ -4893,4 +4893,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 747,
+    titulo: "Cascata automática: excluir orçamento remove planejamento vinculado",
+    descricao: "Ao excluir um orçamento (soft-delete ou exclusão definitiva), todos os dados de planejamento vinculados são automaticamente removidos: projeto, revisões, atividades, avanços, REFIS, medições e dados de IA. Impede dados órfãos no sistema. Limpeza retroativa de projetos que apontavam para orçamentos já deletados (Chlorum Palmeira e Hotel QIU 2).",
+    tipo: "melhoria",
+    modulos: "Planejamento,Orçamentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

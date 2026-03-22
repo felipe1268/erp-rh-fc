@@ -26,6 +26,14 @@ import {
   orcamentoSecItens,
   planejamentoProjetos,
   planejamentoRefis,
+  planejamentoRevisoes,
+  planejamentoAtividades,
+  planejamentoAvancos,
+  iaCronogramaChat,
+  iaCronogramaAlertas,
+  iaCronogramaCenarios,
+  iaCronogramaMonitoramento,
+  planejamentoMedicoes,
   comprasSolicitacoesItens,
   comprasCotacoesItens,
   terceiroContratoItens,
@@ -1713,11 +1721,27 @@ export const orcamentoRouter = router({
         console.log(`[Importar] obraId=${input.obraId} companyId=${input.companyId} — conflito encontrado: ${existente.length > 0 ? 'SIM id=' + existente[0].id : 'NÃO'}`);
         if (existente.length > 0) {
           if (input.forceReplace) {
-            // Soft-delete o orçamento existente antes de criar o novo
+            const oldOrcId = existente[0].id;
+            const projsOld = await db.select({ id: planejamentoProjetos.id })
+              .from(planejamentoProjetos)
+              .where(eq(planejamentoProjetos.orcamentoId, oldOrcId));
+            for (const pj of projsOld) {
+              const pid = pj.id;
+              await db.delete(planejamentoRefis).where(eq(planejamentoRefis.projetoId, pid));
+              await db.delete(planejamentoAvancos).where(eq(planejamentoAvancos.projetoId, pid));
+              await db.delete(planejamentoMedicoes).where(eq(planejamentoMedicoes.projetoId, pid));
+              await db.delete(planejamentoAtividades).where(eq(planejamentoAtividades.projetoId, pid));
+              await db.delete(planejamentoRevisoes).where(eq(planejamentoRevisoes.projetoId, pid));
+              await db.delete(iaCronogramaChat).where(eq(iaCronogramaChat.projetoId, pid));
+              await db.delete(iaCronogramaAlertas).where(eq(iaCronogramaAlertas.projetoId, pid));
+              await db.delete(iaCronogramaCenarios).where(eq(iaCronogramaCenarios.projetoId, pid));
+              await db.delete(iaCronogramaMonitoramento).where(eq(iaCronogramaMonitoramento.projetoId, pid));
+              await db.delete(planejamentoProjetos).where(eq(planejamentoProjetos.id, pid));
+            }
             await db.update(orcamentos)
               .set({ deletedAt: new Date().toISOString() })
-              .where(eq(orcamentos.id, existente[0].id));
-            console.log(`[Importar] forceReplace=true — orçamento ${existente[0].id} excluído para substituição.`);
+              .where(eq(orcamentos.id, oldOrcId));
+            console.log(`[Importar] forceReplace=true — orçamento ${oldOrcId} excluído (+ ${projsOld.length} planejamento(s) vinculado(s)).`);
           } else {
             throw new TRPCError({
               code: 'CONFLICT',
@@ -2160,9 +2184,24 @@ export const orcamentoRouter = router({
 
       const oid = input.id;
 
-      await db.update(planejamentoProjetos)
-        .set({ orcamentoId: null })
+      const projsVinculados = await db.select({ id: planejamentoProjetos.id })
+        .from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.orcamentoId, oid));
+
+      for (const pj of projsVinculados) {
+        const pid = pj.id;
+        await db.delete(planejamentoRefis).where(eq(planejamentoRefis.projetoId, pid));
+        await db.delete(planejamentoAvancos).where(eq(planejamentoAvancos.projetoId, pid));
+        await db.delete(planejamentoMedicoes).where(eq(planejamentoMedicoes.projetoId, pid));
+        await db.delete(planejamentoAtividades).where(eq(planejamentoAtividades.projetoId, pid));
+        await db.delete(planejamentoRevisoes).where(eq(planejamentoRevisoes.projetoId, pid));
+        await db.delete(iaCronogramaChat).where(eq(iaCronogramaChat.projetoId, pid));
+        await db.delete(iaCronogramaAlertas).where(eq(iaCronogramaAlertas.projetoId, pid));
+        await db.delete(iaCronogramaCenarios).where(eq(iaCronogramaCenarios.projetoId, pid));
+        await db.delete(iaCronogramaMonitoramento).where(eq(iaCronogramaMonitoramento.projetoId, pid));
+        await db.delete(planejamentoProjetos).where(eq(planejamentoProjetos.id, pid));
+      }
+
       await db.update(comprasRiscoDebitos)
         .set({ orcamentoId: null })
         .where(eq(comprasRiscoDebitos.orcamentoId, oid));
@@ -2836,6 +2875,25 @@ export const orcamentoRouter = router({
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
       if (orc.status === 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento fechado não pode ser excluído.' });
+
+      const projsVinculados = await db.select({ id: planejamentoProjetos.id })
+        .from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.orcamentoId, input.id));
+
+      for (const pj of projsVinculados) {
+        const pid = pj.id;
+        await db.delete(planejamentoRefis).where(eq(planejamentoRefis.projetoId, pid));
+        await db.delete(planejamentoAvancos).where(eq(planejamentoAvancos.projetoId, pid));
+        await db.delete(planejamentoMedicoes).where(eq(planejamentoMedicoes.projetoId, pid));
+        await db.delete(planejamentoAtividades).where(eq(planejamentoAtividades.projetoId, pid));
+        await db.delete(planejamentoRevisoes).where(eq(planejamentoRevisoes.projetoId, pid));
+        await db.delete(iaCronogramaChat).where(eq(iaCronogramaChat.projetoId, pid));
+        await db.delete(iaCronogramaAlertas).where(eq(iaCronogramaAlertas.projetoId, pid));
+        await db.delete(iaCronogramaCenarios).where(eq(iaCronogramaCenarios.projetoId, pid));
+        await db.delete(iaCronogramaMonitoramento).where(eq(iaCronogramaMonitoramento.projetoId, pid));
+        await db.delete(planejamentoProjetos).where(eq(planejamentoProjetos.id, pid));
+      }
+
       await db.update(orcamentos).set({ deletedAt: new Date().toISOString() }).where(eq(orcamentos.id, input.id));
       return { success: true };
     }),
