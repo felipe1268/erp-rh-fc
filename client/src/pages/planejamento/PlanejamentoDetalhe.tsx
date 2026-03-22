@@ -3739,15 +3739,14 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
           </div>
         );
 
-        // Estado 2: sem orçamento vinculado ao projeto
-        if (!curvaSFin || curvaSFin.status === "sem_orcamento") return (
+        if (!curvaSFin || (curvaSFin.totalVenda === 0 && (curvaSFin.curva ?? []).length === 0)) return (
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-4 text-slate-400">
             <DollarSign className="h-12 w-12 opacity-20" />
             <div className="text-center">
-              <p className="text-sm font-semibold text-slate-600 mb-1">Orçamento não vinculado</p>
+              <p className="text-sm font-semibold text-slate-600 mb-1">Sem dados financeiros</p>
               <p className="text-xs text-slate-400 max-w-sm">
-                Vincule um <strong className="text-slate-500">Orçamento</strong> a este projeto nas configurações para
-                que a Curva S Financeira seja calculada automaticamente cruzando o cronograma com os valores do orçamento.
+                Vincule um <strong className="text-slate-500">Orçamento</strong> ou preencha o <strong className="text-slate-500">Valor do Contrato</strong> nas
+                configurações do projeto para gerar a Curva S Financeira.
               </p>
             </div>
             <button
@@ -3758,88 +3757,6 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
             </button>
           </div>
         );
-
-        // Estado 3: divergências EAP (bloqueio total — o usuário precisa corrigir)
-        if (curvaSFin.status === "divergencias") {
-          const semOrc  = curvaSFin.divergencias.filter((d: any) => d.tipo === "sem_orcamento");
-          const semCron = curvaSFin.divergencias.filter((d: any) => d.tipo === "sem_cronograma");
-          return (
-            <div className="space-y-4">
-              <div className="bg-red-50 border border-red-200 rounded-xl p-5">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-red-600 text-base font-bold">!</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-red-700 mb-1">Divergência na EAP — Curva S Financeira bloqueada</p>
-                    <p className="text-xs text-red-600">
-                      A EAP do cronograma e a EAP do orçamento devem ser 100% idênticas.
-                      Corrija as divergências abaixo para liberar a curva financeira.
-                    </p>
-                  </div>
-                </div>
-
-                {semOrc.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-xs font-semibold text-red-700 mb-2 uppercase tracking-wide">
-                      No cronograma, sem item no orçamento ({semOrc.length})
-                    </p>
-                    <div className="rounded-lg overflow-hidden border border-red-200">
-                      <table className="w-full text-xs">
-                        <thead className="bg-red-100">
-                          <tr>
-                            <th className="px-3 py-2 text-left text-red-700 font-semibold w-24">EAP</th>
-                            <th className="px-3 py-2 text-left text-red-700 font-semibold">Atividade</th>
-                            <th className="px-3 py-2 text-left text-red-700 font-semibold w-36">Ação necessária</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-red-100 bg-white">
-                          {semOrc.map((d: any) => (
-                            <tr key={d.eapCodigo}>
-                              <td className="px-3 py-2 font-mono text-red-600 font-semibold">{d.eapCodigo}</td>
-                              <td className="px-3 py-2 text-slate-700">{d.nome}</td>
-                              <td className="px-3 py-2 text-slate-500">Adicionar ao orçamento</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {semCron.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-red-700 mb-2 uppercase tracking-wide">
-                      No orçamento, sem atividade no cronograma ({semCron.length})
-                    </p>
-                    <div className="rounded-lg overflow-hidden border border-red-200">
-                      <table className="w-full text-xs">
-                        <thead className="bg-red-100">
-                          <tr>
-                            <th className="px-3 py-2 text-left text-red-700 font-semibold w-24">EAP</th>
-                            <th className="px-3 py-2 text-left text-red-700 font-semibold">Item do Orçamento</th>
-                            <th className="px-3 py-2 text-left text-red-700 font-semibold w-36">Ação necessária</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-red-100 bg-white">
-                          {semCron.map((d: any) => (
-                            <tr key={d.eapCodigo}>
-                              <td className="px-3 py-2 font-mono text-red-600 font-semibold">{d.eapCodigo}</td>
-                              <td className="px-3 py-2 text-slate-700">{d.nome}</td>
-                              <td className="px-3 py-2 text-slate-500">Adicionar ao cronograma</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        }
-
-        // Estado 4: EAP consistente → renderizar curva
         const totalVenda = curvaSFin.totalVenda ?? 0;
         const curvaSFinOk = curvaSFin.curva ?? [];
         const hasMedicoes = (curvaMedicoes as any[]).length > 0;
