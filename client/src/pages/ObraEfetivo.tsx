@@ -18,7 +18,7 @@ import {
   HardHat, Users, Search, ArrowRightLeft, UserPlus, AlertTriangle,
   Building2, CheckCircle, XCircle, Clock, MapPin, ChevronRight,
   Loader2, UserMinus, History, BarChart3, X, ArrowRight, Shield,
-  Printer, FileDown,
+  Printer, FileDown, Settings2, Zap, Thermometer, Moon,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -53,6 +53,9 @@ export default function ObraEfetivo() {
   const [equipeSearch, setEquipeSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [equipeStatusFilter, setEquipeStatusFilter] = useState<string | null>(null);
+  const [condicoesDialogOpen, setCondicoesDialogOpen] = useState(false);
+  const [condicoesDialogItem, setCondicoesDialogItem] = useState<any>(null);
+  const [condicoesForm, setCondicoesForm] = useState({ insalubridadeOverride: 'herda', periculosidadeOverride: 'herda', adicionalEscolhido: 'auto' });
 
   // Queries
   const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId });
@@ -115,6 +118,15 @@ export default function ObraEfetivo() {
     onSuccess: () => {
       toast.success("Funcionário removido da obra!");
       efetivoQ.refetch(); semObraQ.refetch(); funcObraQ.refetch(); allEmpsQ.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateCondicoesMut = trpc.obras.updateObraFuncionarioCondicoes.useMutation({
+    onSuccess: () => {
+      toast.success("Condições atualizadas!");
+      funcObraQ.refetch();
+      setCondicoesDialogOpen(false);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -1473,7 +1485,22 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                     )}
                                   </td>
                                   <td className="px-4 py-2.5 print:hidden">
-                                    <div className="flex items-center justify-end gap-1">
+                                    <div className="flex items-center justify-end gap-1 flex-wrap">
+                                      {/* Badge de override ativo */}
+                                      {(f.insalubridadeOverride && f.insalubridadeOverride !== 'herda') || (f.periculosidadeOverride && f.periculosidadeOverride !== 'herda') || (f.adicionalEscolhido && f.adicionalEscolhido !== 'auto') ? (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 shrink-0">Override</span>
+                                      ) : null}
+                                      <Button variant="ghost" size="sm" className="h-7 text-xs text-[#1B2A4A] hover:text-[#1B2A4A]" onClick={() => {
+                                        setCondicoesDialogItem(f);
+                                        setCondicoesForm({
+                                          insalubridadeOverride: f.insalubridadeOverride ?? 'herda',
+                                          periculosidadeOverride: f.periculosidadeOverride ?? 'herda',
+                                          adicionalEscolhido: f.adicionalEscolhido ?? 'auto',
+                                        });
+                                        setCondicoesDialogOpen(true);
+                                      }}>
+                                        <Settings2 className="h-3.5 w-3.5 mr-1" /> Condições
+                                      </Button>
                                       <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openHistory(f.employeeId)}>
                                         <History className="h-3.5 w-3.5 mr-1" /> Histórico
                                       </Button>
@@ -1500,6 +1527,149 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
           })()}
         </div>
       </FullScreenDialog>
+
+      {/* Dialog de override de condições de trabalho por funcionário */}
+      <Dialog open={condicoesDialogOpen} onOpenChange={setCondicoesDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5 text-[#1B2A4A]" />
+              Condições de Trabalho — {condicoesDialogItem?.employee?.nomeCompleto || "Funcionário"}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Define se este funcionário herda as condições da obra ou tem configuração específica.
+            </DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const obra = obrasAtivas.find((o: any) => o.id === selectedObraId);
+            const obraInsGrau = obra?.insalubridadeGrau ?? 'none';
+            const obraPeri = obra?.periculosidade === 1;
+            const obraNoturno = obra?.adicionalNoturnoAtivo === 1;
+            const grauLabels: Record<string, string> = { none: 'Não aplicável', minimo: 'Mínimo (10%)', medio: 'Médio (20%)', maximo: 'Máximo (40%)' };
+            // Determinar se a escolha manual é contra o mais vantajoso (CLT Art. 193 §2)
+            const insaGrauEfetivo = condicoesForm.insalubridadeOverride === 'herda' ? obraInsGrau
+              : condicoesForm.insalubridadeOverride === 'none' ? 'none'
+              : condicoesForm.insalubridadeOverride;
+            const periEfetivo = condicoesForm.periculosidadeOverride === 'herda' ? obraPeri
+              : condicoesForm.periculosidadeOverride === 'sim';
+            const grauPct: Record<string, number> = { minimo: 0.10, medio: 0.20, maximo: 0.40, none: 0 };
+            const insaValor = insaGrauEfetivo !== 'none' ? 1518 * (grauPct[insaGrauEfetivo] ?? 0) : 0;
+            const periValor = periEfetivo ? ((parseFloat(condicoesDialogItem?.employee?.salario || '0') || 0) * 0.30) : 0;
+            const escolhaContraClt = condicoesForm.adicionalEscolhido !== 'auto'
+              && ((condicoesForm.adicionalEscolhido === 'insalubridade' && periValor > insaValor && periValor > 0)
+              || (condicoesForm.adicionalEscolhido === 'periculosidade' && insaValor > periValor && insaValor > 0));
+            return (
+              <div className="space-y-5 py-2">
+                {/* Condições da obra (referência) */}
+                {obra && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">Condições da Obra (padrão)</p>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md font-medium ${obraInsGrau !== 'none' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-500'}`}>
+                        <Thermometer className="h-3 w-3" /> Insalubridade: {grauLabels[obraInsGrau] ?? obraInsGrau}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md font-medium ${obraPeri ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-500'}`}>
+                        <Zap className="h-3 w-3" /> Periculosidade: {obraPeri ? 'Sim (30%)' : 'Não'}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md font-medium ${obraNoturno ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
+                        <Moon className="h-3 w-3" /> Noturno: {obraNoturno ? 'Ativo' : 'Não'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Override: Insalubridade */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-semibold flex items-center gap-1.5">
+                    <Thermometer className="h-4 w-4 text-yellow-600" /> Insalubridade individual
+                  </Label>
+                  <Select value={condicoesForm.insalubridadeOverride} onValueChange={v => setCondicoesForm(f => ({ ...f, insalubridadeOverride: v }))}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="herda">Herdar da obra ({grauLabels[obraInsGrau] ?? obraInsGrau})</SelectItem>
+                      <SelectItem value="none">Não aplicável (sem insalubridade)</SelectItem>
+                      <SelectItem value="minimo">Grau Mínimo — 10% do salário mínimo</SelectItem>
+                      <SelectItem value="medio">Grau Médio — 20% do salário mínimo</SelectItem>
+                      <SelectItem value="maximo">Grau Máximo — 40% do salário mínimo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {insaValor > 0 && <p className="text-[11px] text-muted-foreground">Valor estimado: R$ {insaValor.toFixed(2).replace('.', ',')}/mês (SM = R$ 1.518,00)</p>}
+                </div>
+
+                {/* Override: Periculosidade */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-semibold flex items-center gap-1.5">
+                    <Zap className="h-4 w-4 text-orange-600" /> Periculosidade individual
+                  </Label>
+                  <Select value={condicoesForm.periculosidadeOverride} onValueChange={v => setCondicoesForm(f => ({ ...f, periculosidadeOverride: v }))}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="herda">Herdar da obra ({obraPeri ? 'Sim — 30% sal. base' : 'Não'})</SelectItem>
+                      <SelectItem value="sim">Sim — 30% do salário base (Art. 193)</SelectItem>
+                      <SelectItem value="nao">Não — isento de periculosidade</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {periValor > 0 && <p className="text-[11px] text-muted-foreground">Valor estimado: R$ {periValor.toFixed(2).replace('.', ',')}/mês</p>}
+                </div>
+
+                {/* Adicional Escolhido */}
+                {(insaValor > 0 || periValor > 0) && (
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-semibold">Adicional a aplicar na folha</Label>
+                    <Select value={condicoesForm.adicionalEscolhido} onValueChange={v => setCondicoesForm(f => ({ ...f, adicionalEscolhido: v }))}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Automático — sistema escolhe o mais vantajoso ({insaValor >= periValor ? 'Insalubridade' : 'Periculosidade'} = R$ {Math.max(insaValor, periValor).toFixed(2).replace('.', ',')})</SelectItem>
+                        {insaValor > 0 && <SelectItem value="insalubridade">Insalubridade — R$ {insaValor.toFixed(2).replace('.', ',')} (Art. 192)</SelectItem>}
+                        {periValor > 0 && <SelectItem value="periculosidade">Periculosidade — R$ {periValor.toFixed(2).replace('.', ',')} (Art. 193)</SelectItem>}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">CLT Art. 193 §2: insalubridade e periculosidade não acumulam. O sistema aplica apenas um.</p>
+                  </div>
+                )}
+
+                {/* Alerta: escolha contra o mais vantajoso */}
+                {escolhaContraClt && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-800">Escolha menos vantajosa ao funcionário</p>
+                      <p className="text-xs text-red-700 mt-0.5">
+                        O adicional de {condicoesForm.adicionalEscolhido === 'insalubridade' ? 'periculosidade' : 'insalubridade'} (R$ {Math.max(insaValor, periValor).toFixed(2).replace('.', ',')}) é mais vantajoso que o escolhido. Verifique se a escolha foi acordada com o funcionário.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCondicoesDialogOpen(false)}>Cancelar</Button>
+            <Button
+              className="bg-[#1B2A4A] text-white hover:bg-[#1B2A4A]/90"
+              disabled={updateCondicoesMut.isPending}
+              onClick={() => {
+                if (!condicoesDialogItem?.id) return;
+                updateCondicoesMut.mutate({
+                  id: condicoesDialogItem.id,
+                  insalubridadeOverride: condicoesForm.insalubridadeOverride as any,
+                  periculosidadeOverride: condicoesForm.periculosidadeOverride as any,
+                  adicionalEscolhido: condicoesForm.adicionalEscolhido as any,
+                });
+              }}
+            >
+              {updateCondicoesMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Salvar Condições
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <PrintFooterLGPD />
     </DashboardLayout>

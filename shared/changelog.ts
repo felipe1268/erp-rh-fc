@@ -4678,6 +4678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 731,
+    titulo: "Adicionais de Trabalho — Fase 2: Override individual e engine de cálculo",
+    descricao: "Override por funcionário: botão 'Condições' na tabela de equipe da obra abre dialog para definir insalubridade individual (herda/none/mínimo/médio/máximo), periculosidade (herda/sim/não) e escolha do adicional (automático/insalubridade/periculosidade). Alerta vermelho quando a escolha manual contraria o que seria mais vantajoso pela CLT. Badge colorido na linha do funcionário indica overrides ativos. Engine de cálculo: nova procedure calcularAdicionaisEmployee no backend (obras router) que resolve override vs herança da obra, busca salário mínimo do system_criteria, calcula insalubridade (10/20/40% do SM), periculosidade (30% salário base), adicional noturno estimado (20%/hora), e retorna o adicional sugerido e o valor final aplicado. Mutation updateObraFuncionarioCondicoes persiste os overrides na tabela obra_funcionarios.",
+    tipo: "feature",
+    modulos: "Obras / Efetivo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 730,
     titulo: "Adicionais de Trabalho — Insalubridade, Periculosidade e Noturno por Obra",
     descricao: "Novo módulo de Condições de Trabalho. Cada obra agora pode cadastrar insalubridade (grau mínimo/médio/máximo — CLT Art. 192), periculosidade (30% sal. base — CLT Art. 193) e adicional noturno (20% horas 22h-5h). A ficha de cadastro/edição da obra ganhou a seção 'Condições de Trabalho' com toggles e seletor de grau, além de data de vigência. Badges de condições aparecem nos cards das obras na listagem. No dialog de alocação de funcionários, ao selecionar uma obra com condições ativas, o sistema exibe automaticamente as condições que os funcionários irão herdar, com aviso especial quando insalubridade e periculosidade coexistem (Art. 193 §2 — sistema sugere o mais vantajoso). Novas colunas criadas: obras(insalubridade_grau, periculosidade, adicional_noturno_ativo, condicoes_vigencia_inicio) e obra_funcionarios(insalubridade_override, periculosidade_override, adicional_escolhido).",

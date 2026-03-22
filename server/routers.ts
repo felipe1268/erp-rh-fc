@@ -1079,6 +1079,100 @@ export const appRouter = router({
     removeEmployee: protectedProcedure.input(z.object({ employeeId: z.number(), motivo: z.string().optional() })).mutation(({ input, ctx }) => removeEmployeeFromObra(input.employeeId, input.motivo, ctx.user.name ?? 'Sistema', ctx.user.id)),
     // Histórico de alocações de um funcionário
     employeeHistory: protectedProcedure.input(z.object({ employeeId: z.number() })).query(({ input }) => getEmployeeSiteHistory(input.employeeId)),
+    // Atualizar condições de trabalho individuais (override por alocação)
+    updateObraFuncionarioCondicoes: protectedProcedure.input(z.object({
+      id: z.number(),
+      insalubridadeOverride: z.enum(['herda', 'none', 'minimo', 'medio', 'maximo']),
+      periculosidadeOverride: z.enum(['herda', 'sim', 'nao']),
+      adicionalEscolhido: z.enum(['auto', 'insalubridade', 'periculosidade']),
+    })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+      const { obraFuncionarios: of_ } = await import("../drizzle/schema");
+      await db.update(of_).set({
+        insalubridadeOverride: input.insalubridadeOverride,
+        periculosidadeOverride: input.periculosidadeOverride,
+        adicionalEscolhido: input.adicionalEscolhido,
+      }).where(eq(of_.id, input.id));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "obras", entityType: "obra_funcionario", entityId: input.id, details: `Condições override: ins=${input.insalubridadeOverride} per=${input.periculosidadeOverride} adic=${input.adicionalEscolhido}` });
+      return { success: true };
+    }),
+    // Calcular adicionais de trabalho para um funcionário em um mês
+    calcularAdicionaisEmployee: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      mesReferencia: z.string(), // YYYY-MM
+    })).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const { obraFuncionarios: of_, obras: ob, employees: emp_, systemCriteria: sc } = await import("../drizzle/schema");
+      // 1. Alocação ativa (ou alocação no mês de referência)
+      const allocs = await db.select({
+        id: of_.id, obraId: of_.obraId, companyId: of_.companyId,
+        insalubridadeOverride: of_.insalubridadeOverride,
+        periculosidadeOverride: of_.periculosidadeOverride,
+        adicionalEscolhido: of_.adicionalEscolhido,
+      }).from(of_).where(and(eq(of_.employeeId, input.employeeId), eq(of_.isActive, 1)));
+      if (allocs.length === 0) return null;
+      const alloc = allocs[0];
+      // 2. Dados da obra
+      const obraRows = await db.select({
+        insalubridadeGrau: ob.insalubridadeGrau, periculosidade: ob.periculosidade,
+        adicionalNoturnoAtivo: ob.adicionalNoturnoAtivo,
+      }).from(ob).where(eq(ob.id, alloc.obraId));
+      if (obraRows.length === 0) return null;
+      const obra = obraRows[0];
+      // 3. Dados do funcionário (salário)
+      const empRows = await db.select({ salario: emp_.salario }).from(emp_).where(eq(emp_.id, input.employeeId));
+      const salarioBase = empRows.length > 0 ? parseFloat(empRows[0].salario ?? "0") || 0 : 0;
+      // 4. Salário mínimo (system_criteria)
+      const scRows = await db.select({ valor: sc.valor }).from(sc).where(and(
+        eq(sc.companyId, input.companyId),
+        eq(sc.chave, "salario_minimo"),
+      ));
+      const salarioMinimo = scRows.length > 0 ? parseFloat(scRows[0].valor) || 1518 : 1518;
+      // 5. Resolver overrides
+      const insaGrauEfetivo = (alloc.insalubridadeOverride === 'herda' || !alloc.insalubridadeOverride)
+        ? (obra.insalubridadeGrau ?? 'none')
+        : alloc.insalubridadeOverride === 'none' ? 'none' : alloc.insalubridadeOverride;
+      const periAtivo = (alloc.periculosidadeOverride === 'herda' || !alloc.periculosidadeOverride)
+        ? (obra.periculosidade === 1)
+        : alloc.periculosidadeOverride === 'sim';
+      const notAtivo = obra.adicionalNoturnoAtivo === 1;
+      // 6. Calcular valores (CLT Art. 192/193/73)
+      const grauPct: Record<string, number> = { minimo: 0.10, medio: 0.20, maximo: 0.40, none: 0 };
+      const insalubridadeValor = insaGrauEfetivo !== 'none' ? salarioMinimo * (grauPct[insaGrauEfetivo] ?? 0) : 0;
+      const periculosidadeValor = periAtivo ? salarioBase * 0.30 : 0;
+      // Noturno: estimativa — 20% sobre valor de 1 hora noturna (simplificado, sem horas reais nesse cálculo)
+      const salarioHora = salarioBase / 220;
+      const adicionalNoturnoEstimado = notAtivo ? salarioHora * 1.20 : 0; // valor/hora adicional
+      // 7. Determinar adicional automático (mais vantajoso; não acumulam entre si — CLT Art. 193 §2)
+      let adicionalSugerido: 'insalubridade' | 'periculosidade' | 'nenhum' = 'nenhum';
+      if (insalubridadeValor > 0 && periculosidadeValor > 0)
+        adicionalSugerido = insalubridadeValor >= periculosidadeValor ? 'insalubridade' : 'periculosidade';
+      else if (insalubridadeValor > 0) adicionalSugerido = 'insalubridade';
+      else if (periculosidadeValor > 0) adicionalSugerido = 'periculosidade';
+      const escolha = alloc.adicionalEscolhido ?? 'auto';
+      const adicionalFinal = escolha === 'auto' ? adicionalSugerido
+        : escolha === 'insalubridade' ? (insalubridadeValor > 0 ? 'insalubridade' : 'nenhum')
+        : escolha === 'periculosidade' ? (periculosidadeValor > 0 ? 'periculosidade' : 'nenhum')
+        : 'nenhum';
+      const valorPrincipal = adicionalFinal === 'insalubridade' ? insalubridadeValor
+        : adicionalFinal === 'periculosidade' ? periculosidadeValor : 0;
+      // Alerta: funcionário escolheu manualmente o menos vantajoso
+      const escolhaContraClt = (escolha === 'insalubridade' && periculosidadeValor > insalubridadeValor && periculosidadeValor > 0)
+        || (escolha === 'periculosidade' && insalubridadeValor > periculosidadeValor && insalubridadeValor > 0);
+      return {
+        insaGrauEfetivo, periAtivo, notAtivo,
+        insalubridadeValor, periculosidadeValor, adicionalNoturnoEstimado,
+        adicionalSugerido, adicionalFinal, valorPrincipal, salarioMinimo, salarioBase,
+        escolha, escolhaContraClt,
+        obraFuncionariosId: alloc.id,
+        insalubridadeOverride: alloc.insalubridadeOverride ?? 'herda',
+        periculosidadeOverride: alloc.periculosidadeOverride ?? 'herda',
+        adicionalEscolhido: alloc.adicionalEscolhido ?? 'auto',
+      };
+    }),
     // Efetivo atual por obra
     efetivoPorObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEfetivoPorObra(input.companyId, input.companyIds)),
     // Efetivo histórico (evolução mensal)
