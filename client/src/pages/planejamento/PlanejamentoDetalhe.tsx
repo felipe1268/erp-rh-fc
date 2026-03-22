@@ -2524,18 +2524,6 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     ));
   }
 
-  if (loadingAtiv) return (
-    <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
-      <Loader2 className="h-5 w-5 animate-spin" /><span>Carregando cronograma...</span>
-    </div>
-  );
-
-  if (!revisaoAtiva) return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
-      Nenhuma revisão ativa encontrada. Crie uma revisão na aba Revisões.
-    </div>
-  );
-
   const periodoRange = useMemo(
     () => getPeriodoRange(periodoFiltro, intervaloIni, intervaloFim),
     [periodoFiltro, intervaloIni, intervaloFim]
@@ -2544,8 +2532,6 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     if (editando) return linhas;
     if (!periodoRange) return atividades;
     const [ini, fim] = periodoRange;
-    // Inclui atividades cujo início OU fim cai dentro do intervalo
-    // (atividade começa OU termina dentro do período selecionado)
     const matchIds = new Set(
       atividades.filter((a: any) => {
         if (!a.dataInicio) return false;
@@ -2562,6 +2548,18 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     });
     return atividades.filter((a: any) => matchIds.has(a.id) || (a.isGrupo && a.eapCodigo && parentEaps.has(a.eapCodigo)));
   }, [editando, linhas, atividades, periodoRange]);
+
+  if (loadingAtiv) return (
+    <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
+      <Loader2 className="h-5 w-5 animate-spin" /><span>Carregando cronograma...</span>
+    </div>
+  );
+
+  if (!revisaoAtiva) return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
+      Nenhuma revisão ativa encontrada. Crie uma revisão na aba Revisões.
+    </div>
+  );
 
   return (
     <div className="space-y-3">
