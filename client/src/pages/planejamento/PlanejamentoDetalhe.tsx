@@ -8925,17 +8925,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
           {/* Resultado da análise IA */}
           {analisarDesvioMut.isPending && (
-            <div className="px-5 py-4 flex items-center gap-3 text-sm text-slate-600">
-              <img src="/julinho-3d.png" alt="JULINHO" className="h-10 w-10 object-contain shrink-0 drop-shadow" />
-              <div>
-                <div className="flex gap-1 mb-1">
-                  <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="w-2 h-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "300ms" }} />
-                </div>
-                <span className="text-orange-700 font-medium text-xs">JULINHO analisando o desvio e elaborando planos de ação...</span>
-              </div>
-            </div>
+            <JulinhoLoadingBar />
           )}
 
           {analiseDesvio && analiseExpanded && !analisarDesvioMut.isPending && (
@@ -9599,6 +9589,69 @@ function useWeatherForProject(local: string | null | undefined) {
     }).catch(() => {});
   }, [local]);
   return dadosClima;
+}
+
+const JULINHO_STEPS = [
+  { label: "Coletando dados do projeto...", dur: 3000 },
+  { label: "Analisando desvio de prazo...", dur: 4000 },
+  { label: "Identificando grupos críticos...", dur: 5000 },
+  { label: "Calculando impacto no cronograma...", dur: 5000 },
+  { label: "Elaborando planos de ação...", dur: 8000 },
+  { label: "Finalizando relatório...", dur: 0 },
+];
+
+function JulinhoLoadingBar() {
+  const [step, setStep] = React.useState(0);
+  const [barPct, setBarPct] = React.useState(0);
+
+  React.useEffect(() => {
+    if (step >= JULINHO_STEPS.length - 1) return;
+    const dur = JULINHO_STEPS[step].dur;
+    const timer = setTimeout(() => setStep(s => Math.min(s + 1, JULINHO_STEPS.length - 1)), dur);
+    return () => clearTimeout(timer);
+  }, [step]);
+
+  React.useEffect(() => {
+    const totalSteps = JULINHO_STEPS.length;
+    const basePct = (step / totalSteps) * 100;
+    const nextPct = ((step + 1) / totalSteps) * 100;
+    setBarPct(basePct);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const raf = requestAnimationFrame(() => {
+      timeoutId = setTimeout(() => setBarPct(Math.min(nextPct - 2, 95)), 100);
+    });
+    return () => { cancelAnimationFrame(raf); if (timeoutId) clearTimeout(timeoutId); };
+  }, [step]);
+
+  const currentLabel = JULINHO_STEPS[step]?.label ?? "Analisando...";
+
+  return (
+    <div className="px-5 py-4">
+      <div className="flex items-center gap-3 mb-3">
+        <img src="/julinho-3d.png" alt="JULINHO" className="h-10 w-10 object-contain shrink-0 drop-shadow" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold text-orange-800">JULINHO está analisando</span>
+            <span className="flex gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </span>
+          </div>
+          <div className="w-full bg-orange-100 rounded-full h-2 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-500 transition-all duration-[2000ms] ease-out"
+              style={{ width: `${barPct}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-orange-600 mt-1.5 flex items-center gap-1.5">
+            <Loader2 className="h-3 w-3 animate-spin text-orange-400 shrink-0" />
+            {currentLabel}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ReactMarkdownSimple({ text }: { text: string }) {

@@ -4875,4 +4875,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 745,
+    titulo: "Barra de progresso na análise do JULINHO",
+    descricao: "A análise de desvio do JULINHO agora exibe uma barra de progresso animada com etapas detalhadas (coletando dados, analisando desvio, identificando grupos críticos, calculando impacto, elaborando planos de ação, finalizando). Melhora a experiência de espera durante a análise IA. Também inclui melhorias adicionais no CSS de impressão para redução de espaço em branco.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];
