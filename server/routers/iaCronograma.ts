@@ -13,6 +13,7 @@ import {
   planejamentoProjetos,
   planejamentoAvancos,
   lobConfig,
+  orcamentos,
 } from "../../drizzle/schema";
 import { eq, and, or, ilike, desc, sql, isNull } from "drizzle-orm";
 
@@ -724,26 +725,43 @@ Responda com um JSON no formato:
     .mutation(async ({ input }) => {
       const db = await getDb();
 
-      // Carregar base de conhecimento para enriquecer o contexto
-      const conhecimentos = await db.select()
-        .from(iaCronogramaConhecimento)
-        .where(
-          or(
-            eq(iaCronogramaConhecimento.companyId, 0),
-            isNull(iaCronogramaConhecimento.companyId)
-          )
-        )
-        .limit(10);
+      const [conhecimentos, projetoRows] = await Promise.all([
+        db.select()
+          .from(iaCronogramaConhecimento)
+          .where(or(eq(iaCronogramaConhecimento.companyId, 0), isNull(iaCronogramaConhecimento.companyId)))
+          .limit(10),
+        db.select().from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1),
+      ]);
+
+      const proj = projetoRows[0];
+      const valorContrato = proj?.valorContrato ? Number(proj.valorContrato) : 0;
+      const orcId = proj?.orcamentoId;
+
+      let custoTotal = 0;
+      let custoMdo = 0;
+      let custoMat = 0;
+      let tempoObraMeses = 0;
+      if (orcId) {
+        const orcRows = await db.select().from(orcamentos).where(eq(orcamentos.id, orcId)).limit(1);
+        const orc = orcRows[0];
+        if (orc) {
+          custoTotal = orc.totalCusto ? Number(orc.totalCusto) : 0;
+          custoMdo   = orc.totalMdo ? Number(orc.totalMdo) : 0;
+          custoMat   = orc.totalMateriais ? Number(orc.totalMateriais) : 0;
+          tempoObraMeses = orc.tempoObraMeses ?? 0;
+        }
+      }
+
+      const custoMensal = tempoObraMeses > 0 && custoTotal > 0 ? custoTotal / tempoObraMeses : 0;
+      const custoMdoMensal = tempoObraMeses > 0 && custoMdo > 0 ? custoMdo / tempoObraMeses : 0;
 
       const systemPrompt = buildSystemPrompt(conhecimentos);
 
-      // Calcular impacto em dias
       const diasAtraso = input.dataTermino
         ? (() => {
             const termino = new Date(input.dataTermino + "T12:00:00");
             const hoje = new Date(input.semana + "T12:00:00");
             const diasRestantes = Math.max(0, Math.round((termino.getTime() - hoje.getTime()) / 86400000));
-            // Proporção do desvio em dias
             return Math.round(Math.abs(input.desvioFisico) / 100 * diasRestantes);
           })()
         : null;
@@ -752,6 +770,23 @@ Responda com um JSON no formato:
         .slice(0, 8)
         .map(a => `  - ${a.eapCodigo ? `[${a.eapCodigo}] ` : ""}${a.nome}: Prev=${a.previsto.toFixed(1)}%, Real=${a.realizado.toFixed(1)}%, Desvio=${a.desvio.toFixed(1)}pp`)
         .join("\n") || "  (não informadas)";
+
+      const fmtR$ = (v: number) => v > 0 ? `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "não disponível";
+
+      const temFinanceiro = valorContrato > 0 || custoTotal > 0 || tempoObraMeses > 0;
+      const contextoFinanceiro = temFinanceiro ? `
+**Dados financeiros da obra:**
+${valorContrato > 0 ? `- Valor do Contrato: **${fmtR$(valorContrato)}**` : ""}
+${custoTotal > 0 ? `- Custo Orçado Total: **${fmtR$(custoTotal)}**` : ""}
+${custoMdo > 0 && custoTotal > 0 ? `- Custo Mão de Obra Orçado: **${fmtR$(custoMdo)}** (${(custoMdo/custoTotal*100).toFixed(0)}% do custo total)` : custoMdo > 0 ? `- Custo Mão de Obra Orçado: **${fmtR$(custoMdo)}**` : ""}
+${custoMat > 0 ? `- Custo Materiais Orçado: **${fmtR$(custoMat)}**` : ""}
+${tempoObraMeses > 0 ? `- Prazo da Obra: **${tempoObraMeses} meses**` : ""}
+${custoMensal > 0 ? `- Custo Médio Mensal: **${fmtR$(custoMensal)}**` : ""}
+${custoMdoMensal > 0 ? `- Custo MDO Mensal Médio: **${fmtR$(custoMdoMensal)}** (base para HE: +50% hora normal, +100% dom/fer)` : ""}
+IMPORTANTE: Use APENAS os dados financeiros acima para estimar custos. Se algum dado não estiver disponível, declare "estimativa não disponível por falta de dados financeiros" — NÃO invente valores.
+` : `
+IMPORTANTE: Dados financeiros da obra não disponíveis no sistema. Forneça estimativas conceituais com ranges (ex: "entre R$ X e R$ Y") baseadas em benchmarks de mercado para obras similares. Deixe claro que são estimativas de mercado, não dados reais do projeto.
+`;
 
       const userPrompt = `## ALERTA DE DESVIO DE PRAZO — OBRA: ${input.nomeObra}
 
@@ -763,37 +798,50 @@ Responda com um JSON no formato:
 - Desvio Físico: **${input.desvioFisico.toFixed(1)} pp** (ATRASADO)
 - SPI: **${input.spi.toFixed(2)}** ${input.spi < 0.85 ? "🔴 CRÍTICO" : input.spi < 0.95 ? "🟡 ATENÇÃO" : "🟠 MONITORAR"}
 ${diasAtraso !== null ? `- Impacto estimado: **~${diasAtraso} dias de atraso** no prazo contratual` : ""}
-
+${contextoFinanceiro}
 **Atividades com maior desvio negativo:**
 ${atrasadasTxt}
 
 ---
 
-Faça uma análise técnica detalhada deste desvio de prazo e responda EXATAMENTE neste formato:
+Faça uma análise técnica detalhada deste desvio de prazo. Para CADA cenário/plano de ação, ESTIME valores financeiros em R$ com base nos dados da obra acima. Use regras trabalhistas brasileiras para horas extras (CLT: +50% hora normal dias úteis, +100% domingos/feriados).
+
+Responda EXATAMENTE neste formato:
 
 ## ⚠️ Diagnóstico do Desvio
-(2-3 parágrafos explicando as causas prováveis do desvio com base nos dados, o que isso pode acarretar se não for corrigido agora, incluindo impacto no prazo final, nas medições e no faturamento)
+(2-3 parágrafos: causas prováveis, impacto no prazo, medições e faturamento. Quantifique o prejuízo financeiro se nada for feito — ex: "cada semana de atraso representa ~R$ X de faturamento não realizado")
 
-## 📋 Plano de Ação 1 — [Nome do plano: ex. "Aceleração com Horas Extras"]
-**Ações:** (liste 3-4 ações concretas e específicas)
-**Impacto esperado:** (ex: recuperar X% em Y semanas)
-**Recursos adicionais:** (equipamentos e efetivo específicos necessários)
-**Custo adicional estimado:** (estimativa percentual sobre o custo da semana)
+## 📋 Plano de Ação 1 — [Nome: ex. "Aceleração com Horas Extras"]
+**Ações:** (3-4 ações concretas)
+**Impacto esperado:** (recuperar X% em Y semanas)
+**Recursos adicionais:** (equipe, equipamentos)
+**💰 Custo estimado do cenário: R$ XX.XXX,XX** (detalhe: X funcionários × Y horas extras/semana × Z semanas × R$ W/hora = total. Se envolver contratação, incluir custo de mobilização)
+**Prazo de recuperação:** X semanas
 
-## 📋 Plano de Ação 2 — [Nome do plano: ex. "Reprogramação com Reforço de Equipe"]
-**Ações:** (liste 3-4 ações concretas e específicas)
-**Impacto esperado:** (ex: recuperar X% em Y semanas)
-**Recursos adicionais:** (equipamentos e efetivo específicos necessários)
-**Custo adicional estimado:** (estimativa percentual sobre o custo da semana)
+## 📋 Plano de Ação 2 — [Nome: ex. "Reforço de Equipe"]
+**Ações:** (3-4 ações concretas)
+**Impacto esperado:** (recuperar X% em Y semanas)
+**Recursos adicionais:** (equipe, equipamentos)
+**💰 Custo estimado do cenário: R$ XX.XXX,XX** (detalhe o cálculo)
+**Prazo de recuperação:** X semanas
 
-## 📋 Plano de Ação 3 — [Nome do plano: ex. "Revisão de Sequência Construtiva"]
-**Ações:** (liste 3-4 ações concretas e específicas)
-**Impacto esperado:** (ex: recuperar X% em Y semanas)
-**Recursos adicionais:** (equipamentos e efetivo específicos necessários)
-**Custo adicional estimado:** (estimativa percentual sobre o custo da semana)
+## 📋 Plano de Ação 3 — [Nome: ex. "Revisão de Sequência Construtiva"]
+**Ações:** (3-4 ações concretas)
+**Impacto esperado:** (recuperar X% em Y semanas)
+**Recursos adicionais:** (equipe, equipamentos)
+**💰 Custo estimado do cenário: R$ XX.XXX,XX** (detalhe o cálculo)
+**Prazo de recuperação:** X semanas
+
+## 📊 Comparativo Custo × Benefício
+
+| Cenário | Custo Adicional | Prazo Recuperação | Eficiência (R$/sem. recuperada) | Risco |
+|---------|----------------|-------------------|-------------------------------|-------|
+| Plano 1 | R$ ... | X sem | R$ .../sem | Baixo/Médio/Alto |
+| Plano 2 | R$ ... | X sem | R$ .../sem | Baixo/Médio/Alto |
+| Plano 3 | R$ ... | X sem | R$ .../sem | Baixo/Médio/Alto |
 
 ## 🎯 Recomendação do JULINHO
-(1 parágrafo com qual plano você recomenda e por quê, considerando custo-benefício)`;
+(1-2 parágrafos: qual plano é a melhor relação custo×benefício e por quê. Se a combinação de planos for ideal, recomende. Inclua o ROI: "investir R$ X para evitar atraso de Y semanas que custaria R$ Z em multas/faturamento perdido")`;
 
       let analise: string;
       try {
@@ -802,7 +850,7 @@ Faça uma análise técnica detalhada deste desvio de prazo e responda EXATAMENT
             { role: "system", content: systemPrompt },
             { role: "user",   content: userPrompt },
           ],
-          maxTokens: 2000,
+          maxTokens: 3500,
         });
         const raw = result.choices?.[0]?.message?.content;
         analise = typeof raw === "string" ? raw : "Não foi possível gerar análise no momento.";

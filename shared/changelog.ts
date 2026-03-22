@@ -4884,4 +4884,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 746,
+    titulo: "Análise de desvio com estimativa de custos e custo×benefício",
+    descricao: "O JULINHO agora carrega dados financeiros reais do orçamento (valor contrato, custo MDO, custo materiais, prazo obra) e estima valores em R$ para cada cenário sugerido. Inclui cálculos de horas extras pela CLT (+50%/+100%), tabela comparativa custo×benefício com eficiência R$/semana recuperada, e recomendação final com ROI. Tokens ampliados para 3500 para comportar a análise completa.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];
