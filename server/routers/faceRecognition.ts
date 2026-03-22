@@ -71,6 +71,7 @@ export const faceRecognitionRouter = router({
       fotoBase64: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      console.log(`[enrollFace] START empId=${input.employeeId} compId=${input.companyId} hasFoto=${!!input.fotoBase64} descLen=${input.descriptor.length}`);
       const db = (await getDb())!;
       const descriptorJson = JSON.stringify(input.descriptor);
       const userName = ctx.user?.name || 'Sistema';
@@ -105,6 +106,7 @@ export const faceRecognitionRouter = router({
         `);
       }
 
+      console.log(`[enrollFace] SUCCESS empId=${input.employeeId} fotoUrl=${fotoUrl}`);
       return { ok: true, fotoUrl };
     }),
 
