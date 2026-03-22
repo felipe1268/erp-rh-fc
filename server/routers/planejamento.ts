@@ -3055,12 +3055,14 @@ REGRAS TÉCNICAS:
           });
 
           const lastIdx = nn - 1;
+          const lastPlanSemana = allSemanas[allSemanas.length - 1] ?? "";
           const lastDate = new Date(pts[lastIdx].sem + "T12:00:00Z");
           for (let w = 1; w <= 52; w++) {
             const proj = inter + slope * (lastIdx + w);
             if (proj >= totalVenda * 1.05) break;
             const d = new Date(lastDate.getTime() + w * 7 * 86400000);
             const key = toMondayStr(d);
+            if (key > lastPlanSemana) break;
             tendenciaMap.set(key, +Math.max(0, Math.min(totalVenda, proj)).toFixed(2));
           }
         }
@@ -3073,16 +3075,6 @@ REGRAS TÉCNICAS:
         receita: (lastReceitaSemana && p.semana <= lastReceitaSemana) ? (receitaMap.get(p.semana) ?? null) : null,
         tendencia: tendenciaMap.get(p.semana) ?? null,
       }));
-
-      if (tendenciaMap.size > 0) {
-        const lastPonto = pontos[pontos.length - 1]?.semana ?? "";
-        for (const [sem, val] of tendenciaMap) {
-          if (sem > lastPonto) {
-            curvaCompleta.push({ semana: sem, acumulado: null as any, bcwp: null, receita: null, tendencia: val });
-          }
-        }
-        curvaCompleta.sort((a, b) => a.semana.localeCompare(b.semana));
-      }
 
       return { status: "ok" as const, divergencias: [], curva: curvaCompleta, totalVenda };
     }),
