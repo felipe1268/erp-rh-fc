@@ -4830,4 +4830,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 740,
+    titulo: "Estoque por Obra — Escritório Central + Valor Total Geral",
+    descricao: "A tela 'Estoque por Obra' agora exibe o card do Escritório Central (estoque da tabela principal de EPIs) com seus valores respectivos, além de um totalizador geral que soma Central + todas as Obras. Novo endpoint estoqueCentralResumo no backend.",
+    tipo: "melhoria",
+    modulos: "EPI, Estoque",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

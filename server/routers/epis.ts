@@ -1221,6 +1221,21 @@ Exemplos de referência:
       return rows;
     }),
 
+  estoqueCentralResumo: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const rows = await db.select({
+        totalItens: sql<number>`COUNT(CASE WHEN ${epis.quantidadeEstoque} > 0 THEN 1 END)`,
+        totalUnidades: sql<number>`COALESCE(SUM(${epis.quantidadeEstoque}), 0)`,
+        valorTotal: sql<number>`COALESCE(SUM(${epis.quantidadeEstoque} * COALESCE(${epis.valorProduto}, 0)), 0)`,
+      })
+        .from(epis)
+        .where(inArray(epis.companyId, ids));
+      return rows[0] ?? { totalItens: 0, totalUnidades: 0, valorTotal: 0 };
+    }),
+
   // ============================================================
   // TRANSFERÊNCIAS DE ESTOQUE
   // ============================================================
