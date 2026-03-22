@@ -1599,11 +1599,15 @@ export default function Ferias() {
                         if (isNaN(n)) return v;
                         return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                       };
+                      const vF = parseFloat(selectedItem.valorFerias || "0") || 0;
+                      const vT = parseFloat(selectedItem.valorTercoConstitucional || "0") || 0;
+                      const vA = parseFloat(selectedItem.valorAbono || "0") || 0;
+                      const totalCalculado = vF + vT + vA;
                       setEditValores({
                         valorFerias: fmtBRL(selectedItem.valorFerias),
                         valorTerco: fmtBRL(selectedItem.valorTercoConstitucional),
                         valorAbono: fmtBRL(selectedItem.valorAbono),
-                        valorTotal: fmtBRL(selectedItem.valorTotal),
+                        valorTotal: totalCalculado > 0 ? fmtBRL(totalCalculado.toFixed(2)) : fmtBRL(selectedItem.valorTotal),
                       });
                       setEditingValues(true);
                     }}>
