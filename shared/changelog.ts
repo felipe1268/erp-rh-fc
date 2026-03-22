@@ -4911,4 +4911,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 749,
+    titulo: "Auto-importação de atividades do EAP ao criar planejamento",
+    descricao: "Ao criar um projeto de planejamento vinculado a uma obra com orçamento, o sistema agora auto-importa todas as atividades do EAP com peso financeiro calculado (custo item / custo total × 100). Orcamento é vinculado automaticamente ao projeto. Ao salvar atividades com pesos zero, o sistema tenta calcular pesos pelo orçamento (EAP) antes de usar fallback por duração.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

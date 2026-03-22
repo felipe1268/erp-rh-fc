@@ -101,11 +101,17 @@ export const planejamentoRouter = router({
 
       // Regra: a obra DEVE ter orçamento cadastrado
       const [orcamentoVinculado] = await db
-        .select({ id: orcamentos.id })
+        .select({
+          id: orcamentos.id,
+          totalCusto: orcamentos.totalCusto,
+          totalVenda: orcamentos.totalVenda,
+          tempoObraMeses: orcamentos.tempoObraMeses,
+        })
         .from(orcamentos)
         .where(and(
           eq(orcamentos.companyId, input.companyId),
           eq(orcamentos.obraId, input.obraId),
+          sql`${orcamentos.deletedAt} IS NULL`,
         ))
         .limit(1);
       if (!orcamentoVinculado) {
@@ -130,10 +136,12 @@ export const planejamentoRouter = router({
         });
       }
 
+      const orcId = orcamentoVinculado.id;
+
       const [projeto] = await db.insert(planejamentoProjetos).values({
         companyId:             input.companyId,
         obraId:                input.obraId ?? null,
-        orcamentoId:           input.orcamentoId ?? null,
+        orcamentoId:           orcId,
         nome:                  input.nome,
         cliente:               input.cliente ?? null,
         local:                 input.local ?? null,
@@ -145,9 +153,8 @@ export const planejamentoRouter = router({
         descricao:             input.descricao ?? null,
       }).returning();
 
-      // Cria baseline (Rev 00) automaticamente
       const today = new Date().toISOString().split("T")[0];
-      await db.insert(planejamentoRevisoes).values({
+      const [rev] = await db.insert(planejamentoRevisoes).values({
         projetoId:   projeto.id,
         numero:      0,
         descricao:   "Baseline inicial",
@@ -155,7 +162,69 @@ export const planejamentoRouter = router({
         motivo:      "Criação do projeto",
         isBaseline:  true,
         status:      "aprovada",
-      });
+      }).returning();
+
+      try {
+        const eapItens = await db.select({
+          eapCodigo: orcamentoItens.eapCodigo,
+          descricao: orcamentoItens.descricao,
+          nivel:     orcamentoItens.nivel,
+          unidade:   orcamentoItens.unidade,
+          quantidade: orcamentoItens.quantidade,
+          custoTotal: orcamentoItens.custoTotal,
+          ordem:     orcamentoItens.ordem,
+        })
+        .from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, orcId))
+        .orderBy(asc(orcamentoItens.ordem));
+
+        if (eapItens.length > 0) {
+          const totalCusto = parseFloat(orcamentoVinculado.totalCusto ?? "0") || 1;
+
+          const folhas = eapItens.filter(it => {
+            const niv = it.nivel ?? 1;
+            const isGrp = eapItens.some(other =>
+              other.eapCodigo !== it.eapCodigo &&
+              other.eapCodigo?.startsWith(it.eapCodigo + ".") &&
+              (other.nivel ?? 1) === niv + 1
+            );
+            return !isGrp;
+          });
+          const totalCustoFolhas = folhas.reduce((s, it) => s + (parseFloat(it.custoTotal ?? "0") || 0), 0) || totalCusto;
+
+          const ativRows = eapItens.map((it, idx) => {
+            const isGrupo = !folhas.includes(it);
+            const custo = parseFloat(it.custoTotal ?? "0") || 0;
+            const peso = isGrupo ? 0 : (custo / totalCustoFolhas) * 100;
+            return {
+              revisaoId:           rev.id,
+              projetoId:           projeto.id,
+              eapCodigo:           it.eapCodigo ?? "",
+              nome:                it.descricao ?? "",
+              nivel:               it.nivel ?? 1,
+              dataInicio:          null as string | null,
+              dataFim:             null as string | null,
+              duracaoDias:         0,
+              predecessora:        null as string | null,
+              pesoFinanceiro:      peso.toFixed(4),
+              recursoPrincipal:    null as string | null,
+              quantidadePlanejada: it.quantidade ?? "0",
+              unidade:             it.unidade ?? null,
+              ordem:               it.ordem ?? idx,
+              isGrupo,
+              isMarco:             false,
+            };
+          });
+
+          const CHUNK = 100;
+          for (let i = 0; i < ativRows.length; i += CHUNK) {
+            await db.insert(planejamentoAtividades).values(ativRows.slice(i, i + CHUNK));
+          }
+          console.log(`[CriarProjeto] Auto-importou ${ativRows.length} atividades do orçamento #${orcId} (${folhas.length} folhas com peso).`);
+        }
+      } catch (eapErr: any) {
+        console.warn(`[CriarProjeto] Falha ao auto-importar EAP: ${eapErr?.message ?? eapErr}`);
+      }
 
       return projeto;
     }),
@@ -524,13 +593,45 @@ export const planejamentoRouter = router({
 
       const allPesosZero = rows.every(r => parseFloat(r.pesoFinanceiro) === 0 || r.isGrupo);
       if (allPesosZero) {
-        const folhas = rows.filter(r => !r.isGrupo && (r.duracaoDias ?? 0) > 0);
-        const totalDias = folhas.reduce((s, r) => s + (r.duracaoDias ?? 0), 0);
-        if (totalDias > 0) {
-          for (const r of rows) {
-            if (r.isGrupo) { r.pesoFinanceiro = "0"; continue; }
-            const dur = r.duracaoDias ?? 0;
-            r.pesoFinanceiro = String(+((dur / totalDias) * 100).toFixed(4));
+        let pesoCalculado = false;
+
+        const [proj] = await db.select({ orcamentoId: planejamentoProjetos.orcamentoId })
+          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+        if (proj?.orcamentoId) {
+          try {
+            const eapItens = await db.select({
+              eapCodigo: orcamentoItens.eapCodigo,
+              custoTotal: orcamentoItens.custoTotal,
+            }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, proj.orcamentoId));
+
+            if (eapItens.length > 0) {
+              const custoMap = new Map<string, number>();
+              for (const it of eapItens) custoMap.set(it.eapCodigo ?? "", parseFloat(it.custoTotal ?? "0") || 0);
+
+              const folhas = rows.filter(r => !r.isGrupo);
+              const totalCusto = folhas.reduce((s, r) => s + (custoMap.get(r.eapCodigo ?? "") ?? 0), 0);
+
+              if (totalCusto > 0) {
+                for (const r of rows) {
+                  if (r.isGrupo) { r.pesoFinanceiro = "0"; continue; }
+                  const custo = custoMap.get(r.eapCodigo ?? "") ?? 0;
+                  r.pesoFinanceiro = String(+((custo / totalCusto) * 100).toFixed(4));
+                }
+                pesoCalculado = true;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!pesoCalculado) {
+          const folhas = rows.filter(r => !r.isGrupo && (r.duracaoDias ?? 0) > 0);
+          const totalDias = folhas.reduce((s, r) => s + (r.duracaoDias ?? 0), 0);
+          if (totalDias > 0) {
+            for (const r of rows) {
+              if (r.isGrupo) { r.pesoFinanceiro = "0"; continue; }
+              const dur = r.duracaoDias ?? 0;
+              r.pesoFinanceiro = String(+((dur / totalDias) * 100).toFixed(4));
+            }
           }
         }
       }
