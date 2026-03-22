@@ -1256,6 +1256,45 @@ export default function Epis() {
                   searchPlaceholder="Buscar por nome, CPF, matrícula, função..."
                   emptyMessage="Nenhum funcionário encontrado."
                 />
+                {/* FOTO DO FUNCIONÁRIO — confirmação visual da identidade */}
+                {entregaForm.employeeId && (() => {
+                  const empSel = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
+                  if (!empSel) return null;
+                  return (
+                    <div className="mt-2 flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                      {empSel.fotoUrl ? (
+                        <img
+                          src={empSel.fotoUrl}
+                          alt={empSel.nomeCompleto}
+                          className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 border-2 border-white shadow-sm">
+                          <span className="text-xl font-bold text-gray-400">
+                            {empSel.nomeCompleto?.charAt(0)?.toUpperCase() || "?"}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-900 truncate">{empSel.nomeCompleto}</p>
+                        <p className="text-xs text-gray-500 truncate">{empSel.funcao || empSel.cargo || "Sem função"}</p>
+                        {empSel.obraAtualNome && (
+                          <p className="text-xs text-blue-600 mt-0.5 truncate">📍 {empSel.obraAtualNome}</p>
+                        )}
+                        {!empSel.fotoUrl && (
+                          <p className="text-xs text-amber-600 mt-0.5">⚠ Sem foto cadastrada</p>
+                        )}
+                      </div>
+                      {empSel.fotoUrl && (
+                        <div className="flex-shrink-0 text-green-600" title="Identidade confirmada por foto">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               {/* ORIGEM DA ENTREGA */}
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
