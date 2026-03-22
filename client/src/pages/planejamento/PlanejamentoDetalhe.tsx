@@ -9080,7 +9080,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           {!colBloco3B && (
             <>
               {/* KPI strip */}
-              <div className={`grid divide-x divide-slate-100 border-b border-slate-100 ${cfHasFaturado ? "grid-cols-5" : "grid-cols-4"}`}>
+              <div className={`grid divide-x divide-slate-100 border-b border-slate-100 ${cfHasFaturado ? "grid-cols-6" : "grid-cols-4"}`}>
                 <div className="px-4 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Contrato Total</p>
                   <p className="text-base font-bold text-slate-700">{fmt(totalContrato)}</p>
@@ -9093,26 +9093,26 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturamento Realizado (Físico)</p>
                   <p className="text-base font-bold text-emerald-700">{fmt(realAcumFin)}</p>
                 </div>
-                {cfHasFaturado && (
-                  <div className="px-4 py-3 text-center">
-                    <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturado Real</p>
-                    <p className="text-base font-bold" style={{ color: "#7c3aed" }}>{fmt(faturadoAcumulado)}</p>
-                  </div>
-                )}
                 <div className="px-4 py-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">
-                    {cfHasFaturado ? "Fat. vs Físico" : "Desvio Financeiro"}
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Desvio (Prev. − Real.)</p>
+                  <p className={`text-base font-bold ${desvioFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desvioFin >= 0 ? "+" : ""}{fmt(desvioFin)}
                   </p>
-                  {cfHasFaturado && desvioFatVsReal != null ? (
-                    <p className={`text-base font-bold ${desvioFatVsReal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                      {desvioFatVsReal >= 0 ? "+" : ""}{fmt(desvioFatVsReal)}
-                    </p>
-                  ) : (
-                    <p className={`text-base font-bold ${desvioFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                      {desvioFin >= 0 ? "+" : ""}{fmt(desvioFin)}
-                    </p>
-                  )}
                 </div>
+                {cfHasFaturado && (
+                  <>
+                    <div className="px-4 py-3 text-center">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturado Real</p>
+                      <p className="text-base font-bold" style={{ color: "#7c3aed" }}>{fmt(faturadoAcumulado)}</p>
+                    </div>
+                    <div className="px-4 py-3 text-center">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Fat. vs Físico</p>
+                      <p className={`text-base font-bold ${(desvioFatVsReal ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        {(desvioFatVsReal ?? 0) >= 0 ? "+" : ""}{fmt(desvioFatVsReal ?? 0)}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
               {/* Chart */}
               <div className="px-5 py-4" style={{ height: 360 }}>
