@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 724,
+    titulo: "Almoxarifado — Valor unitário, precificação do inventário e correção de estoque",
+    descricao: "Campo 'Valor Unitário (R$)' adicionado ao formulário de item do almoxarifado, com botão de estimativa de preço por IA (modelo de linguagem que analisa nome, unidade e categoria). Tabela ganha duas novas colunas: 'Valor Unit.' e 'Total Estoque' (qtd × valor). Novo KPI 'Valor Total em Estoque' no dashboard. Rodapé da tabela mostra o total dos itens filtrados. Campo 'Corrigir Estoque Atual' no modal de edição permite ajuste direto do saldo sem precisar criar uma movimentação manual.",
+    tipo: "feature",
+    modulos: "Compras / Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 723,
     titulo: "EPIs — Salvar Ficha como PDF digital sem precisar imprimir",
     descricao: "Botão 'Salvar PDF' na ficha de entrega de EPI gera um PDF completo com todos os dados (funcionário, EPI, tabela, política de cobrança, declaração, obrigações NR-6) e as assinaturas digitais embutidas como imagens. O PDF é salvo automaticamente no sistema (S3) e também baixado localmente. O botão 'Ver PDF Salvo' aparece sempre que houver uma ficha salva. O antigo botão 'Upload Assinada' foi removido — o fluxo agora é totalmente digital. Geração programática com jsPDF incluindo stamp de auditoria digital.",
