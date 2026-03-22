@@ -48,8 +48,9 @@ export const faceRecognitionRouter = router({
           efd.employee_id AS "employeeId",
           efd.descriptor,
           e."nomeCompleto",
-          e."numeroInterno",
+          e."codigoInterno",
           e."fotoUrl",
+          e."funcao",
           e."cargo"
         FROM employee_face_descriptors efd
         JOIN employees e ON e.id = efd.employee_id
@@ -57,7 +58,9 @@ export const faceRecognitionRouter = router({
           AND e."deletedAt" IS NULL
       `);
 
-      return Array.isArray(result2) ? result2 : (result2 as any).rows || [];
+      const data2 = Array.isArray(result2) ? result2 : ((result2 as any).rows ?? []);
+      console.log(`[getFaceDescriptors] count=${data2.length}`);
+      return data2;
     }),
 
   enrollFace: protectedProcedure
@@ -98,7 +101,7 @@ export const faceRecognitionRouter = router({
 
       if (fotoUrl) {
         await db.execute(sql`
-          UPDATE employees SET "fotoUrl" = ${fotoUrl} WHERE id = ${input.employeeId} AND ("fotoUrl" IS NULL OR "fotoUrl" = '')
+          UPDATE employees SET "fotoUrl" = ${fotoUrl} WHERE id = ${input.employeeId}
         `);
       }
 
