@@ -812,6 +812,7 @@ export const controleDocumentosRouter = router({
         tipoAssinante: z.enum(["funcionario", "aplicador", "testemunha1", "testemunha2", "testemunha3"]),
         base64Png: z.string(),
         nomeAssinante: z.string().optional(),
+        docAssinante: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
@@ -830,7 +831,12 @@ export const controleDocumentosRouter = router({
           let arr: any[] = [];
           try { arr = JSON.parse(adv?.testemunhas || "[]"); } catch { arr = []; }
           while (arr.length <= idx) arr.push({ nome: "", doc: "" });
-          arr[idx] = { ...arr[idx], assinaturaUrl: url, nome: input.nomeAssinante || arr[idx]?.nome || "" };
+          arr[idx] = {
+            ...arr[idx],
+            assinaturaUrl: url,
+            nome: input.nomeAssinante || arr[idx]?.nome || "",
+            doc: input.docAssinante || arr[idx]?.doc || "",
+          };
           await db.update(warnings).set({ testemunhas: JSON.stringify(arr) } as any).where(eq(warnings.id, input.advertenciaId));
         }
         return { url };

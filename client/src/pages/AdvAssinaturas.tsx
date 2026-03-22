@@ -252,14 +252,31 @@ export default function AdvAssinaturas({
     testemunha3: testemunha3.nome,
   });
 
+  const [cpfInputs, setCpfInputs] = useState({
+    testemunha1: testemunha1.doc || "",
+    testemunha2: testemunha2.doc || "",
+    testemunha3: testemunha3.doc || "",
+  });
+
+  function formatCpf(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+    return digits
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
+  }
+
   function handleSign(tipo: TipoAssinante, dataUrl: string) {
     setSigners(prev => prev.map(s => s.tipo === tipo ? { ...s, salvando: true } : s));
     const signer = signers.find(s => s.tipo === tipo);
+    const docValue = (tipo === "testemunha1" || tipo === "testemunha2" || tipo === "testemunha3")
+      ? cpfInputs[tipo] || undefined : undefined;
     salvarMut.mutate({
       advertenciaId,
       tipoAssinante: tipo,
       base64Png: dataUrl,
       nomeAssinante: signer?.nome,
+      docAssinante: docValue,
     });
   }
 
@@ -281,7 +298,7 @@ export default function AdvAssinaturas({
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PenTool className="h-5 w-5 text-slate-700" />
@@ -339,34 +356,46 @@ export default function AdvAssinaturas({
               return (
                 <div key={tipo} className="space-y-2">
                   {!signer.nomeConfirmado ? (
-                    <div className="rounded-xl border-2 border-slate-200 p-4 space-y-2">
+                    <div className="rounded-xl border-2 border-slate-200 p-4 space-y-3">
                       <div className="flex items-center gap-2 text-slate-500">
                         <Unlock className="h-4 w-4" />
                         <p className="font-medium text-sm">Testemunha {idx + 1}</p>
-                        <p className="text-xs text-slate-400">— Digite o nome para liberar a assinatura</p>
+                        <p className="text-xs text-slate-400">— Preencha os dados para liberar a assinatura</p>
                       </div>
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder={`Nome completo da Testemunha ${idx + 1}`}
-                          value={nomeInputs[tipo]}
-                          onChange={e => setNomeInputs(p => ({ ...p, [tipo]: e.target.value }))}
-                          className="flex-1"
-                          onKeyDown={e => { if (e.key === "Enter") confirmarNome(tipo); }}
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                          onClick={() => confirmarNome(tipo)}
-                        >
-                          <Unlock className="h-3.5 w-3.5 mr-1" /> Liberar
-                        </Button>
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder={`Nome completo da Testemunha ${idx + 1}`}
+                            value={nomeInputs[tipo]}
+                            onChange={e => setNomeInputs(p => ({ ...p, [tipo]: e.target.value }))}
+                            className="flex-1"
+                            onKeyDown={e => { if (e.key === "Enter") confirmarNome(tipo); }}
+                          />
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <Input
+                            placeholder="CPF da Testemunha (opcional)"
+                            value={cpfInputs[tipo]}
+                            onChange={e => setCpfInputs(p => ({ ...p, [tipo]: formatCpf(e.target.value) }))}
+                            className="flex-1"
+                            maxLength={14}
+                            onKeyDown={e => { if (e.key === "Enter") confirmarNome(tipo); }}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 shrink-0"
+                            onClick={() => confirmarNome(tipo)}
+                          >
+                            <Unlock className="h-3.5 w-3.5 mr-1" /> Liberar
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : (
                     <SignaturePadBlock
                       titulo={`Testemunha ${idx + 1} — ${signer.nome}`}
-                      subtitulo="Presenciei a aplicação desta advertência."
+                      subtitulo={cpfInputs[tipo] ? `CPF: ${cpfInputs[tipo]} — Presenciei a aplicação desta advertência.` : "Presenciei a aplicação desta advertência."}
                       cor={cor}
                       locked={false}
                       jaAssinado={!!signer.assinaturaUrl}
