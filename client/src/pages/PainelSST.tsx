@@ -12,7 +12,7 @@ import { trpc } from "@/lib/trpc";
 import {
   Shield, HardHat, HeartPulse, FileWarning, AlertTriangle,
   ChevronRight, BarChart3, ShieldCheck, ClipboardList, Activity,
-  Clock, Users, Search, Filter, X, UserPlus
+  Clock, Users, Search, Filter, X, UserPlus, Camera, Fingerprint
 } from "lucide-react";
 import { formatDateTime } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
@@ -348,6 +348,8 @@ export default function PainelSST() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {[
                     { label: "EPIs", icon: HardHat, path: "/epis", color: "text-emerald-600" },
+                    { label: "Entrega de EPI", icon: Camera, path: "/epi-entrega", color: "text-blue-600" },
+                    { label: "Biometria Facial", icon: Fingerprint, path: "/biometria-facial", color: "text-violet-600" },
                     { label: "ASOs / Documentos", icon: HeartPulse, path: "/controle-documentos", color: "text-red-600" },
                     { label: "CIPA", icon: ShieldCheck, path: "/cipa", color: "text-blue-600" },
                     { label: "Dashboards", icon: BarChart3, path: "/dashboards/epis", color: "text-purple-600" },

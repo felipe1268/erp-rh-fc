@@ -281,10 +281,20 @@ Módulos atualmente registrados (Rev. 394): `rh`, `sst`, `juridico`, `avaliacao`
 - Raw SQL com template literal: `sql\`SELECT ... WHERE "col" = ${variable}\`` — interpolação segura via Drizzle.
 - Para checks de existência: `SELECT EXISTS(SELECT 1 FROM ...)::bool` é mais eficiente que `COUNT(*)`.
 
+#### Módulo SST — Biometria Facial (Rev. 718)
+- Biblioteca: `face-api.js` roda 100% no navegador (sem API externa). Modelos em `client/public/models/`.
+- Modelos usados: `tinyFaceDetector`, `faceLandmark68TinyNet`, `faceRecognitionNet` (~7MB total, carregados uma vez).
+- Tabela: `employee_face_descriptors` (employee_id UNIQUE, descriptor TEXT JSON, foto_capturada_url).
+- `epi_deliveries` ganhou: `biometria_facial_url`, `biometria_capturada_em`, `modo_identificacao`.
+- Rotas: `/epi-entrega` (entrega), `/biometria-facial` (enrollment admin).
+- Router server: `faceRecognition` em `server/routers/faceRecognition.ts`.
+- PDF: `client/src/lib/epiReceiptPdf.ts` usa jsPDF. Foto biométrica = prova legal (Lei 14.063/2020).
+- FaceCaptureCamera: componente reutilizável para ambos os modos (`enroll` / `recognize`).
+
 #### Versioning
 - `shared/version.ts`: `APP_VERSION`, `APP_VERSION_DATE` (DD/MM/YYYY), `APP_VERSION_NUMBER` (número inteiro).
 - `shared/changelog.ts`: campo `tipo` é `'feature' | 'bugfix' | 'melhoria' | 'seguranca' | 'performance'`. **Não** usar `'correcao'` ou `'bug'` — esses valores quebram o NOT NULL do enum.
-- Rev. atual: **716**. Próxima: **717**.
+- Rev. atual: **718**. Próxima: **719**.
 
 #### Design / UI
 - **Usuário prefere design limpo, branco e didático** — sem gradientes coloridos, sem cards com cores vibrantes.

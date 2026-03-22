@@ -1041,6 +1041,9 @@ export const epiDeliveries = pgTable("epi_deliveries", {
         obraId: integer(),
         dataValidade: date("data_validade", { mode: 'string' }),
         assinaturaUrl: text("assinatura_url"),
+        biometriaFacialUrl: text("biometria_facial_url"),
+        biometriaCapturadaEm: timestamp("biometria_capturada_em", { mode: 'string' }),
+        modoIdentificacao: varchar("modo_identificacao", { length: 20 }).default('manual'),
 },
 (table) => [
         index("idx_ed_company").on(table.companyId),
@@ -6046,3 +6049,18 @@ export const medicaoFdRegistros = pgTable("medicao_fd_registros", {
   criadoEm:             timestamp("criado_em").defaultNow(),
   atualizadoEm:         timestamp("atualizado_em").defaultNow(),
 }, (t) => [index("idx_mfd_contrato").on(t.contratoId), index("idx_mfd_company").on(t.companyId)]);
+
+export const employeeFaceDescriptors = pgTable("employee_face_descriptors", {
+  id:             serial("id").primaryKey(),
+  companyId:      integer("company_id").notNull(),
+  employeeId:     integer("employee_id").notNull().unique(),
+  descriptor:     text("descriptor").notNull(),
+  fotoCapturadaUrl: text("foto_capturada_url"),
+  enrolledAt:     timestamp("enrolled_at").defaultNow().notNull(),
+  enrolledBy:     varchar("enrolled_by", { length: 255 }),
+  enrolledByUserId: integer("enrolled_by_user_id"),
+  updatedAt:      timestamp("updated_at").defaultNow(),
+}, (t) => [
+  index("idx_efd_company").on(t.companyId),
+  index("idx_efd_employee").on(t.employeeId),
+]);

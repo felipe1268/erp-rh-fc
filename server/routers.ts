@@ -56,6 +56,7 @@ import { getAvailableTables, getTableStructure, importTableData } from "./router
 import { processosTrabRouter } from "./routers/processosTrabalhistas";
 import { homeDataRouter } from "./routers/homeData";
 import { episRouter } from "./routers/epis";
+import { faceRecognitionRouter } from "./routers/faceRecognition";
 import { menuConfigRouter } from "./routers/menuConfig";
 import { goldenRulesRouter } from "./routers/goldenRules";
 import { visaoPanoramicaRouter } from "./routers/visaoPanoramica";
@@ -126,6 +127,7 @@ export const appRouter = router({
   docs: controleDocumentosRouter,
   home: homeDataRouter,
   epis: episRouter,
+  faceRecognition: faceRecognitionRouter,
   insurance: insuranceRouter,
   menuConfig: menuConfigRouter,
   goldenRules: goldenRulesRouter,

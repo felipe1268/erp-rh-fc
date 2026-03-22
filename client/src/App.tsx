@@ -58,6 +58,8 @@ const RelogiosPonto = lazy(() => import("./pages/RelogiosPonto"));
 const ConvencoesColetivas = lazy(() => import("./pages/ConvencoesColetivas"));
 const ProcessosTrabalhistas = lazy(() => import("./pages/ProcessosTrabalhistas"));
 const Epis = lazy(() => import("./pages/Epis"));
+const EpiEntrega = lazy(() => import("./pages/EpiEntrega"));
+const FaceEnrollment = lazy(() => import("./pages/FaceEnrollment"));
 const Lixeira = lazy(() => import("./pages/Lixeira"));
 const AvisoPrevio = lazy(() => import("./pages/AvisoPrevio"));
 const Ferias = lazy(() => import("./pages/Ferias"));
@@ -236,6 +238,8 @@ function Router() {
         <Route path={"/convencoes-coletivas"} component={ConvencoesColetivas} />
         <Route path={"/processos-trabalhistas"} component={ProcessosTrabalhistas} />
         <Route path={"/epis"} component={Epis} />
+        <Route path={"/epi-entrega"} component={EpiEntrega} />
+        <Route path={"/biometria-facial"} component={FaceEnrollment} />
         <Route path={"/usuarios"} component={() => <MasterOnlyGuard component={Usuarios} />} />
         <Route path={"/grupos-usuarios"} component={() => <MasterOnlyGuard component={GruposUsuarios} />} />
         <Route path={"/auditoria"} component={() => <MasterOnlyGuard component={Auditoria} />} />

@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 718,
+    titulo: "SST — Entrega de EPI com Reconhecimento Facial (NR-6)",
+    descricao: "Novo módulo de biometria facial para identificação de funcionários na entrega de EPIs. Inclui: (1) Cadastro de Biometria: tela de enrollment onde o admin captura o rosto de cada funcionário com a câmera do dispositivo usando IA face-api.js 100% local; (2) Entrega de EPI: fluxo guiado em 4 etapas — identificação (facial/QR/número interno), seleção de EPIs, confirmação e conclusão; (3) Geração de Recibo PDF NR-6 com foto biométrica capturada no momento da entrega como prova legal equivalente à assinatura eletrônica qualificada (Lei 14.063/2020); (4) Fallback offline via número interno do funcionário. Tabela employee_face_descriptors criada para armazenar descritores faciais com segurança.",
+    tipo: "feature",
+    modulos: "SST / EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 717,
     titulo: "Rescisão — Correção retroativa de rescisões existentes (BUG-001)",
     descricao: "Correção retroativa aplicada a todos os registros de aviso prévio com status 'em_andamento' e 'aguardando_pagamento': valorEstimadoTotal e previsaoRescisao agora refletem a contagem real de férias vencidas do banco (vacation_periods). Além disso, as funções CLT de rescisão foram extraídas para módulo utilitário compartilhado (rescisaoCalc.ts), permitindo uso no startup sem dependência circular. A regra de correção retroativa obrigatória foi formalizada na memória permanente do sistema.",
