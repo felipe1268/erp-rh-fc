@@ -8437,53 +8437,64 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           #refis-print-area textarea { border: 0.5pt solid #cbd5e1 !important; font-size: 7pt !important; padding: 3pt !important; width: 100% !important; resize: none !important; display: block !important; min-height: 24pt !important; box-sizing: border-box !important; }
 
           #refis-print-area .recharts-wrapper { break-inside: avoid !important; page-break-inside: avoid !important; }
-          #refis-print-area .recharts-wrapper svg { max-height: 200pt !important; }
 
           .refis-doc-footer {
-            border-top: 0.5pt solid #94a3b8 !important; padding-top: 3pt !important; margin-top: 4pt !important;
-            font-size: 5.5pt !important; color: #64748b !important;
+            border-top: 0.5pt solid #94a3b8 !important; padding-top: 2pt !important; margin-top: 3pt !important;
+            font-size: 5pt !important; color: #64748b !important;
             display: flex !important; justify-content: space-between !important; align-items: center !important;
           }
 
-          #refis-print-area .px-5.py-3 { padding: 3pt 6pt !important; }
-          #refis-print-area .px-5.py-4 { padding: 3pt 6pt !important; }
-          #refis-print-area .px-4.py-3 { padding: 2pt 4pt !important; }
-          #refis-print-area .py-5 { padding-top: 4pt !important; padding-bottom: 4pt !important; }
-          #refis-print-area .py-4 { padding-top: 3pt !important; padding-bottom: 3pt !important; }
-          #refis-print-area .py-3 { padding-top: 2pt !important; padding-bottom: 2pt !important; }
-          #refis-print-area .gap-5 { gap: 3pt !important; }
-          #refis-print-area .gap-4 { gap: 2pt !important; }
-          #refis-print-area .gap-3 { gap: 2pt !important; }
-          #refis-print-area .mb-4 { margin-bottom: 2pt !important; }
-          #refis-print-area .mb-3 { margin-bottom: 2pt !important; }
-          #refis-print-area .mb-2 { margin-bottom: 1pt !important; }
-          #refis-print-area .mt-4 { margin-top: 2pt !important; }
-          #refis-print-area .mt-3 { margin-top: 2pt !important; }
-          #refis-print-area .space-y-4 > * + * { margin-top: 2pt !important; }
-          #refis-print-area .space-y-3 > * + * { margin-top: 2pt !important; }
-          #refis-print-area .space-y-2 > * + * { margin-top: 1pt !important; }
+          #refis-print-area .px-5.py-3 { padding: 2pt 5pt !important; }
+          #refis-print-area .px-5.py-4 { padding: 2pt 5pt !important; }
+          #refis-print-area .px-4.py-3 { padding: 2pt 3pt !important; }
+          #refis-print-area .py-5 { padding-top: 3pt !important; padding-bottom: 3pt !important; }
+          #refis-print-area .py-4 { padding-top: 2pt !important; padding-bottom: 2pt !important; }
+          #refis-print-area .py-3 { padding-top: 1.5pt !important; padding-bottom: 1.5pt !important; }
+          #refis-print-area .gap-5 { gap: 2pt !important; }
+          #refis-print-area .gap-4 { gap: 1.5pt !important; }
+          #refis-print-area .gap-3 { gap: 1pt !important; }
+          #refis-print-area .mb-4 { margin-bottom: 1pt !important; }
+          #refis-print-area .mb-3 { margin-bottom: 1pt !important; }
+          #refis-print-area .mb-2 { margin-bottom: 0.5pt !important; }
+          #refis-print-area .mb-1 { margin-bottom: 0 !important; }
+          #refis-print-area .mt-4 { margin-top: 1pt !important; }
+          #refis-print-area .mt-3 { margin-top: 1pt !important; }
+          #refis-print-area .mt-2 { margin-top: 0.5pt !important; }
+          #refis-print-area .space-y-5 > * + * { margin-top: 2pt !important; }
+          #refis-print-area .space-y-4 > * + * { margin-top: 1.5pt !important; }
+          #refis-print-area .space-y-3 > * + * { margin-top: 1pt !important; }
+          #refis-print-area .space-y-2 > * + * { margin-top: 0.5pt !important; }
 
-          #refis-print-area .text-base { font-size: 8pt !important; }
-          #refis-print-area .text-sm { font-size: 7pt !important; }
-          #refis-print-area .text-xs { font-size: 6.5pt !important; }
-          #refis-print-area .text-lg { font-size: 10pt !important; }
-          #refis-print-area .text-xl { font-size: 11pt !important; }
-          #refis-print-area .text-2xl { font-size: 12pt !important; }
-          #refis-print-area .text-3xl { font-size: 14pt !important; }
-          #refis-print-area .text-\\[10px\\] { font-size: 5.5pt !important; }
-          #refis-print-area .text-\\[11px\\] { font-size: 6pt !important; }
+          #refis-print-area .text-base { font-size: 7pt !important; }
+          #refis-print-area .text-sm { font-size: 6.5pt !important; }
+          #refis-print-area .text-xs { font-size: 6pt !important; }
+          #refis-print-area .text-lg { font-size: 9pt !important; }
+          #refis-print-area .text-xl { font-size: 10pt !important; }
+          #refis-print-area .text-2xl { font-size: 11pt !important; }
+          #refis-print-area .text-3xl { font-size: 12pt !important; }
+          #refis-print-area .text-\\[10px\\] { font-size: 5pt !important; }
+          #refis-print-area .text-\\[11px\\] { font-size: 5.5pt !important; }
 
           #refis-print-area .grid-cols-5 { grid-template-columns: repeat(5, 1fr) !important; }
           #refis-print-area .grid-cols-6 { grid-template-columns: repeat(6, 1fr) !important; }
 
           #refis-print-area .recharts-wrapper,
-          #refis-print-area .recharts-responsive-container { height: 180pt !important; max-height: 180pt !important; }
+          #refis-print-area .recharts-responsive-container { height: 130pt !important; max-height: 130pt !important; }
+          #refis-print-area [style*="height: 360"] { height: 130pt !important; }
+          #refis-print-area [style*="height: 320"] { height: 130pt !important; }
 
           #refis-print-area .no-print { display: none !important; }
 
-          #refis-print-area .p-4 { padding: 4pt !important; }
-          #refis-print-area .p-3 { padding: 3pt !important; }
-          #refis-print-area .px-6 { padding-left: 6pt !important; padding-right: 6pt !important; }
+          #refis-print-area .p-4 { padding: 3pt !important; }
+          #refis-print-area .p-3 { padding: 2pt !important; }
+          #refis-print-area .px-6 { padding-left: 5pt !important; padding-right: 5pt !important; }
+
+          .refis-alert-block .refis-ia-cta { display: none !important; }
+
+          #refis-print-area .refis-block .divide-y > * { border-width: 0.3pt !important; }
+          #refis-print-area .refis-block .divide-x > * { border-width: 0.3pt !important; }
+          #refis-print-area .border-b { border-bottom-width: 0.3pt !important; }
+          #refis-print-area .border { border-width: 0.3pt !important; }
         }
       `}</style>
 
@@ -8832,7 +8843,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 refis-ia-cta">
               {!analiseDesvio && (
                 <Button
                   size="sm"
@@ -8953,7 +8964,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
           {/* Estado inicial — sem análise ainda */}
           {!analiseDesvio && !analisarDesvioMut.isPending && (
-            <div className="px-5 py-4 text-center">
+            <div className="refis-ia-cta px-5 py-4 text-center">
               <img src="/julinho-3d.png" alt="JULINHO" className="h-14 w-14 object-contain mx-auto mb-2 drop-shadow" />
               <p className="text-sm font-medium text-orange-800">Desvio detectado — solicite análise do JULINHO</p>
               <p className="text-xs text-orange-600 mt-1">
