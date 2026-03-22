@@ -8,8 +8,8 @@ const MODELS_URL = "/models";
 export interface FaceMatch {
   employeeId: number;
   nomeCompleto: string;
-  numeroInterno: string;
-  cargo: string;
+  codigoInterno: string;
+  funcao: string;
   fotoUrl: string | null;
   distance: number;
   descriptor: Float32Array;
@@ -18,8 +18,8 @@ export interface FaceMatch {
 export interface KnownFace {
   employeeId: number;
   nomeCompleto: string;
-  numeroInterno: string;
-  cargo: string;
+  codigoInterno: string;
+  funcao: string;
   fotoUrl: string | null;
   descriptor: number[];
 }
@@ -183,8 +183,8 @@ export function FaceCaptureCamera({
                   const match: FaceMatch = {
                     employeeId: emp.employeeId,
                     nomeCompleto: emp.nomeCompleto,
-                    numeroInterno: emp.numeroInterno,
-                    cargo: emp.cargo,
+                    codigoInterno: emp.codigoInterno,
+                    funcao: emp.funcao,
                     fotoUrl: emp.fotoUrl,
                     distance: result.distance,
                     descriptor: det.descriptor,
@@ -258,8 +258,8 @@ export function FaceCaptureCamera({
           const match: FaceMatch = {
             employeeId: emp.employeeId,
             nomeCompleto: emp.nomeCompleto,
-            numeroInterno: emp.numeroInterno,
-            cargo: emp.cargo,
+            codigoInterno: emp.codigoInterno,
+            funcao: emp.funcao,
             fotoUrl: emp.fotoUrl,
             distance: result.distance,
             descriptor: detection.descriptor,
@@ -353,7 +353,7 @@ export function FaceCaptureCamera({
       {matchResult && status === "captured" && (
         <div className="w-full rounded-lg border border-green-200 bg-green-50 p-3 text-sm">
           <p className="font-semibold text-green-800">{matchResult.nomeCompleto}</p>
-          <p className="text-green-700">#{matchResult.numeroInterno} · {matchResult.cargo}</p>
+          <p className="text-green-700">#{matchResult.codigoInterno} · {matchResult.funcao}</p>
           <p className="text-xs text-green-600 mt-1">
             Confiança: {Math.round((1 - matchResult.distance) * 100)}%
           </p>

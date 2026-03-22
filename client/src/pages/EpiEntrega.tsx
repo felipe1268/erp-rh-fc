@@ -106,10 +106,10 @@ export default function EpiEntrega() {
     faceDescriptors.map((f: any) => ({
       employeeId: f.employeeId,
       nomeCompleto: f.nomeCompleto,
-      numeroInterno: f.numeroInterno,
-      cargo: f.cargo,
+      codigoInterno: f.codigoInterno || '',
+      funcao: f.funcao || f.cargo || '',
       fotoUrl: f.fotoUrl,
-      descriptor: JSON.parse(f.descriptor),
+      descriptor: typeof f.descriptor === 'string' ? JSON.parse(f.descriptor) : f.descriptor,
     })),
     [faceDescriptors]
   );
@@ -142,8 +142,8 @@ export default function EpiEntrega() {
     setFuncionario({
       id: match.employeeId,
       nomeCompleto: match.nomeCompleto,
-      numeroInterno: match.numeroInterno,
-      cargo: match.cargo,
+      codigoInterno: match.codigoInterno,
+      funcao: match.funcao,
       fotoUrl: match.fotoUrl,
     });
     setShowCamera(false);
@@ -415,7 +415,7 @@ export default function EpiEntrega() {
             )}
             <div className="flex-1">
               <p className="font-semibold text-green-900">{funcionario.nomeCompleto}</p>
-              <p className="text-xs text-green-700">#{funcionario.numeroInterno} · {funcionario.cargo}</p>
+              <p className="text-xs text-green-700">#{funcionario.codigoInterno} · {funcionario.funcao}</p>
               {idMode === "facial" && (
                 <Badge className="bg-green-100 text-green-700 border-0 text-xs mt-1">
                   <ShieldCheck className="h-3 w-3 mr-1" />
@@ -512,7 +512,7 @@ export default function EpiEntrega() {
               <div className="flex items-center gap-2 text-sm">
                 <User className="h-4 w-4 text-gray-400" />
                 <span className="font-medium">{funcionario.nomeCompleto}</span>
-                <span className="text-gray-400">#{funcionario.numeroInterno}</span>
+                <span className="text-gray-400">#{funcionario.codigoInterno}</span>
               </div>
 
               {obraId && obraId !== "central" && (obras as any[]).find((o: any) => o.id === Number(obraId)) && (
