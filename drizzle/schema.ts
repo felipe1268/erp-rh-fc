@@ -1997,6 +1997,9 @@ export const obraFuncionarios = pgTable("obra_funcionarios", {
         dataFim: date({ mode: 'string' }),
         isActive: smallint().default(1).notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        insalubridadeOverride: varchar({ length: 20 }).default('herda'),
+        periculosidadeOverride: varchar({ length: 10 }).default('herda'),
+        adicionalEscolhido: varchar({ length: 20 }).default('auto'),
 });
 
 export const obraHorasRateio = pgTable("obra_horas_rateio", {
@@ -2090,6 +2093,10 @@ export const obras = pgTable("obras", {
         convencaoId: integer(),
         convencaoDivergencias: text("convencao_divergencias"),
         responsavelId: integer(),
+        insalubridadeGrau: varchar({ length: 20 }).default('none'),
+        periculosidade: smallint().default(0),
+        adicionalNoturnoAtivo: smallint().default(0),
+        condicoesVigenciaInicio: date({ mode: 'string' }),
 },
 (table) => [
         index("idx_obra_company").on(table.companyId),

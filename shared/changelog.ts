@@ -4678,6 +4678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 730,
+    titulo: "Adicionais de Trabalho — Insalubridade, Periculosidade e Noturno por Obra",
+    descricao: "Novo módulo de Condições de Trabalho. Cada obra agora pode cadastrar insalubridade (grau mínimo/médio/máximo — CLT Art. 192), periculosidade (30% sal. base — CLT Art. 193) e adicional noturno (20% horas 22h-5h). A ficha de cadastro/edição da obra ganhou a seção 'Condições de Trabalho' com toggles e seletor de grau, além de data de vigência. Badges de condições aparecem nos cards das obras na listagem. No dialog de alocação de funcionários, ao selecionar uma obra com condições ativas, o sistema exibe automaticamente as condições que os funcionários irão herdar, com aviso especial quando insalubridade e periculosidade coexistem (Art. 193 §2 — sistema sugere o mais vantajoso). Novas colunas criadas: obras(insalubridade_grau, periculosidade, adicional_noturno_ativo, condicoes_vigencia_inicio) e obra_funcionarios(insalubridade_override, periculosidade_override, adicional_escolhido).",
+    tipo: "feature",
+    modulos: "Obras, ObraEfetivo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 729,
     titulo: "Férias — Persistência de Média HE e DSR no banco de dados",
     descricao: "Novas colunas media_he e media_dsr_he na tabela vacation_periods (ColFix aplicado). O formulário 'Editar Valores' agora salva os valores de Média de HE e Média DSR das HE junto com os demais campos ao clicar em Salvar. Ao reabrir o formulário, os valores salvos manualmente são restaurados (prioridade sobre o cálculo automático). O histórico de edições manuais fica preservado independentemente de alterações nos dados de HE.",

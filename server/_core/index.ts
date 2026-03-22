@@ -529,6 +529,20 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_aplicador_url TEXT`);
         console.log("[ColFix] warnings assinatura_funcionario_url + assinatura_aplicador_url Rev.726 OK");
       } catch (e: any) { console.warn("[ColFix] warnings assinaturas:", e?.message ?? e); }
+      // ColFix Rev.730 — Adicionais de trabalho (insalubridade, periculosidade, noturno) em obras e alocações
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS insalubridade_grau VARCHAR(20) DEFAULT 'none'`);
+        await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS periculosidade SMALLINT DEFAULT 0`);
+        await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS adicional_noturno_ativo SMALLINT DEFAULT 0`);
+        await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS condicoes_vigencia_inicio DATE`);
+        await db.execute(sql`ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS insalubridade_override VARCHAR(20) DEFAULT 'herda'`);
+        await db.execute(sql`ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS periculosidade_override VARCHAR(10) DEFAULT 'herda'`);
+        await db.execute(sql`ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS adicional_escolhido VARCHAR(20) DEFAULT 'auto'`);
+        console.log("[ColFix] obras + obra_funcionarios adicionais Rev.730 OK");
+      } catch (e: any) { console.warn("[ColFix] adicionais Rev.730:", e?.message ?? e); }
     });
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));

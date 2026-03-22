@@ -34,6 +34,10 @@ type ObraForm = {
   status: string; cep: string; endereco: string;
   dataInicio: string; dataPrevisaoFim: string; observacoes: string;
   usarConvencaoMatriz: number; convencaoId: number | null;
+  insalubridadeGrau: string;
+  periculosidade: number;
+  adicionalNoturnoAtivo: number;
+  condicoesVigenciaInicio: string;
 };
 
 const emptyForm: ObraForm = {
@@ -44,6 +48,10 @@ const emptyForm: ObraForm = {
   status: "Planejamento", cep: "", endereco: "",
   dataInicio: "", dataPrevisaoFim: "", observacoes: "",
   usarConvencaoMatriz: 1, convencaoId: null,
+  insalubridadeGrau: "none",
+  periculosidade: 0,
+  adicionalNoturnoAtivo: 0,
+  condicoesVigenciaInicio: "",
 };
 
 export default function Obras() {
@@ -194,6 +202,10 @@ export default function Obras() {
       observacoes: obra.observacoes || "",
       usarConvencaoMatriz: obra.usarConvencaoMatriz ?? 1,
       convencaoId: obra.convencaoId ?? null,
+      insalubridadeGrau: obra.insalubridadeGrau || "none",
+      periculosidade: obra.periculosidade ?? 0,
+      adicionalNoturnoAtivo: obra.adicionalNoturnoAtivo ?? 0,
+      condicoesVigenciaInicio: obra.condicoesVigenciaInicio || "",
     });
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
     setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca("");
@@ -383,6 +395,26 @@ export default function Obras() {
                       </div>
                       {getStatusBadge(obra.status)}
                     </div>
+                    {/* Condições de trabalho */}
+                    {(obra.insalubridadeGrau && obra.insalubridadeGrau !== "none") || obra.periculosidade === 1 || obra.adicionalNoturnoAtivo === 1 ? (
+                      <div className="flex flex-wrap gap-1 mb-2 mt-1">
+                        {obra.insalubridadeGrau && obra.insalubridadeGrau !== "none" && (
+                          <Badge variant="outline" className="text-[10px] bg-orange-50 text-orange-700 border-orange-200">
+                            Insalubre ({obra.insalubridadeGrau === "minimo" ? "10%" : obra.insalubridadeGrau === "medio" ? "20%" : "40%"})
+                          </Badge>
+                        )}
+                        {obra.periculosidade === 1 && (
+                          <Badge variant="outline" className="text-[10px] bg-red-50 text-red-700 border-red-200">
+                            Periculosa (30%)
+                          </Badge>
+                        )}
+                        {obra.adicionalNoturnoAtivo === 1 && (
+                          <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200">
+                            Add. Noturno
+                          </Badge>
+                        )}
+                      </div>
+                    ) : null}
                     {/* SNs vinculados */}
                     {activeSns.length > 0 && (
                       <div className="flex flex-wrap gap-1 mb-2">
@@ -894,6 +926,102 @@ export default function Obras() {
             onChangeMatriz={(v) => setForm(f => ({ ...f, usarConvencaoMatriz: v, convencaoId: v === 1 ? null : f.convencaoId }))}
             onChangeConvencao={(id) => setForm(f => ({ ...f, convencaoId: id }))}
           />
+
+          {/* ═══════════ CONDIÇÕES DE TRABALHO ═══════════ */}
+          <div className="mt-6 border border-slate-200 rounded-lg p-4 bg-slate-50">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-5 w-1 bg-orange-400 rounded-full" />
+              <h3 className="font-semibold text-sm text-slate-700">Condições de Trabalho</h3>
+              <span className="text-xs text-slate-400 ml-1">(Insalubridade · Periculosidade · Adicional Noturno)</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Insalubridade */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600 mb-1 block">Insalubridade</Label>
+                <select
+                  value={form.insalubridadeGrau}
+                  onChange={e => setForm(f => ({ ...f, insalubridadeGrau: e.target.value }))}
+                  className="w-full text-sm border border-slate-200 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="none">Não se aplica</option>
+                  <option value="minimo">Grau Mínimo — 10% sal. mín.</option>
+                  <option value="medio">Grau Médio — 20% sal. mín.</option>
+                  <option value="maximo">Grau Máximo — 40% sal. mín.</option>
+                </select>
+                {form.insalubridadeGrau !== "none" && (
+                  <p className="text-xs text-orange-600 mt-1">
+                    ⚠ CLT Art. 192 — Laudo técnico obrigatório
+                  </p>
+                )}
+              </div>
+
+              {/* Periculosidade */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600 mb-1 block">Periculosidade</Label>
+                <div className="flex items-center gap-3 h-9">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, periculosidade: f.periculosidade === 1 ? 0 : 1 }))}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${form.periculosidade === 1 ? "bg-red-500" : "bg-slate-200"}`}
+                  >
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.periculosidade === 1 ? "translate-x-5" : "translate-x-0"}`} />
+                  </button>
+                  <span className={`text-sm font-medium ${form.periculosidade === 1 ? "text-red-600" : "text-slate-400"}`}>
+                    {form.periculosidade === 1 ? "Sim — 30% sal. base" : "Não"}
+                  </span>
+                </div>
+                {form.periculosidade === 1 && form.insalubridadeGrau !== "none" && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    ℹ Ambos ativos — sistema sugere o mais vantajoso por funcionário
+                  </p>
+                )}
+                {form.periculosidade === 1 && (
+                  <p className="text-xs text-orange-600 mt-1">⚠ CLT Art. 193 — Laudo técnico obrigatório</p>
+                )}
+              </div>
+
+              {/* Adicional Noturno */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600 mb-1 block">Adicional Noturno <span className="text-slate-400 font-normal">(22h–5h)</span></Label>
+                <div className="flex items-center gap-3 h-9">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, adicionalNoturnoAtivo: f.adicionalNoturnoAtivo === 1 ? 0 : 1 }))}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${form.adicionalNoturnoAtivo === 1 ? "bg-indigo-500" : "bg-slate-200"}`}
+                  >
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.adicionalNoturnoAtivo === 1 ? "translate-x-5" : "translate-x-0"}`} />
+                  </button>
+                  <span className={`text-sm font-medium ${form.adicionalNoturnoAtivo === 1 ? "text-indigo-600" : "text-slate-400"}`}>
+                    {form.adicionalNoturnoAtivo === 1 ? "Ativo — 20% hora noturna" : "Não"}
+                  </span>
+                </div>
+                {form.adicionalNoturnoAtivo === 1 && (
+                  <p className="text-xs text-slate-500 mt-1">Calculado pelo ponto eletrônico (horas 22h–5h)</p>
+                )}
+              </div>
+            </div>
+
+            {/* Data de vigência */}
+            {(form.insalubridadeGrau !== "none" || form.periculosidade === 1 || form.adicionalNoturnoAtivo === 1) && (
+              <div className="mt-4 pt-3 border-t border-slate-200">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1 block">Vigência das condições a partir de</Label>
+                    <input
+                      type="date"
+                      value={form.condicoesVigenciaInicio}
+                      onChange={e => setForm(f => ({ ...f, condicoesVigenciaInicio: e.target.value }))}
+                      className="text-sm border border-slate-200 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div className="flex-1 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 text-xs text-blue-700">
+                    ℹ O sistema identificará os funcionários alocados nesta obra a partir desta data e gerará alertas para revisão dos meses afetados.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => { setDialogOpen(false); setSaving(false); }}>Cancelar</Button>

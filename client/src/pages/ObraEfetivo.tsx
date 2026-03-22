@@ -958,6 +958,46 @@ export default function ObraEfetivo() {
               </div>
             </div>
 
+            {/* Condições da obra selecionada */}
+            {allocForm.obraId > 0 && (() => {
+              const obraDest = obrasAtivas.find((o: any) => o.id === allocForm.obraId);
+              if (!obraDest) return null;
+              const temIns = obraDest.insalubridadeGrau && obraDest.insalubridadeGrau !== "none";
+              const temPer = obraDest.periculosidade === 1;
+              const temNot = obraDest.adicionalNoturnoAtivo === 1;
+              if (!temIns && !temPer && !temNot) return null;
+              const grauLabel: Record<string, string> = { minimo: "Grau Mínimo (10% sal. mín.)", medio: "Grau Médio (20% sal. mín.)", maximo: "Grau Máximo (40% sal. mín.)" };
+              const ambosAtivos = temIns && temPer;
+              return (
+                <div className="border border-orange-200 bg-orange-50 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-orange-600 font-semibold text-xs">⚠ Condições de Trabalho — {obraDest.nome}</span>
+                  </div>
+                  {temIns && (
+                    <div className="text-xs text-orange-700">
+                      <span className="font-medium">Insalubridade:</span> {grauLabel[obraDest.insalubridadeGrau] || obraDest.insalubridadeGrau}
+                    </div>
+                  )}
+                  {temPer && (
+                    <div className="text-xs text-red-700">
+                      <span className="font-medium">Periculosidade:</span> 30% sobre o salário base
+                    </div>
+                  )}
+                  {temNot && (
+                    <div className="text-xs text-indigo-700">
+                      <span className="font-medium">Adicional Noturno:</span> 20% sobre horas entre 22h–5h (calculado pelo ponto)
+                    </div>
+                  )}
+                  {ambosAtivos && (
+                    <div className="mt-2 pt-2 border-t border-orange-200 text-xs text-amber-800 bg-amber-50 rounded p-2">
+                      ℹ Esta obra tem insalubridade <strong>e</strong> periculosidade ativas. O sistema calculará e sugerirá automaticamente o mais vantajoso para cada funcionário no momento do pagamento (CLT Art. 193 §2).
+                    </div>
+                  )}
+                  <div className="text-[10px] text-orange-500 mt-1">Todos os funcionários alocados herdarão estas condições. O RH poderá ajustar individualmente após a alocação.</div>
+                </div>
+              );
+            })()}
+
             {/* Summary info */}
             {selectedEmployees.length > 0 && allocForm.obraId > 0 && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-4">
