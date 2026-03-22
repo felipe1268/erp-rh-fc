@@ -599,6 +599,33 @@ async function startServer() {
         console.log("[ColFix] obras + obra_funcionarios adicionais Rev.730 OK");
       } catch (e: any) { console.warn("[ColFix] adicionais Rev.730:", e?.message ?? e); }
     });
+    // Rev.738: ColFix — restaurar empresas deletadas que ainda possuem funcionários ativos
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        // Buscar empresas deletadas que possuem funcionários não-deletados
+        const rows = await db.execute(sql`
+          SELECT DISTINCT c.id, c."razaoSocial"
+          FROM companies c
+          INNER JOIN employees e ON e."companyId" = c.id AND e."deletedAt" IS NULL
+          WHERE c."deletedAt" IS NOT NULL
+        `);
+        const lista = (rows as any).rows ?? (rows as any) ?? [];
+        if (!lista.length) {
+          console.log("[ColFix] Empresas com funcionários: todas OK");
+          return;
+        }
+        let restauradas = 0;
+        for (const row of lista) {
+          await db.execute(sql`UPDATE companies SET "deletedAt" = NULL WHERE id = ${row.id}`);
+          restauradas++;
+          console.log(`[ColFix] Empresa ${row.id} (${row.razaoSocial}) restaurada — tinha funcionários ativos`);
+        }
+        console.log(`[ColFix] ${restauradas} empresa(s) restaurada(s) com funcionários ativos`);
+      } catch (e: any) { console.warn("[ColFix] Restaurar empresas:", e?.message ?? e); }
+    });
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
     // Iniciar job de verificação de prazos de rescisão (Art. 477 §6º CLT)
