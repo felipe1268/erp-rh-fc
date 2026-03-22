@@ -87,10 +87,10 @@ export function securityHeaders() {
     // Referrer Policy — não vazar URLs internas
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
-    // Permissions Policy — desabilitar features desnecessárias
+    // Permissions Policy — permitir câmera (biometria facial EPI), desabilitar o resto
     res.setHeader(
       "Permissions-Policy",
-      "camera=(), microphone=(), geolocation=(), payment=()"
+      "camera=(self), microphone=(), geolocation=(), payment=()"
     );
 
     // Strict Transport Security (HSTS) — forçar HTTPS
