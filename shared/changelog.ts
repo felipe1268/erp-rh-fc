@@ -4731,4 +4731,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 732,
+    titulo: "Férias — Acréscimos (bônus/gratificação) passam a compor a base de incidência do INSS",
+    descricao: "O campo 'Bônus / outros' (acréscimos) foi movido para a parte superior da seção de memória de cálculo, antes da tabela INSS. A base de cálculo do INSS passa a ser: Total Bruto (Férias) + Acréscimos. A tabela de faixas progressivas e a fórmula simplificada calculam sobre inssBase = bruto + bonusNum. O valor líquido foi ajustado: liquido = inssBase − INSS − Pensão − Outros + Ajuste (o bônus não é mais somado separadamente ao líquido). Exibição: quando há acréscimo, a linha 'Base de cálculo do INSS' mostra o subtotal e o breakdown (Total Bruto + Bônus = inssBase).",
+    tipo: "bugfix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

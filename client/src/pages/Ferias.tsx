@@ -1953,8 +1953,15 @@ export default function Ferias() {
               </div>
               {/* INSS + Líquido — Memória de Cálculo */}
               {(() => {
+                const parseMoeda = (v: string) => parseFloat((v || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
+                const bonusNum = parseMoeda(bonusValor);
+                const pensaoNum = parseMoeda(pensaoDesconto);
+                const outrosDescNum = parseMoeda(outrosDescontos);
+                const ajusteNum = parseFloat(inssAjuste.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
                 const bruto = parseFloat(selectedItem.valorTotal || "0");
-                if (!bruto) return null;
+                // Acréscimos compõem a base de incidência do INSS
+                const inssBase = bruto + bonusNum;
+                if (!inssBase) return null;
                 // Tabela INSS progressiva 2026 — Portaria Interministerial MPS/MF nº 13/2026 (DOU 09/01/2026)
                 const FAIXAS = [
                   { de: 0,       ate: 1621.00, aliq: 0.075, deducao: 0,      label: "1ª faixa" },
@@ -1963,37 +1970,66 @@ export default function Ferias() {
                   { de: 4354.27, ate: 8475.55, aliq: 0.14,  deducao: 198.49, label: "4ª faixa" },
                 ];
                 const TETO_BASE = 8475.55;
-                // Calcula INSS faixa a faixa (progressivo) e valida com "parcela a deduzir"
+                // Calcula INSS faixa a faixa (progressivo) sobre inssBase (inclui acréscimos)
                 let inssTotal = 0;
                 const linhas: { label: string; de: number; ate: number; base: number; aliq: number; deducao: number; valor: number; ativa: boolean; inssSimplificado: number }[] = [];
                 let prev = 0;
                 let faixaAtiva = FAIXAS[FAIXAS.length - 1];
-                for (const f of FAIXAS) { if (bruto <= f.ate) { faixaAtiva = f; break; } }
+                for (const f of FAIXAS) { if (inssBase <= f.ate) { faixaAtiva = f; break; } }
                 for (const f of FAIXAS) {
-                  const slice = Math.max(0, Math.min(bruto, f.ate) - prev);
+                  const slice = Math.max(0, Math.min(inssBase, f.ate) - prev);
                   const valor = slice * f.aliq;
-                  const inssSimplificado = f === faixaAtiva ? Math.max(0, bruto * f.aliq - f.deducao) : 0;
+                  const inssSimplificado = f === faixaAtiva ? Math.max(0, inssBase * f.aliq - f.deducao) : 0;
                   linhas.push({ label: f.label, de: f.de, ate: f.ate, base: slice, aliq: f.aliq, deducao: f.deducao, valor, ativa: slice > 0, inssSimplificado });
                   inssTotal += valor;
                   prev = f.ate;
-                  if (bruto <= f.ate) break;
+                  if (inssBase <= f.ate) break;
                 }
                 const INSS_TETO = Math.max(0, TETO_BASE * 0.14 - 198.49); // R$ 988,09
-                if (bruto > TETO_BASE) inssTotal = INSS_TETO;
-                const ajusteNum = parseFloat(inssAjuste.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
-                const parseMoeda = (v: string) => parseFloat((v || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
-                const bonusNum = parseMoeda(bonusValor);
-                const pensaoNum = parseMoeda(pensaoDesconto);
-                const outrosDescNum = parseMoeda(outrosDescontos);
-                const liquido = bruto - inssTotal + bonusNum - pensaoNum - outrosDescNum + ajusteNum;
+                if (inssBase > TETO_BASE) inssTotal = INSS_TETO;
+                const liquido = inssBase - inssTotal - pensaoNum - outrosDescNum + ajusteNum;
                 return (
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
                     <p className="text-xs text-slate-500 uppercase font-semibold">Desconto INSS — Memória de Cálculo (Tabela 2026)</p>
 
-                    {/* Linha de base */}
-                    <div className="flex justify-between text-sm border-b border-slate-200 pb-2">
-                      <span className="text-slate-600 font-medium">Valor Bruto (base de cálculo)</span>
-                      <span className="font-semibold">{formatMoeda(bruto)}</span>
+                    {/* Acréscimos — agora no topo, pois compõem a base INSS */}
+                    <div className="border border-green-200 bg-green-50 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-green-800 uppercase">Acréscimos <span className="normal-case font-normal text-green-700">(incidem no INSS)</span></p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-600 w-24 shrink-0">Bônus / outros:</span>
+                        <Input
+                          className="h-7 text-xs text-right w-28 border-green-300 focus:border-green-500"
+                          value={bonusValor}
+                          onChange={e => setBonusValor(e.target.value)}
+                          placeholder="0,00"
+                        />
+                        <Input
+                          className="h-7 text-xs flex-1 border-green-300 focus:border-green-500"
+                          value={bonusDesc}
+                          onChange={e => setBonusDesc(e.target.value)}
+                          placeholder="Descrição (ex: bônus, gratificação...)"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Linha de base — agora inclui acréscimos */}
+                    <div className="flex flex-col border-b border-slate-200 pb-2 gap-0.5">
+                      {bonusNum > 0 && (
+                        <div className="flex justify-between text-xs text-slate-500">
+                          <span>Total Bruto (férias)</span>
+                          <span>{formatMoeda(bruto)}</span>
+                        </div>
+                      )}
+                      {bonusNum > 0 && (
+                        <div className="flex justify-between text-xs text-green-700">
+                          <span>+ {bonusDesc || "Bônus / acréscimo"}</span>
+                          <span>+ {formatMoeda(bonusNum)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-600 font-medium">Base de cálculo do INSS</span>
+                        <span className="font-semibold">{formatMoeda(inssBase)}</span>
+                      </div>
                     </div>
 
                     {/* Tabela de faixas com parcela a deduzir */}
@@ -2034,7 +2070,7 @@ export default function Ferias() {
                       return (
                         <div className="bg-white border border-slate-200 rounded p-2 text-xs text-slate-600">
                           <span className="font-medium">Fórmula simplificada:</span>{" "}
-                          {formatMoeda(bruto)} × {(fAtiva.aliq * 100).toFixed(1)}% − {formatMoeda(fAtiva.deducao)} = <span className="font-semibold text-red-600">{formatMoeda(Math.max(0, bruto * fAtiva.aliq - fAtiva.deducao))}</span>
+                          {formatMoeda(inssBase)} × {(fAtiva.aliq * 100).toFixed(1)}% − {formatMoeda(fAtiva.deducao)} = <span className="font-semibold text-red-600">{formatMoeda(Math.max(0, inssBase * fAtiva.aliq - fAtiva.deducao))}</span>
                         </div>
                       );
                     })()}
@@ -2044,26 +2080,6 @@ export default function Ferias() {
                       <div className="flex justify-between text-sm font-semibold text-red-700">
                         <span>Total INSS descontado</span>
                         <span>− {formatMoeda(inssTotal)}</span>
-                      </div>
-                    </div>
-
-                    {/* Acréscimos (bônus, etc.) */}
-                    <div className="border border-green-200 bg-green-50 rounded-lg p-3 space-y-2">
-                      <p className="text-xs font-semibold text-green-800 uppercase">Acréscimos</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-600 w-24 shrink-0">Bônus / outros:</span>
-                        <Input
-                          className="h-7 text-xs text-right w-28 border-green-300 focus:border-green-500"
-                          value={bonusValor}
-                          onChange={e => setBonusValor(e.target.value)}
-                          placeholder="0,00"
-                        />
-                        <Input
-                          className="h-7 text-xs flex-1 border-green-300 focus:border-green-500"
-                          value={bonusDesc}
-                          onChange={e => setBonusDesc(e.target.value)}
-                          placeholder="Descrição (ex: bônus, gratificação...)"
-                        />
                       </div>
                     </div>
 
@@ -2111,7 +2127,6 @@ export default function Ferias() {
 
                     {/* Valor Líquido */}
                     <div className="border-t border-slate-200 pt-2 space-y-1">
-                      {bonusNum > 0 && <div className="flex justify-between text-xs text-green-700"><span>+ {bonusDesc || "Bônus"}</span><span>+ {formatMoeda(bonusNum)}</span></div>}
                       {pensaoNum > 0 && <div className="flex justify-between text-xs text-red-600"><span>− Pensão alimentícia</span><span>− {formatMoeda(pensaoNum)}</span></div>}
                       {outrosDescNum > 0 && <div className="flex justify-between text-xs text-red-600"><span>− {outrosDescontosDesc || "Outros descontos"}</span><span>− {formatMoeda(outrosDescNum)}</span></div>}
                       {ajusteNum !== 0 && <div className="flex justify-between text-xs text-amber-700"><span>Ajuste arredondamento</span><span>{ajusteNum > 0 ? "+" : "−"} {formatMoeda(Math.abs(ajusteNum))}</span></div>}
