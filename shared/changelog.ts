@@ -4947,4 +4947,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 753,
+    titulo: "Cronograma não auto-importa EAP do orçamento",
+    descricao: "Ao criar um novo projeto de planejamento, o cronograma agora começa VAZIO. As atividades só são preenchidas quando o usuário importa o arquivo do MS Project. Removida a auto-importação de itens do orçamento que gerava centenas/milhares de atividades sem datas. Limpeza de dados órfãos de projetos deletados.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

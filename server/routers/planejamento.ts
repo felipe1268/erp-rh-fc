@@ -161,67 +161,7 @@ export const planejamentoRouter = router({
         status:      "aprovada",
       }).returning();
 
-      try {
-        const eapItens = await db.select({
-          eapCodigo: orcamentoItens.eapCodigo,
-          descricao: orcamentoItens.descricao,
-          nivel:     orcamentoItens.nivel,
-          unidade:   orcamentoItens.unidade,
-          quantidade: orcamentoItens.quantidade,
-          custoTotal: orcamentoItens.custoTotal,
-          ordem:     orcamentoItens.ordem,
-        })
-        .from(orcamentoItens)
-        .where(eq(orcamentoItens.orcamentoId, orcId))
-        .orderBy(asc(orcamentoItens.ordem));
-
-        if (eapItens.length > 0) {
-          const totalCusto = parseFloat(orcamentoVinculado.totalCusto ?? "0") || 1;
-
-          const folhas = eapItens.filter(it => {
-            const niv = it.nivel ?? 1;
-            const isGrp = eapItens.some(other =>
-              other.eapCodigo !== it.eapCodigo &&
-              other.eapCodigo?.startsWith(it.eapCodigo + ".") &&
-              (other.nivel ?? 1) === niv + 1
-            );
-            return !isGrp;
-          });
-          const totalCustoFolhas = folhas.reduce((s, it) => s + (parseFloat(it.custoTotal ?? "0") || 0), 0) || totalCusto;
-
-          const ativRows = eapItens.map((it, idx) => {
-            const isGrupo = !folhas.includes(it);
-            const custo = parseFloat(it.custoTotal ?? "0") || 0;
-            const peso = isGrupo ? 0 : (custo / totalCustoFolhas) * 100;
-            return {
-              revisaoId:           rev.id,
-              projetoId:           projeto.id,
-              eapCodigo:           it.eapCodigo ?? "",
-              nome:                it.descricao ?? "",
-              nivel:               it.nivel ?? 1,
-              dataInicio:          null as string | null,
-              dataFim:             null as string | null,
-              duracaoDias:         0,
-              predecessora:        null as string | null,
-              pesoFinanceiro:      peso.toFixed(4),
-              recursoPrincipal:    null as string | null,
-              quantidadePlanejada: it.quantidade ?? "0",
-              unidade:             it.unidade ?? null,
-              ordem:               it.ordem ?? idx,
-              isGrupo,
-              isMarco:             false,
-            };
-          });
-
-          const CHUNK = 100;
-          for (let i = 0; i < ativRows.length; i += CHUNK) {
-            await db.insert(planejamentoAtividades).values(ativRows.slice(i, i + CHUNK));
-          }
-          console.log(`[CriarProjeto] Auto-importou ${ativRows.length} atividades do orçamento #${orcId} (${folhas.length} folhas com peso).`);
-        }
-      } catch (eapErr: any) {
-        console.warn(`[CriarProjeto] Falha ao auto-importar EAP: ${eapErr?.message ?? eapErr}`);
-      }
+      console.log(`[CriarProjeto] Projeto #${projeto.id} criado para obra #${input.obraId} com orçamento #${orcId}. Cronograma vazio — aguardando importação do MS Project.`);
 
       return projeto;
     }),
