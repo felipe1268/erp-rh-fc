@@ -4938,4 +4938,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 752,
+    titulo: "Planejamento sem orçamento obrigatório",
+    descricao: "Agora é possível criar um planejamento para qualquer obra, mesmo sem orçamento cadastrado. Se a obra tiver orçamento, a EAP é auto-importada com pesos calculados; se não tiver, o projeto é criado vazio e as atividades podem ser cadastradas manualmente no Cronograma. A Curva S funciona para qualquer projeto que tenha atividades com datas preenchidas.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

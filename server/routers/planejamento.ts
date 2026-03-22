@@ -91,7 +91,6 @@ export const planejamentoRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
 
-      // Regra: obraId obrigatório para criar planejamento
       if (!input.obraId) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -99,7 +98,7 @@ export const planejamentoRouter = router({
         });
       }
 
-      // Regra: a obra DEVE ter orçamento cadastrado
+      // Orçamento é OPCIONAL — auto-vincula se existir, mas permite criar sem
       const [orcamentoVinculado] = await db
         .select({
           id: orcamentos.id,
@@ -113,13 +112,8 @@ export const planejamentoRouter = router({
           eq(orcamentos.obraId, input.obraId),
           sql`${orcamentos.deletedAt} IS NULL`,
         ))
-        .limit(1);
-      if (!orcamentoVinculado) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Não é possível criar um planejamento sem orçamento vinculado. Cadastre primeiro o orçamento da obra.",
-        });
-      }
+        .limit(1)
+        .catch(() => [undefined as any]);
 
       // Regra: 1 planejamento por obra
       const [existe] = await db.select({ id: planejamentoProjetos.id })
@@ -136,7 +130,7 @@ export const planejamentoRouter = router({
         });
       }
 
-      const orcId = orcamentoVinculado.id;
+      const orcId = orcamentoVinculado?.id ?? null;
 
       const [projeto] = await db.insert(planejamentoProjetos).values({
         companyId:             input.companyId,
@@ -164,7 +158,7 @@ export const planejamentoRouter = router({
         status:      "aprovada",
       }).returning();
 
-      try {
+      if (orcId) try {
         const eapItens = await db.select({
           eapCodigo: orcamentoItens.eapCodigo,
           descricao: orcamentoItens.descricao,
@@ -179,7 +173,7 @@ export const planejamentoRouter = router({
         .orderBy(asc(orcamentoItens.ordem));
 
         if (eapItens.length > 0) {
-          const totalCusto = parseFloat(orcamentoVinculado.totalCusto ?? "0") || 1;
+          const totalCusto = parseFloat(orcamentoVinculado?.totalCusto ?? "0") || 1;
 
           const folhas = eapItens.filter(it => {
             const niv = it.nivel ?? 1;
