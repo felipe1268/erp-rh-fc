@@ -8320,11 +8320,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
       {/* Print styles */}
       <style>{`
-        /* ─── REFIS · Layout de Impressão Profissional A4 ────────────────────── */
         @media print {
-          @page { size: A4 ${orientacaoPdf}; margin: 12mm 12mm 14mm 12mm; }
+          @page { size: A4 ${orientacaoPdf}; margin: 8mm 10mm 10mm 10mm; }
 
-          /* Isolação do conteúdo */
           html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden !important; }
           #refis-print-area {
@@ -8339,7 +8337,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             z-index: 99999 !important;
             overflow: visible !important;
             font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important;
-            font-size: 8.5pt !important;
+            font-size: 7.5pt !important;
             color: #1e293b !important;
           }
           #refis-print-area * {
@@ -8349,121 +8347,143 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             color-adjust: exact !important;
           }
 
-          /* Ocultar elementos de tela */
           .refis-no-print { display: none !important; visibility: hidden !important; }
-          /* Mostrar elementos apenas de impressão */
           .refis-print-only { display: flex !important; }
           .refis-print-only-block { display: block !important; }
 
-          /* Espaçamento entre blocos */
-          #refis-print-area .space-y-5 > * + * { margin-top: 5pt !important; }
+          #refis-print-area .space-y-5 > * + * { margin-top: 3pt !important; }
 
-          /* Quebras de página forçadas */
           .refis-break-before { page-break-before: always !important; break-before: always !important; margin-top: 0 !important; }
           .refis-break-avoid  { page-break-inside: avoid !important; break-inside: avoid !important; }
 
-          /* ── Decoração web removida ── */
           #refis-print-area .rounded-xl,
           #refis-print-area .rounded-lg,
-          #refis-print-area .rounded-md { border-radius: 2px !important; }
+          #refis-print-area .rounded-md { border-radius: 1px !important; }
           #refis-print-area .shadow-sm,
           #refis-print-area .shadow-md,
           #refis-print-area .shadow { box-shadow: none !important; }
 
-          /* ── Cabeçalho doc (FC Engenharia · banner) ── */
-          .refis-doc-header { background: #1A3461 !important; color: white !important; margin-bottom: 5pt !important; page-break-after: avoid !important; }
-          .refis-doc-header-inner { display: flex !important; align-items: stretch !important; min-height: 42pt !important; }
+          .refis-doc-header { background: #1A3461 !important; color: white !important; margin-bottom: 3pt !important; page-break-after: avoid !important; }
+          .refis-doc-header-inner { display: flex !important; align-items: stretch !important; min-height: 36pt !important; }
           .refis-doc-header-brand {
-            border-right: 1pt solid rgba(255,255,255,0.22) !important;
-            padding: 7pt 11pt !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 100pt !important;
+            border-right: 0.5pt solid rgba(255,255,255,0.22) !important;
+            padding: 5pt 9pt !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 80pt !important;
           }
           .refis-doc-header-center {
-            flex: 1 !important; padding: 7pt 12pt !important; display: flex !important; flex-direction: column !important; justify-content: center !important;
+            flex: 1 !important; padding: 5pt 10pt !important; display: flex !important; flex-direction: column !important; justify-content: center !important;
           }
           .refis-doc-header-ref {
-            border-left: 1pt solid rgba(255,255,255,0.22) !important;
-            padding: 7pt 11pt !important; text-align: right !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 76pt !important;
+            border-left: 0.5pt solid rgba(255,255,255,0.22) !important;
+            padding: 5pt 9pt !important; text-align: right !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 68pt !important;
           }
 
-          /* ── Container de cada bloco ── */
           .refis-block {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
             border: 0.5pt solid #cbd5e1 !important;
             background: white !important;
-            margin-bottom: 5pt !important;
+            margin-bottom: 3pt !important;
             overflow: visible !important;
           }
-          /* Blocos de etapa (bloco 5) podem quebrar internamente */
           .refis-block-tall { break-inside: auto !important; page-break-inside: auto !important; }
 
-          /* ── BLOCO 1: cabeçalho obra ── */
           #refis-print-area .refis-block .bg-slate-800 {
-            background: #1A3461 !important; padding: 5pt 9pt !important; font-size: 8pt !important;
+            background: #1A3461 !important; padding: 3pt 8pt !important; font-size: 7pt !important;
           }
           #refis-print-area .refis-block .bg-slate-800 .text-slate-300 { color: rgba(255,255,255,0.65) !important; }
           #refis-print-area .refis-block .bg-slate-800 .text-slate-100 { color: rgba(255,255,255,0.95) !important; }
           #refis-print-area .refis-block .bg-slate-50  { background: #f8fafc !important; }
           #refis-print-area .refis-block .bg-slate-100 { background: #f1f5f9 !important; }
           #refis-print-area .refis-block .divide-slate-100 { border-color: #e2e8f0 !important; }
-          /* Grid obra (3 colunas) — NÃO afecta o grid KPI de 4 colunas */
+
           #refis-print-area .sm\\:grid-cols-3 { grid-template-columns: repeat(3, 1fr) !important; }
-          /* Grid KPI (4 colunas) — forçado horizontalmente */
           #refis-print-area .sm\\:grid-cols-4 { grid-template-columns: repeat(4, 1fr) !important; }
 
-          /* ── BLOCO 2: barras + KPIs ── */
-          #refis-print-area .refis-block .bg-slate-100.border-b { background: #f1f5f9 !important; padding: 4pt 8pt !important; font-size: 7.5pt !important; }
-          /* KPI horizontal strip: padding compacto */
-          #refis-print-area .grid.sm\\:grid-cols-4 > div { padding: 5pt 6pt !important; }
-          #refis-print-area .grid.sm\\:grid-cols-4 .text-3xl { font-size: 17pt !important; }
-          /* Barras de progresso */
+          #refis-print-area .refis-block .bg-slate-100.border-b { background: #f1f5f9 !important; padding: 3pt 6pt !important; font-size: 6.5pt !important; }
+          #refis-print-area .grid.sm\\:grid-cols-4 > div { padding: 3pt 4pt !important; }
+          #refis-print-area .grid.sm\\:grid-cols-4 .text-3xl { font-size: 14pt !important; }
+
           #refis-print-area [style*="background: #FFB800"] { background: #FFB800 !important; }
           #refis-print-area [style*="background: #1A3461"] { background: #1A3461 !important; }
           #refis-print-area .bg-emerald-600 { background: #16a34a !important; }
           #refis-print-area .bg-red-500    { background: #ef4444 !important; }
           #refis-print-area .bg-emerald-50 { background: #f0fdf4 !important; }
           #refis-print-area .bg-red-50     { background: #fef2f2 !important; }
-          /* Padding interno das seções de barras */
-          #refis-print-area .px-6.py-5.space-y-5 { padding: 8pt 10pt !important; }
-          #refis-print-area .px-6.py-5.space-y-5 .space-y-5 > * + * { margin-top: 8pt !important; }
 
-          /* ── BLOCO 2B: alerta IA ── */
-          .refis-alert-block { border: 1.5pt solid #dc2626 !important; break-inside: avoid !important; page-break-inside: avoid !important; margin-bottom: 5pt !important; background: white !important; }
+          #refis-print-area .px-6.py-5.space-y-5 { padding: 5pt 8pt !important; }
+          #refis-print-area .px-6.py-5.space-y-5 .space-y-5 > * + * { margin-top: 4pt !important; }
+
+          .refis-alert-block { border: 1pt solid #dc2626 !important; break-inside: avoid !important; page-break-inside: avoid !important; margin-bottom: 3pt !important; background: white !important; }
           #refis-print-area .bg-red-600    { background: #dc2626 !important; }
           #refis-print-area .bg-orange-500 { background: #ea580c !important; }
-          #refis-print-area .rounded-full  { border-radius: 3pt !important; }
-          #refis-print-area .rounded-full.px-3 { font-size: 7pt !important; padding: 2pt 5pt !important; }
+          #refis-print-area .rounded-full  { border-radius: 2pt !important; }
+          #refis-print-area .rounded-full.px-3 { font-size: 6pt !important; padding: 1pt 4pt !important; }
 
-          /* ── BLOCO 5: grupo header escuro ── */
-          #refis-print-area .bg-slate-700 { background: #334155 !important; }
+          #refis-print-area .bg-slate-700 { background: #334155 !important; padding: 2pt 8pt !important; }
           #refis-print-area .bg-slate-700 .text-blue-300    { color: #93c5fd !important; }
           #refis-print-area .bg-slate-700 .text-emerald-300 { color: #6ee7b7 !important; }
           #refis-print-area .bg-slate-700 .text-red-300     { color: #fca5a5 !important; }
 
-          /* ── Faturamento ── */
           #refis-print-area .bg-amber-50   { background: #fffbeb !important; }
           #refis-print-area .bg-blue-50    { background: #eff6ff !important; }
           #refis-print-area .border-amber-200 { border-color: #fde68a !important; }
           #refis-print-area .border-blue-200  { border-color: #bfdbfe !important; }
 
-          /* ── Histórico: tabela compacta ── */
           #refis-print-area .overflow-x-auto { overflow: visible !important; }
-          #refis-print-area table { width: 100% !important; border-collapse: collapse !important; font-size: 7pt !important; }
-          #refis-print-area table th { background: #f1f5f9 !important; border: 0.5pt solid #cbd5e1 !important; padding: 2.5pt 4pt !important; font-size: 6pt !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #475569 !important; }
-          #refis-print-area table td { border: 0.5pt solid #e2e8f0 !important; padding: 2.5pt 4pt !important; }
+          #refis-print-area table { width: 100% !important; border-collapse: collapse !important; font-size: 6.5pt !important; }
+          #refis-print-area table th { background: #f1f5f9 !important; border: 0.5pt solid #cbd5e1 !important; padding: 2pt 3pt !important; font-size: 5.5pt !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #475569 !important; }
+          #refis-print-area table td { border: 0.5pt solid #e2e8f0 !important; padding: 2pt 3pt !important; }
 
-          /* ── Textarea de observações ── */
-          #refis-print-area textarea { border: 0.5pt solid #cbd5e1 !important; font-size: 7.5pt !important; padding: 4pt !important; width: 100% !important; resize: none !important; display: block !important; min-height: 32pt !important; box-sizing: border-box !important; }
+          #refis-print-area textarea { border: 0.5pt solid #cbd5e1 !important; font-size: 7pt !important; padding: 3pt !important; width: 100% !important; resize: none !important; display: block !important; min-height: 24pt !important; box-sizing: border-box !important; }
 
-          /* ── Recharts SVG ── */
           #refis-print-area .recharts-wrapper { break-inside: avoid !important; page-break-inside: avoid !important; }
+          #refis-print-area .recharts-wrapper svg { max-height: 200pt !important; }
 
-          /* ── Rodapé do documento ── */
           .refis-doc-footer {
-            border-top: 0.8pt solid #94a3b8 !important; padding-top: 4pt !important; margin-top: 6pt !important;
-            font-size: 6pt !important; color: #64748b !important;
+            border-top: 0.5pt solid #94a3b8 !important; padding-top: 3pt !important; margin-top: 4pt !important;
+            font-size: 5.5pt !important; color: #64748b !important;
             display: flex !important; justify-content: space-between !important; align-items: center !important;
           }
+
+          #refis-print-area .px-5.py-3 { padding: 3pt 6pt !important; }
+          #refis-print-area .px-5.py-4 { padding: 3pt 6pt !important; }
+          #refis-print-area .px-4.py-3 { padding: 2pt 4pt !important; }
+          #refis-print-area .py-5 { padding-top: 4pt !important; padding-bottom: 4pt !important; }
+          #refis-print-area .py-4 { padding-top: 3pt !important; padding-bottom: 3pt !important; }
+          #refis-print-area .py-3 { padding-top: 2pt !important; padding-bottom: 2pt !important; }
+          #refis-print-area .gap-5 { gap: 3pt !important; }
+          #refis-print-area .gap-4 { gap: 2pt !important; }
+          #refis-print-area .gap-3 { gap: 2pt !important; }
+          #refis-print-area .mb-4 { margin-bottom: 2pt !important; }
+          #refis-print-area .mb-3 { margin-bottom: 2pt !important; }
+          #refis-print-area .mb-2 { margin-bottom: 1pt !important; }
+          #refis-print-area .mt-4 { margin-top: 2pt !important; }
+          #refis-print-area .mt-3 { margin-top: 2pt !important; }
+          #refis-print-area .space-y-4 > * + * { margin-top: 2pt !important; }
+          #refis-print-area .space-y-3 > * + * { margin-top: 2pt !important; }
+          #refis-print-area .space-y-2 > * + * { margin-top: 1pt !important; }
+
+          #refis-print-area .text-base { font-size: 8pt !important; }
+          #refis-print-area .text-sm { font-size: 7pt !important; }
+          #refis-print-area .text-xs { font-size: 6.5pt !important; }
+          #refis-print-area .text-lg { font-size: 10pt !important; }
+          #refis-print-area .text-xl { font-size: 11pt !important; }
+          #refis-print-area .text-2xl { font-size: 12pt !important; }
+          #refis-print-area .text-3xl { font-size: 14pt !important; }
+          #refis-print-area .text-\\[10px\\] { font-size: 5.5pt !important; }
+          #refis-print-area .text-\\[11px\\] { font-size: 6pt !important; }
+
+          #refis-print-area .grid-cols-5 { grid-template-columns: repeat(5, 1fr) !important; }
+          #refis-print-area .grid-cols-6 { grid-template-columns: repeat(6, 1fr) !important; }
+
+          #refis-print-area .recharts-wrapper,
+          #refis-print-area .recharts-responsive-container { height: 180pt !important; max-height: 180pt !important; }
+
+          #refis-print-area .no-print { display: none !important; }
+
+          #refis-print-area .p-4 { padding: 4pt !important; }
+          #refis-print-area .p-3 { padding: 3pt !important; }
+          #refis-print-area .px-6 { padding-left: 6pt !important; padding-right: 6pt !important; }
         }
       `}</style>
 
