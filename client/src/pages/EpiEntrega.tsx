@@ -670,8 +670,9 @@ export default function EpiEntrega() {
             />
             <div className="flex-1 overflow-y-auto space-y-1 border rounded-lg p-1.5 min-h-[200px]">
               {(() => {
-                const all = allEmployees as any[];
-                const filtrados = all.filter((e: any) => {
+                const enrolledIds = new Set((faceDescriptors as any[]).map((f: any) => f.employeeId));
+                const semBio = (allEmployees as any[]).filter((e: any) => !enrolledIds.has(e.id));
+                const filtrados = semBio.filter((e: any) => {
                   if (!enrollSearch.trim()) return true;
                   const lower = enrollSearch.toLowerCase();
                   const cpfClean = e.cpf?.replace(/\D/g, '') || '';
@@ -683,7 +684,7 @@ export default function EpiEntrega() {
                 });
                 if (filtrados.length === 0) return (
                   <p className="text-center text-sm text-gray-400 py-8">
-                    {all.length === 0 ? "Carregando funcionários..." : "Nenhum funcionário encontrado"}
+                    {semBio.length === 0 ? "Todos os funcionários já possuem biometria" : "Nenhum funcionário encontrado"}
                   </p>
                 );
                 return filtrados.map((emp: any) => (
