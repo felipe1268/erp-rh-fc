@@ -2022,9 +2022,12 @@ export default function Epis() {
               </Card>
               {!hideEpiValues && <Card className="border-l-4 border-l-emerald-500 flex-shrink-0 w-[150px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("valorInventario")}>
                 <CardContent className="p-3">
-                  <p className="text-xs text-muted-foreground whitespace-nowrap">Valor Inventário</p>
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">Inventário Total</p>
                   <p className="text-lg font-bold text-emerald-700">
-                    {stats.valorTotalInventario > 0 ? stats.valorTotalInventario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "—"}
+                    {(stats.valorTotalGeral || stats.valorTotalInventario) > 0 ? (stats.valorTotalGeral || stats.valorTotalInventario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "—"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Central: {stats.valorTotalInventario > 0 ? stats.valorTotalInventario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "R$ 0"}
                   </p>
                 </CardContent>
               </Card>}

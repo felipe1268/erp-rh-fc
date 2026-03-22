@@ -546,12 +546,22 @@ export const episRouter = router({
       const caVencido = allEpis.filter(e => e.validadeCa && e.validadeCa < hoje).length;
       const totalEntregas = allDeliveries.length;
 
-      // Valor total do inventário
+      // Valor total do inventário (central)
       const valorTotalInventario = allEpis.reduce((sum, e) => {
         const valor = e.valorProduto ? parseFloat(String(e.valorProduto)) : 0;
         const qtd = e.quantidadeEstoque || 0;
         return sum + (valor * qtd);
       }, 0);
+
+      // Valor em obras
+      const obrasValorRows = await db.select({
+        valorObras: sql<number>`COALESCE(SUM(${epiEstoqueObra.quantidade} * COALESCE(${epis.valorProduto}, 0)), 0)`,
+      })
+        .from(epiEstoqueObra)
+        .leftJoin(epis, eq(epiEstoqueObra.epiId, epis.id))
+        .where(and(inArray(epiEstoqueObra.companyId, ids), sql`${epiEstoqueObra.quantidade} > 0`));
+      const valorObras = parseFloat(String(obrasValorRows[0]?.valorObras || 0));
+      const valorTotalGeral = valorTotalInventario + valorObras;
 
       // Entregas últimos 30 dias
       const ha30dias = new Date();
@@ -669,6 +679,8 @@ export const episRouter = router({
         totalEntregas,
         entregasMes,
         valorTotalInventario,
+        valorObras,
+        valorTotalGeral,
         unidadesEntregues,
         // Analytics expandidos
         porCategoria,
