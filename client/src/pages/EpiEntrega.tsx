@@ -665,32 +665,40 @@ export default function EpiEntrega() {
             />
             <div className="flex-1 overflow-y-auto space-y-1 border rounded-lg p-1.5 min-h-[200px]">
               {(() => {
-                const semBio = (allEmployees as any[]).filter((e: any) => !e.faceId);
-                const filtrados = semBio.filter((e: any) => {
+                const all = allEmployees as any[];
+                const filtrados = all.filter((e: any) => {
                   if (!enrollSearch.trim()) return true;
                   const lower = enrollSearch.toLowerCase();
                   return e.nomeCompleto?.toLowerCase().includes(lower) || e.numeroInterno?.toLowerCase().includes(lower);
                 });
                 if (filtrados.length === 0) return (
                   <p className="text-center text-sm text-gray-400 py-8">
-                    {semBio.length === 0 ? "Todos os funcionários já possuem biometria cadastrada" : "Nenhum funcionário encontrado"}
+                    {all.length === 0 ? "Carregando funcionários..." : "Nenhum funcionário encontrado"}
                   </p>
                 );
-                return filtrados.map((emp: any) => (
-                  <button
-                    key={emp.id}
-                    className={`w-full text-left p-2 rounded-lg border transition-colors ${
-                      enrollEmployee?.id === emp.id ? "border-green-500 bg-green-50" : "border-gray-100 hover:bg-gray-50"
-                    }`}
-                    onClick={() => setEnrollEmployee(emp)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-900">{emp.nomeCompleto}</p>
-                      {enrollEmployee?.id === emp.id && <CheckCircle className="h-4 w-4 text-green-600" />}
-                    </div>
-                    <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
-                  </button>
-                ));
+                return filtrados.map((emp: any) => {
+                  const temBio = !!emp.faceId;
+                  return (
+                    <button
+                      key={emp.id}
+                      className={`w-full text-left p-2 rounded-lg border transition-colors ${
+                        enrollEmployee?.id === emp.id ? "border-green-500 bg-green-50" : temBio ? "border-gray-100 bg-gray-50 opacity-50" : "border-gray-100 hover:bg-gray-50"
+                      }`}
+                      onClick={() => !temBio && setEnrollEmployee(emp)}
+                      disabled={temBio}
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-gray-900">{emp.nomeCompleto}</p>
+                        {temBio ? (
+                          <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Biometria OK</span>
+                        ) : enrollEmployee?.id === emp.id ? (
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
+                    </button>
+                  );
+                });
               })()}
             </div>
             <div className="flex-shrink-0 space-y-2">

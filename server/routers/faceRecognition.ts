@@ -13,7 +13,7 @@ export const faceRecognitionRouter = router({
       const db = (await getDb())!;
       const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
 
-      const rows = await db.execute(sql`
+      const result = await db.execute(sql`
         SELECT
           e.id,
           e."nomeCompleto",
@@ -32,7 +32,9 @@ export const faceRecognitionRouter = router({
         ORDER BY e."nomeCompleto"
       `);
 
-      return (rows as any).rows || [];
+      const data = Array.isArray(result) ? result : (result as any).rows || [];
+      console.log(`[getEnrolledEmployees] isArray=${Array.isArray(result)} hasRows=${!!(result as any).rows} dataLen=${data.length} keys=${Object.keys(result).slice(0,5)}`);
+      return data;
     }),
 
   getFaceDescriptors: protectedProcedure
@@ -41,7 +43,7 @@ export const faceRecognitionRouter = router({
       const db = (await getDb())!;
       const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
 
-      const rows = await db.execute(sql`
+      const result2 = await db.execute(sql`
         SELECT
           efd.employee_id AS "employeeId",
           efd.descriptor,
@@ -55,7 +57,7 @@ export const faceRecognitionRouter = router({
           AND e."deletedAt" IS NULL
       `);
 
-      return (rows as any).rows || [];
+      return Array.isArray(result2) ? result2 : (result2 as any).rows || [];
     }),
 
   enrollFace: protectedProcedure
