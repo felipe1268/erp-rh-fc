@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 716,
+    titulo: "Rescisão — Férias vencidas calculadas com base em períodos reais do banco",
+    descricao: "Bug corrigido: calcularRescisaoCompleta usava fórmula matemática pura (anos completos de serviço) para contar férias vencidas, ignorando períodos já concluídos/pagos registrados no módulo Férias. Agora consulta vacation_periods no banco e conta apenas períodos com status diferente de 'concluida', 'cancelada' e 'em_gozo' que estejam com o concessivo vencido. Impacto: funcionários com múltiplos períodos de férias quitados (ex: Francisco Eudice) não terão mais férias vencidas inflacionadas na rescisão. Correção aplicada em todas as procedures: calcular, comparativo, create, update, recalcularTodos e getById.",
+    tipo: "bugfix",
+    modulos: "Rescisão",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 715,
     titulo: "Férias — Botão editar habilitado para status 'Agendada'",
     descricao: "O botão de editar (lápis) estava visível apenas para férias com status 'pendente', 'vencida' e 'em_gozo'. Adicionado suporte ao status 'agendada', permitindo ajustar as datas de início e fim do gozo após o agendamento.",
