@@ -504,6 +504,18 @@ async function startServer() {
         console.log(`[ColFix] BUG-001 retroativo: ${atualizados}/${avisos.length} rescisão(ões) recalculada(s) com férias reais`);
       } catch (e: any) { console.warn("[ColFix] BUG-001 retroativo:", e?.message ?? e); }
     });
+    // Rev.721: ColFix — colunas de biometria facial em epi_deliveries (Neon DB)
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS biometria_facial_url TEXT`);
+        await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS biometria_capturada_em TIMESTAMP`);
+        await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS modo_identificacao VARCHAR(20) DEFAULT 'manual'`);
+        console.log("[ColFix] epi_deliveries biometria Rev.721 OK");
+      } catch (e: any) { console.warn("[ColFix] epi_deliveries biometria:", e?.message ?? e); }
+    });
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
     // Iniciar job de verificação de prazos de rescisão (Art. 477 §6º CLT)

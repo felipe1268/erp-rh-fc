@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 721,
+    titulo: "EPIs — Bugfix: entrega de EPI falhava por colunas de biometria ausentes no banco de produção",
+    descricao: "ColFix Rev.721: adicionadas colunas biometria_facial_url, biometria_capturada_em e modo_identificacao na tabela epi_deliveries do banco de produção (Neon). O Drizzle ORM inclui automaticamente o valor padrão 'manual' da coluna modo_identificacao em todo INSERT de entrega — sem a coluna, a operação falhava com erro de SQL. O ColFix usa IF NOT EXISTS para ser idempotente.",
+    tipo: "bugfix",
+    modulos: "SST / EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 720,
     titulo: "EPIs — Foto do EPI exibida ao selecionar no formulário de entrega",
     descricao: "No formulário 'Registrar Entrega de EPI', ao selecionar um EPI aparece automaticamente um card com sua foto, CA, estoque disponível e valor unitário. Se não houver foto cadastrada, exibe ícone de capacete. O estoque aparece em verde (disponível) ou vermelho (zerado).",
