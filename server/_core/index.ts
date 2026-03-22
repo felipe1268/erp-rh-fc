@@ -617,6 +617,66 @@ async function startServer() {
           console.log("[ColFix] Limpeza de empresas: OK (nenhuma empresa extra)");
         }
       } catch (e: any) { console.warn("[ColFix] Limpeza empresas:", e?.message ?? e); }
+
+      try {
+        const db2 = await getDb();
+        if (!db2) return;
+        const { sql: sql2 } = await import("drizzle-orm");
+        const orphanProjs = await db2.execute(sql2`
+          SELECT pp.id FROM planejamento_projetos pp
+          LEFT JOIN orcamentos o ON o.id = pp.orcamento_id AND o."deleted_at" IS NULL
+          WHERE pp.orcamento_id IS NOT NULL AND o.id IS NULL
+        `);
+        const orphanIds = (orphanProjs as any).rows?.map((r: any) => r.id) ?? [];
+        if (orphanIds.length > 0) {
+          for (const pid of orphanIds) {
+            await db2.execute(sql2`DELETE FROM planejamento_refis WHERE projeto_id = ${pid}`);
+            await db2.execute(sql2`DELETE FROM planejamento_avancos WHERE projeto_id = ${pid}`);
+            await db2.execute(sql2`DELETE FROM planejamento_medicoes WHERE projeto_id = ${pid}`);
+            await db2.execute(sql2`DELETE FROM planejamento_atividades WHERE projeto_id = ${pid}`);
+            await db2.execute(sql2`DELETE FROM planejamento_revisoes WHERE projeto_id = ${pid}`);
+            await db2.execute(sql2`DELETE FROM ia_cronograma_chat WHERE projeto_id = ${pid}`);
+            await db2.execute(sql2`DELETE FROM ia_cronograma_alertas WHERE projeto_id = ${pid}`);
+            await db2.execute(sql2`DELETE FROM ia_cronograma_cenarios WHERE projeto_id = ${pid}`);
+            await db2.execute(sql2`DELETE FROM ia_cronograma_monitoramento WHERE projeto_id = ${pid}`);
+            await db2.execute(sql2`DELETE FROM planejamento_projetos WHERE id = ${pid}`);
+          }
+          console.log(`[ColFix] ${orphanIds.length} planejamento(s) órfão(s) removido(s) (orçamento deletado)`);
+        }
+
+        const ghostOrcs = await db2.execute(sql2`
+          SELECT o.id FROM orcamentos o WHERE o."deleted_at" IS NOT NULL
+        `);
+        const ghostIds = (ghostOrcs as any).rows?.map((r: any) => r.id) ?? [];
+        if (ghostIds.length > 0) {
+          const childTables = [
+            "orcamento_revisoes", "orcamento_itens", "orcamento_insumos",
+            "orcamento_bdi", "orcamento_secs",
+            "bdi_indiretos", "bdi_fd", "bdi_adm_central",
+            "bdi_despesas_financeiras", "bdi_tributos", "bdi_taxa_comercializacao"
+          ];
+          let allOk = true;
+          const errors: string[] = [];
+          for (const oid of ghostIds) {
+            for (const tbl of childTables) {
+              try {
+                await db2.execute(sql2.raw(`DELETE FROM ${tbl} WHERE "orcamentoId" = ${Number(oid)}`));
+              } catch (tblErr: any) {
+                allOk = false;
+                errors.push(`${tbl}(${oid}): ${tblErr?.message ?? tblErr}`);
+              }
+            }
+          }
+          await db2.execute(sql2`DELETE FROM orcamentos WHERE "deleted_at" IS NOT NULL`);
+          if (errors.length > 0) {
+            console.warn(`[ColFix] ${ghostIds.length} fantasma(s) purgado(s) com ${errors.length} aviso(s): ${errors.slice(0, 3).join("; ")}`);
+          } else {
+            console.log(`[ColFix] ${ghostIds.length} orçamento(s) fantasma(s) purgado(s) definitivamente`);
+          }
+        } else {
+          console.log("[ColFix] Orçamentos/planejamentos fantasmas: nenhum encontrado");
+        }
+      } catch (e: any) { console.warn("[ColFix] Limpeza fantasmas:", e?.message ?? e); }
     });
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));

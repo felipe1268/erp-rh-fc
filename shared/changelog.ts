@@ -4902,4 +4902,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 748,
+    titulo: "Purga definitiva de orçamentos fantasmas + ColFix automático",
+    descricao: "Removidos 16 orçamentos soft-deleted e todos os dados filhos (15.607 itens, 3.115 insumos, 1.255 BDIs). Adicionado ColFix de startup que detecta e remove automaticamente: (1) planejamentos órfãos cujo orçamento foi deletado, (2) orçamentos fantasmas com deleted_at preenchido e seus filhos. Base agora limpa: 0 orçamentos, projeto Hotel do Papa preservado.",
+    tipo: "melhoria",
+    modulos: "Orçamentos,Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];
