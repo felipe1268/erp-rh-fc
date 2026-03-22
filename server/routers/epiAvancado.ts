@@ -782,6 +782,7 @@ export const epiAvancadoRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), deliveryId: z.number().optional(),
       employeeId: z.number(),
       tipo: z.enum(["entrega", "devolucao"]),
+      tipoAssinante: z.enum(["funcionario", "responsavel"]).default("funcionario"),
       assinaturaBase64: z.string(),
       ipAddress: z.string().optional(),
       userAgent: z.string().optional(),
@@ -825,11 +826,17 @@ export const epiAvancadoRouter = router({
         dispositivoInfo: input.dispositivoInfo || null,
       });
 
-      // Also save to delivery record if deliveryId provided
+      // Save to delivery record based on who is signing
       if (input.deliveryId) {
-        await db.update(epiDeliveries).set({
-          assinaturaUrl: url,
-        } as any).where(eq(epiDeliveries.id, input.deliveryId));
+        if (input.tipoAssinante === "responsavel") {
+          await db.update(epiDeliveries).set({
+            assinaturaResponsavelUrl: url,
+          } as any).where(eq(epiDeliveries.id, input.deliveryId));
+        } else {
+          await db.update(epiDeliveries).set({
+            assinaturaUrl: url,
+          } as any).where(eq(epiDeliveries.id, input.deliveryId));
+        }
       }
 
       return { success: true, url, hashSha256 };

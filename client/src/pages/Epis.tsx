@@ -176,6 +176,8 @@ export default function Epis() {
   const [drillDown, setDrillDown] = useState<DrillDownType>(null);
   const [showFichaSignPad, setShowFichaSignPad] = useState(false);
   const [fichaSignature, setFichaSignature] = useState<string | null>(null);
+  const [showResponsavelSignPad, setShowResponsavelSignPad] = useState(false);
+  const [responsavelSignature, setResponsavelSignature] = useState<string | null>(null);
 
   // Queries
   // Quando Construtoras selecionado, companyId=0 mas companyIds tem os IDs do pool
@@ -1756,47 +1758,64 @@ export default function Epis() {
 
             {/* Signature Lines - Digital ou Impressa */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-16 mt-6 sm:mt-12 pt-4 sm:pt-8">
+              {/* Assinatura do Funcionário */}
               <div className="text-center">
-                {fichaDelivery.assinaturaUrl ? (
+                {fichaDelivery.assinaturaUrl || fichaSignature ? (
                   <div>
-                    <img src={fichaDelivery.assinaturaUrl} alt="Assinatura" className="mx-auto h-16 object-contain mb-1" />
+                    <img src={fichaDelivery.assinaturaUrl || fichaSignature!} alt="Assinatura" className="mx-auto h-16 object-contain mb-1" />
                     <div className="border-t border-black pt-1 text-sm">Assinatura do Funcionário</div>
-                    <p className="text-[9px] text-green-600 mt-0.5">Assinatura digital coletada</p>
-                  </div>
-                ) : fichaSignature ? (
-                  <div>
-                    <img src={fichaSignature} alt="Assinatura" className="mx-auto h-16 object-contain mb-1" />
-                    <div className="border-t border-black pt-1 text-sm">Assinatura do Funcionário</div>
-                    <p className="text-[9px] text-green-600 mt-0.5">Assinatura digital coletada</p>
+                    <p className="text-[9px] text-green-600 mt-0.5">✓ Assinatura digital coletada</p>
                   </div>
                 ) : (
                   <div>
+                    <div className="h-16" />
                     <div className="border-t border-black pt-2 text-sm">Assinatura do Funcionário</div>
                   </div>
                 )}
               </div>
+              {/* Assinatura do Responsável */}
               <div className="text-center">
-                <div className="border-t border-black pt-2 text-sm">
-                  Responsável pela Entrega
-                </div>
-                <p className="text-[9px] text-gray-500 mt-0.5">{user?.name || ''}</p>
+                {fichaDelivery.assinaturaResponsavelUrl || responsavelSignature ? (
+                  <div>
+                    <img src={fichaDelivery.assinaturaResponsavelUrl || responsavelSignature!} alt="Assinatura Responsável" className="mx-auto h-16 object-contain mb-1" />
+                    <div className="border-t border-black pt-1 text-sm">Responsável pela Entrega</div>
+                    <p className="text-[9px] text-green-600 mt-0.5">✓ Assinatura digital coletada</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="h-16" />
+                    <div className="border-t border-black pt-2 text-sm">Responsável pela Entrega</div>
+                    <p className="text-[9px] text-gray-500 mt-0.5">{user?.name || ''}</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Botão Assinar Digitalmente - só aparece na tela, não na impressão */}
-            {!fichaDelivery.assinaturaUrl && !fichaSignature && (
-              <div className="mt-4 print:hidden">
+            {/* Botões de Assinatura Digital - só aparece na tela, não na impressão */}
+            <div className="mt-4 print:hidden space-y-2">
+              {!fichaDelivery.assinaturaUrl && !fichaSignature && (
                 <Button
                   className="w-full bg-[#1B2A4A] hover:bg-[#243660] text-white"
                   onClick={() => setShowFichaSignPad(true)}
                 >
-                  <PenTool className="h-4 w-4 mr-2" /> Assinar Digitalmente pelo Celular
+                  <PenTool className="h-4 w-4 mr-2" /> Funcionário Assinar Digitalmente
                 </Button>
-                <p className="text-[10px] text-center text-muted-foreground mt-1">
-                  O funcionário assina na tela do celular/tablet — substitui a ficha de papel
+              )}
+              {!fichaDelivery.assinaturaResponsavelUrl && !responsavelSignature && (
+                <Button
+                  variant="outline"
+                  className="w-full border-orange-400 text-orange-700 hover:bg-orange-50"
+                  onClick={() => setShowResponsavelSignPad(true)}
+                >
+                  <PenTool className="h-4 w-4 mr-2" /> Responsável Assinar Digitalmente
+                </Button>
+              )}
+              {(!fichaDelivery.assinaturaUrl && !fichaSignature) || (!fichaDelivery.assinaturaResponsavelUrl && !responsavelSignature) ? (
+                <p className="text-[10px] text-center text-muted-foreground">
+                  Colete as assinaturas no celular ou tablet — substituem a ficha de papel
                 </p>
-              </div>
-            )}
+              ) : null}
+            </div>
 
             {/* Legal Footer */}
             <div className="mt-6 pt-4 border-t-2 border-[#1B2A4A] text-[10px] text-gray-400 text-center">
@@ -1806,7 +1825,7 @@ export default function Epis() {
           </div>
         </div>
 
-        {/* Overlay de Assinatura Digital */}
+        {/* Overlay de Assinatura Digital — Funcionário */}
         {showFichaSignPad && fichaDelivery && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
             <div className="max-w-lg w-full">
@@ -1815,16 +1834,40 @@ export default function Epis() {
                 employeeName={fichaDelivery.nomeFunc || ''}
                 deliveryId={fichaDelivery.id}
                 tipo="entrega"
+                tipoAssinante="funcionario"
                 epiNome={fichaDelivery.nomeEpi}
                 onComplete={(url) => {
                   setShowFichaSignPad(false);
                   setFichaSignature(url);
-                  // Atualizar o fichaDelivery com a URL da assinatura
                   setFichaDelivery((prev: any) => prev ? { ...prev, assinaturaUrl: url } : prev);
                   deliveriesQ.refetch();
-                  toast.success("Assinatura digital coletada com sucesso!");
+                  toast.success("Assinatura do funcionário coletada com sucesso!");
                 }}
                 onCancel={() => setShowFichaSignPad(false)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Overlay de Assinatura Digital — Responsável pela Entrega */}
+        {showResponsavelSignPad && fichaDelivery && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
+            <div className="max-w-lg w-full">
+              <EpiAssinatura
+                employeeId={fichaDelivery.employeeId}
+                employeeName={fichaDelivery.nomeFunc || ''}
+                deliveryId={fichaDelivery.id}
+                tipo="entrega"
+                tipoAssinante="responsavel"
+                epiNome={fichaDelivery.nomeEpi}
+                onComplete={(url) => {
+                  setShowResponsavelSignPad(false);
+                  setResponsavelSignature(url);
+                  setFichaDelivery((prev: any) => prev ? { ...prev, assinaturaResponsavelUrl: url } : prev);
+                  deliveriesQ.refetch();
+                  toast.success("Assinatura do responsável coletada com sucesso!");
+                }}
+                onCancel={() => setShowResponsavelSignPad(false)}
               />
             </div>
           </div>

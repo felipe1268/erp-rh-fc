@@ -513,7 +513,8 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS biometria_facial_url TEXT`);
         await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS biometria_capturada_em TIMESTAMP`);
         await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS modo_identificacao VARCHAR(20) DEFAULT 'manual'`);
-        console.log("[ColFix] epi_deliveries biometria Rev.721 OK");
+        await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_url TEXT`);
+        console.log("[ColFix] epi_deliveries biometria + assinatura_responsavel Rev.722 OK");
       } catch (e: any) { console.warn("[ColFix] epi_deliveries biometria:", e?.message ?? e); }
     });
     // Iniciar job de verificação automática do DataJud

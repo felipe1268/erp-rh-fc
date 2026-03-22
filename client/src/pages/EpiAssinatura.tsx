@@ -12,17 +12,20 @@ const TERMO_ENTREGA = `Declaro ter recebido os Equipamentos de Proteção Indivi
 
 const TERMO_DEVOLUCAO = `Declaro que devolvi o(s) Equipamento(s) de Proteção Individual (EPIs) acima descritos. Estou ciente de que a não devolução poderá acarretar desconto em minha rescisão conforme Art. 462 da CLT. Confirmo que os itens foram devolvidos nas condições indicadas.`;
 
+const TERMO_RESPONSAVEL = `Declaro, na qualidade de responsável pela entrega, que entreguei os Equipamentos de Proteção Individual (EPIs) descritos neste documento ao funcionário identificado, orientei quanto ao uso correto, finalidade e obrigações legais pertinentes à NR-6 do MTE, e que o mesmo recebeu os itens em perfeitas condições de uso.`;
+
 interface EpiAssinaturaProps {
   employeeId: number;
   employeeName: string;
   deliveryId?: number;
   tipo: "entrega" | "devolucao";
+  tipoAssinante?: "funcionario" | "responsavel";
   epiNome?: string;
   onComplete?: (url: string) => void;
   onCancel?: () => void;
 }
 
-export default function EpiAssinatura({ employeeId, employeeName, deliveryId, tipo, epiNome, onComplete, onCancel }: EpiAssinaturaProps) {
+export default function EpiAssinatura({ employeeId, employeeName, deliveryId, tipo, tipoAssinante = "funcionario", epiNome, onComplete, onCancel }: EpiAssinaturaProps) {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
@@ -33,7 +36,9 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
   const [geoLocation, setGeoLocation] = useState<{ lat: string; lng: string; accuracy: string } | null>(null);
   const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "success" | "denied" | "error">("idle");
 
-  const textoTermo = tipo === "entrega" ? TERMO_ENTREGA : TERMO_DEVOLUCAO;
+  const textoTermo = tipoAssinante === "responsavel"
+    ? TERMO_RESPONSAVEL
+    : tipo === "entrega" ? TERMO_ENTREGA : TERMO_DEVOLUCAO;
 
   const salvarMut = trpc.epiAvancado.salvarAssinatura.useMutation({
     onSuccess: (data) => {
@@ -180,6 +185,7 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
     salvarMut.mutate({ companyId, companyIds, deliveryId,
       employeeId,
       tipo,
+      tipoAssinante,
       assinaturaBase64: dataUrl,
       ipAddress: undefined,
       userAgent: navigator.userAgent,
@@ -191,14 +197,16 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
       textoTermo,
       dispositivoInfo,
     });
-  }, [hasSignature, termoAceito, companyId, deliveryId, employeeId, tipo, salvarMut, geoLocation, textoTermo]);
+  }, [hasSignature, termoAceito, companyId, deliveryId, employeeId, tipo, tipoAssinante, salvarMut, geoLocation, textoTermo]);
 
   return (
-    <Card className="border-2 border-blue-200">
+    <Card className={`border-2 ${tipoAssinante === "responsavel" ? "border-orange-200" : "border-blue-200"}`}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
-          <PenTool className="h-4 w-4 text-blue-600" />
-          Assinatura Digital — {tipo === "entrega" ? "Recebimento" : "Devolução"} de EPI
+          <PenTool className={`h-4 w-4 ${tipoAssinante === "responsavel" ? "text-orange-600" : "text-blue-600"}`} />
+          {tipoAssinante === "responsavel"
+            ? `Assinatura do Responsável — ${tipo === "entrega" ? "Entrega" : "Devolução"} de EPI`
+            : `Assinatura Digital — ${tipo === "entrega" ? "Recebimento" : "Devolução"} de EPI`}
         </CardTitle>
         <div className="flex items-center gap-2 mt-1">
           <Badge variant="outline" className="text-[9px] gap-1">
@@ -211,11 +219,13 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Info do funcionário */}
-        <div className="bg-blue-50 rounded-lg p-3 text-xs space-y-1">
-          <p><strong>Funcionário:</strong> {employeeName}</p>
+        {/* Info */}
+        <div className={`rounded-lg p-3 text-xs space-y-1 ${tipoAssinante === "responsavel" ? "bg-orange-50" : "bg-blue-50"}`}>
+          {tipoAssinante === "responsavel"
+            ? <p><strong>Assinante:</strong> Responsável pela Entrega</p>
+            : <p><strong>Funcionário:</strong> {employeeName}</p>}
           {epiNome && <p><strong>EPI:</strong> {epiNome}</p>}
-          <p><strong>Tipo:</strong> <Badge variant="outline" className="text-[10px]">{tipo === "entrega" ? "Recebimento" : "Devolução"}</Badge></p>
+          <p><strong>Tipo:</strong> <Badge variant="outline" className="text-[10px]">{tipo === "entrega" ? tipoAssinante === "responsavel" ? "Entrega (Responsável)" : "Recebimento" : "Devolução"}</Badge></p>
           <p><strong>Data:</strong> {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR")}</p>
           {geoLocation && (
             <p className="text-green-700"><strong>Localização:</strong> {geoLocation.lat}, {geoLocation.lng} (±{geoLocation.accuracy}m)</p>

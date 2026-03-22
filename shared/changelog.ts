@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 722,
+    titulo: "EPIs — Assinatura digital dupla: funcionário e responsável pela entrega na ficha de EPI",
+    descricao: "Ficha de entrega de EPI (ficha_epi) agora suporta dois pads de assinatura digital: um para o funcionário (recebedor) e outro para o responsável pela entrega (entregador). Cada assinatura tem seu próprio termo legal, hash SHA-256, GPS e auditoria completa. Nova coluna assinatura_responsavel_url adicionada via ColFix no banco de produção. O componente EpiAssinatura ganhou prop tipoAssinante ('funcionario' | 'responsavel') que adapta cor, título e texto do termo. A ficha exibe a imagem de cada assinatura assim que coletada e oculta o botão correspondente.",
+    tipo: "feature",
+    modulos: "SST / EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 721,
     titulo: "EPIs — Bugfix: entrega de EPI falhava por colunas de biometria ausentes no banco de produção",
     descricao: "ColFix Rev.721: adicionadas colunas biometria_facial_url, biometria_capturada_em e modo_identificacao na tabela epi_deliveries do banco de produção (Neon). O Drizzle ORM inclui automaticamente o valor padrão 'manual' da coluna modo_identificacao em todo INSERT de entrega — sem a coluna, a operação falhava com erro de SQL. O ColFix usa IF NOT EXISTS para ser idempotente.",
