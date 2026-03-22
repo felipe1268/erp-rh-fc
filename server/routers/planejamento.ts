@@ -1014,6 +1014,7 @@ export const planejamentoRouter = router({
         }
       }
 
+      console.log(`[getCurvaS] projetoId=${input.projetoId} revisaoId=${input.revisaoId} baselineId=${input.baselineId} → baseline=${curvaBaseline.length}pts planejada=${curvaPlanejada.length}pts realizada=${curvaRealizada.length}pts tendencia=${curvaTendencia.length}pts (atividades=${atividades.length}, folhas=${folhasParaCurva.length})`);
       return { curvaPlanejada, curvaBaseline, curvaRealizada, curvaTendencia };
     }),
 
