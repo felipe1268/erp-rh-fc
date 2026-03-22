@@ -1359,49 +1359,6 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         <CompanyHeader isMobile={isMobile} activeLabel={activeMenuItem?.label ?? "Menu"} />
-        {/* Balão fixo — Funcionários em Aviso Prévio */}
-        {(() => {
-          const avisos = (avisoAtivosQuery.data || []) as any[];
-          if (avisos.length === 0) return null;
-          return (
-            <div className="sticky top-14 z-30 bg-amber-50 border-b border-amber-300 px-4 py-1.5 flex items-center gap-3 shadow-sm">
-              <span className="flex items-center gap-1.5 text-amber-800 font-semibold text-xs shrink-0">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-                {avisos.length} em Aviso Prévio
-              </span>
-              {avisoBannerOpen && (
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 flex-1 min-w-0">
-                  {avisos.map((a: any) => (
-                    <span key={a.id} className="text-xs text-amber-700 whitespace-nowrap">
-                      <span className="font-medium">{a.employeeName}</span>
-                      {a.dataFim && (
-                        <span className="text-amber-500 ml-1">até {new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="ml-auto flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => setLocation('/aviso-previo')}
-                  className="text-[10px] text-amber-700 underline hover:text-amber-900 px-1"
-                >
-                  Ver todos
-                </button>
-                <button
-                  onClick={() => setAvisoBannerOpen(o => !o)}
-                  className="text-amber-600 hover:text-amber-900 p-0.5 rounded"
-                  title={avisoBannerOpen ? "Recolher" : "Expandir"}
-                >
-                  {avisoBannerOpen
-                    ? <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
-                    : <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                  }
-                </button>
-              </div>
-            </div>
-          );
-        })()}
         <main className="flex-1 p-3 sm:p-4 md:p-6">{children}</main>
       </SidebarInset>
     </>
