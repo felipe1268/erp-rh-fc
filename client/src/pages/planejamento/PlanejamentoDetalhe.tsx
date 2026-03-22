@@ -3571,8 +3571,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
       </div>
 
       {/* ── ABA: TRABALHO ─────────────────────────────────────────────────── */}
-      {curvaTipo === "trabalho" && <>
-      {(!curvaData || merged.length === 0) ? (
+      {curvaTipo === "trabalho" && ((!curvaData || merged.length === 0) ? (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
           <TrendingUp className="h-10 w-10 opacity-30" />
           <p className="text-sm">Sem dados suficientes para gerar a Curva S de Trabalho.</p>
@@ -3726,8 +3725,8 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
         <p>🟢 <strong>Tendência</strong>: Projeção baseada no ritmo atual. Indica data estimada de conclusão.</p>
         {revisoesAnteriores.length > 0 && <p>⚙️ <strong>Revisões anteriores</strong>: Ative os botões acima para comparar cronogramas de revisões anteriores.</p>}
       </div>
-      </>)}
-      </>}
+      </>
+      )}
 
       {/* ── ABA: FINANCEIRA ───────────────────────────────────────────────── */}
       {curvaTipo === "financeira" && (() => {
