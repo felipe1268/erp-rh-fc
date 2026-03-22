@@ -154,7 +154,6 @@ const menuSectionsSST: MenuSection[] = [
     items: [
       { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
       { icon: PackageCheck, label: "Entrega de EPI", path: "/epi-entrega" },
-      { icon: ScanFace, label: "Biometria Facial", path: "/biometria-facial" },
       { icon: Warehouse, label: "Estoque por Obra", path: "/epis?tab=estoque_obra" },
       { icon: ClipboardList, label: "Checklists EPI", path: "/epis?tab=checklist" },
       { icon: Ban, label: "Descontos EPI", path: "/epis?tab=descontos" },

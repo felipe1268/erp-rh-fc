@@ -94,7 +94,13 @@ export const faceRecognitionRouter = router({
           updated_at = now()
       `);
 
-      return { ok: true };
+      if (fotoUrl) {
+        await db.execute(sql`
+          UPDATE employees SET "fotoUrl" = ${fotoUrl} WHERE id = ${input.employeeId} AND ("fotoUrl" IS NULL OR "fotoUrl" = '')
+        `);
+      }
+
+      return { ok: true, fotoUrl };
     }),
 
   deleteEnrollment: protectedProcedure

@@ -4839,4 +4839,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 741,
+    titulo: "Entrega EPI — Fluxo Integrado de Identificação e Cadastro Facial",
+    descricao: "Tela de Entrega de EPI redesenhada: busca manual por nome/número + botão Câmera para reconhecimento facial. Na câmera, toggle entre Reconhecer (identifica automaticamente) e Cadastrar Novo (captura foto e vincula a um funcionário). A foto cadastrada vira automaticamente a foto de perfil do funcionário. Removida a tela separada de 'Biometria Facial' do menu SST.",
+    tipo: "melhoria",
+    modulos: "EPI, Reconhecimento Facial",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

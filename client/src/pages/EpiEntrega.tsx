@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { FaceCaptureCamera } from "@/components/FaceCaptureCamera";
@@ -17,13 +17,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Camera, QrCode, Hash, CheckCircle, Plus, Minus, Trash2,
+  Camera, CheckCircle, Plus, Minus, Trash2,
   Package, User, ArrowRight, ArrowLeft, FileText, ShieldCheck,
+  Search, UserPlus, X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateEpiReceiptPdf } from "@/lib/epiReceiptPdf";
 
-type IdMode = "facial" | "qrcode" | "numero";
 type Step = "identificar" | "selecionar" | "confirmar" | "concluido";
 
 interface ItemEntrega {
@@ -38,20 +38,28 @@ interface ItemEntrega {
 export default function EpiEntrega() {
   const { companyId, companyIds } = useCompany();
   const { toast } = useToast();
+  const utils = trpc.useUtils();
 
   const [step, setStep] = useState<Step>("identificar");
-  const [idMode, setIdMode] = useState<IdMode>("facial");
-  const [numeroInterno, setNumeroInterno] = useState("");
   const [funcionario, setFuncionario] = useState<any | null>(null);
   const [biometriaFoto, setBiometriaFoto] = useState<string | null>(null);
   const [obraId, setObraId] = useState<string>("");
   const [itens, setItens] = useState<ItemEntrega[]>([]);
   const [showAddEpi, setShowAddEpi] = useState(false);
   const [epiSearch, setEpiSearch] = useState("");
+  const [idMode, setIdMode] = useState<"facial" | "manual">("manual");
+
+  const [searchText, setSearchText] = useState("");
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraMode, setCameraMode] = useState<"recognize" | "enroll">("recognize");
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const [enrollEmployee, setEnrollEmployee] = useState<any | null>(null);
+  const [enrollDescriptor, setEnrollDescriptor] = useState<Float32Array | null>(null);
+  const [enrollFoto, setEnrollFoto] = useState<string | null>(null);
 
   const { data: faceDescriptors = [] } = trpc.faceRecognition.getFaceDescriptors.useQuery(
     { companyId, companyIds },
-    { enabled: !!companyId && idMode === "facial" }
+    { enabled: !!companyId }
   );
 
   const { data: obras = [] } = trpc.sprint1.obras.list.useQuery(
@@ -64,14 +72,31 @@ export default function EpiEntrega() {
     { enabled: !!companyId }
   );
 
-  const { data: employees = [] } = trpc.faceRecognition.getEnrolledEmployees.useQuery(
+  const { data: allEmployees = [] } = trpc.faceRecognition.getEnrolledEmployees.useQuery(
     { companyId, companyIds },
-    { enabled: !!companyId && idMode === "numero" }
+    { enabled: !!companyId }
   );
 
   const createDelivery = trpc.faceRecognition.createDeliveryWithFace.useMutation({
     onSuccess: () => setStep("concluido"),
     onError: (e) => toast({ title: "Erro ao registrar entrega", description: e.message, variant: "destructive" }),
+  });
+
+  const enrollFaceMutation = trpc.faceRecognition.enrollFace.useMutation({
+    onSuccess: (data) => {
+      toast({ title: "Biometria cadastrada!", description: "A foto do funcionário foi salva como foto de perfil." });
+      utils.faceRecognition.getFaceDescriptors.invalidate();
+      utils.faceRecognition.getEnrolledEmployees.invalidate();
+      if (enrollEmployee) {
+        setFuncionario({ ...enrollEmployee, fotoUrl: data.fotoUrl || enrollEmployee.fotoUrl });
+        setBiometriaFoto(enrollFoto);
+        setIdMode("facial");
+        setShowEnrollDialog(false);
+        setShowCamera(false);
+        setTimeout(() => setStep("selecionar"), 300);
+      }
+    },
+    onError: (e) => toast({ title: "Erro ao cadastrar biometria", description: e.message, variant: "destructive" }),
   });
 
   const knownFaces: KnownFace[] = useMemo(() =>
@@ -86,6 +111,16 @@ export default function EpiEntrega() {
     [faceDescriptors]
   );
 
+  const filteredEmployees = useMemo(() => {
+    if (!searchText.trim()) return allEmployees;
+    const lower = searchText.toLowerCase();
+    return (allEmployees as any[]).filter((e: any) =>
+      e.nomeCompleto?.toLowerCase().includes(lower) ||
+      e.numeroInterno?.toLowerCase().includes(lower) ||
+      e.cargo?.toLowerCase().includes(lower)
+    );
+  }, [allEmployees, searchText]);
+
   const episFiltrados = useMemo(() =>
     episList.filter((e: any) =>
       !epiSearch ||
@@ -97,6 +132,7 @@ export default function EpiEntrega() {
 
   const handleFaceMatch = (match: FaceMatch, foto: string) => {
     setBiometriaFoto(foto);
+    setIdMode("facial");
     setFuncionario({
       id: match.employeeId,
       nomeCompleto: match.nomeCompleto,
@@ -104,19 +140,38 @@ export default function EpiEntrega() {
       cargo: match.cargo,
       fotoUrl: match.fotoUrl,
     });
-    setTimeout(() => setStep("selecionar"), 800);
+    setShowCamera(false);
+    setTimeout(() => setStep("selecionar"), 500);
   };
 
-  const handleBuscarNumero = () => {
-    const emp = (employees as any[]).find(
-      (e: any) => e.numeroInterno === numeroInterno.trim()
-    );
-    if (!emp) {
-      toast({ title: "Funcionário não encontrado", description: "Verifique o número interno.", variant: "destructive" });
-      return;
-    }
+  const handleNoMatch = () => {
+    toast({
+      title: "Rosto não reconhecido",
+      description: "Selecione o funcionário manualmente ou cadastre a biometria dele.",
+    });
+  };
+
+  const handleSelectEmployee = (emp: any) => {
     setFuncionario(emp);
+    setIdMode("manual");
     setStep("selecionar");
+  };
+
+  const handleEnrollFromCamera = (descriptor: Float32Array, foto: string) => {
+    setEnrollDescriptor(descriptor);
+    setEnrollFoto(foto);
+    setShowCamera(false);
+    setShowEnrollDialog(true);
+  };
+
+  const confirmEnroll = () => {
+    if (!enrollEmployee || !enrollDescriptor || !enrollFoto) return;
+    enrollFaceMutation.mutate({
+      companyId,
+      employeeId: enrollEmployee.id,
+      descriptor: Array.from(enrollDescriptor),
+      fotoBase64: enrollFoto,
+    });
   };
 
   const addItem = (epi: any) => {
@@ -160,7 +215,7 @@ export default function EpiEntrega() {
         dataValidade: i.dataValidade || undefined,
         motivo: i.motivo,
       })),
-      modoIdentificacao: idMode,
+      modoIdentificacao: idMode === "facial" ? "facial" : "manual",
       biometriaFotoBase64: biometriaFoto || undefined,
     });
   };
@@ -172,7 +227,7 @@ export default function EpiEntrega() {
       itens,
       obraId,
       obras: obras as any[],
-      modoIdentificacao: idMode,
+      modoIdentificacao: idMode === "facial" ? "facial" : "manual",
       biometriaFoto: biometriaFoto || undefined,
     });
   };
@@ -182,15 +237,22 @@ export default function EpiEntrega() {
     setFuncionario(null);
     setBiometriaFoto(null);
     setItens([]);
-    setNumeroInterno("");
     setObraId("");
+    setSearchText("");
+    setShowCamera(false);
+    setCameraMode("recognize");
+    setShowEnrollDialog(false);
+    setEnrollEmployee(null);
+    setEnrollDescriptor(null);
+    setEnrollFoto(null);
+    setIdMode("manual");
   };
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4">
       <div>
         <h1 className="text-xl font-bold text-gray-900">Entrega de EPI</h1>
-        <p className="text-sm text-gray-500 mt-1">Registre a entrega com identificação biométrica — NR-6</p>
+        <p className="text-sm text-gray-500 mt-1">Registre a entrega com identificação do funcionário — NR-6</p>
       </div>
 
       <div className="flex gap-1 text-xs">
@@ -206,82 +268,130 @@ export default function EpiEntrega() {
 
       {step === "identificar" && (
         <div className="space-y-4">
-          <div className="flex gap-2">
-            {([
-              { key: "facial", icon: <Camera className="h-4 w-4" />, label: "Facial" },
-              { key: "qrcode", icon: <QrCode className="h-4 w-4" />, label: "QR Code" },
-              { key: "numero", icon: <Hash className="h-4 w-4" />, label: "Número" },
-            ] as const).map(({ key, icon, label }) => (
-              <Button
-                key={key}
-                variant={idMode === key ? "default" : "outline"}
-                size="sm"
-                onClick={() => setIdMode(key)}
-                className={`flex-1 gap-1 ${idMode === key ? "bg-gray-900 text-white" : ""}`}
-              >
-                {icon}
-                {label}
-              </Button>
-            ))}
-          </div>
-
-          {idMode === "facial" && (
-            <div className="space-y-2">
-              {knownFaces.length === 0 ? (
-                <div className="text-center py-6 rounded-lg border border-amber-200 bg-amber-50">
-                  <Camera className="h-8 w-8 text-amber-400 mx-auto mb-2" />
-                  <p className="text-sm text-amber-700 font-medium">Nenhuma biometria cadastrada</p>
-                  <p className="text-xs text-amber-600 mt-1">Acesse "Biometria Facial" para cadastrar os funcionários.</p>
-                </div>
-              ) : (
-                <>
-                  <p className="text-xs text-gray-500 text-center">
-                    {knownFaces.length} funcionário(s) com biometria cadastrada
-                  </p>
-                  <FaceCaptureCamera
-                    mode="recognize"
-                    knownFaces={knownFaces}
-                    onMatch={handleFaceMatch}
-                    onNoMatch={() => toast({
-                      title: "Funcionário não reconhecido",
-                      description: "Tente pelo número interno ou QR code.",
-                      variant: "destructive",
-                    })}
-                  />
-                </>
-              )}
-            </div>
-          )}
-
-          {idMode === "numero" && (
-            <div className="space-y-3">
-              <div>
-                <Label className="text-sm">Número Interno do Funcionário</Label>
-                <div className="flex gap-2 mt-1">
+          {!showCamera ? (
+            <>
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <Input
-                    placeholder="Ex: 001, 002..."
-                    value={numeroInterno}
-                    onChange={(e) => setNumeroInterno(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleBuscarNumero()}
-                    className="flex-1"
+                    placeholder="Buscar por nome ou número..."
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    className="pl-9"
                   />
-                  <Button onClick={handleBuscarNumero} className="bg-gray-900 text-white">
-                    Buscar
-                  </Button>
                 </div>
+                <Button
+                  onClick={() => setShowCamera(true)}
+                  className="bg-gray-900 text-white gap-1.5"
+                  title="Identificar por câmera"
+                >
+                  <Camera className="h-4 w-4" />
+                  Câmera
+                </Button>
               </div>
-            </div>
-          )}
 
-          {idMode === "qrcode" && (
-            <div className="text-center py-8 rounded-lg border border-gray-200 bg-gray-50">
-              <QrCode className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">
-                Use o leitor de QR Code do dispositivo para ler o crachá do funcionário.
-              </p>
-              <p className="text-xs text-gray-400 mt-2">
-                (Em breve — use o número interno por enquanto)
-              </p>
+              <div className="max-h-[380px] overflow-y-auto space-y-1.5">
+                {(filteredEmployees as any[]).length === 0 ? (
+                  <div className="text-center py-8 text-gray-400">
+                    <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Nenhum funcionário encontrado</p>
+                  </div>
+                ) : (
+                  (filteredEmployees as any[]).map((emp: any) => (
+                    <button
+                      key={emp.id}
+                      className="w-full text-left p-3 rounded-lg hover:bg-gray-50 border border-gray-100 transition-colors flex items-center gap-3"
+                      onClick={() => handleSelectEmployee(emp)}
+                    >
+                      {emp.fotoUrl ? (
+                        <img src={emp.fotoUrl} className="w-10 h-10 rounded-full object-cover border border-gray-200" alt="" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                          <User className="h-5 w-5 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{emp.nomeCompleto}</p>
+                        <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {emp.faceId ? (
+                          <Badge className="bg-green-50 text-green-600 border-green-200 text-[10px]">
+                            <Camera className="h-2.5 w-2.5 mr-0.5" />
+                            Bio
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-gray-400 border-gray-200 text-[10px]">
+                            Sem foto
+                          </Badge>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-700">
+                  <Camera className="h-4 w-4 inline mr-1.5" />
+                  {cameraMode === "recognize" ? "Identificar funcionário" : "Cadastrar biometria"}
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => setShowCamera(false)} className="text-gray-500">
+                  <X className="h-4 w-4 mr-1" /> Voltar
+                </Button>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={cameraMode === "recognize" ? "default" : "outline"}
+                  onClick={() => setCameraMode("recognize")}
+                  className={`flex-1 text-xs ${cameraMode === "recognize" ? "bg-gray-900 text-white" : ""}`}
+                >
+                  <Search className="h-3.5 w-3.5 mr-1" />
+                  Reconhecer
+                </Button>
+                <Button
+                  size="sm"
+                  variant={cameraMode === "enroll" ? "default" : "outline"}
+                  onClick={() => setCameraMode("enroll")}
+                  className={`flex-1 text-xs ${cameraMode === "enroll" ? "bg-gray-900 text-white" : ""}`}
+                >
+                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                  Cadastrar Novo
+                </Button>
+              </div>
+
+              {cameraMode === "recognize" && knownFaces.length > 0 && (
+                <p className="text-xs text-gray-500 text-center">
+                  {knownFaces.length} funcionário(s) com biometria cadastrada
+                </p>
+              )}
+              {cameraMode === "recognize" && knownFaces.length === 0 && (
+                <div className="text-center py-3 rounded-lg border border-amber-200 bg-amber-50">
+                  <p className="text-xs text-amber-700">Nenhuma biometria cadastrada ainda.</p>
+                  <p className="text-xs text-amber-600 mt-1">Use "Cadastrar Novo" para registrar o primeiro funcionário.</p>
+                </div>
+              )}
+
+              {cameraMode === "recognize" ? (
+                <FaceCaptureCamera
+                  key="cam-recognize"
+                  mode="recognize"
+                  knownFaces={knownFaces}
+                  onMatch={handleFaceMatch}
+                  onNoMatch={handleNoMatch}
+                />
+              ) : (
+                <FaceCaptureCamera
+                  key="cam-enroll"
+                  mode="enroll"
+                  onCapture={handleEnrollFromCamera}
+                  autoCapture={false}
+                />
+              )}
             </div>
           )}
         </div>
@@ -417,8 +527,7 @@ export default function EpiEntrega() {
               <div className="pt-2 border-t border-gray-100">
                 <div className="flex items-center gap-2 text-xs">
                   {idMode === "facial" && <><ShieldCheck className="h-3 w-3 text-green-500" /><span className="text-green-600">Identificação biométrica registrada</span></>}
-                  {idMode === "numero" && <><Hash className="h-3 w-3 text-gray-400" /><span className="text-gray-500">Identificação por número interno</span></>}
-                  {idMode === "qrcode" && <><QrCode className="h-3 w-3 text-gray-400" /><span className="text-gray-500">Identificação por QR Code</span></>}
+                  {idMode === "manual" && <><User className="h-3 w-3 text-gray-400" /><span className="text-gray-500">Identificação manual</span></>}
                 </div>
               </div>
 
@@ -511,7 +620,7 @@ export default function EpiEntrega() {
                   <div className="flex gap-2 mt-0.5">
                     {epi.ca && <span className="text-xs text-gray-500">CA: {epi.ca}</span>}
                     {itens.find((i) => i.epiId === epi.id) && (
-                      <span className="text-xs text-green-600">✓ Adicionado</span>
+                      <span className="text-xs text-green-600">Adicionado</span>
                     )}
                   </div>
                 </button>
@@ -520,6 +629,54 @@ export default function EpiEntrega() {
                 <p className="text-center text-sm text-gray-400 py-4">Nenhum EPI encontrado</p>
               )}
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEnrollDialog} onOpenChange={setShowEnrollDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <UserPlus className="h-4 w-4" />
+              Cadastrar Biometria
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {enrollFoto && (
+              <div className="flex justify-center">
+                <img src={enrollFoto} className="w-24 h-24 rounded-full object-cover border-2 border-green-200" alt="Captura" />
+              </div>
+            )}
+            <p className="text-sm text-gray-600 text-center">
+              Selecione o funcionário para vincular esta foto:
+            </p>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {(allEmployees as any[])
+                .filter((e: any) => !e.faceId)
+                .map((emp: any) => (
+                <button
+                  key={emp.id}
+                  className={`w-full text-left p-2.5 rounded-lg border transition-colors ${
+                    enrollEmployee?.id === emp.id ? "border-green-500 bg-green-50" : "border-gray-100 hover:bg-gray-50"
+                  }`}
+                  onClick={() => setEnrollEmployee(emp)}
+                >
+                  <p className="text-sm font-medium text-gray-900">{emp.nomeCompleto}</p>
+                  <p className="text-xs text-gray-500">#{emp.numeroInterno} · {emp.cargo}</p>
+                </button>
+              ))}
+            </div>
+            <Button
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
+              disabled={!enrollEmployee || enrollFaceMutation.isPending}
+              onClick={confirmEnroll}
+            >
+              <Camera className="h-4 w-4 mr-2" />
+              {enrollFaceMutation.isPending ? "Cadastrando..." : "Cadastrar e Selecionar"}
+            </Button>
+            <p className="text-xs text-gray-400 text-center">
+              A foto será salva como foto de perfil do funcionário
+            </p>
           </div>
         </DialogContent>
       </Dialog>
