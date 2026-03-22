@@ -1836,9 +1836,12 @@ export default function Ferias() {
                       const salario = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
                       const diasGozo = selectedItem.diasGozo || 30;
 
-                      // Recalcula ferias + terco + total a partir de mediaHE e mediaDSRHE
-                      const recalcFromHE = (heStr: string, dsrStr: string, abonoStr: string) => {
-                        const base = salario + pv(heStr) + pv(dsrStr);
+                      // Acréscimos (insalubridade, gratificação, etc.) compõem a base de cálculo:
+                      // Férias = (base/30) × dias; 1/3 = Férias/3 — ambos já refletem o acréscimo.
+                      // bonusOverride: usado quando o próprio campo de bonus muda (estado ainda não atualizado).
+                      const recalcFromHE = (heStr: string, dsrStr: string, abonoStr: string, bonusOverride?: string) => {
+                        const bonusVal = bonusOverride !== undefined ? bonusOverride : bonusValor;
+                        const base = salario + pv(heStr) + pv(dsrStr) + pv(bonusVal);
                         const ferias = base > 0 ? (base / 30) * diasGozo : 0;
                         const terco  = ferias / 3;
                         const total  = ferias + terco + pv(abonoStr);
@@ -1884,9 +1887,36 @@ export default function Ferias() {
                                 setEditValores(p => ({ ...p, mediaDSRHE: f, valorFerias: ferias, valorTerco: terco, valorTotal: total }));
                               }} placeholder="0,00" />
                             </div>
+                            {/* Acréscimos habituais — compõem a base (incidem em Férias, 1/3 e INSS) */}
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              <span className="whitespace-nowrap text-slate-600 text-xs w-40">Acréscimos:</span>
+                              <Input
+                                className="h-7 text-sm text-right w-28"
+                                value={bonusValor}
+                                onChange={e => {
+                                  const v = e.target.value;
+                                  setBonusValor(v);
+                                  const { ferias, terco, total } = recalcFromHE(editValores.mediaHE, editValores.mediaDSRHE, editValores.valorAbono, v);
+                                  setEditValores(p => ({ ...p, valorFerias: ferias, valorTerco: terco, valorTotal: total }));
+                                }}
+                                onBlur={e => {
+                                  const f = fmtBlur(e.target.value);
+                                  setBonusValor(f);
+                                  const { ferias, terco, total } = recalcFromHE(editValores.mediaHE, editValores.mediaDSRHE, editValores.valorAbono, f);
+                                  setEditValores(p => ({ ...p, valorFerias: ferias, valorTerco: terco, valorTotal: total }));
+                                }}
+                                placeholder="0,00"
+                              />
+                              <Input
+                                className="h-7 text-xs flex-1"
+                                value={bonusDesc}
+                                onChange={e => setBonusDesc(e.target.value)}
+                                placeholder="Ex: insalubridade, gratificação..."
+                              />
+                            </div>
                             <div className="flex items-center justify-between gap-4 border-t border-blue-200 pt-1">
                               <span className="whitespace-nowrap text-blue-800 text-xs font-semibold w-40">Base das Férias:</span>
-                              <Input className="h-7 text-sm text-right font-semibold bg-blue-100" value={fmt(salario + pv(editValores.mediaHE) + pv(editValores.mediaDSRHE))} readOnly />
+                              <Input className="h-7 text-sm text-right font-semibold bg-blue-100" value={fmt(salario + pv(editValores.mediaHE) + pv(editValores.mediaDSRHE) + pv(bonusValor))} readOnly />
                             </div>
                           </div>
 
@@ -1959,8 +1989,8 @@ export default function Ferias() {
                 const outrosDescNum = parseMoeda(outrosDescontos);
                 const ajusteNum = parseFloat(inssAjuste.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
                 const bruto = parseFloat(selectedItem.valorTotal || "0");
-                // Acréscimos compõem a base de incidência do INSS
-                const inssBase = bruto + bonusNum;
+                // Acréscimos já estão embutidos no TOTAL BRUTO via BASE DE CÁLCULO (recalcFromHE inclui bonus na base)
+                const inssBase = bruto;
                 if (!inssBase) return null;
                 // Tabela INSS progressiva 2026 — Portaria Interministerial MPS/MF nº 13/2026 (DOU 09/01/2026)
                 const FAIXAS = [
@@ -1992,44 +2022,10 @@ export default function Ferias() {
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
                     <p className="text-xs text-slate-500 uppercase font-semibold">Desconto INSS — Memória de Cálculo (Tabela 2026)</p>
 
-                    {/* Acréscimos — agora no topo, pois compõem a base INSS */}
-                    <div className="border border-green-200 bg-green-50 rounded-lg p-3 space-y-2">
-                      <p className="text-xs font-semibold text-green-800 uppercase">Acréscimos <span className="normal-case font-normal text-green-700">(incidem no INSS)</span></p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-600 w-24 shrink-0">Bônus / outros:</span>
-                        <Input
-                          className="h-7 text-xs text-right w-28 border-green-300 focus:border-green-500"
-                          value={bonusValor}
-                          onChange={e => setBonusValor(e.target.value)}
-                          placeholder="0,00"
-                        />
-                        <Input
-                          className="h-7 text-xs flex-1 border-green-300 focus:border-green-500"
-                          value={bonusDesc}
-                          onChange={e => setBonusDesc(e.target.value)}
-                          placeholder="Descrição (ex: bônus, gratificação...)"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Linha de base — agora inclui acréscimos */}
-                    <div className="flex flex-col border-b border-slate-200 pb-2 gap-0.5">
-                      {bonusNum > 0 && (
-                        <div className="flex justify-between text-xs text-slate-500">
-                          <span>Total Bruto (férias)</span>
-                          <span>{formatMoeda(bruto)}</span>
-                        </div>
-                      )}
-                      {bonusNum > 0 && (
-                        <div className="flex justify-between text-xs text-green-700">
-                          <span>+ {bonusDesc || "Bônus / acréscimo"}</span>
-                          <span>+ {formatMoeda(bonusNum)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-600 font-medium">Base de cálculo do INSS</span>
-                        <span className="font-semibold">{formatMoeda(inssBase)}</span>
-                      </div>
+                    {/* Linha de base */}
+                    <div className="flex justify-between text-sm border-b border-slate-200 pb-2">
+                      <span className="text-slate-600 font-medium">Total Bruto — base de cálculo do INSS{bonusNum > 0 ? <span className="text-green-700 font-normal"> (incl. {bonusDesc || "acréscimos"})</span> : ""}</span>
+                      <span className="font-semibold">{formatMoeda(inssBase)}</span>
                     </div>
 
                     {/* Tabela de faixas com parcela a deduzir */}

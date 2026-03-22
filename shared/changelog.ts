@@ -4740,4 +4740,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 733,
+    titulo: "Férias — Acréscimos integrados na BASE DE CÁLCULO: incidem em Férias, 1/3 e INSS",
+    descricao: "O campo 'Acréscimos' (insalubridade, gratificação, etc.) foi movido para dentro do bloco 'Base de Cálculo — Art. 142 CLT' (seção superior de edição). recalcFromHE agora inclui o bonus na base salarial: base = salário + mediaHE + mediaDSRHE + acréscimos. Consequência: Férias = (base/30)×diasGozo e 1/3 = Férias/3 já refletem o acréscimo. 'Base das Férias' exibe o valor com acréscimos. Ao mudar o acréscimo, Férias/1/3/Total recalculam em cascata (via bonusOverride no recalcFromHE). Na seção INSS: inssBase = bruto (Total Bruto já inclui acréscimos via base calc; sem dupla contagem). A linha de base no INSS exibe nota '(incl. nome-do-acréscimo)' quando há valor preenchido.",
+    tipo: "bugfix",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];
