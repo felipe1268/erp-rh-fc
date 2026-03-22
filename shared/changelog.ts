@@ -4866,4 +4866,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 744,
+    titulo: "Curva S Financeira com 3 curvas: Previsto, Realizado e Receita",
+    descricao: "A Curva S Financeira agora exibe 3 linhas: (1) Previsto (BCWS) — desembolso planejado conforme cronograma; (2) Realizado (BCWP) — valor agregado calculado pelo avanço físico real de cada atividade × seu valor no orçamento; (3) Receita Acumulada — valores efetivamente recebidos do cliente (medições/parcelas com baixa confirmada). Permite análise completa de Earned Value Management.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

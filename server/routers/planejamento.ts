@@ -2926,6 +2926,12 @@ REGRAS TÉCNICAS:
         }
       });
 
+      const valorPorAtiv = new Map<number, number>();
+      folhas.forEach(a => {
+        const pesoAtiv = usarIgual ? 1 : n(a.pesoFinanceiro);
+        valorPorAtiv.set(a.id, (pesoAtiv / pesoTotal) * totalVenda);
+      });
+
       const sorted = [...dates.entries()].sort((a, b) => a[0].localeCompare(b[0]));
       let acum = 0;
       const pontos = sorted.map(([semana, val]) => {
@@ -2939,6 +2945,97 @@ REGRAS TÉCNICAS:
         pontos.unshift({ semana: toMondayStr(semanaAntes), acumulado: 0 });
       }
 
-      return { status: "ok" as const, divergencias: [], curva: pontos, totalVenda };
+      const allSemanas = pontos.map(p => p.semana);
+
+      const avancosDB = await db.select({
+        atividadeId:       planejamentoAvancos.atividadeId,
+        semana:            planejamentoAvancos.semana,
+        percentualAcumulado: planejamentoAvancos.percentualAcumulado,
+      })
+        .from(planejamentoAvancos)
+        .where(and(
+          eq(planejamentoAvancos.projetoId, input.projetoId),
+          eq(planejamentoAvancos.revisaoId, input.revisaoId),
+        ));
+
+      const bcwpMap = new Map<string, number>();
+      if (avancosDB.length > 0) {
+        const ultimoPctPorAtiv = new Map<number, Map<string, number>>();
+        avancosDB.forEach(av => {
+          const sem = toMondayStr(new Date(av.semana + "T12:00:00Z"));
+          if (!ultimoPctPorAtiv.has(av.atividadeId)) ultimoPctPorAtiv.set(av.atividadeId, new Map());
+          ultimoPctPorAtiv.get(av.atividadeId)!.set(sem, n(av.percentualAcumulado));
+        });
+
+        allSemanas.forEach(sem => {
+          let totalEV = 0;
+          for (const [ativId, valorAtiv] of valorPorAtiv) {
+            const pctMap = ultimoPctPorAtiv.get(ativId);
+            if (!pctMap) continue;
+            let ultimoPct = 0;
+            for (const s of allSemanas) {
+              if (s > sem) break;
+              if (pctMap.has(s)) ultimoPct = pctMap.get(s)!;
+            }
+            totalEV += (ultimoPct / 100) * valorAtiv;
+          }
+          if (totalEV > 0) bcwpMap.set(sem, +totalEV.toFixed(2));
+        });
+      }
+
+      const medicoesDB = await db.select({
+        competencia: planejamentoMedicoes.competencia,
+        valorMedido: planejamentoMedicoes.valorMedido,
+        status:      planejamentoMedicoes.status,
+      })
+        .from(planejamentoMedicoes)
+        .where(eq(planejamentoMedicoes.projetoId, input.projetoId));
+
+      const receitaMensal = new Map<string, number>();
+      medicoesDB.forEach(m => {
+        const val = n(m.valorMedido);
+        if (val > 0) receitaMensal.set(m.competencia!, val);
+      });
+
+      const receitaMap = new Map<string, number>();
+      if (receitaMensal.size > 0) {
+        const mesParaSemana = new Map<string, string>();
+        allSemanas.forEach(sem => {
+          const mesSem = sem.substring(0, 7);
+          mesParaSemana.set(mesSem, sem);
+        });
+
+        const compsSorted = [...receitaMensal.keys()].sort();
+        let recAcum = 0;
+        compsSorted.forEach(comp => {
+          recAcum += receitaMensal.get(comp)!;
+          const semAlvo = mesParaSemana.get(comp);
+          if (semAlvo) {
+            receitaMap.set(semAlvo, +recAcum.toFixed(2));
+          }
+        });
+
+        if (recAcum > 0) {
+          const lastSet = [...receitaMap.entries()].sort((a, b) => b[0].localeCompare(a[0]))[0];
+          if (lastSet) {
+            allSemanas.forEach(sem => {
+              if (sem > lastSet[0]) return;
+              if (!receitaMap.has(sem)) {
+                const prev = allSemanas.filter(s => s < sem && receitaMap.has(s)).pop();
+                if (prev) receitaMap.set(sem, receitaMap.get(prev)!);
+              }
+            });
+          }
+        }
+      }
+
+      const curvaCompleta = pontos.map(p => ({
+        semana: p.semana,
+        acumulado: p.acumulado,
+        bcwp: bcwpMap.get(p.semana) ?? null,
+        receita: receitaMap.get(p.semana) ?? null,
+      }));
+
+      return { status: "ok" as const, divergencias: [], curva: curvaCompleta, totalVenda };
     }),
 });

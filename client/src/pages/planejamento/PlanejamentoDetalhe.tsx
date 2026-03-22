@@ -3761,11 +3761,15 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
         const hasMedicoes = (curvaMedicoes as any[]).length > 0;
         if (curvaSFinOk.length === 0 && !hasMedicoes) return null;
 
-        // Construir dataset: planejada (R$) do EAP × Orçamento + realizada (% × totalVenda) + faturado (medições)
         const finPlanMap: Record<string, number> = {};
-        curvaSFinOk.forEach((p: any) => { finPlanMap[p.semana] = p.acumulado; });
+        const bcwpMap: Record<string, number | null> = {};
+        const receitaMap: Record<string, number | null> = {};
+        curvaSFinOk.forEach((p: any) => {
+          finPlanMap[p.semana] = p.acumulado;
+          bcwpMap[p.semana] = p.bcwp ?? null;
+          receitaMap[p.semana] = p.receita ?? null;
+        });
 
-        // Realizada e tendência: escala física (%) × totalVenda
         const realMap: Record<string, number | null> = {};
         const tendMap: Record<string, number | null> = {};
         merged.forEach((row: any) => {
@@ -3775,11 +3779,9 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
             ? +(totalVenda * row.tendencia / 100).toFixed(2) : null;
         });
 
-        // Medições (faturado acumulado por competência "YYYY-MM")
         const medMap: Record<string, number> = {};
         (curvaMedicoes as any[]).forEach((m: any) => { medMap[m.competencia] = m.valorAcumulado; });
 
-        // Union de todas as semanas (planejada + merged para realizada)
         const allSemanasSet = new Set<string>([
           ...curvaSFinOk.map((p: any) => p.semana),
           ...merged.map((row: any) => row.semana),
@@ -3788,17 +3790,23 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
           const comp      = semana.slice(0, 7);
           const allComps  = Object.keys(medMap).filter(k => k <= comp);
           const lastComp  = allComps.length ? allComps[allComps.length - 1] : null;
+
+          const bcwpVal = bcwpMap[semana];
+          const realVal = realMap[semana];
+          const receitaVal = receitaMap[semana];
+          const faturadoMed = lastComp != null ? medMap[lastComp] : undefined;
+
           return {
             semana,
             planejada: finPlanMap[semana] ?? null,
-            realizada: realMap[semana]    ?? null,
+            realizada: bcwpVal ?? realVal ?? null,
             tendencia: tendMap[semana]    ?? null,
-            faturado:  lastComp != null ? medMap[lastComp] : undefined,
+            receita:   receitaVal ?? (faturadoMed != null ? faturadoMed : null),
           };
         });
 
         const finHasPlanejada = finFull.some((p: any) => p.planejada != null);
-        const finHasFaturado  = finFull.some((p: any) => p.faturado  != null);
+        const finHasReceita   = finFull.some((p: any) => p.receita  != null);
         const finHasRealizada = finFull.some((p: any) => p.realizada != null);
         const finHasTendencia = finFull.some((p: any) => p.tendencia != null);
 
@@ -3823,13 +3831,13 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
               {finHasPlanejada && (
                 <div className="flex items-center gap-1.5">
                   <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#1e40af" strokeWidth="2.5" /></svg>
-                  <span className="text-slate-600">Valor Planejado (BCWS)</span>
+                  <span className="text-slate-600">Previsto (BCWS)</span>
                 </div>
               )}
               {finHasRealizada && (
                 <div className="flex items-center gap-1.5">
                   <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#22c55e" strokeWidth="2.5" /></svg>
-                  <span className="text-slate-600">Valor Realizado (BCWP)</span>
+                  <span className="text-slate-600">Realizado (BCWP)</span>
                 </div>
               )}
               {finHasTendencia && (
@@ -3838,10 +3846,10 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
                   <span className="text-slate-600">Tendência</span>
                 </div>
               )}
-              {finHasFaturado && (
+              {finHasReceita && (
                 <div className="flex items-center gap-1.5">
-                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#7c3aed" strokeWidth="2.5" /></svg>
-                  <span className="text-slate-600">Faturado Real</span>
+                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#f59e0b" strokeWidth="2.5" /></svg>
+                  <span className="text-slate-600">Receita Acumulada</span>
                 </div>
               )}
             </div>
@@ -3866,27 +3874,27 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
                     if (!payload?.length) return null;
                     const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
                     const plan = get("planejada");
-                    const real = get("realizada"); const fat  = get("faturado"); const tend = get("tendencia");
+                    const real = get("realizada"); const rec = get("receita"); const tend = get("tendencia");
                     const desvio    = plan != null && real != null ? (real as number) - (plan as number) : null;
-                    const desvioFat = fat  != null && plan != null ? (fat  as number) - (plan as number) : null;
+                    const desvioRec = rec  != null && plan != null ? (rec  as number) - (plan as number) : null;
                     const [y, m, d] = String(label).split("-");
                     return (
                       <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[230px]">
                         <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">
                           {finSemLabel[label] ?? label} · {d}/{m}/{y}
                         </p>
-                        {plan != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Planejado (BCWS)</span><strong>{fmt(plan)}</strong></p>}
+                        {plan != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Previsto (BCWS)</span><strong>{fmt(plan)}</strong></p>}
                         {real != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Realizado (BCWP)</span><strong>{fmt(real)}</strong></p>}
-                        {fat  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#7c3aed" }}>Faturado Real</span><strong>{fmt(fat)}</strong></p>}
+                        {rec  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#f59e0b" }}>Receita Acumulada</span><strong>{fmt(rec)}</strong></p>}
                         {tend != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#16a34a" }}>Tendência</span><strong>{fmt(tend)}</strong></p>}
-                        {desvioFat != null && (
-                          <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvioFat >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                            <span>Fat. vs Planejado</span><span>{desvioFat >= 0 ? "+" : ""}{fmt(desvioFat)}</span>
+                        {desvio != null && (
+                          <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            <span>Realizado vs Previsto</span><span>{desvio >= 0 ? "+" : ""}{fmt(desvio)}</span>
                           </p>
                         )}
-                        {desvio != null && !desvioFat && (
-                          <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 border-t border-slate-100 ${desvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                            <span>Realizado vs Planejado</span><span>{desvio >= 0 ? "+" : ""}{fmt(desvio)}</span>
+                        {desvioRec != null && (
+                          <p className={`flex justify-between gap-4 font-bold pt-1.5 mt-1 ${!desvio ? "border-t border-slate-100" : ""} ${desvioRec >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            <span>Receita vs Previsto</span><span>{desvioRec >= 0 ? "+" : ""}{fmt(desvioRec)}</span>
                           </p>
                         )}
                       </div>
@@ -3899,9 +3907,9 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
                 {finHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#1e40af" strokeWidth={2.5} dot={false} connectNulls />}
                 {finHasRealizada && <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />}
                 {finHasTendencia && <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />}
-                {finHasFaturado && (
-                  <Line type="stepAfter" dataKey="faturado" stroke="#7c3aed" strokeWidth={2.5}
-                    dot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }} activeDot={{ r: 7 }} connectNulls />
+                {finHasReceita && (
+                  <Line type="stepAfter" dataKey="receita" stroke="#f59e0b" strokeWidth={2.5}
+                    dot={{ r: 5, fill: "#f59e0b", strokeWidth: 0 }} activeDot={{ r: 7 }} connectNulls />
                 )}
               </LineChart>
             </ResponsiveContainer>
@@ -3910,10 +3918,10 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
           {/* Interpretação financeira */}
           <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 text-xs text-slate-600 space-y-1">
             <p className="font-semibold text-slate-700 mb-2">Como interpretar</p>
-            {finHasPlanejada && <p>🔵 <strong>Valor Planejado (BCWS)</strong>: Quanto do orçamento deveria estar comprometido até esta semana segundo o cronograma.</p>}
-            {finHasRealizada && <p>🟢 <strong>Valor Realizado (BCWP)</strong>: Avanço físico registrado convertido em R$ pelo total do orçamento.</p>}
-            {finHasFaturado  && <p>🟣 <strong>Faturado Real</strong>: Valor efetivamente medido/faturado (Módulo Medição de Contratos).</p>}
-            {finHasTendencia && <p>🟢 <strong>Tendência</strong>: Projeção do realizado físico até o fim do projeto.</p>}
+            {finHasPlanejada && <p>🔵 <strong>Previsto (BCWS)</strong>: Desembolso previsto conforme o cronograma — quanto deveria estar gasto até esta semana segundo o plano.</p>}
+            {finHasRealizada && <p>🟢 <strong>Realizado (BCWP)</strong>: Valor agregado — quanto a obra efetivamente "produziu" em valor, baseado no avanço físico real de cada atividade.</p>}
+            {finHasReceita && <p>🟠 <strong>Receita Acumulada</strong>: Quanto o cliente efetivamente pagou (medições/parcelas confirmadas). Dados da aba Medição.</p>}
+            {finHasTendencia && <p>🟢 <strong>Tendência</strong>: Projeção do realizado físico até o fim do projeto, convertido em R$.</p>}
             <p className="text-slate-400 pt-1">Curva calculada pelo cruzamento da EAP do cronograma com os valores de venda do orçamento vinculado.</p>
           </div>
         </>
