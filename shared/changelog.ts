@@ -4956,4 +4956,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 754,
+    titulo: "JULINHO: Persistência da análise de desvio",
+    descricao: "A análise do JULINHO (desvio de prazo na Visão Geral REFIS) agora é salva no banco de dados e carregada automaticamente ao reabrir a página. Campos adicionados ao projeto: ultima_analise_julinho, analise_julinho_data, analise_julinho_semana. Footer da análise agora mostra a semana de referência e indicador 'Salvo'. Novas análises substituem a anterior automaticamente.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

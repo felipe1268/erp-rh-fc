@@ -4495,6 +4495,9 @@ export const planejamentoProjetos = pgTable("planejamento_projetos", {
   valorContrato:          numeric("valor_contrato", { precision: 18, scale: 2 }).default("0"),
   status:                 varchar({ length: 50 }).default("Em andamento"),
   descricao:              text(),
+  ultimaAnaliseJulinho:   text("ultima_analise_julinho"),
+  analiseJulinhoData:     timestamp("analise_julinho_data"),
+  analiseJulinhoSemana:   varchar("analise_julinho_semana", { length: 20 }),
   criadoEm:               timestamp("criado_em").defaultNow(),
   atualizadoEm:           timestamp("atualizado_em").defaultNow(),
 });

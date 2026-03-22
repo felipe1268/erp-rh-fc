@@ -861,6 +861,18 @@ Responda EXATAMENTE neste formato:
           : `⚠️ **Erro ao contatar IA** — ${err?.message ?? "Erro desconhecido"}.`;
       }
 
+      try {
+        await db.update(planejamentoProjetos)
+          .set({
+            ultimaAnaliseJulinho: analise,
+            analiseJulinhoData: new Date(),
+            analiseJulinhoSemana: input.semana,
+          })
+          .where(eq(planejamentoProjetos.id, input.projetoId));
+      } catch (saveErr: any) {
+        console.warn(`[JULINHO] Falha ao salvar análise: ${saveErr?.message}`);
+      }
+
       return { analise };
     }),
 

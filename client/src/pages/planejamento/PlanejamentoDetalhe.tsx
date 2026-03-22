@@ -7829,8 +7829,17 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   }, [initialSemana]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [modoMascara, setModoMascara] = useState(false);
-  const [analiseDesvio, setAnaliseDesvio] = useState<string | null>(null);
+  const [analiseDesvio, setAnaliseDesvio] = useState<string | null>(proj?.ultimaAnaliseJulinho ?? null);
   const [analiseExpanded, setAnaliseExpanded] = useState(true);
+  const [analiseSemana, setAnaliseSemana] = useState<string | null>(proj?.analiseJulinhoSemana ?? null);
+  const analiseJulinhoRef = useRef(false);
+  useEffect(() => {
+    if (!analiseJulinhoRef.current && proj?.ultimaAnaliseJulinho && !analiseDesvio) {
+      setAnaliseDesvio(proj.ultimaAnaliseJulinho);
+      setAnaliseSemana(proj.analiseJulinhoSemana ?? null);
+      analiseJulinhoRef.current = true;
+    }
+  }, [proj?.ultimaAnaliseJulinho]);
   const [orientacaoPdf, setOrientacaoPdf] = useState<"portrait" | "landscape">("landscape");
   const [colBloco2, setColBloco2] = useState(false);
   const [colBloco3A, setColBloco3A] = useState(false);
@@ -7908,7 +7917,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const analisarDesvioMut = (trpc.iaCronograma as any).analisarDesvio.useMutation({
     onSuccess: (data: any) => {
       setAnaliseDesvio(data.analise);
+      setAnaliseSemana(semana);
       setAnaliseExpanded(true);
+      utils.planejamento.getProjetoById.invalidate({ id: projetoId });
     },
   });
 
@@ -8213,9 +8224,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       .slice(0, 8);
   }, [grupos]);
 
-  // Reset análise quando muda a semana
+  const semanaInitRef = useRef(true);
   useEffect(() => {
+    if (semanaInitRef.current) { semanaInitRef.current = false; return; }
     setAnaliseDesvio(null);
+    setAnaliseSemana(null);
   }, [semana]);
 
   return (
@@ -8945,9 +8958,15 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               </div>
 
               {/* Footer */}
-              <div className="mt-4 pt-3 border-t border-slate-200 flex items-center gap-2 text-[10px] text-slate-400">
-                <Sparkles className="h-3 w-3 text-violet-400" />
-                Gerado por JULINHO · Para implementar os planos de ação, acesse a aba IA Gestora → Simulador de Cenários
+              <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-3 w-3 text-violet-400" />
+                  Gerado por JULINHO{analiseSemana ? ` · Semana ${new Date(analiseSemana + "T12:00:00").toLocaleDateString("pt-BR")}` : ""} · Para implementar os planos de ação, acesse a aba IA Gestora → Simulador de Cenários
+                </div>
+                <div className="flex items-center gap-1 text-emerald-500">
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  Salvo
+                </div>
               </div>
             </div>
           )}
