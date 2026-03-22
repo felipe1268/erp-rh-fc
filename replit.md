@@ -169,3 +169,117 @@ Módulos atualmente registrados (Rev. 394): `rh`, `sst`, `juridico`, `avaliacao`
 ## Notes
 - Default password for first login: `asdf1020`
 - After every completed adjustment, click **Publish** to deploy (autoscale, build=`pnpm run build`, run=`node dist/index.js`)
+
+---
+
+## 🚨 MEMÓRIA ANTI-REGRESSÃO — Bugs Corrigidos e Padrões Obrigatórios
+
+> Esta seção é OBRIGATÓRIA de ler antes de qualquer mudança nos módulos listados.
+> Objetivo: impedir que bugs já corrigidos voltem e manter consistência nas melhorias.
+
+---
+
+### REGRAS DE OURO ABSOLUTAS (violar = breaking change)
+
+| # | Regra | Detalhe |
+|---|-------|---------|
+| 0 | **Verificar no banco ANTES de declarar bug** | Sempre consultar dados reais de produção antes de assumir que algo está errado no código |
+| 1 | **Versão + Changelog obrigatórios** | Toda mudança exige: (a) incrementar `APP_VERSION_NUMBER` em `shared/version.ts`, (b) adicionar entrada em `shared/changelog.ts` com campo `tipo` (NOT NULL) |
+| 2 | **DashboardLayout obrigatório** | Toda nova página DEVE envolver seu conteúdo em `<DashboardLayout>` — sem isso, a sidebar e header não aparecem |
+| 3 | **NUNCA usar `npm run db:push`** | É interativo e pode DROPAR colunas silenciosamente. Sempre usar `code_execution` com `executeSql` + `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` |
+| 4 | **Novas colunas via ColFix** | Adicionar colunas em `server/_core/index.ts` via ColFix (padrão já existente), NÃO via syncSchema — o ColFix roda no startup e garante que a coluna existe antes de qualquer query |
+| 5 | **SQL camelCase com aspas duplas** | Toda coluna camelCase em SQL raw DEVE ter aspas: `"employeeId"`, `"deletedAt"`, `"periodoConcessivoFim"`. Sem aspas = PostgreSQL converte para minúsculas e falha |
+| 6 | **db.execute() retorna objeto, não array** | `db.execute(sql\`...\`)` retorna `QueryResult`. SEMPRE acessar via `((await db.execute(sql\`...\`)) as any).rows \|\| []` |
+| 7 | **Não sobrescrever dados manuais** | Antes de recalcular qualquer valor (salário, férias, rescisão), verificar se há valor manual salvo (`> 0`) — se houver, respeitar e não sobrescrever |
+| 8 | **Status inativos específicos** | Status que indicam funcionário inativo: `'Desligado'`, `'Afastado'`, `'Recluso'`, `'Lista_Negra'`; em férias: `'Ferias'`; ativo = `'Ativo'`. Não inventar outros |
+| 9 | **Company IDs fixos** | FC Engenharia employees: `companyId = 60002`. Obras: `companyId = 1`. CF Hotelaria: `60004`. Julio Ferraz: `60005`. Locnow: `90001` |
+
+---
+
+### BUGS CORRIGIDOS — Não reintroduzir
+
+#### [BUG-001] Rescisão — Férias Vencidas inflacionadas (Rev. 716)
+- **Módulo**: Rescisão / `avisoPrevioFerias.ts`
+- **Causa**: `calcularRescisaoCompleta` usava `calcularFeriasVencidas(dataAdmissao, dataProjecao)` = fórmula matemática `Math.floor(meses/12)`. Ignorava completamente o que estava no banco (`vacation_periods`), contando como "vencidos" períodos que já foram pagos e marcados como "Concluída".
+- **Correção**: Adicionado parâmetro `periodosVencidosOverride?: number`. Antes de cada chamada à função, consultar:
+  ```sql
+  SELECT COUNT(*)::int AS total FROM vacation_periods
+  WHERE "employeeId" = $id
+    AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
+    AND "periodoConcessivoFim" < $dataFimAviso
+    AND "deletedAt" IS NULL
+  ```
+- **Regra anti-regressão**: NUNCA calcular férias vencidas na rescisão apenas por matemática de anos. SEMPRE consultar o banco.
+- **Call sites afetados**: `calcular`, `comparativo`, `create`, `update` (recalcular), `recalcularTodos`, `getById` — todos têm a consulta real.
+
+#### [BUG-002] Vale Férias — Valor R$ 0,00 para funcionários com alerta (Rev. 711-712)
+- **Módulo**: Folha de Pagamento / `payrollEngine.ts`
+- **Causa**: Funcionários com alerta de férias (período vencido) exibiam `valorFerias = 0` no vale, pois o cálculo proporcional não era aplicado quando havia bloqueio por férias.
+- **Correção**: Calcular valor proporcional real mesmo para alertas. Funcionários "aprovados manualmente" (`motivoBloqueio LIKE '%[APROVADO%'`) são capturados no `aprovadosAlertaSet` antes de deletar e recebem `foiAprovadoManualmente = true` → bypass do bloqueio, grava `[APROVADO MANUALMENTE]` em `motivoBloqueio`.
+- **Regra anti-regressão**: O botão "Consolidar Vale" deve permanecer DESABILITADO enquanto houver alertas pendentes. Não remover esse bloqueio.
+
+#### [BUG-003] Férias — Valores manuais sobrescritos pelo recálculo automático (Rev. 713)
+- **Módulo**: Férias / endpoint `list` em `avisoPrevioFerias.ts`
+- **Causa**: O endpoint `list` recalculava o valor das férias com base no salário atual, sobrescrevendo valores que o usuário havia editado manualmente.
+- **Correção**: Verificar `temValorManual = r.valorFerias && parseFloat(r.valorFerias) > 0`. Se verdadeiro, retornar `r` sem recalcular.
+- **Regra anti-regressão**: O endpoint `list` de férias NUNCA deve recalcular quando `valorFerias > 0` (indica edição manual).
+
+#### [BUG-004] Férias — Status "Vencida" não atualizado automaticamente (Rev. 714)
+- **Módulo**: Férias
+- **Causa**: Períodos com `periodoConcessivoFim < hoje` e `status = 'pendente'` não tinham seu status atualizado automaticamente para "vencida".
+- **Correção**: Três camadas: (1) ColFix no startup faz UPDATE no banco; (2) endpoint `list` retorna status dinâmico baseado na data; (3) filtro 'vencida' inclui períodos vencidos por data mesmo sem a flag atualizada.
+- **Regra anti-regressão**: Manter as três camadas. Não remover o ColFix de `vacation_periods` do startup.
+
+#### [BUG-005] Férias — Botão editar desabilitado para status "Agendada" (Rev. 715)
+- **Módulo**: Férias / `Ferias.tsx`
+- **Causa**: O botão lápis (editar período) só estava habilitado para `pendente`, `vencida`, `em_gozo` — não para `agendada`.
+- **Correção**: Adicionar `agendada` à lista de status editáveis.
+- **Regra anti-regressão**: Status editáveis de férias = `['pendente', 'vencida', 'em_gozo', 'agendada']`.
+
+---
+
+### PADRÕES DE IMPLEMENTAÇÃO — Manter sempre
+
+#### Módulo Férias
+- `vacation_periods` tem colunas mistas: camelCase com aspas duplas (`"employeeId"`, `"periodoConcessivoFim"`, `"deletedAt"`) E snake_case sem aspas (`ajuste_inss`, `valor_liquido`, `bonus_valor`, `bonus_desc`, `pensao_desconto`, `outros_descontos`, `outros_descontos_desc`, `recibo_url`, `recibo_nome`).
+- Status válidos: `pendente`, `vencida`, `agendada`, `em_gozo`, `concluida`, `cancelada`.
+- Badge de status "vencida" é calculado dinamicamente (não só pelo campo `vencida=1`): comparar `periodoConcessivoFim` com data de hoje.
+
+#### Módulo Rescisão
+- Toda previsão de rescisão DEVE incluir contagem real de `vacation_periods` (ver BUG-001).
+- `calcularRescisaoCompleta` tem parâmetro `periodosVencidosOverride` — sempre passar resultado da query do banco.
+- Aviso prévio integra ao tempo de serviço (Art. 487 §1º CLT): usar `dataFimAviso` (término do aviso) para férias, 13º e FGTS — NÃO `dataDesligamento`.
+
+#### Módulo Folha / Vale
+- `aprovadosAlertaSet`: sempre capturar antes de deletar para manter aprovações manuais entre recálculos.
+- "Consolidar Vale": só habilitar quando não houver alertas pendentes (`alertasFeriasCount === 0`).
+- Valor proporcional de férias no vale: calcular mesmo para funcionários com alerta — exibir valor real, não R$ 0,00.
+
+#### Banco de Dados / SQL
+- Sempre usar `::int` ou `::text` nos casts PostgreSQL quando necessário.
+- `COUNT(*)::int` para retornar número (não string) do PostgreSQL.
+- Raw SQL com template literal: `sql\`SELECT ... WHERE "col" = ${variable}\`` — interpolação segura via Drizzle.
+- Para checks de existência: `SELECT EXISTS(SELECT 1 FROM ...)::bool` é mais eficiente que `COUNT(*)`.
+
+#### Versioning
+- `shared/version.ts`: `APP_VERSION`, `APP_VERSION_DATE` (DD/MM/YYYY), `APP_VERSION_NUMBER` (número inteiro).
+- `shared/changelog.ts`: campo `tipo` é `'feature' | 'bugfix' | 'melhoria' | 'seguranca' | 'performance'`. **Não** usar `'correcao'` ou `'bug'` — esses valores quebram o NOT NULL do enum.
+- Rev. atual: **716**. Próxima: **717**.
+
+#### Design / UI
+- **Usuário prefere design limpo, branco e didático** — sem gradientes coloridos, sem cards com cores vibrantes.
+- Usar `badge` com cores neutras (cinza, âmbar) para indicadores de status — não vermelho/verde vibrante para informações não-críticas.
+- Tabelas com `hover:bg-gray-50`, header `bg-gray-50 text-gray-600 text-xs uppercase`.
+
+---
+
+### CHECKLIST antes de cada deploy
+
+- [ ] `shared/version.ts` atualizado com Rev. N+1
+- [ ] `shared/changelog.ts` com entrada da Rev. N+1 (incluindo campo `tipo` válido)
+- [ ] Novas colunas adicionadas via ColFix (não via db:push)
+- [ ] Valores manuais não são sobrescritos pelos recálculos automáticos
+- [ ] `periodosVencidosOverride` passado em TODOS os call sites de `calcularRescisaoCompleta`
+- [ ] SQL com colunas camelCase usa aspas duplas
+- [ ] `db.execute()` acessado via `.rows || []`
+- [ ] Novas páginas envoltas em `<DashboardLayout>`
