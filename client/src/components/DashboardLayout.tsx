@@ -626,7 +626,7 @@ function DashboardLayoutContent({
   const [avisoBannerOpen, setAvisoBannerOpen] = useState(true);
   const cId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const cIds = getCompanyIdsForQuery ? getCompanyIdsForQuery() : [];
-  const avisoAtivosQuery = trpc.avisoPrevio.list.useQuery(
+  const avisoAtivosQuery = trpc.avisoPrevio.avisoPrevio.list.useQuery(
     { companyId: cId, companyIds: isConstrutoras ? cIds : undefined, status: 'em_andamento' },
     { enabled: cId > 0 || (isConstrutoras && cIds.length > 0), staleTime: 60_000 }
   );
