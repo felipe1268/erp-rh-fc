@@ -3787,9 +3787,45 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
           return v.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
         };
 
+        const hoje2 = new Date().toISOString().split("T")[0];
+        const lastPlanPoint = [...finFull].reverse().find((p: any) => p.semana <= hoje2 && p.planejada != null);
+        const lastRealPoint = [...finFull].reverse().find((p: any) => p.realizada != null);
+        const lastRecPoint  = [...finFull].reverse().find((p: any) => p.receita != null);
+        const finPrevHoje   = lastPlanPoint?.planejada ?? 0;
+        const finRealHoje   = lastRealPoint?.realizada ?? 0;
+        const finRecHoje    = lastRecPoint?.receita ?? 0;
+        const finDesvio     = finRealHoje - finPrevHoje;
+        const finDesvioRec  = finHasReceita ? finRecHoje - finRealHoje : null;
+
         return (
           <>
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            <div className={`grid divide-x divide-slate-100 border-b border-slate-100 mb-4 ${finHasReceita ? "grid-cols-5" : "grid-cols-4"}`}>
+              <div className="px-4 py-3 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Orçamento Total</p>
+                <p className="text-base font-bold text-slate-700">{fmt(totalVenda)}</p>
+              </div>
+              <div className="px-4 py-3 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Previsto (BCWS)</p>
+                <p className="text-base font-bold text-blue-700">{fmt(finPrevHoje)}</p>
+              </div>
+              <div className="px-4 py-3 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Realizado (BCWP)</p>
+                <p className="text-base font-bold text-emerald-700">{fmt(finRealHoje)}</p>
+              </div>
+              {finHasReceita && (
+                <div className="px-4 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Receita Acumulada</p>
+                  <p className="text-base font-bold text-amber-600">{fmt(finRecHoje)}</p>
+                </div>
+              )}
+              <div className="px-4 py-3 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Desvio (BCWP − BCWS)</p>
+                <p className={`text-base font-bold ${finDesvio >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {finDesvio >= 0 ? "+" : ""}{fmt(finDesvio)}
+                </p>
+              </div>
+            </div>
             {/* Legenda */}
             <div className="flex flex-wrap gap-4 text-xs mb-3">
               {finHasPlanejada && (
