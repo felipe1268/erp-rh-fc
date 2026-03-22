@@ -35,7 +35,7 @@ import {
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
-  Home, Tag, GripVertical, Network,
+  Home, Tag, GripVertical, Network, ScanFace, PackageCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -153,6 +153,8 @@ const menuSectionsSST: MenuSection[] = [
     title: "Segurança do Trabalho",
     items: [
       { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
+      { icon: PackageCheck, label: "Entrega de EPI", path: "/epi-entrega" },
+      { icon: ScanFace, label: "Biometria Facial", path: "/biometria-facial" },
       { icon: Warehouse, label: "Estoque por Obra", path: "/epis?tab=estoque_obra" },
       { icon: ClipboardList, label: "Checklists EPI", path: "/epis?tab=checklist" },
       { icon: Ban, label: "Descontos EPI", path: "/epis?tab=descontos" },
