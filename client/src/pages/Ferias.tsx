@@ -1739,7 +1739,7 @@ export default function Ferias() {
                       };
                       const mHE  = mediaHEData?.mediaHE    ?? 0;
                       const mDSR = mediaHEData?.mediaDSRHE ?? 0;
-                      const salario = parseFloat(selectedItem.employeeSalario || "0") || 0;
+                      const salario = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
                       const diasGozo = selectedItem.diasGozo || 30;
                       // Calcular ferias e terco com base HE se valores ainda não foram salvos manualmente
                       const temValorSalvo = parseFloat(selectedItem.valorFerias || "0") > 0;
@@ -1770,7 +1770,7 @@ export default function Ferias() {
                   {editingValues && (
                     <div className="flex gap-2">
                       <Button size="sm" variant="ghost" className="h-7 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800" title="Zera Média de HE e DSR e recalcula usando apenas o salário base" onClick={() => {
-                        const salario = parseFloat(selectedItem.employeeSalario || "0") || 0;
+                        const salario = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
                         const diasGozo = selectedItem.diasGozo || 30;
                         const fmtN = (n: number) => n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
                         const ferias = salario > 0 ? (salario / 30) * diasGozo : 0;
@@ -1824,7 +1824,7 @@ export default function Ferias() {
                       const fmt = (n: number) => n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
                       // Formata BRL ao sair do campo: parse → formata
                       const fmtBlur = (raw: string) => fmt(pv(raw));
-                      const salario = parseFloat(selectedItem.employeeSalario || "0") || 0;
+                      const salario = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
                       const diasGozo = selectedItem.diasGozo || 30;
 
                       // Recalcula ferias + terco + total a partir de mediaHE e mediaDSRHE
