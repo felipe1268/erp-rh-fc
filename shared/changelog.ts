@@ -4129,6 +4129,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-21 00:00:00",
   },
   {
+    version: 715,
+    titulo: "Férias — Botão editar habilitado para status 'Agendada'",
+    descricao: "O botão de editar (lápis) estava visível apenas para férias com status 'pendente', 'vencida' e 'em_gozo'. Adicionado suporte ao status 'agendada', permitindo ajustar as datas de início e fim do gozo após o agendamento.",
+    tipo: "melhoria",
+    modulos: "Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
+  {
     version: 714,
     titulo: "Férias — Status 'Vencida' corrigido para períodos com concessivo expirado",
     descricao: "Períodos de férias com 'Concessivo Até' anterior à data atual e status ainda 'pendente' agora são automaticamente marcados como 'Vencida'. A correção ocorre em três camadas: (1) ColFix no startup atualiza o banco; (2) endpoint list retorna status dinâmico baseado na data; (3) filtro 'vencida' inclui períodos vencidos por data mesmo sem a flag atualizada.",
