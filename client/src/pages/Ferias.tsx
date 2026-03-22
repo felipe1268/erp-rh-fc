@@ -1651,10 +1651,13 @@ export default function Ferias() {
                       const pvP = (s: string) => parseFloat((s || "0").replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
                       const mHE_auto  = mediaHEData.mediaHE    ?? 0;
                       const mDSR_auto = mediaHEData.mediaDSRHE ?? 0;
-                      const mHE_disp  = editingValues ? pvP(editValores.mediaHE)   : mHE_auto;
-                      const mDSR_disp = editingValues ? pvP(editValores.mediaDSRHE) : mDSR_auto;
-                      const isManualHE  = editingValues && Math.abs(mHE_disp  - mHE_auto)  > 0.001;
-                      const isManualDSR = editingValues && Math.abs(mDSR_disp - mDSR_auto) > 0.001;
+                      // Ao não editar, mostrar valor salvo no banco se existir (formato US: "37.62")
+                      const mHE_fromDB  = parseFloat(selectedItem.mediaHE  || "0") || 0;
+                      const mDSR_fromDB = parseFloat(selectedItem.mediaDSRHE || "0") || 0;
+                      const mHE_disp  = editingValues ? pvP(editValores.mediaHE)   : (mHE_fromDB  > 0 ? mHE_fromDB  : mHE_auto);
+                      const mDSR_disp = editingValues ? pvP(editValores.mediaDSRHE) : (mDSR_fromDB > 0 ? mDSR_fromDB : mDSR_auto);
+                      const isManualHE  = Math.abs(mHE_disp  - mHE_auto)  > 0.001;
+                      const isManualDSR = Math.abs(mDSR_disp - mDSR_auto) > 0.001;
                       return (
                         <div className="grid grid-cols-3 gap-2 text-xs mb-2">
                           <div className="bg-white border rounded p-2 text-center">
@@ -1664,19 +1667,15 @@ export default function Ferias() {
                           <div className={`border rounded p-2 text-center transition-colors ${isManualHE ? "bg-amber-50 border-amber-300" : "bg-white"}`}>
                             <p className="text-slate-400 text-[10px]">Média HE/mês</p>
                             <p className={`font-bold ${isManualHE ? "text-amber-700" : "text-blue-700"}`}>{formatMoeda(mHE_disp)}</p>
-                            {editingValues && (
-                              <p className={`text-[9px] mt-0.5 ${isManualHE ? "text-amber-600" : "text-green-600"}`}>
-                                {isManualHE ? "✏ editado manualmente" : "⚙ calculado auto"}
-                              </p>
+                            {isManualHE && (
+                              <p className="text-[9px] mt-0.5 text-amber-600">✏ editado manualmente</p>
                             )}
                           </div>
                           <div className={`border rounded p-2 text-center transition-colors ${isManualDSR ? "bg-amber-50 border-amber-300" : "bg-white"}`}>
                             <p className="text-slate-400 text-[10px]">Média DSR das HE</p>
                             <p className={`font-bold ${isManualDSR ? "text-amber-700" : "text-blue-700"}`}>{formatMoeda(mDSR_disp)}</p>
-                            {editingValues && (
-                              <p className={`text-[9px] mt-0.5 ${isManualDSR ? "text-amber-600" : "text-green-600"}`}>
-                                {isManualDSR ? "✏ editado manualmente" : "⚙ calculado auto"}
-                              </p>
+                            {isManualDSR && (
+                              <p className="text-[9px] mt-0.5 text-amber-600">✏ editado manualmente</p>
                             )}
                           </div>
                         </div>
@@ -1740,9 +1739,9 @@ export default function Ferias() {
                       const mHE_auto  = mediaHEData?.mediaHE    ?? 0;
                       const mDSR_auto = mediaHEData?.mediaDSRHE ?? 0;
                       // Usar valor salvo manualmente se existir, senão usar o calculado
-                      const pvInit = (s: string | null | undefined) => parseFloat((s || "0").replace(/\./g, "").replace(",", ".")) || 0;
-                      const mHE_saved  = pvInit(selectedItem.mediaHE);
-                      const mDSR_saved = pvInit(selectedItem.mediaDSRHE);
+                      // Valores do banco estão em formato US (ex: "37.62") — usar parseFloat direto
+                      const mHE_saved  = parseFloat(selectedItem.mediaHE  || "0") || 0;
+                      const mDSR_saved = parseFloat(selectedItem.mediaDSRHE || "0") || 0;
                       const mHE  = mHE_saved  > 0 ? mHE_saved  : mHE_auto;
                       const mDSR = mDSR_saved > 0 ? mDSR_saved : mDSR_auto;
                       const salario = parseFloat((selectedItem.employeeSalario || "0").replace(/\./g, "").replace(",", ".")) || 0;
