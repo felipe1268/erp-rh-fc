@@ -187,7 +187,16 @@ export default function MedicaoContratos() {
         const sP = parseFloat(config.sinalPct || "0");
         if (sP > 0) autoSinalPct = String(sP);
         const entrada = parseFloat(config.entrada || "0");
-        if (entrada > 0) autoSinalValor = formatBrlInput(entrada);
+        if (entrada > 0) {
+          autoSinalValor = formatBrlInput(entrada);
+        } else if (sP > 0) {
+          const valorBase = parseBrlInput(autoValor);
+          const vb = parseFloat(valorBase || "0");
+          if (vb > 0) {
+            const sinalCalc = (sP / 100) * vb;
+            autoSinalValor = formatBrlInput(sinalCalc);
+          }
+        }
         const rP = parseFloat(config.retencaoPct || "0");
         if (rP > 0) autoRetencaoPct = String(rP);
       }
