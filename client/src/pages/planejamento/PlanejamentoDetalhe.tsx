@@ -4921,9 +4921,16 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     const ultData = datasFim[datasFim.length - 1]?.substring(0, 7) ?? dadosMensais[dadosMensais.length - 1]?.mes ?? null;
     if (!priData || !ultData) return [];
 
-    // Mapa de custo por mês vindo do cruzamento com orçamento (para coluna "Custo Prev.")
+    // Mapas de venda/custo por mês vindos do cruzamento com orçamento
+    const vendaByMes: Record<string, number> = {};
     const custoByMes: Record<string, number> = {};
-    dadosMensais.forEach((d: any) => { custoByMes[d.mes] = d.custo ?? 0; });
+    dadosMensais.forEach((d: any) => {
+      vendaByMes[d.mes] = d.venda ?? 0;
+      custoByMes[d.mes] = d.custo ?? 0;
+    });
+
+    // Fator de escala: se há sinal, reduz proporcionalmente os valores de venda
+    const escala = baseV > 0 ? baseMedicoes / baseV : 1;
 
     // Monta estrutura de meses baseada em TODAS as atividades
     const mesesAll = mesesRange(priData, ultData).map(mes => {
@@ -4933,45 +4940,22 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
         nomeMes: dt.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
         nomeMesCurto: dt.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
         custo: custoByMes[mes] ?? 0,
-        venda: 0,
+        vendaOriginal: vendaByMes[mes] ?? 0,
       };
     });
 
+    let cumVenda = 0;
     const rows = mesesAll.map((d: any) => {
-      const [ano, m] = d.mes.split("-").map(Number);
-      const lastDay = new Date(ano, m, 0).getDate();
-      const corte = Math.min(cfgDiaCorte, lastDay);
-      const cutoff = `${d.mes}-${String(corte).padStart(2, "0")}`;
-      let soma = 0;
-      folhas.forEach((a: any) => {
-        const acts = avByAct[a.id] ?? [];
-        let pct = 0;
-        if (acts.length > 0) {
-          // Avanço real registrado
-          for (const av of acts) { if (av.semana <= cutoff) pct = av.pct; else break; }
-        } else if (a.dataInicio && a.dataFim) {
-          // Sem avanço registrado → usa cronograma planejado (interpolação linear)
-          const startMs = new Date(a.dataInicio + "T00:00:00").getTime();
-          const endMs   = new Date(a.dataFim   + "T23:59:59").getTime();
-          const cutMs   = new Date(cutoff       + "T23:59:59").getTime();
-          if (cutMs >= endMs)        pct = 100;
-          else if (cutMs >= startMs) pct = (cutMs - startMs) / (endMs - startMs) * 100;
-          else                       pct = 0;
-        }
-        const peso = semPeso ? 1 : n(a.pesoFinanceiro);
-        soma += (pct * peso) / denom;
-      });
-      const pctAcum = +soma.toFixed(4);
-      const pctMensal = Math.max(0, pctAcum - pctAcumAnterior);
-      pctAcumAnterior = pctAcum;
+      // Usa valor de venda do cruzamento orçamento×cronograma, escalado pelo sinal
+      const medicaoBruta = +(d.vendaOriginal * escala).toFixed(2);
+      cumVenda += d.vendaOriginal;
+      const pctAcum = baseV > 0 ? +(cumVenda / baseV * 100).toFixed(1) : 0;
 
-      const prevMedicao = +(pctAcum / 100 * baseMedicoes).toFixed(2);         // cumulative (for display)
-      const medicaoBruta = +(pctMensal / 100 * baseMedicoes).toFixed(2);      // monthly increment (for billing)
       const retencao = +(medicaoBruta * cfgRetencaoPct / 100).toFixed(2);
       const descontoSinal = 0;
       const liquido = +(medicaoBruta - retencao).toFixed(2);
 
-      return { ...d, pct: +pctAcum.toFixed(1), pctMensal: +pctMensal.toFixed(2), prevMedicao, medicaoBruta, retencao, descontoSinal, liquido, isSinalRow: false };
+      return { ...d, pct: pctAcum, pctMensal: 0, prevMedicao: +(cumVenda * escala).toFixed(2), medicaoBruta, retencao, descontoSinal, liquido, isSinalRow: false };
     });
 
     // Linha sintética de Sinal/Mobilização
@@ -5003,7 +4987,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     }
 
     return rows;
-  }, [cfgDiaCorte, cfgSinalPct, cfgRetencaoPct, cfgDataInicioObra, dadosMensais, avancos, atividades, baseV, sinalModo, cfgSinalValor]);
+  }, [cfgSinalPct, cfgRetencaoPct, cfgDataInicioObra, dadosMensais, atividades, baseV, sinalModo, cfgSinalValor]);
 
   // ── Análise de Performance Semanal ───────────────────────────────────────
   const analiseSemanal = useMemo(() => {
