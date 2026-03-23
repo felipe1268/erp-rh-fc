@@ -220,9 +220,16 @@ export default function PlanejamentoLista() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           {[
             { label: "Total de Projetos", value: projetos.length, icon: <Building2 className="h-4 w-4" />, color: "text-blue-600", bg: "bg-blue-50" },
-            { label: "Em Andamento", value: projetos.filter(p => p.status?.toLowerCase().includes("andamento")).length, icon: <TrendingUp className="h-4 w-4" />, color: "text-emerald-600", bg: "bg-emerald-50" },
-            { label: "Com Atraso", value: projetos.filter(p => p.status?.toLowerCase().includes("atraso")).length, icon: <AlertTriangle className="h-4 w-4" />, color: "text-red-600", bg: "bg-red-50" },
-            { label: "Valor Total", value: formatBRL(projetos.reduce((s, p) => s + n(p.valorContrato), 0)), icon: <DollarSign className="h-4 w-4" />, color: "text-purple-600", bg: "bg-purple-50" },
+            { label: "Em Andamento", value: projetos.filter(p => p.status?.toLowerCase().replace(/_/g, " ").includes("andamento")).length, icon: <TrendingUp className="h-4 w-4" />, color: "text-emerald-600", bg: "bg-emerald-50" },
+            { label: "Com Atraso", value: projetos.filter(p => {
+              const st = (p.status || "").toLowerCase().replace(/_/g, " ");
+              if (st.includes("conclu")) return false;
+              const prazo = p.dataTerminoContratual;
+              if (!prazo) return false;
+              const hoje = new Date().toISOString().split("T")[0];
+              return String(prazo).slice(0, 10) < hoje;
+            }).length, icon: <AlertTriangle className="h-4 w-4" />, color: "text-red-600", bg: "bg-red-50" },
+            { label: "Valor Total", value: formatBRL(projetos.reduce((s, p) => s + (n(p.valorContrato) || n((p as any).orcamentoValorNegociado) || n((p as any).orcamentoTotalVenda)), 0)), icon: <DollarSign className="h-4 w-4" />, color: "text-purple-600", bg: "bg-purple-50" },
           ].map((k, i) => (
             <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex items-start gap-3">
               <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center shrink-0`}>
@@ -300,10 +307,10 @@ export default function PlanejamentoLista() {
                         </span>
                       </div>
                     )}
-                    {n(projeto.valorContrato) > 0 && (
+                    {(n(projeto.valorContrato) > 0 || n((projeto as any).orcamentoValorNegociado) > 0 || n((projeto as any).orcamentoTotalVenda) > 0) && (
                       <div className="flex items-center gap-1.5 font-semibold text-emerald-700">
                         <DollarSign className="h-3.5 w-3.5 shrink-0" />
-                        <span>{formatBRL(n(projeto.valorContrato))}</span>
+                        <span>{formatBRL(n(projeto.valorContrato) || n((projeto as any).orcamentoValorNegociado) || n((projeto as any).orcamentoTotalVenda))}</span>
                       </div>
                     )}
                   </div>

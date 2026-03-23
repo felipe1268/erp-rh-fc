@@ -5055,4 +5055,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 15:00:00",
   },
+  {
+    version: 765,
+    titulo: "Bugfix: Cards da lista de projetos — 'Com Atraso' e 'Valor Total' sem dados",
+    descricao: "Corrigidos 2 cards KPI na lista de projetos: (1) 'Com Atraso' antes verificava apenas se o status continha 'atraso' — agora calcula automaticamente: se o prazo contratual (dataTerminoContratual) já passou e o projeto não está concluído, conta como atrasado. (2) 'Valor Total' mostrava R$ 0,00 porque usava apenas valorContrato (que estava zerado) — agora usa fallback: valorContrato → orcamentoValorNegociado → orcamentoTotalVenda. O mesmo fallback foi aplicado ao card individual de cada projeto na lista.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 15:30:00",
+  },
 ];
