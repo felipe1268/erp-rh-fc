@@ -1377,7 +1377,8 @@ export const planejamentoRouter = router({
 
       // Cruzamento orçamento × cronograma: usa apenas itens-FOLHA do orçamento
       // (sem sub-itens) para evitar dupla contagem de valores acumulados em itens-pai.
-      // Para cada item-folha, busca UMA atividade do cronograma com nome igual.
+      // Cada item pode cruzar com MÚLTIPLAS atividades (mesmo nome em pavimentos diferentes).
+      // Nesse caso o valor do item é dividido igualmente entre as N atividades (valor/N).
       const rows = await db.execute(sql`
         WITH orc_scope AS (
           SELECT i.*
@@ -1394,8 +1395,8 @@ export const planejamentoRouter = router({
               AND c.id != o.id
           )
         ),
-        matched AS (
-          SELECT DISTINCT ON (i.id)
+        all_pairs AS (
+          SELECT
             i.id                                   AS item_id,
             i."eapCodigo"                          AS eap,
             i.descricao                            AS nome,
@@ -1409,7 +1410,8 @@ export const planejamentoRouter = router({
             a.id                                   AS ativ_id,
             a.data_inicio::text                    AS data_inicio,
             a.data_fim::text                       AS data_fim,
-            a.ordem                                AS ordem
+            a.ordem                                AS ordem,
+            COUNT(*) OVER (PARTITION BY i.id)      AS n_ativs
           FROM folhas i
           JOIN planejamento_atividades a
             ON a.projeto_id = ${input.projetoId}
@@ -1418,9 +1420,19 @@ export const planejamentoRouter = router({
               = LOWER(REGEXP_REPLACE(TRIM(i.descricao), '[\\s]+', ' ', 'g'))
           WHERE a.data_inicio IS NOT NULL
             AND a.data_fim IS NOT NULL
-          ORDER BY i.id, a.ordem ASC
         )
-        SELECT * FROM matched ORDER BY ordem
+        SELECT
+          item_id, eap, nome,
+          (venda_total / n_ativs) AS venda_total,
+          (meta_total  / n_ativs) AS meta_total,
+          (custo_total / n_ativs) AS custo_total,
+          (custo_mat   / n_ativs) AS custo_mat,
+          (custo_mdo   / n_ativs) AS custo_mdo,
+          unidade,
+          (quantidade  / n_ativs) AS quantidade,
+          ativ_id, data_inicio, data_fim, ordem
+        FROM all_pairs
+        ORDER BY ordem
       `);
 
       // Busca totais do orçamento para normalização dos 3 cenários

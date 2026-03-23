@@ -4992,4 +4992,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 758,
+    titulo: "Cruzamento Orçamento × Cronograma: distribuição por atividades múltiplas",
+    descricao: "Corrigida a distribuição temporal dos valores do cruzamento orçamento × cronograma. Antes, quando um item do orçamento casava com múltiplas atividades do cronograma (ex: mesmo serviço em pavimentos diferentes), apenas a primeira atividade recebia 100% do valor. Agora o valor é dividido igualmente entre todas as atividades que compartilham o mesmo nome, e cada fração é distribuída conforme as datas da respectiva atividade. Resultado: a distribuição mensal agora reflete o cronograma real da obra em vez de concentrar tudo nos meses iniciais.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 00:00:00",
+  },
 ];
