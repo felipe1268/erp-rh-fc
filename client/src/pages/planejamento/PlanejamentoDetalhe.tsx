@@ -4707,6 +4707,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [sinalModo, setSinalModo] = useState<"pct" | "valor">("pct");
   const [sinalValorFocused, setSinalValorFocused] = useState(false);
   const [sinalValorInput, setSinalValorInput] = useState("");
+  const [cfgSinalValor, setCfgSinalValor] = useState<number | null>(null);
   const [cfgBloqueado, setCfgBloqueado] = useState(false);
   // ── Reforços de Parcela (anti-caixa negativo) — persiste em localStorage ──
   const reforcoKey = `reforcos_${projetoId}`;
@@ -4905,7 +4906,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     });
     Object.values(avByAct).forEach(arr => arr.sort((a, b) => a.semana.localeCompare(b.semana)));
 
-    const sinalTotal = +(baseV * cfgSinalPct / 100).toFixed(2);
+    const sinalTotal = sinalModo === "valor" && cfgSinalValor != null && cfgSinalValor > 0
+      ? cfgSinalValor
+      : +(baseV * cfgSinalPct / 100).toFixed(2);
     let sinalRestante = sinalTotal;
     let pctAcumAnterior = 0;
 
@@ -4999,7 +5002,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     }
 
     return rows;
-  }, [cfgDiaCorte, cfgSinalPct, cfgRetencaoPct, cfgDataInicioObra, dadosMensais, avancos, atividades, baseV]);
+  }, [cfgDiaCorte, cfgSinalPct, cfgRetencaoPct, cfgDataInicioObra, dadosMensais, avancos, atividades, baseV, sinalModo, cfgSinalValor]);
 
   // ── Análise de Performance Semanal ───────────────────────────────────────
   const analiseSemanal = useMemo(() => {
@@ -5275,27 +5278,31 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                         <input
                           type="text"
                           value={sinalValorFocused
-                            ? (sinalValorInput === "0" ? "" : sinalValorInput)
-                            : ((baseV * cfgSinalPct / 100) === 0 ? "" : (baseV * cfgSinalPct / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                            ? sinalValorInput
+                            : (cfgSinalValor != null && cfgSinalValor > 0
+                              ? cfgSinalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : "")
                           }
                           onFocus={() => {
                             setSinalValorFocused(true);
-                            const cur = baseV * cfgSinalPct / 100;
-                            setSinalValorInput(cur > 0 ? String(cur).replace(".", ",") : "");
+                            if (cfgSinalValor != null && cfgSinalValor > 0) {
+                              setSinalValorInput(cfgSinalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                            } else {
+                              setSinalValorInput("");
+                            }
                           }}
-                          onBlur={e => {
+                          onBlur={() => {
                             setSinalValorFocused(false);
-                            const raw = e.target.value.replace(/\./g, "").replace(",", ".");
+                            const raw = sinalValorInput.replace(/\./g, "").replace(",", ".");
                             const val = parseFloat(raw) || 0;
+                            setCfgSinalValor(val > 0 ? val : null);
                             const pct = baseV > 0 ? Math.min(100, Math.max(0, (val / baseV) * 100)) : 0;
-                            setCfgSinalPct(+pct.toFixed(4));
+                            setCfgSinalPct(+pct.toFixed(6));
                           }}
                           onChange={e => {
-                            const raw = e.target.value.replace(/[^\d,]/g, "");
-                            setSinalValorInput(raw);
-                            const val = parseFloat(raw.replace(",", ".")) || 0;
-                            const pct = baseV > 0 ? Math.min(100, Math.max(0, (val / baseV) * 100)) : 0;
-                            setCfgSinalPct(+pct.toFixed(4));
+                            const v = e.target.value;
+                            const clean = v.replace(/[^\d.,]/g, "");
+                            setSinalValorInput(clean);
                           }}
                           placeholder="0,00"
                           className="h-9 w-full text-sm border border-violet-200 rounded-lg px-3 pr-8 bg-white focus:ring-2 focus:ring-violet-400 outline-none font-semibold text-center" />
@@ -5703,7 +5710,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                       <th className="py-2 px-3 text-right text-blue-700">% Acum.</th>
                       <th className="py-2 px-3 text-right">Medição Bruta</th>
                       <th className="py-2 px-3 text-right text-rose-700">− Ret. {cfgRetencaoPct}%</th>
-                      <th className="py-2 px-3 text-right text-violet-700">− Sinal {cfgSinalPct}%</th>
+                      <th className="py-2 px-3 text-right text-violet-700">− Sinal {sinalModo === "valor" && cfgSinalValor != null ? fmt(cfgSinalValor) : `${cfgSinalPct}%`}</th>
                       <th className="py-2 px-3 text-right text-emerald-700 font-semibold">= Líquido</th>
                       <th className="py-2 px-3 text-right text-slate-500">Custo Prev.</th>
                       <th className="py-2 px-3 text-right">Margem</th>
