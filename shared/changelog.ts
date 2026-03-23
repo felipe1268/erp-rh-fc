@@ -5073,4 +5073,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 16:00:00",
   },
+  {
+    version: 767,
+    titulo: "Medição — preenchimento automático dos dados do Planejamento",
+    descricao: "Ao selecionar um projeto no modal 'Novo Contrato de Medição', o sistema agora puxa automaticamente da Configuração de Medição do Planejamento: valor total do contrato (do orçamento), % de sinal/mobilização, valor do sinal (entrada), % de retenção de garantia, e critério de medição (avanço físico ou parcela fixa). Campos preenchidos exibem indicação visual '• do planejamento' / '• do orçamento'. Dados permanecem editáveis caso o usuário queira ajustar. Evita redigitação de informações já cadastradas.",
+    tipo: "melhoria",
+    modulos: "Medição",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 16:30:00",
+  },
 ];

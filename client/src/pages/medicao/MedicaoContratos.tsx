@@ -165,7 +165,7 @@ export default function MedicaoContratos() {
     });
   }
 
-  function handleProjetoSelect(projetoId: string) {
+  async function handleProjetoSelect(projetoId: string) {
     const projeto = (projetos as any[]).find((p: any) => String(p.id) === projetoId);
     let autoValor = "";
     if (projeto) {
@@ -174,7 +174,34 @@ export default function MedicaoContratos() {
       const valor = negociado > 0 ? negociado : totalVenda > 0 ? totalVenda : 0;
       if (valor > 0) autoValor = formatBrlInput(valor);
     }
-    setForm(f => ({ ...f, projetoId, valorTotalContrato: autoValor }));
+
+    let autoCriterio = "avanco_fisico";
+    let autoSinalPct = "";
+    let autoSinalValor = "";
+    let autoRetencaoPct = "";
+
+    try {
+      const config = await utils.medicao.getProjetoMedicaoConfig.fetch({ projetoId: parseInt(projetoId) });
+      if (config) {
+        if (config.tipoMedicao === "parcelas") autoCriterio = "parcela_fixa";
+        const sP = parseFloat(config.sinalPct || "0");
+        if (sP > 0) autoSinalPct = String(sP);
+        const entrada = parseFloat(config.entrada || "0");
+        if (entrada > 0) autoSinalValor = formatBrlInput(entrada);
+        const rP = parseFloat(config.retencaoPct || "0");
+        if (rP > 0) autoRetencaoPct = String(rP);
+      }
+    } catch {}
+
+    setForm(f => ({
+      ...f,
+      projetoId,
+      valorTotalContrato: autoValor,
+      criterio: autoCriterio,
+      percentualSinal: autoSinalPct,
+      valorSinalRecebido: autoSinalValor,
+      percentualRetencao: autoRetencaoPct,
+    }));
   }
 
   function handleCriar() {
@@ -430,7 +457,12 @@ export default function MedicaoContratos() {
                     </div>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-gray-700 mb-2 block">Sinal Recebido</Label>
+                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                      Sinal Recebido
+                      {form.valorSinalRecebido && (
+                        <span className="text-[10px] text-emerald-600 font-normal normal-case">• do planejamento</span>
+                      )}
+                    </Label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">R$</span>
                       <Input
@@ -456,7 +488,12 @@ export default function MedicaoContratos() {
                   <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label className="text-sm font-medium text-gray-700 mb-2 block">% Desconto de Sinal</Label>
+                        <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                          % Desconto de Sinal
+                          {form.percentualSinal && (
+                            <span className="text-[10px] text-emerald-600 font-normal normal-case">• do planejamento</span>
+                          )}
+                        </Label>
                         <div className="relative">
                           <Input
                             className="h-10 text-sm pr-8 bg-white"
@@ -468,7 +505,12 @@ export default function MedicaoContratos() {
                         </div>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium text-gray-700 mb-2 block">% Retenção de Garantia</Label>
+                        <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                          % Retenção de Garantia
+                          {form.percentualRetencao && (
+                            <span className="text-[10px] text-emerald-600 font-normal normal-case">• do planejamento</span>
+                          )}
+                        </Label>
                         <div className="relative">
                           <Input
                             className="h-10 text-sm pr-8 bg-white"

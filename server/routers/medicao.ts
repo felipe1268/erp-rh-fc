@@ -9,6 +9,7 @@ import {
   planejamentoProjetos,
   planejamentoAtividades,
   planejamentoAvancos,
+  planejamentoMedicaoConfig,
   orcamentoItens,
   orcamentos,
   obras,
@@ -133,6 +134,23 @@ export const medicaoRouter = router({
           eq(medicaoContratos.companyId, companyId),
         ));
       return { success: true };
+    }),
+
+  getProjetoMedicaoConfig: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.select({
+        tipoMedicao: planejamentoMedicaoConfig.tipoMedicao,
+        sinalPct: planejamentoMedicaoConfig.sinalPct,
+        retencaoPct: planejamentoMedicaoConfig.retencaoPct,
+        entrada: planejamentoMedicaoConfig.entrada,
+        diaCorte: planejamentoMedicaoConfig.diaCorte,
+      })
+      .from(planejamentoMedicaoConfig)
+      .where(eq(planejamentoMedicaoConfig.projetoId, input.projetoId))
+      .limit(1);
+      return rows[0] || null;
     }),
 
   excluirContrato: protectedProcedure
