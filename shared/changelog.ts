@@ -5028,4 +5028,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 13:00:00",
   },
+  {
+    version: 762,
+    titulo: "Bugfix: Curva S — linha Realizado não aparecia no gráfico",
+    descricao: "Corrigido bug onde a linha verde (Realizado) da Curva S de Trabalho não era exibida no gráfico, apesar dos dados de avanço existirem no banco. Causa raiz: opção keepPreviousData do React Query mantinha dados obsoletos de projetos anteriores durante a navegação, mostrando curva baseline sem realizado. Correções: (1) Removido keepPreviousData da query getCurvaS para garantir dados frescos do projeto atual. (2) Adicionado indicador visual 'Atualizando...' durante refetch. (3) Legenda do Realizado agora só aparece quando há dados reais (antes era hardcoded show:true).",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 14:00:00",
+  },
 ];

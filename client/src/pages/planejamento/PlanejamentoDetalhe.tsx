@@ -300,9 +300,9 @@ export default function PlanejamentoDetalhe() {
   );
 
   const curvaBaselineId = baselineRev?.id ?? revisaoAtiva?.id ?? 0;
-  const { data: curvaData, isLoading: curvaLoading } = trpc.planejamento.getCurvaS.useQuery(
+  const { data: curvaData, isLoading: curvaLoading, isFetching: curvaFetching } = trpc.planejamento.getCurvaS.useQuery(
     { projetoId, revisaoId: revisaoAtiva?.id ?? 0, baselineId: curvaBaselineId },
-    { enabled: !!revisaoAtiva && curvaBaselineId > 0, keepPreviousData: true }
+    { enabled: !!revisaoAtiva && curvaBaselineId > 0 }
   );
 
   const { data: curvaMedicoes = [] } = trpc.planejamento.getCurvaMedicoes.useQuery(
@@ -590,7 +590,7 @@ export default function PlanejamentoDetalhe() {
           />
         )}
         {aba === "curva-s" && (
-          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} curvaMedicoes={curvaMedicoes} onEditarProjeto={abrirEditProjeto} />
+          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} curvaFetching={curvaFetching} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} curvaMedicoes={curvaMedicoes} onEditarProjeto={abrirEditProjeto} />
         )}
         {aba === "avanco" && (
           <AvancoSemanal
@@ -3482,7 +3482,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
 // Paleta de cores para revisões anteriores (distintas, mas secundárias)
 const REV_COLORS = ["#7c3aed","#0891b2","#d97706","#be185d","#0d9488","#ea580c","#9333ea","#0284c7"];
 
-function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, revisaoAtiva, curvaMedicoes = [], onEditarProjeto }: any) {
+function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPct, projetoId, revisaoAtiva, curvaMedicoes = [], onEditarProjeto }: any) {
   const [curvaTipo, setCurvaTipo] = useState<"trabalho" | "financeira">("trabalho");
 
   // Revisões anteriores com toggles
@@ -3548,6 +3548,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
   const hasRealizada  = merged.some(p => p.realizada  != null);
   const hasTendencia  = merged.some(p => p.tendencia  != null);
 
+
   return (
     <div className="space-y-4">
       {/* ── Switcher Trabalho / Financeira ───────────────────────────────── */}
@@ -3591,7 +3592,7 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
         {[
           { key: "baseline",  show: hasBaseline,  color: "#1e40af", dash: false, width: 2, label: "Baseline (Rev 00)" },
           { key: "planejada", show: hasPlanejada, color: "#ef4444", dash: false, width: 4, label: "Revisão Atual" },
-          { key: "realizada", show: true,          color: "#22c55e", dash: false, width: 3, label: "Realizado" },
+          { key: "realizada", show: hasRealizada,   color: "#22c55e", dash: false, width: 3, label: "Realizado" },
           { key: "tendencia", show: hasTendencia, color: "#16a34a", dash: true,  width: 2, label: "Tendência (projeção)" },
         ].filter(l => l.show).map((l, i) => (
           <div key={i} className="flex items-center gap-1.5">
@@ -3630,7 +3631,13 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
       </div>
 
       {/* Gráfico */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 relative">
+        {curvaFetching && (
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 text-xs text-slate-400">
+            <div className="h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            Atualizando...
+          </div>
+        )}
         <p className="text-sm font-semibold text-slate-700 mb-1">
           Curva S de Trabalho — Avanço Físico Acumulado (%)
         </p>
