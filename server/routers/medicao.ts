@@ -10,6 +10,8 @@ import {
   planejamentoAtividades,
   planejamentoAvancos,
   orcamentoItens,
+  orcamentos,
+  obras,
 } from "../../drizzle/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 
@@ -35,9 +37,15 @@ export const medicaoRouter = router({
           nomeProjeto: planejamentoProjetos.nome,
           cliente: planejamentoProjetos.cliente,
           local: planejamentoProjetos.local,
+          obraId: planejamentoProjetos.obraId,
+          obraNome: obras.nome,
+          orcamentoId: planejamentoProjetos.orcamentoId,
+          orcamentoCodigo: orcamentos.codigo,
         })
         .from(medicaoContratos)
         .leftJoin(planejamentoProjetos, eq(medicaoContratos.projetoId, planejamentoProjetos.id))
+        .leftJoin(obras, eq(planejamentoProjetos.obraId, obras.id))
+        .leftJoin(orcamentos, eq(planejamentoProjetos.orcamentoId, orcamentos.id))
         .where(and(
           eq(medicaoContratos.companyId, input.companyId),
           isNull(medicaoContratos.deletedAt),
@@ -105,6 +113,7 @@ export const medicaoRouter = router({
   atualizarContrato: protectedProcedure
     .input(z.object({
       id: z.number(),
+      companyId: z.number(),
       criterio: z.enum(["avanco_fisico", "parcela_fixa"]).optional(),
       valorTotalContrato: z.string().optional(),
       percentualSinal: z.string().optional(),
@@ -116,10 +125,26 @@ export const medicaoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const { id, ...data } = input;
+      const { id, companyId, ...data } = input;
       await db.update(medicaoContratos)
         .set({ ...data, atualizadoEm: new Date() })
-        .where(eq(medicaoContratos.id, id));
+        .where(and(
+          eq(medicaoContratos.id, id),
+          eq(medicaoContratos.companyId, companyId),
+        ));
+      return { success: true };
+    }),
+
+  excluirContrato: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(medicaoContratos)
+        .set({ deletedAt: new Date() })
+        .where(and(
+          eq(medicaoContratos.id, input.id),
+          eq(medicaoContratos.companyId, input.companyId),
+        ));
       return { success: true };
     }),
 

@@ -5064,4 +5064,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 15:30:00",
   },
+  {
+    version: 766,
+    titulo: "Medição de Contratos — editar, apagar e info de obra/orçamento",
+    descricao: "Cards de contratos de medição agora exibem o nome da obra em destaque e o código do orçamento (ORC xxx). Adicionados botões de editar (lápis) e excluir (lixeira) em cada card. Modal de edição permite alterar critério, status, valores de contrato, sinal, retenção, FD e observações. Exclusão com confirmação (soft delete via deletedAt). Backend: listarContratos agora faz JOIN com tabelas obras e orcamentos; novo endpoint excluirContrato com filtro por companyId.",
+    tipo: "feature",
+    modulos: "Medição",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 16:00:00",
+  },
 ];

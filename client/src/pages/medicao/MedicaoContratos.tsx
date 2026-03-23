@@ -15,7 +15,7 @@ import {
 import {
   Plus, Search, Loader2, FileText, Building2, DollarSign,
   ChevronRight, Settings, CheckCircle2, AlertCircle, TrendingUp,
-  Percent, ClipboardList, StickyNote,
+  Percent, ClipboardList, StickyNote, Pencil, Trash2,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -86,6 +86,19 @@ export default function MedicaoContratos() {
     { enabled: companyId > 0 }
   );
 
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({
+    criterio: "avanco_fisico",
+    valorTotalContrato: "",
+    percentualSinal: "",
+    valorSinalRecebido: "",
+    percentualRetencao: "",
+    valorMinimoFd: "",
+    observacoes: "",
+    status: "ativo",
+  });
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+
   const criarMutation = trpc.medicao.criarContrato.useMutation({
     onSuccess: () => {
       utils.medicao.listarContratos.invalidate();
@@ -93,6 +106,51 @@ export default function MedicaoContratos() {
       resetForm();
     },
   });
+
+  const atualizarMutation = trpc.medicao.atualizarContrato.useMutation({
+    onSuccess: () => {
+      utils.medicao.listarContratos.invalidate();
+      setEditId(null);
+    },
+  });
+
+  const excluirMutation = trpc.medicao.excluirContrato.useMutation({
+    onSuccess: () => {
+      utils.medicao.listarContratos.invalidate();
+      setConfirmDelete(null);
+    },
+  });
+
+  function abrirEdicao(c: any, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditForm({
+      criterio: c.criterio || "avanco_fisico",
+      valorTotalContrato: formatBrlInput(c.valorTotalContrato),
+      percentualSinal: c.percentualSinal ? String(n(c.percentualSinal)) : "",
+      valorSinalRecebido: formatBrlInput(c.valorSinalRecebido),
+      percentualRetencao: c.percentualRetencao ? String(n(c.percentualRetencao)) : "",
+      valorMinimoFd: formatBrlInput(c.valorMinimoFd),
+      observacoes: c.observacoes || "",
+      status: c.status || "ativo",
+    });
+    setEditId(c.id);
+  }
+
+  function salvarEdicao() {
+    if (!editId) return;
+    atualizarMutation.mutate({
+      id: editId,
+      companyId,
+      criterio: editForm.criterio as "avanco_fisico" | "parcela_fixa",
+      valorTotalContrato: parseBrlInput(editForm.valorTotalContrato) || undefined,
+      percentualSinal: editForm.percentualSinal || undefined,
+      valorSinalRecebido: parseBrlInput(editForm.valorSinalRecebido) || undefined,
+      percentualRetencao: editForm.percentualRetencao || null,
+      valorMinimoFd: parseBrlInput(editForm.valorMinimoFd) || null,
+      observacoes: editForm.observacoes || null,
+      status: editForm.status as "ativo" | "encerrado",
+    });
+  }
 
   function resetForm() {
     setForm({
@@ -185,12 +243,42 @@ export default function MedicaoContratos() {
                 onClick={() => setLocation(`/medicao/${c.id}`)}
                 className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group"
               >
-                <div className="flex items-start justify-between mb-3">
+                <div className="flex items-start justify-between mb-1">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 truncate">{c.nomeProjeto}</h3>
-                    <p className="text-sm text-gray-500 truncate mt-0.5">{c.cliente || "—"}</p>
+                    <h3 className="font-bold text-base text-gray-900 truncate">
+                      {c.obraNome || c.nomeProjeto || "Sem nome"}
+                    </h3>
+                    {c.obraNome && c.nomeProjeto && c.obraNome !== c.nomeProjeto && (
+                      <p className="text-xs text-gray-500 truncate">{c.nomeProjeto}</p>
+                    )}
                   </div>
-                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-blue-500 ml-2 flex-shrink-0 mt-0.5 transition-colors" />
+                  <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                    <button
+                      onClick={(e) => abrirEdicao(c, e)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                      title="Editar contrato"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDelete(c.id); }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="Excluir contrato"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                    <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-blue-500 transition-colors" />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+                  {c.cliente && <span>{c.cliente}</span>}
+                  {c.cliente && c.orcamentoCodigo && <span>·</span>}
+                  {c.orcamentoCodigo && (
+                    <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">
+                      ORC {c.orcamentoCodigo}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -439,6 +527,121 @@ export default function MedicaoContratos() {
                   : <Plus className="h-4 w-4" />
                 }
                 Criar Contrato
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Editar Contrato */}
+      <Dialog open={editId !== null} onOpenChange={open => { if (!open) setEditId(null); }}>
+        <DialogContent className="max-w-lg" style={{ backgroundColor: "white" }}>
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-gray-900">Editar Contrato</h2>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-1 block">Critério de Medição</Label>
+                <Select value={editForm.criterio} onValueChange={v => setEditForm(f => ({ ...f, criterio: v }))}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="avanco_fisico">Avanço Físico</SelectItem>
+                    <SelectItem value="parcela_fixa">Parcela Fixa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-1 block">Status</Label>
+                <Select value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ativo">Ativo</SelectItem>
+                    <SelectItem value="encerrado">Encerrado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium text-gray-700 mb-1 block">Valor Total do Contrato (R$)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">R$</span>
+                <Input className="h-10 pl-9" value={editForm.valorTotalContrato}
+                  onChange={e => handleBrlChange(e, v => setEditForm(f => ({ ...f, valorTotalContrato: v })))}
+                  onBlur={e => { const p = parseBrlInput(e.target.value); if (p) setEditForm(f => ({ ...f, valorTotalContrato: formatBrlInput(p) })); }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-1 block">% Sinal / Mobilização</Label>
+                <Input className="h-10" value={editForm.percentualSinal}
+                  onChange={e => setEditForm(f => ({ ...f, percentualSinal: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-1 block">Valor do Sinal (R$)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">R$</span>
+                  <Input className="h-10 pl-9" value={editForm.valorSinalRecebido}
+                    onChange={e => handleBrlChange(e, v => setEditForm(f => ({ ...f, valorSinalRecebido: v })))}
+                    onBlur={e => { const p = parseBrlInput(e.target.value); if (p) setEditForm(f => ({ ...f, valorSinalRecebido: formatBrlInput(p) })); }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-1 block">% Retenção de Garantia</Label>
+                <Input className="h-10" value={editForm.percentualRetencao}
+                  onChange={e => setEditForm(f => ({ ...f, percentualRetencao: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-1 block">Valor Mínimo FD (R$)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">R$</span>
+                  <Input className="h-10 pl-9" value={editForm.valorMinimoFd}
+                    onChange={e => handleBrlChange(e, v => setEditForm(f => ({ ...f, valorMinimoFd: v })))}
+                    onBlur={e => { const p = parseBrlInput(e.target.value); if (p) setEditForm(f => ({ ...f, valorMinimoFd: formatBrlInput(p) })); }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium text-gray-700 mb-1 block">Observações</Label>
+              <Textarea className="min-h-[60px]" value={editForm.observacoes}
+                onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))} />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setEditId(null)}>Cancelar</Button>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={salvarEdicao} disabled={atualizarMutation.isPending}>
+                {atualizarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmação de exclusão */}
+      <Dialog open={confirmDelete !== null} onOpenChange={open => { if (!open) setConfirmDelete(null); }}>
+        <DialogContent className="max-w-sm" style={{ backgroundColor: "white" }}>
+          <div className="space-y-4 text-center">
+            <div className="mx-auto h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+              <Trash2 className="h-5 w-5 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">Excluir contrato?</h3>
+            <p className="text-sm text-gray-500">Esta ação não pode ser desfeita. Os boletins de medição associados serão mantidos para histórico.</p>
+            <div className="flex justify-center gap-3 pt-2">
+              <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancelar</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => {
+                if (confirmDelete) excluirMutation.mutate({ id: confirmDelete, companyId });
+              }} disabled={excluirMutation.isPending}>
+                {excluirMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Excluir
               </Button>
             </div>
           </div>
