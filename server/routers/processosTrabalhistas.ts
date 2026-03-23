@@ -307,10 +307,10 @@ export const processosTrabRouter = router({
     }),
 
   excluirAndamento: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), processoId: z.number() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      await db.delete(processosAndamentos).where(eq(processosAndamentos.id, input.id));
+      await db.delete(processosAndamentos).where(and(eq(processosAndamentos.id, input.id), eq(processosAndamentos.processoId, input.processoId)));
       return { success: true };
     }),
 

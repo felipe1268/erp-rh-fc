@@ -5019,4 +5019,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 12:00:00",
   },
+  {
+    version: 761,
+    titulo: "Auditoria de consistência de dados: padrão único de acesso",
+    descricao: "Auditoria completa de todos os módulos para garantir consistência de dados. Correções: (1) getProjetoById agora aceita e verifica companyId, evitando acesso cruzado entre empresas. (2) obterCruzamentoOrcCronograma agora filtra atividades pela revisão ativa (antes usava todas as revisões, causando duplicatas) e implementa fallback de match por conteúdo parcial (LIKE) quando nome exato não bate, reduzindo itens 'fantasma'. (3) Clientes: atualizar/excluir agora exigem companyId no filtro. (4) ProcessosTrabalhistas: excluirAndamento agora exige processoId. (5) useCompany hook padronizado com queryInput pronto para uso uniforme em todas as páginas.",
+    tipo: "melhoria",
+    modulos: "Todos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 13:00:00",
+  },
 ];

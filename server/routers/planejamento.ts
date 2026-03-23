@@ -223,11 +223,13 @@ export const planejamentoRouter = router({
 
   // ── Detalhe completo do projeto ───────────────────────────────────────────
   getProjetoById: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), companyId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
+      const conditions = [eq(planejamentoProjetos.id, input.id)];
+      if (input.companyId) conditions.push(eq(planejamentoProjetos.companyId, input.companyId));
       const [projeto] = await db.select().from(planejamentoProjetos)
-        .where(eq(planejamentoProjetos.id, input.id));
+        .where(and(...conditions));
       if (!projeto) throw new Error("Projeto não encontrado");
 
       const [revisoes, orcamento] = await Promise.all([
@@ -1379,6 +1381,14 @@ export const planejamentoRouter = router({
       // (sem sub-itens) para evitar dupla contagem de valores acumulados em itens-pai.
       // Cada item pode cruzar com MÚLTIPLAS atividades (mesmo nome em pavimentos diferentes).
       // Nesse caso o valor do item é dividido igualmente entre as N atividades (valor/N).
+      const revAtiva = await db.execute(sql`
+        SELECT r.id FROM planejamento_revisoes r
+        WHERE r.projeto_id = ${input.projetoId}
+          AND r.status = 'aprovada'
+        ORDER BY r.numero DESC LIMIT 1
+      `);
+      const revId = (revAtiva.rows as any[])[0]?.id ?? 0;
+
       const rows = await db.execute(sql`
         WITH orc_scope AS (
           SELECT i.*
@@ -1394,6 +1404,37 @@ export const planejamentoRouter = router({
             WHERE c."eapCodigo" LIKE o."eapCodigo" || '.%'
               AND c.id != o.id
           )
+        ),
+        norm_name AS (
+          SELECT *, LOWER(REGEXP_REPLACE(TRIM(descricao), '[[:space:]]+', ' ', 'g')) AS nome_norm
+          FROM folhas
+        ),
+        norm_ativ AS (
+          SELECT *, LOWER(REGEXP_REPLACE(TRIM(nome), '[[:space:]]+', ' ', 'g')) AS nome_norm
+          FROM planejamento_atividades
+          WHERE projeto_id = ${input.projetoId}
+            AND revisao_id = ${revId}
+            AND NOT is_grupo
+            AND data_inicio IS NOT NULL
+            AND data_fim IS NOT NULL
+        ),
+        match_exact AS (
+          SELECT i.id AS item_id, a.id AS ativ_id
+          FROM norm_name i
+          JOIN norm_ativ a ON a.nome_norm = i.nome_norm
+        ),
+        match_contains AS (
+          SELECT i.id AS item_id, a.id AS ativ_id
+          FROM norm_name i
+          JOIN norm_ativ a ON (a.nome_norm LIKE '%' || i.nome_norm || '%' OR i.nome_norm LIKE '%' || a.nome_norm || '%')
+          WHERE NOT EXISTS (SELECT 1 FROM match_exact m WHERE m.item_id = i.id)
+            AND LENGTH(i.nome_norm) >= 5
+            AND LENGTH(a.nome_norm) >= 5
+        ),
+        all_matches AS (
+          SELECT * FROM match_exact
+          UNION ALL
+          SELECT * FROM match_contains
         ),
         all_pairs AS (
           SELECT
@@ -1413,13 +1454,8 @@ export const planejamentoRouter = router({
             a.ordem                                AS ordem,
             COUNT(*) OVER (PARTITION BY i.id)      AS n_ativs
           FROM folhas i
-          JOIN planejamento_atividades a
-            ON a.projeto_id = ${input.projetoId}
-            AND NOT a.is_grupo
-            AND LOWER(REGEXP_REPLACE(TRIM(a.nome), '[\\s]+', ' ', 'g'))
-              = LOWER(REGEXP_REPLACE(TRIM(i.descricao), '[\\s]+', ' ', 'g'))
-          WHERE a.data_inicio IS NOT NULL
-            AND a.data_fim IS NOT NULL
+          JOIN all_matches m ON m.item_id = i.id
+          JOIN norm_ativ a ON a.id = m.ativ_id
         )
         SELECT
           item_id, eap, nome,

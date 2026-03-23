@@ -176,7 +176,7 @@ export default function Clientes() {
       cep:  form.cep.replace(/\D/g, "")  || undefined,
     };
     if (editandoId) {
-      atualizarMut.mutate({ id: editandoId, ...payload });
+      atualizarMut.mutate({ id: editandoId, companyId, ...payload });
     } else {
       criarMut.mutate({ companyId, ...payload });
     }
@@ -327,7 +327,7 @@ export default function Clientes() {
                     <button
                       onClick={() => {
                         if (confirm(`Excluir o cliente "${c.razaoSocial}"?`))
-                          excluirMut.mutate({ id: c.id });
+                          excluirMut.mutate({ id: c.id, companyId });
                       }}
                       className="p-1 rounded hover:bg-red-50 text-red-400"
                       title="Excluir"

@@ -123,7 +123,7 @@ export default function ProcessosTrabalhistas() {
   const [filterArquivo, setFilterArquivo] = useState("all");
   const [showAndamentoDialog, setShowAndamentoDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: "processo" | "andamento"; id: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: "processo" | "andamento"; id: number; processoId?: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
 
@@ -964,7 +964,7 @@ export default function ProcessosTrabalhistas() {
                                     <span className="text-xs text-muted-foreground">{formatDate(a.data)}</span>
                                   </div>
                                   <button onClick={() => {
-                                    setDeleteTarget({ type: "andamento", id: a.id });
+                                    setDeleteTarget({ type: "andamento", id: a.id, processoId: a.processoId });
                                     setShowDeleteDialog(true);
                                   }} className="text-red-400 hover:text-red-600"><Trash2 className="h-3 w-3" /></button>
                                 </div>
@@ -1050,7 +1050,7 @@ export default function ProcessosTrabalhistas() {
               <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancelar</Button>
               <Button variant="destructive" onClick={() => {
                 if (deleteTarget?.type === "processo") excluirMut.mutate({ id: deleteTarget.id });
-                else if (deleteTarget?.type === "andamento") excluirAndamentoMut.mutate({ id: deleteTarget.id });
+                else if (deleteTarget?.type === "andamento") excluirAndamentoMut.mutate({ id: deleteTarget.id, processoId: deleteTarget.processoId! });
                 setShowDeleteDialog(false);
               }}>Excluir</Button>
             </DialogFooter>
@@ -1621,7 +1621,7 @@ export default function ProcessosTrabalhistas() {
                 <Button variant="destructive" onClick={() => {
                   if (deleteTarget) {
                     if (deleteTarget.type === "processo") excluirMut.mutate({ id: deleteTarget.id });
-                    else excluirAndamentoMut.mutate({ id: deleteTarget.id });
+                    else excluirAndamentoMut.mutate({ id: deleteTarget.id, processoId: deleteTarget.processoId! });
                   }
                   setShowDeleteDialog(false);
                   setDeleteTarget(null);

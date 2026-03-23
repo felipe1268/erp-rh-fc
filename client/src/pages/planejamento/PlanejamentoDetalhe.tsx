@@ -5,7 +5,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCompany } from "@/hooks/useCompany";
 import PrintHeader from "@/components/PrintHeader";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, TarefaImportada } from "./ImportarCronograma";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
@@ -154,7 +154,7 @@ export default function PlanejamentoDetalhe() {
   });
   const { isAdminMaster } = usePermissions();
   const { user } = useAuth();
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, companyId } = useCompany();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
   const [semanaVisualizacao, setSemanaVisualizacao] = useState<string | null>(null);
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
@@ -179,7 +179,7 @@ export default function PlanejamentoDetalhe() {
   // ── Queries ───────────────────────────────────────────────────────────────
   const utils = trpc.useUtils();
   const { data: proj, isLoading: loadingProj } = trpc.planejamento.getProjetoById.useQuery(
-    { id: projetoId }, { enabled: !!projetoId }
+    { id: projetoId, companyId: companyId || undefined }, { enabled: !!projetoId }
   );
 
   // ── Editar Projeto ─────────────────────────────────────────────────────────

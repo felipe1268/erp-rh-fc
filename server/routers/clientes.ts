@@ -69,6 +69,7 @@ export const clientesRouter = router({
   atualizar: protectedProcedure
     .input(z.object({
       id:              z.number(),
+      companyId:       z.number(),
       tipo:            z.string().optional(),
       cnpj:            z.string().optional(),
       cpf:             z.string().optional(),
@@ -92,16 +93,16 @@ export const clientesRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const { id, ...data } = input;
-      await db.update(clientes).set({ ...data, atualizadoEm: new Date().toISOString() }).where(eq(clientes.id, id));
+      const { id, companyId, ...data } = input;
+      await db.update(clientes).set({ ...data, atualizadoEm: new Date().toISOString() }).where(and(eq(clientes.id, id), eq(clientes.companyId, companyId)));
       return { success: true };
     }),
 
   excluir: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      await db.delete(clientes).where(eq(clientes.id, input.id));
+      await db.delete(clientes).where(and(eq(clientes.id, input.id), eq(clientes.companyId, input.companyId)));
       return { success: true };
     }),
 });
