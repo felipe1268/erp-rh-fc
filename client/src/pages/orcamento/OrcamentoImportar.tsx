@@ -424,12 +424,14 @@ export default function OrcamentoImportar() {
   const importarBdiMut = trpc.orcamento.importarBdi.useMutation();
   const previewSheetMut = trpc.orcamento.previewSheet.useMutation();
 
-  const obras = (obrasQ.data ?? []).filter((o: any) =>
-    !obraIdsComOrcamento.has(o.id) && (
-      !search || o.nome.toLowerCase().includes(search.toLowerCase()) ||
-      (o.numOrcamento || "").toLowerCase().includes(search.toLowerCase())
-    )
-  );
+  const obras = (obrasQ.data ?? []).filter((o: any) => {
+    const st = (o.status ?? "").toLowerCase().replace(/_/g, " ");
+    return !obraIdsComOrcamento.has(o.id) &&
+      (st === "em andamento" || st === "em_andamento") && (
+        !search || o.nome.toLowerCase().includes(search.toLowerCase()) ||
+        (o.numOrcamento || "").toLowerCase().includes(search.toLowerCase())
+      );
+  });
 
   /* ── selecionar arquivo custo → analisa automaticamente ── */
   const onFileCusto = useCallback(async (f: File) => {
