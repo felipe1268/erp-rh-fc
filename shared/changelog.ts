@@ -4983,4 +4983,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-22 00:00:00",
   },
+  {
+    version: 757,
+    titulo: "Sinal/Mobilização: entrada por % ou valor R$",
+    descricao: "O campo de Sinal/Mobilização no Cronograma de Medições agora permite alternar entre entrada por percentual (%) ou por valor absoluto (R$). Ao digitar um, o outro é calculado automaticamente com base no valor do contrato. Toggle visual '%' / 'R$' acima do campo, com indicação do valor complementar abaixo.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-22 00:00:00",
+  },
 ];

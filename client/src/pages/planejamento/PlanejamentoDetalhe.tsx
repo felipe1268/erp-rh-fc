@@ -4704,6 +4704,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   const [salvando, setSalvando]       = useState(false);
   const [saved, setSaved]             = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false);
+  const [sinalModo, setSinalModo] = useState<"pct" | "valor">("pct");
+  const [sinalValorFocused, setSinalValorFocused] = useState(false);
+  const [sinalValorInput, setSinalValorInput] = useState("");
   const [cfgBloqueado, setCfgBloqueado] = useState(false);
   // ── Reforços de Parcela (anti-caixa negativo) — persiste em localStorage ──
   const reforcoKey = `reforcos_${projetoId}`;
@@ -5243,17 +5246,67 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
 
               {cfgTipo === "avanco" && (
                 <>
-                  {/* Sinal % — só para avanço físico */}
+                  {/* Sinal % ou R$ — só para avanço físico */}
                   <div>
-                    <label className="text-[10px] text-slate-500 block mb-1 font-medium">Sinal / Mobilização (%)</label>
-                    <div className="relative">
-                      <input type="number" min={0} max={100} step={0.5} value={cfgSinalPct}
-                        onChange={e => setCfgSinalPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
-                        className="h-9 w-full text-sm border border-violet-200 rounded-lg px-3 pr-8 bg-white focus:ring-2 focus:ring-violet-400 outline-none font-semibold text-center" />
-                      <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] text-slate-500 font-medium">Sinal / Mobilização</label>
+                      <div className="flex bg-slate-100 rounded-md p-0.5 gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setSinalModo("pct")}
+                          className={`text-[9px] px-2 py-0.5 rounded transition-colors ${sinalModo === "pct" ? "bg-violet-600 text-white font-bold" : "text-slate-500 hover:bg-slate-200"}`}
+                        >%</button>
+                        <button
+                          type="button"
+                          onClick={() => setSinalModo("valor")}
+                          className={`text-[9px] px-2 py-0.5 rounded transition-colors ${sinalModo === "valor" ? "bg-violet-600 text-white font-bold" : "text-slate-500 hover:bg-slate-200"}`}
+                        >R$</button>
+                      </div>
                     </div>
+                    {sinalModo === "pct" ? (
+                      <div className="relative">
+                        <input type="number" min={0} max={100} step={0.5} value={cfgSinalPct}
+                          onChange={e => setCfgSinalPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                          className="h-9 w-full text-sm border border-violet-200 rounded-lg px-3 pr-8 bg-white focus:ring-2 focus:ring-violet-400 outline-none font-semibold text-center" />
+                        <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={sinalValorFocused
+                            ? (sinalValorInput === "0" ? "" : sinalValorInput)
+                            : ((baseV * cfgSinalPct / 100) === 0 ? "" : (baseV * cfgSinalPct / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                          }
+                          onFocus={() => {
+                            setSinalValorFocused(true);
+                            const cur = baseV * cfgSinalPct / 100;
+                            setSinalValorInput(cur > 0 ? String(cur).replace(".", ",") : "");
+                          }}
+                          onBlur={e => {
+                            setSinalValorFocused(false);
+                            const raw = e.target.value.replace(/\./g, "").replace(",", ".");
+                            const val = parseFloat(raw) || 0;
+                            const pct = baseV > 0 ? Math.min(100, Math.max(0, (val / baseV) * 100)) : 0;
+                            setCfgSinalPct(+pct.toFixed(4));
+                          }}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/[^\d,]/g, "");
+                            setSinalValorInput(raw);
+                            const val = parseFloat(raw.replace(",", ".")) || 0;
+                            const pct = baseV > 0 ? Math.min(100, Math.max(0, (val / baseV) * 100)) : 0;
+                            setCfgSinalPct(+pct.toFixed(4));
+                          }}
+                          placeholder="0,00"
+                          className="h-9 w-full text-sm border border-violet-200 rounded-lg px-3 pr-8 bg-white focus:ring-2 focus:ring-violet-400 outline-none font-semibold text-center" />
+                        <span className="absolute right-3 top-2 text-slate-400 text-xs">R$</span>
+                      </div>
+                    )}
                     <p className="text-[10px] text-slate-400 mt-0.5">
-                      Sinal: {fmt(baseV * cfgSinalPct / 100)}
+                      {sinalModo === "pct"
+                        ? <>Sinal: {fmt(baseV * cfgSinalPct / 100)}</>
+                        : <>Percentual: {(cfgSinalPct).toFixed(2).replace(".", ",")}%</>
+                      }
                     </p>
                   </div>
 
