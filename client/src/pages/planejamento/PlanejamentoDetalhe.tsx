@@ -4945,11 +4945,18 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     });
 
     let cumVenda = 0;
-    const rows = mesesAll.map((d: any) => {
-      // Usa valor de venda do cruzamento orçamento×cronograma, escalado pelo sinal
-      const medicaoBruta = +(d.vendaOriginal * escala).toFixed(2);
+    let somaArredondada = 0;
+    const rows = mesesAll.map((d: any, idx: number) => {
       cumVenda += d.vendaOriginal;
       const pctAcum = baseV > 0 ? +(cumVenda / baseV * 100).toFixed(1) : 0;
+
+      let medicaoBruta: number;
+      if (idx === mesesAll.length - 1) {
+        medicaoBruta = +(baseMedicoes - somaArredondada).toFixed(2);
+      } else {
+        medicaoBruta = +(d.vendaOriginal * escala).toFixed(2);
+      }
+      somaArredondada += medicaoBruta;
 
       const retencao = +(medicaoBruta * cfgRetencaoPct / 100).toFixed(2);
       const descontoSinal = 0;
