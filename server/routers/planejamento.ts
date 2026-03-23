@@ -1660,6 +1660,7 @@ export const planejamentoRouter = router({
       numeroParcelas:    z.number().min(1).max(120).optional(),
       inicioFaturamento: z.string().nullable().optional(),
       sinalPct:          z.number().min(0).max(100).optional(),
+      sinalValor:        z.number().optional(),
       retencaoPct:       z.number().min(0).max(100).optional(),
       dataInicioObra:    z.string().nullable().optional(),
     }))
@@ -1676,6 +1677,7 @@ export const planejamentoRouter = router({
           ? (input.inicioFaturamento.length === 7 ? input.inicioFaturamento + "-01" : input.inicioFaturamento.substring(0, 10))
           : null,
         sinalPct:          String(input.sinalPct ?? 0),
+        sinalValor:        String(input.sinalValor ?? 0),
         retencaoPct:       String(input.retencaoPct ?? 5),
         dataInicioObra:    input.dataInicioObra ?? null,
         bloqueado:         false,
@@ -1689,6 +1691,7 @@ export const planejamentoRouter = router({
         numeroParcelas:    data.numeroParcelas,
         inicioFaturamento: data.inicioFaturamento,
         sinalPct:          data.sinalPct,
+        sinalValor:        data.sinalValor,
         retencaoPct:       data.retencaoPct,
         dataInicioObra:    data.dataInicioObra,
         bloqueado:         false,

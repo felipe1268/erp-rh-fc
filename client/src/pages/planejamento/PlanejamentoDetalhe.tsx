@@ -4856,6 +4856,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       setCfgParcelas(configMed.numeroParcelas ?? 6);
       setCfgInicioFat(configMed.inicioFaturamento ? String(configMed.inicioFaturamento).substring(0, 7) : "");
       setCfgSinalPct(n(configMed.sinalPct) || 0);
+      const sv = n((configMed as any).sinalValor);
+      if (sv > 0) setCfgSinalValor(sv);
       setCfgRetencaoPct(n(configMed.retencaoPct) || 5);
       setCfgDataInicioObra((configMed as any).dataInicioObra ?? "");
       setCfgBloqueado(configMed.bloqueado ?? false);
@@ -5151,6 +5153,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       numeroParcelas: cfgParcelas,
       inicioFaturamento: cfgInicioFat || null,
       sinalPct: cfgSinalPct,
+      sinalValor: cfgSinalValor ?? 0,
       retencaoPct: cfgRetencaoPct,
       dataInicioObra: cfgDataInicioObra || null,
     });
@@ -5168,6 +5171,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
           numeroParcelas: cfgParcelas,
           inicioFaturamento: cfgInicioFat || null,
           sinalPct: cfgSinalPct,
+          sinalValor: cfgSinalValor ?? 0,
           retencaoPct: cfgRetencaoPct,
           dataInicioObra: cfgDataInicioObra || null,
         });

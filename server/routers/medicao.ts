@@ -143,6 +143,7 @@ export const medicaoRouter = router({
       const rows = await db.select({
         tipoMedicao: planejamentoMedicaoConfig.tipoMedicao,
         sinalPct: planejamentoMedicaoConfig.sinalPct,
+        sinalValor: planejamentoMedicaoConfig.sinalValor,
         retencaoPct: planejamentoMedicaoConfig.retencaoPct,
         entrada: planejamentoMedicaoConfig.entrada,
         diaCorte: planejamentoMedicaoConfig.diaCorte,

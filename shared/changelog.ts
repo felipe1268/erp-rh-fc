@@ -5082,4 +5082,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 16:30:00",
   },
+  {
+    version: 768,
+    titulo: "Sinal/Mobilização — valor em R$ agora persistido no banco",
+    descricao: "O valor em R$ do Sinal/Mobilização digitado na Configuração de Medição do Planejamento agora é salvo no banco de dados (nova coluna sinal_valor em planejamento_medicao_config). Antes, o valor era calculado localmente e se perdia ao sair da tela. Agora, ao clicar 'Salvar Configuração' ou 'Bloquear', o valor exato digitado é persistido. No módulo Medição, ao criar um novo contrato, o sistema usa a prioridade: sinal_valor salvo > entrada > cálculo por percentual. Garante que o valor nunca muda entre sessões.",
+    tipo: "bugfix",
+    modulos: "Planejamento, Medição",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 17:00:00",
+  },
 ];

@@ -186,8 +186,11 @@ export default function MedicaoContratos() {
         if (config.tipoMedicao === "parcelas") autoCriterio = "parcela_fixa";
         const sP = parseFloat(config.sinalPct || "0");
         if (sP > 0) autoSinalPct = String(sP);
+        const sinalV = parseFloat(config.sinalValor || "0");
         const entrada = parseFloat(config.entrada || "0");
-        if (entrada > 0) {
+        if (sinalV > 0) {
+          autoSinalValor = formatBrlInput(sinalV);
+        } else if (entrada > 0) {
           autoSinalValor = formatBrlInput(entrada);
         } else if (sP > 0) {
           const valorBase = parseBrlInput(autoValor);
