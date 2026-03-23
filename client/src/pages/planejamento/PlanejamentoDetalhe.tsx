@@ -299,9 +299,10 @@ export default function PlanejamentoDetalhe() {
     { projetoId }, { enabled: !!projetoId && aba === "custo-rh" }
   );
 
+  const curvaBaselineId = baselineRev?.id ?? revisaoAtiva?.id ?? 0;
   const { data: curvaData, isLoading: curvaLoading } = trpc.planejamento.getCurvaS.useQuery(
-    { projetoId, revisaoId: revisaoAtiva?.id ?? 0, baselineId: baselineRev?.id ?? revisaoAtiva?.id ?? 0 },
-    { enabled: !!revisaoAtiva }
+    { projetoId, revisaoId: revisaoAtiva?.id ?? 0, baselineId: curvaBaselineId },
+    { enabled: !!revisaoAtiva && curvaBaselineId > 0, keepPreviousData: true }
   );
 
   const { data: curvaMedicoes = [] } = trpc.planejamento.getCurvaMedicoes.useQuery(
@@ -3571,7 +3572,12 @@ function CurvaS({ curvaData, curvaLoading, proj, avancoAtual, fPct, projetoId, r
       </div>
 
       {/* ── ABA: TRABALHO ─────────────────────────────────────────────────── */}
-      {curvaTipo === "trabalho" && ((!curvaData || merged.length === 0) ? (
+      {curvaTipo === "trabalho" && (curvaLoading ? (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
+          <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm">Carregando Curva S...</p>
+        </div>
+      ) : (!curvaData || merged.length === 0) ? (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
           <TrendingUp className="h-10 w-10 opacity-30" />
           <p className="text-sm">Sem dados suficientes para gerar a Curva S de Trabalho.</p>

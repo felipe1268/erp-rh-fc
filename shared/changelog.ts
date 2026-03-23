@@ -5010,4 +5010,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 00:10:00",
   },
+  {
+    version: 760,
+    titulo: "Curva S intermitente: race condition corrigida",
+    descricao: "Corrigida race condition na Curva S que fazia o gráfico aparecer intermitentemente (hora mostrava dados, hora 'Sem dados suficientes'). Causa: a query disparava antes do baselineId ser resolvido, executando com baselineId=0 e cacheando resultado vazio. Fix: query agora aguarda baselineId > 0 antes de disparar, usa keepPreviousData para evitar flash, e mostra spinner de carregamento enquanto os dados estão sendo buscados.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 12:00:00",
+  },
 ];
