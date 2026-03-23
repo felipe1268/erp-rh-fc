@@ -73,12 +73,17 @@ const NIVEL_BG: Record<number, string> = {
   4: "bg-white",
 };
 
-export default function OrcamentoDetalhe() {
+export default function OrcamentoDetalheWrapper() {
   const [, params] = useRoute("/orcamento/:id");
+  const id = parseInt(params?.id ?? "0");
+  return <OrcamentoDetalheInner key={id} routeId={id} />;
+}
+
+function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const { company } = useCompany();
-  const id = parseInt(params?.id ?? "0");
+  const id = routeId;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activePage, setActivePage] = useState<"orcamento" | "bdi" | "sec">("orcamento");

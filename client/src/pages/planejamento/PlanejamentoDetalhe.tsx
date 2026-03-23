@@ -137,10 +137,15 @@ function loadTabOrder(): Tab[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export default function PlanejamentoDetalhe() {
-  const [, params]    = useRoute("/planejamento/:id");
+export default function PlanejamentoDetalheWrapper() {
+  const [, params] = useRoute("/planejamento/:id");
+  const projetoId  = params?.id ? parseInt(params.id) : 0;
+  return <PlanejamentoDetalheInner key={projetoId} routeProjetoId={projetoId} />;
+}
+
+function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }) {
   const [, setLoc]    = useLocation();
-  const projetoId     = params?.id ? parseInt(params.id) : 0;
+  const projetoId     = routeProjetoId;
   const [aba, setAba] = useState<Tab>(() => {
     const stored = sessionStorage.getItem('_navParams');
     if (stored) {

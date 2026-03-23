@@ -237,14 +237,19 @@ function OrcamentoConsolidadoDash({ lista, formatBRL }: { lista: any[]; formatBR
 }
 
 // ── Página principal ──────────────────────────────────────────────────────────
-export default function OrcamentoDashPage() {
+export default function OrcamentoDashPageWrapper() {
   const [, params] = useRoute("/orcamento/:id/dash");
+  const id = params?.id ? parseInt(params.id) : 0;
+  return <OrcamentoDashPageInner key={id} routeId={id} />;
+}
+
+function OrcamentoDashPageInner({ routeId }: { routeId: number }) {
   const [, setLocation] = useLocation();
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
 
   const [selectedId, setSelectedId] = useState<number | null>(
-    params?.id ? parseInt(params.id) : null
+    routeId || null
   );
   const [pickerOpen, setPickerOpen] = useState(false);
 

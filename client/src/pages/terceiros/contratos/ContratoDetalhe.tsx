@@ -39,10 +39,15 @@ const STATUS_DOC: Record<string, { label: string; cls: string }> = {
 
 type Tab = "itens" | "medicoes" | "documentos" | "documento";
 
-export default function ContratoDetalhe() {
-  const [, navigate] = useLocation();
+export default function ContratoDetalheWrapper() {
   const [, params] = useRoute("/terceiros/contratos/:id");
   const id = parseInt(params?.id || "0");
+  return <ContratoDetalheInner key={id} routeId={id} />;
+}
+
+function ContratoDetalheInner({ routeId }: { routeId: number }) {
+  const [, navigate] = useLocation();
+  const id = routeId;
   const [tab, setTab] = useState<Tab>("itens");
   const [showAddItem, setShowAddItem] = useState(false);
   const [showGerarMedicao, setShowGerarMedicao] = useState(false);

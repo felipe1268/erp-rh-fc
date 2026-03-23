@@ -88,10 +88,15 @@ function valorPorExtenso(valor: number): string {
   return resultado.charAt(0).toUpperCase() + resultado.slice(1);
 }
 
-export default function ContratoPJView() {
+export default function ContratoPJViewWrapper() {
   const [, params] = useRoute("/contrato-pj/:id");
-  const [, navigate] = useLocation();
   const contratoId = params?.id ? parseInt(params.id, 10) : 0;
+  return <ContratoPJViewInner key={contratoId} routeContratoId={contratoId} />;
+}
+
+function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
+  const [, navigate] = useLocation();
+  const contratoId = routeContratoId;
   const { selectedCompany, selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = (selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0;
   const companyIds = getCompanyIdsForQuery();

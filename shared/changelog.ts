@@ -5037,4 +5037,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 14:00:00",
   },
+  {
+    version: 763,
+    titulo: "Padronização: key={id} em todas as páginas de detalhe (elimina stale state)",
+    descricao: "Causa raiz definitiva dos bugs que persistiam entre projetos: ao navegar de /planejamento/22 para /planejamento/30, o React reutilizava a mesma instância do componente e os useState internos mantinham valores do projeto anterior (ex: Curva S, aba selecionada, avanços). Solução: padrão Wrapper com key={id} aplicado em TODAS as páginas de detalhe — PlanejamentoDetalhe, OrcamentoDetalhe, OrcamentoPrint, OrcamentoDashPage, ContratoDetalhe, ContratoPJView. O key={id} força o React a remontar completamente o componente quando o ID muda, eliminando 100% dos problemas de stale state entre navegações.",
+    tipo: "bugfix",
+    modulos: "Planejamento, Orçamento, Terceiros, PJ",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 14:30:00",
+  },
 ];

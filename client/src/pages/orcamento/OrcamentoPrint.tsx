@@ -18,9 +18,14 @@ function padEap(cod: string) {
 
 function r2(v: number) { return Math.round(v * 100) / 100; }
 
-export default function OrcamentoPrint() {
+export default function OrcamentoPrintWrapper() {
   const [, params] = useRoute("/orcamento/:id/print");
   const id = Number(params?.id ?? 0);
+  return <OrcamentoPrintInner key={id} routeId={id} />;
+}
+
+function OrcamentoPrintInner({ routeId }: { routeId: number }) {
+  const id = routeId;
 
   const qs     = new URLSearchParams(window.location.search);
   const versao = (qs.get("v") || "custo") as "custo" | "meta" | "venda";

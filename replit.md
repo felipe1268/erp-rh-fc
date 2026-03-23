@@ -307,6 +307,20 @@ Módulos atualmente registrados (Rev. 394): `rh`, `sst`, `juridico`, `avaliacao`
 - `shared/changelog.ts`: campo `tipo` é `'feature' | 'bugfix' | 'melhoria' | 'seguranca' | 'performance'`. **Não** usar `'correcao'` ou `'bug'` — esses valores quebram o NOT NULL do enum.
 - Rev. atual: **718**. Próxima: **719**.
 
+#### Golden Rule #15 — Padrão Wrapper key={id} para páginas de detalhe
+- Toda página que usa `useRoute(".../:id")` DEVE usar o padrão Wrapper:
+  ```tsx
+  export default function XWrapper() {
+    const [, params] = useRoute("/rota/:id");
+    const id = parseInt(params?.id ?? "0");
+    return <XInner key={id} routeId={id} />;
+  }
+  function XInner({ routeId }: { routeId: number }) { ... }
+  ```
+- O `key={id}` força remontagem completa ao navegar entre IDs (ex: /planejamento/22 → /planejamento/30).
+- SEM isso, React reutiliza a instância e useState mantém valores do registro anterior (stale state).
+- Páginas já padronizadas (Rev.763): PlanejamentoDetalhe, OrcamentoDetalhe, OrcamentoPrint, OrcamentoDashPage, ContratoDetalhe, ContratoPJView.
+
 #### Design / UI
 - **Usuário prefere design limpo, branco e didático** — sem gradientes coloridos, sem cards com cores vibrantes.
 - Usar `badge` com cores neutras (cinza, âmbar) para indicadores de status — não vermelho/verde vibrante para informações não-críticas.
