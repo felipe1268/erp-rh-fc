@@ -5001,4 +5001,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 00:00:00",
   },
+  {
+    version: 759,
+    titulo: "Sinal/Mobilização: valor deduzido do contrato (não somado)",
+    descricao: "Corrigido o cálculo do Sinal/Mobilização no Cronograma Financeiro. Antes o sinal era somado ao valor total do contrato, inflando o total. Agora o sinal é deduzido do valor do contrato: se o contrato é R$ 9.5M e o sinal é R$ 100k, os R$ 9.4M restantes são distribuídos proporcionalmente ao cronograma. Campo R$ aceita formatação brasileira (ponto milhar, vírgula decimal) e mostra o saldo restante abaixo do campo.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 00:10:00",
+  },
 ];

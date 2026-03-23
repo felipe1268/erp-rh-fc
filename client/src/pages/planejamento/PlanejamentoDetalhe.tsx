@@ -4906,10 +4906,12 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     });
     Object.values(avByAct).forEach(arr => arr.sort((a, b) => a.semana.localeCompare(b.semana)));
 
-    const sinalTotal = sinalModo === "valor" && cfgSinalValor != null && cfgSinalValor > 0
+    const sinalRaw = sinalModo === "valor" && cfgSinalValor != null && cfgSinalValor > 0
       ? cfgSinalValor
       : +(baseV * cfgSinalPct / 100).toFixed(2);
-    let sinalRestante = sinalTotal;
+    const sinalTotal = Math.max(0, Math.min(sinalRaw, baseV));
+    const hasSinalRow = sinalTotal > 0 && !!cfgDataInicioObra;
+    const baseMedicoes = hasSinalRow ? baseV - sinalTotal : baseV;
     let pctAcumAnterior = 0;
 
     // Range de meses vem de TODAS as atividades folha com datas (não apenas as que cruzam com orçamento)
@@ -4963,18 +4965,17 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       const pctMensal = Math.max(0, pctAcum - pctAcumAnterior);
       pctAcumAnterior = pctAcum;
 
-      const prevMedicao = +(pctAcum / 100 * baseV).toFixed(2);         // cumulative (for display)
-      const medicaoBruta = +(pctMensal / 100 * baseV).toFixed(2);      // monthly increment (for billing)
+      const prevMedicao = +(pctAcum / 100 * baseMedicoes).toFixed(2);         // cumulative (for display)
+      const medicaoBruta = +(pctMensal / 100 * baseMedicoes).toFixed(2);      // monthly increment (for billing)
       const retencao = +(medicaoBruta * cfgRetencaoPct / 100).toFixed(2);
-      const descontoSinal = Math.min(sinalRestante, +(medicaoBruta * cfgSinalPct / 100).toFixed(2));
-      sinalRestante = Math.max(0, sinalRestante - descontoSinal);
-      const liquido = +(medicaoBruta - retencao - descontoSinal).toFixed(2);
+      const descontoSinal = 0;
+      const liquido = +(medicaoBruta - retencao).toFixed(2);
 
       return { ...d, pct: +pctAcum.toFixed(1), pctMensal: +pctMensal.toFixed(2), prevMedicao, medicaoBruta, retencao, descontoSinal, liquido, isSinalRow: false };
     });
 
     // Linha sintética de Sinal/Mobilização
-    if (cfgSinalPct > 0 && cfgDataInicioObra) {
+    if (hasSinalRow) {
       const sinalMes = cfgDataInicioObra.substring(0, 7);
       const sinalDate = new Date(sinalMes + "-15");
       const nomeMesSinal = sinalDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
@@ -5311,8 +5312,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                     )}
                     <p className="text-[10px] text-slate-400 mt-0.5">
                       {sinalModo === "pct"
-                        ? <>Sinal: {fmt(baseV * cfgSinalPct / 100)}</>
-                        : <>Percentual: {(cfgSinalPct).toFixed(2).replace(".", ",")}%</>
+                        ? <>Sinal: {fmt(baseV * cfgSinalPct / 100)} · Saldo: {fmt(baseV - baseV * cfgSinalPct / 100)}</>
+                        : <>Percentual: {(cfgSinalPct).toFixed(2).replace(".", ",")}% · Saldo: {fmt(baseV - (cfgSinalValor ?? 0))}</>
                       }
                     </p>
                   </div>
@@ -5710,7 +5711,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                       <th className="py-2 px-3 text-right text-blue-700">% Acum.</th>
                       <th className="py-2 px-3 text-right">Medição Bruta</th>
                       <th className="py-2 px-3 text-right text-rose-700">− Ret. {cfgRetencaoPct}%</th>
-                      <th className="py-2 px-3 text-right text-violet-700">− Sinal {sinalModo === "valor" && cfgSinalValor != null ? fmt(cfgSinalValor) : `${cfgSinalPct}%`}</th>
+                      <th className="py-2 px-3 text-right text-violet-700">Sinal {sinalModo === "valor" && cfgSinalValor != null ? fmt(cfgSinalValor) : `${cfgSinalPct}%`}</th>
                       <th className="py-2 px-3 text-right text-emerald-700 font-semibold">= Líquido</th>
                       <th className="py-2 px-3 text-right text-slate-500">Custo Prev.</th>
                       <th className="py-2 px-3 text-right">Margem</th>
@@ -5830,7 +5831,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                       <td className="py-2 px-3" />
                       <td className="py-2 px-3 text-right font-bold text-indigo-300">{fmt(previsoesMensais.reduce((s, r) => s + r.medicaoBruta, 0))}</td>
                       <td className="py-2 px-3 text-right font-bold text-rose-300">−{fmt(previsoesMensais.reduce((s, r) => s + r.retencao, 0))}</td>
-                      <td className="py-2 px-3 text-right font-bold text-violet-300">−{fmt(previsoesMensais.reduce((s, r) => s + r.descontoSinal, 0))}</td>
+                      <td className="py-2 px-3 text-right font-bold text-violet-300">{fmt(previsoesMensais.find(r => r.isSinalRow)?.medicaoBruta ?? 0)}</td>
                       <td className="py-2 px-3 text-right font-bold text-emerald-300">{fmt(previsoesMensais.reduce((s, r) => s + r.liquido, 0))}</td>
                       <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(previsoesMensais.reduce((s, r) => s + r.custo, 0))}</td>
                       <td className="py-2 px-3" />
@@ -5844,7 +5845,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
             </>
           )}
           <p className="text-[10px] text-slate-400 px-4 py-2 border-t border-slate-100">
-            * Medição Bruta = incremento mensal de avanço físico × valor contrato · Retenção e Desc. Sinal deduzidos até recuperar o total adiantado.
+            * Medição Bruta = incremento mensal de avanço físico × saldo do contrato (após sinal) · Retenção deduzida de cada medição.
           </p>
         </div>
       )}
