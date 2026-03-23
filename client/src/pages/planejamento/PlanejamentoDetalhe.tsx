@@ -5016,6 +5016,30 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
       }
     }
 
+    if (cfgRetencaoPct > 0 && rows.length > 0) {
+      const totalRetencao = rows.reduce((s, r) => s + r.retencao, 0);
+      if (totalRetencao > 0) {
+        const ultimoMes = rows.filter(r => !r.isSinalRow).slice(-1)[0]?.mes ?? rows.slice(-1)[0]?.mes ?? "";
+        const [aU, mU] = ultimoMes.split("-").map(Number);
+        const proxDate = new Date(aU, mU, 15);
+        const proxMes = `${proxDate.getFullYear()}-${String(proxDate.getMonth() + 1).padStart(2, "0")}`;
+        rows.push({
+          mes: proxMes,
+          nomeMes: proxDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+          nomeMesCurto: proxDate.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+          venda: 0, custo: 0, vendaOriginal: 0,
+          pct: 100, pctMensal: 0,
+          prevMedicao: 0,
+          medicaoBruta: +totalRetencao.toFixed(2),
+          retencao: 0,
+          descontoSinal: 0,
+          liquido: +totalRetencao.toFixed(2),
+          isSinalRow: false,
+          isRetencaoRow: true,
+        });
+      }
+    }
+
     return rows;
   }, [cfgSinalPct, cfgRetencaoPct, cfgDataInicioObra, dadosMensais, atividades, baseV, sinalModo, cfgSinalValor]);
 
@@ -5742,6 +5766,48 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                       const confirmado = !!baixa?.confirmado;
                       const temLiquido = r.liquido > 0;
 
+                      // ── Linha especial de Liberação da Retenção ──────────────
+                      if ((r as any).isRetencaoRow) {
+                        return (
+                          <tr key={`ret-${r.mes}`} className="border-b border-amber-200 bg-amber-50">
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-600 text-white uppercase tracking-wide">RETENÇÃO</span>
+                                <span className="font-semibold text-amber-800 text-xs">{r.nomeMes}</span>
+                              </div>
+                              <p className="text-[9px] text-amber-500 mt-0.5">Liberação da retenção ({cfgRetencaoPct}%) após conclusão</p>
+                            </td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-right font-bold text-amber-700">{fmt(r.medicaoBruta)}</td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className={`py-2 px-3 text-right font-bold ${confirmado ? "text-emerald-600 line-through" : "text-amber-700"}`}>
+                              {fmt(r.liquido)}
+                            </td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => abrirBaixa(r.mes, r.liquido, r.nomeMes)}
+                                title={confirmado ? `Recebido em ${baixa?.data} — clique para desfazer` : "Marcar liberação como recebida"}
+                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
+                                  confirmado
+                                    ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
+                                    : "bg-white border-amber-300 text-amber-600 hover:border-amber-500 hover:bg-amber-50"
+                                }`}
+                              >
+                                {confirmado ? (
+                                  <><CheckCircle2 className="h-3 w-3" /> Recebido</>
+                                ) : (
+                                  <><Circle className="h-3 w-3" /> Dar Baixa</>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       // ── Linha especial de Sinal/Mobilização ──────────────
                       if ((r as any).isSinalRow) {
                         return (
@@ -5861,7 +5927,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
             </>
           )}
           <p className="text-[10px] text-slate-400 px-4 py-2 border-t border-slate-100">
-            * Medição Bruta = incremento mensal de avanço físico × saldo do contrato (após sinal) · Retenção deduzida de cada medição.
+            * Medição Bruta = incremento mensal de avanço físico × saldo do contrato (após sinal) · Retenção ({cfgRetencaoPct}%) deduzida de cada medição e liberada no mês seguinte ao término.
           </p>
         </div>
       )}

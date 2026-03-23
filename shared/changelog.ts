@@ -5100,4 +5100,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 17:10:00",
   },
+  {
+    version: 770,
+    titulo: "Linha de Liberação da Retenção na Previsão de Medição",
+    descricao: "A tabela de Previsão de Medição agora inclui uma linha final de 'Liberação da Retenção' no mês seguinte ao término da obra, devolvendo o total retido durante o contrato. O TOTAL PREVISTO (LÍQ.) agora bate com o valor total do contrato. A linha tem visual diferenciado (amarelo) e permite dar baixa como as demais.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 17:20:00",
+  },
 ];
