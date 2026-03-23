@@ -425,6 +425,8 @@ async function startServer() {
           )
         `);
         console.log("[MedicaoMigration] Tabelas do módulo Medição OK");
+        await db.execute(sql`ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS sinal_valor NUMERIC(18,2) DEFAULT 0`);
+        console.log("[ColFix] planejamento_medicao_config.sinal_valor OK");
       } catch (e: any) { console.warn("[MedicaoMigration] Aviso:", e?.message ?? e); }
     });
     // Rev.547: migração aviso prévio — adiciona dataBaixa e move concluidos auto-marcados → aguardando_pagamento
