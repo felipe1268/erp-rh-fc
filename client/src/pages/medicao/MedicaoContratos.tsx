@@ -317,7 +317,7 @@ export default function MedicaoContratos() {
       </div>
 
       <Dialog open={modalAberto} onOpenChange={open => { setModalAberto(open); if (!open) resetForm(); }}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden">
+        <DialogContent className="p-0 overflow-hidden" style={{ maxWidth: "95vw", width: "95vw", maxHeight: "95vh", height: "auto" }}>
           {/* Header com gradiente */}
           <div className="bg-gradient-to-r from-[#0f2744] to-[#1a3a5c] px-8 py-5">
             <div className="flex items-center gap-4">
@@ -331,7 +331,7 @@ export default function MedicaoContratos() {
             </div>
           </div>
 
-          <div className="px-8 py-6">
+          <div className="px-8 py-6 overflow-y-auto" style={{ maxHeight: "calc(95vh - 140px)" }}>
             {/* Layout 2 colunas: esquerda = Identificação | direita = Valores + Deduções */}
             <div className="grid grid-cols-2 gap-x-10 gap-y-5">
 
@@ -535,93 +535,150 @@ export default function MedicaoContratos() {
 
       {/* Modal Editar Contrato */}
       <Dialog open={editId !== null} onOpenChange={open => { if (!open) setEditId(null); }}>
-        <DialogContent className="max-w-lg" style={{ backgroundColor: "white" }}>
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Editar Contrato</h2>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-1 block">Critério de Medição</Label>
-                <Select value={editForm.criterio} onValueChange={v => setEditForm(f => ({ ...f, criterio: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="avanco_fisico">Avanço Físico</SelectItem>
-                    <SelectItem value="parcela_fixa">Parcela Fixa</SelectItem>
-                  </SelectContent>
-                </Select>
+        <DialogContent className="p-0 overflow-hidden" style={{ maxWidth: "95vw", width: "95vw", maxHeight: "95vh", height: "auto", backgroundColor: "white" }}>
+          <div className="bg-gradient-to-r from-[#0f2744] to-[#1a3a5c] px-8 py-5">
+            <div className="flex items-center gap-4">
+              <div className="h-11 w-11 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center flex-shrink-0">
+                <Pencil className="h-5 w-5 text-white" />
               </div>
               <div>
-                <Label className="text-sm font-medium text-gray-700 mb-1 block">Status</Label>
-                <Select value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="encerrado">Encerrado</SelectItem>
-                  </SelectContent>
-                </Select>
+                <h2 className="text-lg font-semibold text-white leading-tight">Editar Contrato de Medição</h2>
+                <p className="text-sm text-blue-200/70 mt-0.5">Altere os dados do contrato conforme necessário</p>
               </div>
             </div>
+          </div>
 
-            <div>
-              <Label className="text-sm font-medium text-gray-700 mb-1 block">Valor Total do Contrato (R$)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">R$</span>
-                <Input className="h-10 pl-9" value={editForm.valorTotalContrato}
-                  onChange={e => handleBrlChange(e, v => setEditForm(f => ({ ...f, valorTotalContrato: v })))}
-                  onBlur={e => { const p = parseBrlInput(e.target.value); if (p) setEditForm(f => ({ ...f, valorTotalContrato: formatBrlInput(p) })); }}
-                />
-              </div>
-            </div>
+          <div className="px-8 py-6 overflow-y-auto" style={{ maxHeight: "calc(95vh - 140px)" }}>
+            <div className="grid grid-cols-2 gap-x-10 gap-y-5">
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-1 block">% Sinal / Mobilização</Label>
-                <Input className="h-10" value={editForm.percentualSinal}
-                  onChange={e => setEditForm(f => ({ ...f, percentualSinal: e.target.value }))} />
+              <div className="space-y-5">
+                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                  <Settings className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Configuração</span>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">Critério de Medição</Label>
+                  <Select value={editForm.criterio} onValueChange={v => setEditForm(f => ({ ...f, criterio: v }))}>
+                    <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="avanco_fisico">
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="h-3.5 w-3.5 text-blue-500" />
+                          Avanço Físico
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="parcela_fixa">
+                        <div className="flex items-center gap-2">
+                          <ClipboardList className="h-3.5 w-3.5 text-purple-500" />
+                          Parcela Fixa
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">Status</Label>
+                  <Select value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>
+                    <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ativo">Ativo</SelectItem>
+                      <SelectItem value="encerrado">Encerrado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <StickyNote className="h-4 w-4 text-gray-400" />
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Observações</span>
+                  </div>
+                  <Textarea className="text-sm resize-none h-[120px]" value={editForm.observacoes}
+                    onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))} />
+                </div>
               </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-1 block">Valor do Sinal (R$)</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">R$</span>
-                  <Input className="h-10 pl-9" value={editForm.valorSinalRecebido}
-                    onChange={e => handleBrlChange(e, v => setEditForm(f => ({ ...f, valorSinalRecebido: v })))}
-                    onBlur={e => { const p = parseBrlInput(e.target.value); if (p) setEditForm(f => ({ ...f, valorSinalRecebido: formatBrlInput(p) })); }}
-                  />
+
+              <div className="space-y-5">
+                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                  <DollarSign className="h-4 w-4 text-gray-400" />
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Valores Contratuais</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700 mb-2 block">Valor Total do Contrato</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">R$</span>
+                      <Input className="h-10 text-sm pl-9" value={editForm.valorTotalContrato}
+                        onChange={e => handleBrlChange(e, v => setEditForm(f => ({ ...f, valorTotalContrato: v })))}
+                        onBlur={e => { const p = parseBrlInput(e.target.value); if (p) setEditForm(f => ({ ...f, valorTotalContrato: formatBrlInput(p) })); }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700 mb-2 block">Sinal Recebido</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">R$</span>
+                      <Input className="h-10 text-sm pl-9" value={editForm.valorSinalRecebido}
+                        onChange={e => handleBrlChange(e, v => setEditForm(f => ({ ...f, valorSinalRecebido: v })))}
+                        onBlur={e => { const p = parseBrlInput(e.target.value); if (p) setEditForm(f => ({ ...f, valorSinalRecebido: formatBrlInput(p) })); }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <Percent className="h-4 w-4 text-gray-400" />
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Deduções por Medição</span>
+                  </div>
+
+                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700 mb-2 block">% Desconto de Sinal</Label>
+                        <div className="relative">
+                          <Input className="h-10 text-sm pr-8 bg-white" placeholder="ex: 1.00"
+                            value={editForm.percentualSinal}
+                            onChange={e => setEditForm(f => ({ ...f, percentualSinal: e.target.value }))} />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700 mb-2 block">% Retenção de Garantia</Label>
+                        <div className="relative">
+                          <Input className="h-10 text-sm pr-8 bg-white" placeholder="opcional"
+                            value={editForm.percentualRetencao}
+                            onChange={e => setEditForm(f => ({ ...f, percentualRetencao: e.target.value }))} />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-amber-700 mt-3 leading-snug">Descontados automaticamente em cada boletim de medição gerado.</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700 mb-2 block">Valor Mínimo para FD — Faturamento Direto</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">R$</span>
+                      <Input className="h-10 text-sm pl-9" placeholder="0,00" value={editForm.valorMinimoFd}
+                        onChange={e => handleBrlChange(e, v => setEditForm(f => ({ ...f, valorMinimoFd: v })))}
+                        onBlur={e => { const p = parseBrlInput(e.target.value); if (p) setEditForm(f => ({ ...f, valorMinimoFd: formatBrlInput(p) })); }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-1 block">% Retenção de Garantia</Label>
-                <Input className="h-10" value={editForm.percentualRetencao}
-                  onChange={e => setEditForm(f => ({ ...f, percentualRetencao: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-1 block">Valor Mínimo FD (R$)</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">R$</span>
-                  <Input className="h-10 pl-9" value={editForm.valorMinimoFd}
-                    onChange={e => handleBrlChange(e, v => setEditForm(f => ({ ...f, valorMinimoFd: v })))}
-                    onBlur={e => { const p = parseBrlInput(e.target.value); if (p) setEditForm(f => ({ ...f, valorMinimoFd: formatBrlInput(p) })); }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium text-gray-700 mb-1 block">Observações</Label>
-              <Textarea className="min-h-[60px]" value={editForm.observacoes}
-                onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))} />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="outline" onClick={() => setEditId(null)}>Cancelar</Button>
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={salvarEdicao} disabled={atualizarMutation.isPending}>
-                {atualizarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Salvar
-              </Button>
-            </div>
+          <div className="px-8 py-4 bg-gray-50 border-t flex items-center justify-end gap-3">
+            <Button variant="outline" className="h-10 px-5" onClick={() => setEditId(null)}>Cancelar</Button>
+            <Button className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white gap-2" onClick={salvarEdicao} disabled={atualizarMutation.isPending}>
+              {atualizarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Salvar Alterações
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
