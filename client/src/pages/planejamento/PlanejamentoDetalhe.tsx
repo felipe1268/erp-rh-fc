@@ -4861,7 +4861,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
         setCfgSinalValor(sv);
         setSinalModo("valor");
       }
-      setCfgRetencaoPct(n(configMed.retencaoPct) || 5);
+      const retVal = n(configMed.retencaoPct);
+      setCfgRetencaoPct(retVal != null && !isNaN(retVal) ? retVal : 5);
       setCfgDataInicioObra((configMed as any).dataInicioObra ?? "");
       setCfgBloqueado(configMed.bloqueado ?? false);
     }
