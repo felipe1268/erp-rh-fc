@@ -5031,12 +5031,13 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
           venda: 0, custo: 0, vendaOriginal: 0,
           pct: 100, pctMensal: 0,
           prevMedicao: 0,
-          medicaoBruta: +totalRetencao.toFixed(2),
-          retencao: 0,
+          medicaoBruta: 0,
+          retencao: +(-totalRetencao).toFixed(2),
           descontoSinal: 0,
           liquido: +totalRetencao.toFixed(2),
           isSinalRow: false,
           isRetencaoRow: true,
+          retencaoValor: +totalRetencao.toFixed(2),
         });
       }
     }
@@ -5779,8 +5780,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                               <p className="text-[9px] text-amber-500 mt-0.5">Liberação da retenção ({cfgRetencaoPct}%) após conclusão</p>
                             </td>
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
-                            <td className="py-2 px-3 text-right font-bold text-amber-700">{fmt(r.medicaoBruta)}</td>
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-right font-bold text-emerald-600">+{fmt((r as any).retencaoValor ?? r.liquido)}</td>
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
                             <td className={`py-2 px-3 text-right font-bold ${confirmado ? "text-emerald-600 line-through" : "text-amber-700"}`}>
                               {fmt(r.liquido)}
@@ -5912,8 +5913,10 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                     <tr>
                       <td className="py-2 px-3 font-bold">TOTAL</td>
                       <td className="py-2 px-3" />
-                      <td className="py-2 px-3 text-right font-bold text-indigo-300">{fmt(previsoesMensais.reduce((s, r) => s + r.medicaoBruta, 0))}</td>
-                      <td className="py-2 px-3 text-right font-bold text-rose-300">−{fmt(previsoesMensais.reduce((s, r) => s + r.retencao, 0))}</td>
+                      <td className="py-2 px-3 text-right font-bold text-indigo-300">{fmt(previsoesMensais.filter(r => !(r as any).isRetencaoRow).reduce((s, r) => s + r.medicaoBruta, 0))}</td>
+                      <td className="py-2 px-3 text-right font-bold text-rose-300">
+                        {(() => { const retTotal = previsoesMensais.filter(r => !(r as any).isRetencaoRow && !r.isSinalRow).reduce((s, r) => s + r.retencao, 0); return retTotal > 0 ? `−${fmt(retTotal)} / +${fmt(retTotal)}` : "—"; })()}
+                      </td>
                       <td className="py-2 px-3 text-right font-bold text-violet-300">{fmt(previsoesMensais.find(r => r.isSinalRow)?.medicaoBruta ?? 0)}</td>
                       <td className="py-2 px-3 text-right font-bold text-emerald-300">{fmt(previsoesMensais.reduce((s, r) => s + r.liquido, 0))}</td>
                       <td className="py-2 px-3 text-right font-bold text-red-300">{fmt(previsoesMensais.reduce((s, r) => s + r.custo, 0))}</td>
