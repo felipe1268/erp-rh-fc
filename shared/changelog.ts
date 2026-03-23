@@ -5091,4 +5091,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 17:00:00",
   },
+  {
+    version: 769,
+    titulo: "Bugfix: Sinal/Mobilização agora mantém valor digitado ao recarregar",
+    descricao: "Ao recarregar a tela de Previsão de Medição, o campo Sinal/Mobilização agora preserva exatamente o valor em R$ digitado pelo usuário (ex: R$ 100.000,00), sem recalcular por percentual. O sistema detecta automaticamente que há um valor salvo e ativa o modo 'valor' em vez de 'percentual'. Removido item 'Linha de Balanços' do menu lateral do Planejamento.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 17:10:00",
+  },
 ];
