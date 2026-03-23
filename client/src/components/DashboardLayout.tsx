@@ -993,7 +993,6 @@ function DashboardLayoutContent({
           { icon: BarChart3,     label: "Visão Geral",       path: `/planejamento/${planId}?tab=visao-geral` },
           { icon: CalendarDays,  label: "Cronograma",        path: `/planejamento/${planId}?tab=cronograma` },
           { icon: ClipboardCheck,label: "Gantt",             path: `/planejamento/${planId}?tab=gantt` },
-          { icon: Building2,     label: "Linha de Balanços", path: `/planejamento/${planId}?tab=lob` },
           { icon: DollarSign,    label: "Crono. Financeiro", path: `/planejamento/${planId}?tab=cronograma-financeiro` },
           { icon: TrendingUp,    label: "Curva S",           path: `/planejamento/${planId}?tab=curva-s` },
           { icon: BarChart3,     label: "Avanço Semanal",    path: `/planejamento/${planId}?tab=avanco` },
