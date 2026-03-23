@@ -5046,4 +5046,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 14:30:00",
   },
+  {
+    version: 764,
+    titulo: "Bugfix: Curva S — todas as curvas agora iniciam obrigatoriamente em 0%",
+    descricao: "Regra fundamental corrigida: toda Curva S (Baseline, Revisão Atual, Realizado, Tendência) DEVE iniciar do ponto 0%. Antes, a curva Baseline e Realizada começavam no primeiro valor acumulado da primeira semana (ex: 12%). Correção: gerarCurvaPlanejada agora insere automaticamente um ponto {semana: semana_anterior, acumulado: 0} antes do primeiro valor real. Curva Realizada idem — se o primeiro avanço já tem acumulado > 0, insere ponto zero na semana anterior. Isso garante que o gráfico começa no canto inferior esquerdo (0%), como toda Curva S de engenharia deve ser.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 15:00:00",
+  },
 ];

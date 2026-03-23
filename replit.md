@@ -307,6 +307,12 @@ Módulos atualmente registrados (Rev. 394): `rh`, `sst`, `juridico`, `avaliacao`
 - `shared/changelog.ts`: campo `tipo` é `'feature' | 'bugfix' | 'melhoria' | 'seguranca' | 'performance'`. **Não** usar `'correcao'` ou `'bug'` — esses valores quebram o NOT NULL do enum.
 - Rev. atual: **718**. Próxima: **719**.
 
+#### Golden Rule #16 — Curva S SEMPRE inicia em 0%
+- Toda curva S (Baseline, Revisão Atual, Realizado, Tendência) DEVE ter o primeiro ponto com acumulado = 0%.
+- O backend insere automaticamente `{ semana: semana_anterior_ao_primeiro_dado, acumulado: 0 }` como ponto inicial.
+- Isso se aplica a `gerarCurvaPlanejada`, `curvaRealizada`, e `getCurvasTodasRevisoes`.
+- A curva financeira (`getCurvaSFinanceira`) já segue esta regra.
+
 #### Golden Rule #15 — Padrão Wrapper key={id} para páginas de detalhe
 - Toda página que usa `useRoute(".../:id")` DEVE usar o padrão Wrapper:
   ```tsx

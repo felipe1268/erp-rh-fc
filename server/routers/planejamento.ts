@@ -935,10 +935,15 @@ export const planejamentoRouter = router({
         });
 
         const sorted = [...dates.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+        if (sorted.length === 0) return [];
+        const primeiraSemana = sorted[0][0];
+        const semanaAnterior = new Date(new Date(primeiraSemana + "T12:00:00Z").getTime() - 7 * 86400000);
+        const semZero = toMondayStr(semanaAnterior);
         let acum = 0;
-        const pontos = sorted.map(([semana, val]) => {
+        const pontos = [{ semana: semZero, acumulado: 0 }];
+        sorted.forEach(([semana, val]) => {
           acum = Math.min(100, acum + val);
-          return { semana, acumulado: +acum.toFixed(2) };
+          pontos.push({ semana, acumulado: +acum.toFixed(2) });
         });
         return pontos;
       }
@@ -981,10 +986,12 @@ export const planejamentoRouter = router({
         return { semana, acumulado: +Math.min(100, soma).toFixed(2) };
       });
 
-      if (curvaRealizada.length > 0 && curvaBaseline.length > 0) {
-        const primeiraPlan = curvaBaseline[0].semana;
-        if (curvaRealizada[0].semana > primeiraPlan) {
-          curvaRealizada.unshift({ semana: primeiraPlan, acumulado: 0 });
+      if (curvaRealizada.length > 0) {
+        if (curvaRealizada[0].acumulado !== 0) {
+          const primeiraSemReal = curvaRealizada[0].semana;
+          const semAnteriorReal = new Date(new Date(primeiraSemReal + "T12:00:00Z").getTime() - 7 * 86400000);
+          const semZeroReal = toMondayStr(semAnteriorReal);
+          curvaRealizada.unshift({ semana: semZeroReal, acumulado: 0 });
         }
       }
 
