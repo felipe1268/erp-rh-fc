@@ -40,7 +40,7 @@ import {
 
 const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
-function fPct(v: number) { return `${n(v).toFixed(1)}%`; }
+function fPct(v: number) { return `${n(v).toFixed(2)}%`; }
 
 type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "simulador";
 
@@ -444,7 +444,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                   )}
                   {desvio !== null && Math.abs(desvio) >= 0.1 && (
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desvioPositivo ? "bg-emerald-50 text-emerald-700" : desvioNegativo ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-500"}`}>
-                      {desvioPositivo ? "+" : ""}{desvio.toFixed(1)}% {desvioPositivo ? "adiantado" : "atrasado"}
+                      {desvioPositivo ? "+" : ""}{desvio.toFixed(2)}% {desvioPositivo ? "adiantado" : "atrasado"}
                     </span>
                   )}
                   {desvio !== null && Math.abs(desvio) < 0.1 && (
@@ -4214,7 +4214,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     return +soma.toFixed(1);
   }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal]);
 
-  const delta = +(realizadoAcum - previsto).toFixed(1);
+  const delta = +(realizadoAcum - previsto).toFixed(2);
 
   const previstoComInd = useMemo(() => {
     const folhasComDatas = folhasComInd.filter((a: any) => a.dataInicio && a.dataFim);
@@ -4261,8 +4261,8 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     return +soma.toFixed(1);
   }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim]);
 
-  const distorcaoPrev = +(previstoComInd - previsto).toFixed(1);
-  const distorcaoReal = +(realizadoComInd - realizadoAcum).toFixed(1);
+  const distorcaoPrev = +(previstoComInd - previsto).toFixed(2);
+  const distorcaoReal = +(realizadoComInd - realizadoAcum).toFixed(2);
 
   // ── Import XML / XLSX do MS Project ───────────────────────────────────────
   async function importarDoMSProject(file: File) {
@@ -4590,7 +4590,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
         {/* Previsto */}
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1">
           <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Previsto (semana)</p>
-          <p className="text-2xl font-bold text-orange-600">{previsto.toFixed(1)}%</p>
+          <p className="text-2xl font-bold text-orange-600">{previsto.toFixed(2)}%</p>
           <div className="w-full bg-slate-100 rounded-full h-2 mt-1 overflow-hidden">
             <div className="h-full rounded-full bg-orange-400" style={{ width: `${Math.min(100, previsto)}%` }} />
           </div>
@@ -4600,7 +4600,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
         {/* Realizado */}
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1">
           <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Realizado (acum.)</p>
-          <p className="text-2xl font-bold text-emerald-600">{realizadoAcum.toFixed(1)}%</p>
+          <p className="text-2xl font-bold text-emerald-600">{realizadoAcum.toFixed(2)}%</p>
           <div className="w-full bg-slate-100 rounded-full h-2 mt-1 overflow-hidden">
             <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, realizadoAcum)}%` }} />
           </div>
@@ -4611,7 +4611,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
         <div className={`rounded-xl border shadow-sm p-4 flex flex-col gap-1 ${delta >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
           <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Variação (Real − Prev.)</p>
           <p className={`text-2xl font-bold ${delta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-            {delta >= 0 ? "+" : ""}{delta.toFixed(1)}%
+            {delta >= 0 ? "+" : ""}{delta.toFixed(2)}%
           </p>
           <div className="flex items-center gap-1.5 mt-1">
             <div className={`h-2 w-2 rounded-full ${delta >= 0 ? "bg-emerald-500" : "bg-red-500"}`} />
@@ -4645,7 +4645,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                   <UiTooltipTrigger asChild>
                     <div className="cursor-help">
                       <p className="text-[9px] text-slate-400">Diretas</p>
-                      <p className="text-base font-black text-slate-500">{previsto.toFixed(1)}%</p>
+                      <p className="text-base font-black text-slate-500">{previsto.toFixed(2)}%</p>
                     </div>
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
@@ -4658,7 +4658,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                   <UiTooltipTrigger asChild>
                     <div className="cursor-help">
                       <p className="text-[9px] text-blue-400">Global</p>
-                      <p className="text-base font-black text-blue-700">{previstoComInd.toFixed(1)}%</p>
+                      <p className="text-base font-black text-blue-700">{previstoComInd.toFixed(2)}%</p>
                     </div>
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
@@ -4669,7 +4669,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                 <UiTooltip>
                   <UiTooltipTrigger asChild>
                     <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full cursor-help ${distorcaoPrev >= 0 ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-red-100 text-red-700 border border-red-200"}`}>
-                      {distorcaoPrev >= 0 ? "+" : ""}{distorcaoPrev.toFixed(1)}pp
+                      {distorcaoPrev >= 0 ? "+" : ""}{distorcaoPrev.toFixed(2)}pp
                     </span>
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
@@ -4686,7 +4686,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                   <UiTooltipTrigger asChild>
                     <div className="cursor-help">
                       <p className="text-[9px] text-slate-400">Diretas</p>
-                      <p className="text-base font-black text-slate-500">{realizadoAcum.toFixed(1)}%</p>
+                      <p className="text-base font-black text-slate-500">{realizadoAcum.toFixed(2)}%</p>
                     </div>
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
@@ -4699,7 +4699,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                   <UiTooltipTrigger asChild>
                     <div className="cursor-help">
                       <p className="text-[9px] text-blue-400">Global</p>
-                      <p className="text-base font-black text-blue-700">{realizadoComInd.toFixed(1)}%</p>
+                      <p className="text-base font-black text-blue-700">{realizadoComInd.toFixed(2)}%</p>
                     </div>
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
@@ -4710,7 +4710,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                 <UiTooltip>
                   <UiTooltipTrigger asChild>
                     <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full cursor-help ${distorcaoReal >= 0 ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-red-100 text-red-700 border border-red-200"}`}>
-                      {distorcaoReal >= 0 ? "+" : ""}{distorcaoReal.toFixed(1)}pp
+                      {distorcaoReal >= 0 ? "+" : ""}{distorcaoReal.toFixed(2)}pp
                     </span>
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
@@ -4723,8 +4723,8 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
           </div>
           <div className="grid grid-cols-2 divide-x divide-blue-100 border-t border-blue-100 bg-slate-50/80">
             {(() => {
-              const desvDiretas = +(realizadoAcum - previsto).toFixed(1);
-              const desvGlobal = +(realizadoComInd - previstoComInd).toFixed(1);
+              const desvDiretas = +(realizadoAcum - previsto).toFixed(2);
+              const desvGlobal = +(realizadoComInd - previstoComInd).toFixed(2);
               return <>
                 <div className="px-4 py-2 flex items-center gap-2">
                   <UiTooltip>
@@ -4737,7 +4737,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                     </UiTooltipContent>
                   </UiTooltip>
                   <span className={`text-sm font-extrabold ${desvDiretas >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {desvDiretas >= 0 ? "+" : ""}{desvDiretas.toFixed(1)}pp
+                    {desvDiretas >= 0 ? "+" : ""}{desvDiretas.toFixed(2)}pp
                   </span>
                 </div>
                 <div className="px-4 py-2 flex items-center gap-2">
@@ -4751,7 +4751,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                     </UiTooltipContent>
                   </UiTooltip>
                   <span className={`text-sm font-extrabold ${desvGlobal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {desvGlobal >= 0 ? "+" : ""}{desvGlobal.toFixed(1)}pp
+                    {desvGlobal >= 0 ? "+" : ""}{desvGlobal.toFixed(2)}pp
                   </span>
                 </div>
               </>;
@@ -8497,8 +8497,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     }, 0));
   }, [atividades, avancos, semana, semanaFimRefis]);
 
-  const refisDistPrev = +(refisPrevistoComInd - avancoPrevisto).toFixed(1);
-  const refisDistReal = +(refisRealComInd - avancoRealAtual).toFixed(1);
+  const refisDistPrev = +(refisPrevistoComInd - avancoPrevisto).toFixed(2);
+  const refisDistReal = +(refisRealComInd - avancoRealAtual).toFixed(2);
   const qtdIndiretas = atividades.filter((a: any) => a.isIndireta && !a.isGrupo).length;
 
   // ── Mapa realizado por atividade (último avanço até a semana selecionada) ──
@@ -9359,7 +9359,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 <UiTooltip>
                   <UiTooltipTrigger asChild>
                     <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full cursor-help ${refisDistPrev >= 0 ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-red-100 text-red-700 border border-red-200"}`}>
-                      {refisDistPrev >= 0 ? "+" : ""}{refisDistPrev.toFixed(1)}pp
+                      {refisDistPrev >= 0 ? "+" : ""}{refisDistPrev.toFixed(2)}pp
                     </span>
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
@@ -9400,7 +9400,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 <UiTooltip>
                   <UiTooltipTrigger asChild>
                     <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full cursor-help ${refisDistReal >= 0 ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-red-100 text-red-700 border border-red-200"}`}>
-                      {refisDistReal >= 0 ? "+" : ""}{refisDistReal.toFixed(1)}pp
+                      {refisDistReal >= 0 ? "+" : ""}{refisDistReal.toFixed(2)}pp
                     </span>
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
@@ -9413,8 +9413,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
           <div className="grid grid-cols-2 divide-x divide-blue-100 border-t border-blue-100 bg-slate-50/80">
             {(() => {
-              const desvDiretas = +(avancoRealAtual - avancoPrevisto).toFixed(1);
-              const desvGlobal = +(refisRealComInd - refisPrevistoComInd).toFixed(1);
+              const desvDiretas = +(avancoRealAtual - avancoPrevisto).toFixed(2);
+              const desvGlobal = +(refisRealComInd - refisPrevistoComInd).toFixed(2);
               return <>
                 <div className="px-5 py-2 flex items-center gap-2">
                   <UiTooltip>
@@ -9427,7 +9427,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     </UiTooltipContent>
                   </UiTooltip>
                   <span className={`text-sm font-extrabold ${desvDiretas >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {desvDiretas >= 0 ? "+" : ""}{desvDiretas.toFixed(1)}pp
+                    {desvDiretas >= 0 ? "+" : ""}{desvDiretas.toFixed(2)}pp
                   </span>
                 </div>
                 <div className="px-5 py-2 flex items-center gap-2">
@@ -9441,7 +9441,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     </UiTooltipContent>
                   </UiTooltip>
                   <span className={`text-sm font-extrabold ${desvGlobal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {desvGlobal >= 0 ? "+" : ""}{desvGlobal.toFixed(1)}pp
+                    {desvGlobal >= 0 ? "+" : ""}{desvGlobal.toFixed(2)}pp
                   </span>
                 </div>
               </>;
