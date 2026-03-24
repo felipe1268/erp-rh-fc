@@ -116,6 +116,7 @@ interface Props {
   nomeCliente: string;
   atividades:  any[];
   avancosMap:  Record<number, number>;
+  refisLista?: any[];
 }
 
 // ── Cores de status ───────────────────────────────────────────────────────────
@@ -152,8 +153,16 @@ function tipoIcon(tipo: string) {
 export function ProgramacaoSemanal({
   projetoId, revisaoId, orcamentoId, companyId,
   nomeProjeto, nomeCliente, atividades, avancosMap,
+  refisLista = [],
 }: Props) {
   const semanas  = useMemo(() => computeWeeks(atividades), [atividades]);
+  const refisSemanas = useMemo(() => {
+    const s = new Set<string>();
+    refisLista.forEach((r: any) => {
+      if (r.semana) s.add(String(r.semana).substring(0, 10));
+    });
+    return s;
+  }, [refisLista]);
   const [idx, setIdx] = useState<number>(() => currentWeekIdx(semanas));
   const [modoRelatorio, setModoRelatorio] = useState(false);
   const [qtdSemanas, setQtdSemanas] = useState(3);
@@ -387,6 +396,12 @@ export function ProgramacaoSemanal({
                     Semana Atual
                   </span>
                 )}
+                {semanaAtual && refisSemanas.has(dateStr(semanaAtual.ini)) && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-full px-2 py-0.5">
+                    <CheckCircle2 className="h-3 w-3" />
+                    REFIS Emitido
+                  </span>
+                )}
               </div>
               <p className="text-base font-bold text-slate-800">
                 {semanaAtual ? `${fmtBRDate(semanaAtual.ini)} — ${fmtBRDate(semanaAtual.fim)}` : "—"}
@@ -411,21 +426,25 @@ export function ProgramacaoSemanal({
               const atv = atividadesDaSemana(atividades, s);
               const temAtrasada = atv.some((a: any) => a.dataFim && a.dataFim < today && (avancosMap[a.id] ?? 0) < 100);
               const isCurrent   = dateStr(s.ini) <= today && dateStr(s.fim) >= today;
+              const temRefis    = refisSemanas.has(dateStr(s.ini));
               return (
                 <button
                   key={s.numero}
                   onClick={() => setIdx(i)}
-                  title={`Sem. ${s.numero} — ${fmtBRDate(s.ini)} a ${fmtBRDate(s.fim)}`}
-                  className={`h-6 min-w-[36px] px-1.5 text-[10px] font-bold rounded border shrink-0 transition-colors
+                  title={`Sem. ${s.numero} — ${fmtBRDate(s.ini)} a ${fmtBRDate(s.fim)}${temRefis ? " ✓ REFIS emitido" : ""}`}
+                  className={`h-6 min-w-[36px] px-1.5 text-[10px] font-bold rounded border shrink-0 transition-colors flex items-center gap-0.5
                     ${i === idx
                       ? "bg-blue-600 text-white border-blue-600"
                       : isCurrent
                         ? "bg-red-500 text-white border-red-600"
-                        : temAtrasada
-                          ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
-                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                        : temRefis
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                          : temAtrasada
+                            ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
                     }`}
                 >
+                  {temRefis && <CheckCircle2 className="h-3 w-3 shrink-0" />}
                   {s.numero}
                 </button>
               );

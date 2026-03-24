@@ -684,6 +684,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             nomeCliente={proj?.cliente ?? ""}
             atividades={atividades}
             avancosMap={avancosMap}
+            refisLista={refisLista}
           />
         )}
 
