@@ -588,21 +588,47 @@ export const planejamentoRouter = router({
           .from(planejamentoAtividades)
           .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
         const existingIds = new Set(existing.map(e => e.id));
-        const toDelete = [...existingIds].filter(id => !sentIds.includes(id));
+        const toDeleteIds = [...existingIds].filter(id => !sentIds.includes(id));
 
-        if (toDelete.length > 0) {
+        if (toDeleteIds.length > 0) {
           await tx.delete(planejamentoAtividades)
-            .where(inArray(planejamentoAtividades.id, toDelete));
+            .where(inArray(planejamentoAtividades.id, toDeleteIds));
         }
 
-        for (const a of toUpdate) {
-          const r = rows[a._idx];
-          await tx.update(planejamentoAtividades)
-            .set(r)
-            .where(and(
-              eq(planejamentoAtividades.id, a.id!),
-              eq(planejamentoAtividades.revisaoId, input.revisaoId),
-            ));
+        if (toUpdate.length > 0) {
+          const BATCH = 50;
+          for (let b = 0; b < toUpdate.length; b += BATCH) {
+            const batch = toUpdate.slice(b, b + BATCH);
+            const cases = (field: string, getValue: (r: any) => string) => {
+              const whens = batch.map(a => `WHEN ${a.id} THEN ${getValue(rows[a._idx])}`).join(" ");
+              return `${field} = CASE id ${whens} ELSE ${field} END`;
+            };
+            const esc = (v: any) => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
+            const escBool = (v: any) => v ? "TRUE" : "FALSE";
+            const escNum = (v: any) => v == null ? "0" : String(Number(v) || 0);
+            const batchIds = batch.map(a => a.id!);
+
+            await tx.execute(sql.raw(`
+              UPDATE planejamento_atividades SET
+                ${cases("eap_codigo", r => esc(r.eapCodigo))},
+                ${cases("nome", r => esc(r.nome))},
+                ${cases("nivel", r => escNum(r.nivel))},
+                ${cases("data_inicio", r => r.dataInicio ? esc(r.dataInicio) : "NULL")},
+                ${cases("data_fim", r => r.dataFim ? esc(r.dataFim) : "NULL")},
+                ${cases("duracao_dias", r => escNum(r.duracaoDias))},
+                ${cases("predecessora", r => esc(r.predecessora))},
+                ${cases("peso_financeiro", r => esc(r.pesoFinanceiro))},
+                ${cases("recurso_principal", r => esc(r.recursoPrincipal))},
+                ${cases("quantidade_planejada", r => esc(r.quantidadePlanejada))},
+                ${cases("unidade", r => esc(r.unidade))},
+                ${cases("ordem", r => escNum(r.ordem))},
+                ${cases("is_grupo", r => escBool(r.isGrupo))},
+                ${cases("is_marco", r => escBool(r.isMarco))},
+                ${cases("is_indireta", r => escBool(r.isIndireta))}
+              WHERE id IN (${batchIds.join(",")})
+                AND revisao_id = ${input.revisaoId}
+            `));
+          }
         }
 
         if (toInsert.length > 0) {

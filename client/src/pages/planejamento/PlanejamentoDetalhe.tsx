@@ -2610,11 +2610,17 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                 <Calculator className="h-3.5 w-3.5" />
                 Calcular Pesos
               </Button>
-              <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700"
+              <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 relative overflow-hidden min-w-[100px]"
                 disabled={salvarMutation.isPending}
                 onClick={() => salvarMutation.mutate({ revisaoId: revisaoAtiva.id, projetoId, atividades: linhas })}>
+                {salvarMutation.isPending && (
+                  <div className="absolute bottom-0 left-0 h-1 bg-blue-300 animate-pulse" style={{ width: "100%" }}>
+                    <div className="h-full bg-white/60 animate-[progress_2s_ease-in-out_infinite]"
+                      style={{ width: "40%", animation: "progress 1.5s ease-in-out infinite" }} />
+                  </div>
+                )}
                 {salvarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                Salvar
+                {salvarMutation.isPending ? "Salvando..." : "Salvar"}
               </Button>
             </>
           ) : (
@@ -2918,18 +2924,22 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                   : editando
                     ? a.isGrupo
                       ? (a.nivel ?? 1) === 1 ? "bg-yellow-50 border-l-4 border-l-yellow-400" : "bg-amber-50/60 border-l-4 border-l-amber-300"
-                      : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                      : a.isIndireta
+                        ? "bg-gray-100 border-l-4 border-l-gray-400"
+                        : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
                     : atrasada
                       ? "bg-red-50"
                       : a.isMarco
                         ? "bg-purple-50/40 border-l-4 border-l-purple-400"
-                        : a.isGrupo && nivel === 1
-                          ? "bg-yellow-50 border-l-4 border-l-yellow-400"
-                          : a.isGrupo && nivel === 2
-                            ? "bg-amber-50/60 border-l-4 border-l-amber-300"
-                            : a.isGrupo
-                              ? "bg-slate-50 border-l-4 border-l-slate-300"
-                              : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30";
+                        : a.isIndireta
+                          ? "bg-gray-100 border-l-4 border-l-gray-400"
+                          : a.isGrupo && nivel === 1
+                            ? "bg-yellow-50 border-l-4 border-l-yellow-400"
+                            : a.isGrupo && nivel === 2
+                              ? "bg-amber-50/60 border-l-4 border-l-amber-300"
+                              : a.isGrupo
+                                ? "bg-slate-50 border-l-4 border-l-slate-300"
+                                : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30";
 
               return (
                 <tr key={a.id ?? idx}
