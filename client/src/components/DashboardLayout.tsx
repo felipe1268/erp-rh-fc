@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import IAModuloChat from "@/components/IAModuloChat";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -1361,6 +1362,7 @@ function DashboardLayoutContent({
         <CompanyHeader isMobile={isMobile} activeLabel={activeMenuItem?.label ?? "Menu"} />
         <main className="flex-1 p-3 sm:p-4 md:p-6">{children}</main>
       </SidebarInset>
+      <IAModuloAutoDetect location={location} />
     </>
   );
 }
@@ -1429,3 +1431,35 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
   );
 }
 
+
+type IAModulo = "planejamento" | "orcamento" | "compras" | "rh" | "financeiro" | "sst" | "medicao";
+
+const ROUTE_TO_MODULO: [RegExp, IAModulo][] = [
+  [/^\/planejamento/, "planejamento"],
+  [/^\/orcamento/, "orcamento"],
+  [/^\/(compras|almoxarifado)/, "compras"],
+  [/^\/(painel\/rh|funcionarios|colaboradores|folha-pagamento|folha|ferias|ponto|fechamento-ponto|espelho-ponto|rescisao|admissao|banco-horas|aviso-previo|hora-extra|solicitacao-he|gestao-competencias|controle-documentos|vale-alimentacao|dissidio|feriados|modulo-pj|contrato-pj|apontamentos-campo)/, "rh"],
+  [/^\/financeiro/, "financeiro"],
+  [/^\/(painel\/sst|sst|epis?|aso|cipa|treinamento)/, "sst"],
+  [/^\/medicao/, "medicao"],
+];
+
+function IAModuloAutoDetect({ location }: { location: string }) {
+  const detected = useMemo(() => {
+    for (const [re, mod] of ROUTE_TO_MODULO) {
+      if (re.test(location)) return mod;
+    }
+    return null;
+  }, [location]);
+
+  const projetoId = useMemo(() => {
+    if (detected === "planejamento") {
+      const m = location.match(/\/planejamento\/(\d+)/);
+      return m ? parseInt(m[1]) : undefined;
+    }
+    return undefined;
+  }, [location, detected]);
+
+  if (!detected) return null;
+  return <IAModuloChat modulo={detected} projetoId={projetoId} />;
+}

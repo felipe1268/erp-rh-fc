@@ -78,6 +78,7 @@ import { dissidioRouter } from "./routers/dissidio";
 import { sindicalRouter } from "./routers/sindical";
 import { avaliacaoRouter } from "./routers/avaliacao";
 import { orcamentistaRouter } from "./routers/orcamentista";
+import { iaModulosRouter } from "./routers/iaModulos";
 import { sprint1Router } from "./routers/sprint1Foundation";
 import { medicosClinicasRouter } from "./routers/medicosClinicas";
 import { terceirosRouter } from "./routers/terceiros";
@@ -133,6 +134,7 @@ export const appRouter = router({
   notifications: notificationsRouter,
   avaliacao: avaliacaoRouter,
   orcamentista: orcamentistaRouter,
+  iaModulos: iaModulosRouter,
   sprint1: sprint1Router,
   medicosClinicas: medicosClinicasRouter,
   terceiros: terceirosRouter,
