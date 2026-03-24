@@ -4613,33 +4613,33 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       </div>
 
       {(distorcaoPrev !== 0 || distorcaoReal !== 0) && (
-        <div className="flex flex-wrap items-center gap-3 px-4 py-2 rounded-lg border border-purple-200 bg-purple-50/60">
-          <div className="flex items-center gap-1.5">
-            <Info className="h-3.5 w-3.5 text-purple-500" />
-            <span className="text-[11px] font-semibold text-purple-800">Análise c/ Indiretas:</span>
+        <div className="rounded-xl border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-purple-100/80 shadow-md overflow-hidden">
+          <div className="bg-purple-600 px-4 py-2 flex items-center gap-2">
+            <Info className="h-4 w-4 text-white" />
+            <span className="text-xs font-bold text-white tracking-wide uppercase">
+              Impacto das Indiretas — {folhasComInd.length - folhas.length} atividade{folhasComInd.length - folhas.length !== 1 ? "s" : ""}
+            </span>
           </div>
-          <div className="flex items-center gap-3 text-[11px]">
-            <span className="text-slate-600">
-              Previsto: <span className="font-bold text-orange-600">{previsto.toFixed(1)}%</span>
-              <span className="mx-1 text-slate-400">→</span>
-              <span className="font-bold text-purple-700">{previstoComInd.toFixed(1)}%</span>
-              <span className={`ml-1 font-bold ${distorcaoPrev >= 0 ? "text-purple-600" : "text-red-600"}`}>
-                ({distorcaoPrev >= 0 ? "+" : ""}{distorcaoPrev.toFixed(1)}pp)
+          <div className="px-4 py-3 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Previsto</span>
+              <span className="text-lg font-black text-orange-600">{previsto.toFixed(1)}%</span>
+              <span className="text-slate-400 text-lg font-light">→</span>
+              <span className="text-lg font-black text-purple-700">{previstoComInd.toFixed(1)}%</span>
+              <span className={`text-sm font-extrabold px-2 py-0.5 rounded-full ${distorcaoPrev >= 0 ? "bg-purple-200 text-purple-800" : "bg-red-100 text-red-700"}`}>
+                {distorcaoPrev >= 0 ? "+" : ""}{distorcaoPrev.toFixed(1)}pp
               </span>
-            </span>
-            <span className="text-slate-300">|</span>
-            <span className="text-slate-600">
-              Realizado: <span className="font-bold text-emerald-600">{realizadoAcum.toFixed(1)}%</span>
-              <span className="mx-1 text-slate-400">→</span>
-              <span className="font-bold text-purple-700">{realizadoComInd.toFixed(1)}%</span>
-              <span className={`ml-1 font-bold ${distorcaoReal >= 0 ? "text-purple-600" : "text-red-600"}`}>
-                ({distorcaoReal >= 0 ? "+" : ""}{distorcaoReal.toFixed(1)}pp)
+            </div>
+            <div className="w-px h-8 bg-purple-200" />
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Realizado</span>
+              <span className="text-lg font-black text-emerald-600">{realizadoAcum.toFixed(1)}%</span>
+              <span className="text-slate-400 text-lg font-light">→</span>
+              <span className="text-lg font-black text-purple-700">{realizadoComInd.toFixed(1)}%</span>
+              <span className={`text-sm font-extrabold px-2 py-0.5 rounded-full ${distorcaoReal >= 0 ? "bg-purple-200 text-purple-800" : "bg-red-100 text-red-700"}`}>
+                {distorcaoReal >= 0 ? "+" : ""}{distorcaoReal.toFixed(1)}pp
               </span>
-            </span>
-            <span className="text-slate-300">|</span>
-            <span className="text-[10px] text-purple-500 italic">
-              Distorção causada por {folhasComInd.length - folhas.length} atividade{folhasComInd.length - folhas.length !== 1 ? "s" : ""} indireta{folhasComInd.length - folhas.length !== 1 ? "s" : ""}
-            </span>
+            </div>
           </div>
         </div>
       )}
@@ -9191,29 +9191,33 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       </div>
 
       {qtdIndiretas > 0 && (refisDistPrev !== 0 || refisDistReal !== 0) && (
-        <div className="refis-distortion-block flex flex-wrap items-center gap-3 px-5 py-2.5 rounded-xl border border-purple-200 bg-purple-50/60">
-          <div className="flex items-center gap-1.5">
-            <Info className="h-3.5 w-3.5 text-purple-500" />
-            <span className="text-[11px] font-semibold text-purple-800">Impacto das Indiretas ({qtdIndiretas}):</span>
+        <div className="refis-distortion-block rounded-xl border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-purple-100/80 shadow-md overflow-hidden">
+          <div className="bg-purple-600 px-5 py-2 flex items-center gap-2">
+            <Info className="h-4 w-4 text-white" />
+            <span className="text-xs font-bold text-white tracking-wide uppercase">
+              Impacto das Indiretas — {qtdIndiretas} atividade{qtdIndiretas !== 1 ? "s" : ""}
+            </span>
           </div>
-          <div className="flex items-center gap-3 text-[11px]">
-            <span className="text-slate-600">
-              Prev. direto: <span className="font-bold text-orange-600">{fPct_(avancoPrevisto)}</span>
-              <span className="mx-1 text-slate-400">→</span>
-              c/ ind.: <span className="font-bold text-purple-700">{fPct_(refisPrevistoComInd)}</span>
-              <span className={`ml-1 font-bold ${refisDistPrev >= 0 ? "text-purple-600" : "text-red-600"}`}>
-                ({refisDistPrev >= 0 ? "+" : ""}{refisDistPrev.toFixed(1)}pp)
+          <div className="px-5 py-3 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Previsto</span>
+              <span className="text-lg font-black text-orange-600">{fPct_(avancoPrevisto)}</span>
+              <span className="text-slate-400 text-lg font-light">→</span>
+              <span className="text-lg font-black text-purple-700">{fPct_(refisPrevistoComInd)}</span>
+              <span className={`text-sm font-extrabold px-2 py-0.5 rounded-full ${refisDistPrev >= 0 ? "bg-purple-200 text-purple-800" : "bg-red-100 text-red-700"}`}>
+                {refisDistPrev >= 0 ? "+" : ""}{refisDistPrev.toFixed(1)}pp
               </span>
-            </span>
-            <span className="text-slate-300">|</span>
-            <span className="text-slate-600">
-              Real. direto: <span className="font-bold text-blue-700">{fPct_(avancoRealAtual)}</span>
-              <span className="mx-1 text-slate-400">→</span>
-              c/ ind.: <span className="font-bold text-purple-700">{fPct_(refisRealComInd)}</span>
-              <span className={`ml-1 font-bold ${refisDistReal >= 0 ? "text-purple-600" : "text-red-600"}`}>
-                ({refisDistReal >= 0 ? "+" : ""}{refisDistReal.toFixed(1)}pp)
+            </div>
+            <div className="w-px h-8 bg-purple-200" />
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Realizado</span>
+              <span className="text-lg font-black text-blue-700">{fPct_(avancoRealAtual)}</span>
+              <span className="text-slate-400 text-lg font-light">→</span>
+              <span className="text-lg font-black text-purple-700">{fPct_(refisRealComInd)}</span>
+              <span className={`text-sm font-extrabold px-2 py-0.5 rounded-full ${refisDistReal >= 0 ? "bg-purple-200 text-purple-800" : "bg-red-100 text-red-700"}`}>
+                {refisDistReal >= 0 ? "+" : ""}{refisDistReal.toFixed(1)}pp
               </span>
-            </span>
+            </div>
           </div>
         </div>
       )}
