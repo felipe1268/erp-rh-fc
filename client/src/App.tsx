@@ -87,7 +87,6 @@ const PainelSST = lazy(() => import("./pages/PainelSST"));
 const PainelJuridico = lazy(() => import("./pages/PainelJuridico"));
 const BibliotecaConhecimento = lazy(() => import("./pages/BibliotecaConhecimento"));
 const AvaliacaoDesempenho = lazy(() => import("./pages/AvaliacaoDesempenho"));
-const AssistenteIAFloat = lazy(() => import("./components/AssistenteIAFloat"));
 const ImportData = lazy(() => import("./pages/ImportData"));
 
 // Relatórios
@@ -400,9 +399,6 @@ function App() {
               <PermissionsProvider>
                 <ModuleProvider>
                   <Router />
-                  <Suspense fallback={null}>
-                    <AssistenteIAFloat />
-                  </Suspense>
                   <PwaInstallBanner />
                 </ModuleProvider>
               </PermissionsProvider>
