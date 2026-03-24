@@ -5118,4 +5118,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 17:30:00",
   },
+  {
+    version: 772,
+    titulo: "Remoção do Chatbot Flutuante (IA por Módulo)",
+    descricao: "Removido completamente o sistema de chat flutuante de IA por módulo (botão azul) de todos os módulos do ERP. O sistema de consultores virtuais foi substituído por solução dedicada já existente no sistema.",
+    tipo: "melhoria",
+    modulos: "Todos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-24 10:10:00",
+  },
 ];
