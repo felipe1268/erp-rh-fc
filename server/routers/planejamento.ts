@@ -950,7 +950,7 @@ export const planejamentoRouter = router({
 
       function gerarCurvaPlanejada(ativs: typeof atividades) {
         if (!ativs.length) return [];
-        const folhas = ativs.filter(a => !a.isGrupo && a.dataInicio && a.dataFim);
+        const folhas = ativs.filter(a => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
         if (!folhas.length) return [];
 
         const pesoBruto   = folhas.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
@@ -1015,7 +1015,7 @@ export const planejamentoRouter = router({
       // Curva realizada — acumulado ponderado por atividade (idêntico ao REFIS)
       // Para cada semana com avanços, calcula o acumulado ponderado real
       // (mesmo algoritmo usado em avancoRealAtual no cliente)
-      const folhasParaCurva    = atividades.filter(a => !a.isGrupo);
+      const folhasParaCurva    = atividades.filter(a => !a.isGrupo && !a.isIndireta);
       const pesoBrutoCurva     = folhasParaCurva.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
       const ativComPesoCurva   = folhasParaCurva.filter(a => n(a.pesoFinanceiro) > 0).length;
       const usarIgualCurva     = pesoBrutoCurva === 0 || ativComPesoCurva < folhasParaCurva.length * 0.2;
@@ -1095,7 +1095,7 @@ export const planejamentoRouter = router({
         .orderBy(asc(planejamentoRevisoes.numero));
 
       function gerarCurva(ativs: any[]) {
-        const folhas = ativs.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
+        const folhas = ativs.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
         if (!folhas.length) return [];
         const pesoBruto   = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
         const ativComPeso = folhas.filter((a: any) => n(a.pesoFinanceiro) > 0).length;

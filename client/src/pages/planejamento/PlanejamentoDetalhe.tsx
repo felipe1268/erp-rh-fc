@@ -328,7 +328,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
 
   const avancoAtual = useMemo(() => {
     if (!atividades.length) return 0;
-    const folhas    = atividades.filter((a: any) => !a.isGrupo);
+    const folhas    = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const pesoBruto = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const semPeso   = pesoBruto === 0;
     const pesoTotal = semPeso ? folhas.length || 1 : pesoBruto;
@@ -339,11 +339,8 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     return Math.min(100, ponderado);
   }, [atividades, avancosMap]);
 
-  // Previsto acumulado: interpolação linear por atividade folha (mesmo algoritmo do Avanço Semanal).
-  // Usa segunda-feira da semana atual (ou semanaVisualizacao quando selecionada) como referência,
-  // evitando divergência causada pelo método de blocos semanais da Curva S.
   const avancoPrevistoDia = useMemo(() => {
-    const folhas = atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
     if (!folhas.length) return null;
     const refStr = semanaVisualizacao ?? toMonday(new Date());
     const ref = new Date(refStr + "T12:00:00").getTime();
@@ -1204,8 +1201,8 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
   const { selectedCompany } = useCompany();
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
-  const totalAtiv   = atividades.filter((a: any) => !a.isGrupo).length;
-  const concluidas  = atividades.filter((a: any) => !a.isGrupo).filter((a: any) => {
+  const totalAtiv   = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta).length;
+  const concluidas  = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta).filter((a: any) => {
     const avMap: Record<number, number> = {};
     avancos.forEach((av: any) => { avMap[av.atividadeId] = n(av.percentualAcumulado); });
     return (avMap[a.id] ?? 0) >= 100;
@@ -4994,7 +4991,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
 
   // ── Previsão por avanço físico ────────────────────────────────────────────
   const previsoesMensais = useMemo(() => {
-    const folhas = (atividades ?? []).filter((a: any) => !a.isGrupo);
+    const folhas = (atividades ?? []).filter((a: any) => !a.isGrupo && !a.isIndireta);
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const semPeso = pesoTotal === 0;
     const denom = semPeso ? (folhas.length || 1) : pesoTotal;
@@ -6895,7 +6892,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
 // ABA: CAMINHO CRÍTICO
 // ═════════════════════════════════════════════════════════════════════════════
 function CaminhoCritico({ proj, atividades, avancos }: any) {
-  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim), [atividades]);
+  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim), [atividades]);
 
   const avMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -8175,7 +8172,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // Calcula avanço previsto ponderado para a semana a partir do cronograma.
   // Usa o FIM da semana (domingo) como referência — igual ao AvancoSemanal.
   const avancoPrevisto = useMemo(() => {
-    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
@@ -8183,11 +8180,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     }, 0));
   }, [atividades, semanaFimRefis]);
 
-  // Avanço semanal previsto e realizado
   const semIdx   = semanas.indexOf(semana);
   const semAntes = semIdx > 0 ? semanas[semIdx - 1] : null;
 
-  // Fim da semana ANTERIOR (para calcular o incremento semanal previsto)
   const semAntesFim = useMemo(() => {
     if (!semAntes) return null;
     const idx = semanas.indexOf(semAntes);
@@ -8199,7 +8194,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntesFim) return 0;
-    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
@@ -8217,7 +8212,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
@@ -8234,7 +8229,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
@@ -8261,7 +8256,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   // ── Agrupamento hierárquico por EAP para gráficos ─────────────────────────
   const grupos = useMemo(() => {
-    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
 
     function prevInd(a: any) {
       if (!a.dataInicio || !a.dataFim) return 0;
@@ -10058,9 +10053,8 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
   // Calcular avanço/SPI atual a partir de atividades+avanços (para contexto do simulador)
   const metricsAtuais = useMemo(() => {
     const hoje = new Date().toISOString().split("T")[0];
-    const folhas = atividades.filter((a: any) => !a.isGrupo);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
-    // Previsto até hoje
     let prevAcum = 0;
     folhas.forEach((a: any) => {
       if (!a.dataInicio || !a.dataFim) return;
