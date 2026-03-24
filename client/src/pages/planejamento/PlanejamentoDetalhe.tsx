@@ -9242,23 +9242,23 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Realizado Acumulado{refisComIndiretas ? " (Global)" : ""}</span>
                   <p className="text-2xl font-black leading-none" style={{ color: "#1d4ed8" }}>{fPct_(rReal)}</p>
                 </div>
-                <span className={`text-[11px] pb-0.5 font-semibold ${rDesvioFisico >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                  {rDesvioFisico >= 0 ? <ArrowUpRight className="h-3.5 w-3.5 inline" /> : <ArrowDownRight className="h-3.5 w-3.5 inline" />}
+                <span className={`text-sm pb-0.5 font-bold ${rDesvioFisico >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                  {rDesvioFisico >= 0 ? <ArrowUpRight className="h-4 w-4 inline" /> : <ArrowDownRight className="h-4 w-4 inline" />}
                   Desvio {rDesvioFisico >= 0 ? "+" : ""}{fPct_(rDesvioFisico)}
                 </span>
               </div>
               {/* Barra bullet */}
-              <div className="relative h-9 rounded-md overflow-hidden" style={{ background: "#dbeafe" }}>
+              <div className="relative h-11 rounded-md overflow-hidden" style={{ background: "#dbeafe" }}>
                 {/* Milestones */}
                 {[25,50,75].map(m => (
                   <div key={m} className="absolute top-0 bottom-0 w-px" style={{ left: `${m}%`, background: "rgba(30,64,175,0.20)" }}>
-                    <span className="absolute -top-0.5 left-0.5 text-[9px]" style={{ color: "#1e3a8a" }}>{m}%</span>
+                    <span className="absolute -top-0.5 left-0.5 text-[10px]" style={{ color: "#1e3a8a" }}>{m}%</span>
                   </div>
                 ))}
                 {/* Referência previsto (linha fina) */}
                 {rPrev > 0 && (
                   <div className="absolute top-0 bottom-0 w-0.5 z-10" style={{ left: `${rPrev}%`, background: "#FFB800", opacity: 0.8 }}>
-                    <div className="absolute -top-0 left-1 text-[9px] font-bold" style={{ color: "#d97706" }}>▾ prev</div>
+                    <div className="absolute -top-0 left-1 text-[10px] font-bold" style={{ color: "#d97706" }}>▾ prev</div>
                   </div>
                 )}
                 {/* Filled */}
@@ -9267,13 +9267,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   style={{ width: `${Math.max(rReal, 0)}%`, background: "linear-gradient(90deg,#1d4ed8,#3b82f6)", minWidth: rReal > 0 ? 4 : 0 }}
                 >
                   {rReal > 6 && (
-                    <span className="absolute right-2 text-[12px] font-black text-white drop-shadow-sm">{fPct_(rReal)}</span>
+                    <span className="absolute right-2 text-sm font-black text-white drop-shadow-sm">{fPct_(rReal)}</span>
                   )}
                 </div>
                 {/* Restante label */}
                 {rReal < 70 && (
                   <div className="absolute right-3 top-0 bottom-0 flex items-center">
-                    <span className="text-[11px] font-semibold" style={{ color: "#1e3a8a" }}>
+                    <span className="text-sm font-bold" style={{ color: "#1e3a8a" }}>
                       saldo {fPct_(100 - rReal)}
                     </span>
                   </div>
