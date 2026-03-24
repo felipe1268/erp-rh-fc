@@ -170,6 +170,27 @@ export function ProgramacaoSemanal({
   );
 
   const n = (v: any) => parseFloat(v) || 0;
+
+  const grupoMap = useMemo(() => {
+    const m = new Map<string, string>();
+    atividades.forEach((a: any) => {
+      if (a.isGrupo && a.eapCodigo) m.set(a.eapCodigo, a.nome);
+    });
+    return m;
+  }, [atividades]);
+
+  const hierarquiaOf = (eap: string | null | undefined): string[] => {
+    if (!eap) return [];
+    const parts = eap.split(".");
+    const chain: string[] = [];
+    for (let i = 1; i < parts.length; i++) {
+      const prefix = parts.slice(0, i).join(".");
+      const nome = grupoMap.get(prefix);
+      if (nome) chain.push(nome);
+    }
+    return chain;
+  };
+
   const folhasTodas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta), [atividades]);
   const pesoSemana = useMemo(() => {
     const diretas = atividadesSemAtual.filter((a: any) => !a.isIndireta);
@@ -517,6 +538,19 @@ export function ProgramacaoSemanal({
                                 </span>
                               )}
                             </div>
+                            {(() => {
+                              const h = hierarquiaOf(a.eapCodigo);
+                              return h.length > 0 ? (
+                                <div className="text-[9px] text-slate-400 mt-0.5 italic leading-tight truncate">
+                                  {h.map((seg, si) => (
+                                    <span key={si}>
+                                      {si > 0 && <span className="mx-0.5">›</span>}
+                                      <span className="text-slate-500 font-medium not-italic">{seg}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null;
+                            })()}
                           </td>
                           <td className="py-2 px-3 text-slate-600">{fmtBR(a.dataInicio)}</td>
                           <td className="py-2 px-3 text-slate-600">{fmtBR(a.dataFim)}</td>
@@ -1044,6 +1078,19 @@ function RelatorioTresSemanas({
                           </span>
                           <span className={`shrink-0 text-[10px] font-bold ${isInd ? "text-gray-400" : atrasada ? "text-red-600" : av >= 100 ? "text-emerald-600" : "text-blue-600"}`}>{av.toFixed(0)}%</span>
                         </div>
+                        {(() => {
+                          const h = hierarquiaOf(a.eapCodigo);
+                          return h.length > 0 ? (
+                            <div className="text-[9px] text-slate-400 mt-0.5 leading-tight truncate">
+                              {h.map((seg, si) => (
+                                <span key={si}>
+                                  {si > 0 && <span className="mx-0.5">›</span>}
+                                  <span className="text-slate-500 font-medium">{seg}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()}
                         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
                           <span>{fmtBR(a.dataInicio)} → {fmtBR(a.dataFim)}</span>
                           {a.recursoPrincipal && <span className="truncate text-slate-400">· {a.recursoPrincipal}</span>}

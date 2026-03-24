@@ -4121,6 +4121,26 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   // Lista final exibida na tabela (muda conforme filtroAtivo)
   const folhasExibidas = filtroAtivo === "pendentes" ? folhasPendentes : folhasNaSemana;
 
+  const grupoMapSem = useMemo(() => {
+    const m = new Map<string, string>();
+    atividades.forEach((a: any) => {
+      if (a.isGrupo && a.eapCodigo) m.set(a.eapCodigo, a.nome);
+    });
+    return m;
+  }, [atividades]);
+
+  const hierarquiaOfSem = (eap: string | null | undefined): string[] => {
+    if (!eap) return [];
+    const parts = eap.split(".");
+    const chain: string[] = [];
+    for (let i = 1; i < parts.length; i++) {
+      const prefix = parts.slice(0, i).join(".");
+      const nome = grupoMapSem.get(prefix);
+      if (nome) chain.push(nome);
+    }
+    return chain;
+  };
+
   const pesoSemana = useMemo(() => {
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 1;
     const somaSemana = folhasNaSemana.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
@@ -4683,6 +4703,19 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                         </span>
                       )}
                     </div>
+                    {(() => {
+                      const h = hierarquiaOfSem(a.eapCodigo);
+                      return h.length > 0 ? (
+                        <div className="text-[9px] text-slate-400 mt-0.5 italic leading-tight">
+                          {h.map((seg: string, si: number) => (
+                            <span key={si}>
+                              {si > 0 && <span className="mx-0.5">›</span>}
+                              <span className="text-slate-500 font-medium not-italic">{seg}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
                   </td>
                   <td className="py-2 px-3 text-slate-500">{fmtBR(a.dataInicio)}</td>
                   <td className="py-2 px-3 text-slate-500">{fmtBR(a.dataFim)}</td>
