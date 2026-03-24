@@ -4727,18 +4727,32 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
               const desvGlobal = +(realizadoComInd - previstoComInd).toFixed(1);
               return <>
                 <div className="px-4 py-2 flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400 font-medium">Desvio:</span>
+                  <UiTooltip>
+                    <UiTooltipTrigger asChild>
+                      <span className="text-[10px] text-slate-400 font-medium cursor-help border-b border-dashed border-slate-300">Desvio (diretas):</span>
+                    </UiTooltipTrigger>
+                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
+                      <p className="font-semibold">Desvio = Realizado − Previsto (só diretas)</p>
+                      <p className="text-slate-400 mt-0.5">Diferença entre o avanço real e o previsto pelo cronograma, considerando apenas atividades diretas. Negativo = obra atrasada.</p>
+                    </UiTooltipContent>
+                  </UiTooltip>
                   <span className={`text-sm font-extrabold ${desvDiretas >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                     {desvDiretas >= 0 ? "+" : ""}{desvDiretas.toFixed(1)}pp
                   </span>
-                  <span className="text-[9px] text-slate-400">(diretas)</span>
                 </div>
                 <div className="px-4 py-2 flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400 font-medium">Desvio:</span>
+                  <UiTooltip>
+                    <UiTooltipTrigger asChild>
+                      <span className="text-[10px] text-slate-400 font-medium cursor-help border-b border-dashed border-slate-300">Desvio (global):</span>
+                    </UiTooltipTrigger>
+                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
+                      <p className="font-semibold">Desvio = Realizado − Previsto (c/ indiretas)</p>
+                      <p className="text-slate-400 mt-0.5">Diferença entre o avanço real e o previsto incluindo atividades indiretas no cálculo. Negativo = obra atrasada na visão global.</p>
+                    </UiTooltipContent>
+                  </UiTooltip>
                   <span className={`text-sm font-extrabold ${desvGlobal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                     {desvGlobal >= 0 ? "+" : ""}{desvGlobal.toFixed(1)}pp
                   </span>
-                  <span className="text-[9px] text-slate-400">(global)</span>
                 </div>
               </>;
             })()}
@@ -9403,18 +9417,32 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               const desvGlobal = +(refisRealComInd - refisPrevistoComInd).toFixed(1);
               return <>
                 <div className="px-5 py-2 flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400 font-medium">Desvio:</span>
+                  <UiTooltip>
+                    <UiTooltipTrigger asChild>
+                      <span className="text-[10px] text-slate-400 font-medium cursor-help border-b border-dashed border-slate-300">Desvio (diretas):</span>
+                    </UiTooltipTrigger>
+                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
+                      <p className="font-semibold">Desvio = Realizado − Previsto (só diretas)</p>
+                      <p className="text-slate-400 mt-0.5">Diferença entre o avanço real e o previsto pelo cronograma, considerando apenas atividades diretas. Negativo = obra atrasada.</p>
+                    </UiTooltipContent>
+                  </UiTooltip>
                   <span className={`text-sm font-extrabold ${desvDiretas >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                     {desvDiretas >= 0 ? "+" : ""}{desvDiretas.toFixed(1)}pp
                   </span>
-                  <span className="text-[9px] text-slate-400">(diretas)</span>
                 </div>
                 <div className="px-5 py-2 flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400 font-medium">Desvio:</span>
+                  <UiTooltip>
+                    <UiTooltipTrigger asChild>
+                      <span className="text-[10px] text-slate-400 font-medium cursor-help border-b border-dashed border-slate-300">Desvio (global):</span>
+                    </UiTooltipTrigger>
+                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
+                      <p className="font-semibold">Desvio = Realizado − Previsto (c/ indiretas)</p>
+                      <p className="text-slate-400 mt-0.5">Diferença entre o avanço real e o previsto incluindo atividades indiretas no cálculo. Negativo = obra atrasada na visão global.</p>
+                    </UiTooltipContent>
+                  </UiTooltip>
                   <span className={`text-sm font-extrabold ${desvGlobal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                     {desvGlobal >= 0 ? "+" : ""}{desvGlobal.toFixed(1)}pp
                   </span>
-                  <span className="text-[9px] text-slate-400">(global)</span>
                 </div>
               </>;
             })()}
