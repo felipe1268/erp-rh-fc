@@ -4125,13 +4125,18 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 1;
     const somaSemana = folhasNaSemana.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const pctSemana = (somaSemana / pesoTotal) * 100;
-    let maiorPesoId: number | null = null;
     let maiorPesoVal = 0;
     folhasNaSemana.forEach((a: any) => {
       const p = n(a.pesoFinanceiro);
-      if (p > maiorPesoVal) { maiorPesoVal = p; maiorPesoId = a.id; }
+      if (p > maiorPesoVal) { maiorPesoVal = p; }
     });
-    return { somaSemana, pctSemana, maiorPesoId, maiorPesoVal };
+    const maiorPesoIds = new Set<number>();
+    if (maiorPesoVal > 0) {
+      folhasNaSemana.forEach((a: any) => {
+        if (Math.abs(n(a.pesoFinanceiro) - maiorPesoVal) < 0.0001) maiorPesoIds.add(a.id);
+      });
+    }
+    return { somaSemana, pctSemana, maiorPesoIds, maiorPesoVal };
   }, [folhas, folhasNaSemana]);
 
   // Avanço anterior por atividade
@@ -4656,7 +4661,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
               const atrasada = !alterado && atual < prevInd - 5;
 
               const naoExecutada = filtroAtivo === "pendentes" && atual === 0 && prevInd > 0;
-              const isMaiorPeso = a.id === pesoSemana.maiorPesoId && pesoSemana.maiorPesoVal > 0;
+              const isMaiorPeso = pesoSemana.maiorPesoIds.has(a.id);
 
               return (
                 <tr key={a.id} className={`border-b ${

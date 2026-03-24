@@ -177,13 +177,18 @@ export function ProgramacaoSemanal({
     const pesoTotal = folhasTodas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 1;
     const somaSemana = diretas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const pctSemana = (somaSemana / pesoTotal) * 100;
-    let maiorPesoId: number | null = null;
     let maiorPesoVal = 0;
     diretas.forEach((a: any) => {
       const p = n(a.pesoFinanceiro);
-      if (p > maiorPesoVal) { maiorPesoVal = p; maiorPesoId = a.id; }
+      if (p > maiorPesoVal) { maiorPesoVal = p; }
     });
-    return { somaSemana, pctSemana, maiorPesoId, maiorPesoVal, diretasCount: diretas.length, indiretasCount: indiretas.length };
+    const maiorPesoIds = new Set<number>();
+    if (maiorPesoVal > 0) {
+      diretas.forEach((a: any) => {
+        if (Math.abs(n(a.pesoFinanceiro) - maiorPesoVal) < 0.0001) maiorPesoIds.add(a.id);
+      });
+    }
+    return { somaSemana, pctSemana, maiorPesoIds, maiorPesoVal, diretasCount: diretas.length, indiretasCount: indiretas.length };
   }, [atividadesSemAtual, folhasTodas]);
 
   // EAP codes for the current week (for resource lookup)
@@ -434,12 +439,13 @@ export function ProgramacaoSemanal({
                   </div>
                 </>
               )}
-              {pesoSemana.maiorPesoId && (
+              {pesoSemana.maiorPesoIds.size > 0 && (
                 <>
                   <span className="text-slate-300">|</span>
                   <div className="text-[11px] text-orange-600 flex items-center gap-1">
                     <Zap className="h-3 w-3" />
                     Maior peso: <span className="font-bold">{pesoSemana.maiorPesoVal.toFixed(2)}%</span>
+                    {pesoSemana.maiorPesoIds.size > 1 && <span className="text-[10px] text-orange-500">({pesoSemana.maiorPesoIds.size} atividades)</span>}
                   </div>
                 </>
               )}
@@ -482,7 +488,7 @@ export function ProgramacaoSemanal({
                       const av       = avancosMap[a.id] ?? 0;
                       const atrasada = !!a.dataFim && a.dataFim < today && av < 100;
                       const isIndireta = !!a.isIndireta;
-                      const isMaiorPeso = a.id === pesoSemana.maiorPesoId && pesoSemana.maiorPesoVal > 0;
+                      const isMaiorPeso = pesoSemana.maiorPesoIds.has(a.id);
                       return (
                         <tr key={a.id ?? i}
                           className={`border-b border-slate-50 ${
