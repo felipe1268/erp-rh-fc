@@ -5127,4 +5127,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-24 10:10:00",
   },
+  {
+    version: 773,
+    titulo: "Atividades Indiretas + Resumo de Pesos no Avanço Semanal",
+    descricao: "Novo checkbox 'Indireta' no cronograma para marcar atividades que não representam avanço efetivo da obra (equipe técnica, canteiro, refeições, despesas administrativas, etc.). No Avanço Semanal: 1) Atividades indiretas são automaticamente excluídas da tabela e dos cálculos de progresso. 2) Novo banner no topo mostrando a soma dos pesos da semana e quantas atividades diretas estão programadas. 3) A atividade com MAIOR PESO da semana ganha destaque visual (badge 'MAIOR PESO' + fundo laranja) para alertar o engenheiro sobre sua importância.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-24 11:30:00",
+  },
 ];

@@ -299,6 +299,7 @@ export const planejamentoRouter = router({
                 unidade:             a.unidade,
                 ordem:               a.ordem,
                 isGrupo:             a.isGrupo,
+                isIndireta:          a.isIndireta ?? false,
               }))
             );
           }
@@ -507,6 +508,7 @@ export const planejamentoRouter = router({
         ordem:               z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
         isGrupo:             z.boolean().optional(),
         isMarco:             z.boolean().optional(),
+        isIndireta:          z.boolean().optional(),
       })),
     }))
     .mutation(async ({ input }) => {
@@ -528,6 +530,7 @@ export const planejamentoRouter = router({
         ordem:               a.ordem ?? i,
         isGrupo:             a.isGrupo ?? false,
         isMarco:             a.isMarco ?? false,
+        isIndireta:          a.isIndireta ?? false,
       }));
 
       const allPesosZero = rows.every(r => parseFloat(r.pesoFinanceiro) === 0 || r.isGrupo);

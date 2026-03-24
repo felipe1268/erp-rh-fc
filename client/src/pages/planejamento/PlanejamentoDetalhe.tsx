@@ -2432,7 +2432,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     setLinhas(l => [...l, {
       id: undefined, eapCodigo: "", nome: "", nivel: 1,
       dataInicio: "", dataFim: "", duracaoDias: 0,
-      predecessora: "", pesoFinanceiro: 0, recursoPrincipal: "", isGrupo: false, ordem: l.length,
+      predecessora: "", pesoFinanceiro: 0, recursoPrincipal: "", isGrupo: false, isIndireta: false, ordem: l.length,
     }]);
   }
 
@@ -2967,6 +2967,15 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                               <UiTooltipContent side="top" className="text-xs">Marcar como marco ◆</UiTooltipContent>
                             </UiTooltip>
                           </UiTooltipProvider>
+                          <UiTooltipProvider delayDuration={300}>
+                            <UiTooltip>
+                              <UiTooltipTrigger asChild>
+                                <input type="checkbox" checked={!!a.isIndireta} onChange={e => updateLinha(idx, "isIndireta", e.target.checked)}
+                                  className="h-3.5 w-3.5 shrink-0 cursor-pointer" style={{accentColor:"#6b7280"}} />
+                              </UiTooltipTrigger>
+                              <UiTooltipContent side="top" className="text-xs">Marcar como indireta (não conta no avanço efetivo)</UiTooltipContent>
+                            </UiTooltip>
+                          </UiTooltipProvider>
                           <Input value={a.nome} onChange={e => updateLinha(idx, "nome", e.target.value)}
                             className={`h-7 text-xs w-full ${a.isGrupo ? "font-semibold bg-yellow-50" : ""}`}
                             placeholder="Nome da atividade" />
@@ -3030,6 +3039,11 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                           {a.isMarco && (
                             <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[9px] font-semibold shrink-0">
                               ◆ Marco
+                            </span>
+                          )}
+                          {a.isIndireta && (
+                            <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-semibold shrink-0">
+                              Indireta
                             </span>
                           )}
                           {!editando && !isConsolidado && a.id && (
@@ -4014,7 +4028,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     }
   }, [semanas]);
 
-  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
+  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta), [atividades]);
 
   // Filtra atividades ativas na semana selecionada (Seg-Sex) — base para todos os modos
   const folhasNaSemana = useMemo(() => {
@@ -4099,6 +4113,19 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
 
   // Lista final exibida na tabela (muda conforme filtroAtivo)
   const folhasExibidas = filtroAtivo === "pendentes" ? folhasPendentes : folhasNaSemana;
+
+  const pesoSemana = useMemo(() => {
+    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 1;
+    const somaSemana = folhasNaSemana.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const pctSemana = (somaSemana / pesoTotal) * 100;
+    let maiorPesoId: number | null = null;
+    let maiorPesoVal = 0;
+    folhasNaSemana.forEach((a: any) => {
+      const p = n(a.pesoFinanceiro);
+      if (p > maiorPesoVal) { maiorPesoVal = p; maiorPesoId = a.id; }
+    });
+    return { somaSemana, pctSemana, maiorPesoId, maiorPesoVal };
+  }, [folhas, folhasNaSemana]);
 
   // Avanço anterior por atividade
   const avancoAnterior = useMemo(() => {
@@ -4541,6 +4568,36 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
         </div>
       )}
 
+      {/* ── Resumo de pesos da semana ──────────────────────────────────────── */}
+      {folhasNaSemana.length > 0 && filtroAtivo !== "todas" && (
+        <div className="flex items-center gap-4 px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50/60">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-blue-600" />
+            <span className="text-xs font-semibold text-blue-800">
+              Peso da Semana {semanaNum}:
+            </span>
+            <span className="text-sm font-bold text-blue-700 tabular-nums">
+              {pesoSemana.somaSemana.toFixed(2)}%
+            </span>
+            <span className="text-[10px] text-blue-500">
+              ({pesoSemana.pctSemana.toFixed(1)}% do projeto)
+            </span>
+          </div>
+          <span className="text-slate-300">|</span>
+          <div className="text-[11px] text-slate-600">
+            <span className="font-medium">{folhasNaSemana.length}</span> atividades diretas
+          </div>
+          {atividades.some((a: any) => a.isIndireta) && (
+            <>
+              <span className="text-slate-300">|</span>
+              <div className="text-[10px] text-slate-400">
+                {atividades.filter((a: any) => a.isIndireta && !a.isGrupo).length} indiretas ocultas
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── Tabela de atividades ─────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
         <table className="w-full text-xs">
@@ -4557,7 +4614,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
               </th>
               <th className="py-2 px-3 text-left w-24">Início</th>
               <th className="py-2 px-3 text-left w-24">Fim</th>
-              <th className="py-2 px-3 text-right w-20">Previsto%</th>
+              <th className="py-2 px-3 text-right w-20">Peso%</th>
               <th className="py-2 px-3 text-right w-24">% Anterior</th>
               <th className="py-2 px-3 text-center w-72">% Acumulado</th>
             </tr>
@@ -4592,9 +4649,11 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
               const atrasada = !alterado && atual < prevInd - 5;
 
               const naoExecutada = filtroAtivo === "pendentes" && atual === 0 && prevInd > 0;
+              const isMaiorPeso = a.id === pesoSemana.maiorPesoId && pesoSemana.maiorPesoVal > 0;
 
               return (
                 <tr key={a.id} className={`border-b ${
+                  isMaiorPeso && !naoExecutada && !alterado ? "bg-orange-50/60 border-orange-100" :
                   naoExecutada     ? "bg-amber-50/70 border-amber-100" :
                   alterado         ? "bg-blue-50/60 border-slate-50" :
                   idx % 2 === 0    ? "bg-white border-slate-50" :
@@ -4603,13 +4662,19 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                   <td className="py-2 px-3 font-mono text-slate-500">{a.eapCodigo ?? ""}</td>
                   <td className="py-2 px-3 text-slate-700">
                     <div className="flex items-center gap-1.5">
+                      {isMaiorPeso && <Zap className="h-3 w-3 shrink-0 text-orange-500" />}
                       {(atrasada || naoExecutada) && <AlertTriangle className={`h-3 w-3 shrink-0 ${naoExecutada ? "text-amber-600" : "text-amber-500"}`} />}
-                      <span className={naoExecutada ? "font-medium text-amber-900" : ""}>{a.nome}</span>
+                      <span className={`${naoExecutada ? "font-medium text-amber-900" : ""} ${isMaiorPeso ? "font-semibold text-orange-900" : ""}`}>{a.nome}</span>
+                      {isMaiorPeso && (
+                        <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold shrink-0">
+                          MAIOR PESO
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="py-2 px-3 text-slate-500">{fmtBR(a.dataInicio)}</td>
                   <td className="py-2 px-3 text-slate-500">{fmtBR(a.dataFim)}</td>
-                  <td className="py-2 px-3 text-right text-orange-600 font-medium">{prevInd.toFixed(0)}%</td>
+                  <td className={`py-2 px-3 text-right font-medium ${isMaiorPeso ? "text-orange-700 font-bold" : "text-slate-600"}`}>{n(a.pesoFinanceiro).toFixed(2)}%</td>
                   <td className="py-2 px-3 text-right text-slate-500">{fPct(anterior)}</td>
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-2 min-w-[220px]">

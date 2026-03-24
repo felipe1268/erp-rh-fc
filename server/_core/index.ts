@@ -128,6 +128,8 @@ async function startServer() {
         console.log("[ColFix] planejamento_revisoes.consolidado OK");
         await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT FALSE`);
         console.log("[ColFix] planejamento_atividades.disabled OK");
+        await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_indireta BOOLEAN DEFAULT FALSE`);
+        console.log("[ColFix] planejamento_atividades.is_indireta OK");
         await db.execute(sql`ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT`);
         console.log("[ColFix] epis.fotoUrl OK");
         // Rev.612: novos campos Aviso Prévio
