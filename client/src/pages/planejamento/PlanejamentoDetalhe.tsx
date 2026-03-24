@@ -137,17 +137,10 @@ function loadTabOrder(): Tab[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-import IAModuloChat from "@/components/IAModuloChat";
-
 export default function PlanejamentoDetalheWrapper() {
   const [, params] = useRoute("/planejamento/:id");
   const projetoId  = params?.id ? parseInt(params.id) : 0;
-  return (
-    <>
-      <PlanejamentoDetalheInner key={projetoId} routeProjetoId={projetoId} />
-      <IAModuloChat modulo="planejamento" projetoId={projetoId} />
-    </>
-  );
+  return <PlanejamentoDetalheInner key={projetoId} routeProjetoId={projetoId} />;
 }
 
 function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }) {
