@@ -578,12 +578,39 @@ export const planejamentoRouter = router({
         }
       }
 
+      const inputWithIds = input.atividades.map((a, i) => ({ ...a, _idx: i }));
+      const toUpdate = inputWithIds.filter(a => a.id != null && a.id > 0);
+      const toInsert = inputWithIds.filter(a => a.id == null || a.id <= 0);
+      const sentIds = toUpdate.map(a => a.id!);
+
       await db.transaction(async (tx) => {
-        await tx.delete(planejamentoAtividades)
+        const existing = await tx.select({ id: planejamentoAtividades.id })
+          .from(planejamentoAtividades)
           .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
-        const CHUNK = 100;
-        for (let i = 0; i < rows.length; i += CHUNK) {
-          await tx.insert(planejamentoAtividades).values(rows.slice(i, i + CHUNK));
+        const existingIds = new Set(existing.map(e => e.id));
+        const toDelete = [...existingIds].filter(id => !sentIds.includes(id));
+
+        if (toDelete.length > 0) {
+          await tx.delete(planejamentoAtividades)
+            .where(inArray(planejamentoAtividades.id, toDelete));
+        }
+
+        for (const a of toUpdate) {
+          const r = rows[a._idx];
+          await tx.update(planejamentoAtividades)
+            .set(r)
+            .where(and(
+              eq(planejamentoAtividades.id, a.id!),
+              eq(planejamentoAtividades.revisaoId, input.revisaoId),
+            ));
+        }
+
+        if (toInsert.length > 0) {
+          const insertRows = toInsert.map(a => rows[a._idx]);
+          const CHUNK = 100;
+          for (let i = 0; i < insertRows.length; i += CHUNK) {
+            await tx.insert(planejamentoAtividades).values(insertRows.slice(i, i + CHUNK));
+          }
         }
       });
 
