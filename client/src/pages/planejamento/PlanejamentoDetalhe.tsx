@@ -8289,6 +8289,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [colBloco4, setColBloco4] = useState(false);
   const [colBloco6, setColBloco6] = useState(false);
   const [colBloco7, setColBloco7] = useState(false);
+  const [refisComIndiretas, setRefisComIndiretas] = useState(false);
 
   // ── Cruzamento orçamento × cronograma (para calcular venda prevista/realizada mensal) ──
   const { data: cruzamento } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
@@ -8501,6 +8502,47 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const refisDistReal = +(refisRealComInd - avancoRealAtual).toFixed(2);
   const qtdIndiretas = atividades.filter((a: any) => a.isIndireta && !a.isGrupo).length;
 
+  const avancoPrevAntesComInd = useMemo(() => {
+    if (!semAntesFim) return 0;
+    const f = atividades.filter((a: any) => !a.isGrupo);
+    const { pesoTotal, semPeso } = calcPesoTotal(f);
+    return Math.min(100, f.reduce((s: number, a: any) => {
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
+    }, 0));
+  }, [atividades, semAntesFim]);
+
+  const avancoRealAntesComInd = useMemo(() => {
+    if (!semAntes) return 0;
+    const m: Record<number, number> = {};
+    avancos.filter((av: any) => av.semana <= semAntes).forEach((av: any) => {
+      if (!m[av.atividadeId] || av.semana > (m as any)[`d_${av.atividadeId}`]) {
+        m[av.atividadeId] = n(av.percentualAcumulado);
+        (m as any)[`d_${av.atividadeId}`] = av.semana;
+      }
+    });
+    const f = atividades.filter((a: any) => !a.isGrupo);
+    const { pesoTotal, semPeso } = calcPesoTotal(f);
+    return Math.min(100, f.reduce((s: number, a: any) => {
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      let val: number;
+      if (a.isIndireta) {
+        val = semAntesFim ? prevIndRef(a, semAntesFim) : 0;
+      } else {
+        val = m[a.id] ?? 0;
+      }
+      return s + val * (peso / pesoTotal);
+    }, 0));
+  }, [atividades, avancos, semAntes, semAntesFim]);
+
+  const rPrev       = refisComIndiretas ? refisPrevistoComInd : avancoPrevisto;
+  const rReal       = refisComIndiretas ? refisRealComInd : avancoRealAtual;
+  const rPrevAntes  = refisComIndiretas ? avancoPrevAntesComInd : avancoPrevAntes;
+  const rRealAntes  = refisComIndiretas ? avancoRealAntesComInd : avancoRealAntes;
+  const rPrevSem    = Math.max(0, rPrev - rPrevAntes);
+  const rRealSem    = Math.max(0, rReal - rRealAntes);
+  const rSpi        = rPrev > 0 ? rReal / rPrev : 0;
+
   // ── Mapa realizado por atividade (último avanço até a semana selecionada) ──
   const realMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -8577,6 +8619,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const vendaMes      = dadosMesSelecionado.venda;
   const custoPrevAuto = +(vendaMes * avancoPrevisto / 100).toFixed(2);
   const custoRealAuto = +(vendaMes * avancoRealAtual / 100).toFixed(2);
+  const rCustoPrev    = +(vendaMes * rPrev / 100).toFixed(2);
+  const rCustoReal    = +(vendaMes * rReal / 100).toFixed(2);
 
   function emitirRefis() {
     salvarMutation.mutate({
@@ -8681,8 +8725,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   // Desvio físico global (pp)
   const desvioFisico = avancoRealAtual - avancoPrevisto;
+  const rDesvioFisico = rReal - rPrev;
   // Desvio financeiro do mês (R$)
   const desvioFinanceiro = custoRealAuto - custoPrevAuto;
+  const rDesvioFinanceiro = rCustoReal - rCustoPrev;
 
   // Atividades com desvio negativo para contexto da análise IA
   const atividadesAtrasadas = useMemo(() => {
@@ -8713,6 +8759,20 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       <div className="flex flex-wrap items-center justify-between gap-3 refis-no-print">
         <div className="flex items-center gap-3">
           <p className="text-sm font-semibold text-slate-700">REFIS — Relatório Semanal de Avanço Físico</p>
+          {qtdIndiretas > 0 && (
+            <label className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-blue-100 transition-colors select-none">
+              <input
+                type="checkbox"
+                checked={refisComIndiretas}
+                onChange={e => setRefisComIndiretas(e.target.checked)}
+                className="accent-blue-600 h-3.5 w-3.5"
+              />
+              <span className="text-[11px] font-semibold text-blue-700">
+                {refisComIndiretas ? "Global (c/ Indiretas)" : "Só Diretas"}
+              </span>
+              <span className="text-[9px] text-blue-500">({qtdIndiretas} ind.)</span>
+            </label>
+          )}
           <select
             value={semana}
             onChange={e => { setSemana(e.target.value); setObs(""); }}
@@ -9140,8 +9200,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <div>
               <div className="flex items-end justify-between mb-2">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Previsto Acumulado</span>
-                  <p className="text-2xl font-black leading-none" style={{ color: "#d97706" }}>{fPct_(avancoPrevisto)}</p>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Previsto Acumulado{refisComIndiretas ? " (Global)" : ""}</span>
+                  <p className="text-2xl font-black leading-none" style={{ color: "#d97706" }}>{fPct_(rPrev)}</p>
                 </div>
                 <span className="text-[11px] text-slate-400 pb-0.5">Meta: <strong className="text-slate-600">100%</strong></span>
               </div>
@@ -9156,17 +9216,17 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 {/* Filled */}
                 <div
                   className="absolute left-0 top-0 bottom-0 flex items-center"
-                  style={{ width: `${Math.max(avancoPrevisto, 0)}%`, background: "linear-gradient(90deg,#d97706,#FFB800)", minWidth: avancoPrevisto > 0 ? 4 : 0 }}
+                  style={{ width: `${Math.max(rPrev, 0)}%`, background: "linear-gradient(90deg,#d97706,#FFB800)", minWidth: rPrev > 0 ? 4 : 0 }}
                 >
-                  {avancoPrevisto > 6 && (
-                    <span className="absolute right-2 text-[12px] font-black text-white drop-shadow-sm">{fPct_(avancoPrevisto)}</span>
+                  {rPrev > 6 && (
+                    <span className="absolute right-2 text-[12px] font-black text-white drop-shadow-sm">{fPct_(rPrev)}</span>
                   )}
                 </div>
                 {/* Restante label (apenas se tiver espaço suficiente) */}
-                {avancoPrevisto < 70 && (
+                {rPrev < 70 && (
                   <div className="absolute right-3 top-0 bottom-0 flex items-center">
                     <span className="text-[11px] font-semibold" style={{ color: "#92400e" }}>
-                      saldo {fPct_(100 - avancoPrevisto)}
+                      saldo {fPct_(100 - rPrev)}
                     </span>
                   </div>
                 )}
@@ -9179,12 +9239,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <div>
               <div className="flex items-end justify-between mb-2">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Realizado Acumulado</span>
-                  <p className="text-2xl font-black leading-none" style={{ color: desvioFisico >= 0 ? "#1d4ed8" : "#1d4ed8" }}>{fPct_(avancoRealAtual)}</p>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Realizado Acumulado{refisComIndiretas ? " (Global)" : ""}</span>
+                  <p className="text-2xl font-black leading-none" style={{ color: "#1d4ed8" }}>{fPct_(rReal)}</p>
                 </div>
-                <span className={`text-[11px] pb-0.5 font-semibold ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                  {desvioFisico >= 0 ? <ArrowUpRight className="h-3.5 w-3.5 inline" /> : <ArrowDownRight className="h-3.5 w-3.5 inline" />}
-                  Desvio {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
+                <span className={`text-[11px] pb-0.5 font-semibold ${rDesvioFisico >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                  {rDesvioFisico >= 0 ? <ArrowUpRight className="h-3.5 w-3.5 inline" /> : <ArrowDownRight className="h-3.5 w-3.5 inline" />}
+                  Desvio {rDesvioFisico >= 0 ? "+" : ""}{fPct_(rDesvioFisico)}
                 </span>
               </div>
               {/* Barra bullet */}
@@ -9196,25 +9256,25 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   </div>
                 ))}
                 {/* Referência previsto (linha fina) */}
-                {avancoPrevisto > 0 && (
-                  <div className="absolute top-0 bottom-0 w-0.5 z-10" style={{ left: `${avancoPrevisto}%`, background: "#FFB800", opacity: 0.8 }}>
+                {rPrev > 0 && (
+                  <div className="absolute top-0 bottom-0 w-0.5 z-10" style={{ left: `${rPrev}%`, background: "#FFB800", opacity: 0.8 }}>
                     <div className="absolute -top-0 left-1 text-[9px] font-bold" style={{ color: "#d97706" }}>▾ prev</div>
                   </div>
                 )}
                 {/* Filled */}
                 <div
                   className="absolute left-0 top-0 bottom-0 flex items-center"
-                  style={{ width: `${Math.max(avancoRealAtual, 0)}%`, background: "linear-gradient(90deg,#1d4ed8,#3b82f6)", minWidth: avancoRealAtual > 0 ? 4 : 0 }}
+                  style={{ width: `${Math.max(rReal, 0)}%`, background: "linear-gradient(90deg,#1d4ed8,#3b82f6)", minWidth: rReal > 0 ? 4 : 0 }}
                 >
-                  {avancoRealAtual > 6 && (
-                    <span className="absolute right-2 text-[12px] font-black text-white drop-shadow-sm">{fPct_(avancoRealAtual)}</span>
+                  {rReal > 6 && (
+                    <span className="absolute right-2 text-[12px] font-black text-white drop-shadow-sm">{fPct_(rReal)}</span>
                   )}
                 </div>
                 {/* Restante label */}
-                {avancoRealAtual < 70 && (
+                {rReal < 70 && (
                   <div className="absolute right-3 top-0 bottom-0 flex items-center">
                     <span className="text-[11px] font-semibold" style={{ color: "#1e3a8a" }}>
-                      saldo {fPct_(100 - avancoRealAtual)}
+                      saldo {fPct_(100 - rReal)}
                     </span>
                   </div>
                 )}
@@ -9228,7 +9288,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               <span>Início: <strong className="text-slate-700">{proj.dataInicio ? new Date(proj.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</strong></span>
               <span>Prazo contratual: <strong className="text-slate-700">{proj.dataTerminoContratual ? new Date(proj.dataTerminoContratual + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</strong></span>
               <span className="ml-auto">
-                SPI: <strong className={spi >= 1 ? "text-emerald-600" : "text-red-600"}>{avancoPrevisto === 0 ? "—" : spi.toFixed(2)}</strong>
+                SPI: <strong className={rSpi >= 1 ? "text-emerald-600" : "text-red-600"}>{rPrev === 0 ? "—" : rSpi.toFixed(2)}</strong>
               </span>
             </div>
           </div>
@@ -9241,9 +9301,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 Avanço Semanal<br/>
                 <span style={{ color: "#b45309" }}>Previsto</span>
               </p>
-              <p className="text-3xl font-black leading-none" style={{ color: "#d97706" }}>{fPct_(avancoPrevSemanal)}</p>
+              <p className="text-3xl font-black leading-none" style={{ color: "#d97706" }}>{fPct_(rPrevSem)}</p>
               <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#fde68a" }}>
-                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(avancoPrevSemanal * 10, 100)}%`, background: "#FFB800" }} />
+                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(rPrevSem * 10, 100)}%`, background: "#FFB800" }} />
               </div>
               <p className="text-[9px] mt-2 text-amber-700 font-medium">Baseado no cronograma</p>
             </div>
@@ -9254,9 +9314,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 Avanço Semanal<br/>
                 <span style={{ color: "#1d4ed8" }}>Realizado</span>
               </p>
-              <p className="text-3xl font-black leading-none" style={{ color: "#2563eb" }}>{fPct_(avancoRealSemanal)}</p>
+              <p className="text-3xl font-black leading-none" style={{ color: "#2563eb" }}>{fPct_(rRealSem)}</p>
               <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#bfdbfe" }}>
-                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(avancoRealSemanal * 10, 100)}%`, background: "#3b82f6" }} />
+                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(rRealSem * 10, 100)}%`, background: "#3b82f6" }} />
               </div>
               <p className="text-[9px] mt-2 text-blue-700 font-medium">Ponderado financeiramente</p>
             </div>
@@ -9264,45 +9324,45 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             {/* SPI */}
             <div
               className="flex flex-col px-5 py-4 border-r border-slate-100"
-              style={{ background: avancoPrevisto === 0 ? "#f8fafc" : spi >= 1 ? "#f0fdf4" : spi >= 0.9 ? "#fef9c3" : "#fef2f2" }}
+              style={{ background: rPrev === 0 ? "#f8fafc" : rSpi >= 1 ? "#f0fdf4" : rSpi >= 0.9 ? "#fef9c3" : "#fef2f2" }}
             >
               <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-3"
-                style={{ color: avancoPrevisto === 0 ? "#64748b" : spi >= 1 ? "#166534" : spi >= 0.9 ? "#92400e" : "#991b1b" }}>
+                style={{ color: rPrev === 0 ? "#64748b" : rSpi >= 1 ? "#166534" : rSpi >= 0.9 ? "#92400e" : "#991b1b" }}>
                 SPI — Índice de<br/>Desempenho
               </p>
               <p className="text-3xl font-black leading-none"
-                style={{ color: avancoPrevisto === 0 ? "#94a3b8" : spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }}>
-                {avancoPrevisto === 0 ? "—" : spi.toFixed(2)}
+                style={{ color: rPrev === 0 ? "#94a3b8" : rSpi >= 1 ? "#16a34a" : rSpi >= 0.9 ? "#d97706" : "#dc2626" }}>
+                {rPrev === 0 ? "—" : rSpi.toFixed(2)}
               </p>
               <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden bg-slate-200">
                 <div className="h-full rounded-full transition-all"
-                  style={{ width: `${Math.min(Math.max(spi, 0) * 100, 100)}%`,
-                    background: spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }} />
+                  style={{ width: `${Math.min(Math.max(rSpi, 0) * 100, 100)}%`,
+                    background: rSpi >= 1 ? "#16a34a" : rSpi >= 0.9 ? "#d97706" : "#dc2626" }} />
               </div>
               <p className="text-[9px] mt-2 font-semibold"
-                style={{ color: avancoPrevisto === 0 ? "#94a3b8" : spi >= 1 ? "#16a34a" : spi >= 0.9 ? "#d97706" : "#dc2626" }}>
-                {avancoPrevisto === 0 ? "Sem previsto" : spi >= 1 ? "Dentro do prazo" : spi >= 0.9 ? "Atenção" : "Abaixo do previsto"}
+                style={{ color: rPrev === 0 ? "#94a3b8" : rSpi >= 1 ? "#16a34a" : rSpi >= 0.9 ? "#d97706" : "#dc2626" }}>
+                {rPrev === 0 ? "Sem previsto" : rSpi >= 1 ? "Dentro do prazo" : rSpi >= 0.9 ? "Atenção" : "Abaixo do previsto"}
               </p>
             </div>
 
             {/* DESVIO FÍSICO */}
             <div
               className="flex flex-col px-5 py-4"
-              style={{ background: desvioFisico >= 0 ? "#f0fdf4" : "#fef2f2" }}
+              style={{ background: rDesvioFisico >= 0 ? "#f0fdf4" : "#fef2f2" }}
             >
               <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-3 text-slate-500">
                 Desvio Físico<br/>
-                <span className={desvioFisico >= 0 ? "text-emerald-700" : "text-red-700"}>
-                  {desvioFisico >= 0 ? "Adiantado" : "Atrasado"}
+                <span className={rDesvioFisico >= 0 ? "text-emerald-700" : "text-red-700"}>
+                  {rDesvioFisico >= 0 ? "Adiantado" : "Atrasado"}
                 </span>
               </p>
-              <p className={`text-3xl font-black leading-none ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
+              <p className={`text-3xl font-black leading-none ${rDesvioFisico >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {rDesvioFisico >= 0 ? "+" : ""}{fPct_(rDesvioFisico)}
               </p>
               <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden bg-slate-200">
                 <div className="h-full rounded-full transition-all"
-                  style={{ width: `${Math.min(Math.abs(desvioFisico) * 5, 100)}%`,
-                    background: desvioFisico >= 0 ? "#16a34a" : "#dc2626" }} />
+                  style={{ width: `${Math.min(Math.abs(rDesvioFisico) * 5, 100)}%`,
+                    background: rDesvioFisico >= 0 ? "#16a34a" : "#dc2626" }} />
               </div>
               <p className={`text-[9px] mt-2 font-medium`} style={{ color: "#64748b" }}>
                 Semana {semana}
@@ -9479,10 +9539,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     projetoId,
                     nomeObra:        proj.nome,
                     semana,
-                    desvioFisico,
-                    avancoPrevisto,
-                    avancoRealizado: avancoRealAtual,
-                    spi,
+                    desvioFisico:    rDesvioFisico,
+                    avancoPrevisto:  rPrev,
+                    avancoRealizado: rReal,
+                    spi:             rSpi,
                     dataTermino:     proj.dataTerminoContratual ?? null,
                     atividadesAtrasadas,
                   })}>
@@ -9500,10 +9560,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       projetoId,
                       nomeObra:        proj.nome,
                       semana,
-                      desvioFisico,
-                      avancoPrevisto,
-                      avancoRealizado: avancoRealAtual,
-                      spi,
+                      desvioFisico:    rDesvioFisico,
+                      avancoPrevisto:  rPrev,
+                      avancoRealizado: rReal,
+                      spi:             rSpi,
                       dataTermino:     proj.dataTerminoContratual ?? null,
                       atividadesAtrasadas,
                     })}>
@@ -9523,12 +9583,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
 
           {/* Chips de indicadores rápidos */}
-          <div className={`px-5 py-3 flex flex-wrap gap-3 border-b ${spi < 0.85 ? "border-red-200 bg-red-100/60" : "border-orange-200 bg-orange-100/60"}`}>
+          <div className={`px-5 py-3 flex flex-wrap gap-3 border-b ${rSpi < 0.85 ? "border-red-200 bg-red-100/60" : "border-orange-200 bg-orange-100/60"}`}>
             {[
-              { label: "Desvio Físico", value: `${desvioFisico.toFixed(1)}pp`, bad: true },
-              { label: "SPI",           value: spi.toFixed(2),                 bad: spi < 1 },
-              { label: "Previsto Acum", value: fPct_(avancoPrevisto),          bad: false },
-              { label: "Realizado Acum",value: fPct_(avancoRealAtual),         bad: false },
+              { label: "Desvio Físico", value: `${rDesvioFisico.toFixed(1)}pp`, bad: true },
+              { label: "SPI",           value: rSpi.toFixed(2),                 bad: rSpi < 1 },
+              { label: "Previsto Acum", value: fPct_(rPrev),          bad: false },
+              { label: "Realizado Acum",value: fPct_(rReal),         bad: false },
               ...(atividadesAtrasadas.length > 0
                 ? [{ label: "Grupos Atrasados", value: String(atividadesAtrasadas.length), bad: true }]
                 : []),
@@ -9689,10 +9749,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       <ReferenceLine x={cfHojeLabel} stroke="#94a3b8" strokeDasharray="2 2"
                         label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
                     )}
-                    <ReferenceLine y={avancoPrevisto}  stroke="#ef4444" strokeDasharray="5 4" strokeWidth={1}
-                      label={{ value: `${avancoPrevisto.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
-                    <ReferenceLine y={avancoRealAtual} stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
-                      label={{ value: `${avancoRealAtual.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
+                    <ReferenceLine y={rPrev}  stroke="#ef4444" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: `${rPrev.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
+                    <ReferenceLine y={rReal} stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: `${rReal.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
                     {cfHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
                     {cfHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
                     <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
@@ -10029,9 +10089,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               </p>
               {vendaMes > 0 ? (
                 <>
-                  <p className="text-xl font-bold text-amber-800 mt-1">{fmt(custoPrevAuto)}</p>
+                  <p className="text-xl font-bold text-amber-800 mt-1">{fmt(rCustoPrev)}</p>
                   <p className="text-[10px] text-amber-600 mt-0.5">
-                    {fmt(vendaMes)} × {avancoPrevisto.toFixed(1)}% (avanço previsto)
+                    {fmt(vendaMes)} × {rPrev.toFixed(1)}% (avanço previsto)
                   </p>
                 </>
               ) : (
@@ -10046,9 +10106,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               </p>
               {vendaMes > 0 ? (
                 <>
-                  <p className="text-xl font-bold text-blue-800 mt-1">{fmt(custoRealAuto)}</p>
+                  <p className="text-xl font-bold text-blue-800 mt-1">{fmt(rCustoReal)}</p>
                   <p className="text-[10px] text-blue-600 mt-0.5">
-                    {fmt(vendaMes)} × {avancoRealAtual.toFixed(1)}% (avanço realizado)
+                    {fmt(vendaMes)} × {rReal.toFixed(1)}% (avanço realizado)
                   </p>
                 </>
               ) : (
@@ -10057,20 +10117,20 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             </div>
 
             {/* Desvio Financeiro */}
-            <div className={`rounded-lg border px-4 py-3 ${desvioFinanceiro >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
-              <p className={`text-[10px] font-semibold uppercase tracking-wider ${desvioFinanceiro >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+            <div className={`rounded-lg border px-4 py-3 ${rDesvioFinanceiro >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+              <p className={`text-[10px] font-semibold uppercase tracking-wider ${rDesvioFinanceiro >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                 Desvio no Mês
               </p>
               {vendaMes > 0 ? (
                 <>
-                  <p className={`text-xl font-bold mt-1 ${desvioFinanceiro >= 0 ? "text-emerald-800" : "text-red-800"}`}>
-                    {desvioFinanceiro >= 0 ? "+" : ""}{fmt(desvioFinanceiro)}
+                  <p className={`text-xl font-bold mt-1 ${rDesvioFinanceiro >= 0 ? "text-emerald-800" : "text-red-800"}`}>
+                    {rDesvioFinanceiro >= 0 ? "+" : ""}{fmt(rDesvioFinanceiro)}
                   </p>
-                  <p className={`text-[10px] mt-0.5 flex items-center gap-0.5 ${desvioFinanceiro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {desvioFinanceiro >= 0
+                  <p className={`text-[10px] mt-0.5 flex items-center gap-0.5 ${rDesvioFinanceiro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {rDesvioFinanceiro >= 0
                       ? <ArrowUpRight className="h-3 w-3" />
                       : <ArrowDownRight className="h-3 w-3" />}
-                    {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)} físico
+                    {rDesvioFisico >= 0 ? "+" : ""}{fPct_(rDesvioFisico)} físico
                   </p>
                 </>
               ) : (

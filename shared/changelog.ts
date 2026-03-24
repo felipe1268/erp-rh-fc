@@ -5154,4 +5154,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-24 15:00:00",
   },
+  {
+    version: 776,
+    titulo: "REFIS: Toggle Diretas / Global c/ Indiretas",
+    descricao: "Checkbox no toolbar do REFIS permite alternar entre 'Só Diretas' (padrão) e 'Global (c/ Indiretas)'. Quando ativado, TODOS os valores do REFIS recalculam incluindo atividades indiretas: barras de avanço (previsto/realizado acumulado e semanal), SPI, desvio físico, faturamento previsto/realizado, desvio financeiro, referências na Curva S, chips de indicadores e dados enviados à análise IA. O REFIS emitido sempre salva os valores de diretas (sem indiretas). A emissão do REFIS não é afetada pelo toggle.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-24 16:00:00",
+  },
 ];
