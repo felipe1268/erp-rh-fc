@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { trpc } from "@/lib/trpc";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   X, Send, Loader2, Sparkles, Bot, RotateCcw,
   HardHat, Calculator, ShoppingCart, Users, DollarSign, Shield, FileText,
-  BarChart3, MessageSquare, ChevronDown,
+  BarChart3, MessageSquare, ChevronDown, Maximize2, Minimize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/hooks/useCompany";
@@ -120,6 +120,41 @@ export default function IAModuloChat({
   const inputRef = useRef<HTMLInputElement>(null);
   const { companyId } = useCompany();
 
+  const MIN_W = 320;
+  const MIN_H = 300;
+  const [panelW, setPanelW] = useState(400);
+  const [panelH, setPanelH] = useState<number | null>(null);
+  const dragRef = useRef<{ type: string; startX: number; startY: number; startW: number; startH: number } | null>(null);
+
+  const onPointerDown = useCallback((type: string) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    dragRef.current = {
+      type,
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: panelW,
+      startH: panelH ?? window.innerHeight,
+    };
+  }, [panelW, panelH]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const d = dragRef.current;
+    if (d.type === "left" || d.type === "corner") {
+      const newW = Math.max(MIN_W, Math.min(window.innerWidth * 0.9, d.startW + (d.startX - e.clientX)));
+      setPanelW(newW);
+    }
+    if (d.type === "top" || d.type === "corner") {
+      const newH = Math.max(MIN_H, Math.min(window.innerHeight * 0.95, d.startH + (d.startY - e.clientY)));
+      setPanelH(newH);
+    }
+  }, []);
+
+  const onPointerUp = useCallback(() => { dragRef.current = null; }, []);
+
   const chatMutation = trpc.iaModulos.chat.useMutation();
   const config = MODULE_CONFIG[modulo];
   const Icon = config.icon;
@@ -178,8 +213,43 @@ export default function IAModuloChat({
     );
   }
 
+  const isFullH = panelH === null;
+  const panelStyle: React.CSSProperties = {
+    width: panelW,
+    ...(isFullH ? { top: 0, bottom: 0 } : { bottom: 0, height: panelH }),
+  };
+
   return (
-    <div className="fixed top-0 right-0 bottom-0 w-[400px] z-50 bg-white shadow-2xl border-l border-slate-200 flex flex-col">
+    <div
+      className="fixed right-0 z-50 bg-white shadow-2xl border-l border-slate-200 flex flex-col"
+      style={panelStyle}
+    >
+      <div
+        className="absolute left-0 top-0 bottom-0 w-[5px] cursor-col-resize hover:bg-blue-400/30 active:bg-blue-400/50 z-10"
+        onPointerDown={onPointerDown("left")}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        style={{ touchAction: "none" }}
+      />
+
+      {!isFullH && (
+        <div
+          className="absolute left-0 right-0 top-0 h-[5px] cursor-row-resize hover:bg-blue-400/30 active:bg-blue-400/50 z-10"
+          onPointerDown={onPointerDown("top")}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          style={{ touchAction: "none" }}
+        />
+      )}
+
+      <div
+        className="absolute left-0 top-0 w-[10px] h-[10px] cursor-nwse-resize hover:bg-blue-400/40 active:bg-blue-500/50 z-20"
+        onPointerDown={onPointerDown("corner")}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        style={{ touchAction: "none" }}
+      />
+
       <div className={`${config.bg} text-white px-4 py-3 flex items-center justify-between shrink-0`}>
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5" />
@@ -191,6 +261,16 @@ export default function IAModuloChat({
         <div className="flex items-center gap-1">
           <button onClick={limpar} className="p-1.5 hover:bg-white/20 rounded" title="Limpar conversa">
             <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => {
+              if (isFullH) setPanelH(500);
+              else setPanelH(null);
+            }}
+            className="p-1.5 hover:bg-white/20 rounded"
+            title={isFullH ? "Reduzir painel" : "Expandir tela cheia"}
+          >
+            {isFullH ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </button>
           <button onClick={() => setOpen(false)} className="p-1.5 hover:bg-white/20 rounded" title="Fechar">
             <X className="h-4 w-4" />
