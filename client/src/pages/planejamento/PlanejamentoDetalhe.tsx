@@ -4241,14 +4241,25 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     const denom     = semPeso ? (folhasComInd.length || 1) : pesoTotal;
     let soma = 0;
     folhasComInd.forEach((a: any) => {
-      const val  = avancoLocal[a.id] !== undefined
-        ? avancoLocal[a.id]
-        : (avancoExistente[a.id] ?? avancoMaisRecente[a.id] ?? 0);
+      let val: number;
+      if (a.isIndireta) {
+        if (!a.dataInicio || !a.dataFim) { val = 0; }
+        else {
+          const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+          const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+          const ref = new Date(semanaFim    + "T12:00:00").getTime();
+          val = ref >= fim ? 100 : ref <= ini ? 0 : ((ref - ini) / (fim - ini)) * 100;
+        }
+      } else {
+        val = avancoLocal[a.id] !== undefined
+          ? avancoLocal[a.id]
+          : (avancoExistente[a.id] ?? avancoMaisRecente[a.id] ?? 0);
+      }
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
       soma += (val * peso) / denom;
     });
     return +soma.toFixed(1);
-  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal]);
+  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim]);
 
   const distorcaoPrev = +(previstoComInd - previsto).toFixed(1);
   const distorcaoReal = +(realizadoComInd - realizadoAcum).toFixed(1);
@@ -4613,91 +4624,88 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       </div>
 
       {(distorcaoPrev !== 0 || distorcaoReal !== 0) && (
-        <div className="rounded-xl border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-purple-100/80 shadow-md overflow-hidden">
-          <div className="bg-purple-600 px-4 py-2 flex items-center gap-2">
-            <Info className="h-4 w-4 text-white" />
-            <span className="text-xs font-bold text-white tracking-wide uppercase">
-              Impacto das Indiretas — {folhasComInd.length - folhas.length} atividade{folhasComInd.length - folhas.length !== 1 ? "s" : ""}
+        <UiTooltipProvider delayDuration={200}>
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="bg-slate-100 px-4 py-1.5 flex items-center gap-2 border-b border-slate-200">
+            <Info className="h-3.5 w-3.5 text-slate-500" />
+            <span className="text-[11px] font-semibold text-slate-600">
+              Visão c/ Indiretas ({folhasComInd.length - folhas.length} atividade{folhasComInd.length - folhas.length !== 1 ? "s" : ""})
             </span>
           </div>
-          <div className="px-4 py-3 flex flex-wrap items-stretch gap-4">
-            <UiTooltipProvider delayDuration={200}>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Previsto</span>
-                <div className="flex items-center gap-2">
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className="text-lg font-black text-orange-600 cursor-help border-b border-dashed border-orange-300">{previsto.toFixed(1)}%</span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Previsto (Diretas)</p>
-                      <p className="text-slate-400 mt-0.5">Avanço previsto pelo cronograma considerando apenas atividades diretas da obra (sem indiretas).</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                  <span className="text-slate-400 text-lg font-light">→</span>
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className="text-lg font-black text-purple-700 cursor-help border-b border-dashed border-purple-300">{previstoComInd.toFixed(1)}%</span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Previsto (c/ Indiretas)</p>
-                      <p className="text-slate-400 mt-0.5">Avanço previsto incluindo atividades indiretas (canteiro, administrativo, equipe técnica etc.) no cálculo ponderado.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className={`text-sm font-extrabold px-2 py-0.5 rounded-full cursor-help ${distorcaoPrev >= 0 ? "bg-purple-200 text-purple-800" : "bg-red-100 text-red-700"}`}>
-                        {distorcaoPrev >= 0 ? "+" : ""}{distorcaoPrev.toFixed(1)}pp
-                      </span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Distorção do Previsto</p>
-                      <p className="text-slate-400 mt-0.5">Diferença em pontos percentuais entre o previsto com e sem indiretas. Mostra quanto as atividades indiretas alteram o indicador previsto.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                </div>
-                <p className="text-[9px] text-slate-400 leading-tight mt-0.5">Sem indiretas → com indiretas</p>
+          <div className="grid grid-cols-2 divide-x divide-slate-100">
+            <div className="px-4 py-2.5">
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide mb-1">Previsto</p>
+              <div className="flex items-baseline gap-1.5">
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className="text-sm font-bold text-slate-600 cursor-help">{previsto.toFixed(1)}%</span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Previsto (só diretas)</p>
+                    <p className="text-slate-400 mt-0.5">Avanço previsto considerando apenas atividades diretas da obra.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
+                <span className="text-slate-300">→</span>
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className="text-sm font-bold text-slate-800 cursor-help">{previstoComInd.toFixed(1)}%</span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Previsto (c/ indiretas)</p>
+                    <p className="text-slate-400 mt-0.5">Avanço previsto incluindo atividades indiretas no cálculo ponderado.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className={`text-xs font-bold cursor-help ${distorcaoPrev >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      ({distorcaoPrev >= 0 ? "+" : ""}{distorcaoPrev.toFixed(1)}pp)
+                    </span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Distorção</p>
+                    <p className="text-slate-400 mt-0.5">Quanto as indiretas alteram o previsto em pontos percentuais.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
               </div>
-              <div className="w-px bg-purple-200 self-stretch" />
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Realizado</span>
-                <div className="flex items-center gap-2">
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className="text-lg font-black text-emerald-600 cursor-help border-b border-dashed border-emerald-300">{realizadoAcum.toFixed(1)}%</span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Realizado (Diretas)</p>
-                      <p className="text-slate-400 mt-0.5">Avanço real acumulado considerando apenas atividades diretas da obra.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                  <span className="text-slate-400 text-lg font-light">→</span>
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className="text-lg font-black text-purple-700 cursor-help border-b border-dashed border-purple-300">{realizadoComInd.toFixed(1)}%</span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Realizado (c/ Indiretas)</p>
-                      <p className="text-slate-400 mt-0.5">Avanço real acumulado incluindo atividades indiretas no cálculo ponderado.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className={`text-sm font-extrabold px-2 py-0.5 rounded-full cursor-help ${distorcaoReal >= 0 ? "bg-purple-200 text-purple-800" : "bg-red-100 text-red-700"}`}>
-                        {distorcaoReal >= 0 ? "+" : ""}{distorcaoReal.toFixed(1)}pp
-                      </span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Distorção do Realizado</p>
-                      <p className="text-slate-400 mt-0.5">Diferença em pontos percentuais entre o realizado com e sem indiretas. Mostra quanto as atividades indiretas alteram o indicador realizado.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                </div>
-                <p className="text-[9px] text-slate-400 leading-tight mt-0.5">Sem indiretas → com indiretas</p>
+            </div>
+            <div className="px-4 py-2.5">
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide mb-1">Realizado</p>
+              <div className="flex items-baseline gap-1.5">
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className="text-sm font-bold text-slate-600 cursor-help">{realizadoAcum.toFixed(1)}%</span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Realizado (só diretas)</p>
+                    <p className="text-slate-400 mt-0.5">Avanço real acumulado apenas com atividades diretas.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
+                <span className="text-slate-300">→</span>
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className="text-sm font-bold text-slate-800 cursor-help">{realizadoComInd.toFixed(1)}%</span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Realizado (c/ indiretas)</p>
+                    <p className="text-slate-400 mt-0.5">Avanço real incluindo indiretas (progresso proporcional ao tempo).</p>
+                  </UiTooltipContent>
+                </UiTooltip>
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className={`text-xs font-bold cursor-help ${distorcaoReal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      ({distorcaoReal >= 0 ? "+" : ""}{distorcaoReal.toFixed(1)}pp)
+                    </span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Distorção</p>
+                    <p className="text-slate-400 mt-0.5">Quanto as indiretas alteram o realizado em pontos percentuais.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
               </div>
-            </UiTooltipProvider>
+            </div>
           </div>
         </div>
+        </UiTooltipProvider>
       )}
 
       {/* ── Alerta: modo "Não Executadas" ───────────────────────────────────── */}
@@ -8426,9 +8434,15 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
-      return s + (m[a.id] ?? 0) * (peso / pesoTotal);
+      let val: number;
+      if (a.isIndireta) {
+        val = prevIndRef(a, semanaFimRefis);
+      } else {
+        val = m[a.id] ?? 0;
+      }
+      return s + val * (peso / pesoTotal);
     }, 0));
-  }, [atividades, avancos, semana]);
+  }, [atividades, avancos, semana, semanaFimRefis]);
 
   const refisDistPrev = +(refisPrevistoComInd - avancoPrevisto).toFixed(1);
   const refisDistReal = +(refisRealComInd - avancoRealAtual).toFixed(1);
@@ -9247,91 +9261,88 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       </div>
 
       {qtdIndiretas > 0 && (refisDistPrev !== 0 || refisDistReal !== 0) && (
-        <div className="refis-distortion-block rounded-xl border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-purple-100/80 shadow-md overflow-hidden">
-          <div className="bg-purple-600 px-5 py-2 flex items-center gap-2">
-            <Info className="h-4 w-4 text-white" />
-            <span className="text-xs font-bold text-white tracking-wide uppercase">
-              Impacto das Indiretas — {qtdIndiretas} atividade{qtdIndiretas !== 1 ? "s" : ""}
+        <UiTooltipProvider delayDuration={200}>
+        <div className="refis-distortion-block rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="bg-slate-100 px-5 py-1.5 flex items-center gap-2 border-b border-slate-200">
+            <Info className="h-3.5 w-3.5 text-slate-500" />
+            <span className="text-[11px] font-semibold text-slate-600">
+              Visão c/ Indiretas ({qtdIndiretas} atividade{qtdIndiretas !== 1 ? "s" : ""})
             </span>
           </div>
-          <div className="px-5 py-3 flex flex-wrap items-stretch gap-4">
-            <UiTooltipProvider delayDuration={200}>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Previsto</span>
-                <div className="flex items-center gap-2">
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className="text-lg font-black text-orange-600 cursor-help border-b border-dashed border-orange-300">{fPct_(avancoPrevisto)}</span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Previsto (Diretas)</p>
-                      <p className="text-slate-400 mt-0.5">Avanço previsto pelo cronograma considerando apenas atividades diretas da obra (sem indiretas).</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                  <span className="text-slate-400 text-lg font-light">→</span>
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className="text-lg font-black text-purple-700 cursor-help border-b border-dashed border-purple-300">{fPct_(refisPrevistoComInd)}</span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Previsto (c/ Indiretas)</p>
-                      <p className="text-slate-400 mt-0.5">Avanço previsto incluindo atividades indiretas (canteiro, administrativo, equipe técnica etc.) no cálculo ponderado.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className={`text-sm font-extrabold px-2 py-0.5 rounded-full cursor-help ${refisDistPrev >= 0 ? "bg-purple-200 text-purple-800" : "bg-red-100 text-red-700"}`}>
-                        {refisDistPrev >= 0 ? "+" : ""}{refisDistPrev.toFixed(1)}pp
-                      </span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Distorção do Previsto</p>
-                      <p className="text-slate-400 mt-0.5">Diferença em pontos percentuais entre o previsto com e sem indiretas. Mostra quanto as atividades indiretas alteram o indicador previsto.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                </div>
-                <p className="text-[9px] text-slate-400 leading-tight mt-0.5">Sem indiretas → com indiretas</p>
+          <div className="grid grid-cols-2 divide-x divide-slate-100">
+            <div className="px-5 py-2.5">
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide mb-1">Previsto</p>
+              <div className="flex items-baseline gap-1.5">
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className="text-sm font-bold text-slate-600 cursor-help">{fPct_(avancoPrevisto)}</span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Previsto (só diretas)</p>
+                    <p className="text-slate-400 mt-0.5">Avanço previsto considerando apenas atividades diretas da obra.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
+                <span className="text-slate-300">→</span>
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className="text-sm font-bold text-slate-800 cursor-help">{fPct_(refisPrevistoComInd)}</span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Previsto (c/ indiretas)</p>
+                    <p className="text-slate-400 mt-0.5">Avanço previsto incluindo atividades indiretas no cálculo ponderado.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className={`text-xs font-bold cursor-help ${refisDistPrev >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      ({refisDistPrev >= 0 ? "+" : ""}{refisDistPrev.toFixed(1)}pp)
+                    </span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Distorção</p>
+                    <p className="text-slate-400 mt-0.5">Quanto as indiretas alteram o previsto em pontos percentuais.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
               </div>
-              <div className="w-px bg-purple-200 self-stretch" />
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Realizado</span>
-                <div className="flex items-center gap-2">
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className="text-lg font-black text-blue-700 cursor-help border-b border-dashed border-blue-300">{fPct_(avancoRealAtual)}</span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Realizado (Diretas)</p>
-                      <p className="text-slate-400 mt-0.5">Avanço real acumulado considerando apenas atividades diretas da obra.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                  <span className="text-slate-400 text-lg font-light">→</span>
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className="text-lg font-black text-purple-700 cursor-help border-b border-dashed border-purple-300">{fPct_(refisRealComInd)}</span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Realizado (c/ Indiretas)</p>
-                      <p className="text-slate-400 mt-0.5">Avanço real acumulado incluindo atividades indiretas no cálculo ponderado.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                  <UiTooltip>
-                    <UiTooltipTrigger asChild>
-                      <span className={`text-sm font-extrabold px-2 py-0.5 rounded-full cursor-help ${refisDistReal >= 0 ? "bg-purple-200 text-purple-800" : "bg-red-100 text-red-700"}`}>
-                        {refisDistReal >= 0 ? "+" : ""}{refisDistReal.toFixed(1)}pp
-                      </span>
-                    </UiTooltipTrigger>
-                    <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Distorção do Realizado</p>
-                      <p className="text-slate-400 mt-0.5">Diferença em pontos percentuais entre o realizado com e sem indiretas. Mostra quanto as atividades indiretas alteram o indicador realizado.</p>
-                    </UiTooltipContent>
-                  </UiTooltip>
-                </div>
-                <p className="text-[9px] text-slate-400 leading-tight mt-0.5">Sem indiretas → com indiretas</p>
+            </div>
+            <div className="px-5 py-2.5">
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide mb-1">Realizado</p>
+              <div className="flex items-baseline gap-1.5">
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className="text-sm font-bold text-slate-600 cursor-help">{fPct_(avancoRealAtual)}</span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Realizado (só diretas)</p>
+                    <p className="text-slate-400 mt-0.5">Avanço real acumulado apenas com atividades diretas.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
+                <span className="text-slate-300">→</span>
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className="text-sm font-bold text-slate-800 cursor-help">{fPct_(refisRealComInd)}</span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Realizado (c/ indiretas)</p>
+                    <p className="text-slate-400 mt-0.5">Avanço real incluindo indiretas (progresso proporcional ao tempo).</p>
+                  </UiTooltipContent>
+                </UiTooltip>
+                <UiTooltip>
+                  <UiTooltipTrigger asChild>
+                    <span className={`text-xs font-bold cursor-help ${refisDistReal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      ({refisDistReal >= 0 ? "+" : ""}{refisDistReal.toFixed(1)}pp)
+                    </span>
+                  </UiTooltipTrigger>
+                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    <p className="font-semibold">Distorção</p>
+                    <p className="text-slate-400 mt-0.5">Quanto as indiretas alteram o realizado em pontos percentuais.</p>
+                  </UiTooltipContent>
+                </UiTooltip>
               </div>
-            </UiTooltipProvider>
+            </div>
           </div>
         </div>
+        </UiTooltipProvider>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
