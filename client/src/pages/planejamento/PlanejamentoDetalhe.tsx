@@ -4721,6 +4721,28 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
               </div>
             </div>
           </div>
+          <div className="grid grid-cols-2 divide-x divide-blue-100 border-t border-blue-100 bg-slate-50/80">
+            {(() => {
+              const desvDiretas = +(realizadoAcum - previsto).toFixed(1);
+              const desvGlobal = +(realizadoComInd - previstoComInd).toFixed(1);
+              return <>
+                <div className="px-4 py-2 flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-medium">Desvio:</span>
+                  <span className={`text-sm font-extrabold ${desvDiretas >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desvDiretas >= 0 ? "+" : ""}{desvDiretas.toFixed(1)}pp
+                  </span>
+                  <span className="text-[9px] text-slate-400">(diretas)</span>
+                </div>
+                <div className="px-4 py-2 flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-medium">Desvio:</span>
+                  <span className={`text-sm font-extrabold ${desvGlobal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desvGlobal >= 0 ? "+" : ""}{desvGlobal.toFixed(1)}pp
+                  </span>
+                  <span className="text-[9px] text-slate-400">(global)</span>
+                </div>
+              </>;
+            })()}
+          </div>
         </div>
         </UiTooltipProvider>
       )}
@@ -9374,6 +9396,28 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </UiTooltip>
               </div>
             </div>
+          </div>
+          <div className="grid grid-cols-2 divide-x divide-blue-100 border-t border-blue-100 bg-slate-50/80">
+            {(() => {
+              const desvDiretas = +(avancoRealAtual - avancoPrevisto).toFixed(1);
+              const desvGlobal = +(refisRealComInd - refisPrevistoComInd).toFixed(1);
+              return <>
+                <div className="px-5 py-2 flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-medium">Desvio:</span>
+                  <span className={`text-sm font-extrabold ${desvDiretas >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desvDiretas >= 0 ? "+" : ""}{desvDiretas.toFixed(1)}pp
+                  </span>
+                  <span className="text-[9px] text-slate-400">(diretas)</span>
+                </div>
+                <div className="px-5 py-2 flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-medium">Desvio:</span>
+                  <span className={`text-sm font-extrabold ${desvGlobal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desvGlobal >= 0 ? "+" : ""}{desvGlobal.toFixed(1)}pp
+                  </span>
+                  <span className="text-[9px] text-slate-400">(global)</span>
+                </div>
+              </>;
+            })()}
           </div>
         </div>
         </UiTooltipProvider>
