@@ -30,7 +30,7 @@ import {
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer, CheckSquare,
   TrendingDown, ArrowUpRight, ArrowDownRight, Circle, CalendarClock, Network,
-  Users, HardHat, CheckCircle, Calculator,
+  Users, HardHat, CheckCircle, Calculator, Info,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -4037,6 +4037,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   }, [semanas]);
 
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta), [atividades]);
+  const folhasComInd = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
 
   // Filtra atividades ativas na semana selecionada (Seg-Sex) — base para todos os modos
   const folhasNaSemana = useMemo(() => {
@@ -4214,6 +4215,43 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal]);
 
   const delta = +(realizadoAcum - previsto).toFixed(1);
+
+  const previstoComInd = useMemo(() => {
+    const folhasComDatas = folhasComInd.filter((a: any) => a.dataInicio && a.dataFim);
+    const pesoTotal = folhasComInd.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso   = pesoTotal === 0;
+    const denom     = semPeso ? (folhasComDatas.length || 1) : pesoTotal;
+    let soma = 0;
+    folhasComDatas.forEach((a: any) => {
+      const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
+      const fim  = new Date(a.dataFim    + "T12:00:00").getTime();
+      const ref  = new Date(semanaFim    + "T12:00:00").getTime();
+      let exp = 0;
+      if (ref >= fim) exp = 100;
+      else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      soma += (exp * peso) / denom;
+    });
+    return +soma.toFixed(1);
+  }, [folhasComInd, semanaFim]);
+
+  const realizadoComInd = useMemo(() => {
+    const pesoTotal = folhasComInd.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso   = pesoTotal === 0;
+    const denom     = semPeso ? (folhasComInd.length || 1) : pesoTotal;
+    let soma = 0;
+    folhasComInd.forEach((a: any) => {
+      const val  = avancoLocal[a.id] !== undefined
+        ? avancoLocal[a.id]
+        : (avancoExistente[a.id] ?? avancoMaisRecente[a.id] ?? 0);
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      soma += (val * peso) / denom;
+    });
+    return +soma.toFixed(1);
+  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal]);
+
+  const distorcaoPrev = +(previstoComInd - previsto).toFixed(1);
+  const distorcaoReal = +(realizadoComInd - realizadoAcum).toFixed(1);
 
   // ── Import XML / XLSX do MS Project ───────────────────────────────────────
   async function importarDoMSProject(file: File) {
@@ -4573,6 +4611,38 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
           <p className="text-[10px] text-slate-400 mt-0.5">Semana {semanaAtual}</p>
         </div>
       </div>
+
+      {(distorcaoPrev !== 0 || distorcaoReal !== 0) && (
+        <div className="flex flex-wrap items-center gap-3 px-4 py-2 rounded-lg border border-purple-200 bg-purple-50/60">
+          <div className="flex items-center gap-1.5">
+            <Info className="h-3.5 w-3.5 text-purple-500" />
+            <span className="text-[11px] font-semibold text-purple-800">Análise c/ Indiretas:</span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="text-slate-600">
+              Previsto: <span className="font-bold text-orange-600">{previsto.toFixed(1)}%</span>
+              <span className="mx-1 text-slate-400">→</span>
+              <span className="font-bold text-purple-700">{previstoComInd.toFixed(1)}%</span>
+              <span className={`ml-1 font-bold ${distorcaoPrev >= 0 ? "text-purple-600" : "text-red-600"}`}>
+                ({distorcaoPrev >= 0 ? "+" : ""}{distorcaoPrev.toFixed(1)}pp)
+              </span>
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className="text-slate-600">
+              Realizado: <span className="font-bold text-emerald-600">{realizadoAcum.toFixed(1)}%</span>
+              <span className="mx-1 text-slate-400">→</span>
+              <span className="font-bold text-purple-700">{realizadoComInd.toFixed(1)}%</span>
+              <span className={`ml-1 font-bold ${distorcaoReal >= 0 ? "text-purple-600" : "text-red-600"}`}>
+                ({distorcaoReal >= 0 ? "+" : ""}{distorcaoReal.toFixed(1)}pp)
+              </span>
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className="text-[10px] text-purple-500 italic">
+              Distorção causada por {folhasComInd.length - folhas.length} atividade{folhasComInd.length - folhas.length !== 1 ? "s" : ""} indireta{folhasComInd.length - folhas.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── Alerta: modo "Não Executadas" ───────────────────────────────────── */}
       {filtroAtivo === "pendentes" && (
@@ -8279,6 +8349,35 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const avancoRealSemanal = Math.max(0, avancoRealAtual - avancoRealAntes);
   const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
 
+  const refisPrevistoComInd = useMemo(() => {
+    const f = atividades.filter((a: any) => !a.isGrupo);
+    const { pesoTotal, semPeso } = calcPesoTotal(f);
+    return Math.min(100, f.reduce((s: number, a: any) => {
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
+    }, 0));
+  }, [atividades, semanaFimRefis]);
+
+  const refisRealComInd = useMemo(() => {
+    const m: Record<number, number> = {};
+    avancos.filter((av: any) => av.semana <= semana).forEach((av: any) => {
+      if (!m[av.atividadeId] || av.semana > (m as any)[`d_${av.atividadeId}`]) {
+        m[av.atividadeId] = n(av.percentualAcumulado);
+        (m as any)[`d_${av.atividadeId}`] = av.semana;
+      }
+    });
+    const f = atividades.filter((a: any) => !a.isGrupo);
+    const { pesoTotal, semPeso } = calcPesoTotal(f);
+    return Math.min(100, f.reduce((s: number, a: any) => {
+      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      return s + (m[a.id] ?? 0) * (peso / pesoTotal);
+    }, 0));
+  }, [atividades, avancos, semana]);
+
+  const refisDistPrev = +(refisPrevistoComInd - avancoPrevisto).toFixed(1);
+  const refisDistReal = +(refisRealComInd - avancoRealAtual).toFixed(1);
+  const qtdIndiretas = atividades.filter((a: any) => a.isIndireta && !a.isGrupo).length;
+
   // ── Mapa realizado por atividade (último avanço até a semana selecionada) ──
   const realMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -9090,6 +9189,34 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         </div>
         }
       </div>
+
+      {qtdIndiretas > 0 && (refisDistPrev !== 0 || refisDistReal !== 0) && (
+        <div className="refis-distortion-block flex flex-wrap items-center gap-3 px-5 py-2.5 rounded-xl border border-purple-200 bg-purple-50/60">
+          <div className="flex items-center gap-1.5">
+            <Info className="h-3.5 w-3.5 text-purple-500" />
+            <span className="text-[11px] font-semibold text-purple-800">Impacto das Indiretas ({qtdIndiretas}):</span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="text-slate-600">
+              Prev. direto: <span className="font-bold text-orange-600">{fPct_(avancoPrevisto)}</span>
+              <span className="mx-1 text-slate-400">→</span>
+              c/ ind.: <span className="font-bold text-purple-700">{fPct_(refisPrevistoComInd)}</span>
+              <span className={`ml-1 font-bold ${refisDistPrev >= 0 ? "text-purple-600" : "text-red-600"}`}>
+                ({refisDistPrev >= 0 ? "+" : ""}{refisDistPrev.toFixed(1)}pp)
+              </span>
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className="text-slate-600">
+              Real. direto: <span className="font-bold text-blue-700">{fPct_(avancoRealAtual)}</span>
+              <span className="mx-1 text-slate-400">→</span>
+              c/ ind.: <span className="font-bold text-purple-700">{fPct_(refisRealComInd)}</span>
+              <span className={`ml-1 font-bold ${refisDistReal >= 0 ? "text-purple-600" : "text-red-600"}`}>
+                ({refisDistReal >= 0 ? "+" : ""}{refisDistReal.toFixed(1)}pp)
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 2B — ALERTA IA DE DESVIO DE PRAZO

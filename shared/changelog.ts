@@ -5136,4 +5136,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-24 11:30:00",
   },
+  {
+    version: 774,
+    titulo: "Distorção por Indiretas no REFIS + Hierarquia EAP + Melhorias ProgramacaoSemanal",
+    descricao: "1) REFIS: novo painel roxo mostrando o impacto das atividades indiretas nos percentuais de avanço — compara valores diretos (sem indiretas) com valores incluindo indiretas e exibe a diferença em pontos percentuais. 2) Avanço Semanal: painel roxo de distorção por indiretas (Previsto e Realizado direto → com indiretas → diferença pp). 3) Hierarquia EAP: abaixo de cada nome de atividade aparece o caminho hierárquico dos grupos pai (ex: Estrutura › Superestrutura › Laje). 4) ProgramacaoSemanal: coluna Peso%, banner de soma de pesos, MAIOR PESO destaca todas empatadas (Set), relatório 3 semanas com cards de indiretas, botões de semana ficam verdes com check quando REFIS emitido, badge REFIS Emitido no cabeçalho.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-24 12:00:00",
+  },
 ];
