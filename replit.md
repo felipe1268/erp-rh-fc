@@ -95,12 +95,13 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
 - **RH**: card "Fechar Folha para Custo de MO" + modal "Config. Cargos" em `FolhaPagamento.tsx`
 - **Planejamento**: botão "Importar Custos MO" no cabeçalho de `PlanejamentoDetalhe.tsx` com dialog de pré-condições
 
-## IA Especializada por Módulo (Rev. 771)
+## IA Especializada por Módulo (Rev. 771, Vision Rev. 775)
 - **Router**: `server/routers/iaModulos.ts` — chat, historico, analytics, getModulos
 - **Componente**: `client/src/components/IAModuloChat.tsx` — painel lateral reutilizável
 - **Tabela auditoria**: `ia_modulo_conversas` (company_id, user_id, user_name, modulo, pergunta, resposta, projeto_id, criado_em)
 - **Módulos**: planejamento, orcamento, compras, rh, financeiro, sst, medicao
 - **Integração**: Auto-detecção no `DashboardLayout.tsx` via `IAModuloAutoDetect` (mapeia rota → módulo)
+- **Upload de Imagens (Rev. 775)**: Botão ImagePlus + Ctrl+V paste para anexar prints/fotos. Imagens enviadas como base64 via tRPC (max 5MB, max 5 por msg, tipos: png/jpeg/webp/gif). Backend constrói content blocks com image_url para Anthropic Vision. VISION_INSTRUCTION adicionada ao system prompt quando imagens presentes.
 - O antigo `AssistenteIAFloat` (botão azul genérico) foi removido na Rev. 772
 
 ## Planejamento Module

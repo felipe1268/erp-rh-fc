@@ -7,14 +7,15 @@ import { Input } from "@/components/ui/input";
 import {
   X, Send, Loader2, Sparkles, Bot, RotateCcw,
   HardHat, Calculator, ShoppingCart, Users, DollarSign, Shield, FileText,
-  BarChart3, MessageSquare, ChevronDown, Maximize2, Minimize2,
+  BarChart3, MessageSquare, ChevronDown, Maximize2, Minimize2, ImagePlus, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/hooks/useCompany";
 
 type Modulo = "planejamento" | "orcamento" | "compras" | "rh" | "financeiro" | "sst" | "medicao";
 
-interface Msg { role: "user" | "assistant"; content: string }
+interface ImageData { base64: string; mimeType: string; preview: string }
+interface Msg { role: "user" | "assistant"; content: string; images?: ImageData[] }
 
 const MODULE_CONFIG: Record<Modulo, {
   icon: any; label: string; cor: string; bg: string; border: string;
@@ -114,11 +115,73 @@ export default function IAModuloChat({
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [pendingImages, setPendingImages] = useState<ImageData[]>([]);
   const [loading, setLoading] = useState(false);
   const [showQuick, setShowQuick] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { companyId } = useCompany();
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const maxSize = 5 * 1024 * 1024;
+    Array.from(files).forEach(file => {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Apenas imagens são permitidas");
+        return;
+      }
+      if (file.size > maxSize) {
+        toast.error("Imagem muito grande (máx 5MB)");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(",")[1];
+        setPendingImages(prev => [...prev, {
+          base64,
+          mimeType: file.type,
+          preview: dataUrl,
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  };
+
+  const removePendingImage = (idx: number) => {
+    setPendingImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const maxSize = 5 * 1024 * 1024;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+        if (file.size > maxSize) {
+          toast.error("Imagem muito grande (máx 5MB)");
+          continue;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const base64 = dataUrl.split(",")[1];
+          setPendingImages(prev => [...prev, {
+            base64,
+            mimeType: file.type,
+            preview: dataUrl,
+          }]);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  }, []);
 
   const MIN_W = 320;
   const MIN_H = 300;
@@ -167,21 +230,28 @@ export default function IAModuloChat({
     if (open) setTimeout(() => inputRef.current?.focus(), 200);
   }, [open]);
 
-  const addMsg = (role: "user" | "assistant", content: string) =>
-    setMsgs(prev => [...prev, { role, content }]);
+  const addMsg = (role: "user" | "assistant", content: string, images?: ImageData[]) =>
+    setMsgs(prev => [...prev, { role, content, images }]);
 
   const enviar = async (pergunta?: string) => {
     const texto = (pergunta ?? input).trim();
-    if (!texto || loading) return;
+    const imgs = [...pendingImages];
+    if ((!texto && imgs.length === 0) || loading) return;
+    const textoFinal = texto || (imgs.length > 0 ? "Analise esta imagem." : "");
     setInput("");
+    setPendingImages([]);
     setShowQuick(false);
-    addMsg("user", texto);
+    addMsg("user", textoFinal, imgs.length > 0 ? imgs : undefined);
     setLoading(true);
     try {
-      const allMsgs = [...msgs, { role: "user" as const, content: texto }];
+      const allMsgs = [...msgs, { role: "user" as const, content: textoFinal, images: imgs.length > 0 ? imgs.map(i => ({ base64: i.base64, mimeType: i.mimeType })) : undefined }];
       const result = await chatMutation.mutateAsync({
         modulo,
-        messages: allMsgs,
+        messages: allMsgs.map(m => ({
+          role: m.role,
+          content: m.content,
+          images: m.images?.map(i => ({ base64: i.base64, mimeType: i.mimeType })),
+        })),
         contexto,
         projetoId,
         companyId,
@@ -197,6 +267,7 @@ export default function IAModuloChat({
 
   const limpar = () => {
     setMsgs([]);
+    setPendingImages([]);
     setShowQuick(true);
   };
 
@@ -317,6 +388,19 @@ export default function IAModuloChat({
                   <span className={`text-[9px] font-bold ${config.cor} uppercase`}>{config.label}</span>
                 </div>
               )}
+              {m.role === "user" && m.images && m.images.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {m.images.map((img, j) => (
+                    <img
+                      key={j}
+                      src={img.preview}
+                      alt={`Imagem ${j + 1}`}
+                      className="rounded border border-slate-300 max-h-32 max-w-full object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => window.open(img.preview, "_blank")}
+                    />
+                  ))}
+                </div>
+              )}
               {m.role === "user" ? (
                 <p className="text-xs">{m.content}</p>
               ) : (
@@ -340,21 +424,59 @@ export default function IAModuloChat({
       </div>
 
       <div className="shrink-0 border-t border-slate-200 p-3">
-        <form onSubmit={e => { e.preventDefault(); enviar(); }} className="flex gap-2">
+        {pendingImages.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {pendingImages.map((img, i) => (
+              <div key={i} className="relative group">
+                <img
+                  src={img.preview}
+                  alt={`Preview ${i + 1}`}
+                  className="h-14 w-14 object-cover rounded border border-slate-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => removePendingImage(i)}
+                  className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <form onSubmit={e => { e.preventDefault(); enviar(); }} className="flex gap-1.5">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleImageUpload}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading}
+            className={`shrink-0 h-9 w-9 flex items-center justify-center rounded-md border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50 ${pendingImages.length > 0 ? config.cor : "text-slate-400"}`}
+            title="Anexar imagem / print de tela"
+          >
+            <ImagePlus className="h-4 w-4" />
+          </button>
           <Input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder={config.placeholder}
+            onPaste={handlePaste}
+            placeholder={pendingImages.length > 0 ? "Descreva sua dúvida sobre a imagem..." : config.placeholder}
             className="text-xs h-9"
             disabled={loading}
           />
-          <Button type="submit" size="sm" disabled={loading || !input.trim()} className={`${config.bg} hover:opacity-90 h-9 px-3`}>
+          <Button type="submit" size="sm" disabled={loading || (!input.trim() && pendingImages.length === 0)} className={`${config.bg} hover:opacity-90 h-9 px-3`}>
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           </Button>
         </form>
         <p className="text-[9px] text-slate-400 mt-1.5 text-center">
-          Todas as consultas são registradas para auditoria
+          📎 Anexe prints de tela para análise visual • Todas as consultas são registradas
         </p>
       </div>
     </div>

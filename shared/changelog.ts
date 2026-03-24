@@ -5145,4 +5145,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-24 12:00:00",
   },
+  {
+    version: 775,
+    titulo: "IA Chat: Upload de Imagens para Análise Visual",
+    descricao: "Agora é possível anexar prints de tela e imagens no chat da IA para que o especialista analise visualmente. Botão de upload com preview das imagens antes de enviar, suporte a múltiplas imagens por mensagem (máx 5MB cada), thumbnails clicáveis no histórico do chat. A IA recebe as imagens via vision e responde com base no conteúdo visual.",
+    tipo: "feature",
+    modulos: "IA Chat",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-24 15:00:00",
+  },
 ];

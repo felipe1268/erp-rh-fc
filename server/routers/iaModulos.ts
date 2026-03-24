@@ -9,6 +9,17 @@ const MODULOS_DISPONIVEIS = [
 ] as const;
 type Modulo = typeof MODULOS_DISPONIVEIS[number];
 
+const VISION_INSTRUCTION = `
+
+## Capacidade de Análise Visual:
+Você possui capacidade de VISÃO — pode analisar imagens, prints de tela, fotos, gráficos, planilhas e documentos enviados pelo usuário. Quando o usuário enviar uma imagem:
+- Analise detalhadamente o conteúdo visual
+- Identifique dados, números, tabelas, gráficos ou informações relevantes
+- Responda com base no que você VÊ na imagem combinado com seu conhecimento técnico
+- Se a imagem contiver dados numéricos, extraia-os e faça cálculos/análises
+- Nunca diga que não pode ver imagens — você PODE e DEVE analisá-las
+`;
+
 const SYSTEM_PROMPTS: Record<Modulo, string> = {
   planejamento: `Você é o **ENGENHEIRO DE PLANEJAMENTO SÊNIOR**, um dos maiores especialistas do mundo em planejamento e controle de obras de construção civil, com mais de 25 anos de experiência em projetos de grande porte no Brasil e no exterior.
 
@@ -257,23 +268,46 @@ export const iaModulosRouter = router({
       messages: z.array(z.object({
         role: z.enum(["user", "assistant"]),
         content: z.string(),
+        images: z.array(z.object({
+          base64: z.string().max(7_000_000),
+          mimeType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]),
+        })).max(5).optional(),
       })),
       contexto: z.string().optional(),
       projetoId: z.number().optional(),
       companyId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const systemPrompt = SYSTEM_PROMPTS[input.modulo];
+      const hasImages = input.messages.some(m => m.images && m.images.length > 0);
+      const systemPrompt = SYSTEM_PROMPTS[input.modulo] + (hasImages ? VISION_INSTRUCTION : "");
       const contextoExtra = input.contexto
         ? `\n\n## Contexto do Projeto Atual:\n${input.contexto}`
         : "";
 
-      const llmMessages = [
+      const llmMessages: import("../_core/llm").Message[] = [
         { role: "system" as const, content: systemPrompt + contextoExtra },
-        ...input.messages.map(m => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
+        ...input.messages.map(m => {
+          if (m.images && m.images.length > 0) {
+            const contentParts: import("../_core/llm").MessageContent[] = m.images.map(img => ({
+              type: "image_url" as const,
+              image_url: {
+                url: `data:${img.mimeType};base64,${img.base64}`,
+                detail: "high" as const,
+              },
+            }));
+            if (m.content) {
+              contentParts.push({ type: "text" as const, text: m.content });
+            }
+            return {
+              role: m.role as "user" | "assistant",
+              content: contentParts,
+            };
+          }
+          return {
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          };
+        }),
       ];
 
       const result = await invokeLLM({ messages: llmMessages, maxTokens: 4096 });
