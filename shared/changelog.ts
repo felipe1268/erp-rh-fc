@@ -5109,4 +5109,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-23 17:20:00",
   },
+  {
+    version: 771,
+    titulo: "IA Especializada por Módulo — Sistema de Consultores Virtuais",
+    descricao: "Novo sistema de IAs especializadas por módulo com painel lateral de chat. Cada módulo tem seu próprio consultor virtual com conhecimento profundo da área: Planejamento (Eng. Planejamento Sênior — CPM, EVM, Last Planner, Lean Construction), Orçamento (Orçamentista PhD — SINAPI, BDI, Curva ABC), Compras (Gestor de Suprimentos — negociação, lead times), RH (Especialista DP/CLT — cálculos, eSocial), Financeiro (Controller — fluxo de caixa, DRE), SST (Eng. Segurança — NRs, EPIs), Medição (Especialista — contratos, retenções). Todas as conversas são registradas em banco para auditoria. Inclui botões de insights rápidos e histórico completo. Dashboard de analytics com perguntas mais frequentes por módulo e por usuário.",
+    tipo: "feature",
+    modulos: "Todos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-23 17:30:00",
+  },
 ];

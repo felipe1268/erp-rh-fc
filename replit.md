@@ -95,6 +95,16 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
 - **RH**: card "Fechar Folha para Custo de MO" + modal "Config. Cargos" em `FolhaPagamento.tsx`
 - **Planejamento**: botão "Importar Custos MO" no cabeçalho de `PlanejamentoDetalhe.tsx` com dialog de pré-condições
 
+## IA Especializada por Módulo (Rev. 771)
+- **Router**: `server/routers/iaModulos.ts` — chat, historico, analytics, getModulos
+- **Componente**: `client/src/components/IAModuloChat.tsx` — painel lateral reutilizável
+- **Tabela auditoria**: `ia_modulo_conversas` (company_id, user_id, user_name, modulo, pergunta, resposta, projeto_id, criado_em)
+- **Módulos**: planejamento, orcamento, compras, rh, financeiro, sst, medicao
+- **System Prompts**: extensos e especializados por área (25+ anos experiência, metodologias, indicadores, fórmulas)
+- **Quick Insights**: botões de consulta rápida por módulo
+- **Analytics**: total consultas, por usuário, por dia, últimas perguntas
+- Integrado no Planejamento como piloto; replicar para demais módulos adicionando `<IAModuloChat modulo="xxx" />` na página
+
 ## Planejamento Module
 - Routes: `/planejamento/:id` (tabs: cronograma, curva-s, avanco, refis, compras, ia-gestora, etc.)
 - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` — main file ~7430 lines

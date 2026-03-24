@@ -427,6 +427,18 @@ async function startServer() {
         console.log("[MedicaoMigration] Tabelas do módulo Medição OK");
         await db.execute(sql`ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS sinal_valor NUMERIC(18,2) DEFAULT 0`);
         console.log("[ColFix] planejamento_medicao_config.sinal_valor OK");
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS ia_modulo_conversas (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL DEFAULT 0,
+          user_id INTEGER NOT NULL DEFAULT 0,
+          user_name VARCHAR(200) DEFAULT '',
+          modulo VARCHAR(50) NOT NULL,
+          pergunta TEXT NOT NULL,
+          resposta TEXT NOT NULL,
+          projeto_id INTEGER,
+          criado_em TIMESTAMP DEFAULT NOW()
+        )`);
+        console.log("[ColFix] ia_modulo_conversas OK");
       } catch (e: any) { console.warn("[MedicaoMigration] Aviso:", e?.message ?? e); }
     });
     // Rev.547: migração aviso prévio — adiciona dataBaixa e move concluidos auto-marcados → aguardando_pagamento
