@@ -173,9 +173,14 @@ export function ProgramacaoSemanal({
   const today = new Date().toISOString().split("T")[0];
   const semanaAtual = semanas[idx];
 
-  const atividadesSemAtual = useMemo(
+  const atividadesSemAtualTodas = useMemo(
     () => semanaAtual ? atividadesDaSemana(atividades, semanaAtual) : [],
     [atividades, semanaAtual]
+  );
+
+  const atividadesSemAtual = useMemo(
+    () => atividadesSemAtualTodas.filter((a: any) => !a.isIndireta),
+    [atividadesSemAtualTodas]
   );
 
   const n = (v: any) => parseFloat(v) || 0;
@@ -202,24 +207,23 @@ export function ProgramacaoSemanal({
 
   const folhasTodas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta), [atividades]);
   const pesoSemana = useMemo(() => {
-    const diretas = atividadesSemAtual.filter((a: any) => !a.isIndireta);
-    const indiretas = atividadesSemAtual.filter((a: any) => a.isIndireta);
+    const indiretas = atividadesSemAtualTodas.filter((a: any) => a.isIndireta);
     const pesoTotal = folhasTodas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 1;
-    const somaSemana = diretas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const somaSemana = atividadesSemAtual.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const pctSemana = (somaSemana / pesoTotal) * 100;
     let maiorPesoVal = 0;
-    diretas.forEach((a: any) => {
+    atividadesSemAtual.forEach((a: any) => {
       const p = n(a.pesoFinanceiro);
       if (p > maiorPesoVal) { maiorPesoVal = p; }
     });
     const maiorPesoIds = new Set<number>();
     if (maiorPesoVal > 0) {
-      diretas.forEach((a: any) => {
+      atividadesSemAtual.forEach((a: any) => {
         if (Math.abs(n(a.pesoFinanceiro) - maiorPesoVal) < 0.0001) maiorPesoIds.add(a.id);
       });
     }
-    return { somaSemana, pctSemana, maiorPesoIds, maiorPesoVal, diretasCount: diretas.length, indiretasCount: indiretas.length };
-  }, [atividadesSemAtual, folhasTodas]);
+    return { somaSemana, pctSemana, maiorPesoIds, maiorPesoVal, diretasCount: atividadesSemAtual.length, indiretasCount: indiretas.length };
+  }, [atividadesSemAtual, atividadesSemAtualTodas, folhasTodas]);
 
   // EAP codes for the current week (for resource lookup)
   const eapsDaSemana = useMemo(
@@ -231,7 +235,7 @@ export function ProgramacaoSemanal({
   const proximas3 = useMemo(() => {
     const result = [];
     for (let i = idx; i < Math.min(idx + qtdSemanas, semanas.length); i++) {
-      result.push({ semana: semanas[i], atividades: atividadesDaSemana(atividades, semanas[i]) });
+      result.push({ semana: semanas[i], atividades: atividadesDaSemana(atividades, semanas[i]).filter((a: any) => !a.isIndireta) });
     }
     return result;
   }, [idx, semanas, atividades, qtdSemanas]);
@@ -527,33 +531,24 @@ export function ProgramacaoSemanal({
                     {atividadesSemAtual.map((a: any, i: number) => {
                       const av       = avancosMap[a.id] ?? 0;
                       const atrasada = !!a.dataFim && a.dataFim < today && av < 100;
-                      const isIndireta = !!a.isIndireta;
                       const isMaiorPeso = pesoSemana.maiorPesoIds.has(a.id);
                       return (
                         <tr key={a.id ?? i}
                           className={`border-b border-slate-50 ${
-                            isIndireta
-                              ? "bg-gray-100 border-l-4 border-l-gray-400"
-                              : isMaiorPeso
-                                ? "bg-orange-50/60 border-l-4 border-l-orange-400"
-                                : atrasada
-                                  ? "bg-red-50/40"
-                                  : i % 2 === 0 ? "bg-white" : "bg-slate-50/30"
+                            isMaiorPeso
+                              ? "bg-orange-50/60 border-l-4 border-l-orange-400"
+                              : atrasada
+                                ? "bg-red-50/40"
+                                : i % 2 === 0 ? "bg-white" : "bg-slate-50/30"
                           }`}>
                           <td className="py-2 px-3 font-mono text-slate-500">{a.eapCodigo ?? "—"}</td>
                           <td className="py-2 px-3 text-slate-800 font-medium max-w-[300px]">
                             <div className="flex items-center gap-1.5">
                               {isMaiorPeso && <Zap className="h-3 w-3 shrink-0 text-orange-500" />}
-                              {isIndireta && <span className="inline-block w-2 h-2 rounded-full bg-gray-400 shrink-0" />}
-                              <span className={`truncate ${isIndireta ? "text-gray-500 italic" : ""} ${isMaiorPeso ? "font-semibold text-orange-900" : ""}`}>{a.nome}</span>
+                              <span className={`truncate ${isMaiorPeso ? "font-semibold text-orange-900" : ""}`}>{a.nome}</span>
                               {isMaiorPeso && (
                                 <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold shrink-0">
                                   MAIOR PESO
-                                </span>
-                              )}
-                              {isIndireta && (
-                                <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600 text-[9px] font-semibold shrink-0">
-                                  INDIRETA
                                 </span>
                               )}
                             </div>
@@ -574,11 +569,11 @@ export function ProgramacaoSemanal({
                           <td className="py-2 px-3 text-slate-600">{fmtBR(a.dataInicio)}</td>
                           <td className="py-2 px-3 text-slate-600">{fmtBR(a.dataFim)}</td>
                           <td className="py-2 px-3 text-slate-500 max-w-[120px] truncate">{a.recursoPrincipal || "—"}</td>
-                          <td className={`py-2 px-3 text-right font-medium ${isMaiorPeso ? "text-orange-700 font-bold" : isIndireta ? "text-gray-400" : "text-slate-600"}`}>{parseFloat(a.pesoFinanceiro ?? "0").toFixed(2)}%</td>
+                          <td className={`py-2 px-3 text-right font-medium ${isMaiorPeso ? "text-orange-700 font-bold" : "text-slate-600"}`}>{parseFloat(a.pesoFinanceiro ?? "0").toFixed(2)}%</td>
                           <td className="py-2 px-3 text-right font-semibold text-slate-800">{av.toFixed(1)}%</td>
                           <td className="py-2 px-3 text-center">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${isIndireta ? "bg-gray-100 text-gray-500 border-gray-200" : statusColor(atrasada, av)}`}>
-                              {isIndireta ? "Indireta" : statusLabel(atrasada, av)}
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColor(atrasada, av)}`}>
+                              {statusLabel(atrasada, av)}
                             </span>
                           </td>
                         </tr>
@@ -1085,17 +1080,15 @@ function RelatorioTresSemanas({
                   {at.map((a: any, i: number) => {
                     const av       = avancosMap[a.id] ?? 0;
                     const atrasada = !!a.dataFim && a.dataFim < today && av < 100;
-                    const isInd = !!a.isIndireta;
                     return (
                       <div key={a.id ?? i}
-                        className={`rounded p-1.5 border text-[11px] ${isInd ? "bg-gray-100 border-gray-300 border-l-4 border-l-gray-400" : atrasada ? "bg-red-50 border-red-200" : av >= 100 ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-100"}`}>
+                        className={`rounded p-1.5 border text-[11px] ${atrasada ? "bg-red-50 border-red-200" : av >= 100 ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-100"}`}>
                         <div className="flex items-start justify-between gap-1">
-                          <span className={`font-semibold leading-tight ${isInd ? "text-gray-500 italic" : "text-slate-700"}`}>
+                          <span className="font-semibold leading-tight text-slate-700">
                             {a.eapCodigo && <span className="font-mono text-slate-400 mr-1">{a.eapCodigo}</span>}
                             {a.nome}
-                            {isInd && <span className="ml-1 text-[9px] font-normal bg-gray-200 text-gray-600 px-1 py-0.5 rounded">IND</span>}
                           </span>
-                          <span className={`shrink-0 text-[10px] font-bold ${isInd ? "text-gray-400" : atrasada ? "text-red-600" : av >= 100 ? "text-emerald-600" : "text-blue-600"}`}>{av.toFixed(0)}%</span>
+                          <span className={`shrink-0 text-[10px] font-bold ${atrasada ? "text-red-600" : av >= 100 ? "text-emerald-600" : "text-blue-600"}`}>{av.toFixed(0)}%</span>
                         </div>
                         {(() => {
                           const h = hierarquiaOf(a.eapCodigo);
@@ -1113,7 +1106,7 @@ function RelatorioTresSemanas({
                         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
                           <span>{fmtBR(a.dataInicio)} → {fmtBR(a.dataFim)}</span>
                           {a.recursoPrincipal && <span className="truncate text-slate-400">· {a.recursoPrincipal}</span>}
-                          {!isInd && <span className="text-blue-500 font-medium">{n(a.pesoFinanceiro).toFixed(2)}%</span>}
+                          <span className="text-blue-500 font-medium">{n(a.pesoFinanceiro).toFixed(2)}%</span>
                         </div>
                         {/* Barra de progresso mini */}
                         <div className="mt-1 h-1 bg-slate-200 rounded-full overflow-hidden">
