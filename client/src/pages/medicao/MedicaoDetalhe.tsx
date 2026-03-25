@@ -342,6 +342,11 @@ export default function MedicaoDetalhe() {
                 if (dot > 0) childMap[item.eapCodigo.slice(0, dot)] = true;
               });
 
+              const vcContrato = (planilhaData as any).valorContrato || 0;
+              const totalVendaOrc = (planilhaData as any).totalVendaOrc || 0;
+              const somaFolhasVenda = allItens.filter((i: any) => !childMap[i.eapCodigo]).reduce((s: number, i: any) => s + n(i.vendaTotal), 0);
+              const fatorContrato = somaFolhasVenda > 0 && vcContrato > 0 ? vcContrato / somaFolhasVenda : 1;
+
               const groupTotals: Record<string, { mat: number; mdo: number; venda: number }> = {};
               allItens.forEach(item => {
                 if (!childMap[item.eapCodigo]) return;
@@ -350,9 +355,9 @@ export default function MedicaoDetalhe() {
                 allItens.forEach(child => {
                   if (!child.eapCodigo.startsWith(prefix)) return;
                   if (childMap[child.eapCodigo]) return;
-                  mat += n(child.custoTotalMat);
-                  mdo += n(child.custoTotalMdo);
-                  venda += n(child.vendaTotal);
+                  mat += n(child.custoTotalMat) * fatorContrato;
+                  mdo += n(child.custoTotalMdo) * fatorContrato;
+                  venda += n(child.vendaTotal) * fatorContrato;
                 });
                 groupTotals[item.eapCodigo] = { mat, mdo, venda };
               });
@@ -400,19 +405,18 @@ export default function MedicaoDetalhe() {
               const leafItens = allItens.filter((i: any) => !childMap[i.eapCodigo]);
               let totalContratual = 0, totalMedidoGlobal = 0, totalSaldo = 0, totalMat = 0, totalMdo = 0;
               for (const i of leafItens) {
-                const v = n(i.vendaTotal);
+                const v = n(i.vendaTotal) * fatorContrato;
                 const eap = i.eapCodigo || "";
                 const med = medMap[eap] || medMap[normEap(eap)];
                 const tm = med?.totalMedido ?? 0;
                 totalContratual += v;
                 totalMedidoGlobal += tm;
                 totalSaldo += (v - tm);
-                totalMat += n(i.custoTotalMat);
-                totalMdo += n(i.custoTotalMdo);
+                totalMat += n(i.custoTotalMat) * fatorContrato;
+                totalMdo += n(i.custoTotalMdo) * fatorContrato;
               }
 
-              const valorContrato = n(contrato?.valorTotalContrato);
-              const excedeu = totalMedidoGlobal > valorContrato && valorContrato > 0;
+              const excedeu = totalMedidoGlobal > vcContrato && vcContrato > 0;
 
               const NIVEL_BG: Record<number, string> = { 1: "bg-slate-200", 2: "bg-slate-100", 3: "bg-slate-50" };
 
@@ -441,7 +445,7 @@ export default function MedicaoDetalhe() {
                   {excedeu && (
                     <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                      <span>Total medido ({brl(totalMedidoGlobal)}) <strong>excede</strong> o valor do contrato ({brl(valorContrato)}). Verifique os itens.</span>
+                      <span>Total medido ({brl(totalMedidoGlobal)}) <strong>excede</strong> o valor do contrato ({brl(vcContrato)}). Verifique os itens.</span>
                     </div>
                   )}
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -468,9 +472,9 @@ export default function MedicaoDetalhe() {
                             const isGroup = !!childMap[eap];
                             const isCollapsed = collapsedEap.has(eap);
                             const gt = groupTotals[eap];
-                            const vContr = isGroup ? (n(i.vendaTotal) || gt?.venda || 0) : n(i.vendaTotal);
-                            const matVal = isGroup ? (gt?.mat || 0) : n(i.custoTotalMat);
-                            const mdoVal = isGroup ? (gt?.mdo || 0) : n(i.custoTotalMdo);
+                            const vContr = isGroup ? (gt?.venda || n(i.vendaTotal) * fatorContrato) : n(i.vendaTotal) * fatorContrato;
+                            const matVal = isGroup ? (gt?.mat || 0) : n(i.custoTotalMat) * fatorContrato;
+                            const mdoVal = isGroup ? (gt?.mdo || 0) : n(i.custoTotalMdo) * fatorContrato;
                             const med = medMap[eap] || medMap[normEap(eap)];
                             const pctMed = med?.pctAcumulado ?? 0;
                             const vMed = med?.totalMedido ?? 0;
@@ -498,7 +502,7 @@ export default function MedicaoDetalhe() {
                                 </TableCell>
                                 <TableCell className="text-center text-xs text-gray-500">{isGroup ? "" : (i.unidade || "—")}</TableCell>
                                 <TableCell className="text-right text-xs">{isGroup ? "" : n(i.quantidade).toLocaleString("pt-BR")}</TableCell>
-                                <TableCell className="text-right text-xs">{isGroup ? "" : brl(n(i.vendaUnitTotal))}</TableCell>
+                                <TableCell className="text-right text-xs">{isGroup ? "" : brl(n(i.vendaUnitTotal) * fatorContrato)}</TableCell>
                                 <TableCell className="text-right text-sm font-medium">{brl(vContr)}</TableCell>
                                 <TableCell className="text-right text-xs text-orange-700">{matVal > 0 ? brl(matVal) : <span className="text-gray-300">—</span>}</TableCell>
                                 <TableCell className="text-right text-xs text-indigo-700">{mdoVal > 0 ? brl(mdoVal) : <span className="text-gray-300">—</span>}</TableCell>

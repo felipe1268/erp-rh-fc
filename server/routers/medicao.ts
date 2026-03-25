@@ -529,6 +529,15 @@ export const medicaoRouter = router({
 
       if (!contrato) throw new Error("Contrato não encontrado ou sem permissão");
 
+      const [orc] = await db
+        .select({ totalVenda: orcamentos.totalVenda })
+        .from(orcamentos)
+        .where(eq(orcamentos.id, input.orcamentoId))
+        .limit(1);
+
+      const valorContrato = parseFloat(String(contrato.valorTotalContrato || "0")) || 0;
+      const totalVendaOrc = parseFloat(String(orc?.totalVenda || "0")) || 0;
+
       const itens = await db
         .select({
           id: orcamentoItens.id,
@@ -575,7 +584,7 @@ export const medicaoRouter = router({
         if (norm !== row.eap_codigo) medidoMap[norm] = val;
       }
 
-      return { itens, medidoMap };
+      return { itens, medidoMap, valorContrato, totalVendaOrc };
     }),
 
   getAvancosParaMedicao: protectedProcedure
