@@ -5280,4 +5280,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 23:59:00",
   },
+  {
+    version: 790,
+    titulo: "Medição: tab Planilha de Medição com visão global do orçamento vs medido",
+    descricao: "Nova aba 'Planilha de Medição' exibe todos os itens do orçamento com EAP hierárquico, valor contratual, % medido acumulado, valor medido e saldo restante. Inclui filtro por EAP/descrição, totalizadores globais (contratual, medido, saldo, progresso %), cores condicionais (verde = 100% medido, vermelho = saldo negativo) e indentação visual por nível. Estrutura reorganizada em 3 abas: Planilha de Medição, Boletins de Medição e Faturamento Direto.",
+    tipo: "feature",
+    modulos: "Medição",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 00:30:00",
+  },
 ];

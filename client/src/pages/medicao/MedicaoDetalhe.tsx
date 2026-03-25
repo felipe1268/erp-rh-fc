@@ -22,7 +22,7 @@ import {
 import {
   ArrowLeft, Plus, Loader2, FileText, ChevronRight, CheckCircle2,
   Clock, Send, AlertCircle, DollarSign, Percent, Settings,
-  Edit, Trash2, Eye, TrendingUp, Package,
+  Edit, Trash2, Eye, TrendingUp, Package, Search, ListTree,
 } from "lucide-react";
 
 const n = (v: unknown) => parseFloat(String(v || "0")) || 0;
@@ -63,7 +63,7 @@ export default function MedicaoDetalhe() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
 
-  const [abaAtiva, setAbaAtiva] = useState("boletins");
+  const [abaAtiva, setAbaAtiva] = useState("planilha");
   const [modalBoletim, setModalBoletim] = useState(false);
   const [boletimSelecionado, setBoletimSelecionado] = useState<any | null>(null);
   const [modalFd, setModalFd] = useState(false);
@@ -107,6 +107,11 @@ export default function MedicaoDetalhe() {
     { projetoId: contrato?.projetoId ?? 0, contratoId, boletimId: boletimSelecionado?.id },
     { enabled: !!contrato?.projetoId && contratoId > 0 }
   );
+  const { data: planilhaData, isLoading: loadingPlanilha } = trpc.medicao.getPlanilhaMedicao.useQuery(
+    { contratoId, orcamentoId: contrato?.orcamentoId ?? 0 },
+    { enabled: contratoId > 0 && !!contrato?.orcamentoId }
+  );
+  const [filtroPlanilha, setFiltroPlanilha] = useState("");
 
   const ultimoBoletimDataFim = useMemo(() => {
     const sorted = [...(boletins as any[])].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0));
@@ -317,9 +322,114 @@ export default function MedicaoDetalhe() {
 
         <Tabs value={abaAtiva} onValueChange={setAbaAtiva}>
           <TabsList>
+            <TabsTrigger value="planilha" className="gap-1.5"><ListTree className="h-3.5 w-3.5" />Planilha de Medição</TabsTrigger>
             <TabsTrigger value="boletins">Boletins de Medição</TabsTrigger>
             <TabsTrigger value="fd">Faturamento Direto (FD)</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="planilha" className="mt-4">
+            {loadingPlanilha ? (
+              <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+            ) : planilhaData ? (() => {
+              const medMap = planilhaData.medidoMap as Record<string, { pctAcumulado: number; totalMedido: number }>;
+              const normEap = (e: string) => e.split(".").map(s => String(parseInt(s, 10))).join(".");
+              const filtro = filtroPlanilha.toLowerCase();
+              const itensFiltrados = (planilhaData.itens as any[]).filter((i: any) => {
+                if (!filtro) return true;
+                return (i.eapCodigo || "").toLowerCase().includes(filtro) || (i.descricao || "").toLowerCase().includes(filtro);
+              });
+              let totalContratual = 0, totalMedidoGlobal = 0, totalSaldo = 0;
+              for (const i of planilhaData.itens as any[]) {
+                if (i.nivel <= 1 || i.tipo?.includes("grupo")) continue;
+                const v = n(i.vendaTotal);
+                const eap = i.eapCodigo || "";
+                const med = medMap[eap] || medMap[normEap(eap)];
+                const tm = med?.totalMedido ?? 0;
+                totalContratual += v;
+                totalMedidoGlobal += tm;
+                totalSaldo += (v - tm);
+              }
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-1 max-w-xs">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                      <Input placeholder="Filtrar por EAP ou descrição..." className="pl-9" value={filtroPlanilha} onChange={e => setFiltroPlanilha(e.target.value)} />
+                    </div>
+                    <div className="flex gap-4 text-sm ml-auto">
+                      <span className="text-gray-500">Contratual: <strong className="text-gray-900">{brl(totalContratual)}</strong></span>
+                      <span className="text-emerald-600">Medido: <strong>{brl(totalMedidoGlobal)}</strong></span>
+                      <span className="text-amber-600">Saldo: <strong>{brl(totalSaldo)}</strong></span>
+                      <span className="text-blue-600">Progresso: <strong>{totalContratual > 0 ? ((totalMedidoGlobal / totalContratual) * 100).toFixed(2) : "0.00"}%</strong></span>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto max-h-[65vh]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 sticky top-0 z-10">
+                            <TableHead className="w-24">EAP</TableHead>
+                            <TableHead>Descrição</TableHead>
+                            <TableHead className="text-center w-16">Und</TableHead>
+                            <TableHead className="text-right w-20">Qtd</TableHead>
+                            <TableHead className="text-right w-28">V. Unit.</TableHead>
+                            <TableHead className="text-right w-32">V. Contratual</TableHead>
+                            <TableHead className="text-right w-20">% Medido</TableHead>
+                            <TableHead className="text-right w-32">V. Medido</TableHead>
+                            <TableHead className="text-right w-32">Saldo</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {itensFiltrados.map((i: any) => {
+                            const eap = i.eapCodigo || "";
+                            const isGrupo = i.tipo?.includes("grupo") || i.nivel <= 1;
+                            const vContr = n(i.vendaTotal);
+                            const med = medMap[eap] || medMap[normEap(eap)];
+                            const pctMed = med?.pctAcumulado ?? 0;
+                            const vMed = med?.totalMedido ?? 0;
+                            const saldo = vContr - vMed;
+                            return (
+                              <TableRow key={i.id} className={isGrupo ? "bg-slate-50 font-semibold" : pctMed >= 100 ? "bg-emerald-50/50" : ""}>
+                                <TableCell className={`font-mono text-xs ${isGrupo ? "font-bold text-slate-700" : ""}`}>{eap}</TableCell>
+                                <TableCell className={`text-sm ${isGrupo ? "font-bold" : ""}`} style={{ paddingLeft: `${Math.max(0, (i.nivel - 1)) * 16 + 8}px` }}>
+                                  {i.descricao}
+                                </TableCell>
+                                <TableCell className="text-center text-xs text-gray-500">{isGrupo ? "" : (i.unidade || "—")}</TableCell>
+                                <TableCell className="text-right text-xs">{isGrupo ? "" : n(i.quantidade).toLocaleString("pt-BR")}</TableCell>
+                                <TableCell className="text-right text-xs">{isGrupo ? "" : brl(n(i.vendaUnitTotal))}</TableCell>
+                                <TableCell className="text-right text-sm font-medium">{brl(vContr)}</TableCell>
+                                <TableCell className="text-right text-sm">
+                                  {isGrupo ? "" : (
+                                    <span className={pctMed >= 100 ? "text-emerald-600 font-bold" : pctMed > 0 ? "text-blue-600 font-medium" : "text-gray-400"}>
+                                      {pct(pctMed)}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right text-sm font-medium text-emerald-700">{vMed > 0 ? brl(vMed) : isGrupo ? "" : <span className="text-gray-300">—</span>}</TableCell>
+                                <TableCell className="text-right text-sm">
+                                  {isGrupo ? "" : (
+                                    <span className={saldo < 0 ? "text-red-600 font-bold" : saldo === vContr ? "text-gray-400" : "text-amber-600"}>
+                                      {brl(saldo)}
+                                    </span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })() : (
+              <div className="text-center py-12 text-gray-400">
+                <ListTree className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="font-medium">Nenhum orçamento vinculado</p>
+                <p className="text-sm mt-1">Vincule um orçamento ao projeto para visualizar a planilha</p>
+              </div>
+            )}
+          </TabsContent>
 
           <TabsContent value="boletins" className="space-y-4 mt-4">
             <div className="flex justify-end">

@@ -512,6 +512,69 @@ export const medicaoRouter = router({
         .orderBy(orcamentoItens.eapCodigo);
     }),
 
+  getPlanilhaMedicao: protectedProcedure
+    .input(z.object({
+      contratoId: z.number(),
+      orcamentoId: z.number(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const companyId = (ctx as any).companyId ?? (ctx as any).user?.companyId;
+
+      const [contrato] = await db
+        .select({ id: medicaoContratos.id, companyId: medicaoContratos.companyId })
+        .from(medicaoContratos)
+        .where(and(eq(medicaoContratos.id, input.contratoId), eq(medicaoContratos.companyId, companyId)))
+        .limit(1);
+
+      if (!contrato) throw new Error("Contrato não encontrado ou sem permissão");
+
+      const itens = await db
+        .select({
+          id: orcamentoItens.id,
+          eapCodigo: orcamentoItens.eapCodigo,
+          descricao: orcamentoItens.descricao,
+          nivel: orcamentoItens.nivel,
+          tipo: orcamentoItens.tipo,
+          unidade: orcamentoItens.unidade,
+          quantidade: orcamentoItens.quantidade,
+          vendaUnitTotal: orcamentoItens.vendaUnitTotal,
+          vendaTotal: orcamentoItens.vendaTotal,
+        })
+        .from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
+        .orderBy(orcamentoItens.eapCodigo);
+
+      const medidoResult = await db.execute(sql`
+        SELECT
+          i.eap_codigo,
+          MAX(CAST(i.percentual_acumulado_atual AS NUMERIC)) AS pct_acumulado,
+          SUM(CAST(i.valor_periodo AS NUMERIC)) AS total_medido
+        FROM medicao_boletim_itens i
+        JOIN medicao_boletins b ON b.id = i.boletim_id
+        WHERE b.contrato_id = ${input.contratoId}
+          AND b.status IN ('enviado', 'aprovado', 'finalizado')
+          AND i.eap_codigo IS NOT NULL
+        GROUP BY i.eap_codigo
+      `);
+
+      const normalizeEap = (eap: string) =>
+        eap.split(".").map(s => String(parseInt(s, 10))).join(".");
+
+      const medidoMap: Record<string, { pctAcumulado: number; totalMedido: number }> = {};
+      for (const row of medidoResult.rows as any[]) {
+        const val = {
+          pctAcumulado: parseFloat(row.pct_acumulado || "0"),
+          totalMedido: parseFloat(row.total_medido || "0"),
+        };
+        medidoMap[row.eap_codigo] = val;
+        const norm = normalizeEap(row.eap_codigo);
+        if (norm !== row.eap_codigo) medidoMap[norm] = val;
+      }
+
+      return { itens, medidoMap };
+    }),
+
   getAvancosParaMedicao: protectedProcedure
     .input(z.object({
       projetoId: z.number(),
