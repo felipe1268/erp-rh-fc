@@ -1159,14 +1159,14 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
 
       {/* ── STATUS BAR ──────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-2 flex items-center gap-5 text-[11px] text-slate-500 flex-wrap">
-        <span className="font-semibold text-slate-700">{rawNodes.length} atividades</span>
+        <button onClick={() => setFiltroStatus("todos")} className={`font-semibold cursor-pointer hover:underline ${filtroStatus === "todos" ? "text-blue-700 underline" : "text-slate-700"}`}>{rawNodes.length} atividades</button>
         <span>·</span>
         <span>{rawEdges.length} conexões</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />{counts.concluida} concluídas</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />{counts.em_andamento} em andamento</span>
-        {counts.atrasada > 0 && <span className="flex items-center gap-1 text-red-600 font-semibold"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />{counts.atrasada} atrasadas</span>}
-        {counts.em_risco > 0 && <span className="flex items-center gap-1 text-amber-600 font-semibold"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />{counts.em_risco} em risco</span>}
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />{counts.nao_iniciada} não iniciadas</span>
+        <button onClick={() => setFiltroStatus(filtroStatus === "concluida" ? "todos" : "concluida")} className={`flex items-center gap-1 cursor-pointer hover:underline rounded-md px-1.5 py-0.5 transition-colors ${filtroStatus === "concluida" ? "bg-emerald-100 text-emerald-700 font-semibold" : ""}`}><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />{counts.concluida} concluídas</button>
+        <button onClick={() => setFiltroStatus(filtroStatus === "em_andamento" ? "todos" : "em_andamento")} className={`flex items-center gap-1 cursor-pointer hover:underline rounded-md px-1.5 py-0.5 transition-colors ${filtroStatus === "em_andamento" ? "bg-blue-100 text-blue-700 font-semibold" : ""}`}><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />{counts.em_andamento} em andamento</button>
+        {counts.atrasada > 0 && <button onClick={() => setFiltroStatus(filtroStatus === "atrasada" ? "todos" : "atrasada")} className={`flex items-center gap-1 cursor-pointer hover:underline rounded-md px-1.5 py-0.5 transition-colors font-semibold ${filtroStatus === "atrasada" ? "bg-red-100 text-red-700" : "text-red-600"}`}><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />{counts.atrasada} atrasadas</button>}
+        {counts.em_risco > 0 && <button onClick={() => setFiltroStatus(filtroStatus === "em_risco" ? "todos" : "em_risco")} className={`flex items-center gap-1 cursor-pointer hover:underline rounded-md px-1.5 py-0.5 transition-colors font-semibold ${filtroStatus === "em_risco" ? "bg-amber-100 text-amber-700" : "text-amber-600"}`}><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />{counts.em_risco} em risco</button>}
+        <button onClick={() => setFiltroStatus(filtroStatus === "nao_iniciada" ? "todos" : "nao_iniciada")} className={`flex items-center gap-1 cursor-pointer hover:underline rounded-md px-1.5 py-0.5 transition-colors ${filtroStatus === "nao_iniciada" ? "bg-slate-200 text-slate-700 font-semibold" : ""}`}><span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />{counts.nao_iniciada} não iniciadas</button>
         {filtroStatus !== "todos" && (
           <button onClick={() => setFiltroStatus("todos")} className="ml-auto flex items-center gap-1 text-slate-400 hover:text-slate-600">
             <X className="h-3 w-3" /> Limpar filtro
