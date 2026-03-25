@@ -8642,7 +8642,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           return { ...e, ...calc(eLeaves), nLeaves: eLeaves.length };
         });
 
-      return { ...g, ...calc(gLeaves), nLeaves: gLeaves.length, etapas };
+      const gInis = gLeaves.filter((a: any) => a.dataInicio).map((a: any) => a.dataInicio as string).sort();
+      const gFins = gLeaves.filter((a: any) => a.dataFim).map((a: any) => a.dataFim as string).sort();
+      const gDataInicio = gInis[0] ?? null;
+      const gDataFim = gFins[gFins.length - 1] ?? null;
+      return { ...g, ...calc(gLeaves), nLeaves: gLeaves.length, etapas, dataInicio: gDataInicio, dataFim: gDataFim };
     }).filter((g: any) => g.nLeaves > 0);
   }, [atividades, realMap, semana]);
 
@@ -10007,11 +10011,20 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             className="bg-slate-700 text-white px-5 py-2.5 flex items-center justify-between cursor-pointer select-none"
             onClick={() => toggleGrupo(g.id)}
           >
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-mono bg-slate-600 rounded px-2 py-0.5">{g.eapCodigo}</span>
-              <p className="text-sm font-bold uppercase tracking-wide">{g.nome}</p>
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-xs font-mono bg-slate-600 rounded px-2 py-0.5 shrink-0">{g.eapCodigo}</span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold uppercase tracking-wide">{g.nome}</p>
+                {(g.dataInicio || g.dataFim) && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    {g.dataInicio && <span>{new Date(g.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}</span>}
+                    {g.dataInicio && g.dataFim && <span> → </span>}
+                    {g.dataFim && <span>{new Date(g.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}</span>}
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 shrink-0">
               <div className="flex gap-4 text-xs">
                 <span className="text-blue-300">Previsto: <strong className="text-white">{fPct_(g.previsto)}</strong></span>
                 <span className="text-emerald-300">Realizado: <strong className="text-white">{fPct_(g.realizado)}</strong></span>
