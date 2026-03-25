@@ -287,6 +287,54 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     })));
   }, [viewFilter]);
 
+  const originalColorsRef = useRef<Map<number, THREE.Color>>(new Map());
+
+  useEffect(() => {
+    if (!sceneRef.current || !bimLinks || bimLinks.length === 0) return;
+
+    const expressToProgress = new Map<number, number>();
+    bimLinks.forEach(link => {
+      const prog = link.progressoReal ?? 0;
+      (link.expressIds || []).forEach((eid: number) => {
+        const existing = expressToProgress.get(eid);
+        if (existing === undefined || prog > existing) {
+          expressToProgress.set(eid, prog);
+        }
+      });
+    });
+
+    sceneRef.current.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh) || !obj.userData.expressID) return;
+      const eid = obj.userData.expressID as number;
+      const mat = obj.material as THREE.MeshPhongMaterial;
+      if (!mat || !mat.color) return;
+
+      if (!originalColorsRef.current.has(eid)) {
+        originalColorsRef.current.set(eid, mat.color.clone());
+      }
+
+      const prog = expressToProgress.get(eid);
+      if (prog !== undefined) {
+        if (prog >= 100) {
+          mat.color.setHex(0x2ecc71);
+        } else if (prog > 0) {
+          const orig = originalColorsRef.current.get(eid)!;
+          const green = new THREE.Color(0x2ecc71);
+          mat.color.copy(orig).lerp(green, prog / 100);
+        } else {
+          mat.color.setHex(0xe74c3c);
+        }
+        mat.needsUpdate = true;
+      } else {
+        const orig = originalColorsRef.current.get(eid);
+        if (orig) {
+          mat.color.copy(orig);
+          mat.needsUpdate = true;
+        }
+      }
+    });
+  }, [bimLinks, models]);
+
   useEffect(() => {
     if (!savedModels || savedModels.length === 0 || savedModelsLoadedRef.current) return;
     if (!sceneRef.current) return;
@@ -1178,6 +1226,25 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               <p className="text-[10px] text-slate-500">
                 Clique para selecionar | Arrastar: rotacionar | Scroll: zoom | Botão direito: mover
               </p>
+            </div>
+          )}
+          {models.length > 0 && (bimLinks?.length ?? 0) > 0 && (
+            <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur rounded-lg shadow-sm border border-slate-200 px-3 py-2 z-10">
+              <p className="text-[9px] font-bold text-slate-600 mb-1">Legenda 4D</p>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#2ecc71" }} />
+                  <span className="text-[9px] text-slate-500">Concluído (100%)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#7dcea0" }} />
+                  <span className="text-[9px] text-slate-500">Em andamento</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#e74c3c" }} />
+                  <span className="text-[9px] text-slate-500">Não iniciado (0%)</span>
+                </div>
+              </div>
             </div>
           )}
         </div>

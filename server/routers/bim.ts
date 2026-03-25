@@ -196,20 +196,21 @@ export const bimRouter = router({
     .input(z.object({ projetoId: z.number(), companyId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) return [];
+      if (!db) { console.log("[BIM] listAtividades: db null"); return []; }
+      console.log(`[BIM] listAtividades projetoId=${input.projetoId} companyId=${input.companyId}`);
       const rows = await db.execute(
         sql`SELECT pa.id, pa.nome, pa.eap_codigo, pa.data_inicio as inicio, pa.data_fim as fim,
-                   pa.progresso_real, pa.is_grupo, pa.nivel
+                   pa.progresso_real
             FROM planejamento_atividades pa
             JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
-            LEFT JOIN planejamento_revisoes pr ON pr.id = pa.revisao_id
             WHERE pa.projeto_id = ${input.projetoId}
               AND pp.company_id = ${input.companyId}
-              AND (pa.is_grupo IS NULL OR pa.is_grupo = false)
-              AND (pa.disabled IS NULL OR pa.disabled = false)
-            ORDER BY pa.ordem ASC, pa.id ASC
+              AND (pa.is_grupo IS NOT TRUE)
+              AND (pa.disabled IS NOT TRUE)
+            ORDER BY pa.eap_codigo ASC NULLS LAST, pa.ordem ASC, pa.id ASC
             LIMIT 2000`
       );
+      console.log(`[BIM] listAtividades result: ${rows.rows?.length ?? 0} rows`);
       return (rows.rows || []).map((r: any) => ({
         id: r.id,
         nome: r.nome,
