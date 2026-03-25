@@ -998,115 +998,104 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
 
   return (
     <div ref={wrapperRef} className={`flex flex-col bg-white rounded-lg border border-slate-200 overflow-hidden ${isFullscreen ? "h-screen" : "h-[calc(100vh-220px)]"}`}>
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+      <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50">
+        <div className="flex items-center gap-2 overflow-x-auto px-3 py-2 scrollbar-thin">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Box className="h-5 w-5 text-blue-600" />
-            <h3 className="font-bold text-slate-800">Modelo BIM 3D</h3>
+            <h3 className="font-bold text-slate-800 whitespace-nowrap text-sm">Modelo BIM 3D</h3>
           </div>
           {models.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
-                {filteredModels.length}/{models.length} modelo{models.length !== 1 ? "s" : ""}
-              </Badge>
-              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-                {totalElements} elementos
-              </Badge>
-              {viewFilter !== "Todas" && (
-                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                  {viewFilter}
-                </Badge>
-              )}
-            </div>
+            <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 flex-shrink-0">
+              {filteredModels.length}/{models.length} modelo{models.length !== 1 ? "s" : ""}
+            </Badge>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 border border-slate-200 rounded-md bg-white px-1.5 py-0.5">
+          <div className="flex items-center gap-1 border border-slate-200 rounded-md bg-white px-1.5 py-0.5 flex-shrink-0">
             <Eye className="h-3 w-3 text-slate-400" />
             <select
               className="text-xs bg-transparent border-0 outline-none pr-1 font-medium text-slate-700"
               value={viewFilter}
               onChange={e => setViewFilter(e.target.value)}
             >
-              <option value="Todas">Todas Disciplinas</option>
+              <option value="Todas">Todas</option>
               {DISCIPLINES.map(d => {
                 const count = models.filter(m => m.discipline === d).length;
                 return <option key={d} value={d}>{d}{count > 0 ? ` (${count})` : ""}</option>;
               })}
             </select>
           </div>
-          <div className="w-px h-5 bg-slate-200" />
           <select
-            className="text-xs border border-slate-200 rounded px-2 py-1 bg-white"
+            className="text-xs border border-slate-200 rounded px-2 py-1 bg-white flex-shrink-0"
             value={importDiscipline}
             onChange={e => setImportDiscipline(e.target.value)}
           >
             {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
-          <label className="cursor-pointer">
+          <label className="cursor-pointer flex-shrink-0">
             <input type="file" accept=".ifc" className="hidden" onChange={handleFileUpload} disabled={loading} />
             <Button size="sm" variant="default" className="gap-1.5" asChild disabled={loading}>
               <span>
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                {loading ? loadingMsg : `Importar ${importDiscipline}`}
+                <span className="hidden sm:inline">{loading ? loadingMsg : `Importar ${importDiscipline}`}</span>
+                <span className="sm:hidden">{loading ? "..." : "Importar"}</span>
               </span>
             </Button>
           </label>
           {models.length > 0 && selectedMeshes.size > 0 && (
             <>
-              <div className="w-px h-5 bg-slate-200" />
-              <Badge variant="outline" className="text-[10px] bg-orange-50 text-orange-700 border-orange-200">
-                {selectedMeshes.size} selecionado(s)
+              <Badge variant="outline" className="text-[10px] bg-orange-50 text-orange-700 border-orange-200 flex-shrink-0">
+                {selectedMeshes.size} sel.
               </Badge>
               <Button
                 size="sm" variant="default"
-                className="gap-1 bg-green-600 hover:bg-green-700"
+                className="gap-1 bg-green-600 hover:bg-green-700 flex-shrink-0"
                 onClick={() => { setActivitySearch(""); setLinkPanelOpen(true); }}
               >
                 <Link2 className="h-3.5 w-3.5" /> Vincular
               </Button>
-              <Button size="sm" variant="outline" className="gap-1 h-7 text-[10px]" onClick={clearSelection}>
-                <X className="h-3 w-3" /> Limpar
+              <Button size="sm" variant="outline" className="gap-1 h-7 text-[10px] flex-shrink-0" onClick={clearSelection}>
+                <X className="h-3 w-3" />
               </Button>
             </>
           )}
           {models.length > 0 && (bimLinks?.length ?? 0) > 0 && (
-            <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
-              {bimLinks!.length} vínculo{bimLinks!.length !== 1 ? "s" : ""}
+            <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0">
+              {bimLinks!.length} vínc.
             </Badge>
           )}
-          <Button size="sm" variant="outline" className="gap-1" onClick={resetCamera}>
-            <Maximize className="h-3.5 w-3.5" /> Enquadrar
+          <Button size="sm" variant="outline" className="gap-1 flex-shrink-0" onClick={resetCamera}>
+            <Maximize className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Enquadrar</span>
           </Button>
           <Button
             size="sm" variant="outline"
-            className={`gap-1 ${!showGrid ? "bg-slate-100 text-slate-400" : ""}`}
+            className={`gap-1 flex-shrink-0 ${!showGrid ? "bg-slate-100 text-slate-400" : ""}`}
             onClick={() => {
               const next = !showGrid;
               setShowGrid(next);
               if (gridRef.current) gridRef.current.visible = next;
             }}
-            title={showGrid ? "Ocultar grade do piso" : "Mostrar grade do piso"}
+            title={showGrid ? "Ocultar grade" : "Mostrar grade"}
           >
-            <Grid3X3 className="h-3.5 w-3.5" /> {showGrid ? "Grid" : "Grid"}
+            <Grid3X3 className="h-3.5 w-3.5" />
           </Button>
           <Button
             size="sm" variant="outline"
-            className={`gap-1 ${sidebarOpen ? "bg-blue-50 text-blue-700" : ""}`}
+            className={`gap-1 flex-shrink-0 ${sidebarOpen ? "bg-blue-50 text-blue-700" : ""}`}
             onClick={() => setSidebarOpen(!sidebarOpen)}
           >
-            <Layers className="h-3.5 w-3.5" /> Painel
+            <Layers className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Painel</span>
           </Button>
-          <Button size="sm" variant="outline" className="gap-1" onClick={toggleFullscreen} title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}>
+          <Button size="sm" variant="outline" className="gap-1 flex-shrink-0" onClick={toggleFullscreen} title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}>
             {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Fullscreen className="h-3.5 w-3.5" />}
-            {isFullscreen ? "Sair" : "Tela Cheia"}
+            <span className="hidden sm:inline">{isFullscreen ? "Sair" : "Tela Cheia"}</span>
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {sidebarOpen && (
-          <div className="w-72 border-r border-slate-200 bg-slate-50 overflow-y-auto flex-shrink-0">
+          <div className="absolute lg:relative z-20 w-64 lg:w-72 h-full border-r border-slate-200 bg-slate-50 overflow-y-auto flex-shrink-0 shadow-lg lg:shadow-none">
             {filteredModels.length === 0 ? (
               <div className="p-6 text-center text-slate-400">
                 <Box className="h-10 w-10 mx-auto mb-3 text-slate-300" />
