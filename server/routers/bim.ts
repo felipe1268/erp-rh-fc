@@ -128,7 +128,7 @@ export const bimRouter = router({
       if (!db) return [];
       const rows = await db.execute(
         sql`SELECT bl.id, bl.atividade_id, bl.model_id, bl.express_ids, bl.storey_name, bl.descricao,
-                   pa.nome as atividade_nome, pa.inicio, pa.fim, pa.progresso_real
+                   pa.nome as atividade_nome, pa.data_inicio as inicio, pa.data_fim as fim
             FROM bim_links bl
             LEFT JOIN planejamento_atividades pa ON pa.id = bl.atividade_id
             WHERE bl.projeto_id = ${input.projetoId} AND bl.company_id = ${input.companyId}
@@ -144,7 +144,7 @@ export const bimRouter = router({
         atividadeNome: r.atividade_nome,
         inicio: r.inicio,
         fim: r.fim,
-        progressoReal: r.progresso_real != null ? parseFloat(r.progresso_real) : null,
+        progressoReal: 0,
       }));
     }),
 
@@ -200,7 +200,7 @@ export const bimRouter = router({
       console.log(`[BIM] listAtividades projetoId=${input.projetoId} companyId=${input.companyId}`);
       const rows = await db.execute(
         sql`SELECT pa.id, pa.nome, pa.eap_codigo, pa.data_inicio as inicio, pa.data_fim as fim,
-                   pa.progresso_real
+                   pa.peso_financeiro
             FROM planejamento_atividades pa
             JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
             WHERE pa.projeto_id = ${input.projetoId}
@@ -217,7 +217,7 @@ export const bimRouter = router({
         eapCodigo: r.eap_codigo,
         inicio: r.inicio,
         fim: r.fim,
-        progressoReal: r.progresso_real != null ? parseFloat(r.progresso_real) : 0,
+        progressoReal: 0,
       }));
     }),
 
