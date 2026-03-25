@@ -522,7 +522,7 @@ export const medicaoRouter = router({
       const db = await getDb();
 
       const [contrato] = await db
-        .select({ id: medicaoContratos.id, companyId: medicaoContratos.companyId })
+        .select({ id: medicaoContratos.id, companyId: medicaoContratos.companyId, valorTotalContrato: medicaoContratos.valorTotalContrato })
         .from(medicaoContratos)
         .where(and(eq(medicaoContratos.id, input.contratoId), eq(medicaoContratos.companyId, input.companyId)))
         .limit(1);
