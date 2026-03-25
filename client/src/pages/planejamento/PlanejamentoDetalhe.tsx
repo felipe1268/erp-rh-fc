@@ -10016,11 +10016,21 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               <div className="min-w-0">
                 <p className="text-sm font-bold uppercase tracking-wide">{g.nome}</p>
                 {(g.dataInicio || g.dataFim) && (
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    {g.dataInicio && <span>{new Date(g.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}</span>}
-                    {g.dataInicio && g.dataFim && <span> → </span>}
-                    {g.dataFim && <span>{new Date(g.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}</span>}
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {g.dataInicio && (
+                      <span className="inline-flex items-center gap-1 bg-slate-600 rounded px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                        <CalendarDays className="h-2.5 w-2.5" />
+                        {new Date(g.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}
+                      </span>
+                    )}
+                    {g.dataInicio && g.dataFim && <span className="text-slate-500 text-[10px] font-bold">→</span>}
+                    {g.dataFim && (
+                      <span className="inline-flex items-center gap-1 bg-slate-600 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                        <CalendarDays className="h-2.5 w-2.5" />
+                        {new Date(g.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
