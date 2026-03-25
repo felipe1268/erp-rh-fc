@@ -663,6 +663,7 @@ export function ProgramacaoSemanal({
           loadIA={loadIA}
           iaErro={iaErro}
           onGerarAlertas={gerarAlertas}
+          hierarquiaOf={hierarquiaOf}
         />
       )}
     </div>
@@ -966,6 +967,7 @@ function AlertasBlock({ alertas, semanas }: { alertas: any; semanas: Week[] }) {
 function RelatorioTresSemanas({
   proximas3, avancosMap, today, nomeProjeto, nomeCliente,
   recursos, equipDisponiveis, alertas, loadIA, iaErro, onGerarAlertas,
+  hierarquiaOf,
 }: {
   proximas3: { semana: Week; atividades: any[] }[];
   avancosMap: Record<number, number>;
@@ -978,6 +980,7 @@ function RelatorioTresSemanas({
   loadIA: boolean;
   iaErro: string | null;
   onGerarAlertas: () => void;
+  hierarquiaOf: (eap: string | null | undefined) => string[];
 }) {
   const dataGeracao = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
