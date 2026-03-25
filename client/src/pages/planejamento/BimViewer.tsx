@@ -5,9 +5,9 @@ import * as WebIFC from "web-ifc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Upload, Loader2, Box, Eye, EyeOff, Maximize, Grid3X3,
+  Upload, Loader2, Box, Eye, EyeOff, Maximize, Minimize2, Grid3X3,
   ChevronRight, ChevronDown, Trash2, Layers, Palette, Info,
-  MousePointer2, Link2, X, Check, Search,
+  MousePointer2, Link2, X, Check, Search, Fullscreen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -72,8 +72,10 @@ interface Props {
 }
 
 export default function BimViewer({ projetoId, projetoNome, companyId }: Props) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -274,6 +276,21 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedMeshes, linkPanelOpen]);
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!wrapperRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      wrapperRef.current.requestFullscreen();
+    }
+  }, []);
 
   useEffect(() => {
     models.forEach(m => {
@@ -851,7 +868,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   }, {});
 
   return (
-    <div className="flex flex-col h-[calc(100vh-220px)] bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <div ref={wrapperRef} className={`flex flex-col bg-white rounded-lg border border-slate-200 overflow-hidden ${isFullscreen ? "h-screen" : "h-[calc(100vh-220px)]"}`}>
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -950,6 +967,10 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
             onClick={() => setSidebarOpen(!sidebarOpen)}
           >
             <Layers className="h-3.5 w-3.5" /> Painel
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1" onClick={toggleFullscreen} title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}>
+            {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Fullscreen className="h-3.5 w-3.5" />}
+            {isFullscreen ? "Sair" : "Tela Cheia"}
           </Button>
         </div>
       </div>
