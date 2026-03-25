@@ -514,7 +514,7 @@ export default function MedicaoDetalhe() {
       </Dialog>
 
       <Dialog open={modalItens} onOpenChange={open => { setModalItens(open); if (!open) setItensEdicao([]); }}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Itens do Boletim {boletimSelecionado ? String(boletimSelecionado.numero).padStart(2, "0") : ""} — {boletimSelecionado?.periodoReferencia}
