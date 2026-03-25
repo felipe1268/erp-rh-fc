@@ -1066,6 +1066,19 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               {bimLinks!.length} vínc.
             </Badge>
           )}
+          {models.length > 0 && (bimAtividades?.length ?? 0) > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 flex-shrink-0 border-purple-200 text-purple-700 hover:bg-purple-50"
+              onClick={handleAutoLink}
+              disabled={autoLinking}
+              title="Vincular automaticamente Pilares, Vigas e Lajes às atividades do cronograma"
+            >
+              {autoLinking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">Auto-vincular</span>
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="gap-1 flex-shrink-0" onClick={resetCamera}>
             <Maximize className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Enquadrar</span>
