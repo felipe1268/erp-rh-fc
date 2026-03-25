@@ -1864,8 +1864,8 @@ export default function Epis() {
 
         {/* Overlay de Assinatura Digital — Funcionário */}
         {showFichaSignPad && fichaDelivery && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
-            <div className="max-w-lg w-full">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden overflow-y-auto">
+            <div className="max-w-lg w-full my-auto">
               <EpiAssinatura
                 employeeId={fichaDelivery.employeeId}
                 employeeName={fichaDelivery.nomeFunc || ''}
@@ -1888,8 +1888,8 @@ export default function Epis() {
 
         {/* Overlay de Assinatura Digital — Responsável pela Entrega */}
         {showResponsavelSignPad && fichaDelivery && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
-            <div className="max-w-lg w-full">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden overflow-y-auto">
+            <div className="max-w-lg w-full my-auto">
               <EpiAssinatura
                 employeeId={fichaDelivery.employeeId}
                 employeeName={fichaDelivery.nomeFunc || ''}

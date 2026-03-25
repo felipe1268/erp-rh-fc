@@ -5262,4 +5262,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 23:00:00",
   },
+  {
+    version: 788,
+    titulo: "Assinatura digital EPI: botões sempre visíveis no celular",
+    descricao: "Corrigido problema onde os botões Limpar/Cancelar/Confirmar Assinatura ficavam cortados (invisíveis) na tela de assinatura do funcionário em dispositivos móveis. Os botões agora ficam fixos na parte inferior do card, e o conteúdo do formulário rola verticalmente quando necessário.",
+    tipo: "correção",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 23:30:00",
+  },
 ];

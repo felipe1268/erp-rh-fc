@@ -200,8 +200,8 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
   }, [hasSignature, termoAceito, companyId, deliveryId, employeeId, tipo, tipoAssinante, salvarMut, geoLocation, textoTermo]);
 
   return (
-    <Card className={`border-2 ${tipoAssinante === "responsavel" ? "border-orange-200" : "border-blue-200"}`}>
-      <CardHeader className="pb-2">
+    <Card className={`border-2 max-h-[100dvh] flex flex-col ${tipoAssinante === "responsavel" ? "border-orange-200" : "border-blue-200"}`}>
+      <CardHeader className="pb-2 shrink-0">
         <CardTitle className="text-sm flex items-center gap-2">
           <PenTool className={`h-4 w-4 ${tipoAssinante === "responsavel" ? "text-orange-600" : "text-blue-600"}`} />
           {tipoAssinante === "responsavel"
@@ -218,7 +218,7 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 overflow-y-auto flex-1 min-h-0">
         {/* Info */}
         <div className={`rounded-lg p-3 text-xs space-y-1 ${tipoAssinante === "responsavel" ? "bg-orange-50" : "bg-blue-50"}`}>
           {tipoAssinante === "responsavel"
@@ -277,27 +277,26 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
           <p>Base legal: MP 2.200-2/2001 (Art. 10, §2º) — assinatura eletrônica aceita quando as partes concordam.</p>
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={clearCanvas} className="flex-1">
-            <RotateCcw className="h-3.5 w-3.5 mr-1" /> Limpar
-          </Button>
-          {onCancel && (
-            <Button size="sm" variant="outline" onClick={onCancel} className="flex-1">
-              <X className="h-3.5 w-3.5 mr-1" /> Cancelar
-            </Button>
-          )}
-          <Button
-            size="sm"
-            className="flex-1 bg-green-600 hover:bg-green-700"
-            disabled={!hasSignature || !termoAceito || salvarMut.isPending}
-            onClick={handleSave}
-          >
-            <Check className="h-3.5 w-3.5 mr-1" />
-            {salvarMut.isPending ? "Salvando..." : "Confirmar Assinatura"}
-          </Button>
-        </div>
       </CardContent>
+      <div className="shrink-0 border-t px-6 py-3 flex gap-2 bg-white rounded-b-lg">
+        <Button size="sm" variant="outline" onClick={clearCanvas} className="flex-1">
+          <RotateCcw className="h-3.5 w-3.5 mr-1" /> Limpar
+        </Button>
+        {onCancel && (
+          <Button size="sm" variant="outline" onClick={onCancel} className="flex-1">
+            <X className="h-3.5 w-3.5 mr-1" /> Cancelar
+          </Button>
+        )}
+        <Button
+          size="sm"
+          className="flex-1 bg-green-600 hover:bg-green-700"
+          disabled={!hasSignature || !termoAceito || salvarMut.isPending}
+          onClick={handleSave}
+        >
+          <Check className="h-3.5 w-3.5 mr-1" />
+          {salvarMut.isPending ? "Salvando..." : "Confirmar Assinatura"}
+        </Button>
+      </div>
     </Card>
   );
 }
