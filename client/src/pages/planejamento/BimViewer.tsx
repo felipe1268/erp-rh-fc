@@ -90,7 +90,6 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [expandedStoreys, setExpandedStoreys] = useState<Set<string>>(new Set());
   const [showGrid, setShowGrid] = useState(true);
   const gridRef = useRef<THREE.GridHelper | null>(null);
-  const [selectMode, setSelectMode] = useState(false);
   const [selectedMeshes, setSelectedMeshes] = useState<Set<THREE.Mesh>>(new Set());
   const [linkPanelOpen, setLinkPanelOpen] = useState(false);
   const [activitySearch, setActivitySearch] = useState("");
@@ -262,15 +261,17 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && selectMode) {
-        clearSelection();
-        setSelectMode(false);
-        setLinkPanelOpen(false);
+      if (e.key === "Escape") {
+        if (linkPanelOpen) {
+          setLinkPanelOpen(false);
+        } else if (selectedMeshes.size > 0) {
+          clearSelection();
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectMode, selectedMeshes]);
+  }, [selectedMeshes, linkPanelOpen]);
 
   useEffect(() => {
     models.forEach(m => {
@@ -655,38 +656,13 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
-    if (selectMode && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setBoxStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-      setBoxEnd(null);
-      setBoxSelecting(false);
-    }
-  };
-
-  const handleCanvasMouseMove = (e: React.MouseEvent) => {
-    if (!selectMode || !boxStart || !mouseDownPosRef.current || !containerRef.current) return;
-    if (e.buttons !== 1) return;
-
-    const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
-    const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
-    if (dx < 25 && dy < 25 && !boxSelecting) return;
-
-    if (!boxSelecting && controlsRef.current) {
-      controlsRef.current.enabled = false;
-      setBoxSelecting(true);
-    }
-
-    const rect = containerRef.current.getBoundingClientRect();
-    setBoxEnd({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
 
   const handleCanvasMouseUp = (e: React.MouseEvent) => {
-    if (!selectMode || !containerRef.current || !cameraRef.current) {
+    if (!containerRef.current || !cameraRef.current) {
       mouseDownPosRef.current = null;
       return;
     }
-
-    if (controlsRef.current) controlsRef.current.enabled = true;
 
     if (boxSelecting && boxStart && boxEnd) {
       const rect = containerRef.current.getBoundingClientRect();
@@ -878,36 +854,28 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               </span>
             </Button>
           </label>
-          <div className="w-px h-5 bg-slate-200" />
-          {models.length > 0 && (
+          {models.length > 0 && selectedMeshes.size > 0 && (
             <>
+              <div className="w-px h-5 bg-slate-200" />
+              <Badge variant="outline" className="text-[10px] bg-orange-50 text-orange-700 border-orange-200">
+                {selectedMeshes.size} selecionado(s)
+              </Badge>
               <Button
-                size="sm"
-                variant={selectMode ? "default" : "outline"}
-                className={`gap-1 ${selectMode ? "bg-orange-500 hover:bg-orange-600" : ""}`}
-                onClick={() => {
-                  if (selectMode) { clearSelection(); }
-                  setSelectMode(!selectMode);
-                }}
+                size="sm" variant="default"
+                className="gap-1 bg-green-600 hover:bg-green-700"
+                onClick={() => { setActivitySearch(""); setLinkPanelOpen(true); }}
               >
-                <MousePointer2 className="h-3.5 w-3.5" />
-                {selectMode ? `Seleção (${selectedMeshes.size})` : "Selecionar"}
+                <Link2 className="h-3.5 w-3.5" /> Vincular
               </Button>
-              {selectMode && selectedMeshes.size > 0 && (
-                <Button
-                  size="sm" variant="default"
-                  className="gap-1 bg-green-600 hover:bg-green-700"
-                  onClick={() => { setActivitySearch(""); setLinkPanelOpen(true); }}
-                >
-                  <Link2 className="h-3.5 w-3.5" /> Vincular ({selectedMeshes.size})
-                </Button>
-              )}
-              {(bimLinks?.length ?? 0) > 0 && (
-                <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
-                  {bimLinks!.length} vínculo{bimLinks!.length !== 1 ? "s" : ""}
-                </Badge>
-              )}
+              <Button size="sm" variant="outline" className="gap-1 h-7 text-[10px]" onClick={clearSelection}>
+                <X className="h-3 w-3" /> Limpar
+              </Button>
             </>
+          )}
+          {models.length > 0 && (bimLinks?.length ?? 0) > 0 && (
+            <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+              {bimLinks!.length} vínculo{bimLinks!.length !== 1 ? "s" : ""}
+            </Badge>
           )}
           <Button size="sm" variant="outline" className="gap-1" onClick={resetCamera}>
             <Maximize className="h-3.5 w-3.5" /> Enquadrar
@@ -1041,9 +1009,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
 
         <div
           ref={containerRef}
-          className={`flex-1 relative bg-gradient-to-br from-slate-100 to-blue-50 ${selectMode ? "cursor-crosshair" : ""}`}
+          className="flex-1 relative bg-gradient-to-br from-slate-100 to-blue-50"
           onMouseDown={handleCanvasMouseDown}
-          onMouseMove={handleCanvasMouseMove}
           onMouseUp={handleCanvasMouseUp}
         >
           {models.length === 0 && !loading && (
@@ -1103,7 +1070,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               }}
             />
           )}
-          {selectedElement && !selectMode && (
+          {selectedElement && selectedMeshes.size === 0 && (
             <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg border border-slate-200 p-3 z-10 max-w-xs">
               <div className="flex items-center gap-2 mb-1">
                 <Info className="h-3.5 w-3.5 text-blue-600" />
@@ -1119,28 +1086,21 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               </div>
             </div>
           )}
-          {selectMode && (
-            <div className="absolute bottom-4 left-4 bg-orange-50 rounded-lg shadow-lg border border-orange-200 p-3 z-10 max-w-xs">
+          {selectedMeshes.size > 0 && (
+            <div className="absolute bottom-4 left-4 bg-blue-50 rounded-lg shadow-lg border border-blue-200 p-3 z-10 max-w-xs">
               <div className="flex items-center gap-2 mb-1">
-                <MousePointer2 className="h-3.5 w-3.5 text-orange-600" />
-                <span className="text-xs font-bold text-orange-800">Modo Seleção</span>
+                <MousePointer2 className="h-3.5 w-3.5 text-blue-600" />
+                <span className="text-xs font-bold text-blue-800">{selectedMeshes.size} elemento(s) selecionado(s)</span>
               </div>
-              <p className="text-[10px] text-orange-600">
-                Clique ou arraste um retângulo para selecionar elementos.
-                {selectedMeshes.size > 0 && (
-                  <span className="font-bold"> {selectedMeshes.size} selecionado(s).</span>
-                )}
-              </p>
-              {selectedMeshes.size > 0 && (
-                <div className="flex gap-1 mt-2">
-                  <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={clearSelection}>
-                    <X className="h-3 w-3" /> Limpar
-                  </Button>
-                  <Button size="sm" className="h-6 text-[10px] gap-1 bg-green-600 hover:bg-green-700" onClick={() => { setActivitySearch(""); setLinkPanelOpen(true); }}>
-                    <Link2 className="h-3 w-3" /> Vincular a atividade
-                  </Button>
-                </div>
-              )}
+              <div className="flex gap-1 mt-1">
+                <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={clearSelection}>
+                  <X className="h-3 w-3" /> Limpar
+                </Button>
+                <Button size="sm" className="h-6 text-[10px] gap-1 bg-green-600 hover:bg-green-700" onClick={() => { setActivitySearch(""); setLinkPanelOpen(true); }}>
+                  <Link2 className="h-3 w-3" /> Vincular a atividade
+                </Button>
+              </div>
+              <p className="text-[9px] text-blue-500 mt-1">ESC para limpar seleção</p>
             </div>
           )}
           {linkPanelOpen && (
@@ -1213,17 +1173,10 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               </div>
             </div>
           )}
-          {models.length > 0 && !selectMode && (
+          {models.length > 0 && (
             <div className="absolute top-3 left-3 bg-white/90 backdrop-blur rounded-lg shadow-sm border border-slate-200 px-3 py-1.5 z-10">
               <p className="text-[10px] text-slate-500">
-                Rotacionar: arrastar | Zoom: scroll | Mover: botão direito
-              </p>
-            </div>
-          )}
-          {models.length > 0 && selectMode && (
-            <div className="absolute top-3 left-3 bg-orange-50/90 backdrop-blur rounded-lg shadow-sm border border-orange-200 px-3 py-1.5 z-10">
-              <p className="text-[10px] text-orange-700 font-medium">
-                Clique ou arraste retângulo para selecionar | ESC para sair
+                Clique para selecionar | Arrastar: rotacionar | Scroll: zoom | Botão direito: mover
               </p>
             </div>
           )}
