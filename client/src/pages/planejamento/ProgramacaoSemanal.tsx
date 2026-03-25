@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const n = (v: any) => parseFloat(v) || 0;
+
 // ── Classificação de insumos ──────────────────────────────────────────────────
 
 const PALAVRAS_PESSOA = [
@@ -182,8 +184,6 @@ export function ProgramacaoSemanal({
     () => atividadesSemAtualTodas.filter((a: any) => !a.isIndireta),
     [atividadesSemAtualTodas]
   );
-
-  const n = (v: any) => parseFloat(v) || 0;
 
   const grupoMap = useMemo(() => {
     const m = new Map<string, string>();
