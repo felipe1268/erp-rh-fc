@@ -115,7 +115,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     { projetoId, companyId },
     { enabled: !!companyId && !!projetoId }
   );
-  const { data: bimAtividades } = trpc.bim.listAtividades.useQuery(
+  const { data: bimAtividades, isLoading: atividadesLoading } = trpc.bim.listAtividades.useQuery(
     { projetoId, companyId },
     { enabled: !!projetoId && !!companyId }
   );
@@ -1115,7 +1115,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                     </Badge>
                   </div>
                   <span className="text-[9px] text-slate-400 mr-6">
-                    {bimAtividades?.length ? `${bimAtividades.length} atividade(s) · Vincule a múltiplas` : "Carregando..."}
+                    {atividadesLoading ? "Carregando..." : bimAtividades?.length ? `${bimAtividades.length} atividade(s)` : "Nenhuma atividade"}
                   </span>
                   <button onClick={() => setLinkPanelOpen(false)} className="p-1 rounded hover:bg-slate-100">
                     <X className="h-4 w-4 text-slate-400" />
@@ -1137,7 +1137,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                 <div className="flex-1 overflow-y-auto max-h-[400px]">
                   {filteredAtividades.length === 0 ? (
                     <div className="p-6 text-center text-slate-400 text-xs">
-                      {bimAtividades?.length === 0 ? "Nenhuma atividade no cronograma aprovado" : "Nenhuma atividade encontrada"}
+                      {atividadesLoading ? "Carregando atividades..." : bimAtividades?.length === 0 ? "Nenhuma atividade cadastrada neste projeto" : "Nenhuma atividade encontrada para esta busca"}
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-50">

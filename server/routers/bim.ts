@@ -201,14 +201,14 @@ export const bimRouter = router({
         sql`SELECT pa.id, pa.nome, pa.eap_codigo, pa.data_inicio as inicio, pa.data_fim as fim,
                    pa.progresso_real, pa.is_grupo, pa.nivel
             FROM planejamento_atividades pa
-            JOIN planejamento_revisoes pr ON pr.id = pa.revisao_id
             JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
+            LEFT JOIN planejamento_revisoes pr ON pr.id = pa.revisao_id
             WHERE pa.projeto_id = ${input.projetoId}
               AND pp.company_id = ${input.companyId}
-              AND pr.status = 'aprovada'
               AND (pa.is_grupo IS NULL OR pa.is_grupo = false)
               AND (pa.disabled IS NULL OR pa.disabled = false)
-            ORDER BY pa.ordem ASC, pa.id ASC`
+            ORDER BY pa.ordem ASC, pa.id ASC
+            LIMIT 2000`
       );
       return (rows.rows || []).map((r: any) => ({
         id: r.id,
