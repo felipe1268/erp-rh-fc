@@ -336,7 +336,6 @@ export default function MedicaoDetalhe() {
                   <TableHeader>
                     <TableRow className="bg-gray-50">
                       <TableHead className="w-12">Nº</TableHead>
-                      <TableHead>Período</TableHead>
                       <TableHead>Início</TableHead>
                       <TableHead>Fim</TableHead>
                       <TableHead>Status</TableHead>
@@ -359,7 +358,6 @@ export default function MedicaoDetalhe() {
                       return (
                         <TableRow key={b.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => abrirItens(b)}>
                           <TableCell className="font-mono text-sm font-semibold">{String(b.numero).padStart(2, "0")}</TableCell>
-                          <TableCell className="font-medium">{b.periodoReferencia}</TableCell>
                           <TableCell className="text-sm">
                             {b.dataInicio ? (
                               <span className="flex items-center gap-1">
@@ -484,7 +482,7 @@ export default function MedicaoDetalhe() {
       </div>
 
       <Dialog open={modalBoletim} onOpenChange={setModalBoletim}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Novo Boletim de Medição</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             {ultimoBoletimDataFim && (
@@ -493,18 +491,9 @@ export default function MedicaoDetalhe() {
                 <span className="text-emerald-800">Última medição até: <strong>{new Date(ultimoBoletimDataFim + "T12:00:00").toLocaleDateString("pt-BR")}</strong></span>
               </div>
             )}
-            <div>
-              <Label>Período de Referência *</Label>
-              <Input
-                type="month"
-                value={formBoletim.periodoReferencia}
-                onChange={e => setFormBoletim(f => ({ ...f, periodoReferencia: e.target.value }))}
-              />
-              <p className="text-xs text-gray-400 mt-1">Mês e ano desta medição</p>
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Data Início</Label>
+                <Label>Data Início *</Label>
                 <Input
                   type="date"
                   value={formBoletim.dataInicio}
@@ -515,7 +504,7 @@ export default function MedicaoDetalhe() {
                 )}
               </div>
               <div>
-                <Label>Data Fim</Label>
+                <Label>Data Fim *</Label>
                 <Input
                   type="date"
                   value={formBoletim.dataFim}
@@ -535,15 +524,18 @@ export default function MedicaoDetalhe() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setModalBoletim(false)}>Cancelar</Button>
               <Button
-                disabled={!formBoletim.periodoReferencia || criarBoletimMutation.isPending}
-                onClick={() => criarBoletimMutation.mutate({
-                  companyId,
-                  contratoId,
-                  periodoReferencia: formBoletim.periodoReferencia,
-                  dataInicio: formBoletim.dataInicio || null,
-                  dataFim: formBoletim.dataFim || null,
-                  observacoes: formBoletim.observacoes || null,
-                })}
+                disabled={!formBoletim.dataInicio || !formBoletim.dataFim || criarBoletimMutation.isPending}
+                onClick={() => {
+                  const periodo = formBoletim.dataInicio ? formBoletim.dataInicio.substring(0, 7) : "";
+                  criarBoletimMutation.mutate({
+                    companyId,
+                    contratoId,
+                    periodoReferencia: periodo,
+                    dataInicio: formBoletim.dataInicio || null,
+                    dataFim: formBoletim.dataFim || null,
+                    observacoes: formBoletim.observacoes || null,
+                  });
+                }}
               >
                 {criarBoletimMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Criar e Lançar Itens
@@ -554,20 +546,12 @@ export default function MedicaoDetalhe() {
       </Dialog>
 
       <Dialog open={modalEditBoletim} onOpenChange={open => { setModalEditBoletim(open); if (!open) setBoletimEditando(null); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Editar Boletim {boletimEditando ? String(boletimEditando.numero).padStart(2, "0") : ""}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div>
-              <Label>Período de Referência *</Label>
-              <Input
-                type="month"
-                value={formEditBoletim.periodoReferencia}
-                onChange={e => setFormEditBoletim(f => ({ ...f, periodoReferencia: e.target.value }))}
-              />
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Data Início</Label>
+                <Label>Data Início *</Label>
                 <Input
                   type="date"
                   value={formEditBoletim.dataInicio}
@@ -575,7 +559,7 @@ export default function MedicaoDetalhe() {
                 />
               </div>
               <div>
-                <Label>Data Fim</Label>
+                <Label>Data Fim *</Label>
                 <Input
                   type="date"
                   value={formEditBoletim.dataFim}
@@ -595,15 +579,19 @@ export default function MedicaoDetalhe() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setModalEditBoletim(false)}>Cancelar</Button>
               <Button
-                disabled={!formEditBoletim.periodoReferencia || editarBoletimMutation.isPending}
-                onClick={() => boletimEditando && editarBoletimMutation.mutate({
-                  id: boletimEditando.id,
-                  companyId,
-                  periodoReferencia: formEditBoletim.periodoReferencia,
-                  dataInicio: formEditBoletim.dataInicio || null,
-                  dataFim: formEditBoletim.dataFim || null,
-                  observacoes: formEditBoletim.observacoes || null,
-                })}
+                disabled={!formEditBoletim.dataInicio || !formEditBoletim.dataFim || editarBoletimMutation.isPending}
+                onClick={() => {
+                  if (!boletimEditando) return;
+                  const periodo = formEditBoletim.dataInicio ? formEditBoletim.dataInicio.substring(0, 7) : boletimEditando.periodoReferencia;
+                  editarBoletimMutation.mutate({
+                    id: boletimEditando.id,
+                    companyId,
+                    periodoReferencia: periodo,
+                    dataInicio: formEditBoletim.dataInicio || null,
+                    dataFim: formEditBoletim.dataFim || null,
+                    observacoes: formEditBoletim.observacoes || null,
+                  });
+                }}
               >
                 {editarBoletimMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Salvar
