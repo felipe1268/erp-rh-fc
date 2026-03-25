@@ -669,7 +669,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
 
     const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
     const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
-    if (dx < 8 && dy < 8 && !boxSelecting) return;
+    if (dx < 25 && dy < 25 && !boxSelecting) return;
 
     if (!boxSelecting && controlsRef.current) {
       controlsRef.current.enabled = false;
@@ -897,7 +897,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                 <Button
                   size="sm" variant="default"
                   className="gap-1 bg-green-600 hover:bg-green-700"
-                  onClick={() => setLinkPanelOpen(true)}
+                  onClick={() => { setActivitySearch(""); setLinkPanelOpen(true); }}
                 >
                   <Link2 className="h-3.5 w-3.5" /> Vincular ({selectedMeshes.size})
                 </Button>
@@ -1136,7 +1136,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                   <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={clearSelection}>
                     <X className="h-3 w-3" /> Limpar
                   </Button>
-                  <Button size="sm" className="h-6 text-[10px] gap-1 bg-green-600 hover:bg-green-700" onClick={() => setLinkPanelOpen(true)}>
+                  <Button size="sm" className="h-6 text-[10px] gap-1 bg-green-600 hover:bg-green-700" onClick={() => { setActivitySearch(""); setLinkPanelOpen(true); }}>
                     <Link2 className="h-3 w-3" /> Vincular a atividade
                   </Button>
                 </div>
@@ -1154,7 +1154,9 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                       {selectedMeshes.size} elemento(s)
                     </Badge>
                   </div>
-                  <span className="text-[9px] text-slate-400 mr-6">Vincule a múltiplas atividades</span>
+                  <span className="text-[9px] text-slate-400 mr-6">
+                    {bimAtividades?.length ? `${bimAtividades.length} atividade(s) · Vincule a múltiplas` : "Carregando..."}
+                  </span>
                   <button onClick={() => setLinkPanelOpen(false)} className="p-1 rounded hover:bg-slate-100">
                     <X className="h-4 w-4 text-slate-400" />
                   </button>
