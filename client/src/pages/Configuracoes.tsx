@@ -2160,6 +2160,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Abas do Projeto", label: "Revisões",              path: "/planejamento?tab=revisoes" },
     { section: "Abas do Projeto", label: "REFIS",                 path: "/planejamento?tab=refis" },
     { section: "Abas do Projeto", label: "IA Gestora",            path: "/planejamento?tab=ia-gestora" },
+    { section: "Abas do Projeto", label: "BIM 3D",               path: "/planejamento?tab=bim-3d" },
   ],
   cadastro: [
     { section: "Cadastro", label: "Empresas", path: "/empresas" },

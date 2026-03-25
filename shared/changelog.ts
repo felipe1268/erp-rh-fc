@@ -5163,4 +5163,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-24 16:00:00",
   },
+  {
+    version: 777,
+    titulo: "BIM 3D — Visualizador de modelos IFC",
+    descricao: "Nova aba 'BIM 3D' no módulo Planejamento permite importar e visualizar arquivos .ifc (modelos BIM) diretamente no navegador. Suporta múltiplas disciplinas (Estrutural, Arquitetura, Hidráulica, Elétrica, etc.) com importação separada e vinculação automática. Visualização 3D interativa com rotação, zoom e pan. Painel lateral com árvore de pavimentos e elementos. Compatível com arquivos exportados do TQS, Revit e outros softwares BIM.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 02:00:00",
+  },
 ];

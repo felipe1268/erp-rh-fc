@@ -28,6 +28,9 @@ export default defineConfig({
     rollupOptions: {},
     chunkSizeWarningLimit: 800,
   },
+  optimizeDeps: {
+    exclude: ["web-ifc"],
+  },
   server: {
     host: "0.0.0.0",
     port: 5000,

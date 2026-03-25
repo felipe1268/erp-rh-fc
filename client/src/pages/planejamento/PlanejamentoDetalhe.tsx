@@ -10,6 +10,7 @@ import PrintHeader from "@/components/PrintHeader";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, TarefaImportada } from "./ImportarCronograma";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
+const BimViewer = React.lazy(() => import("./BimViewer"));
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +31,7 @@ import {
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer, CheckSquare,
   TrendingDown, ArrowUpRight, ArrowDownRight, Circle, CalendarClock, Network,
-  Users, HardHat, CheckCircle, Calculator, Info,
+  Users, HardHat, CheckCircle, Calculator, Info, Box,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
@@ -42,7 +43,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(2)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "simulador";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "simulador" | "bim-3d";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -119,6 +120,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
   { id: "simulador",            label: "Simulador",          Icon: Calculator },
+  { id: "bim-3d",               label: "BIM 3D",             Icon: Box },
 ];
 const TAB_IDS = TAB_DEFS.map(t => t.id);
 const LS_KEY  = "plan-tab-order";
@@ -838,6 +840,12 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             utils={utils}
             onAdotado={() => { utils.planejamento.getProjetoById.invalidate({ id: projetoId }); setAba("cronograma"); }}
           />
+        )}
+
+        {aba === "bim-3d" && (
+          <React.Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /><span className="ml-2 text-sm text-slate-500">Carregando visualizador 3D...</span></div>}>
+            <BimViewer projetoId={projetoId} projetoNome={proj?.nome || ""} />
+          </React.Suspense>
         )}
 
       </div>
