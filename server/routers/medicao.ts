@@ -242,6 +242,31 @@ export const medicaoRouter = router({
       return { success: true };
     }),
 
+  excluirBoletim: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.delete(medicaoBoletimItens).where(eq(medicaoBoletimItens.boletimId, input.id));
+      await db.delete(medicaoBoletins).where(and(eq(medicaoBoletins.id, input.id), eq(medicaoBoletins.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  editarBoletim: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      periodoReferencia: z.string().optional(),
+      observacoes: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const { id, companyId, ...data } = input;
+      await db.update(medicaoBoletins)
+        .set({ ...data, atualizadoEm: new Date() })
+        .where(and(eq(medicaoBoletins.id, id), eq(medicaoBoletins.companyId, companyId)));
+      return { success: true };
+    }),
+
   avancarStatusBoletim: protectedProcedure
     .input(z.object({
       id: z.number(),

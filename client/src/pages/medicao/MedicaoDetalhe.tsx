@@ -69,6 +69,9 @@ export default function MedicaoDetalhe() {
   const [modalFd, setModalFd] = useState(false);
   const [modalItens, setModalItens] = useState(false);
   const [editandoContrato, setEditandoContrato] = useState(false);
+  const [modalEditBoletim, setModalEditBoletim] = useState(false);
+  const [boletimEditando, setBoletimEditando] = useState<any | null>(null);
+  const [formEditBoletim, setFormEditBoletim] = useState({ periodoReferencia: "", observacoes: "" });
 
   const [formBoletim, setFormBoletim] = useState({ periodoReferencia: "", observacoes: "" });
   const [formFd, setFormFd] = useState({ descricao: "", valor: "", dataRegistro: "", origem: "manual", observacoes: "" });
@@ -125,6 +128,18 @@ export default function MedicaoDetalhe() {
 
   const excluirFdMutation = trpc.medicao.excluirFdRegistro.useMutation({
     onSuccess: () => utils.medicao.listarFdRegistros.invalidate({ contratoId }),
+  });
+
+  const editarBoletimMutation = trpc.medicao.editarBoletim.useMutation({
+    onSuccess: () => {
+      utils.medicao.listarBoletins.invalidate({ contratoId });
+      setModalEditBoletim(false);
+      setBoletimEditando(null);
+    },
+  });
+
+  const excluirBoletimMutation = trpc.medicao.excluirBoletim.useMutation({
+    onSuccess: () => utils.medicao.listarBoletins.invalidate({ contratoId }),
   });
 
   const atualizarContratoMutation = trpc.medicao.atualizarContrato.useMutation({
@@ -305,6 +320,13 @@ export default function MedicaoDetalhe() {
                           <TableCell className="text-right text-sm font-bold text-emerald-700">{brl(n(b.valorLiquido))}</TableCell>
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => {
+                                setBoletimEditando(b);
+                                setFormEditBoletim({ periodoReferencia: b.periodoReferencia || "", observacoes: b.observacoes || "" });
+                                setModalEditBoletim(true);
+                              }} title="Editar boletim">
+                                <Edit className="h-3.5 w-3.5 text-slate-500" />
+                              </Button>
                               <Button variant="ghost" size="sm" onClick={() => abrirItens(b)} title="Ver/editar itens">
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
@@ -314,6 +336,11 @@ export default function MedicaoDetalhe() {
                                   <ChevronRight className="h-3.5 w-3.5" />
                                 </Button>
                               )}
+                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600"
+                                onClick={() => { if (confirm(`Excluir o Boletim ${String(b.numero).padStart(2, "0")} (${b.periodoReferencia})? Todos os itens serão removidos.`)) excluirBoletimMutation.mutate({ id: b.id, companyId }); }}
+                                title="Excluir boletim">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -434,6 +461,46 @@ export default function MedicaoDetalhe() {
               >
                 {criarBoletimMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Criar e Lançar Itens
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={modalEditBoletim} onOpenChange={open => { setModalEditBoletim(open); if (!open) setBoletimEditando(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Editar Boletim {boletimEditando ? String(boletimEditando.numero).padStart(2, "0") : ""}</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Período de Referência *</Label>
+              <Input
+                type="month"
+                value={formEditBoletim.periodoReferencia}
+                onChange={e => setFormEditBoletim(f => ({ ...f, periodoReferencia: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Observações</Label>
+              <Textarea
+                placeholder="Observações desta medição..."
+                value={formEditBoletim.observacoes}
+                onChange={e => setFormEditBoletim(f => ({ ...f, observacoes: e.target.value }))}
+                rows={2}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setModalEditBoletim(false)}>Cancelar</Button>
+              <Button
+                disabled={!formEditBoletim.periodoReferencia || editarBoletimMutation.isPending}
+                onClick={() => boletimEditando && editarBoletimMutation.mutate({
+                  id: boletimEditando.id,
+                  companyId,
+                  periodoReferencia: formEditBoletim.periodoReferencia,
+                  observacoes: formEditBoletim.observacoes || null,
+                })}
+              >
+                {editarBoletimMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Salvar
               </Button>
             </div>
           </div>
