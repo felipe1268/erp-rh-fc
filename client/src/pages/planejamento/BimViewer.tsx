@@ -5,7 +5,7 @@ import * as WebIFC from "web-ifc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Upload, Loader2, Box, Eye, EyeOff, Maximize,
+  Upload, Loader2, Box, Eye, EyeOff, Maximize, Grid3X3,
   ChevronRight, ChevronDown, Trash2, Layers, Palette, Info,
   MousePointer2, Link2, X, Check, Search,
 } from "lucide-react";
@@ -88,6 +88,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const [expandedStoreys, setExpandedStoreys] = useState<Set<string>>(new Set());
+  const [showGrid, setShowGrid] = useState(true);
+  const gridRef = useRef<THREE.GridHelper | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedMeshes, setSelectedMeshes] = useState<Set<THREE.Mesh>>(new Set());
   const [linkPanelOpen, setLinkPanelOpen] = useState(false);
@@ -194,6 +196,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     scene.add(hemiLight);
 
     const gridHelper = new THREE.GridHelper(100, 100, 0xcccccc, 0xe0e0e0);
+    gridRef.current = gridHelper;
     scene.add(gridHelper);
 
     const axesHelper = new THREE.AxesHelper(5);
@@ -908,6 +911,18 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
           )}
           <Button size="sm" variant="outline" className="gap-1" onClick={resetCamera}>
             <Maximize className="h-3.5 w-3.5" /> Enquadrar
+          </Button>
+          <Button
+            size="sm" variant="outline"
+            className={`gap-1 ${!showGrid ? "bg-slate-100 text-slate-400" : ""}`}
+            onClick={() => {
+              const next = !showGrid;
+              setShowGrid(next);
+              if (gridRef.current) gridRef.current.visible = next;
+            }}
+            title={showGrid ? "Ocultar grade do piso" : "Mostrar grade do piso"}
+          >
+            <Grid3X3 className="h-3.5 w-3.5" /> {showGrid ? "Grid" : "Grid"}
           </Button>
           <Button
             size="sm" variant="outline"
