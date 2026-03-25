@@ -407,9 +407,12 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
         mat.opacity = 1;
         mat.transparent = false;
       } else {
-        mat.color.setHex(0xb0bec5);
-        mat.opacity = 0.35;
-        mat.transparent = true;
+        const orig = originalColorsRef.current.get(eid);
+        if (orig) {
+          mat.color.copy(orig);
+        }
+        mat.opacity = linkedEids.size > 0 ? 0.4 : 1;
+        mat.transparent = linkedEids.size > 0;
       }
       mat.needsUpdate = true;
     });
