@@ -199,24 +199,35 @@ export default function MedicaoDetalhe() {
     setModalItens(true);
   }
 
+  const normalizeEap = (eap: string) =>
+    eap.split(".").map(s => String(parseInt(s, 10))).join(".");
+
   function popularItensDoOrcamento() {
     if (!itensOrcamento.length) return;
     const ativMap = new Map((atividades as any[]).map((a: any) => [a.eapCodigo, a]));
+    const ativNormMap = new Map((atividades as any[]).map((a: any) => [normalizeEap(a.eapCodigo || ""), a]));
     const cronograma = dadosAvancos?.avancosCronograma ?? {};
     const jaMedido = dadosAvancos?.acumuladoMedido ?? {};
 
-    const novos = (itensOrcamento as any[]).filter((i: any) => i.nivel > 1 && !i.tipo?.includes("grupo")).map((i: any) => {
-      const atv = ativMap.get(i.eapCodigo);
+    const novos: any[] = [];
+    for (const i of (itensOrcamento as any[])) {
+      if (i.nivel <= 1 || i.tipo?.includes("grupo")) continue;
+      const eap = i.eapCodigo || "";
+      const normEap = normalizeEap(eap);
+      const atv = ativMap.get(eap) || ativNormMap.get(normEap);
       const valContr = n(i.vendaTotal);
-      const avancoCrono = cronograma[i.eapCodigo] ?? 0;
-      const pctAnt = jaMedido[i.eapCodigo] ?? 0;
+      const avancoCrono = cronograma[eap] ?? cronograma[normEap] ?? 0;
+      const pctAnt = jaMedido[eap] ?? jaMedido[normEap] ?? 0;
       const pctPeriodo = Math.max(0, Math.min(avancoCrono - pctAnt, 100 - pctAnt));
+
+      if (pctPeriodo <= 0 && pctAnt <= 0) continue;
+
       const pctAcum = Math.min(pctAnt + pctPeriodo, 100);
       const valPeriodo = (valContr * pctPeriodo) / 100;
 
-      return {
+      novos.push({
         atividadeId: atv?.id ?? null,
-        eapCodigo: i.eapCodigo,
+        eapCodigo: eap,
         descricao: i.descricao,
         valorContratual: valContr.toFixed(2),
         percentualAcumuladoAnterior: pctAnt.toFixed(4),
@@ -225,8 +236,8 @@ export default function MedicaoDetalhe() {
         valorPeriodo: valPeriodo.toFixed(2),
         tipoAvanco: "fisico",
         isFd: false,
-      };
-    });
+      });
+    }
     setItensEdicao(novos);
   }
 

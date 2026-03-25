@@ -521,6 +521,9 @@ export const medicaoRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
 
+      const normalizeEap = (eap: string) =>
+        eap.split(".").map(s => String(parseInt(s, 10))).join(".");
+
       const revisaoResult = await db.execute(sql`
         SELECT id FROM planejamento_revisoes
         WHERE projeto_id = ${input.projetoId}
@@ -543,7 +546,10 @@ export const medicaoRouter = router({
 
       const avancosCronograma: Record<string, number> = {};
       for (const row of avancosResult.rows as any[]) {
-        avancosCronograma[row.eap_codigo] = parseFloat(row.percentual_acumulado || "0");
+        const norm = normalizeEap(row.eap_codigo);
+        const val = parseFloat(row.percentual_acumulado || "0");
+        avancosCronograma[row.eap_codigo] = val;
+        if (norm !== row.eap_codigo) avancosCronograma[norm] = val;
       }
 
       const excludeClause = input.boletimId
@@ -565,7 +571,10 @@ export const medicaoRouter = router({
 
       const acumuladoMedido: Record<string, number> = {};
       for (const row of medidoResult.rows as any[]) {
-        acumuladoMedido[row.eap_codigo] = parseFloat(row.pct_acumulado_medido || "0");
+        const norm = normalizeEap(row.eap_codigo);
+        const val = parseFloat(row.pct_acumulado_medido || "0");
+        acumuladoMedido[row.eap_codigo] = val;
+        if (norm !== row.eap_codigo) acumuladoMedido[norm] = val;
       }
 
       return { avancosCronograma, acumuladoMedido };
