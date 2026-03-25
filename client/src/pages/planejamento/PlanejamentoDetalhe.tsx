@@ -344,7 +344,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const avancoPrevistoDia = useMemo(() => {
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
     if (!folhas.length) return null;
-    const refStr = semanaVisualizacao ?? toMonday(new Date());
+    const semIni = semanaVisualizacao ?? toMonday(new Date());
+    const d = new Date(semIni + "T12:00:00");
+    d.setDate(d.getDate() + 7);
+    const refStr = d.toISOString().split("T")[0];
     const ref = new Date(refStr + "T12:00:00").getTime();
     const pesoBruto = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const semPeso = pesoBruto === 0;
