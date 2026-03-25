@@ -5244,4 +5244,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 21:00:00",
   },
+  {
+    version: 786,
+    titulo: "Controle de acesso granular por aba no Planejamento",
+    descricao: "Todas as 15 abas internas do módulo Planejamento (Visão Geral, Cronograma, Gantt, Crono. Financeiro, Curva S, Avanço Semanal, Caminho Crítico, Prev. Medição, Prog. Semanal, Diagrama de Rede, Custo RH, Revisões, REFIS, Simulador, BIM 3D/4D) agora são controladas individualmente pelas permissões do grupo de usuário. Abas sem permissão de visualização ficam automaticamente ocultas. Configuração disponível na tela de Usuários → grupo → módulo Planejamento.",
+    tipo: "feature",
+    modulos: "Planejamento, Usuários",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 22:00:00",
+  },
 ];

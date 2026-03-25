@@ -159,7 +159,33 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     const t = p.get('tab') as Tab;
     return (t && TAB_IDS.includes(t)) ? t : 'visao-geral';
   });
-  const { isAdminMaster } = usePermissions();
+  const { isAdminMaster, canViewPage } = usePermissions();
+
+  const TAB_TO_PAGEID: Record<string, string> = {
+    "visao-geral": "visao_geral",
+    "cronograma": "cronograma",
+    "gantt": "gantt",
+    "cronograma-financeiro": "financeiro",
+    "curva-s": "curva_s",
+    "avanco": "avanco_semanal",
+    "caminho-critico": "caminho_critico",
+    "prev-medicao": "previsao_medicao",
+    "prog-semanal": "prog_semanal",
+    "diagrama-rede": "diagrama_rede",
+    "custo-rh": "custo_rh",
+    "revisoes": "revisoes",
+    "refis": "refis",
+    "simulador": "simulador",
+    "bim-3d": "bim_3d",
+  };
+
+  const canViewTab = (tabId: string): boolean => {
+    if (isAdminMaster) return true;
+    const pageId = TAB_TO_PAGEID[tabId];
+    if (!pageId) return true;
+    return canViewPage("planejamento", pageId);
+  };
+
   const { user } = useAuth();
   const { selectedCompany, companyId } = useCompany();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
@@ -167,6 +193,13 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
   const [overIdx, setOverIdx]   = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!canViewTab(aba)) {
+      const first = tabOrder.find(t => canViewTab(t));
+      if (first) setAba(first);
+    }
+  }, [aba, tabOrder]);
 
   // ── Sidebar tab navigation ─────────────────────────────────────────────────
   useEffect(() => {
@@ -495,7 +528,8 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
 
         {/* ── Abas em duas linhas (drag-and-drop) ──────────────────────── */}
         {(() => {
-          const half = Math.ceil(tabOrder.length / 2);
+          const visibleTabs = tabOrder.filter(id => canViewTab(id));
+          const half = Math.ceil(visibleTabs.length / 2);
           const renderTabBtn = (id: Tab, globalIdx: number) => {
             const t = TAB_DEFS.find(d => d.id === id);
             if (!t) return null;
@@ -542,21 +576,21 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           return (
             <div className="mb-4 rounded-xl border border-slate-200 select-none bg-white p-1 space-y-0.5">
               <div className="hidden lg:flex gap-1">
-                {tabOrder.slice(0, half).map((id, i) => (
+                {visibleTabs.slice(0, half).map((id, i) => (
                   <div key={id} className="flex-1">
                     {renderTabBtn(id, i)}
                   </div>
                 ))}
               </div>
               <div className="hidden lg:flex gap-1">
-                {tabOrder.slice(half).map((id, i) => (
+                {visibleTabs.slice(half).map((id, i) => (
                   <div key={id} className="flex-1">
                     {renderTabBtn(id, half + i)}
                   </div>
                 ))}
               </div>
               <div className="flex lg:hidden gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-                {tabOrder.map((id, i) => (
+                {visibleTabs.map((id, i) => (
                   <div key={id} className="flex-shrink-0">
                     {renderTabBtn(id, i)}
                   </div>
@@ -567,7 +601,12 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
         })()}
 
         {/* ── Conteúdo das abas ────────────────────────────────────────── */}
-        {aba === "visao-geral" && (
+        {!canViewTab(aba) && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center text-yellow-800">
+            Você não tem permissão para visualizar esta aba.
+          </div>
+        )}
+        {canViewTab(aba) && aba === "visao-geral" && (
           <VisaoGeral
             proj={proj}
             atividades={atividades}
@@ -582,7 +621,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             onVerRefisCompleto={(semana: string) => { setRefisInitSemana(semana); setAba("refis"); }}
           />
         )}
-        {aba === "cronograma" && (
+        {canViewTab(aba) && aba === "cronograma" && (
           <Cronograma
             projetoId={projetoId}
             revisaoAtiva={revisaoAtiva}
@@ -593,7 +632,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             orcamentoId={proj?.orcamentoId ?? null}
           />
         )}
-        {aba === "gantt" && (
+        {canViewTab(aba) && aba === "gantt" && (
           <GanttCronograma
             revisaoAtiva={revisaoAtiva}
             atividades={atividades}
@@ -601,10 +640,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             avancos={avancos}
           />
         )}
-        {aba === "curva-s" && (
+        {canViewTab(aba) && aba === "curva-s" && (
           <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} curvaFetching={curvaFetching} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} curvaMedicoes={curvaMedicoes} onEditarProjeto={abrirEditProjeto} />
         )}
-        {aba === "avanco" && (
+        {canViewTab(aba) && aba === "avanco" && (
           <AvancoSemanal
             projetoId={projetoId}
             revisaoAtiva={revisaoAtiva}
@@ -614,7 +653,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             onSemanaChange={setSemanaVisualizacao}
           />
         )}
-        {aba === "revisoes" && (
+        {canViewTab(aba) && aba === "revisoes" && (
           <Revisoes
             projetoId={projetoId}
             revisoes={proj.revisoes ?? []}
@@ -623,7 +662,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             isAdminMaster={isAdminMaster}
           />
         )}
-        {aba === "refis" && (
+        {canViewTab(aba) && aba === "refis" && (
           <Refis
             projetoId={projetoId}
             proj={proj}
@@ -643,7 +682,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             onSemanaChange={setSemanaVisualizacao}
           />
         )}
-        {aba === "cronograma-financeiro" && (
+        {canViewTab(aba) && aba === "cronograma-financeiro" && (
           <CronogramaFinanceiro
             projetoId={projetoId}
             proj={proj}
@@ -654,20 +693,20 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             fPct={fPct}
           />
         )}
-        {aba === "caminho-critico" && (
+        {canViewTab(aba) && aba === "caminho-critico" && (
           <CaminhoCritico
             proj={proj}
             atividades={atividades}
             avancos={avancos}
           />
         )}
-        {aba === "diagrama-rede" && (
+        {canViewTab(aba) && aba === "diagrama-rede" && (
           <DiagramaRede
             atividades={atividades}
             avancosMap={avancosMap}
           />
         )}
-        {aba === "compras" && (
+        {canViewTab(aba) && aba === "compras" && (
           <Compras
             projetoId={projetoId}
             proj={proj}
@@ -675,7 +714,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             fmt={fmt}
           />
         )}
-        {aba === "prev-medicao" && (
+        {canViewTab(aba) && aba === "prev-medicao" && (
           <PrevisaoMedicao
             projetoId={projetoId}
             proj={proj}
@@ -684,7 +723,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             fmt={fmt}
           />
         )}
-        {aba === "prog-semanal" && (
+        {canViewTab(aba) && aba === "prog-semanal" && (
           <ProgramacaoSemanal
             projetoId={projetoId}
             revisaoId={revisaoAtiva?.id ?? 0}
@@ -699,7 +738,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
         )}
 
         {/* ── Custo RH (HE vinculadas ao projeto) ── */}
-        {aba === "custo-rh" && (
+        {canViewTab(aba) && aba === "custo-rh" && (
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-indigo-100">
@@ -839,7 +878,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
         )}
 
         {/* ── Simulador de Cronograma por Orçamento Mensal ── */}
-        {aba === "simulador" && (
+        {canViewTab(aba) && aba === "simulador" && (
           <SimuladorCronograma
             proj={proj}
             revisaoAtiva={revisaoAtiva}
@@ -850,7 +889,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           />
         )}
 
-        {aba === "bim-3d" && (
+        {canViewTab(aba) && aba === "bim-3d" && (
           <React.Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /><span className="ml-2 text-sm text-slate-500">Carregando visualizador 3D...</span></div>}>
             <BimViewer projetoId={projetoId} projetoNome={proj?.nome || ""} companyId={proj?.companyId ?? 0} />
           </React.Suspense>
