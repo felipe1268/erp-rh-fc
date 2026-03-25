@@ -6211,6 +6211,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                           </td>
                           <td className="py-2 px-3 text-center">
                             {temLiquido ? (
+                              <>
                               <button
                                 type="button"
                                 onClick={() => abrirBaixa(r.mes, liquidoEfetivo, r.nomeMes)}
@@ -6227,11 +6228,12 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                                   <><Circle className="h-3 w-3" /> Dar Baixa</>
                                 )}
                               </button>
-                              {confirmado && baixa.pendente && baixa.pendente > 0 && (
+                              {confirmado && baixa?.pendente && baixa.pendente > 0 && (
                                 <p className="text-[9px] text-orange-500 mt-0.5">
                                   Saldo: {fmt(baixa.pendente)}
                                 </p>
                               )}
+                              </>
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>
                             )}
