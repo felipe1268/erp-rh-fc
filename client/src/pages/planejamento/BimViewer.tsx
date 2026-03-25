@@ -292,12 +292,14 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const originalColorsRef = useRef<Map<number, THREE.Color>>(new Map());
 
   useEffect(() => {
-    if (!sceneRef.current || !bimLinks || bimLinks.length === 0) return;
+    if (!sceneRef.current || !bimLinks) return;
 
+    const linkedEids = new Set<number>();
     const expressToProgress = new Map<number, number>();
     bimLinks.forEach(link => {
       const prog = link.progressoReal ?? 0;
       (link.expressIds || []).forEach((eid: number) => {
+        linkedEids.add(eid);
         const existing = expressToProgress.get(eid);
         if (existing === undefined || prog > existing) {
           expressToProgress.set(eid, prog);
@@ -315,8 +317,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
         originalColorsRef.current.set(eid, mat.color.clone());
       }
 
-      const prog = expressToProgress.get(eid);
-      if (prog !== undefined) {
+      if (linkedEids.has(eid)) {
+        const prog = expressToProgress.get(eid) ?? 0;
         if (prog >= 100) {
           mat.color.setHex(0x2ecc71);
         } else if (prog > 0) {
@@ -326,14 +328,14 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
         } else {
           mat.color.setHex(0xe74c3c);
         }
-        mat.needsUpdate = true;
+        mat.opacity = 1;
+        mat.transparent = false;
       } else {
-        const orig = originalColorsRef.current.get(eid);
-        if (orig) {
-          mat.color.copy(orig);
-          mat.needsUpdate = true;
-        }
+        mat.color.setHex(0xb0bec5);
+        mat.opacity = 0.35;
+        mat.transparent = true;
       }
+      mat.needsUpdate = true;
     });
   }, [bimLinks, models]);
 
@@ -1274,6 +1276,10 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#e74c3c" }} />
                   <span className="text-[9px] text-slate-500">Não iniciado (0%)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm border border-slate-300" style={{ backgroundColor: "#b0bec5", opacity: 0.5 }} />
+                  <span className="text-[9px] text-slate-500">Sem vinculação</span>
                 </div>
               </div>
             </div>
