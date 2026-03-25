@@ -103,6 +103,10 @@ export default function MedicaoDetalhe() {
     { orcamentoId: contrato?.orcamentoId ?? 0 },
     { enabled: !!contrato?.orcamentoId }
   );
+  const { data: dadosAvancos } = trpc.medicao.getAvancosParaMedicao.useQuery(
+    { projetoId: contrato?.projetoId ?? 0, contratoId, boletimId: boletimSelecionado?.id },
+    { enabled: !!contrato?.projetoId && contratoId > 0 }
+  );
 
   const ultimoBoletimDataFim = useMemo(() => {
     const sorted = [...(boletins as any[])].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0));
@@ -121,10 +125,12 @@ export default function MedicaoDetalhe() {
   const criarBoletimMutation = trpc.medicao.criarBoletim.useMutation({
     onSuccess: (novo) => {
       utils.medicao.listarBoletins.invalidate({ contratoId });
+      utils.medicao.getAvancosParaMedicao.invalidate();
       setModalBoletim(false);
       setFormBoletim({ periodoReferencia: "", dataInicio: "", dataFim: "", observacoes: "" });
       setBoletimSelecionado(novo);
       setModalItens(true);
+      setAutoImportar(true);
     },
   });
 
@@ -179,6 +185,14 @@ export default function MedicaoDetalhe() {
   });
 
   const [itensEdicao, setItensEdicao] = useState<any[]>([]);
+  const [autoImportar, setAutoImportar] = useState(false);
+
+  React.useEffect(() => {
+    if (autoImportar && itensOrcamento.length > 0 && dadosAvancos) {
+      popularItensDoOrcamento();
+      setAutoImportar(false);
+    }
+  }, [autoImportar, itensOrcamento, dadosAvancos]);
 
   function abrirItens(boletim: any) {
     setBoletimSelecionado(boletim);
@@ -188,17 +202,27 @@ export default function MedicaoDetalhe() {
   function popularItensDoOrcamento() {
     if (!itensOrcamento.length) return;
     const ativMap = new Map((atividades as any[]).map((a: any) => [a.eapCodigo, a]));
+    const cronograma = dadosAvancos?.avancosCronograma ?? {};
+    const jaMedido = dadosAvancos?.acumuladoMedido ?? {};
+
     const novos = (itensOrcamento as any[]).filter((i: any) => i.nivel > 1 && !i.tipo?.includes("grupo")).map((i: any) => {
       const atv = ativMap.get(i.eapCodigo);
+      const valContr = n(i.vendaTotal);
+      const avancoCrono = cronograma[i.eapCodigo] ?? 0;
+      const pctAnt = jaMedido[i.eapCodigo] ?? 0;
+      const pctPeriodo = Math.max(0, Math.min(avancoCrono - pctAnt, 100 - pctAnt));
+      const pctAcum = Math.min(pctAnt + pctPeriodo, 100);
+      const valPeriodo = (valContr * pctPeriodo) / 100;
+
       return {
         atividadeId: atv?.id ?? null,
         eapCodigo: i.eapCodigo,
         descricao: i.descricao,
-        valorContratual: n(i.vendaTotal).toFixed(2),
-        percentualAcumuladoAnterior: "0",
-        percentualPeriodo: "0",
-        percentualAcumuladoAtual: "0",
-        valorPeriodo: "0",
+        valorContratual: valContr.toFixed(2),
+        percentualAcumuladoAnterior: pctAnt.toFixed(4),
+        percentualPeriodo: pctPeriodo.toFixed(4),
+        percentualAcumuladoAtual: pctAcum.toFixed(4),
+        valorPeriodo: valPeriodo.toFixed(2),
         tipoAvanco: "fisico",
         isFd: false,
       };
@@ -333,7 +357,7 @@ export default function MedicaoDetalhe() {
                       const prevBoletim = posInSorted > 0 ? sortedAll[posInSorted - 1] : null;
                       const fmtDate = (d: string | null) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "—";
                       return (
-                        <TableRow key={b.id} className="hover:bg-gray-50">
+                        <TableRow key={b.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => abrirItens(b)}>
                           <TableCell className="font-mono text-sm font-semibold">{String(b.numero).padStart(2, "0")}</TableCell>
                           <TableCell className="font-medium">{b.periodoReferencia}</TableCell>
                           <TableCell className="text-sm">
@@ -354,7 +378,7 @@ export default function MedicaoDetalhe() {
                           <TableCell className="text-right text-sm text-red-600">-{brl(n(b.glosa))}</TableCell>
                           <TableCell className="text-right text-sm text-violet-600">-{brl(n(b.deducaoFd))}</TableCell>
                           <TableCell className="text-right text-sm font-bold text-emerald-700">{brl(n(b.valorLiquido))}</TableCell>
-                          <TableCell>
+                          <TableCell onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
                               <Button variant="ghost" size="sm" onClick={() => {
                                 setBoletimEditando(b);
@@ -362,9 +386,6 @@ export default function MedicaoDetalhe() {
                                 setModalEditBoletim(true);
                               }} title="Editar boletim">
                                 <Edit className="h-3.5 w-3.5 text-slate-500" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => abrirItens(b)} title="Ver/editar itens">
-                                <Eye className="h-3.5 w-3.5" />
                               </Button>
                               {prox && (
                                 <Button variant="ghost" size="sm" className="text-xs text-blue-600 hover:text-blue-700"
@@ -679,7 +700,8 @@ export default function MedicaoDetalhe() {
                   <div className="text-center py-6">
                     <p className="text-sm text-gray-500 mb-3">Nenhum item lançado ainda.</p>
                     <Button variant="outline" size="sm" onClick={() => { popularItensDoOrcamento(); }}>
-                      Importar itens do Orçamento
+                      <TrendingUp className="h-3.5 w-3.5 mr-1" />
+                      Importar do Orçamento (com avanço físico)
                     </Button>
                   </div>
                 ) : (
@@ -738,7 +760,9 @@ export default function MedicaoDetalhe() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-600">{itensEdicao.length} itens — edite os percentuais do período</p>
-                  <Button variant="outline" size="sm" onClick={popularItensDoOrcamento}>Reimportar do Orçamento</Button>
+                  <Button variant="outline" size="sm" onClick={popularItensDoOrcamento}>
+                    <TrendingUp className="h-3.5 w-3.5 mr-1" />Reimportar com Avanço Físico
+                  </Button>
                 </div>
                 <div className="overflow-x-auto rounded-lg border border-gray-200 max-h-96">
                   <Table>

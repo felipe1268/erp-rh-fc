@@ -5271,4 +5271,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 23:30:00",
   },
+  {
+    version: 789,
+    titulo: "Medição: preenchimento automático baseado no avanço físico do cronograma",
+    descricao: "Os itens do boletim de medição agora são preenchidos automaticamente com os percentuais de avanço físico do cronograma. O sistema cruza o EAP do orçamento com as atividades do planejamento, calcula o % acumulado (descontando o que já foi medido em boletins anteriores), e preenche o % do período e valor automaticamente. Clicar na linha do boletim agora abre diretamente os itens. Ao criar um novo boletim, os itens são importados automaticamente com os valores do avanço.",
+    tipo: "feature",
+    modulos: "Medição",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 23:59:00",
+  },
 ];

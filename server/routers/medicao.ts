@@ -511,4 +511,63 @@ export const medicaoRouter = router({
         .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
         .orderBy(orcamentoItens.eapCodigo);
     }),
+
+  getAvancosParaMedicao: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      contratoId: z.number(),
+      boletimId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      const revisaoResult = await db.execute(sql`
+        SELECT id FROM planejamento_revisoes
+        WHERE projeto_id = ${input.projetoId}
+        ORDER BY numero DESC LIMIT 1
+      `);
+      const revisaoId = revisaoResult.rows[0]?.id as number | undefined;
+      if (!revisaoId) return { avancosCronograma: {}, acumuladoMedido: {} };
+
+      const avancosResult = await db.execute(sql`
+        SELECT DISTINCT ON (a.eap_codigo)
+          a.eap_codigo,
+          av.percentual_acumulado
+        FROM planejamento_avancos av
+        JOIN planejamento_atividades a ON a.id = av.atividade_id
+        WHERE av.projeto_id = ${input.projetoId}
+          AND av.revisao_id = ${revisaoId}
+          AND a.eap_codigo IS NOT NULL
+        ORDER BY a.eap_codigo, av.semana DESC
+      `);
+
+      const avancosCronograma: Record<string, number> = {};
+      for (const row of avancosResult.rows as any[]) {
+        avancosCronograma[row.eap_codigo] = parseFloat(row.percentual_acumulado || "0");
+      }
+
+      const excludeClause = input.boletimId
+        ? sql` AND b.id != ${input.boletimId}`
+        : sql``;
+
+      const medidoResult = await db.execute(sql`
+        SELECT
+          i.eap_codigo,
+          MAX(i.percentual_acumulado_atual) AS pct_acumulado_medido
+        FROM medicao_boletim_itens i
+        JOIN medicao_boletins b ON b.id = i.boletim_id
+        WHERE b.contrato_id = ${input.contratoId}
+          AND i.eap_codigo IS NOT NULL
+          AND b.status IN ('enviado', 'aprovado', 'finalizado')
+          ${excludeClause}
+        GROUP BY i.eap_codigo
+      `);
+
+      const acumuladoMedido: Record<string, number> = {};
+      for (const row of medidoResult.rows as any[]) {
+        acumuladoMedido[row.eap_codigo] = parseFloat(row.pct_acumulado_medido || "0");
+      }
+
+      return { avancosCronograma, acumuladoMedido };
+    }),
 });
