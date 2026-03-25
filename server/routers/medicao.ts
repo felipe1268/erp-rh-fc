@@ -516,15 +516,15 @@ export const medicaoRouter = router({
     .input(z.object({
       contratoId: z.number(),
       orcamentoId: z.number(),
+      companyId: z.number(),
     }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const db = await getDb();
-      const companyId = (ctx as any).companyId ?? (ctx as any).user?.companyId;
 
       const [contrato] = await db
         .select({ id: medicaoContratos.id, companyId: medicaoContratos.companyId })
         .from(medicaoContratos)
-        .where(and(eq(medicaoContratos.id, input.contratoId), eq(medicaoContratos.companyId, companyId)))
+        .where(and(eq(medicaoContratos.id, input.contratoId), eq(medicaoContratos.companyId, input.companyId)))
         .limit(1);
 
       if (!contrato) throw new Error("Contrato não encontrado ou sem permissão");

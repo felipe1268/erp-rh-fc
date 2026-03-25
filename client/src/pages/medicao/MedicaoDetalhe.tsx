@@ -108,8 +108,8 @@ export default function MedicaoDetalhe() {
     { enabled: !!contrato?.projetoId && contratoId > 0 }
   );
   const { data: planilhaData, isLoading: loadingPlanilha } = trpc.medicao.getPlanilhaMedicao.useQuery(
-    { contratoId, orcamentoId: contrato?.orcamentoId ?? 0 },
-    { enabled: contratoId > 0 && !!contrato?.orcamentoId }
+    { contratoId, orcamentoId: contrato?.orcamentoId ?? 0, companyId },
+    { enabled: contratoId > 0 && !!contrato?.orcamentoId && companyId > 0 }
   );
   const [filtroPlanilha, setFiltroPlanilha] = useState("");
   const [collapsedEap, setCollapsedEap] = useState<Set<string>>(new Set());
