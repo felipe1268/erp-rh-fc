@@ -1271,9 +1271,23 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                 <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-green-50 to-slate-50 border-b border-slate-100">
                   <Link2 className="h-3.5 w-3.5 text-green-600" />
                   <span className="text-xs font-bold text-green-800 uppercase tracking-wider">Vinculações</span>
-                  <Badge variant="outline" className="ml-auto text-[9px]">
+                  <Badge variant="outline" className="text-[9px]">
                     {bimLinks!.length}
                   </Badge>
+                  <button
+                    className="ml-auto text-[9px] text-red-400 hover:text-red-600 hover:underline"
+                    onClick={async () => {
+                      if (!confirm(`Remover todos os ${bimLinks!.length} vínculos?`)) return;
+                      for (const link of bimLinks!) {
+                        try { await deleteLinkMutation.mutateAsync({ id: link.id, companyId }); } catch {}
+                      }
+                      await refetchLinks();
+                      setColorRevision(c => c + 1);
+                      toast.success("Todos os vínculos removidos");
+                    }}
+                  >
+                    Limpar todos
+                  </button>
                 </div>
                 <div className="divide-y divide-slate-50 max-h-60 overflow-y-auto">
                   {bimLinks!.map(link => (
@@ -1284,11 +1298,11 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                         </span>
                         <span className="text-[9px] text-slate-400">{(link.expressIds || []).length} el.</span>
                         <button
-                          className="p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="p-0.5 rounded hover:bg-red-50 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                           onClick={() => handleDeleteLink(link.id)}
                           title="Desvincular"
                         >
-                          <Trash2 className="h-3 w-3 text-slate-400 hover:text-red-500" />
+                          <Trash2 className="h-3 w-3 text-red-400 hover:text-red-600" />
                         </button>
                       </div>
                       {link.progressoReal > 0 && (
