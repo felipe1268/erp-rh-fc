@@ -96,6 +96,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [boxSelecting, setBoxSelecting] = useState(false);
   const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
   const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null);
+  const [panelSize, setPanelSize] = useState({ w: 480, h: 520 });
+  const panelResizing = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
@@ -1153,7 +1155,11 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
           )}
           {linkPanelOpen && (
             <div className="absolute inset-0 bg-black/30 z-30 flex items-center justify-center" onClick={() => setLinkPanelOpen(false)}>
-              <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-[420px] max-h-[80%] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div
+                className="bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col relative"
+                style={{ width: panelSize.w, height: panelSize.h, minWidth: 320, minHeight: 300, maxWidth: '95%', maxHeight: '95%' }}
+                onClick={e => e.stopPropagation()}
+              >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-green-50 to-blue-50 rounded-t-xl">
                   <div className="flex items-center gap-2">
                     <Link2 className="h-4 w-4 text-green-600" />
@@ -1182,7 +1188,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                     />
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto max-h-[400px]">
+                <div className="flex-1 overflow-y-auto">
                   {filteredAtividades.length === 0 ? (
                     <div className="p-6 text-center text-slate-400 text-xs">
                       {atividadesLoading ? "Carregando atividades..." : bimAtividades?.length === 0 ? "Nenhuma atividade cadastrada neste projeto" : "Nenhuma atividade encontrada para esta busca"}
@@ -1218,6 +1224,31 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                     </div>
                   )}
                 </div>
+                <div
+                  className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize z-40"
+                  style={{ background: "linear-gradient(135deg, transparent 50%, #94a3b8 50%)", borderRadius: "0 0 12px 0" }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    panelResizing.current = { startX: e.clientX, startY: e.clientY, startW: panelSize.w, startH: panelSize.h };
+                    const onMove = (ev: MouseEvent) => {
+                      if (!panelResizing.current) return;
+                      const dw = ev.clientX - panelResizing.current.startX;
+                      const dh = ev.clientY - panelResizing.current.startY;
+                      setPanelSize({
+                        w: Math.max(320, panelResizing.current.startW + dw),
+                        h: Math.max(300, panelResizing.current.startH + dh),
+                      });
+                    };
+                    const onUp = () => {
+                      panelResizing.current = null;
+                      window.removeEventListener("mousemove", onMove);
+                      window.removeEventListener("mouseup", onUp);
+                    };
+                    window.addEventListener("mousemove", onMove);
+                    window.addEventListener("mouseup", onUp);
+                  }}
+                />
               </div>
             </div>
           )}
