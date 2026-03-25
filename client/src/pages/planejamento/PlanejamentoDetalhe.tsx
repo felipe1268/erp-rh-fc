@@ -390,29 +390,29 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       <div className="p-4 pb-10">
 
         {/* ── Cabeçalho ───────────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-          <div className="flex items-start gap-3">
-            <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2 mt-0.5"
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-3 mb-4">
+          <div className="flex items-start gap-2 sm:gap-3 min-w-0">
+            <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2 mt-0.5 flex-shrink-0"
               onClick={() => setLoc("/planejamento")}>
               <ArrowLeft className="h-4 w-4 mr-1" />
               Voltar
             </Button>
-            <div>
-              <h1 className="text-lg font-bold text-slate-800 leading-tight">{proj.nome}</h1>
-              <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-slate-500">
-                {proj.cliente && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{proj.cliente}</span>}
-                {proj.responsavel && <span className="flex items-center gap-1"><User className="h-3 w-3" />{proj.responsavel}</span>}
-                {proj.local && <span className="flex items-center gap-1"><span>📍</span>{proj.local}</span>}
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-slate-800 leading-tight break-words">{proj.nome}</h1>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1 text-xs text-slate-500">
+                {proj.cliente && <span className="flex items-center gap-1"><Building2 className="h-3 w-3 flex-shrink-0" /><span className="truncate">{proj.cliente}</span></span>}
+                {proj.responsavel && <span className="flex items-center gap-1"><User className="h-3 w-3 flex-shrink-0" /><span className="truncate">{proj.responsavel}</span></span>}
+                {proj.local && <span className="flex items-center gap-1"><span>📍</span><span className="truncate">{proj.local}</span></span>}
                 {diasRestantes !== null && (
                   <span className={`flex items-center gap-1 font-medium ${diasRestantes < 0 ? "text-red-600" : diasRestantes < 30 ? "text-amber-600" : "text-emerald-600"}`}>
-                    <Clock className="h-3 w-3" />
+                    <Clock className="h-3 w-3 flex-shrink-0" />
                     {diasRestantes < 0 ? `${Math.abs(diasRestantes)}d atrasado` : `${diasRestantes}d restantes`}
                   </span>
                 )}
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {n(proj.valorContrato) > 0 && (
               <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg">
                 {fmt(n(proj.valorContrato))}
@@ -538,19 +538,24 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           };
           return (
             <div className="mb-4 rounded-xl border border-slate-200 select-none bg-white p-1 space-y-0.5">
-              {/* Linha 1 */}
-              <div className="flex gap-1">
+              <div className="hidden md:flex gap-1">
                 {tabOrder.slice(0, half).map((id, i) => (
                   <div key={id} className="flex-1">
                     {renderTabBtn(id, i)}
                   </div>
                 ))}
               </div>
-              {/* Linha 2 */}
-              <div className="flex gap-1">
+              <div className="hidden md:flex gap-1">
                 {tabOrder.slice(half).map((id, i) => (
                   <div key={id} className="flex-1">
                     {renderTabBtn(id, half + i)}
+                  </div>
+                ))}
+              </div>
+              <div className="flex md:hidden gap-1 overflow-x-auto pb-1 scrollbar-thin">
+                {tabOrder.map((id, i) => (
+                  <div key={id} className="flex-shrink-0">
+                    {renderTabBtn(id, i)}
                   </div>
                 ))}
               </div>
