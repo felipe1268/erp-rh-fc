@@ -538,21 +538,21 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           };
           return (
             <div className="mb-4 rounded-xl border border-slate-200 select-none bg-white p-1 space-y-0.5">
-              <div className="hidden md:flex gap-1">
+              <div className="hidden lg:flex gap-1">
                 {tabOrder.slice(0, half).map((id, i) => (
                   <div key={id} className="flex-1">
                     {renderTabBtn(id, i)}
                   </div>
                 ))}
               </div>
-              <div className="hidden md:flex gap-1">
+              <div className="hidden lg:flex gap-1">
                 {tabOrder.slice(half).map((id, i) => (
                   <div key={id} className="flex-1">
                     {renderTabBtn(id, half + i)}
                   </div>
                 ))}
               </div>
-              <div className="flex md:hidden gap-1 overflow-x-auto pb-1 scrollbar-thin">
+              <div className="flex lg:hidden gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
                 {tabOrder.map((id, i) => (
                   <div key={id} className="flex-shrink-0">
                     {renderTabBtn(id, i)}
