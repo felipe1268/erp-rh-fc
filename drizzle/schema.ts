@@ -6021,6 +6021,8 @@ export const medicaoBoletins = pgTable("medicao_boletins", {
   contratoId:           integer("contrato_id").notNull(),
   numero:               integer().notNull(),
   periodoReferencia:    varchar("periodo_referencia", { length: 7 }).notNull(),
+  dataInicio:           date("data_inicio", { mode: "string" }),
+  dataFim:              date("data_fim", { mode: "string" }),
   status:               varchar({ length: 20 }).notNull().default("rascunho"),
   dataEnvio:            date("data_envio", { mode: "string" }),
   dataAprovacao:        date("data_aprovacao", { mode: "string" }),

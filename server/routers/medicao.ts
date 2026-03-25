@@ -200,6 +200,8 @@ export const medicaoRouter = router({
       companyId: z.number(),
       contratoId: z.number(),
       periodoReferencia: z.string(),
+      dataInicio: z.string().nullable().optional(),
+      dataFim: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -217,6 +219,8 @@ export const medicaoRouter = router({
         contratoId: input.contratoId,
         numero,
         periodoReferencia: input.periodoReferencia,
+        dataInicio: input.dataInicio ?? null,
+        dataFim: input.dataFim ?? null,
         observacoes: input.observacoes,
       }).returning();
       return row;
@@ -256,6 +260,8 @@ export const medicaoRouter = router({
       id: z.number(),
       companyId: z.number(),
       periodoReferencia: z.string().optional(),
+      dataInicio: z.string().nullable().optional(),
+      dataFim: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {

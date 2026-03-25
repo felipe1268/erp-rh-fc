@@ -71,9 +71,9 @@ export default function MedicaoDetalhe() {
   const [editandoContrato, setEditandoContrato] = useState(false);
   const [modalEditBoletim, setModalEditBoletim] = useState(false);
   const [boletimEditando, setBoletimEditando] = useState<any | null>(null);
-  const [formEditBoletim, setFormEditBoletim] = useState({ periodoReferencia: "", observacoes: "" });
+  const [formEditBoletim, setFormEditBoletim] = useState({ periodoReferencia: "", dataInicio: "", dataFim: "", observacoes: "" });
 
-  const [formBoletim, setFormBoletim] = useState({ periodoReferencia: "", observacoes: "" });
+  const [formBoletim, setFormBoletim] = useState({ periodoReferencia: "", dataInicio: "", dataFim: "", observacoes: "" });
   const [formFd, setFormFd] = useState({ descricao: "", valor: "", dataRegistro: "", origem: "manual", observacoes: "" });
   const [formContrato, setFormContrato] = useState<any>({});
 
@@ -104,11 +104,25 @@ export default function MedicaoDetalhe() {
     { enabled: !!contrato?.orcamentoId }
   );
 
+  const ultimoBoletimDataFim = useMemo(() => {
+    const sorted = [...(boletins as any[])].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0));
+    return sorted[0]?.dataFim || null;
+  }, [boletins]);
+
+  const sugerirDataInicio = () => {
+    if (ultimoBoletimDataFim) {
+      const d = new Date(ultimoBoletimDataFim + "T12:00:00");
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().split("T")[0];
+    }
+    return "";
+  };
+
   const criarBoletimMutation = trpc.medicao.criarBoletim.useMutation({
     onSuccess: (novo) => {
       utils.medicao.listarBoletins.invalidate({ contratoId });
       setModalBoletim(false);
-      setFormBoletim({ periodoReferencia: "", observacoes: "" });
+      setFormBoletim({ periodoReferencia: "", dataInicio: "", dataFim: "", observacoes: "" });
       setBoletimSelecionado(novo);
       setModalItens(true);
     },
@@ -274,7 +288,12 @@ export default function MedicaoDetalhe() {
 
           <TabsContent value="boletins" className="space-y-4 mt-4">
             <div className="flex justify-end">
-              <Button onClick={() => setModalBoletim(true)} className="gap-2" size="sm">
+              <Button onClick={() => {
+                const ini = sugerirDataInicio();
+                const hoje = new Date().toISOString().split("T")[0];
+                setFormBoletim({ periodoReferencia: "", dataInicio: ini, dataFim: hoje, observacoes: "" });
+                setModalBoletim(true);
+              }} className="gap-2" size="sm">
                 <Plus className="h-4 w-4" />Novo Boletim
               </Button>
             </div>
@@ -294,6 +313,8 @@ export default function MedicaoDetalhe() {
                     <TableRow className="bg-gray-50">
                       <TableHead className="w-12">Nº</TableHead>
                       <TableHead>Período</TableHead>
+                      <TableHead>Início</TableHead>
+                      <TableHead>Fim</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Valor Bruto</TableHead>
                       <TableHead className="text-right">Desc. Sinal</TableHead>
@@ -301,16 +322,31 @@ export default function MedicaoDetalhe() {
                       <TableHead className="text-right">Glosa</TableHead>
                       <TableHead className="text-right">FD</TableHead>
                       <TableHead className="text-right">Valor Líquido</TableHead>
-                      <TableHead className="w-28"></TableHead>
+                      <TableHead className="w-36"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(boletins as any[]).map((b: any) => {
+                    {(boletins as any[]).map((b: any, bIdx: number) => {
                       const prox = PROXIMOS_STATUS[b.status];
+                      const sortedAll = [...(boletins as any[])].sort((a: any, b: any) => (a.numero ?? 0) - (b.numero ?? 0));
+                      const posInSorted = sortedAll.findIndex((x: any) => x.id === b.id);
+                      const prevBoletim = posInSorted > 0 ? sortedAll[posInSorted - 1] : null;
+                      const fmtDate = (d: string | null) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "—";
                       return (
                         <TableRow key={b.id} className="hover:bg-gray-50">
                           <TableCell className="font-mono text-sm font-semibold">{String(b.numero).padStart(2, "0")}</TableCell>
                           <TableCell className="font-medium">{b.periodoReferencia}</TableCell>
+                          <TableCell className="text-sm">
+                            {b.dataInicio ? (
+                              <span className="flex items-center gap-1">
+                                {prevBoletim?.dataFim && (
+                                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" title={`Medição anterior até ${fmtDate(prevBoletim.dataFim)}`} />
+                                )}
+                                {fmtDate(b.dataInicio)}
+                              </span>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell className="text-sm">{fmtDate(b.dataFim)}</TableCell>
                           <TableCell><StatusBadge status={b.status} /></TableCell>
                           <TableCell className="text-right text-sm">{brl(n(b.valorBruto))}</TableCell>
                           <TableCell className="text-right text-sm text-red-600">-{brl(n(b.descontoSinal))}</TableCell>
@@ -322,7 +358,7 @@ export default function MedicaoDetalhe() {
                             <div className="flex items-center justify-end gap-1">
                               <Button variant="ghost" size="sm" onClick={() => {
                                 setBoletimEditando(b);
-                                setFormEditBoletim({ periodoReferencia: b.periodoReferencia || "", observacoes: b.observacoes || "" });
+                                setFormEditBoletim({ periodoReferencia: b.periodoReferencia || "", dataInicio: b.dataInicio || "", dataFim: b.dataFim || "", observacoes: b.observacoes || "" });
                                 setModalEditBoletim(true);
                               }} title="Editar boletim">
                                 <Edit className="h-3.5 w-3.5 text-slate-500" />
@@ -427,9 +463,15 @@ export default function MedicaoDetalhe() {
       </div>
 
       <Dialog open={modalBoletim} onOpenChange={setModalBoletim}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Novo Boletim de Medição</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
+            {ultimoBoletimDataFim && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-sm">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="text-emerald-800">Última medição até: <strong>{new Date(ultimoBoletimDataFim + "T12:00:00").toLocaleDateString("pt-BR")}</strong></span>
+              </div>
+            )}
             <div>
               <Label>Período de Referência *</Label>
               <Input
@@ -438,6 +480,27 @@ export default function MedicaoDetalhe() {
                 onChange={e => setFormBoletim(f => ({ ...f, periodoReferencia: e.target.value }))}
               />
               <p className="text-xs text-gray-400 mt-1">Mês e ano desta medição</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Data Início</Label>
+                <Input
+                  type="date"
+                  value={formBoletim.dataInicio}
+                  onChange={e => setFormBoletim(f => ({ ...f, dataInicio: e.target.value }))}
+                />
+                {formBoletim.dataInicio && ultimoBoletimDataFim && (
+                  <p className="text-[10px] text-emerald-600 mt-0.5">Dia seguinte à medição anterior</p>
+                )}
+              </div>
+              <div>
+                <Label>Data Fim</Label>
+                <Input
+                  type="date"
+                  value={formBoletim.dataFim}
+                  onChange={e => setFormBoletim(f => ({ ...f, dataFim: e.target.value }))}
+                />
+              </div>
             </div>
             <div>
               <Label>Observações</Label>
@@ -456,6 +519,8 @@ export default function MedicaoDetalhe() {
                   companyId,
                   contratoId,
                   periodoReferencia: formBoletim.periodoReferencia,
+                  dataInicio: formBoletim.dataInicio || null,
+                  dataFim: formBoletim.dataFim || null,
                   observacoes: formBoletim.observacoes || null,
                 })}
               >
@@ -468,7 +533,7 @@ export default function MedicaoDetalhe() {
       </Dialog>
 
       <Dialog open={modalEditBoletim} onOpenChange={open => { setModalEditBoletim(open); if (!open) setBoletimEditando(null); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Editar Boletim {boletimEditando ? String(boletimEditando.numero).padStart(2, "0") : ""}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div>
@@ -478,6 +543,24 @@ export default function MedicaoDetalhe() {
                 value={formEditBoletim.periodoReferencia}
                 onChange={e => setFormEditBoletim(f => ({ ...f, periodoReferencia: e.target.value }))}
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Data Início</Label>
+                <Input
+                  type="date"
+                  value={formEditBoletim.dataInicio}
+                  onChange={e => setFormEditBoletim(f => ({ ...f, dataInicio: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Data Fim</Label>
+                <Input
+                  type="date"
+                  value={formEditBoletim.dataFim}
+                  onChange={e => setFormEditBoletim(f => ({ ...f, dataFim: e.target.value }))}
+                />
+              </div>
             </div>
             <div>
               <Label>Observações</Label>
@@ -496,6 +579,8 @@ export default function MedicaoDetalhe() {
                   id: boletimEditando.id,
                   companyId,
                   periodoReferencia: formEditBoletim.periodoReferencia,
+                  dataInicio: formEditBoletim.dataInicio || null,
+                  dataFim: formEditBoletim.dataFim || null,
                   observacoes: formEditBoletim.observacoes || null,
                 })}
               >
