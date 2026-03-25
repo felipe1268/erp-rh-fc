@@ -10020,14 +10020,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     {g.dataInicio && (
                       <span className="inline-flex items-center gap-1 bg-slate-600 rounded px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
                         <CalendarDays className="h-2.5 w-2.5" />
-                        {new Date(g.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}
+                        Início: {new Date(g.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}
                       </span>
                     )}
                     {g.dataInicio && g.dataFim && <span className="text-slate-500 text-[10px] font-bold">→</span>}
                     {g.dataFim && (
                       <span className="inline-flex items-center gap-1 bg-slate-600 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
                         <CalendarDays className="h-2.5 w-2.5" />
-                        {new Date(g.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
+                        Fim: {new Date(g.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
                       </span>
                     )}
                   </div>
