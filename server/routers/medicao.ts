@@ -540,6 +540,9 @@ export const medicaoRouter = router({
           quantidade: orcamentoItens.quantidade,
           vendaUnitTotal: orcamentoItens.vendaUnitTotal,
           vendaTotal: orcamentoItens.vendaTotal,
+          custoTotalMat: orcamentoItens.custoTotalMat,
+          custoTotalMdo: orcamentoItens.custoTotalMdo,
+          custoTotal: orcamentoItens.custoTotal,
         })
         .from(orcamentoItens)
         .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))

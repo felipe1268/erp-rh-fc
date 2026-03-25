@@ -20,9 +20,9 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
 import {
-  ArrowLeft, Plus, Loader2, FileText, ChevronRight, CheckCircle2,
+  ArrowLeft, Plus, Loader2, FileText, ChevronRight, ChevronDown, CheckCircle2,
   Clock, Send, AlertCircle, DollarSign, Percent, Settings,
-  Edit, Trash2, Eye, TrendingUp, Package, Search, ListTree,
+  Edit, Trash2, Eye, TrendingUp, Package, Search, ListTree, Hammer, HardHat,
 } from "lucide-react";
 
 const n = (v: unknown) => parseFloat(String(v || "0")) || 0;
@@ -112,6 +112,7 @@ export default function MedicaoDetalhe() {
     { enabled: contratoId > 0 && !!contrato?.orcamentoId }
   );
   const [filtroPlanilha, setFiltroPlanilha] = useState("");
+  const [collapsedEap, setCollapsedEap] = useState<Set<string>>(new Set());
 
   const ultimoBoletimDataFim = useMemo(() => {
     const sorted = [...(boletins as any[])].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0));
@@ -331,16 +332,74 @@ export default function MedicaoDetalhe() {
             {loadingPlanilha ? (
               <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
             ) : planilhaData ? (() => {
+              const allItens = planilhaData.itens as any[];
               const medMap = planilhaData.medidoMap as Record<string, { pctAcumulado: number; totalMedido: number }>;
               const normEap = (e: string) => e.split(".").map(s => String(parseInt(s, 10))).join(".");
-              const filtro = filtroPlanilha.toLowerCase();
-              const itensFiltrados = (planilhaData.itens as any[]).filter((i: any) => {
-                if (!filtro) return true;
-                return (i.eapCodigo || "").toLowerCase().includes(filtro) || (i.descricao || "").toLowerCase().includes(filtro);
+
+              const childMap: Record<string, boolean> = {};
+              allItens.forEach(item => {
+                const dot = (item.eapCodigo || "").lastIndexOf(".");
+                if (dot > 0) childMap[item.eapCodigo.slice(0, dot)] = true;
               });
-              let totalContratual = 0, totalMedidoGlobal = 0, totalSaldo = 0;
-              for (const i of planilhaData.itens as any[]) {
-                if (i.nivel <= 1 || i.tipo?.includes("grupo")) continue;
+
+              const groupTotals: Record<string, { mat: number; mdo: number; venda: number }> = {};
+              allItens.forEach(item => {
+                if (!childMap[item.eapCodigo]) return;
+                const prefix = item.eapCodigo + ".";
+                let mat = 0, mdo = 0, venda = 0;
+                allItens.forEach(child => {
+                  if (!child.eapCodigo.startsWith(prefix)) return;
+                  if (childMap[child.eapCodigo]) return;
+                  mat += n(child.custoTotalMat);
+                  mdo += n(child.custoTotalMdo);
+                  venda += n(child.vendaTotal);
+                });
+                groupTotals[item.eapCodigo] = { mat, mdo, venda };
+              });
+
+              const toggleCollapse = (eap: string) => {
+                setCollapsedEap(prev => {
+                  const next = new Set(prev);
+                  next.has(eap) ? next.delete(eap) : next.add(eap);
+                  return next;
+                });
+              };
+
+              const filtro = filtroPlanilha.toLowerCase();
+              const matchingCodes = filtro
+                ? new Set(
+                    allItens
+                      .filter((i: any) =>
+                        (i.eapCodigo || "").toLowerCase().includes(filtro) ||
+                        (i.descricao || "").toLowerCase().includes(filtro)
+                      )
+                      .flatMap((match: any) => {
+                        const ancestors: string[] = [match.eapCodigo];
+                        const parts = match.eapCodigo.split(".");
+                        for (let k = parts.length - 1; k >= 1; k--) ancestors.push(parts.slice(0, k).join("."));
+                        return ancestors;
+                      })
+                  )
+                : null;
+
+              const visibleItems = allItens.filter((item: any, _idx: number) => {
+                if (matchingCodes) return matchingCodes.has(item.eapCodigo);
+                if (item.nivel === 1) return true;
+                const idx = allItens.indexOf(item);
+                for (let lvl = item.nivel - 1; lvl >= 1; lvl--) {
+                  for (let j = idx - 1; j >= 0; j--) {
+                    if (allItens[j].nivel === lvl) {
+                      if (collapsedEap.has(allItens[j].eapCodigo)) return false;
+                      break;
+                    }
+                  }
+                }
+                return true;
+              });
+
+              const leafItens = allItens.filter((i: any) => !childMap[i.eapCodigo]);
+              let totalContratual = 0, totalMedidoGlobal = 0, totalSaldo = 0, totalMat = 0, totalMdo = 0;
+              for (const i of leafItens) {
                 const v = n(i.vendaTotal);
                 const eap = i.eapCodigo || "";
                 const med = medMap[eap] || medMap[normEap(eap)];
@@ -348,21 +407,43 @@ export default function MedicaoDetalhe() {
                 totalContratual += v;
                 totalMedidoGlobal += tm;
                 totalSaldo += (v - tm);
+                totalMat += n(i.custoTotalMat);
+                totalMdo += n(i.custoTotalMdo);
               }
+
+              const valorContrato = n(contrato?.valorTotalContrato);
+              const excedeu = totalMedidoGlobal > valorContrato && valorContrato > 0;
+
+              const NIVEL_BG: Record<number, string> = { 1: "bg-slate-200", 2: "bg-slate-100", 3: "bg-slate-50" };
+
               return (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative flex-1 max-w-xs">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="relative flex-1 max-w-xs min-w-[200px]">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
                       <Input placeholder="Filtrar por EAP ou descrição..." className="pl-9" value={filtroPlanilha} onChange={e => setFiltroPlanilha(e.target.value)} />
                     </div>
-                    <div className="flex gap-4 text-sm ml-auto">
+                    <Button variant="outline" size="sm" onClick={() => setCollapsedEap(new Set(Object.keys(childMap)))} className="text-xs">
+                      Recolher tudo
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setCollapsedEap(new Set())} className="text-xs">
+                      Expandir tudo
+                    </Button>
+                    <div className="flex gap-3 text-xs ml-auto flex-wrap">
                       <span className="text-gray-500">Contratual: <strong className="text-gray-900">{brl(totalContratual)}</strong></span>
+                      <span className="text-orange-600"><Hammer className="h-3 w-3 inline mr-0.5" />Mat: <strong>{brl(totalMat)}</strong></span>
+                      <span className="text-indigo-600"><HardHat className="h-3 w-3 inline mr-0.5" />MO: <strong>{brl(totalMdo)}</strong></span>
                       <span className="text-emerald-600">Medido: <strong>{brl(totalMedidoGlobal)}</strong></span>
                       <span className="text-amber-600">Saldo: <strong>{brl(totalSaldo)}</strong></span>
                       <span className="text-blue-600">Progresso: <strong>{totalContratual > 0 ? ((totalMedidoGlobal / totalContratual) * 100).toFixed(2) : "0.00"}%</strong></span>
                     </div>
                   </div>
+                  {excedeu && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <span>Total medido ({brl(totalMedidoGlobal)}) <strong>excede</strong> o valor do contrato ({brl(valorContrato)}). Verifique os itens.</span>
+                    </div>
+                  )}
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                     <div className="overflow-x-auto max-h-[65vh]">
                       <Table>
@@ -370,44 +451,67 @@ export default function MedicaoDetalhe() {
                           <TableRow className="bg-gray-50 sticky top-0 z-10">
                             <TableHead className="w-24">EAP</TableHead>
                             <TableHead>Descrição</TableHead>
-                            <TableHead className="text-center w-16">Und</TableHead>
-                            <TableHead className="text-right w-20">Qtd</TableHead>
-                            <TableHead className="text-right w-28">V. Unit.</TableHead>
-                            <TableHead className="text-right w-32">V. Contratual</TableHead>
-                            <TableHead className="text-right w-20">% Medido</TableHead>
-                            <TableHead className="text-right w-32">V. Medido</TableHead>
-                            <TableHead className="text-right w-32">Saldo</TableHead>
+                            <TableHead className="text-center w-14">Und</TableHead>
+                            <TableHead className="text-right w-16">Qtd</TableHead>
+                            <TableHead className="text-right w-24">V. Unit.</TableHead>
+                            <TableHead className="text-right w-28">V. Contratual</TableHead>
+                            <TableHead className="text-right w-24 text-orange-700">Material</TableHead>
+                            <TableHead className="text-right w-24 text-indigo-700">Mão de Obra</TableHead>
+                            <TableHead className="text-right w-16">% Med.</TableHead>
+                            <TableHead className="text-right w-28">V. Medido</TableHead>
+                            <TableHead className="text-right w-28">Saldo</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {itensFiltrados.map((i: any) => {
+                          {visibleItems.map((i: any) => {
                             const eap = i.eapCodigo || "";
-                            const isGrupo = i.tipo?.includes("grupo") || i.nivel <= 1;
-                            const vContr = n(i.vendaTotal);
+                            const isGroup = !!childMap[eap];
+                            const isCollapsed = collapsedEap.has(eap);
+                            const gt = groupTotals[eap];
+                            const vContr = isGroup ? (n(i.vendaTotal) || gt?.venda || 0) : n(i.vendaTotal);
+                            const matVal = isGroup ? (gt?.mat || 0) : n(i.custoTotalMat);
+                            const mdoVal = isGroup ? (gt?.mdo || 0) : n(i.custoTotalMdo);
                             const med = medMap[eap] || medMap[normEap(eap)];
                             const pctMed = med?.pctAcumulado ?? 0;
                             const vMed = med?.totalMedido ?? 0;
                             const saldo = vContr - vMed;
+                            const nivelBg = NIVEL_BG[i.nivel] || "";
                             return (
-                              <TableRow key={i.id} className={isGrupo ? "bg-slate-50 font-semibold" : pctMed >= 100 ? "bg-emerald-50/50" : ""}>
-                                <TableCell className={`font-mono text-xs ${isGrupo ? "font-bold text-slate-700" : ""}`}>{eap}</TableCell>
-                                <TableCell className={`text-sm ${isGrupo ? "font-bold" : ""}`} style={{ paddingLeft: `${Math.max(0, (i.nivel - 1)) * 16 + 8}px` }}>
+                              <TableRow
+                                key={i.id}
+                                className={`${isGroup ? `${nivelBg} font-semibold cursor-pointer hover:bg-slate-200/60` : pctMed >= 100 ? "bg-emerald-50/50" : ""}`}
+                                onClick={() => isGroup && toggleCollapse(eap)}
+                              >
+                                <TableCell className={`font-mono text-xs whitespace-nowrap ${isGroup ? "font-bold text-slate-700" : ""}`}>
+                                  {isGroup && (
+                                    isCollapsed
+                                      ? <ChevronRight className="h-3.5 w-3.5 inline mr-1 text-slate-400" />
+                                      : <ChevronDown className="h-3.5 w-3.5 inline mr-1 text-slate-400" />
+                                  )}
+                                  {eap}
+                                </TableCell>
+                                <TableCell
+                                  className={`text-sm ${isGroup ? "font-bold" : ""} ${i.nivel <= 2 && isGroup ? "uppercase" : ""}`}
+                                  style={{ paddingLeft: `${Math.max(0, (i.nivel - 1)) * 16 + 8}px` }}
+                                >
                                   {i.descricao}
                                 </TableCell>
-                                <TableCell className="text-center text-xs text-gray-500">{isGrupo ? "" : (i.unidade || "—")}</TableCell>
-                                <TableCell className="text-right text-xs">{isGrupo ? "" : n(i.quantidade).toLocaleString("pt-BR")}</TableCell>
-                                <TableCell className="text-right text-xs">{isGrupo ? "" : brl(n(i.vendaUnitTotal))}</TableCell>
+                                <TableCell className="text-center text-xs text-gray-500">{isGroup ? "" : (i.unidade || "—")}</TableCell>
+                                <TableCell className="text-right text-xs">{isGroup ? "" : n(i.quantidade).toLocaleString("pt-BR")}</TableCell>
+                                <TableCell className="text-right text-xs">{isGroup ? "" : brl(n(i.vendaUnitTotal))}</TableCell>
                                 <TableCell className="text-right text-sm font-medium">{brl(vContr)}</TableCell>
+                                <TableCell className="text-right text-xs text-orange-700">{matVal > 0 ? brl(matVal) : <span className="text-gray-300">—</span>}</TableCell>
+                                <TableCell className="text-right text-xs text-indigo-700">{mdoVal > 0 ? brl(mdoVal) : <span className="text-gray-300">—</span>}</TableCell>
                                 <TableCell className="text-right text-sm">
-                                  {isGrupo ? "" : (
+                                  {isGroup ? "" : (
                                     <span className={pctMed >= 100 ? "text-emerald-600 font-bold" : pctMed > 0 ? "text-blue-600 font-medium" : "text-gray-400"}>
                                       {pct(pctMed)}
                                     </span>
                                   )}
                                 </TableCell>
-                                <TableCell className="text-right text-sm font-medium text-emerald-700">{vMed > 0 ? brl(vMed) : isGrupo ? "" : <span className="text-gray-300">—</span>}</TableCell>
+                                <TableCell className="text-right text-sm font-medium text-emerald-700">{vMed > 0 ? brl(vMed) : isGroup ? "" : <span className="text-gray-300">—</span>}</TableCell>
                                 <TableCell className="text-right text-sm">
-                                  {isGrupo ? "" : (
+                                  {isGroup ? "" : (
                                     <span className={saldo < 0 ? "text-red-600 font-bold" : saldo === vContr ? "text-gray-400" : "text-amber-600"}>
                                       {brl(saldo)}
                                     </span>
