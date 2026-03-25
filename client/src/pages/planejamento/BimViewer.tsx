@@ -92,6 +92,9 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [selectedMeshes, setSelectedMeshes] = useState<Set<THREE.Mesh>>(new Set());
   const [linkPanelOpen, setLinkPanelOpen] = useState(false);
   const [activitySearch, setActivitySearch] = useState("");
+  const [boxSelecting, setBoxSelecting] = useState(false);
+  const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
+  const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
@@ -113,7 +116,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   );
   const { data: bimAtividades } = trpc.bim.listAtividades.useQuery(
     { projetoId, companyId },
-    { enabled: !!projetoId && linkPanelOpen }
+    { enabled: !!projetoId && !!companyId }
   );
 
   const parseIfcBuffer = useCallback(async (
@@ -635,32 +638,118 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     setSelectedMeshes(new Set());
   };
 
+  const getAllVisibleMeshes = useCallback((): THREE.Mesh[] => {
+    const meshes: THREE.Mesh[] = [];
+    if (!sceneRef.current) return meshes;
+    sceneRef.current.traverse((obj) => {
+      if (obj instanceof THREE.Mesh && obj.visible && obj.userData.expressID) {
+        meshes.push(obj);
+      }
+    });
+    return meshes;
+  }, []);
+
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+    if (selectMode && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setBoxStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      setBoxEnd(null);
+      setBoxSelecting(false);
+    }
   };
 
-  const handleCanvasClick = (e: React.MouseEvent) => {
-    if (!selectMode || !cameraRef.current || !sceneRef.current || !containerRef.current) return;
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    if (!selectMode || !boxStart || !mouseDownPosRef.current || !containerRef.current) return;
+    if (e.buttons !== 1) return;
+
+    const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
+    const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
+    if (dx < 8 && dy < 8 && !boxSelecting) return;
+
+    if (!boxSelecting && controlsRef.current) {
+      controlsRef.current.enabled = false;
+      setBoxSelecting(true);
+    }
+
+    const rect = containerRef.current.getBoundingClientRect();
+    setBoxEnd({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+
+  const handleCanvasMouseUp = (e: React.MouseEvent) => {
+    if (!selectMode || !containerRef.current || !cameraRef.current) {
+      mouseDownPosRef.current = null;
+      return;
+    }
+
+    if (controlsRef.current) controlsRef.current.enabled = true;
+
+    if (boxSelecting && boxStart && boxEnd) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const x1 = Math.min(boxStart.x, boxEnd.x);
+      const y1 = Math.min(boxStart.y, boxEnd.y);
+      const x2 = Math.max(boxStart.x, boxEnd.x);
+      const y2 = Math.max(boxStart.y, boxEnd.y);
+
+      const camera = cameraRef.current;
+      const allMeshes = getAllVisibleMeshes();
+
+      const ndcX1 = (x1 / rect.width) * 2 - 1;
+      const ndcY1 = -(y1 / rect.height) * 2 + 1;
+      const ndcX2 = (x2 / rect.width) * 2 - 1;
+      const ndcY2 = -(y2 / rect.height) * 2 + 1;
+
+      const frustum = new THREE.Frustum();
+      const mvpMatrix = new THREE.Matrix4();
+      mvpMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+
+      const newSelected = new Set(selectedMeshes);
+
+      allMeshes.forEach(mesh => {
+        if (newSelected.has(mesh)) return;
+        const pos = new THREE.Vector3();
+        mesh.getWorldPosition(pos);
+        pos.project(camera);
+
+        if (pos.x >= ndcX1 && pos.x <= ndcX2 && pos.y <= ndcY1 && pos.y >= ndcY2 && pos.z < 1) {
+          newSelected.add(mesh);
+          highlightMesh(mesh);
+        }
+      });
+
+      setSelectedMeshes(newSelected);
+      setBoxSelecting(false);
+      setBoxStart(null);
+      setBoxEnd(null);
+      mouseDownPosRef.current = null;
+      return;
+    }
 
     if (mouseDownPosRef.current) {
       const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
       const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
-      if (dx > 5 || dy > 5) return;
+      if (dx <= 5 && dy <= 5) {
+        const rect = containerRef.current.getBoundingClientRect();
+        mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
+
+        const allMeshes = getAllVisibleMeshes();
+        const intersects = raycasterRef.current.intersectObjects(allMeshes, false);
+
+        if (intersects.length > 0) {
+          const mesh = intersects[0].object as THREE.Mesh;
+          toggleMeshSelection(mesh);
+        }
+      }
     }
 
-    const rect = containerRef.current.getBoundingClientRect();
-    mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-    raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
-
-    const allMeshes = models.flatMap(m => m.meshes).filter(m => m.visible);
-    const intersects = raycasterRef.current.intersectObjects(allMeshes, false);
-
-    if (intersects.length > 0) {
-      const mesh = intersects[0].object as THREE.Mesh;
-      toggleMeshSelection(mesh);
-    }
+    setBoxSelecting(false);
+    setBoxStart(null);
+    setBoxEnd(null);
+    mouseDownPosRef.current = null;
   };
 
   const handleLinkToActivity = async (atividadeId: number) => {
@@ -681,8 +770,6 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
         expressIds,
       });
       toast.success(`${expressIds.length} elemento(s) vinculado(s) à atividade`);
-      clearSelection();
-      setLinkPanelOpen(false);
       refetchLinks();
     } catch (err) {
       toast.error("Erro ao vincular elementos");
@@ -941,7 +1028,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
           ref={containerRef}
           className={`flex-1 relative bg-gradient-to-br from-slate-100 to-blue-50 ${selectMode ? "cursor-crosshair" : ""}`}
           onMouseDown={handleCanvasMouseDown}
-          onClick={handleCanvasClick}
+          onMouseMove={handleCanvasMouseMove}
+          onMouseUp={handleCanvasMouseUp}
         >
           {models.length === 0 && !loading && (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -989,6 +1077,17 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               </div>
             </div>
           )}
+          {boxSelecting && boxStart && boxEnd && (
+            <div
+              className="absolute border-2 border-orange-500 bg-orange-200/20 z-20 pointer-events-none"
+              style={{
+                left: Math.min(boxStart.x, boxEnd.x),
+                top: Math.min(boxStart.y, boxEnd.y),
+                width: Math.abs(boxEnd.x - boxStart.x),
+                height: Math.abs(boxEnd.y - boxStart.y),
+              }}
+            />
+          )}
           {selectedElement && !selectMode && (
             <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg border border-slate-200 p-3 z-10 max-w-xs">
               <div className="flex items-center gap-2 mb-1">
@@ -1012,7 +1111,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                 <span className="text-xs font-bold text-orange-800">Modo Seleção</span>
               </div>
               <p className="text-[10px] text-orange-600">
-                Clique nos elementos 3D para selecioná-los.
+                Clique ou arraste um retângulo para selecionar elementos.
                 {selectedMeshes.size > 0 && (
                   <span className="font-bold"> {selectedMeshes.size} selecionado(s).</span>
                 )}
@@ -1040,6 +1139,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                       {selectedMeshes.size} elemento(s)
                     </Badge>
                   </div>
+                  <span className="text-[9px] text-slate-400 mr-6">Vincule a múltiplas atividades</span>
                   <button onClick={() => setLinkPanelOpen(false)} className="p-1 rounded hover:bg-slate-100">
                     <X className="h-4 w-4 text-slate-400" />
                   </button>
@@ -1064,26 +1164,32 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-50">
-                      {filteredAtividades.map(a => (
-                        <button
-                          key={a.id}
-                          className="w-full text-left px-4 py-2 hover:bg-blue-50 transition-colors group"
-                          onClick={() => handleLinkToActivity(a.id)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-slate-400 font-mono w-16 flex-shrink-0">{a.eapCodigo || "—"}</span>
-                            <span className="text-xs text-slate-700 font-medium truncate flex-1">{a.nome}</span>
-                            <Check className="h-3.5 w-3.5 text-green-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                          <div className="flex items-center gap-3 mt-0.5 pl-[72px]">
-                            {a.inicio && <span className="text-[9px] text-slate-400">{a.inicio}</span>}
-                            {a.fim && <span className="text-[9px] text-slate-400">→ {a.fim}</span>}
-                            {a.progressoReal > 0 && (
-                              <span className="text-[9px] text-green-600 font-medium">{a.progressoReal}%</span>
-                            )}
-                          </div>
-                        </button>
-                      ))}
+                      {filteredAtividades.map(a => {
+                        const alreadyLinked = bimLinks?.some(l => l.atividadeId === a.id);
+                        return (
+                          <button
+                            key={a.id}
+                            className={`w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors group ${alreadyLinked ? "bg-green-50/50" : ""}`}
+                            onClick={() => handleLinkToActivity(a.id)}
+                          >
+                            <div className="flex items-center gap-2">
+                              {a.eapCodigo && (
+                                <span className="text-[10px] text-white bg-blue-500 rounded px-1.5 py-0.5 font-mono font-bold flex-shrink-0">{a.eapCodigo}</span>
+                              )}
+                              <span className="text-xs text-slate-700 font-medium truncate flex-1">{a.nome}</span>
+                              {alreadyLinked && <Badge variant="outline" className="text-[8px] h-4 bg-green-50 text-green-600 border-green-200">vinculada</Badge>}
+                              <Check className="h-3.5 w-3.5 text-green-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5" style={{ paddingLeft: a.eapCodigo ? `${a.eapCodigo.length * 7 + 16}px` : "0" }}>
+                              {a.inicio && <span className="text-[9px] text-slate-400">{a.inicio}</span>}
+                              {a.fim && <span className="text-[9px] text-slate-400">→ {a.fim}</span>}
+                              {a.progressoReal > 0 && (
+                                <span className="text-[9px] text-green-600 font-medium">{a.progressoReal}%</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1100,7 +1206,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
           {models.length > 0 && selectMode && (
             <div className="absolute top-3 left-3 bg-orange-50/90 backdrop-blur rounded-lg shadow-sm border border-orange-200 px-3 py-1.5 z-10">
               <p className="text-[10px] text-orange-700 font-medium">
-                Clique nos elementos para selecionar | ESC para sair
+                Clique ou arraste retângulo para selecionar | ESC para sair
               </p>
             </div>
           )}
