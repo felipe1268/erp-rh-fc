@@ -5235,4 +5235,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 20:00:00",
   },
+  {
+    version: 785,
+    titulo: "BIM — Legenda 4D interativa com filtro por status",
+    descricao: "Cada item da Legenda 4D agora é clicável: ao tocar em 'Concluída', 'Atrasada', etc., o modelo 3D isola visualmente apenas os elementos com aquele status (os demais ficam quase transparentes). Mostra contador de vínculos por status. Link 'Limpar filtro' para voltar à visualização normal. Elementos sem vínculo mantêm cor original do IFC.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 21:00:00",
+  },
 ];

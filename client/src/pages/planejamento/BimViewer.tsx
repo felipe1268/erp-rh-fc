@@ -100,6 +100,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [colorRevision, setColorRevision] = useState(0);
   type AutoLinkPreviewItem = { ifcType: string; storeyName: string; atividadeId: number; atividadeNome: string; grupoPath: string; expressIds: number[]; selected: boolean };
   const [autoLinkPreview, setAutoLinkPreview] = useState<AutoLinkPreviewItem[] | null>(null);
+  type LegendFilter = "concluida" | "andamento" | "risco" | "atrasada" | "nao_iniciada" | "sem_vinculo" | null;
+  const [legendFilter, setLegendFilter] = useState<LegendFilter>(null);
   const [boxSelecting, setBoxSelecting] = useState(false);
   const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
   const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null);
@@ -401,22 +403,39 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
         originalColorsRef.current.set(eid, mat.color.clone());
       }
 
-      if (linkedEids.has(eid)) {
-        const status = expressToStatus.get(eid) ?? "nao_iniciada";
-        mat.color.setHex(statusColor(status));
-        mat.opacity = 1;
-        mat.transparent = false;
+      const isLinked = linkedEids.has(eid);
+      const status = isLinked ? (expressToStatus.get(eid) ?? "nao_iniciada") : null;
+
+      let shouldHighlight = true;
+      if (legendFilter) {
+        if (legendFilter === "sem_vinculo") {
+          shouldHighlight = !isLinked;
+        } else {
+          shouldHighlight = isLinked && status === legendFilter;
+        }
+      }
+
+      if (isLinked) {
+        mat.color.setHex(statusColor(status!));
+        mat.opacity = shouldHighlight ? 1 : 0.1;
+        mat.transparent = !shouldHighlight;
       } else {
         const orig = originalColorsRef.current.get(eid);
-        if (orig) {
-          mat.color.copy(orig);
+        if (orig) mat.color.copy(orig);
+        if (legendFilter === "sem_vinculo") {
+          mat.opacity = 1;
+          mat.transparent = false;
+        } else if (legendFilter) {
+          mat.opacity = 0.08;
+          mat.transparent = true;
+        } else {
+          mat.opacity = linkedEids.size > 0 ? 0.4 : 1;
+          mat.transparent = linkedEids.size > 0;
         }
-        mat.opacity = linkedEids.size > 0 ? 0.4 : 1;
-        mat.transparent = linkedEids.size > 0;
       }
       mat.needsUpdate = true;
     });
-  }, [bimLinks, models, colorRevision]);
+  }, [bimLinks, models, colorRevision, legendFilter]);
 
   useEffect(() => {
     if (!savedModels || savedModels.length === 0 || savedModelsLoadedRef.current) return;
@@ -1672,33 +1691,80 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
             </div>
           )}
           {models.length > 0 && (bimLinks?.length ?? 0) > 0 && (
-            <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur rounded-lg shadow-sm border border-slate-200 px-3 py-2 z-10">
-              <p className="text-[9px] font-bold text-slate-600 mb-1">Legenda 4D</p>
-              <div className="flex flex-col gap-0.5">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#2ecc71" }} />
-                  <span className="text-[9px] text-slate-500">Concluída (100%)</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#3498db" }} />
-                  <span className="text-[9px] text-slate-500">Em andamento</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#f39c12" }} />
-                  <span className="text-[9px] text-slate-500">Risco de atraso</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#e74c3c" }} />
-                  <span className="text-[9px] text-slate-500">Atrasada</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#95a5a6" }} />
-                  <span className="text-[9px] text-slate-500">Não iniciada</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm border border-slate-300" style={{ backgroundColor: "#b0bec5", opacity: 0.5 }} />
-                  <span className="text-[9px] text-slate-500">Sem vinculação</span>
-                </div>
+            <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur rounded-lg shadow-sm border border-slate-200 px-2.5 py-2 z-10">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[9px] font-bold text-slate-600">Legenda 4D</p>
+                {legendFilter && (
+                  <button
+                    className="text-[8px] text-blue-500 hover:text-blue-700 hover:underline"
+                    onClick={() => setLegendFilter(null)}
+                  >
+                    Limpar filtro
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-col gap-0">
+                {([
+                  { key: "concluida" as LegendFilter, color: "#2ecc71", label: "Concluída (100%)" },
+                  { key: "andamento" as LegendFilter, color: "#3498db", label: "Em andamento" },
+                  { key: "risco" as LegendFilter, color: "#f39c12", label: "Risco de atraso" },
+                  { key: "atrasada" as LegendFilter, color: "#e74c3c", label: "Atrasada" },
+                  { key: "nao_iniciada" as LegendFilter, color: "#95a5a6", label: "Não iniciada" },
+                  { key: "sem_vinculo" as LegendFilter, color: "#b0bec5", label: "Sem vinculação", border: true, dim: true },
+                ] as const).map(item => {
+                  const isActive = legendFilter === item.key;
+                  const count = (() => {
+                    if (!bimLinks) return 0;
+                    if (item.key === "sem_vinculo") return "—";
+                    const today = new Date(); today.setHours(0,0,0,0);
+                    return bimLinks.filter(link => {
+                      const prog = link.progressoReal ?? 0;
+                      const fim = link.fim ? new Date(link.fim) : null;
+                      const inicio = link.inicio ? new Date(link.inicio) : null;
+                      if (item.key === "concluida") return prog >= 100;
+                      if (item.key === "atrasada") return prog < 100 && fim && fim < today;
+                      if (item.key === "risco") {
+                        if (prog >= 100 || (fim && fim < today)) return false;
+                        if (!inicio || inicio > today || !fim) return false;
+                        const totalD = (fim.getTime() - inicio.getTime()) / 86400000;
+                        const elap = (today.getTime() - inicio.getTime()) / 86400000;
+                        const exp = totalD > 0 ? (elap / totalD) * 100 : 0;
+                        return prog < exp * 0.7;
+                      }
+                      if (item.key === "andamento") {
+                        if (prog >= 100) return false;
+                        if (fim && fim < today) return false;
+                        if (inicio && inicio <= today && fim) {
+                          const totalD = (fim.getTime() - inicio.getTime()) / 86400000;
+                          const elap = (today.getTime() - inicio.getTime()) / 86400000;
+                          const exp = totalD > 0 ? (elap / totalD) * 100 : 0;
+                          if (prog < exp * 0.7) return false;
+                        }
+                        return prog > 0 || (inicio && inicio <= today);
+                      }
+                      if (item.key === "nao_iniciada") return prog === 0 && (!inicio || inicio > today);
+                      return false;
+                    }).length;
+                  })();
+                  return (
+                    <button
+                      key={item.key}
+                      className={`flex items-center gap-1.5 px-1 py-0.5 rounded text-left w-full transition-all ${
+                        isActive ? "bg-slate-100 ring-1 ring-slate-300" : "hover:bg-slate-50"
+                      } ${legendFilter && !isActive ? "opacity-40" : ""}`}
+                      onClick={() => setLegendFilter(isActive ? null : item.key)}
+                    >
+                      <div
+                        className={`w-3 h-3 rounded-sm flex-shrink-0 ${item.border ? "border border-slate-300" : ""}`}
+                        style={{ backgroundColor: item.color, opacity: item.dim ? 0.5 : 1 }}
+                      />
+                      <span className="text-[9px] text-slate-600 flex-1">{item.label}</span>
+                      {count !== "—" && count > 0 && (
+                        <span className="text-[8px] text-slate-400 font-medium">{count}</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
