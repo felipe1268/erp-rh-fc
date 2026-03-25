@@ -79,7 +79,8 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
   const [models, setModels] = useState<IfcModel[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
-  const [selectedDiscipline, setSelectedDiscipline] = useState("Estrutural");
+  const [importDiscipline, setImportDiscipline] = useState("Estrutural");
+  const [viewFilter, setViewFilter] = useState<string>("Todas");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const [expandedStoreys, setExpandedStoreys] = useState<Set<string>>(new Set());
@@ -184,6 +185,20 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
       initRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    models.forEach(m => {
+      const shouldShow = viewFilter === "Todas" || m.discipline === viewFilter;
+      if (m.visible !== shouldShow) {
+        m.meshes.forEach(mesh => { mesh.visible = shouldShow; });
+        m.visible = shouldShow;
+      }
+    });
+    setModels(prev => prev.map(m => ({
+      ...m,
+      visible: viewFilter === "Todas" || m.discipline === viewFilter,
+    })));
+  }, [viewFilter]);
 
   const initIfcApi = async () => {
     if (ifcApiRef.current) return ifcApiRef.current;
@@ -402,7 +417,7 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
       const model: IfcModel = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         name: file.name.replace(/\.ifc$/i, ""),
-        discipline: selectedDiscipline,
+        discipline: importDiscipline,
         meshes,
         visible: true,
         storeys,
@@ -473,8 +488,9 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
     });
   };
 
-  const totalElements = models.reduce((sum, m) => sum + m.elementCount, 0);
-  const disciplineGroups = models.reduce<Record<string, IfcModel[]>>((acc, m) => {
+  const filteredModels = viewFilter === "Todas" ? models : models.filter(m => m.discipline === viewFilter);
+  const totalElements = filteredModels.reduce((sum, m) => sum + m.elementCount, 0);
+  const disciplineGroups = filteredModels.reduce<Record<string, IfcModel[]>>((acc, m) => {
     (acc[m.discipline] ??= []).push(m);
     return acc;
   }, {});
@@ -490,19 +506,39 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
           {models.length > 0 && (
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
-                {models.length} modelo{models.length !== 1 ? "s" : ""}
+                {filteredModels.length}/{models.length} modelo{models.length !== 1 ? "s" : ""}
               </Badge>
               <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
                 {totalElements} elementos
               </Badge>
+              {viewFilter !== "Todas" && (
+                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                  {viewFilter}
+                </Badge>
+              )}
             </div>
           )}
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 border border-slate-200 rounded-md bg-white px-1.5 py-0.5">
+            <Eye className="h-3 w-3 text-slate-400" />
+            <select
+              className="text-xs bg-transparent border-0 outline-none pr-1 font-medium text-slate-700"
+              value={viewFilter}
+              onChange={e => setViewFilter(e.target.value)}
+            >
+              <option value="Todas">Todas Disciplinas</option>
+              {DISCIPLINES.map(d => {
+                const count = models.filter(m => m.discipline === d).length;
+                return <option key={d} value={d}>{d}{count > 0 ? ` (${count})` : ""}</option>;
+              })}
+            </select>
+          </div>
+          <div className="w-px h-5 bg-slate-200" />
           <select
             className="text-xs border border-slate-200 rounded px-2 py-1 bg-white"
-            value={selectedDiscipline}
-            onChange={e => setSelectedDiscipline(e.target.value)}
+            value={importDiscipline}
+            onChange={e => setImportDiscipline(e.target.value)}
           >
             {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
@@ -511,7 +547,7 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
             <Button size="sm" variant="default" className="gap-1.5" asChild disabled={loading}>
               <span>
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                {loading ? loadingMsg : "Importar IFC"}
+                {loading ? loadingMsg : `Importar ${importDiscipline}`}
               </span>
             </Button>
           </label>
@@ -531,14 +567,23 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
       <div className="flex flex-1 overflow-hidden">
         {sidebarOpen && (
           <div className="w-72 border-r border-slate-200 bg-slate-50 overflow-y-auto flex-shrink-0">
-            {models.length === 0 ? (
+            {filteredModels.length === 0 ? (
               <div className="p-6 text-center text-slate-400">
                 <Box className="h-10 w-10 mx-auto mb-3 text-slate-300" />
-                <p className="text-sm font-medium">Nenhum modelo carregado</p>
-                <p className="text-xs mt-1">Importe um arquivo .ifc para começar</p>
-                <p className="text-[10px] mt-3 text-slate-400">
-                  Cada disciplina (estrutural, arquitetura, etc.) pode ser importada separadamente e o ERP vincula automaticamente.
-                </p>
+                {models.length === 0 ? (
+                  <>
+                    <p className="text-sm font-medium">Nenhum modelo carregado</p>
+                    <p className="text-xs mt-1">Importe um arquivo .ifc para começar</p>
+                    <p className="text-[10px] mt-3 text-slate-400">
+                      Cada disciplina (estrutural, arquitetura, etc.) pode ser importada separadamente e o ERP vincula automaticamente.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium">Nenhum modelo de "{viewFilter}"</p>
+                    <p className="text-xs mt-1">Importe um .ifc com essa disciplina ou selecione "Todas Disciplinas"</p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="p-2 space-y-2">
