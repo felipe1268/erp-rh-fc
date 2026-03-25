@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Upload, Loader2, Box, Eye, EyeOff, Maximize,
   ChevronRight, ChevronDown, Trash2, Layers, Palette, Info,
+  MousePointer2, Link2, X, Check, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -87,14 +88,32 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const [expandedStoreys, setExpandedStoreys] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedMeshes, setSelectedMeshes] = useState<Set<THREE.Mesh>>(new Set());
+  const [linkPanelOpen, setLinkPanelOpen] = useState(false);
+  const [activitySearch, setActivitySearch] = useState("");
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const mouseRef = useRef(new THREE.Vector2());
+  const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const initRef = useRef(false);
   const savedModelsLoadedRef = useRef(false);
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
 
   const uploadMutation = trpc.bim.uploadModel.useMutation();
   const deleteMutation = trpc.bim.deleteModel.useMutation();
+  const saveLinkMutation = trpc.bim.saveLink.useMutation();
+  const deleteLinkMutation = trpc.bim.deleteLink.useMutation();
   const { data: savedModels } = trpc.bim.listModels.useQuery(
     { projetoId, companyId },
     { enabled: !!companyId && !!projetoId }
+  );
+  const { data: bimLinks, refetch: refetchLinks } = trpc.bim.listLinks.useQuery(
+    { projetoId, companyId },
+    { enabled: !!companyId && !!projetoId }
+  );
+  const { data: bimAtividades } = trpc.bim.listAtividades.useQuery(
+    { projetoId, companyId },
+    { enabled: !!projetoId && linkPanelOpen }
   );
 
   const parseIfcBuffer = useCallback(async (
@@ -234,6 +253,18 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
       initRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectMode) {
+        clearSelection();
+        setSelectMode(false);
+        setLinkPanelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectMode, selectedMeshes]);
 
   useEffect(() => {
     models.forEach(m => {
@@ -561,6 +592,119 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     toast.success("Modelo removido");
   };
 
+  const HIGHLIGHT_COLOR = new THREE.Color(0x00aaff);
+  const SELECTED_MATERIAL = new THREE.MeshPhongMaterial({
+    color: HIGHLIGHT_COLOR,
+    emissive: new THREE.Color(0x003366),
+    transparent: true,
+    opacity: 0.85,
+    side: THREE.DoubleSide,
+  });
+
+  const highlightMesh = (mesh: THREE.Mesh) => {
+    if (!originalMaterialsRef.current.has(mesh)) {
+      originalMaterialsRef.current.set(mesh, mesh.material);
+    }
+    mesh.material = SELECTED_MATERIAL;
+  };
+
+  const unhighlightMesh = (mesh: THREE.Mesh) => {
+    const orig = originalMaterialsRef.current.get(mesh);
+    if (orig) {
+      mesh.material = orig;
+      originalMaterialsRef.current.delete(mesh);
+    }
+  };
+
+  const toggleMeshSelection = (mesh: THREE.Mesh) => {
+    setSelectedMeshes(prev => {
+      const next = new Set(prev);
+      if (next.has(mesh)) {
+        next.delete(mesh);
+        unhighlightMesh(mesh);
+      } else {
+        next.add(mesh);
+        highlightMesh(mesh);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    selectedMeshes.forEach(m => unhighlightMesh(m));
+    setSelectedMeshes(new Set());
+  };
+
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent) => {
+    if (!selectMode || !cameraRef.current || !sceneRef.current || !containerRef.current) return;
+
+    if (mouseDownPosRef.current) {
+      const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
+      const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
+      if (dx > 5 || dy > 5) return;
+    }
+
+    const rect = containerRef.current.getBoundingClientRect();
+    mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
+
+    const allMeshes = models.flatMap(m => m.meshes).filter(m => m.visible);
+    const intersects = raycasterRef.current.intersectObjects(allMeshes, false);
+
+    if (intersects.length > 0) {
+      const mesh = intersects[0].object as THREE.Mesh;
+      toggleMeshSelection(mesh);
+    }
+  };
+
+  const handleLinkToActivity = async (atividadeId: number) => {
+    if (selectedMeshes.size === 0) {
+      toast.error("Selecione pelo menos um elemento 3D primeiro");
+      return;
+    }
+
+    const expressIds = Array.from(selectedMeshes).map(m => m.userData.expressID || 0).filter(id => id > 0);
+    const firstModel = models.find(m => m.meshes.some(mesh => selectedMeshes.has(mesh)));
+
+    try {
+      await saveLinkMutation.mutateAsync({
+        projetoId,
+        companyId,
+        atividadeId,
+        modelId: firstModel?.dbId || 0,
+        expressIds,
+      });
+      toast.success(`${expressIds.length} elemento(s) vinculado(s) à atividade`);
+      clearSelection();
+      setLinkPanelOpen(false);
+      refetchLinks();
+    } catch (err) {
+      toast.error("Erro ao vincular elementos");
+      console.error(err);
+    }
+  };
+
+  const handleDeleteLink = async (linkId: number) => {
+    try {
+      await deleteLinkMutation.mutateAsync({ id: linkId, companyId });
+      toast.success("Vinculação removida");
+      refetchLinks();
+    } catch (err) {
+      toast.error("Erro ao remover vinculação");
+    }
+  };
+
+  const filteredAtividades = (bimAtividades || []).filter(a =>
+    !activitySearch || a.nome.toLowerCase().includes(activitySearch.toLowerCase()) ||
+    (a.eapCodigo || "").toLowerCase().includes(activitySearch.toLowerCase())
+  );
+
   const resetCamera = () => {
     const allMeshes = models.flatMap(m => m.meshes).filter(m => m.visible);
     if (allMeshes.length > 0) {
@@ -644,6 +788,37 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               </span>
             </Button>
           </label>
+          <div className="w-px h-5 bg-slate-200" />
+          {models.length > 0 && (
+            <>
+              <Button
+                size="sm"
+                variant={selectMode ? "default" : "outline"}
+                className={`gap-1 ${selectMode ? "bg-orange-500 hover:bg-orange-600" : ""}`}
+                onClick={() => {
+                  if (selectMode) { clearSelection(); }
+                  setSelectMode(!selectMode);
+                }}
+              >
+                <MousePointer2 className="h-3.5 w-3.5" />
+                {selectMode ? `Seleção (${selectedMeshes.size})` : "Selecionar"}
+              </Button>
+              {selectMode && selectedMeshes.size > 0 && (
+                <Button
+                  size="sm" variant="default"
+                  className="gap-1 bg-green-600 hover:bg-green-700"
+                  onClick={() => setLinkPanelOpen(true)}
+                >
+                  <Link2 className="h-3.5 w-3.5" /> Vincular ({selectedMeshes.size})
+                </Button>
+              )}
+              {(bimLinks?.length ?? 0) > 0 && (
+                <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                  {bimLinks!.length} vínculo{bimLinks!.length !== 1 ? "s" : ""}
+                </Badge>
+              )}
+            </>
+          )}
           <Button size="sm" variant="outline" className="gap-1" onClick={resetCamera}>
             <Maximize className="h-3.5 w-3.5" /> Enquadrar
           </Button>
@@ -762,7 +937,12 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
           </div>
         )}
 
-        <div ref={containerRef} className="flex-1 relative bg-gradient-to-br from-slate-100 to-blue-50">
+        <div
+          ref={containerRef}
+          className={`flex-1 relative bg-gradient-to-br from-slate-100 to-blue-50 ${selectMode ? "cursor-crosshair" : ""}`}
+          onMouseDown={handleCanvasMouseDown}
+          onClick={handleCanvasClick}
+        >
           {models.length === 0 && !loading && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center max-w-md px-8">
@@ -809,7 +989,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               </div>
             </div>
           )}
-          {selectedElement && (
+          {selectedElement && !selectMode && (
             <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg border border-slate-200 p-3 z-10 max-w-xs">
               <div className="flex items-center gap-2 mb-1">
                 <Info className="h-3.5 w-3.5 text-blue-600" />
@@ -825,10 +1005,102 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               </div>
             </div>
           )}
-          {models.length > 0 && (
+          {selectMode && (
+            <div className="absolute bottom-4 left-4 bg-orange-50 rounded-lg shadow-lg border border-orange-200 p-3 z-10 max-w-xs">
+              <div className="flex items-center gap-2 mb-1">
+                <MousePointer2 className="h-3.5 w-3.5 text-orange-600" />
+                <span className="text-xs font-bold text-orange-800">Modo Seleção</span>
+              </div>
+              <p className="text-[10px] text-orange-600">
+                Clique nos elementos 3D para selecioná-los.
+                {selectedMeshes.size > 0 && (
+                  <span className="font-bold"> {selectedMeshes.size} selecionado(s).</span>
+                )}
+              </p>
+              {selectedMeshes.size > 0 && (
+                <div className="flex gap-1 mt-2">
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={clearSelection}>
+                    <X className="h-3 w-3" /> Limpar
+                  </Button>
+                  <Button size="sm" className="h-6 text-[10px] gap-1 bg-green-600 hover:bg-green-700" onClick={() => setLinkPanelOpen(true)}>
+                    <Link2 className="h-3 w-3" /> Vincular a atividade
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          {linkPanelOpen && (
+            <div className="absolute inset-0 bg-black/30 z-30 flex items-center justify-center" onClick={() => setLinkPanelOpen(false)}>
+              <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-[420px] max-h-[80%] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-green-50 to-blue-50 rounded-t-xl">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-bold text-slate-800">Vincular a Atividade</span>
+                    <Badge variant="outline" className="text-[10px] bg-orange-50 text-orange-700 border-orange-200">
+                      {selectedMeshes.size} elemento(s)
+                    </Badge>
+                  </div>
+                  <button onClick={() => setLinkPanelOpen(false)} className="p-1 rounded hover:bg-slate-100">
+                    <X className="h-4 w-4 text-slate-400" />
+                  </button>
+                </div>
+                <div className="px-4 py-2 border-b border-slate-100">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar atividade pelo nome ou EAP..."
+                      className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      value={activitySearch}
+                      onChange={e => setActivitySearch(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto max-h-[400px]">
+                  {filteredAtividades.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400 text-xs">
+                      {bimAtividades?.length === 0 ? "Nenhuma atividade no cronograma aprovado" : "Nenhuma atividade encontrada"}
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-50">
+                      {filteredAtividades.map(a => (
+                        <button
+                          key={a.id}
+                          className="w-full text-left px-4 py-2 hover:bg-blue-50 transition-colors group"
+                          onClick={() => handleLinkToActivity(a.id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-400 font-mono w-16 flex-shrink-0">{a.eapCodigo || "—"}</span>
+                            <span className="text-xs text-slate-700 font-medium truncate flex-1">{a.nome}</span>
+                            <Check className="h-3.5 w-3.5 text-green-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5 pl-[72px]">
+                            {a.inicio && <span className="text-[9px] text-slate-400">{a.inicio}</span>}
+                            {a.fim && <span className="text-[9px] text-slate-400">→ {a.fim}</span>}
+                            {a.progressoReal > 0 && (
+                              <span className="text-[9px] text-green-600 font-medium">{a.progressoReal}%</span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {models.length > 0 && !selectMode && (
             <div className="absolute top-3 left-3 bg-white/90 backdrop-blur rounded-lg shadow-sm border border-slate-200 px-3 py-1.5 z-10">
               <p className="text-[10px] text-slate-500">
-                🖱️ Rotacionar: arrastar | Zoom: scroll | Mover: botão direito
+                Rotacionar: arrastar | Zoom: scroll | Mover: botão direito
+              </p>
+            </div>
+          )}
+          {models.length > 0 && selectMode && (
+            <div className="absolute top-3 left-3 bg-orange-50/90 backdrop-blur rounded-lg shadow-sm border border-orange-200 px-3 py-1.5 z-10">
+              <p className="text-[10px] text-orange-700 font-medium">
+                Clique nos elementos para selecionar | ESC para sair
               </p>
             </div>
           )}

@@ -5181,4 +5181,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 12:00:00",
   },
+  {
+    version: 779,
+    titulo: "BIM 4D — Seleção interativa e vinculação com cronograma",
+    descricao: "Seleção interativa de elementos 3D no viewer BIM: botão 'Selecionar' ativa modo de clique nos elementos (ficam azuis). Após selecionar múltiplos elementos, botão 'Vincular' abre painel com busca de atividades do cronograma. Vinculações salvas no banco (tabela bim_links). Correção do bug de persistência dos modelos IFC (faltava await no getDb).",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 14:00:00",
+  },
 ];

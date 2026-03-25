@@ -13,7 +13,8 @@ export const bimRouter = router({
   listModels: protectedProcedure
     .input(z.object({ projetoId: z.number(), companyId: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) return [];
       const rows = await db.execute(
         sql`SELECT id, nome, disciplina, arquivo_path, tamanho_bytes, num_elementos, num_pavimentos, pavimentos, criado_em
             FROM bim_models
@@ -56,7 +57,9 @@ export const bimRouter = router({
 
       await storagePut(relKey, buf, "application/octet-stream");
 
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível" });
+
       const result = await db.execute(
         sql`INSERT INTO bim_models (company_id, projeto_id, nome, disciplina, arquivo_path, tamanho_bytes, num_elementos, num_pavimentos, pavimentos, criado_por)
             VALUES (${input.companyId}, ${input.projetoId}, ${input.nome}, ${input.disciplina}, ${relKey}, ${buf.length}, ${input.numElementos}, ${input.numPavimentos}, ${JSON.stringify(input.pavimentos)}::jsonb, ${(ctx as any).user?.id || 0})
@@ -70,7 +73,9 @@ export const bimRouter = router({
   downloadModel: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível" });
+
       const rows = await db.execute(
         sql`SELECT arquivo_path FROM bim_models WHERE id = ${input.id} AND company_id = ${input.companyId}`
       );
@@ -92,7 +97,9 @@ export const bimRouter = router({
   deleteModel: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível" });
+
       const rows = await db.execute(
         sql`SELECT arquivo_path FROM bim_models WHERE id = ${input.id} AND company_id = ${input.companyId}`
       );
@@ -111,6 +118,117 @@ export const bimRouter = router({
         sql`DELETE FROM bim_models WHERE id = ${input.id} AND company_id = ${input.companyId}`
       );
 
+      return { success: true };
+    }),
+
+  listLinks: protectedProcedure
+    .input(z.object({ projetoId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db.execute(
+        sql`SELECT bl.id, bl.atividade_id, bl.model_id, bl.express_ids, bl.storey_name, bl.descricao,
+                   pa.nome as atividade_nome, pa.inicio, pa.fim, pa.progresso_real
+            FROM bim_links bl
+            LEFT JOIN planejamento_atividades pa ON pa.id = bl.atividade_id
+            WHERE bl.projeto_id = ${input.projetoId} AND bl.company_id = ${input.companyId}
+            ORDER BY bl.criado_em ASC`
+      );
+      return (rows.rows || []).map((r: any) => ({
+        id: r.id,
+        atividadeId: r.atividade_id,
+        modelId: r.model_id,
+        expressIds: r.express_ids || [],
+        storeyName: r.storey_name,
+        descricao: r.descricao,
+        atividadeNome: r.atividade_nome,
+        inicio: r.inicio,
+        fim: r.fim,
+        progressoReal: r.progresso_real != null ? parseFloat(r.progresso_real) : null,
+      }));
+    }),
+
+  saveLink: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      companyId: z.number(),
+      atividadeId: z.number(),
+      modelId: z.number(),
+      expressIds: z.array(z.number()),
+      storeyName: z.string().optional(),
+      descricao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível" });
+
+      if (!input.expressIds.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum elemento selecionado" });
+
+      const projCheck = await db.execute(
+        sql`SELECT id FROM planejamento_projetos WHERE id = ${input.projetoId} AND company_id = ${input.companyId}`
+      );
+      if (!projCheck.rows?.length) throw new TRPCError({ code: "FORBIDDEN", message: "Projeto não pertence à empresa" });
+
+      if (input.modelId > 0) {
+        const modelCheck = await db.execute(
+          sql`SELECT id FROM bim_models WHERE id = ${input.modelId} AND company_id = ${input.companyId} AND projeto_id = ${input.projetoId}`
+        );
+        if (!modelCheck.rows?.length) throw new TRPCError({ code: "FORBIDDEN", message: "Modelo não pertence ao projeto" });
+      }
+
+      const ativCheck = await db.execute(
+        sql`SELECT pa.id FROM planejamento_atividades pa
+            JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
+            WHERE pa.id = ${input.atividadeId} AND pa.projeto_id = ${input.projetoId} AND pp.company_id = ${input.companyId}`
+      );
+      if (!ativCheck.rows?.length) throw new TRPCError({ code: "FORBIDDEN", message: "Atividade não pertence ao projeto" });
+
+      const result = await db.execute(
+        sql`INSERT INTO bim_links (company_id, projeto_id, atividade_id, model_id, express_ids, storey_name, descricao)
+            VALUES (${input.companyId}, ${input.projetoId}, ${input.atividadeId}, ${input.modelId}, ${JSON.stringify(input.expressIds)}::jsonb, ${input.storeyName || null}, ${input.descricao || null})
+            RETURNING id`
+      );
+
+      return { id: (result.rows?.[0] as any)?.id };
+    }),
+
+  listAtividades: protectedProcedure
+    .input(z.object({ projetoId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db.execute(
+        sql`SELECT pa.id, pa.nome, pa.eap_codigo, pa.data_inicio as inicio, pa.data_fim as fim,
+                   pa.progresso_real, pa.is_grupo, pa.nivel
+            FROM planejamento_atividades pa
+            JOIN planejamento_revisoes pr ON pr.id = pa.revisao_id
+            JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
+            WHERE pa.projeto_id = ${input.projetoId}
+              AND pp.company_id = ${input.companyId}
+              AND pr.status = 'aprovada'
+              AND (pa.is_grupo IS NULL OR pa.is_grupo = false)
+              AND (pa.disabled IS NULL OR pa.disabled = false)
+            ORDER BY pa.ordem ASC, pa.id ASC`
+      );
+      return (rows.rows || []).map((r: any) => ({
+        id: r.id,
+        nome: r.nome,
+        eapCodigo: r.eap_codigo,
+        inicio: r.inicio,
+        fim: r.fim,
+        progressoReal: r.progresso_real != null ? parseFloat(r.progresso_real) : 0,
+      }));
+    }),
+
+  deleteLink: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível" });
+
+      await db.execute(
+        sql`DELETE FROM bim_links WHERE id = ${input.id} AND company_id = ${input.companyId}`
+      );
       return { success: true };
     }),
 });

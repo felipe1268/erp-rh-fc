@@ -12,7 +12,7 @@ A full-stack HR/ERP system built for FC Engenharia. It handles employees, payrol
 6. **Orçamento** — Excel import, 3 budget versions (Venda/Custo/Meta), ABC curve, BDI, EAP tree
 7. **Financeiro** (Rev.342) — 17 DB tables, 25+ tRPC endpoints, 12 React pages: DRE, fluxo de caixa, contas, conciliação bancária, obrigações fiscais
 8. **Compras** (Rev.343) — 24 DB tables, 30+ tRPC endpoints, 8 novas páginas: SC emergencial, cotações (portal fornecedor), OC com numeração configurável, recebimentos, AP integrada, realocação de verba, comissões, bridge financeiro
-9. **BIM 3D** (Rev.777-778) — Visualizador de modelos IFC no Planejamento. Three.js + web-ifc (WASM). Importação multi-disciplina com persistência no servidor. Tabela: `bim_models`. Router: `server/routers/bim.ts`. Frontend: `client/src/pages/planejamento/BimViewer.tsx`. Arquivos salvos em `server/uploads/bim/`. Limite 35MB por arquivo.
+9. **BIM 3D/4D** (Rev.777-779) — Visualizador de modelos IFC no Planejamento. Three.js + web-ifc (WASM). Importação multi-disciplina com persistência no servidor. Seleção interativa de elementos 3D (raycasting + multi-select) para vincular a atividades do cronograma (BIM 4D). Tabelas: `bim_models`, `bim_links`. Router: `server/routers/bim.ts`. Frontend: `client/src/pages/planejamento/BimViewer.tsx`. Arquivos salvos em `server/uploads/bim/`. Limite 35MB por arquivo.
 
 ## Orçamento Module
 - Routes: `/orcamento/painel`, `/orcamento/lista`, `/orcamento/importar`, `/orcamento/:id`

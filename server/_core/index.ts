@@ -145,6 +145,18 @@ async function startServer() {
           criado_por INTEGER DEFAULT 0
         )`);
         console.log("[ColFix] bim_models OK");
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS bim_links (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL DEFAULT 0,
+          projeto_id INTEGER NOT NULL,
+          atividade_id INTEGER NOT NULL,
+          model_id INTEGER NOT NULL,
+          express_ids JSONB DEFAULT '[]',
+          storey_name VARCHAR(255),
+          descricao TEXT,
+          criado_em TIMESTAMP DEFAULT NOW()
+        )`);
+        console.log("[ColFix] bim_links OK");
         await db.execute(sql`ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT`);
         console.log("[ColFix] epis.fotoUrl OK");
         // Rev.612: novos campos Aviso Prévio
