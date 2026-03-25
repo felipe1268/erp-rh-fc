@@ -5190,4 +5190,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 14:00:00",
   },
+  {
+    version: 780,
+    titulo: "BIM 4D — Coloração por status e progresso real",
+    descricao: "Coloração 4D baseada no status real: Verde=concluída (100%), Azul=em andamento, Amarelo=risco de atraso (progresso < 70% do esperado), Vermelho=atrasada (passou data fim sem 100%). Progresso real busca dados da tabela planejamento_avancos. Hierarquia de grupos/subgrupos (pilar, viga, laje) visível no painel de vinculação com breadcrumb. Busca por nome de grupo também funciona.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 16:00:00",
+  },
+  {
+    version: 781,
+    titulo: "BIM — Desvinculação, lista de vínculos e auto-vinculação inteligente",
+    descricao: "Painel lateral agora exibe lista de vinculações existentes com barra de progresso e botão de desvincular (lixeira). Botão 'Auto-vincular (Pilar/Viga/Laje)' detecta automaticamente o tipo IFC de cada elemento 3D (IfcColumn=Pilar, IfcBeam=Viga, IfcSlab=Laje) e vincula aos grupos correspondentes do cronograma. Progresso real agora vem da tabela planejamento_avancos.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 17:00:00",
+  },
 ];

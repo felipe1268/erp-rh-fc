@@ -126,15 +126,29 @@ export const bimRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
-      const rows = await db.execute(
-        sql`SELECT bl.id, bl.atividade_id, bl.model_id, bl.express_ids, bl.storey_name, bl.descricao,
-                   pa.nome as atividade_nome, pa.data_inicio as inicio, pa.data_fim as fim
-            FROM bim_links bl
-            LEFT JOIN planejamento_atividades pa ON pa.id = bl.atividade_id
-            WHERE bl.projeto_id = ${input.projetoId} AND bl.company_id = ${input.companyId}
-            ORDER BY bl.criado_em ASC`
-      );
-      return (rows.rows || []).map((r: any) => ({
+      const [linksRes, avancosRes] = await Promise.all([
+        db.execute(
+          sql`SELECT bl.id, bl.atividade_id, bl.model_id, bl.express_ids, bl.storey_name, bl.descricao,
+                     pa.nome as atividade_nome, pa.data_inicio as inicio, pa.data_fim as fim
+              FROM bim_links bl
+              LEFT JOIN planejamento_atividades pa ON pa.id = bl.atividade_id
+              WHERE bl.projeto_id = ${input.projetoId} AND bl.company_id = ${input.companyId}
+              ORDER BY bl.criado_em ASC`
+        ),
+        db.execute(
+          sql`SELECT DISTINCT ON (av.atividade_id) av.atividade_id, av.percentual_acumulado
+              FROM planejamento_avancos av
+              WHERE av.projeto_id = ${input.projetoId}
+              ORDER BY av.atividade_id, av.semana DESC NULLS LAST, av.id DESC`
+        ),
+      ]);
+
+      const progressMap = new Map<number, number>();
+      (avancosRes.rows || []).forEach((a: any) => {
+        if (a.atividade_id != null) progressMap.set(Number(a.atividade_id), Number(a.percentual_acumulado || 0));
+      });
+
+      return (linksRes.rows || []).map((r: any) => ({
         id: r.id,
         atividadeId: r.atividade_id,
         modelId: r.model_id,
@@ -144,7 +158,7 @@ export const bimRouter = router({
         atividadeNome: r.atividade_nome,
         inicio: r.inicio,
         fim: r.fim,
-        progressoReal: 0,
+        progressoReal: progressMap.get(Number(r.atividade_id)) ?? 0,
       }));
     }),
 
@@ -199,7 +213,7 @@ export const bimRouter = router({
       if (!db) { console.log("[BIM] listAtividades: db null"); return []; }
       console.log(`[BIM] listAtividades projetoId=${input.projetoId} companyId=${input.companyId}`);
 
-      const [atividadesRes, gruposRes] = await Promise.all([
+      const [atividadesRes, gruposRes, avancosRes] = await Promise.all([
         db.execute(
           sql`SELECT pa.id, pa.nome, pa.eap_codigo, pa.data_inicio as inicio, pa.data_fim as fim
               FROM planejamento_atividades pa
@@ -220,6 +234,12 @@ export const bimRouter = router({
                 AND pa.is_grupo = true
                 AND (pa.disabled IS NOT TRUE)`
         ),
+        db.execute(
+          sql`SELECT DISTINCT ON (av.atividade_id) av.atividade_id, av.percentual_acumulado
+              FROM planejamento_avancos av
+              WHERE av.projeto_id = ${input.projetoId}
+              ORDER BY av.atividade_id, av.semana DESC NULLS LAST, av.id DESC`
+        ),
       ]);
 
       const grupoMap = new Map<string, string>();
@@ -239,14 +259,19 @@ export const bimRouter = router({
         return path.join(" > ");
       };
 
-      console.log(`[BIM] listAtividades result: ${atividadesRes.rows?.length ?? 0} rows, ${gruposRes.rows?.length ?? 0} grupos`);
+      const progressMap = new Map<number, number>();
+      (avancosRes.rows || []).forEach((a: any) => {
+        if (a.atividade_id != null) progressMap.set(Number(a.atividade_id), Number(a.percentual_acumulado || 0));
+      });
+
+      console.log(`[BIM] listAtividades result: ${atividadesRes.rows?.length ?? 0} rows, ${gruposRes.rows?.length ?? 0} grupos, ${progressMap.size} avancos`);
       return (atividadesRes.rows || []).map((r: any) => ({
         id: r.id,
         nome: r.nome,
         eapCodigo: r.eap_codigo,
         inicio: r.inicio,
         fim: r.fim,
-        progressoReal: 0,
+        progressoReal: progressMap.get(Number(r.id)) ?? 0,
         grupoPath: getPath(r.eap_codigo),
       }));
     }),

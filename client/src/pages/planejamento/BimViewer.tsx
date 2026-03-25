@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Upload, Loader2, Box, Eye, EyeOff, Maximize, Minimize2, Grid3X3,
   ChevronRight, ChevronDown, Trash2, Layers, Palette, Info,
-  MousePointer2, Link2, X, Check, Search, Fullscreen,
+  MousePointer2, Link2, X, Check, Search, Fullscreen, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -95,6 +95,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [selectedMeshes, setSelectedMeshes] = useState<Set<THREE.Mesh>>(new Set());
   const [linkPanelOpen, setLinkPanelOpen] = useState(false);
   const [activitySearch, setActivitySearch] = useState("");
+  const [autoLinking, setAutoLinking] = useState(false);
   const [boxSelecting, setBoxSelecting] = useState(false);
   const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
   const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null);
@@ -146,7 +147,10 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
 
     if (!sceneRef.current) return null;
 
-    const meshes = createMeshesFromIFC(api, modelID, sceneRef.current);
+    const eidTypeMap = new Map<number, string>();
+    elements.forEach(el => eidTypeMap.set(el.expressId, el.type));
+
+    const meshes = createMeshesFromIFC(api, modelID, sceneRef.current, eidTypeMap);
     const scaleFactor = 0.01;
     meshes.forEach(m => m.scale.set(scaleFactor, scaleFactor, scaleFactor));
     api.CloseModel(modelID);
@@ -311,18 +315,68 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   useEffect(() => {
     if (!sceneRef.current || !bimLinks) return;
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    type EidStatus = "concluida" | "atrasada" | "risco" | "andamento" | "nao_iniciada";
+    const expressToStatus = new Map<number, EidStatus>();
     const linkedEids = new Set<number>();
-    const expressToProgress = new Map<number, number>();
+
     bimLinks.forEach(link => {
       const prog = link.progressoReal ?? 0;
+      const fim = link.fim ? new Date(link.fim) : null;
+      const inicio = link.inicio ? new Date(link.inicio) : null;
+
+      let status: EidStatus;
+      if (prog >= 100) {
+        status = "concluida";
+      } else if (fim && fim < today) {
+        status = "atrasada";
+      } else if (inicio && inicio <= today && fim) {
+        const totalDays = (fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24);
+        const elapsed = (today.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24);
+        const expectedProg = totalDays > 0 ? (elapsed / totalDays) * 100 : 0;
+        if (prog < expectedProg * 0.7) {
+          status = "risco";
+        } else {
+          status = "andamento";
+        }
+      } else if (inicio && inicio <= today) {
+        status = prog > 0 ? "andamento" : "nao_iniciada";
+      } else {
+        status = prog > 0 ? "andamento" : "nao_iniciada";
+      }
+
       (link.expressIds || []).forEach((eid: number) => {
         linkedEids.add(eid);
-        const existing = expressToProgress.get(eid);
-        if (existing === undefined || prog > existing) {
-          expressToProgress.set(eid, prog);
+        const existing = expressToStatus.get(eid);
+        if (!existing || statusPriority(status) > statusPriority(existing)) {
+          expressToStatus.set(eid, status);
         }
       });
     });
+
+    function statusPriority(s: EidStatus): number {
+      switch (s) {
+        case "atrasada": return 4;
+        case "risco": return 3;
+        case "andamento": return 2;
+        case "nao_iniciada": return 1;
+        case "concluida": return 0;
+        default: return -1;
+      }
+    }
+
+    function statusColor(s: EidStatus): number {
+      switch (s) {
+        case "concluida": return 0x2ecc71;
+        case "atrasada": return 0xe74c3c;
+        case "risco": return 0xf39c12;
+        case "andamento": return 0x3498db;
+        case "nao_iniciada": return 0x95a5a6;
+        default: return 0xb0bec5;
+      }
+    }
 
     sceneRef.current.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh) || !obj.userData.expressID) return;
@@ -335,16 +389,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
       }
 
       if (linkedEids.has(eid)) {
-        const prog = expressToProgress.get(eid) ?? 0;
-        if (prog >= 100) {
-          mat.color.setHex(0x2ecc71);
-        } else if (prog > 0) {
-          const orig = originalColorsRef.current.get(eid)!;
-          const green = new THREE.Color(0x2ecc71);
-          mat.color.copy(orig).lerp(green, prog / 100);
-        } else {
-          mat.color.setHex(0xe74c3c);
-        }
+        const status = expressToStatus.get(eid) ?? "nao_iniciada";
+        mat.color.setHex(statusColor(status));
         mat.opacity = 1;
         mat.transparent = false;
       } else {
@@ -485,7 +531,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     return elements;
   };
 
-  const createMeshesFromIFC = (api: WebIFC.IfcAPI, modelID: number, scene: THREE.Scene): THREE.Mesh[] => {
+  const createMeshesFromIFC = (api: WebIFC.IfcAPI, modelID: number, scene: THREE.Scene, eidTypeMap?: Map<number, string>): THREE.Mesh[] => {
     const meshes: THREE.Mesh[] = [];
     api.StreamAllMeshes(modelID, (mesh) => {
       const placedGeometries = mesh.geometries;
@@ -528,6 +574,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
         matrix.fromArray(pg.flatTransformation);
         m.applyMatrix4(matrix);
         m.userData.expressID = mesh.expressID;
+        m.userData.ifcType = eidTypeMap?.get(mesh.expressID) || "";
 
         scene.add(m);
         meshes.push(m);
@@ -835,6 +882,84 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     }
   };
 
+  const IFC_TYPE_KEYWORDS: Record<string, string[]> = {
+    "Pilares": ["pilar", "pilares"],
+    "Vigas": ["viga", "vigas"],
+    "Lajes": ["laje", "lajes"],
+    "Fundações": ["fundaç", "fundacao", "fundações", "sapata", "bloco de fundação", "estaca"],
+    "Paredes": ["parede", "paredes", "alvenaria"],
+    "Escadas": ["escada", "escadas"],
+    "Telhados": ["telhado", "cobertura"],
+  };
+
+  const handleAutoLink = async () => {
+    if (!bimAtividades?.length || !models.length || !sceneRef.current) return;
+    setAutoLinking(true);
+
+    try {
+      const eidsByType = new Map<string, number[]>();
+      sceneRef.current.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh) || !obj.userData.expressID) return;
+        const ifcType = (obj.userData.ifcType as string) || "";
+        if (!ifcType) return;
+        if (!eidsByType.has(ifcType)) eidsByType.set(ifcType, []);
+        eidsByType.get(ifcType)!.push(obj.userData.expressID as number);
+      });
+
+      const alreadyLinkedEids = new Set<number>();
+      bimLinks?.forEach(link => {
+        (link.expressIds || []).forEach((eid: number) => alreadyLinkedEids.add(eid));
+      });
+
+      let linked = 0;
+      let skipped = 0;
+
+      for (const [ifcType, keywords] of Object.entries(IFC_TYPE_KEYWORDS)) {
+        const eids = eidsByType.get(ifcType);
+        if (!eids || eids.length === 0) continue;
+
+        const newEids = eids.filter(eid => !alreadyLinkedEids.has(eid));
+        if (newEids.length === 0) { skipped++; continue; }
+
+        const matchingActivities = bimAtividades.filter(a => {
+          const searchText = `${a.nome} ${a.grupoPath || ""}`.toLowerCase();
+          return keywords.some(kw => searchText.includes(kw));
+        });
+
+        if (matchingActivities.length === 0) { skipped++; continue; }
+
+        const firstModel = models[0];
+
+        for (const atividade of matchingActivities) {
+          try {
+            await saveLinkMutation.mutateAsync({
+              projetoId,
+              companyId,
+              atividadeId: atividade.id,
+              modelId: firstModel?.dbId || 0,
+              expressIds: newEids,
+            });
+            linked++;
+          } catch (err) {
+            console.warn(`Auto-link falhou para ${atividade.nome}:`, err);
+          }
+        }
+      }
+
+      if (linked > 0) {
+        toast.success(`Auto-vinculação: ${linked} vínculo(s) criado(s)`);
+        refetchLinks();
+      } else {
+        toast.info("Nenhuma correspondência encontrada para auto-vincular");
+      }
+    } catch (err) {
+      toast.error("Erro na auto-vinculação");
+      console.error(err);
+    } finally {
+      setAutoLinking(false);
+    }
+  };
+
   const filteredAtividades = (bimAtividades || []).filter(a => {
     if (!activitySearch) return true;
     const s = activitySearch.toLowerCase();
@@ -1081,6 +1206,66 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                 ))}
               </div>
             )}
+
+            {(bimLinks?.length ?? 0) > 0 && (
+              <div className="mx-2 mt-2 bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-green-50 to-slate-50 border-b border-slate-100">
+                  <Link2 className="h-3.5 w-3.5 text-green-600" />
+                  <span className="text-xs font-bold text-green-800 uppercase tracking-wider">Vinculações</span>
+                  <Badge variant="outline" className="ml-auto text-[9px]">
+                    {bimLinks!.length}
+                  </Badge>
+                </div>
+                <div className="divide-y divide-slate-50 max-h-60 overflow-y-auto">
+                  {bimLinks!.map(link => (
+                    <div key={link.id} className="px-3 py-2 hover:bg-slate-50 group">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-700 font-medium truncate flex-1">
+                          {link.atividadeNome || `Atividade #${link.atividadeId}`}
+                        </span>
+                        <span className="text-[9px] text-slate-400">{(link.expressIds || []).length} el.</span>
+                        <button
+                          className="p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteLink(link.id)}
+                          title="Desvincular"
+                        >
+                          <Trash2 className="h-3 w-3 text-slate-400 hover:text-red-500" />
+                        </button>
+                      </div>
+                      {link.progressoReal > 0 && (
+                        <div className="mt-0.5 flex items-center gap-1">
+                          <div className="flex-1 bg-slate-200 rounded-full h-1">
+                            <div
+                              className="h-1 rounded-full"
+                              style={{
+                                width: `${Math.min(link.progressoReal, 100)}%`,
+                                backgroundColor: link.progressoReal >= 100 ? "#2ecc71" : "#3498db",
+                              }}
+                            />
+                          </div>
+                          <span className="text-[8px] text-slate-400">{Math.round(link.progressoReal)}%</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {models.length > 0 && (bimAtividades?.length ?? 0) > 0 && (
+              <div className="mx-2 mt-2 mb-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full gap-1.5 text-[10px] h-7 border-purple-200 text-purple-700 hover:bg-purple-50"
+                  onClick={handleAutoLink}
+                  disabled={autoLinking}
+                >
+                  {autoLinking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                  Auto-vincular (Pilar/Viga/Laje)
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1297,15 +1482,23 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#2ecc71" }} />
-                  <span className="text-[9px] text-slate-500">Concluído (100%)</span>
+                  <span className="text-[9px] text-slate-500">Concluída (100%)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#7dcea0" }} />
+                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#3498db" }} />
                   <span className="text-[9px] text-slate-500">Em andamento</span>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#f39c12" }} />
+                  <span className="text-[9px] text-slate-500">Risco de atraso</span>
+                </div>
+                <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#e74c3c" }} />
-                  <span className="text-[9px] text-slate-500">Não iniciado (0%)</span>
+                  <span className="text-[9px] text-slate-500">Atrasada</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#95a5a6" }} />
+                  <span className="text-[9px] text-slate-500">Não iniciada</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm border border-slate-300" style={{ backgroundColor: "#b0bec5", opacity: 0.5 }} />
