@@ -95,6 +95,7 @@ import { contractsRouter } from "./routers/contracts";
 import { skillsRouter } from "./routers/skills";
 import { orcamentoRouter } from "./routers/orcamento";
 import { planejamentoRouter } from "./routers/planejamento";
+import { bimRouter } from "./routers/bim";
 import { medicaoRouter } from "./routers/medicao";
 import { iaCronogramaRouter } from "./routers/iaCronograma";
 import { comprasRouter } from "./routers/compras";
@@ -142,6 +143,7 @@ export const appRouter = router({
   parceiros: parceirosRouter,
   orcamento: orcamentoRouter,
   planejamento: planejamentoRouter,
+  bim: bimRouter,
   medicao: medicaoRouter,
   iaCronograma: iaCronogramaRouter,
   compras: comprasRouter,

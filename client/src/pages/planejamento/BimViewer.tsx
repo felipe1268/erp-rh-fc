@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as WebIFC from "web-ifc";
@@ -9,6 +9,7 @@ import {
   ChevronRight, ChevronDown, Trash2, Layers, Palette, Info,
 } from "lucide-react";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 const ELEMENT_TYPES: Record<number, { label: string; color: string }> = {
   [WebIFC.IFCBEAM]:        { label: "Vigas",       color: "#828282" },
@@ -29,6 +30,7 @@ const ELEMENT_TYPES: Record<number, { label: string; color: string }> = {
 
 interface IfcModel {
   id: string;
+  dbId?: number;
   name: string;
   discipline: string;
   meshes: THREE.Mesh[];
@@ -65,9 +67,10 @@ const DISCIPLINES = [
 interface Props {
   projetoId: number;
   projetoNome: string;
+  companyId: number;
 }
 
-export default function BimViewer({ projetoId, projetoNome }: Props) {
+export default function BimViewer({ projetoId, projetoNome, companyId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -85,6 +88,52 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const [expandedStoreys, setExpandedStoreys] = useState<Set<string>>(new Set());
   const initRef = useRef(false);
+  const savedModelsLoadedRef = useRef(false);
+
+  const uploadMutation = trpc.bim.uploadModel.useMutation();
+  const deleteMutation = trpc.bim.deleteModel.useMutation();
+  const { data: savedModels } = trpc.bim.listModels.useQuery(
+    { projetoId, companyId },
+    { enabled: !!companyId && !!projetoId }
+  );
+
+  const parseIfcBuffer = useCallback(async (
+    data: Uint8Array,
+    name: string,
+    discipline: string,
+  ): Promise<IfcModel | null> => {
+    const api = await initIfcApi();
+    const modelID = api.OpenModel(data);
+    const storeys = extractStoreys(api, modelID);
+    const elements = extractElements(api, modelID);
+
+    storeys.forEach(st => {
+      st.elements = elements.filter(el =>
+        el.storey === st.name || el.storey === st.elevation.toString()
+      );
+    });
+    const unassigned = elements.filter(el => !el.storey);
+    if (unassigned.length > 0 && storeys.length > 0) {
+      storeys[0].elements.push(...unassigned);
+    }
+
+    if (!sceneRef.current) return null;
+
+    const meshes = createMeshesFromIFC(api, modelID, sceneRef.current);
+    const scaleFactor = 0.01;
+    meshes.forEach(m => m.scale.set(scaleFactor, scaleFactor, scaleFactor));
+    api.CloseModel(modelID);
+
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name,
+      discipline,
+      meshes,
+      visible: true,
+      storeys,
+      elementCount: elements.length,
+    };
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current || initRef.current) return;
@@ -199,6 +248,52 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
       visible: viewFilter === "Todas" || m.discipline === viewFilter,
     })));
   }, [viewFilter]);
+
+  useEffect(() => {
+    if (!savedModels || savedModels.length === 0 || savedModelsLoadedRef.current) return;
+    if (!sceneRef.current) return;
+    savedModelsLoadedRef.current = true;
+
+    const loadAll = async () => {
+      setLoading(true);
+      setLoadingMsg(`Carregando ${savedModels.length} modelo(s) salvo(s)...`);
+      const loaded: IfcModel[] = [];
+
+      for (const sm of savedModels) {
+        try {
+          setLoadingMsg(`Baixando "${sm.nome}"...`);
+          const resp = await fetch(`/uploads/${sm.arquivoPath}`);
+          if (!resp.ok) {
+            console.warn(`Não foi possível baixar modelo ${sm.nome}: ${resp.status}`);
+            continue;
+          }
+          const buf = await resp.arrayBuffer();
+          setLoadingMsg(`Processando "${sm.nome}"...`);
+          const model = await parseIfcBuffer(new Uint8Array(buf), sm.nome, sm.disciplina);
+          if (model) {
+            model.dbId = sm.id;
+            loaded.push(model);
+          }
+        } catch (err) {
+          console.error(`Erro carregando modelo salvo ${sm.nome}:`, err);
+        }
+      }
+
+      if (loaded.length > 0) {
+        setModels(loaded);
+        setTimeout(() => {
+          const meshes = loaded.flatMap(m => m.meshes).filter(m => m.visible);
+          if (meshes.length > 0) fitCameraToModel(meshes);
+        }, 300);
+        toast.success(`${loaded.length} modelo(s) carregado(s) do servidor`);
+      }
+
+      setLoading(false);
+      setLoadingMsg("");
+    };
+
+    loadAll();
+  }, [savedModels, companyId, parseIfcBuffer]);
 
   const initIfcApi = async () => {
     if (ifcApiRef.current) return ifcApiRef.current;
@@ -365,69 +460,60 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
       return;
     }
 
-    if (file.size > 100 * 1024 * 1024) {
-      toast.error("Arquivo muito grande (máx 100MB)");
+    if (file.size > 35 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx 35MB)");
       return;
     }
 
     setLoading(true);
-    setLoadingMsg("Inicializando parser IFC...");
+    setLoadingMsg("Lendo arquivo...");
 
     try {
-      const api = await initIfcApi();
-      setLoadingMsg("Lendo arquivo...");
-
       const buffer = await file.arrayBuffer();
       const data = new Uint8Array(buffer);
+      const modelName = file.name.replace(/\.ifc$/i, "");
 
       setLoadingMsg("Processando modelo 3D...");
-      const modelID = api.OpenModel(data);
+      const model = await parseIfcBuffer(data, modelName, importDiscipline);
 
-      setLoadingMsg("Extraindo pavimentos...");
-      const storeys = extractStoreys(api, modelID);
-
-      setLoadingMsg("Extraindo elementos...");
-      const elements = extractElements(api, modelID);
-
-      storeys.forEach(st => {
-        st.elements = elements.filter(el =>
-          el.storey === st.name || el.storey === st.elevation.toString()
-        );
-      });
-
-      const unassigned = elements.filter(el => !el.storey);
-      if (unassigned.length > 0 && storeys.length > 0) {
-        storeys[0].elements.push(...unassigned);
-      }
-
-      if (!sceneRef.current) {
+      if (!model) {
         toast.error("Cena 3D não inicializada");
         return;
       }
 
-      setLoadingMsg("Gerando geometria 3D...");
-      const meshes = createMeshesFromIFC(api, modelID, sceneRef.current);
-
-      const scaleFactor = 0.01;
-      meshes.forEach(m => m.scale.set(scaleFactor, scaleFactor, scaleFactor));
-
       setLoadingMsg("Ajustando câmera...");
-      fitCameraToModel(meshes);
+      fitCameraToModel(model.meshes);
 
-      const model: IfcModel = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        name: file.name.replace(/\.ifc$/i, ""),
-        discipline: importDiscipline,
-        meshes,
-        visible: true,
-        storeys,
-        elementCount: elements.length,
+      setLoadingMsg("Salvando no servidor...");
+      const arrayToBase64 = (arr: Uint8Array): string => {
+        let binary = "";
+        const chunkSize = 8192;
+        for (let i = 0; i < arr.length; i += chunkSize) {
+          binary += String.fromCharCode(...arr.slice(i, i + chunkSize));
+        }
+        return btoa(binary);
       };
+      const fileBase64 = arrayToBase64(data);
+
+      try {
+        const result = await uploadMutation.mutateAsync({
+          projetoId,
+          companyId,
+          nome: modelName,
+          disciplina: importDiscipline,
+          fileBase64,
+          numElementos: model.elementCount,
+          numPavimentos: model.storeys.length,
+          pavimentos: model.storeys.map(s => s.name),
+        });
+        model.dbId = result.id;
+        toast.success(`Modelo "${modelName}" importado e salvo! ${model.elementCount} elementos, ${model.storeys.length} pavimentos.`);
+      } catch (saveErr) {
+        console.error("Erro ao salvar no servidor:", saveErr);
+        toast.warning(`Modelo carregado localmente, mas não foi salvo no servidor. ${(saveErr as any)?.message || ""}`);
+      }
 
       setModels(prev => [...prev, model]);
-      api.CloseModel(modelID);
-
-      toast.success(`Modelo "${model.name}" carregado com sucesso! ${elements.length} elementos, ${storeys.length} pavimentos.`);
     } catch (err) {
       console.error("Error loading IFC:", err);
       toast.error("Erro ao carregar arquivo IFC. Verifique se é um arquivo válido.");
@@ -450,10 +536,17 @@ export default function BimViewer({ projetoId, projetoNome }: Props) {
   };
 
   const removeModel = (modelId: string) => {
+    const model = models.find(m => m.id === modelId);
+    if (model?.dbId) {
+      deleteMutation.mutate(
+        { id: model.dbId, companyId },
+        { onError: (err) => console.error("Erro ao excluir modelo do servidor:", err) }
+      );
+    }
     setModels(prev => {
-      const model = prev.find(m => m.id === modelId);
-      if (model && sceneRef.current) {
-        model.meshes.forEach(mesh => {
+      const m = prev.find(m => m.id === modelId);
+      if (m && sceneRef.current) {
+        m.meshes.forEach(mesh => {
           sceneRef.current!.remove(mesh);
           mesh.geometry.dispose();
           if (Array.isArray(mesh.material)) {

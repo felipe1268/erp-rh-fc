@@ -130,6 +130,21 @@ async function startServer() {
         console.log("[ColFix] planejamento_atividades.disabled OK");
         await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_indireta BOOLEAN DEFAULT FALSE`);
         console.log("[ColFix] planejamento_atividades.is_indireta OK");
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS bim_models (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL DEFAULT 0,
+          projeto_id INTEGER NOT NULL,
+          nome VARCHAR(255) NOT NULL,
+          disciplina VARCHAR(100) NOT NULL DEFAULT 'Estrutural',
+          arquivo_path TEXT NOT NULL,
+          tamanho_bytes INTEGER DEFAULT 0,
+          num_elementos INTEGER DEFAULT 0,
+          num_pavimentos INTEGER DEFAULT 0,
+          pavimentos JSONB DEFAULT '[]',
+          criado_em TIMESTAMP DEFAULT NOW(),
+          criado_por INTEGER DEFAULT 0
+        )`);
+        console.log("[ColFix] bim_models OK");
         await db.execute(sql`ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT`);
         console.log("[ColFix] epis.fotoUrl OK");
         // Rev.612: novos campos Aviso Prévio

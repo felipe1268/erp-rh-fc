@@ -5172,4 +5172,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 02:00:00",
   },
+  {
+    version: 778,
+    titulo: "BIM 3D — Persistência de modelos IFC",
+    descricao: "Modelos IFC importados no BIM 3D agora ficam salvos no servidor. Ao reabrir a aba ou recarregar a página, os modelos são carregados automaticamente. Inclui upload do arquivo .ifc vinculado ao projeto, listagem dos modelos salvos e exclusão com remoção do arquivo.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 12:00:00",
+  },
 ];

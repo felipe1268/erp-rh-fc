@@ -844,7 +844,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
 
         {aba === "bim-3d" && (
           <React.Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /><span className="ml-2 text-sm text-slate-500">Carregando visualizador 3D...</span></div>}>
-            <BimViewer projetoId={projetoId} projetoNome={proj?.nome || ""} />
+            <BimViewer projetoId={projetoId} projetoNome={proj?.nome || ""} companyId={proj?.companyId ?? 0} />
           </React.Suspense>
         )}
 
