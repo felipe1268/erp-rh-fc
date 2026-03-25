@@ -6077,10 +6077,13 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                   <tbody>
                     {previsoesMensais.map((r, idx) => {
                       const temDados = r.pctMensal > 0 || r.pct > 0;
-                      const margem = r.liquido - r.custo;
                       const baixa = baixas[r.mes];
                       const confirmado = !!baixa?.confirmado;
-                      const temLiquido = r.liquido > 0;
+
+                      const pendenteMesAnterior = idx > 0 ? (baixas[previsoesMensais[idx - 1]?.mes]?.pendente ?? 0) : 0;
+                      const liquidoEfetivo = r.liquido + pendenteMesAnterior;
+                      const margem = liquidoEfetivo - r.custo;
+                      const temLiquido = liquidoEfetivo > 0;
 
                       // ── Linha especial de Liberação da Retenção ──────────────
                       if ((r as any).isRetencaoRow) {
@@ -6189,19 +6192,28 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                             {temDados && r.descontoSinal > 0 ? `−${fmt(r.descontoSinal)}` : <span className="text-slate-300">—</span>}
                           </td>
                           <td className={`py-2 px-3 text-right font-bold ${confirmado ? "text-emerald-600 line-through" : "text-emerald-700"}`}>
-                            {temDados ? fmt(r.liquido) : <span className="text-slate-300">—</span>}
+                            {temDados || pendenteMesAnterior > 0 ? (
+                              <div>
+                                {fmt(liquidoEfetivo)}
+                                {pendenteMesAnterior > 0 && (
+                                  <p className="text-[9px] text-orange-500 font-normal mt-0.5">
+                                    inclui +{fmt(pendenteMesAnterior)} pendente
+                                  </p>
+                                )}
+                              </div>
+                            ) : <span className="text-slate-300">—</span>}
                           </td>
                           <td className="py-2 px-3 text-right text-red-500">
                             {fmt(r.custo)}
                           </td>
-                          <td className={`py-2 px-3 text-right font-semibold ${!temDados ? "text-slate-300" : margem >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                            {temDados ? `${margem >= 0 ? "+" : ""}${fmt(margem)}` : "—"}
+                          <td className={`py-2 px-3 text-right font-semibold ${!(temDados || pendenteMesAnterior > 0) ? "text-slate-300" : margem >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            {(temDados || pendenteMesAnterior > 0) ? `${margem >= 0 ? "+" : ""}${fmt(margem)}` : "—"}
                           </td>
                           <td className="py-2 px-3 text-center">
                             {temLiquido ? (
                               <button
                                 type="button"
-                                onClick={() => abrirBaixa(r.mes, r.liquido, r.nomeMes)}
+                                onClick={() => abrirBaixa(r.mes, liquidoEfetivo, r.nomeMes)}
                                 title={confirmado ? `Recebido em ${baixa.data} — clique para desfazer` : "Marcar líquido como recebido"}
                                 className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
                                   confirmado
@@ -6210,11 +6222,16 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
                                 }`}
                               >
                                 {confirmado ? (
-                                  <><CheckCircle2 className="h-3 w-3" /> Recebido</>
+                                  <><CheckCircle2 className="h-3 w-3" /> {fmt(baixa.valor)}</>
                                 ) : (
                                   <><Circle className="h-3 w-3" /> Dar Baixa</>
                                 )}
                               </button>
+                              {confirmado && baixa.pendente && baixa.pendente > 0 && (
+                                <p className="text-[9px] text-orange-500 mt-0.5">
+                                  Saldo: {fmt(baixa.pendente)}
+                                </p>
+                              )}
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>
                             )}
