@@ -96,6 +96,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [linkPanelOpen, setLinkPanelOpen] = useState(false);
   const [activitySearch, setActivitySearch] = useState("");
   const [autoLinking, setAutoLinking] = useState(false);
+  const [colorRevision, setColorRevision] = useState(0);
   const [boxSelecting, setBoxSelecting] = useState(false);
   const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
   const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null);
@@ -400,7 +401,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
       }
       mat.needsUpdate = true;
     });
-  }, [bimLinks, models]);
+  }, [bimLinks, models, colorRevision]);
 
   useEffect(() => {
     if (!savedModels || savedModels.length === 0 || savedModelsLoadedRef.current) return;
@@ -865,7 +866,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
         expressIds,
       });
       toast.success(`${expressIds.length} elemento(s) vinculado(s) à atividade`);
-      refetchLinks();
+      await refetchLinks();
+      setColorRevision(c => c + 1);
     } catch (err) {
       toast.error("Erro ao vincular elementos");
       console.error(err);
@@ -876,7 +878,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     try {
       await deleteLinkMutation.mutateAsync({ id: linkId, companyId });
       toast.success("Vinculação removida");
-      refetchLinks();
+      await refetchLinks();
+      setColorRevision(c => c + 1);
     } catch (err) {
       toast.error("Erro ao remover vinculação");
     }
@@ -948,7 +951,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
 
       if (linked > 0) {
         toast.success(`Auto-vinculação: ${linked} vínculo(s) criado(s)`);
-        refetchLinks();
+        await refetchLinks();
+        setColorRevision(c => c + 1);
       } else {
         toast.info("Nenhuma correspondência encontrada para auto-vincular");
       }

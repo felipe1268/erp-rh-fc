@@ -5208,4 +5208,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 17:00:00",
   },
+  {
+    version: 782,
+    titulo: "BIM — Correção da coloração 4D após vinculação",
+    descricao: "Corrigido bug onde as cores 4D do modelo 3D não atualizavam após vincular/desvincular atividades. Agora o refetch aguarda (await) os dados atualizados e força re-execução do efeito de coloração via revision counter. Toolbar responsivo com scroll horizontal no mobile.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 18:00:00",
+  },
 ];
