@@ -4070,14 +4070,14 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   // exibido seja crescente e reflita corretamente o progresso global do projeto.
   const semanasComDados = useMemo(() => {
     const result: Record<string, number> = {};
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
-    // Semanas únicas que possuem algum avanço, em ordem crescente
+    const pesoTotalRaw = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso = pesoTotalRaw === 0;
+    const pesoTotal = semPeso ? (folhas.length || 1) : pesoTotalRaw;
     const todasSemanas = [...new Set((avancos as any[]).map((av: any) => av.semana as string))].sort();
     todasSemanas.forEach(sem => {
       let soma = 0;
       folhas.forEach((a: any) => {
-        const peso = n(a.pesoFinanceiro) || 1;
-        // Valor mais recente desta atividade até (inclusive) a semana em questão
+        const peso = semPeso ? 1 : n(a.pesoFinanceiro);
         const avsAtiv = (avancos as any[])
           .filter((av: any) => av.atividadeId === a.id && av.semana <= sem);
         if (avsAtiv.length === 0) return;
