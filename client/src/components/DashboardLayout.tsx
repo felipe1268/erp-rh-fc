@@ -818,7 +818,7 @@ function DashboardLayoutContent({
 
   const isAdminUser = user?.role === 'admin' || user?.role === 'admin_master';
   const isMasterUser = user?.role === 'admin_master';
-  const { isAdminMaster: permIsAdminMaster, canAccessFeature, canAccessModule, accessibleModules, hasGroup, groupCanAccessRoute } = usePermissions();
+  const { isAdminMaster: permIsAdminMaster, canAccessFeature, canAccessModule, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage } = usePermissions();
 
   // Paths restritos por nível de acesso
   const adminOnlyPaths = ['/usuarios', '/auditoria', '/configuracoes', '/lixeira'];
@@ -990,28 +990,57 @@ function DashboardLayoutContent({
       const planMatch = location.match(/^\/planejamento\/(\d+)$/);
       if (planMatch) {
         const planId = planMatch[1];
-        const planTabItems: MenuItem[] = [
-          { icon: BarChart3,     label: "Visão Geral",       path: `/planejamento/${planId}?tab=visao-geral` },
-          { icon: CalendarDays,  label: "Cronograma",        path: `/planejamento/${planId}?tab=cronograma` },
-          { icon: ClipboardCheck,label: "Gantt",             path: `/planejamento/${planId}?tab=gantt` },
-          { icon: DollarSign,    label: "Crono. Financeiro", path: `/planejamento/${planId}?tab=cronograma-financeiro` },
-          { icon: TrendingUp,    label: "Curva S",           path: `/planejamento/${planId}?tab=curva-s` },
-          { icon: BarChart3,     label: "Avanço Semanal",    path: `/planejamento/${planId}?tab=avanco` },
-          { icon: AlertTriangle, label: "Caminho Crítico",   path: `/planejamento/${planId}?tab=caminho-critico` },
-          { icon: ShoppingCart,  label: "Cronograma de Compras", path: `/planejamento/${planId}?tab=compras` },
-          { icon: ClipboardList, label: "Prev. Medição",     path: `/planejamento/${planId}?tab=prev-medicao` },
-          { icon: CalendarDays,  label: "Prog. Semanal",     path: `/planejamento/${planId}?tab=prog-semanal` },
-          { icon: Network,       label: "Diagrama de Rede",  path: `/planejamento/${planId}?tab=diagrama-rede` },
-          { icon: GitBranch,     label: "Revisões",          path: `/planejamento/${planId}?tab=revisoes` },
-          { icon: FileText,      label: "REFIS",             path: `/planejamento/${planId}?tab=refis` },
-          { icon: Brain,         label: "IA Gestora",        path: `/planejamento/${planId}?tab=ia-gestora` },
+        const TAB_PAGE_MAP: Record<string, string> = {
+          "visao-geral": "visao_geral",
+          "cronograma": "cronograma",
+          "gantt": "gantt",
+          "cronograma-financeiro": "financeiro",
+          "curva-s": "curva_s",
+          "avanco": "avanco_semanal",
+          "caminho-critico": "caminho_critico",
+          "compras": "",
+          "prev-medicao": "previsao_medicao",
+          "prog-semanal": "prog_semanal",
+          "diagrama-rede": "diagrama_rede",
+          "custo-rh": "custo_rh",
+          "revisoes": "revisoes",
+          "refis": "refis",
+          "simulador": "simulador",
+          "bim-3d": "bim_3d",
+          "ia-gestora": "ia_gestora",
+        };
+        const canSeeTab = (tabId: string) => {
+          if (permIsAdminMaster) return true;
+          const pageId = TAB_PAGE_MAP[tabId];
+          if (!pageId) return true;
+          return canViewPage("planejamento", pageId);
+        };
+        const allPlanTabs: (MenuItem & { tabId: string })[] = [
+          { icon: BarChart3,     label: "Visão Geral",       path: `/planejamento/${planId}?tab=visao-geral`, tabId: "visao-geral" },
+          { icon: CalendarDays,  label: "Cronograma",        path: `/planejamento/${planId}?tab=cronograma`, tabId: "cronograma" },
+          { icon: ClipboardCheck,label: "Gantt",             path: `/planejamento/${planId}?tab=gantt`, tabId: "gantt" },
+          { icon: DollarSign,    label: "Crono. Financeiro", path: `/planejamento/${planId}?tab=cronograma-financeiro`, tabId: "cronograma-financeiro" },
+          { icon: TrendingUp,    label: "Curva S",           path: `/planejamento/${planId}?tab=curva-s`, tabId: "curva-s" },
+          { icon: BarChart3,     label: "Avanço Semanal",    path: `/planejamento/${planId}?tab=avanco`, tabId: "avanco" },
+          { icon: AlertTriangle, label: "Caminho Crítico",   path: `/planejamento/${planId}?tab=caminho-critico`, tabId: "caminho-critico" },
+          { icon: ShoppingCart,  label: "Cronograma de Compras", path: `/planejamento/${planId}?tab=compras`, tabId: "compras" },
+          { icon: ClipboardList, label: "Prev. Medição",     path: `/planejamento/${planId}?tab=prev-medicao`, tabId: "prev-medicao" },
+          { icon: CalendarDays,  label: "Prog. Semanal",     path: `/planejamento/${planId}?tab=prog-semanal`, tabId: "prog-semanal" },
+          { icon: Network,       label: "Diagrama de Rede",  path: `/planejamento/${planId}?tab=diagrama-rede`, tabId: "diagrama-rede" },
+          { icon: Users,         label: "Custo RH",          path: `/planejamento/${planId}?tab=custo-rh`, tabId: "custo-rh" },
+          { icon: GitBranch,     label: "Revisões",          path: `/planejamento/${planId}?tab=revisoes`, tabId: "revisoes" },
+          { icon: FileText,      label: "REFIS",             path: `/planejamento/${planId}?tab=refis`, tabId: "refis" },
+          { icon: Calculator,    label: "Simulador",         path: `/planejamento/${planId}?tab=simulador`, tabId: "simulador" },
+          { icon: Brain,         label: "BIM 3D",            path: `/planejamento/${planId}?tab=bim-3d`, tabId: "bim-3d" },
+          { icon: Brain,         label: "IA Gestora",        path: `/planejamento/${planId}?tab=ia-gestora`, tabId: "ia-gestora" },
         ];
+        const planTabItems: MenuItem[] = allPlanTabs.filter(t => canSeeTab(t.tabId));
         sections = [...sections, { title: "Abas do Projeto", items: planTabItems }];
       }
     }
 
     return sections.filter(s => s.items.length > 0);
-  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, savedMenuConfig]);
+  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage, savedMenuConfig]);
 
   // Aplicar ordem de seções salva, mantendo Ajuda sempre por último
   const orderedSections = useMemo(() => {

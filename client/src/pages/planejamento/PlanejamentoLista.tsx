@@ -4,6 +4,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -44,6 +45,11 @@ export default function PlanejamentoLista() {
   const [, setLocation] = useLocation();
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const { isAdminMaster, isSensitiveHidden, isSomenteVisualizacao, canCreatePage, canEditPage, canDeletePage } = usePermissions();
+  const hideFinancial = !isAdminMaster && isSensitiveHidden("planejamento", "valores_planejamento");
+  const canCreate = isAdminMaster || canCreatePage("planejamento", "projetos");
+  const canEdit = isAdminMaster || canEditPage("planejamento", "projetos");
+  const canDelete = isAdminMaster || canDeletePage("planejamento", "projetos");
 
   const [busca, setBusca] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
@@ -212,7 +218,7 @@ export default function PlanejamentoLista() {
             </div>
           </div>
           <DraggableCommandBar barId="planejamento-lista" items={[
-            { id: "novo-projeto", node: <Button onClick={() => setModalAberto(true)} className="gap-2 bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /> Novo Projeto</Button> },
+            ...(canCreate ? [{ id: "novo-projeto", node: <Button onClick={() => setModalAberto(true)} className="gap-2 bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /> Novo Projeto</Button> }] : []),
           ]} />
         </div>
 
@@ -229,7 +235,7 @@ export default function PlanejamentoLista() {
               const hoje = new Date().toISOString().split("T")[0];
               return String(prazo).slice(0, 10) < hoje;
             }).length, icon: <AlertTriangle className="h-4 w-4" />, color: "text-red-600", bg: "bg-red-50" },
-            { label: "Valor Total", value: formatBRL(projetos.reduce((s, p) => s + (n(p.valorContrato) || n((p as any).orcamentoValorNegociado) || n((p as any).orcamentoTotalVenda)), 0)), icon: <DollarSign className="h-4 w-4" />, color: "text-purple-600", bg: "bg-purple-50" },
+            ...(!hideFinancial ? [{ label: "Valor Total", value: formatBRL(projetos.reduce((s, p) => s + (n(p.valorContrato) || n((p as any).orcamentoValorNegociado) || n((p as any).orcamentoTotalVenda)), 0)), icon: <DollarSign className="h-4 w-4" />, color: "text-purple-600", bg: "bg-purple-50" }] : []),
           ].map((k, i) => (
             <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex items-start gap-3">
               <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center shrink-0`}>
@@ -307,7 +313,7 @@ export default function PlanejamentoLista() {
                         </span>
                       </div>
                     )}
-                    {(n(projeto.valorContrato) > 0 || n((projeto as any).orcamentoValorNegociado) > 0 || n((projeto as any).orcamentoTotalVenda) > 0) && (
+                    {!hideFinancial && (n(projeto.valorContrato) > 0 || n((projeto as any).orcamentoValorNegociado) > 0 || n((projeto as any).orcamentoTotalVenda) > 0) && (
                       <div className="flex items-center gap-1.5 font-semibold text-emerald-700">
                         <DollarSign className="h-3.5 w-3.5 shrink-0" />
                         <span>{formatBRL(n(projeto.valorContrato) || n((projeto as any).orcamentoValorNegociado) || n((projeto as any).orcamentoTotalVenda))}</span>
@@ -328,6 +334,7 @@ export default function PlanejamentoLista() {
                     >
                       <Eye className="h-3.5 w-3.5" />
                     </button>
+                    {canEdit && (
                     <button
                       onClick={e => { e.stopPropagation(); abrirEdicao(projeto); }}
                       className="p-1 rounded hover:bg-amber-50 text-amber-500"
@@ -335,6 +342,8 @@ export default function PlanejamentoLista() {
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
+                    )}
+                    {canDelete && (
                     <button
                       onClick={e => { e.stopPropagation(); if (confirm("Excluir este projeto e todos os seus dados?")) excluirMutation.mutate({ id: projeto.id }); }}
                       className="p-1 rounded hover:bg-red-50 text-red-400"
@@ -342,6 +351,7 @@ export default function PlanejamentoLista() {
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -426,7 +436,8 @@ export default function PlanejamentoLista() {
               </div>
 
               {/* Valor do contrato + Status */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`grid ${hideFinancial ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
+                {!hideFinancial && (
                 <div>
                   <Label className="text-xs font-medium">Valor do Contrato (R$)</Label>
                   <Input
@@ -439,6 +450,7 @@ export default function PlanejamentoLista() {
                     placeholder="0,00"
                   />
                 </div>
+                )}
                 <div>
                   <Label className="text-xs font-medium">Status da Obra</Label>
                   <select
@@ -549,7 +561,7 @@ export default function PlanejamentoLista() {
                       </span>
                     </div>
                   )}
-                  {obraSelecionada.valorContrato && n(obraSelecionada.valorContrato) > 0 && (
+                  {!hideFinancial && obraSelecionada.valorContrato && n(obraSelecionada.valorContrato) > 0 && (
                     <div className="flex items-center gap-2">
                       <DollarSign className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                       <span className="font-semibold text-emerald-700">

@@ -159,7 +159,8 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     const t = p.get('tab') as Tab;
     return (t && TAB_IDS.includes(t)) ? t : 'visao-geral';
   });
-  const { isAdminMaster, canViewPage } = usePermissions();
+  const { isAdminMaster, canViewPage, isSensitiveHidden } = usePermissions();
+  const hideFinancial = !isAdminMaster && isSensitiveHidden("planejamento", "valores_planejamento");
 
   const TAB_TO_PAGEID: Record<string, string> = {
     "visao-geral": "visao_geral",
@@ -449,7 +450,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {n(proj.valorContrato) > 0 && (
+            {!hideFinancial && n(proj.valorContrato) > 0 && (
               <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg">
                 {fmt(n(proj.valorContrato))}
               </span>
@@ -617,6 +618,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             fmt={fmt}
             fPct={fPct}
             user={user}
+            hideFinancial={hideFinancial}
             onEditarProjeto={abrirEditProjeto}
             onVerRefisCompleto={(semana: string) => { setRefisInitSemana(semana); setAba("refis"); }}
           />
@@ -641,7 +643,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           />
         )}
         {canViewTab(aba) && aba === "curva-s" && (
-          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} curvaFetching={curvaFetching} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} curvaMedicoes={curvaMedicoes} onEditarProjeto={abrirEditProjeto} />
+          <CurvaS curvaData={curvaData} curvaLoading={curvaLoading} curvaFetching={curvaFetching} proj={proj} avancoAtual={avancoAtual} fPct={fPct} projetoId={projetoId} revisaoAtiva={revisaoAtiva} curvaMedicoes={curvaMedicoes} onEditarProjeto={abrirEditProjeto} hideFinancial={hideFinancial} />
         )}
         {canViewTab(aba) && aba === "avanco" && (
           <AvancoSemanal
@@ -677,6 +679,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             fmt={fmt}
             fPct={fPct}
             isAdminMaster={isAdminMaster}
+            hideFinancial={hideFinancial}
             initialSemana={refisInitSemana}
             onInitialSemanaConsumed={() => setRefisInitSemana(null)}
             onSemanaChange={setSemanaVisualizacao}
@@ -691,6 +694,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             utils={utils}
             fmt={fmt}
             fPct={fPct}
+            hideFinancial={hideFinancial}
           />
         )}
         {canViewTab(aba) && aba === "caminho-critico" && (
@@ -721,6 +725,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             atividades={atividades}
             avancos={avancos}
             fmt={fmt}
+            hideFinancial={hideFinancial}
           />
         )}
         {canViewTab(aba) && aba === "prog-semanal" && (
@@ -792,10 +797,12 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                 <div className="space-y-5">
                   {/* Cards resumo */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {!hideFinancial && (
                     <div className="rounded-xl bg-indigo-600 text-white p-4">
                       <p className="text-xs opacity-80 mb-1">Custo Total (HE aprovadas)</p>
                       <p className="text-xl font-bold">{totalCustoAprov.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
                     </div>
+                    )}
                     <div className="rounded-xl bg-white border p-4">
                       <p className="text-xs text-muted-foreground mb-1">Total Solicitações</p>
                       <p className="text-xl font-bold text-slate-800">{allHes.length}</p>
@@ -819,9 +826,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                           {group.eapCodigo && <span className="font-mono text-xs text-indigo-700 mr-2">{group.eapCodigo}</span>}
                           <span className="font-semibold text-sm text-indigo-900">{group.atividadeNome}</span>
                         </div>
+                        {!hideFinancial && (
                         <span className="text-sm font-bold text-indigo-800 shrink-0">
                           {group.totalCusto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                         </span>
+                        )}
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
@@ -831,7 +840,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                               <th className="px-3 py-2 font-medium">Horário</th>
                               <th className="px-3 py-2 font-medium">Horas</th>
                               <th className="px-3 py-2 font-medium">Func.</th>
-                              <th className="px-3 py-2 font-medium">Custo Previsto</th>
+                              {!hideFinancial && <th className="px-3 py-2 font-medium">Custo Previsto</th>}
                               <th className="px-3 py-2 font-medium">Status</th>
                             </tr>
                           </thead>
@@ -846,9 +855,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                                 </td>
                                 <td className="px-3 py-2">{(h.horas || 0).toFixed(1)}h</td>
                                 <td className="px-3 py-2">{h.numFuncionarios ?? "—"}</td>
+                                {!hideFinancial && (
                                 <td className="px-3 py-2 font-semibold text-indigo-700">
                                   {(h.custoPrevisto || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                                 </td>
+                                )}
                                 <td className="px-3 py-2">
                                   {h.status === "aprovada" ? (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
@@ -885,6 +896,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             atividades={atividades}
             projetoId={projetoId}
             utils={utils}
+            hideFinancial={hideFinancial}
             onAdotado={() => { utils.planejamento.getProjetoById.invalidate({ id: projetoId }); setAba("cronograma"); }}
           />
         )}
@@ -973,10 +985,12 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                 <Label className="text-xs">Prazo Contratual</Label>
                 <Input type="date" value={editProjForm.dataTerminoContratual} onChange={e => setEditProjForm(v => ({ ...v, dataTerminoContratual: e.target.value }))} className="mt-1 h-8 text-sm" />
               </div>
+              {!hideFinancial && (
               <div className="col-span-2">
                 <Label className="text-xs">Valor do Contrato (R$)</Label>
                 <Input type="number" value={editProjForm.valorContrato} onChange={e => setEditProjForm(v => ({ ...v, valorContrato: e.target.value }))} className="mt-1 h-8 text-sm" placeholder="0,00" />
               </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
@@ -1034,13 +1048,13 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                   {v.jaTransferido && (
                     <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm bg-blue-50 border border-blue-200 text-blue-800">
                       <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      Já importado em {v.ultimaTransferencia?.executadoEm?.slice(0, 10)} —
-                      D: {Number(v.ultimaTransferencia?.totalDireto ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} |
+                      Já importado em {v.ultimaTransferencia?.executadoEm?.slice(0, 10)}
+                      {!hideFinancial && (<> — D: {Number(v.ultimaTransferencia?.totalDireto ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} |
                       I: {Number(v.ultimaTransferencia?.totalIndireto ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} |
-                      C: {Number(v.ultimaTransferencia?.totalCentral ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      C: {Number(v.ultimaTransferencia?.totalCentral ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</>)}
                     </div>
                   )}
-                  {v.totalFolha > 0 && (
+                  {!hideFinancial && v.totalFolha > 0 && (
                     <div className="bg-slate-50 border rounded-lg px-3 py-2 text-sm">
                       <span className="text-slate-600">Total líquido da folha: </span>
                       <span className="font-bold text-slate-800">{v.totalFolha.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
@@ -1253,7 +1267,7 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: VISÃO GERAL
 // ═════════════════════════════════════════════════════════════════════════════
-function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, user, onEditarProjeto, onVerRefisCompleto }: any) {
+function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, user, hideFinancial, onEditarProjeto, onVerRefisCompleto }: any) {
   const { selectedCompany } = useCompany();
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
@@ -1272,9 +1286,13 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
     { label: "Atividades",         value: `${concluidas}/${totalAtiv}`,    color: "text-blue-600",   bg: "bg-blue-50",   icon: <ClipboardList className="h-4 w-4" /> },
     { label: "Avanço Físico",      value: fPct(avancoAtual),               color: "text-emerald-600",bg: "bg-emerald-50",icon: <TrendingUp className="h-4 w-4" /> },
     { label: "SPI (prazo)",        value: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "—" : spi.toFixed(2), color: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" /> },
-    { label: "CPI (custo)",        value: cpi.toFixed(2),                  color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" /> },
+    ...(!hideFinancial ? [
+      { label: "CPI (custo)",        value: cpi.toFixed(2),                  color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" /> },
+    ] : []),
     { label: "REFIs emitidos",     value: String(refisLista.length),       color: "text-purple-600", bg: "bg-purple-50", icon: <FileText className="h-4 w-4" /> },
-    { label: "Valor do Contrato",  value: fmt(n(proj.valorContrato)),      color: "text-slate-700",  bg: "bg-slate-100", icon: <DollarSign className="h-4 w-4" /> },
+    ...(!hideFinancial ? [
+      { label: "Valor do Contrato",  value: fmt(n(proj.valorContrato)),      color: "text-slate-700",  bg: "bg-slate-100", icon: <DollarSign className="h-4 w-4" /> },
+    ] : []),
   ];
 
   // Atividades críticas (sem início ou com atraso)
@@ -1754,7 +1772,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
                   </div>
 
                   {/* Financeiro (só se preenchido) */}
-                  {(cpv > 0 || crv > 0) && (
+                  {!hideFinancial && (cpv > 0 || crv > 0) && (
                     <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 16px' }}>
                       <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#92400e', marginBottom: 8 }}>Custo do Período</p>
                       <div className="grid grid-cols-2 gap-3">
@@ -3564,7 +3582,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
 // Paleta de cores para revisões anteriores (distintas, mas secundárias)
 const REV_COLORS = ["#7c3aed","#0891b2","#d97706","#be185d","#0d9488","#ea580c","#9333ea","#0284c7"];
 
-function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPct, projetoId, revisaoAtiva, curvaMedicoes = [], onEditarProjeto }: any) {
+function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPct, projetoId, revisaoAtiva, curvaMedicoes = [], onEditarProjeto, hideFinancial }: any) {
   const [curvaTipo, setCurvaTipo] = useState<"trabalho" | "financeira">("trabalho");
 
   // Revisões anteriores com toggles
@@ -3891,6 +3909,12 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
         const finRecHoje    = lastRecPoint?.receita ?? 0;
         const finDesvio     = finRealHoje - finPrevHoje;
         const finDesvioRec  = finHasReceita ? finRecHoje - finRealHoje : null;
+
+        if (hideFinancial) return (
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center text-sm text-slate-400">
+            Valores financeiros ocultos para este perfil de acesso.
+          </div>
+        );
 
         return (
           <>
@@ -5060,7 +5084,7 @@ const CENARIOS: { id: Cenario; label: string; cor: string; corBg: string; corTex
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: PREVISÃO DE MEDIÇÃO
 // ═════════════════════════════════════════════════════════════════════════════
-function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
+function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinancial }: any) {
   const valorContrato = n(proj.valorContrato);
 
   // ── Config state ─────────────────────────────────────────────────────────
@@ -5561,6 +5585,12 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
     }
     toggleBloqueioMut.mutate({ projetoId, bloqueado: true });
   }
+
+  if (hideFinancial) return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center text-sm text-slate-400">
+      Valores financeiros ocultos para este perfil de acesso.
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -6657,7 +6687,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt }: any) {
   );
 }
 
-function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt, fPct }: any) {
+function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt, fPct, hideFinancial }: any) {
   const valorContrato = n(proj.valorContrato);
   const [cenario, setCenario] = useState<Cenario>("venda");
   const [custoTooltip, setCustoTooltip] = useState<{ r: any; x: number; y: number } | null>(null);
@@ -6888,6 +6918,12 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
     <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-xs text-red-700">
       <AlertTriangle className="h-4 w-4 shrink-0" />
       Erro ao carregar cruzamento orçamento × cronograma. Tente recarregar a página.
+    </div>
+  );
+
+  if (hideFinancial) return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center text-sm text-slate-400">
+      Valores financeiros ocultos para este perfil de acesso.
     </div>
   );
 
@@ -8321,7 +8357,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, initialSemana, onInitialSemanaConsumed, onSemanaChange }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange }: any) {
   const [semana, setSemanaRaw] = useState(() => toMonday(new Date()));
   const setSemana = (s: string) => { setSemanaRaw(s); onSemanaChange?.(s); };
   const [obs, setObs] = useState("");
@@ -9844,7 +9880,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       )}
 
       {/* BLOCO 3B — Curva S Financeira */}
-      {curvaFinanceira.length > 1 && !modoMascara && (() => {
+      {curvaFinanceira.length > 1 && !modoMascara && !hideFinancial && (() => {
         const prevAcumFin  = totalContrato * avancoPrevisto  / 100;
         const realAcumFin  = totalContrato * avancoRealAtual / 100;
         const desvioFin    = realAcumFin - prevAcumFin;
@@ -10166,7 +10202,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         <div className="flex items-center justify-between flex-wrap gap-1 bg-slate-100 border-b border-slate-200 px-5 py-2 cursor-pointer select-none" onClick={() => setColBloco6(v => !v)}>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Faturamento do Mês</p>
           <div className="flex items-center gap-3">
-            {vendaMes > 0 && !modoMascara && (
+            {vendaMes > 0 && !modoMascara && !hideFinancial && (
               <p className="text-[10px] text-slate-400">
                 Faturamento contratual do mês ({new Date(mesSemana + "-15").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}):
                 <span className="font-semibold text-slate-600 ml-1">{fmt(vendaMes)}</span>
@@ -10177,7 +10213,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         </div>
 
         {!colBloco6 && <div className="p-4 space-y-3">
-        {!modoMascara ? (
+        {!modoMascara && !hideFinancial ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Faturamento Previsto */}
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
@@ -10243,7 +10279,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
         )}
 
-        {vendaMes === 0 && !modoMascara && (
+        {vendaMes === 0 && !modoMascara && !hideFinancial && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             Cruzamento orçamento × cronograma não disponível — os valores serão registrados como 0.
           </p>
@@ -10283,9 +10319,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   <th className="px-4 py-2 text-right">Real. Acum.</th>
                   <th className="px-4 py-2 text-right">Desvio</th>
                   <th className="px-4 py-2 text-right">SPI</th>
-                  {!modoMascara && <th className="px-4 py-2 text-right">Fat. Previsto</th>}
-                  {!modoMascara && <th className="px-4 py-2 text-right">Fat. Realizado</th>}
-                  {!modoMascara && <th className="px-4 py-2 text-right">Desvio R$</th>}
+                  {!modoMascara && !hideFinancial && <th className="px-4 py-2 text-right">Fat. Previsto</th>}
+                  {!modoMascara && !hideFinancial && <th className="px-4 py-2 text-right">Fat. Realizado</th>}
+                  {!modoMascara && !hideFinancial && <th className="px-4 py-2 text-right">Desvio R$</th>}
                   <th className="px-4 py-2 text-left">Observações</th>
                 </tr>
               </thead>
@@ -10312,9 +10348,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                         <td className={`px-4 py-2.5 text-right font-semibold ${n(r.avancoPrevisto) === 0 ? "text-slate-400" : n(r.spi) >= 1 ? "text-emerald-600" : "text-red-600"}`}>
                           {n(r.avancoPrevisto) === 0 ? "—" : n(r.spi).toFixed(2)}
                         </td>
-                        {!modoMascara && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoPrevisto > 0 ? fmt(n(r.custoPrevisto)) : "—"}</td>}
-                        {!modoMascara && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoRealizado > 0 ? fmt(n(r.custoRealizado)) : "—"}</td>}
-                        {!modoMascara && (
+                        {!modoMascara && !hideFinancial && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoPrevisto > 0 ? fmt(n(r.custoPrevisto)) : "—"}</td>}
+                        {!modoMascara && !hideFinancial && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoRealizado > 0 ? fmt(n(r.custoRealizado)) : "—"}</td>}
+                        {!modoMascara && !hideFinancial && (
                           <td className={`px-4 py-2.5 text-right font-semibold ${devFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                             {r.custoPrevisto > 0 ? `${devFin >= 0 ? "+" : ""}${fmt(devFin)}` : "—"}
                           </td>
@@ -11052,11 +11088,14 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                     </p>
                     <p className="text-[10px] text-white/40 mt-0.5">{metricsAtuais.diasRestantes != null ? `${metricsAtuais.diasRestantes}d restantes` : "Prazo n/d"}</p>
                   </div>
+                  {!hideFinancial && (
                   <div>
                     <p className="text-[10px] text-white/50 mb-0.5">Contrato</p>
                     <p className="text-xl font-bold text-white">{dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato) : "—"}</p>
                     <p className="text-[10px] text-white/40 mt-0.5">Custo: {dadosFinanceiros.custoTotal > 0 ? fmt(dadosFinanceiros.custoTotal) : "—"}</p>
                   </div>
+                  )}
+                  {!hideFinancial && (
                   <div>
                     <p className="text-[10px] text-white/50 mb-0.5">Margem Bruta</p>
                     <p className={`text-3xl font-black ${dadosFinanceiros.margemPerc < 5 ? "text-red-400" : dadosFinanceiros.margemPerc < 15 ? "text-amber-400" : "text-emerald-400"}`}>
@@ -11064,6 +11103,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                     </p>
                     <p className="text-[10px] text-white/40 mt-0.5">{dadosFinanceiros.valorContrato > 0 ? fmt(dadosFinanceiros.valorContrato - dadosFinanceiros.custoTotal) : "Orçamento n/d"}</p>
                   </div>
+                  )}
                 </div>
               </div>
             );
@@ -11448,18 +11488,22 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                                         {cen.diasImpacto > 0 ? `+${cen.diasImpacto}d` : cen.diasImpacto < 0 ? `${cen.diasImpacto}d` : "neutro"}
                                       </span>
                                     </div>
+                                    {!hideFinancial && (
                                     <div className="flex justify-between items-center">
                                       <span className="text-[9px] text-slate-400 uppercase">Custo adicional</span>
                                       <span className="text-[11px] font-bold text-slate-700">
                                         {cen.custoAdicional > 0 ? fmt(cen.custoAdicional) : cen.custoAdicional === 0 ? "—" : fmt(Math.abs(cen.custoAdicional)) + " ↘"}
                                       </span>
                                     </div>
+                                    )}
+                                    {!hideFinancial && (
                                     <div className="flex justify-between items-center">
                                       <span className="text-[9px] text-slate-400 uppercase">Nova margem</span>
                                       <span className={`text-[11px] font-bold ${cen.novaMargemPerc < 10 ? "text-red-600" : cen.novaMargemPerc < 20 ? "text-amber-600" : "text-emerald-600"}`}>
                                         {cen.novaMargemPerc > 0 ? `${cen.novaMargemPerc.toFixed(1)}%` : "—"}
                                       </span>
                                     </div>
+                                    )}
                                   </div>
                                   {/* Detalhes expandidos */}
                                   {isSel && (
@@ -11963,7 +12007,7 @@ function GanttSimulador({ atividadesGeradas, mesesGerados, dataInicio }: {
               {/* Label */}
               <div style={{ width: LABEL_W, minWidth: LABEL_W, height: "100%" }}
                 className="flex items-center gap-1.5 px-3 border-r border-slate-100 shrink-0"
-                title={`${a.eapCodigo} — ${a.nome}${info ? ` | R$ ${fmtBRL(info.custo)} | ${a.pesoFinanceiro.toFixed(2)}%` : ""}`}>
+                title={`${a.eapCodigo} — ${a.nome}${info && !hideFinancial ? ` | R$ ${fmtBRL(info.custo)} | ${a.pesoFinanceiro.toFixed(2)}%` : ""}`}>
                 <span className="text-[9px] text-slate-300 shrink-0 font-mono">{a.eapCodigo}</span>
                 <span className={`text-[10px] truncate ${isHov ? "text-violet-700 font-medium" : "text-slate-600"}`}>{a.nome}</span>
               </div>
@@ -12390,7 +12434,7 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
   );
 }
 
-function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils, onAdotado }: any) {
+function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils, onAdotado, hideFinancial }: any) {
   const valorContrato  = parseFloat(proj?.valorContrato ?? "0") || 0;
   const dataInicioProj = atividades.find((a: any) => a.dataInicio)?.dataInicio ?? new Date().toISOString().split("T")[0];
 
@@ -12725,6 +12769,12 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
       );
     });
   }
+
+  if (hideFinancial) return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-center text-sm text-slate-400">
+      Valores financeiros ocultos para este perfil de acesso.
+    </div>
+  );
 
   return (
     <div className="space-y-6">

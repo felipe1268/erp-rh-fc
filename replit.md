@@ -344,6 +344,16 @@ Módulos atualmente registrados (Rev. 394): `rh`, `sst`, `juridico`, `avaliacao`
 
 ---
 
+### Permission System (Rev. 787)
+- **New system**: `module_access` table with granular per-page permissions (view/edit/create/delete/sensitiveHidden)
+- **PermissionsContext**: `resolveRouteToModulePage()` maps routes → module+pageId → `normalizedAccess`
+- `groupCanEdit`/`groupCanCreate`/`groupCanDelete` now check `normalizedAccess` first (was broken: always returned true)
+- `groupOcultarValores` checks `normalizedAccess[pageId]?.sensitiveHidden` for new system
+- `isSomenteVisualizacao`/`isOcultarDadosSensiveis` also check new system
+- **hideFinancial** prop: Gates all R$/BRL values across Planejamento (Visão Geral, Curva S financeira, Crono. Financeiro, Prev. Medição, Custo RH, Simulador, REFIS financial columns, IA Gestora cards, Diagrama de Rede tooltips)
+- Sidebar plan tabs filtered by `canViewPage("planejamento", pageId)`
+- All 15 Planejamento internal tabs in `MODULE_PAGE_CONFIG` with individual access control
+
 ### CHECKLIST antes de cada deploy
 
 - [ ] `shared/version.ts` atualizado com Rev. N+1

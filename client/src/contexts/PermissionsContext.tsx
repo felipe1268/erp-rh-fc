@@ -1,7 +1,7 @@
 import { createContext, useContext, ReactNode, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { MODULE_DEFINITIONS, SHARED_FEATURES, ADMIN_FEATURES, type ActiveModuleId } from "../../../shared/modules";
-import { normalizeModulePerm, ROUTE_TO_PAGEID, type ModulePerm } from "../../../shared/modulePages";
+import { normalizeModulePerm, ROUTE_TO_PAGEID, MODULE_PAGE_CONFIG, type ModulePerm } from "../../../shared/modulePages";
 
 interface GroupRoutePermission {
   rota: string;
@@ -265,6 +265,30 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     return perm;
   };
 
+  const resolveRouteToModulePage = (route: string): { moduleId: string; pageId: string } | null => {
+    const basePath = route.split("?")[0];
+    const tabMatch = route.match(/[?&]tab=([^&]+)/);
+    for (const [moduleId, routeMap] of Object.entries(ROUTE_TO_PAGEID)) {
+      if (!routeMap) continue;
+      if (tabMatch) {
+        const tabKey = `${basePath}?tab=${tabMatch[1]}`;
+        for (const [routePattern, pageId] of Object.entries(routeMap)) {
+          if (routePattern === tabKey || routePattern.endsWith(`?tab=${tabMatch[1]}`)) {
+            return { moduleId, pageId };
+          }
+        }
+      }
+      const pageId = routeMap[basePath] ?? routeMap[route];
+      if (pageId) return { moduleId, pageId };
+    }
+    for (const mod of MODULE_DEFINITIONS) {
+      if (mod.features.some(f => f.route === basePath || f.route === route)) {
+        return { moduleId: mod.id, pageId: "" };
+      }
+    }
+    return null;
+  };
+
   const groupCanAccessRoute = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true;
@@ -313,6 +337,16 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupCanEdit = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true;
+    if (groupHasNewSystem) {
+      const resolved = resolveRouteToModulePage(route);
+      if (!resolved) return false;
+      const perm = normalizedAccess[resolved.moduleId];
+      if (!perm) return false;
+      if (perm.level === "admin") return true;
+      if (perm.level === "viewer") return false;
+      if (!resolved.pageId) return false;
+      return perm.pages?.[resolved.pageId]?.edit ?? false;
+    }
     const perm = getGroupPerm(route);
     if (!perm) return !groupPermissions!.somenteVisualizacao;
     return perm.canEdit;
@@ -321,6 +355,16 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupCanCreate = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true;
+    if (groupHasNewSystem) {
+      const resolved = resolveRouteToModulePage(route);
+      if (!resolved) return false;
+      const perm = normalizedAccess[resolved.moduleId];
+      if (!perm) return false;
+      if (perm.level === "admin") return true;
+      if (perm.level === "viewer") return false;
+      if (!resolved.pageId) return false;
+      return perm.pages?.[resolved.pageId]?.create ?? false;
+    }
     const perm = getGroupPerm(route);
     if (!perm) return !groupPermissions!.somenteVisualizacao;
     return perm.canCreate;
@@ -329,6 +373,16 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupCanDelete = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true;
+    if (groupHasNewSystem) {
+      const resolved = resolveRouteToModulePage(route);
+      if (!resolved) return false;
+      const perm = normalizedAccess[resolved.moduleId];
+      if (!perm) return false;
+      if (perm.level === "admin") return true;
+      if (perm.level === "viewer") return false;
+      if (!resolved.pageId) return false;
+      return perm.pages?.[resolved.pageId]?.delete ?? false;
+    }
     const perm = getGroupPerm(route);
     if (!perm) return !groupPermissions!.somenteVisualizacao;
     return perm.canDelete;
@@ -337,6 +391,15 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupOcultarValores = (route: string): boolean => {
     if (isAdminMaster) return false;
     if (!hasGroup) return false;
+    if (groupHasNewSystem) {
+      const resolved = resolveRouteToModulePage(route);
+      if (!resolved) return false;
+      const perm = normalizedAccess[resolved.moduleId];
+      if (!perm) return false;
+      const config = MODULE_PAGE_CONFIG[resolved.moduleId];
+      if (!config?.sensitiveFlags) return false;
+      return config.sensitiveFlags.some(f => perm.sensitiveHidden?.includes(f.id));
+    }
     const perm = getGroupPerm(route);
     if (perm) return perm.ocultarValores;
     return groupPermissions!.ocultarDadosSensiveis;
@@ -345,13 +408,48 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupOcultarDocumentos = (route: string): boolean => {
     if (isAdminMaster) return false;
     if (!hasGroup) return false;
+    if (groupHasNewSystem) {
+      const resolved = resolveRouteToModulePage(route);
+      if (!resolved) return false;
+      const perm = normalizedAccess[resolved.moduleId];
+      if (!perm) return false;
+      return perm.sensitiveHidden?.includes("documentos_confidenciais") ||
+             perm.sensitiveHidden?.includes("documentos_rh") || false;
+    }
     const perm = getGroupPerm(route);
     if (perm) return perm.ocultarDocumentos;
     return false;
   };
 
-  const isSomenteVisualizacao = !isAdminMaster && hasGroup && !!groupPermissions?.somenteVisualizacao;
-  const isOcultarDadosSensiveis = !isAdminMaster && hasGroup && !!groupPermissions?.ocultarDadosSensiveis;
+  const isSomenteVisualizacao = useMemo(() => {
+    if (isAdminMaster) return false;
+    if (!hasGroup) return false;
+    if (groupHasNewSystem) {
+      for (const perm of Object.values(normalizedAccess)) {
+        if (!perm) continue;
+        if (perm.level === "admin") return false;
+        if (perm.level === "custom") {
+          const hasWrite = Object.values(perm.pages || {}).some(p => p.create || p.edit || p.delete);
+          if (hasWrite) return false;
+        }
+      }
+      return true;
+    }
+    return !!groupPermissions?.somenteVisualizacao;
+  }, [isAdminMaster, hasGroup, groupHasNewSystem, normalizedAccess, groupPermissions]);
+
+  const isOcultarDadosSensiveis = useMemo(() => {
+    if (isAdminMaster) return false;
+    if (!hasGroup) return false;
+    if (groupHasNewSystem) {
+      for (const perm of Object.values(normalizedAccess)) {
+        if (!perm) continue;
+        if (perm.sensitiveHidden && perm.sensitiveHidden.length > 0) return true;
+      }
+      return false;
+    }
+    return !!groupPermissions?.ocultarDadosSensiveis;
+  }, [isAdminMaster, hasGroup, groupHasNewSystem, normalizedAccess, groupPermissions]);
 
   return (
     <PermissionsContext.Provider

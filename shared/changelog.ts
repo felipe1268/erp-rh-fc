@@ -5253,4 +5253,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 22:00:00",
   },
+  {
+    version: 787,
+    titulo: "Correção crítica: enforcement de permissões em todo o sistema",
+    descricao: "Corrigido bug grave onde groupCanEdit/groupCanCreate/groupCanDelete ignoravam o novo sistema de permissões (module_access), permitindo que grupos 'somente visualização' executassem ações de criar/editar/excluir. Corrigido groupOcultarValores para respeitar sensitiveHidden do novo sistema. Sidebar do Planejamento agora filtra abas pela permissão do grupo. Valores financeiros (R$) ocultados em PlanejamentoLista e PlanejamentoDetalhe para grupos com dados sensíveis restritos. Botões Novo/Editar/Excluir projetos bloqueados conforme permissão granular.",
+    tipo: "seguranca",
+    modulos: "Sistema, Planejamento, SST, RH, Todos os módulos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 23:00:00",
+  },
 ];
