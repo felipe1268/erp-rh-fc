@@ -5226,4 +5226,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 19:00:00",
   },
+  {
+    version: 784,
+    titulo: "BIM — Auto-vinculação inteligente por pavimento com pré-visualização",
+    descricao: "Auto-vincular agora cruza tipo IFC (Pilar/Viga/Laje) com o pavimento do modelo 3D para encontrar a melhor atividade no cronograma por scoring (match de nome do pavimento no grupo da atividade). Abre modal de pré-visualização mostrando cada vínculo sugerido com checkbox para selecionar/desselecionar antes de confirmar. Lixeira de desvincular sempre visível no celular. Botão 'Limpar todos' na seção de vinculações.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 20:00:00",
+  },
 ];

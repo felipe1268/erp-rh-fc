@@ -98,6 +98,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [autoLinking, setAutoLinking] = useState(false);
   const [autoLinkProgress, setAutoLinkProgress] = useState({ current: 0, total: 0, label: "" });
   const [colorRevision, setColorRevision] = useState(0);
+  type AutoLinkPreviewItem = { ifcType: string; storeyName: string; atividadeId: number; atividadeNome: string; grupoPath: string; expressIds: number[]; selected: boolean };
+  const [autoLinkPreview, setAutoLinkPreview] = useState<AutoLinkPreviewItem[] | null>(null);
   const [boxSelecting, setBoxSelecting] = useState(false);
   const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
   const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null);
@@ -150,9 +152,18 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     if (!sceneRef.current) return null;
 
     const eidTypeMap = new Map<number, string>();
-    elements.forEach(el => eidTypeMap.set(el.expressId, el.type));
+    const eidStoreyMap = new Map<number, string>();
+    elements.forEach(el => {
+      eidTypeMap.set(el.expressId, el.type);
+      if (el.storey) eidStoreyMap.set(el.expressId, el.storey);
+    });
+    storeys.forEach(st => {
+      st.elements.forEach(el => {
+        if (!eidStoreyMap.has(el.expressId)) eidStoreyMap.set(el.expressId, st.name);
+      });
+    });
 
-    const meshes = createMeshesFromIFC(api, modelID, sceneRef.current, eidTypeMap);
+    const meshes = createMeshesFromIFC(api, modelID, sceneRef.current, eidTypeMap, eidStoreyMap);
     const scaleFactor = 0.01;
     meshes.forEach(m => m.scale.set(scaleFactor, scaleFactor, scaleFactor));
     api.CloseModel(modelID);
@@ -533,7 +544,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     return elements;
   };
 
-  const createMeshesFromIFC = (api: WebIFC.IfcAPI, modelID: number, scene: THREE.Scene, eidTypeMap?: Map<number, string>): THREE.Mesh[] => {
+  const createMeshesFromIFC = (api: WebIFC.IfcAPI, modelID: number, scene: THREE.Scene, eidTypeMap?: Map<number, string>, eidStoreyMap?: Map<number, string>): THREE.Mesh[] => {
     const meshes: THREE.Mesh[] = [];
     api.StreamAllMeshes(modelID, (mesh) => {
       const placedGeometries = mesh.geometries;
@@ -577,6 +588,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
         m.applyMatrix4(matrix);
         m.userData.expressID = mesh.expressID;
         m.userData.ifcType = eidTypeMap?.get(mesh.expressID) || "";
+        m.userData.storeyName = eidStoreyMap?.get(mesh.expressID) || "";
 
         scene.add(m);
         meshes.push(m);
@@ -896,104 +908,136 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     "Telhados": ["telhado", "cobertura"],
   };
 
-  const handleAutoLink = async () => {
+  const handleAutoLinkPreview = () => {
     if (!bimAtividades?.length || !models.length || !sceneRef.current) return;
-    setAutoLinking(true);
-    setAutoLinkProgress({ current: 0, total: 0, label: "Analisando modelo..." });
 
-    try {
-      const eidsByType = new Map<string, number[]>();
-      sceneRef.current.traverse((obj) => {
-        if (!(obj instanceof THREE.Mesh) || !obj.userData.expressID) return;
-        const ifcType = (obj.userData.ifcType as string) || "";
-        if (!ifcType) return;
-        if (!eidsByType.has(ifcType)) eidsByType.set(ifcType, []);
-        eidsByType.get(ifcType)!.push(obj.userData.expressID as number);
-      });
+    const eidsByTypeStorey = new Map<string, number[]>();
+    sceneRef.current.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh) || !obj.userData.expressID) return;
+      const ifcType = (obj.userData.ifcType as string) || "";
+      const storeyName = (obj.userData.storeyName as string) || "";
+      if (!ifcType) return;
+      const key = `${ifcType}|||${storeyName}`;
+      if (!eidsByTypeStorey.has(key)) eidsByTypeStorey.set(key, []);
+      eidsByTypeStorey.get(key)!.push(obj.userData.expressID as number);
+    });
 
-      const alreadyLinkedEids = new Set<number>();
-      bimLinks?.forEach(link => {
-        (link.expressIds || []).forEach((eid: number) => alreadyLinkedEids.add(eid));
-      });
+    const alreadyLinkedEids = new Set<number>();
+    bimLinks?.forEach(link => {
+      (link.expressIds || []).forEach((eid: number) => alreadyLinkedEids.add(eid));
+    });
 
-      type PendingLink = { ifcType: string; atividadeId: number; atividadeNome: string; expressIds: number[] };
-      const pendingLinks: PendingLink[] = [];
+    const preview: AutoLinkPreviewItem[] = [];
 
-      for (const [ifcType, keywords] of Object.entries(IFC_TYPE_KEYWORDS)) {
-        const eids = eidsByType.get(ifcType);
-        if (!eids || eids.length === 0) continue;
+    for (const [key, eids] of eidsByTypeStorey.entries()) {
+      const [ifcType, storeyName] = key.split("|||");
+      const keywords = IFC_TYPE_KEYWORDS[ifcType];
+      if (!keywords) continue;
 
-        const newEids = eids.filter(eid => !alreadyLinkedEids.has(eid));
-        if (newEids.length === 0) continue;
+      const newEids = eids.filter(eid => !alreadyLinkedEids.has(eid));
+      if (newEids.length === 0) continue;
 
-        const matchingActivities = bimAtividades.filter(a => {
-          const searchText = `${a.nome} ${a.grupoPath || ""}`.toLowerCase();
-          return keywords.some(kw => searchText.includes(kw));
-        });
+      let bestMatch = null;
+      let bestScore = -1;
 
-        if (matchingActivities.length === 0) continue;
+      for (const ativ of bimAtividades) {
+        const searchText = `${ativ.nome} ${ativ.grupoPath || ""}`.toLowerCase();
+        const hasKeyword = keywords.some(kw => searchText.includes(kw));
+        if (!hasKeyword) continue;
 
-        const bestMatch = matchingActivities[0];
-        pendingLinks.push({
-          ifcType,
-          atividadeId: bestMatch.id,
-          atividadeNome: bestMatch.nome,
-          expressIds: newEids,
-        });
-      }
-
-      if (pendingLinks.length === 0) {
-        toast.info("Nenhuma correspondência encontrada para auto-vincular");
-        setAutoLinking(false);
-        setAutoLinkProgress({ current: 0, total: 0, label: "" });
-        return;
-      }
-
-      const total = pendingLinks.length;
-      setAutoLinkProgress({ current: 0, total, label: `0/${total} tipos...` });
-      let linked = 0;
-      const firstModel = models[0];
-
-      for (let i = 0; i < pendingLinks.length; i++) {
-        const pl = pendingLinks[i];
-        setAutoLinkProgress({
-          current: i,
-          total,
-          label: `${pl.ifcType} → ${pl.atividadeNome.substring(0, 30)}...`,
-        });
-
-        try {
-          await saveLinkMutation.mutateAsync({
-            projetoId,
-            companyId,
-            atividadeId: pl.atividadeId,
-            modelId: firstModel?.dbId || 0,
-            expressIds: pl.expressIds,
-          });
-          linked++;
-        } catch (err) {
-          console.warn(`Auto-link falhou para ${pl.atividadeNome}:`, err);
+        let score = 1;
+        if (storeyName) {
+          const storeyLower = storeyName.toLowerCase();
+          const pathLower = (ativ.grupoPath || "").toLowerCase();
+          if (pathLower.includes(storeyLower)) score += 10;
+          const storeyWords = storeyLower.split(/[\s\-_]+/).filter(w => w.length > 2);
+          const matchedWords = storeyWords.filter(w => pathLower.includes(w));
+          score += matchedWords.length * 3;
+          const pavMatch = storeyLower.match(/(\d+)/);
+          const pathPavMatch = pathLower.match(/(\d+).*pav/);
+          if (pavMatch && pathPavMatch && pavMatch[1] === pathPavMatch[1]) score += 8;
         }
 
-        setAutoLinkProgress({
-          current: i + 1,
-          total,
-          label: `${i + 1}/${total} concluído`,
-        });
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = ativ;
+        }
       }
 
-      if (linked > 0) {
-        toast.success(`Auto-vinculação: ${linked} vínculo(s) criado(s) com ${pendingLinks.reduce((s, p) => s + p.expressIds.length, 0)} elementos`);
-        await refetchLinks();
-        setColorRevision(c => c + 1);
+      if (bestMatch) {
+        preview.push({
+          ifcType,
+          storeyName: storeyName || "(sem pavimento)",
+          atividadeId: bestMatch.id,
+          atividadeNome: bestMatch.nome,
+          grupoPath: bestMatch.grupoPath || "",
+          expressIds: newEids,
+          selected: true,
+        });
       }
-    } catch (err) {
-      toast.error("Erro na auto-vinculação");
-      console.error(err);
-    } finally {
-      setAutoLinking(false);
-      setAutoLinkProgress({ current: 0, total: 0, label: "" });
     }
+
+    if (preview.length === 0) {
+      toast.info("Nenhuma correspondência encontrada para auto-vincular");
+      return;
+    }
+
+    preview.sort((a, b) => {
+      if (a.ifcType !== b.ifcType) return a.ifcType.localeCompare(b.ifcType);
+      return a.storeyName.localeCompare(b.storeyName);
+    });
+
+    setAutoLinkPreview(preview);
+  };
+
+  const handleAutoLinkConfirm = async () => {
+    if (!autoLinkPreview) return;
+    const selected = autoLinkPreview.filter(p => p.selected);
+    if (selected.length === 0) {
+      toast.info("Nenhum vínculo selecionado");
+      return;
+    }
+
+    setAutoLinking(true);
+    const total = selected.length;
+    setAutoLinkProgress({ current: 0, total, label: `0/${total}...` });
+    let linked = 0;
+    const firstModel = models[0];
+
+    for (let i = 0; i < selected.length; i++) {
+      const pl = selected[i];
+      setAutoLinkProgress({
+        current: i,
+        total,
+        label: `${pl.ifcType} (${pl.storeyName}) → ${pl.atividadeNome.substring(0, 25)}...`,
+      });
+
+      try {
+        await saveLinkMutation.mutateAsync({
+          projetoId,
+          companyId,
+          atividadeId: pl.atividadeId,
+          modelId: firstModel?.dbId || 0,
+          expressIds: pl.expressIds,
+        });
+        linked++;
+      } catch (err) {
+        console.warn(`Auto-link falhou:`, err);
+      }
+
+      setAutoLinkProgress({ current: i + 1, total, label: `${i + 1}/${total} concluído` });
+    }
+
+    if (linked > 0) {
+      const totalEls = selected.reduce((s, p) => s + p.expressIds.length, 0);
+      toast.success(`Auto-vinculação: ${linked} vínculo(s), ${totalEls} elementos`);
+      await refetchLinks();
+      setColorRevision(c => c + 1);
+    }
+
+    setAutoLinking(false);
+    setAutoLinkProgress({ current: 0, total: 0, label: "" });
+    setAutoLinkPreview(null);
   };
 
   const filteredAtividades = (bimAtividades || []).filter(a => {
@@ -1103,7 +1147,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
               size="sm"
               variant="outline"
               className="gap-1 flex-shrink-0 border-purple-200 text-purple-700 hover:bg-purple-50"
-              onClick={handleAutoLink}
+              onClick={handleAutoLinkPreview}
               disabled={autoLinking}
               title="Vincular automaticamente Pilares, Vigas e Lajes às atividades do cronograma"
             >
@@ -1162,6 +1206,81 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
           </div>
         )}
       </div>
+
+      {autoLinkPreview && (
+        <div className="absolute inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-purple-50 to-slate-50 rounded-t-xl">
+              <Zap className="h-4 w-4 text-purple-600" />
+              <span className="font-bold text-sm text-purple-800">Pré-visualização Auto-vinculação</span>
+              <Badge variant="outline" className="text-[9px] ml-auto">
+                {autoLinkPreview.filter(p => p.selected).length}/{autoLinkPreview.length} selecionados
+              </Badge>
+            </div>
+            <div className="px-3 py-2 bg-purple-50/50 border-b border-slate-100">
+              <p className="text-[10px] text-slate-500">Revise os vínculos sugeridos. O sistema cruza o tipo IFC (Pilar/Viga/Laje) com o pavimento do modelo 3D para encontrar a melhor atividade correspondente no cronograma.</p>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {autoLinkPreview.map((item, idx) => (
+                <label key={idx} className={`flex items-start gap-2 px-4 py-2.5 cursor-pointer hover:bg-slate-50 ${!item.selected ? "opacity-50" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={item.selected}
+                    onChange={() => {
+                      const copy = [...autoLinkPreview];
+                      copy[idx] = { ...copy[idx], selected: !copy[idx].selected };
+                      setAutoLinkPreview(copy);
+                    }}
+                    className="mt-0.5 rounded border-slate-300"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="text-[8px] bg-blue-50 text-blue-700 border-blue-200 flex-shrink-0">
+                        {item.ifcType}
+                      </Badge>
+                      <Badge variant="outline" className="text-[8px] bg-amber-50 text-amber-700 border-amber-200 flex-shrink-0">
+                        {item.storeyName}
+                      </Badge>
+                      <span className="text-[9px] text-slate-400 flex-shrink-0">{item.expressIds.length} el.</span>
+                    </div>
+                    <p className="text-[10px] text-slate-700 font-medium mt-0.5 truncate">{item.atividadeNome}</p>
+                    {item.grupoPath && (
+                      <p className="text-[9px] text-slate-400 truncate">{item.grupoPath}</p>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 px-4 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                onClick={() => {
+                  const allSelected = autoLinkPreview.every(p => p.selected);
+                  setAutoLinkPreview(autoLinkPreview.map(p => ({ ...p, selected: !allSelected })));
+                }}
+              >
+                {autoLinkPreview.every(p => p.selected) ? "Desmarcar todos" : "Selecionar todos"}
+              </Button>
+              <div className="flex-1" />
+              <Button size="sm" variant="outline" onClick={() => setAutoLinkPreview(null)}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                className="gap-1 bg-purple-600 hover:bg-purple-700"
+                onClick={handleAutoLinkConfirm}
+                disabled={autoLinking || autoLinkPreview.filter(p => p.selected).length === 0}
+              >
+                {autoLinking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
+                Vincular {autoLinkPreview.filter(p => p.selected).length} item(ns)
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden relative">
         {sidebarOpen && (
@@ -1331,7 +1450,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                   size="sm"
                   variant="outline"
                   className="w-full gap-1.5 text-[10px] h-7 border-purple-200 text-purple-700 hover:bg-purple-50"
-                  onClick={handleAutoLink}
+                  onClick={handleAutoLinkPreview}
                   disabled={autoLinking}
                 >
                   {autoLinking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
