@@ -287,4 +287,16 @@ export const bimRouter = router({
       );
       return { success: true };
     }),
+
+  deleteAllLinks: protectedProcedure
+    .input(z.object({ projetoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível" });
+
+      const result = await db.execute(
+        sql`DELETE FROM bim_links WHERE projeto_id = ${input.projetoId} AND company_id = ${input.companyId}`
+      );
+      return { success: true, deleted: result.rowCount ?? 0 };
+    }),
 });

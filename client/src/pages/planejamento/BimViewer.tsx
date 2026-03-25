@@ -118,6 +118,8 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const deleteMutation = trpc.bim.deleteModel.useMutation();
   const saveLinkMutation = trpc.bim.saveLink.useMutation();
   const deleteLinkMutation = trpc.bim.deleteLink.useMutation();
+  const deleteAllLinksMutation = trpc.bim.deleteAllLinks.useMutation();
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const { data: savedModels } = trpc.bim.listModels.useQuery(
     { projetoId, companyId },
     { enabled: !!companyId && !!projetoId }
@@ -1415,20 +1417,40 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                   <Badge variant="outline" className="text-[9px]">
                     {bimLinks!.length}
                   </Badge>
-                  <button
-                    className="ml-auto text-[9px] text-red-400 hover:text-red-600 hover:underline"
-                    onClick={async () => {
-                      if (!confirm(`Remover todos os ${bimLinks!.length} vínculos?`)) return;
-                      for (const link of bimLinks!) {
-                        try { await deleteLinkMutation.mutateAsync({ id: link.id, companyId }); } catch {}
-                      }
-                      await refetchLinks();
-                      setColorRevision(c => c + 1);
-                      toast.success("Todos os vínculos removidos");
-                    }}
-                  >
-                    Limpar todos
-                  </button>
+                  {!confirmClearAll ? (
+                    <button
+                      className="ml-auto text-[9px] text-red-400 hover:text-red-600 hover:underline"
+                      onClick={() => setConfirmClearAll(true)}
+                    >
+                      Limpar todos
+                    </button>
+                  ) : (
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <span className="text-[9px] text-red-600 font-medium">Confirma?</span>
+                      <button
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600"
+                        onClick={async () => {
+                          try {
+                            await deleteAllLinksMutation.mutateAsync({ projetoId, companyId });
+                            await refetchLinks();
+                            setColorRevision(c => c + 1);
+                            toast.success("Todos os vínculos removidos");
+                          } catch {
+                            toast.error("Erro ao remover vínculos");
+                          }
+                          setConfirmClearAll(false);
+                        }}
+                      >
+                        Sim
+                      </button>
+                      <button
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 hover:bg-slate-300"
+                        onClick={() => setConfirmClearAll(false)}
+                      >
+                        Não
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="divide-y divide-slate-50 max-h-60 overflow-y-auto">
                   {bimLinks!.map(link => (
