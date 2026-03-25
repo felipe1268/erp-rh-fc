@@ -198,26 +198,56 @@ export const bimRouter = router({
       const db = await getDb();
       if (!db) { console.log("[BIM] listAtividades: db null"); return []; }
       console.log(`[BIM] listAtividades projetoId=${input.projetoId} companyId=${input.companyId}`);
-      const rows = await db.execute(
-        sql`SELECT pa.id, pa.nome, pa.eap_codigo, pa.data_inicio as inicio, pa.data_fim as fim,
-                   pa.peso_financeiro
-            FROM planejamento_atividades pa
-            JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
-            WHERE pa.projeto_id = ${input.projetoId}
-              AND pp.company_id = ${input.companyId}
-              AND (pa.is_grupo IS NOT TRUE)
-              AND (pa.disabled IS NOT TRUE)
-            ORDER BY pa.eap_codigo ASC NULLS LAST, pa.ordem ASC, pa.id ASC
-            LIMIT 2000`
-      );
-      console.log(`[BIM] listAtividades result: ${rows.rows?.length ?? 0} rows`);
-      return (rows.rows || []).map((r: any) => ({
+
+      const [atividadesRes, gruposRes] = await Promise.all([
+        db.execute(
+          sql`SELECT pa.id, pa.nome, pa.eap_codigo, pa.data_inicio as inicio, pa.data_fim as fim
+              FROM planejamento_atividades pa
+              JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
+              WHERE pa.projeto_id = ${input.projetoId}
+                AND pp.company_id = ${input.companyId}
+                AND (pa.is_grupo IS NOT TRUE)
+                AND (pa.disabled IS NOT TRUE)
+              ORDER BY pa.eap_codigo ASC NULLS LAST, pa.ordem ASC, pa.id ASC
+              LIMIT 2000`
+        ),
+        db.execute(
+          sql`SELECT pa.eap_codigo, pa.nome
+              FROM planejamento_atividades pa
+              JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
+              WHERE pa.projeto_id = ${input.projetoId}
+                AND pp.company_id = ${input.companyId}
+                AND pa.is_grupo = true
+                AND (pa.disabled IS NOT TRUE)`
+        ),
+      ]);
+
+      const grupoMap = new Map<string, string>();
+      (gruposRes.rows || []).forEach((g: any) => {
+        if (g.eap_codigo) grupoMap.set(g.eap_codigo, (g.nome || "").replace(/:$/, "").trim());
+      });
+
+      const getPath = (eap: string | null): string => {
+        if (!eap || !eap.includes(".")) return "";
+        const parts = eap.split(".");
+        const path: string[] = [];
+        for (let i = 1; i < parts.length; i++) {
+          const parentEap = parts.slice(0, i).join(".");
+          const name = grupoMap.get(parentEap);
+          if (name) path.push(name);
+        }
+        return path.join(" > ");
+      };
+
+      console.log(`[BIM] listAtividades result: ${atividadesRes.rows?.length ?? 0} rows, ${gruposRes.rows?.length ?? 0} grupos`);
+      return (atividadesRes.rows || []).map((r: any) => ({
         id: r.id,
         nome: r.nome,
         eapCodigo: r.eap_codigo,
         inicio: r.inicio,
         fim: r.fim,
         progressoReal: 0,
+        grupoPath: getPath(r.eap_codigo),
       }));
     }),
 

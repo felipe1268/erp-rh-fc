@@ -835,9 +835,13 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
     }
   };
 
-  const filteredAtividades = (bimAtividades || []).filter(a =>
-    !activitySearch || a.nome.toLowerCase().includes(activitySearch.toLowerCase()) ||
-    (a.eapCodigo || "").toLowerCase().includes(activitySearch.toLowerCase())
+  const filteredAtividades = (bimAtividades || []).filter(a => {
+    if (!activitySearch) return true;
+    const s = activitySearch.toLowerCase();
+    return a.nome.toLowerCase().includes(s) ||
+      (a.eapCodigo || "").toLowerCase().includes(s) ||
+      (a.grupoPath || "").toLowerCase().includes(s);
+  }
   );
 
   const resetCamera = () => {
@@ -1226,6 +1230,11 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
                             className={`w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors group ${alreadyLinked ? "bg-green-50/50" : ""}`}
                             onClick={() => handleLinkToActivity(a.id)}
                           >
+                            {a.grupoPath && (
+                              <div className="text-[9px] text-slate-400 mb-0.5 truncate" title={a.grupoPath}>
+                                {a.grupoPath}
+                              </div>
+                            )}
                             <div className="flex items-center gap-2">
                               {a.eapCodigo && (
                                 <span className="text-[10px] text-white bg-blue-500 rounded px-1.5 py-0.5 font-mono font-bold flex-shrink-0">{a.eapCodigo}</span>
