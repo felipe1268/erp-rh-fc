@@ -96,6 +96,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const [linkPanelOpen, setLinkPanelOpen] = useState(false);
   const [activitySearch, setActivitySearch] = useState("");
   const [autoLinking, setAutoLinking] = useState(false);
+  const [autoLinkProgress, setAutoLinkProgress] = useState({ current: 0, total: 0, label: "" });
   const [colorRevision, setColorRevision] = useState(0);
   const [boxSelecting, setBoxSelecting] = useState(false);
   const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
@@ -898,6 +899,7 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
   const handleAutoLink = async () => {
     if (!bimAtividades?.length || !models.length || !sceneRef.current) return;
     setAutoLinking(true);
+    setAutoLinkProgress({ current: 0, total: 0, label: "Analisando modelo..." });
 
     try {
       const eidsByType = new Map<string, number[]>();
@@ -914,53 +916,83 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
         (link.expressIds || []).forEach((eid: number) => alreadyLinkedEids.add(eid));
       });
 
-      let linked = 0;
-      let skipped = 0;
+      type PendingLink = { ifcType: string; atividadeId: number; atividadeNome: string; expressIds: number[] };
+      const pendingLinks: PendingLink[] = [];
 
       for (const [ifcType, keywords] of Object.entries(IFC_TYPE_KEYWORDS)) {
         const eids = eidsByType.get(ifcType);
         if (!eids || eids.length === 0) continue;
 
         const newEids = eids.filter(eid => !alreadyLinkedEids.has(eid));
-        if (newEids.length === 0) { skipped++; continue; }
+        if (newEids.length === 0) continue;
 
         const matchingActivities = bimAtividades.filter(a => {
           const searchText = `${a.nome} ${a.grupoPath || ""}`.toLowerCase();
           return keywords.some(kw => searchText.includes(kw));
         });
 
-        if (matchingActivities.length === 0) { skipped++; continue; }
+        if (matchingActivities.length === 0) continue;
 
-        const firstModel = models[0];
+        const bestMatch = matchingActivities[0];
+        pendingLinks.push({
+          ifcType,
+          atividadeId: bestMatch.id,
+          atividadeNome: bestMatch.nome,
+          expressIds: newEids,
+        });
+      }
 
-        for (const atividade of matchingActivities) {
-          try {
-            await saveLinkMutation.mutateAsync({
-              projetoId,
-              companyId,
-              atividadeId: atividade.id,
-              modelId: firstModel?.dbId || 0,
-              expressIds: newEids,
-            });
-            linked++;
-          } catch (err) {
-            console.warn(`Auto-link falhou para ${atividade.nome}:`, err);
-          }
+      if (pendingLinks.length === 0) {
+        toast.info("Nenhuma correspondência encontrada para auto-vincular");
+        setAutoLinking(false);
+        setAutoLinkProgress({ current: 0, total: 0, label: "" });
+        return;
+      }
+
+      const total = pendingLinks.length;
+      setAutoLinkProgress({ current: 0, total, label: `0/${total} tipos...` });
+      let linked = 0;
+      const firstModel = models[0];
+
+      for (let i = 0; i < pendingLinks.length; i++) {
+        const pl = pendingLinks[i];
+        setAutoLinkProgress({
+          current: i,
+          total,
+          label: `${pl.ifcType} → ${pl.atividadeNome.substring(0, 30)}...`,
+        });
+
+        try {
+          await saveLinkMutation.mutateAsync({
+            projetoId,
+            companyId,
+            atividadeId: pl.atividadeId,
+            modelId: firstModel?.dbId || 0,
+            expressIds: pl.expressIds,
+          });
+          linked++;
+        } catch (err) {
+          console.warn(`Auto-link falhou para ${pl.atividadeNome}:`, err);
         }
+
+        setAutoLinkProgress({
+          current: i + 1,
+          total,
+          label: `${i + 1}/${total} concluído`,
+        });
       }
 
       if (linked > 0) {
-        toast.success(`Auto-vinculação: ${linked} vínculo(s) criado(s)`);
+        toast.success(`Auto-vinculação: ${linked} vínculo(s) criado(s) com ${pendingLinks.reduce((s, p) => s + p.expressIds.length, 0)} elementos`);
         await refetchLinks();
         setColorRevision(c => c + 1);
-      } else {
-        toast.info("Nenhuma correspondência encontrada para auto-vincular");
       }
     } catch (err) {
       toast.error("Erro na auto-vinculação");
       console.error(err);
     } finally {
       setAutoLinking(false);
+      setAutoLinkProgress({ current: 0, total: 0, label: "" });
     }
   };
 
@@ -1108,6 +1140,27 @@ export default function BimViewer({ projetoId, projetoNome, companyId }: Props) 
             <span className="hidden sm:inline">{isFullscreen ? "Sair" : "Tela Cheia"}</span>
           </Button>
         </div>
+        {autoLinking && (
+          <div className="px-3 py-1.5 bg-purple-50 border-t border-purple-100 flex items-center gap-3">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[10px] font-medium text-purple-700 truncate">{autoLinkProgress.label}</span>
+                {autoLinkProgress.total > 0 && (
+                  <span className="text-[10px] text-purple-500 flex-shrink-0 ml-2">
+                    {Math.round((autoLinkProgress.current / autoLinkProgress.total) * 100)}%
+                  </span>
+                )}
+              </div>
+              <div className="w-full bg-purple-200 rounded-full h-1.5">
+                <div
+                  className="bg-purple-600 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: autoLinkProgress.total > 0 ? `${(autoLinkProgress.current / autoLinkProgress.total) * 100}%` : "0%" }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 overflow-hidden relative">

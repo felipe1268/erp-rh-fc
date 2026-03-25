@@ -5217,4 +5217,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-25 18:00:00",
   },
+  {
+    version: 783,
+    titulo: "BIM — Barra de progresso na auto-vinculação + otimização",
+    descricao: "Auto-vincular agora exibe barra de progresso roxa abaixo da toolbar com percentual, tipo IFC sendo processado e nome da atividade. Otimizado para vincular apenas à melhor atividade por tipo (evita duplicatas). Corrigido travamento causado por múltiplas chamadas sequenciais desnecessárias.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-25 19:00:00",
+  },
 ];
