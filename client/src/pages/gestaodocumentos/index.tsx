@@ -80,6 +80,33 @@ const ART_STATUS: Record<string, { label: string; color: string }> = {
   cancelada: { label: "Cancelada", color: "bg-gray-200 text-gray-600" },
 };
 
+const SUBPASTA_EXTENSIONS: Record<string, string[]> = {
+  DWG: [".dwg", ".dxf"],
+  PDF: [".pdf"],
+  DOC: [".doc", ".docx"],
+  IFC: [".ifc"],
+  REVIT: [".rvt", ".rfa"],
+  SKP: [".skp"],
+  XLS: [".xls", ".xlsx"],
+  FOTOS: [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"],
+  BIM: [".ifc", ".rvt", ".rfa", ".nwd", ".nwc"],
+  MEMORIAIS: [".doc", ".docx", ".pdf", ".txt"],
+};
+
+function getAcceptForSubpasta(subpasta: string | null): string | undefined {
+  if (!subpasta) return undefined;
+  const exts = SUBPASTA_EXTENSIONS[subpasta.toUpperCase()];
+  return exts ? exts.join(",") : undefined;
+}
+
+function isExtensionAllowed(fileName: string, subpasta: string | null): boolean {
+  if (!subpasta) return true;
+  const exts = SUBPASTA_EXTENSIONS[subpasta.toUpperCase()];
+  if (!exts) return true;
+  const ext = fileName.substring(fileName.lastIndexOf(".")).toLowerCase();
+  return exts.includes(ext);
+}
+
 type ViewMode = "obras" | "ficheiro" | "configuracoes" | "arts";
 
 export default function GestaoDocumentos() {
@@ -112,6 +139,7 @@ export default function GestaoDocumentos() {
   const [editingArt, setEditingArt] = useState<any>(null);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set());
+  const [previewDoc, setPreviewDoc] = useState<any>(null);
 
   const [newDiscForm, setNewDiscForm] = useState({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"] as string[], newSubpasta: "" });
 
@@ -276,6 +304,11 @@ export default function GestaoDocumentos() {
     if (!selectedObraId) { toast.error("Selecione uma obra primeiro"); return; }
     const validFiles = Array.from(files).filter(f => {
       if (f.size > 30 * 1024 * 1024) { toast.error(`${f.name}: muito grande (máx 30MB)`); return false; }
+      if (!isExtensionAllowed(f.name, selectedSubpasta)) {
+        const allowed = SUBPASTA_EXTENSIONS[selectedSubpasta?.toUpperCase() || ""]?.join(", ") || "";
+        toast.error(`${f.name}: extensão não permitida na pasta ${selectedSubpasta}. Aceito: ${allowed}`);
+        return false;
+      }
       return true;
     });
     if (validFiles.length === 0) return;
@@ -890,7 +923,7 @@ export default function GestaoDocumentos() {
                     type="file"
                     multiple
                     className="hidden"
-                    accept=".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"
+                    accept={getAcceptForSubpasta(selectedSubpasta) || ".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"}
                     onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleBatchUpload(e.target.files); }}
                   />
                   <Button size="sm" variant="outline" onClick={() => batchFileInputRef.current?.click()} className="border-blue-200 text-blue-600 hover:bg-blue-50 h-8" disabled={batchUploading}>
@@ -949,6 +982,11 @@ export default function GestaoDocumentos() {
                         } else if (files.length === 1) {
                           const f = files[0];
                           if (f.size > 30 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 30MB)"); return; }
+                          if (!isExtensionAllowed(f.name, selectedSubpasta)) {
+                            const allowed = SUBPASTA_EXTENSIONS[selectedSubpasta?.toUpperCase() || ""]?.join(", ") || "";
+                            toast.error(`Extensão não permitida na pasta ${selectedSubpasta}. Aceito: ${allowed}`);
+                            return;
+                          }
                           const today = new Date().toISOString().split("T")[0];
                           const discId = selectedDiscId ? String(selectedDiscId) : "";
                           const nameWithoutExt = f.name.replace(/\.[^.]+$/, "");
@@ -1045,8 +1083,13 @@ export default function GestaoDocumentos() {
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
-                                      <Eye className="w-4 h-4 mr-2" /> Ver
+                                      <Eye className="w-4 h-4 mr-2" /> Ver Detalhes
                                     </DropdownMenuItem>
+                                    {doc.arquivoUrl && /\.(pdf|png|jpg|jpeg|gif|webp)$/i.test(doc.arquivoNome || "") && (
+                                      <DropdownMenuItem onClick={() => setPreviewDoc(doc)}>
+                                        <Eye className="w-4 h-4 mr-2" /> Visualizar Arquivo
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem onClick={() => openEditDoc(doc)}>
                                       <Pencil className="w-4 h-4 mr-2" /> Editar
                                     </DropdownMenuItem>
@@ -1274,11 +1317,16 @@ export default function GestaoDocumentos() {
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept=".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"
+                accept={getAcceptForSubpasta(selectedSubpasta) || ".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) {
                     if (f.size > 30 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 30MB)"); return; }
+                    if (!isExtensionAllowed(f.name, selectedSubpasta)) {
+                      const allowed = SUBPASTA_EXTENSIONS[selectedSubpasta?.toUpperCase() || ""]?.join(", ") || "";
+                      toast.error(`Extensão não permitida na pasta ${selectedSubpasta}. Aceito: ${allowed}`);
+                      return;
+                    }
                     setPendingFile(f);
                   }
                 }}
@@ -1476,6 +1524,11 @@ export default function GestaoDocumentos() {
                     <p className="text-sm text-blue-800 font-medium truncate">{selectedDoc.arquivoNome || "Arquivo"}</p>
                     {selectedDoc.arquivoTamanho && <p className="text-xs text-blue-500">{(selectedDoc.arquivoTamanho / 1024).toFixed(0)} KB</p>}
                   </div>
+                  {/\.(pdf|png|jpg|jpeg|gif|webp)$/i.test(selectedDoc.arquivoNome || "") && (
+                    <button onClick={() => { setShowDetailModal(false); setPreviewDoc(selectedDoc); }} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors">
+                      <Eye className="w-4 h-4" /> Visualizar
+                    </button>
+                  )}
                   <a href={selectedDoc.arquivoUrl} download={selectedDoc.arquivoNome || "arquivo"} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors">
                     <Download className="w-4 h-4" /> Baixar
                   </a>
@@ -1588,6 +1641,51 @@ export default function GestaoDocumentos() {
                 </button>
               ));
             })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal — Visualização Rápida de Arquivo */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) setPreviewDoc(null); }}>
+        <DialogContent className="max-w-5xl bg-white border-gray-200 text-gray-900 max-h-[95vh] overflow-hidden flex flex-col p-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <Eye className="w-5 h-5 text-blue-600 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">{previewDoc?.titulo}</p>
+                <p className="text-[11px] text-gray-500">{previewDoc?.arquivoNome}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {previewDoc?.arquivoUrl && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = previewDoc.arquivoUrl;
+                  a.download = previewDoc.arquivoNome || "arquivo";
+                  a.click();
+                }}>
+                  <Download className="w-3 h-3 mr-1" /> Baixar
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 overflow-hidden bg-gray-100">
+            {previewDoc?.arquivoUrl && /\.pdf$/i.test(previewDoc.arquivoNome || "") && (
+              <iframe
+                src={previewDoc.arquivoUrl}
+                className="w-full h-full min-h-[70vh]"
+                title="Preview PDF"
+              />
+            )}
+            {previewDoc?.arquivoUrl && /\.(png|jpg|jpeg|gif|webp)$/i.test(previewDoc.arquivoNome || "") && (
+              <div className="flex items-center justify-center h-full min-h-[70vh] p-4">
+                <img
+                  src={previewDoc.arquivoUrl}
+                  alt={previewDoc.titulo}
+                  className="max-w-full max-h-[80vh] object-contain rounded shadow-lg"
+                />
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
