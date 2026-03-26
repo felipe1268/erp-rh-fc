@@ -736,7 +736,7 @@ export default function GestaoDocumentos() {
                         <div className="flex items-center gap-3 mb-2">
                           <FolderOpen className="w-8 h-8 text-blue-500" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{obra?.nome || "Obra"}</p>
+                            <p className="text-sm font-semibold text-gray-900">{obra?.nome || "Obra"}</p>
                             <p className="text-[11px] text-gray-500">{obra?.codigo || "—"}</p>
                           </div>
                         </div>
