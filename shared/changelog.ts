@@ -5343,4 +5343,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 16:00:00",
   },
+  {
+    version: 797,
+    titulo: "Proj./Doc. Técnicos — Tema Clean + Fluxo Intuitivo de Uso",
+    descricao: "Módulo Proj./Doc. Técnicos totalmente convertido para tema claro/clean (branco, cinza claro, azul). Novo fluxo intuitivo com: barra de progresso visual em 5 etapas (Configurar → Selecionar Obra → Cadastrar Docs → Revisões → ARTs/RRTs), tela de boas-vindas com guia passo-a-passo para novos usuários, dicas contextuais quando falta configuração ou obra selecionada, empty states com CTAs claras direcionando à próxima ação, cards de ações rápidas no Painel (Novo Documento / Gerenciar ARTs / Ver Dashboard), seletor de obra com destaque visual (ring) quando nenhuma obra está selecionada, e mensagens inteligentes adaptando texto conforme o estado do módulo (sem disciplinas? → vá para Configurações; sem obra? → selecione uma obra; tudo pronto? → cadastre o primeiro documento).",
+    tipo: "feature",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 17:00:00",
+  },
 ];

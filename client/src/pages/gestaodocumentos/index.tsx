@@ -78,6 +78,13 @@ import {
   Layers,
   RefreshCw,
   Zap,
+  ArrowRight,
+  Building2,
+  Rocket,
+  BookOpen,
+  ChevronRight,
+  Lightbulb,
+  ListChecks,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -403,6 +410,20 @@ export default function GestaoDocumentos() {
 
   const kpis = dashboard.data || { totalDocumentos: 0, porStatus: {}, totalRevisoes: 0, revisoesPendentes: 0, totalArts: 0, artsVencendo: 0 };
 
+  const hasDisciplinas = (disciplinas.data || []).length > 0;
+  const hasTipos = (tipos.data || []).length > 0;
+  const hasConfig = hasDisciplinas && hasTipos;
+  const hasObra = !!selectedObraId;
+  const hasDocs = kpis.totalDocumentos > 0;
+
+  const flowSteps = [
+    { key: "config", label: "Configurar", desc: "Disciplinas e tipos", icon: Settings, done: hasConfig, tab: "configuracoes" as TabType },
+    { key: "obra", label: "Selecionar Obra", desc: "Escolha o projeto", icon: Building2, done: hasObra, tab: null },
+    { key: "docs", label: "Cadastrar Docs", desc: "Documentos técnicos", icon: FileText, done: hasDocs, tab: "documentos" as TabType },
+    { key: "revs", label: "Revisões", desc: "Controle de versões", icon: History, done: (kpis.totalRevisoes || 0) > 0, tab: "documentos" as TabType },
+    { key: "arts", label: "ARTs / RRTs", desc: "Responsabilidade técnica", icon: Shield, done: (kpis.totalArts || 0) > 0, tab: "arts" as TabType },
+  ];
+
   return (
     <DashboardLayout title="Proj./Doc. Técnicos">
       <div className="space-y-6">
@@ -416,8 +437,8 @@ export default function GestaoDocumentos() {
               value={selectedObraId ? String(selectedObraId) : "all"}
               onValueChange={(v) => setSelectedObraId(v === "all" ? null : Number(v))}
             >
-              <SelectTrigger className="w-[250px] bg-white border-gray-200 text-gray-900">
-                <SelectValue placeholder="Todas as obras" />
+              <SelectTrigger className={`w-[250px] bg-white border-gray-200 text-gray-900 ${!hasObra ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}>
+                <SelectValue placeholder="Selecione uma obra" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as obras</SelectItem>
@@ -428,6 +449,86 @@ export default function GestaoDocumentos() {
             </Select>
           </div>
         </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {flowSteps.map((step, i) => (
+              <div key={step.key} className="flex items-center">
+                <button
+                  onClick={() => {
+                    if (step.tab) setActiveTab(step.tab);
+                  }}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all min-w-[140px] ${
+                    step.done
+                      ? "bg-green-50 border border-green-200 text-green-700"
+                      : i === flowSteps.findIndex(s => !s.done)
+                        ? "bg-blue-50 border-2 border-blue-300 text-blue-700 shadow-sm"
+                        : "bg-gray-50 border border-gray-200 text-gray-400"
+                  }`}
+                >
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                    step.done ? "bg-green-100" : i === flowSteps.findIndex(s => !s.done) ? "bg-blue-100" : "bg-gray-100"
+                  }`}>
+                    {step.done ? (
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <step.icon className={`w-4 h-4 ${i === flowSteps.findIndex(s => !s.done) ? "text-blue-600" : "text-gray-400"}`} />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold leading-tight">{step.label}</p>
+                    <p className="text-[10px] leading-tight opacity-70">{step.desc}</p>
+                  </div>
+                </button>
+                {i < flowSteps.length - 1 && (
+                  <ChevronRight className={`w-4 h-4 mx-1 shrink-0 ${step.done ? "text-green-400" : "text-gray-300"}`} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {!hasConfig && !hasObra && (
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-8 text-center">
+            <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Rocket className="w-8 h-8 text-blue-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Bem-vindo ao Controle de Documentos</h2>
+            <p className="text-sm text-gray-600 mb-6 max-w-lg mx-auto">
+              Para começar, configure as disciplinas e tipos de documento do seu projeto. Depois, selecione uma obra e comece a cadastrar documentos técnicos.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto">
+              <button
+                onClick={() => setActiveTab("configuracoes")}
+                className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all group"
+              >
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                  <Settings className="w-5 h-5 text-blue-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">1. Configurar</span>
+                <span className="text-xs text-gray-500">Disciplinas e tipos</span>
+              </button>
+              <button
+                className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-gray-200 opacity-60 cursor-default"
+              >
+                <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-gray-400" />
+                </div>
+                <span className="text-sm font-medium text-gray-400">2. Selecionar Obra</span>
+                <span className="text-xs text-gray-400">No filtro acima</span>
+              </button>
+              <button
+                className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-gray-200 opacity-60 cursor-default"
+              >
+                <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-gray-400" />
+                </div>
+                <span className="text-sm font-medium text-gray-400">3. Cadastrar Docs</span>
+                <span className="text-xs text-gray-400">Documentos técnicos</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
           <TabsList className="bg-white border border-gray-200">
@@ -453,6 +554,16 @@ export default function GestaoDocumentos() {
           </TabsContent>
 
           <TabsContent value="painel" className="mt-4">
+            {!hasObra && (
+              <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">Selecione uma obra para ver os indicadores</p>
+                  <p className="text-xs text-amber-600 mt-0.5">Use o seletor no topo da página para filtrar por obra específica.</p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <KpiCard title="Total de Documentos" value={kpis.totalDocumentos} icon={FileText} color="blue" />
               <KpiCard title="Em Elaboração" value={kpis.porStatus?.em_elaboracao || 0} icon={Clock} color="yellow" />
@@ -462,27 +573,107 @@ export default function GestaoDocumentos() {
               <KpiCard title="ARTs Vencendo" value={kpis.artsVencendo} icon={Shield} color="red" />
             </div>
 
+            {hasDocs && hasObra && (
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button
+                  onClick={() => { setActiveTab("documentos"); resetDocForm(); setEditingDoc(null); setShowDocModal(true); }}
+                  className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all text-left group"
+                >
+                  <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors shrink-0">
+                    <Plus className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Novo Documento</p>
+                    <p className="text-xs text-gray-500">Cadastrar documento técnico</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-gray-300 ml-auto group-hover:text-blue-500 transition-colors" />
+                </button>
+                <button
+                  onClick={() => setActiveTab("arts")}
+                  className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all text-left group"
+                >
+                  <div className="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center group-hover:bg-purple-200 transition-colors shrink-0">
+                    <Shield className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Gerenciar ARTs</p>
+                    <p className="text-xs text-gray-500">ARTs e RRTs da obra</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-gray-300 ml-auto group-hover:text-purple-500 transition-colors" />
+                </button>
+                <button
+                  onClick={() => setActiveTab("dash")}
+                  className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all text-left group"
+                >
+                  <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center group-hover:bg-emerald-200 transition-colors shrink-0">
+                    <BarChart3 className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Ver Dashboard</p>
+                    <p className="text-xs text-gray-500">Indicadores e métricas</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-gray-300 ml-auto group-hover:text-emerald-500 transition-colors" />
+                </button>
+              </div>
+            )}
+
             {kpis.totalDocumentos === 0 && (
-              <div className="mt-8 text-center py-12 bg-white rounded-lg border border-gray-200">
-                <FolderOpen className="w-16 h-16 mx-auto text-gray-500 mb-4" />
-                <h3 className="text-lg font-medium text-gray-600 mb-2">Nenhum documento cadastrado</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  {selectedObraId ? "Selecione a aba Documentos para começar a cadastrar." : "Selecione uma obra para ver os documentos."}
+              <div className="mt-8 text-center py-12 bg-white rounded-xl border border-gray-200">
+                <FolderOpen className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                <h3 className="text-lg font-medium text-gray-700 mb-2">Nenhum documento cadastrado</h3>
+                <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+                  {!hasConfig
+                    ? "Configure disciplinas e tipos de documento antes de começar."
+                    : !selectedObraId
+                      ? "Selecione uma obra no filtro acima para começar."
+                      : "Tudo pronto! Cadastre seu primeiro documento técnico."}
                 </p>
-                {selectedObraId && (
-                  <Button onClick={() => { setActiveTab("documentos"); setShowDocModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700">
-                    <Plus className="w-4 h-4 mr-2" /> Cadastrar Documento
+                {!hasConfig ? (
+                  <Button onClick={() => setActiveTab("configuracoes")} className="bg-blue-600 text-white hover:bg-blue-700">
+                    <Settings className="w-4 h-4 mr-2" /> Ir para Configurações
                   </Button>
-                )}
+                ) : selectedObraId ? (
+                  <Button onClick={() => { setActiveTab("documentos"); setShowDocModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700">
+                    <Plus className="w-4 h-4 mr-2" /> Cadastrar Primeiro Documento
+                  </Button>
+                ) : null}
               </div>
             )}
           </TabsContent>
 
           <TabsContent value="documentos" className="mt-4">
+            {!hasObra ? (
+              <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Building2 className="w-8 h-8 text-blue-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-700 mb-2">Selecione uma obra</h3>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto mb-1">
+                  Use o seletor <strong>"Selecione uma obra"</strong> no topo da página para filtrar os documentos por projeto.
+                </p>
+                <div className="flex items-center justify-center gap-1 mt-4">
+                  <ArrowUpRight className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs text-blue-600 font-medium">O seletor está no canto superior direito</span>
+                </div>
+              </div>
+            ) : (
+              <>
+            {!hasConfig && (
+              <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-800">Configure disciplinas e tipos de documento</p>
+                  <p className="text-xs text-amber-600 mt-0.5">Para melhor organização, cadastre disciplinas (ARQ, EST, HID...) e tipos de documento (Planta, Memorial, Laudo...).</p>
+                  <Button size="sm" variant="outline" onClick={() => setActiveTab("configuracoes")} className="mt-2 text-xs h-7 border-amber-300 text-amber-700 hover:bg-amber-100">
+                    <Settings className="w-3 h-3 mr-1" /> Ir para Configurações
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
                     placeholder="Buscar por código ou título..."
                     value={search}
@@ -527,18 +718,10 @@ export default function GestaoDocumentos() {
               <Button
                 onClick={() => { resetDocForm(); setEditingDoc(null); setShowDocModal(true); }}
                 className="bg-blue-600 text-white hover:bg-blue-700"
-                disabled={!selectedObraId}
               >
                 <Plus className="w-4 h-4 mr-2" /> Novo Documento
               </Button>
             </div>
-
-            {!selectedObraId ? (
-              <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-                <AlertTriangle className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
-                <p className="text-gray-500">Selecione uma obra no filtro acima para visualizar os documentos.</p>
-              </div>
-            ) : (
               <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -616,28 +799,47 @@ export default function GestaoDocumentos() {
                   </TableBody>
                 </Table>
               </div>
+            {(documentos.data || []).length === 0 && (
+              <div className="mt-6 text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                <h3 className="text-base font-medium text-gray-600 mb-1">Nenhum documento nesta obra</h3>
+                <p className="text-sm text-gray-500 mb-4">Comece cadastrando o primeiro documento técnico.</p>
+                <Button onClick={() => { resetDocForm(); setEditingDoc(null); setShowDocModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700">
+                  <Plus className="w-4 h-4 mr-2" /> Cadastrar Primeiro Documento
+                </Button>
+              </div>
+            )}
+              </>
             )}
           </TabsContent>
 
           <TabsContent value="arts" className="mt-4">
+            {!hasObra ? (
+              <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Shield className="w-8 h-8 text-purple-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-700 mb-2">Selecione uma obra</h3>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                  Use o seletor no topo da página para visualizar as ARTs/RRTs de uma obra específica.
+                </p>
+                <div className="flex items-center justify-center gap-1 mt-4">
+                  <ArrowUpRight className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs text-blue-600 font-medium">O seletor está no canto superior direito</span>
+                </div>
+              </div>
+            ) : (
+              <>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">ARTs e RRTs</h2>
               <Button
                 onClick={() => { resetArtForm(); setEditingArt(null); setShowArtModal(true); }}
                 className="bg-blue-600 text-white hover:bg-blue-700"
-                disabled={!selectedObraId}
               >
                 <Plus className="w-4 h-4 mr-2" /> Nova ART/RRT
               </Button>
             </div>
-
-            {!selectedObraId ? (
-              <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-                <AlertTriangle className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
-                <p className="text-gray-500">Selecione uma obra para visualizar as ARTs/RRTs.</p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="border-gray-200 hover:bg-transparent">
@@ -709,10 +911,28 @@ export default function GestaoDocumentos() {
                   </TableBody>
                 </Table>
               </div>
+            {(arts.data || []).length === 0 && (
+              <div className="mt-6 text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                <Shield className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                <h3 className="text-base font-medium text-gray-600 mb-1">Nenhuma ART/RRT cadastrada</h3>
+                <p className="text-sm text-gray-500 mb-4">Cadastre a primeira ART ou RRT para esta obra.</p>
+                <Button onClick={() => { resetArtForm(); setEditingArt(null); setShowArtModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700">
+                  <Plus className="w-4 h-4 mr-2" /> Cadastrar Primeira ART/RRT
+                </Button>
+              </div>
+            )}
+              </>
             )}
           </TabsContent>
 
           <TabsContent value="configuracoes" className="mt-4">
+            <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+              <BookOpen className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-blue-800">Configure antes de começar</p>
+                <p className="text-xs text-blue-600 mt-0.5">Cadastre as disciplinas (ARQ, EST, HID, ELE...) e tipos de documento (Planta, Memorial, Laudo...) que sua empresa utiliza. Eles aparecem como filtros e categorias nos documentos.</p>
+              </div>
+            </div>
             <ConfigSection
               title="Disciplinas"
               items={disciplinas.data || []}
