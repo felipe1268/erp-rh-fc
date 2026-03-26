@@ -10,9 +10,8 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, Search, Loader2, CalendarRange, Building2, User, DollarSign,
   TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin, ArrowLeft, Pencil,
-  Info, BarChart3, LayoutGrid,
+  Info,
 } from "lucide-react";
-import DashboardObras from "./DashboardObras";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -26,10 +25,10 @@ function formatBRL(v: number) {
 
 function statusBadge(status: string) {
   const s = status?.toLowerCase() ?? "";
-  if (s.includes("conclu")) return "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
-  if (s.includes("atraso") || s.includes("suspen")) return "bg-red-500/20 text-red-400 border border-red-500/30";
-  if (s.includes("parado")) return "bg-gray-600/30 text-gray-400 border border-gray-600";
-  return "bg-blue-500/20 text-blue-400 border border-blue-500/30";
+  if (s.includes("conclu")) return "bg-emerald-100 text-emerald-700";
+  if (s.includes("atraso") || s.includes("suspen")) return "bg-red-100 text-red-700";
+  if (s.includes("parado")) return "bg-gray-100 text-gray-600";
+  return "bg-blue-100 text-blue-700";
 }
 function statusIcon(status: string) {
   const s = status?.toLowerCase() ?? "";
@@ -55,7 +54,6 @@ export default function PlanejamentoLista() {
   const [busca, setBusca] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [excluindo, setExcluindo] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<"dashboard" | "projetos">("dashboard");
 
   // Formulário novo projeto
   const [form, setForm] = useState({
@@ -203,61 +201,32 @@ export default function PlanejamentoLista() {
           <div className="flex items-center gap-3">
             <Button
               variant="outline" size="sm"
-              className="gap-1.5 text-gray-300 border-gray-600 hover:bg-gray-700"
+              className="gap-1.5 text-slate-600"
               onClick={() => window.history.back()}
             >
               <ArrowLeft className="h-4 w-4" />
               Voltar
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                <CalendarRange className="h-5 w-5 text-blue-400" />
+              <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <CalendarRange className="h-5 w-5 text-blue-600" />
                 Planejamento de Obras
               </h1>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 Cronograma · Curva S · REFIS · Controle de Avanço
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center bg-[#1E293B] border border-gray-700 rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode("dashboard")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  viewMode === "dashboard" ? "bg-blue-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                <BarChart3 className="h-3.5 w-3.5" />
-                Dashboard
-              </button>
-              <button
-                onClick={() => setViewMode("projetos")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  viewMode === "projetos" ? "bg-blue-600 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                Projetos
-              </button>
-            </div>
-            <DraggableCommandBar barId="planejamento-lista" items={[
-              ...(canCreate ? [{ id: "novo-projeto", node: <Button onClick={() => setModalAberto(true)} className="gap-2 bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /> Novo Projeto</Button> }] : []),
-            ]} />
-          </div>
+          <DraggableCommandBar barId="planejamento-lista" items={[
+            ...(canCreate ? [{ id: "novo-projeto", node: <Button onClick={() => setModalAberto(true)} className="gap-2 bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /> Novo Projeto</Button> }] : []),
+          ]} />
         </div>
 
-        {/* Dashboard view */}
-        {viewMode === "dashboard" && (
-          <DashboardObras onNavigate={(id) => setLocation(`/planejamento/${id}`)} />
-        )}
-
-        {/* Projetos view */}
-        {viewMode === "projetos" && <>
         {/* KPIs rápidos */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           {[
-            { label: "Total de Projetos", value: projetos.length, icon: <Building2 className="h-4 w-4" />, color: "blue" },
-            { label: "Em Andamento", value: projetos.filter(p => p.status?.toLowerCase().replace(/_/g, " ").includes("andamento")).length, icon: <TrendingUp className="h-4 w-4" />, color: "green" },
+            { label: "Total de Projetos", value: projetos.length, icon: <Building2 className="h-4 w-4" />, color: "text-blue-600", bg: "bg-blue-50" },
+            { label: "Em Andamento", value: projetos.filter(p => p.status?.toLowerCase().replace(/_/g, " ").includes("andamento")).length, icon: <TrendingUp className="h-4 w-4" />, color: "text-emerald-600", bg: "bg-emerald-50" },
             { label: "Com Atraso", value: projetos.filter(p => {
               const st = (p.status || "").toLowerCase().replace(/_/g, " ");
               if (st.includes("conclu")) return false;
@@ -265,42 +234,40 @@ export default function PlanejamentoLista() {
               if (!prazo) return false;
               const hoje = new Date().toISOString().split("T")[0];
               return String(prazo).slice(0, 10) < hoje;
-            }).length, icon: <AlertTriangle className="h-4 w-4" />, color: "red" },
-            ...(!hideFinancial ? [{ label: "Valor Total", value: formatBRL(projetos.reduce((s, p) => s + (n(p.valorContrato) || n((p as any).orcamentoValorNegociado) || n((p as any).orcamentoTotalVenda)), 0)), icon: <DollarSign className="h-4 w-4" />, color: "purple" }] : []),
-          ].map((k, i) => {
-            const kpiBg: Record<string, string> = { blue: "border-blue-500/30 bg-blue-500/10", green: "border-green-500/30 bg-green-500/10", red: "border-red-500/30 bg-red-500/10", purple: "border-purple-500/30 bg-purple-500/10" };
-            const kpiIcon: Record<string, string> = { blue: "text-blue-400", green: "text-green-400", red: "text-red-400", purple: "text-purple-400" };
-            return (
-            <div key={i} className={`rounded-lg border p-4 ${kpiBg[k.color] || kpiBg.blue}`}>
-              <div className="flex items-center justify-between mb-2">
-                <span className={kpiIcon[k.color] || kpiIcon.blue}>{k.icon}</span>
+            }).length, icon: <AlertTriangle className="h-4 w-4" />, color: "text-red-600", bg: "bg-red-50" },
+            ...(!hideFinancial ? [{ label: "Valor Total", value: formatBRL(projetos.reduce((s, p) => s + (n(p.valorContrato) || n((p as any).orcamentoValorNegociado) || n((p as any).orcamentoTotalVenda)), 0)), icon: <DollarSign className="h-4 w-4" />, color: "text-purple-600", bg: "bg-purple-50" }] : []),
+          ].map((k, i) => (
+            <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex items-start gap-3">
+              <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center shrink-0`}>
+                {k.icon}
               </div>
-              <p className="text-2xl font-bold text-white">{k.value}</p>
-              <p className="text-xs text-gray-400 mt-1">{k.label}</p>
+              <div>
+                <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
+                <p className={`text-base font-bold ${k.color} leading-tight mt-0.5`}>{k.value}</p>
+              </div>
             </div>
-            );
-          })}
+          ))}
         </div>
 
         {/* Busca */}
         <div className="relative mb-4 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Buscar projeto, cliente, local..."
             value={busca}
             onChange={e => setBusca(e.target.value)}
-            className="pl-9 text-sm bg-[#1E293B] border-gray-700 text-white placeholder:text-gray-500"
+            className="pl-9 text-sm"
           />
         </div>
 
         {/* Lista */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-20 gap-2 text-gray-400">
+          <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
             <Loader2 className="h-5 w-5 animate-spin" />
             <span>Carregando projetos...</span>
           </div>
         ) : filtrados.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-500 gap-3">
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
             <CalendarRange className="h-10 w-10 opacity-30" />
             <p className="text-sm font-medium">Nenhum projeto de planejamento encontrado</p>
             <Button variant="outline" size="sm" onClick={() => setModalAberto(true)} className="gap-1.5">
@@ -311,12 +278,12 @@ export default function PlanejamentoLista() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtrados.map(projeto => (
               <div key={projeto.id}
-                className="bg-[#1E293B] rounded-lg border border-gray-700 hover:border-blue-500/40 transition-all cursor-pointer group"
+                className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all cursor-pointer group"
                 onClick={() => setLocation(`/planejamento/${projeto.id}`)}
               >
                 <div className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-3">
-                    <h3 className="font-semibold text-white text-sm leading-tight line-clamp-2 flex-1">
+                    <h3 className="font-semibold text-slate-800 text-sm leading-tight line-clamp-2 flex-1">
                       {projeto.nome}
                     </h3>
                     <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${statusBadge(projeto.status ?? "")}`}>
@@ -325,7 +292,7 @@ export default function PlanejamentoLista() {
                     </span>
                   </div>
 
-                  <div className="space-y-1.5 text-xs text-gray-400">
+                  <div className="space-y-1.5 text-xs text-slate-500">
                     {projeto.cliente && (
                       <div className="flex items-center gap-1.5">
                         <Building2 className="h-3.5 w-3.5 shrink-0" />
@@ -347,7 +314,7 @@ export default function PlanejamentoLista() {
                       </div>
                     )}
                     {!hideFinancial && (n(projeto.valorContrato) > 0 || n((projeto as any).orcamentoValorNegociado) > 0 || n((projeto as any).orcamentoTotalVenda) > 0) && (
-                      <div className="flex items-center gap-1.5 font-semibold text-emerald-400">
+                      <div className="flex items-center gap-1.5 font-semibold text-emerald-700">
                         <DollarSign className="h-3.5 w-3.5 shrink-0" />
                         <span>{formatBRL(n(projeto.valorContrato) || n((projeto as any).orcamentoValorNegociado) || n((projeto as any).orcamentoTotalVenda))}</span>
                       </div>
@@ -355,14 +322,14 @@ export default function PlanejamentoLista() {
                   </div>
                 </div>
 
-                <div className="border-t border-gray-700 px-4 py-2 flex items-center justify-between">
-                  <span className="text-[10px] text-gray-500">
+                <div className="border-t border-slate-100 px-4 py-2 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400">
                     Criado {new Date(projeto.criadoEm ?? "").toLocaleDateString("pt-BR")}
                   </span>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={e => { e.stopPropagation(); setLocation(`/planejamento/${projeto.id}`); }}
-                      className="p-1 rounded hover:bg-blue-500/20 text-blue-400"
+                      className="p-1 rounded hover:bg-blue-50 text-blue-500"
                       title="Abrir"
                     >
                       <Eye className="h-3.5 w-3.5" />
@@ -370,7 +337,7 @@ export default function PlanejamentoLista() {
                     {canEdit && (
                     <button
                       onClick={e => { e.stopPropagation(); abrirEdicao(projeto); }}
-                      className="p-1 rounded hover:bg-amber-500/20 text-amber-400"
+                      className="p-1 rounded hover:bg-amber-50 text-amber-500"
                       title="Editar"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -379,7 +346,7 @@ export default function PlanejamentoLista() {
                     {canDelete && (
                     <button
                       onClick={e => { e.stopPropagation(); if (confirm("Excluir este projeto e todos os seus dados?")) excluirMutation.mutate({ id: projeto.id }); }}
-                      className="p-1 rounded hover:bg-red-500/20 text-red-400"
+                      className="p-1 rounded hover:bg-red-50 text-red-400"
                       title="Excluir"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -391,7 +358,6 @@ export default function PlanejamentoLista() {
             ))}
           </div>
         )}
-        </>}
 
         {/* ── Modal Editar Projeto ──────────────────────────────────────────── */}
         <Dialog open={!!editandoProjeto} onOpenChange={open => { if (!open) setEditandoProjeto(null); }}>
