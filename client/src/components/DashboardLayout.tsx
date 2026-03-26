@@ -636,7 +636,7 @@ export default function DashboardLayout({
         } as CSSProperties
       }
     >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+      <DashboardLayoutContent setSidebarWidth={setSidebarWidth} noPadding={noPadding}>
         {children}
       </DashboardLayoutContent>
     </SidebarProvider>
@@ -646,11 +646,13 @@ export default function DashboardLayout({
 type DashboardLayoutContentProps = {
   children: React.ReactNode;
   setSidebarWidth: (width: number) => void;
+  noPadding?: boolean;
 };
 
 function DashboardLayoutContent({
   children,
   setSidebarWidth,
+  noPadding,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
