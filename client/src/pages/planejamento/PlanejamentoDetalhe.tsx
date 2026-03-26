@@ -43,7 +43,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(2)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "bim-3d";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "efetivo" | "bim-3d";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -117,6 +117,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "prog-semanal",         label: "Prog. Semanal",      Icon: CalendarClock },
   { id: "diagrama-rede",        label: "Diagrama de Rede",   Icon: Network },
   { id: "custo-rh",             label: "Custo RH",           Icon: Users },
+  { id: "efetivo",              label: "Efetivo",            Icon: HardHat },
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
   { id: "bim-3d",               label: "BIM 3D",             Icon: Box },
@@ -173,6 +174,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     "prog-semanal": "prog_semanal",
     "diagrama-rede": "diagrama_rede",
     "custo-rh": "custo_rh",
+    "efetivo": "efetivo",
     "revisoes": "revisoes",
     "refis": "refis",
     "bim-3d": "bim_3d",
@@ -886,6 +888,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           </div>
         )}
 
+        {canViewTab(aba) && aba === "efetivo" && (
+          <EfetivoObraTab proj={proj} />
+        )}
+
         {canViewTab(aba) && aba === "bim-3d" && (
           <React.Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /><span className="ml-2 text-sm text-slate-500">Carregando visualizador 3D...</span></div>}>
             <BimViewer projetoId={projetoId} projetoNome={proj?.nome || ""} companyId={proj?.companyId ?? 0} />
@@ -1253,18 +1259,9 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
 // ABA: VISÃO GERAL
 // ═════════════════════════════════════════════════════════════════════════════
 function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, user, hideFinancial, onEditarProjeto, onVerRefisCompleto }: any) {
-  const { selectedCompany, selectedCompanyId } = useCompany();
+  const { selectedCompany } = useCompany();
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
-  const [efetivoAberto, setEfetivoAberto] = useState(false);
-  const [efetivoBusca, setEfetivoBusca] = useState("");
-
-  const companyId = Number(selectedCompanyId) || 0;
-  const obraId = proj?.obraId ?? 0;
-  const { data: equipeObra = [], isLoading: loadingEquipe } = trpc.obras.equipeObra.useQuery(
-    { obraId, companyId },
-    { enabled: obraId > 0 && companyId > 0 }
-  );
   const totalAtiv   = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta).length;
   const concluidas  = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta).filter((a: any) => {
     const avMap: Record<number, number> = {};
@@ -1336,185 +1333,6 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
           </div>
         ))}
       </div>
-
-      {/* ── Efetivo da Obra ────────────────────────────────────────────────── */}
-      {obraId > 0 && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-50">
-                <HardHat className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-800">Efetivo da Obra</h3>
-                <p className="text-[10px] text-slate-500">Funcionários alocados neste projeto</p>
-              </div>
-            </div>
-            {!loadingEquipe && equipeObra.length > 0 && (
-              <button onClick={() => setEfetivoAberto(true)} className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
-                <Users className="h-3.5 w-3.5" /> Ver equipe completa
-              </button>
-            )}
-          </div>
-
-          {loadingEquipe ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500 justify-center py-8">
-              <Loader2 className="h-4 w-4 animate-spin" /> Carregando efetivo...
-            </div>
-          ) : equipeObra.length === 0 ? (
-            <div className="text-center py-8 text-slate-400">
-              <HardHat className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-              <p className="text-sm">Nenhum funcionário alocado nesta obra</p>
-            </div>
-          ) : (() => {
-            const ativos = equipeObra.filter((e: any) => e.effectiveStatus === "Ativo").length;
-            const aviso = equipeObra.filter((e: any) => e.effectiveStatus === "Aviso" || e.effectiveStatus === "AvisoDispensado").length;
-            const ferias = equipeObra.filter((e: any) => e.effectiveStatus === "Ferias").length;
-            const afastados = equipeObra.filter((e: any) => e.effectiveStatus === "Afastado" || e.effectiveStatus === "Licenca").length;
-            const dispensados = equipeObra.filter((e: any) => e.effectiveStatus === "AvisoDispensado").length;
-            const funcaoMap = new Map<string, number>();
-            equipeObra.forEach((e: any) => {
-              const f = e.funcao || e.cargo || "Não informado";
-              funcaoMap.set(f, (funcaoMap.get(f) || 0) + 1);
-            });
-            const funcoes = Array.from(funcaoMap.entries()).sort((a, b) => b[1] - a[1]);
-
-            return (
-              <div className="p-4 space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  <div className="text-center p-3 rounded-lg bg-slate-50">
-                    <p className="text-2xl font-bold text-slate-800">{equipeObra.length}</p>
-                    <p className="text-[10px] text-slate-500 mt-1">Total</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-emerald-50">
-                    <p className="text-2xl font-bold text-emerald-600">{ativos}</p>
-                    <p className="text-[10px] text-emerald-600 mt-1">Ativos</p>
-                  </div>
-                  {aviso > 0 && (
-                    <div className="text-center p-3 rounded-lg bg-red-50">
-                      <p className="text-2xl font-bold text-red-600">{aviso}</p>
-                      <p className="text-[10px] text-red-600 mt-1">Aviso Prévio</p>
-                    </div>
-                  )}
-                  {ferias > 0 && (
-                    <div className="text-center p-3 rounded-lg bg-amber-50">
-                      <p className="text-2xl font-bold text-amber-600">{ferias}</p>
-                      <p className="text-[10px] text-amber-600 mt-1">Férias</p>
-                    </div>
-                  )}
-                  {afastados > 0 && (
-                    <div className="text-center p-3 rounded-lg bg-purple-50">
-                      <p className="text-2xl font-bold text-purple-600">{afastados}</p>
-                      <p className="text-[10px] text-purple-600 mt-1">Afastados</p>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold text-slate-600 mb-2">Distribuição por Função</p>
-                  <div className="space-y-1.5">
-                    {funcoes.slice(0, 8).map(([funcao, qtd]) => (
-                      <div key={funcao} className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-600 w-40 truncate text-right">{funcao}</span>
-                        <div className="flex-1 h-5 bg-slate-100 rounded-md overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500 rounded-md flex items-center justify-end pr-1.5 text-[10px] font-semibold text-white"
-                            style={{ width: `${Math.max(((qtd / equipeObra.length) * 100), 8)}%`, minWidth: 24 }}
-                          >
-                            {qtd}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {funcoes.length > 8 && (
-                      <p className="text-[10px] text-slate-400 text-center mt-1">+{funcoes.length - 8} funções · clique "Ver equipe completa" para detalhes</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* ── Dialog: Equipe Completa ─────────────────────────────────────────── */}
-      {efetivoAberto && (
-        <div className="fixed inset-0 z-50 bg-slate-50 overflow-auto" style={{ fontFamily: "system-ui, sans-serif" }}>
-          <div className="print:hidden sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm px-6 py-3 flex items-center gap-3">
-            <button onClick={() => { setEfetivoAberto(false); setEfetivoBusca(""); }} className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-50">
-              <ChevronLeft className="h-4 w-4" /> Voltar
-            </button>
-            <div className="flex-1 min-w-0">
-              <p className="text-base font-bold text-slate-800 truncate">Equipe — {proj.nome}</p>
-              <p className="text-xs text-slate-500">{equipeObra.length} funcionário(s) alocado(s)</p>
-            </div>
-            <input
-              type="text"
-              placeholder="Buscar funcionário..."
-              value={efetivoBusca}
-              onChange={e => setEfetivoBusca(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-64"
-            />
-          </div>
-          <div className="max-w-5xl mx-auto p-6">
-            {(() => {
-              const STATUS_COLORS: Record<string, string> = {
-                Ativo: "bg-emerald-100 text-emerald-700",
-                Aviso: "bg-red-100 text-red-700",
-                AvisoDispensado: "bg-red-200 text-red-800",
-                Ferias: "bg-amber-100 text-amber-700",
-                Afastado: "bg-purple-100 text-purple-700",
-                Licenca: "bg-purple-100 text-purple-700",
-                Recluso: "bg-slate-200 text-slate-700",
-              };
-              const STATUS_LABELS: Record<string, string> = {
-                Ativo: "Ativo",
-                Aviso: "Aviso Prévio",
-                AvisoDispensado: "Dispensado",
-                Ferias: "Férias",
-                Afastado: "Afastado",
-                Licenca: "Licença",
-                Recluso: "Recluso",
-              };
-              const busca = efetivoBusca.toLowerCase();
-              const lista = equipeObra.filter((e: any) =>
-                !busca || (e.nomeCompleto || "").toLowerCase().includes(busca) || (e.funcao || "").toLowerCase().includes(busca) || (e.cargo || "").toLowerCase().includes(busca)
-              );
-              return (
-                <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Nome</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Função</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Status</th>
-                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500">Admissão</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lista.map((e: any, i: number) => (
-                        <tr key={e.id || i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                          <td className="px-4 py-2.5 font-medium text-slate-800">{e.nomeCompleto}</td>
-                          <td className="px-4 py-2.5 text-slate-600">{e.funcao || e.cargo || "—"}</td>
-                          <td className="px-4 py-2.5">
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[e.effectiveStatus] || "bg-slate-100 text-slate-600"}`}>
-                              {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-slate-500">{e.dataAdmissao ? new Date(e.dataAdmissao).toLocaleDateString("pt-BR") : "—"}</td>
-                        </tr>
-                      ))}
-                      {lista.length === 0 && (
-                        <tr><td colSpan={4} className="text-center py-8 text-slate-400">Nenhum resultado encontrado</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
 
       {/* ── Tela Cheia: Atividades em Atraso ─────────────────────────────────── */}
       {atrasosAberto && (
@@ -7393,6 +7211,240 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
       <p className="text-[10px] text-slate-400 text-center">
         * Lucro Previsto (V−C) = Venda − Custo | Lucro Desejado (V−M) = Venda − Meta | Valores normalizados ao orçamento (valor_negociado, totalMeta, totalCusto).
       </p>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ABA: EFETIVO DA OBRA
+// ═════════════════════════════════════════════════════════════════════════════
+const STATUS_COLORS: Record<string, string> = {
+  Ativo: "bg-emerald-100 text-emerald-700",
+  Aviso: "bg-red-100 text-red-700",
+  AvisoDispensado: "bg-red-200 text-red-800",
+  Ferias: "bg-amber-100 text-amber-700",
+  Afastado: "bg-purple-100 text-purple-700",
+  Licenca: "bg-purple-100 text-purple-700",
+  Recluso: "bg-slate-200 text-slate-700",
+};
+const STATUS_LABELS: Record<string, string> = {
+  Ativo: "Ativo",
+  Aviso: "Aviso Prévio",
+  AvisoDispensado: "Dispensado",
+  Ferias: "Férias",
+  Afastado: "Afastado",
+  Licenca: "Licença",
+  Recluso: "Recluso",
+};
+const STATUS_ORDER = ["Ativo", "Aviso", "AvisoDispensado", "Ferias", "Afastado", "Licenca", "Recluso"];
+
+function EfetivoObraTab({ proj }: { proj: any }) {
+  const { selectedCompanyId } = useCompany();
+  const companyId = Number(selectedCompanyId) || 0;
+  const obraId = proj?.obraId ?? 0;
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+
+  const { data: equipeRaw = [], isLoading } = trpc.obras.equipeObra.useQuery(
+    { obraId, companyId },
+    { enabled: obraId > 0 && companyId > 0 }
+  );
+
+  const equipe = useMemo(() =>
+    equipeRaw.filter((e: any) => e.effectiveStatus !== "Desligado" && e.effectiveStatus !== "Demitido"),
+    [equipeRaw]
+  );
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    equipe.forEach((e: any) => {
+      const s = e.effectiveStatus || "Ativo";
+      c[s] = (c[s] || 0) + 1;
+    });
+    return c;
+  }, [equipe]);
+
+  const funcaoMap = useMemo(() => {
+    const m = new Map<string, { total: number; byStatus: Record<string, number> }>();
+    const filtered = filtroStatus === "todos" ? equipe : equipe.filter((e: any) => e.effectiveStatus === filtroStatus);
+    filtered.forEach((e: any) => {
+      const f = e.funcao || e.cargo || "Não informado";
+      if (!m.has(f)) m.set(f, { total: 0, byStatus: {} });
+      const entry = m.get(f)!;
+      entry.total++;
+      const s = e.effectiveStatus || "Ativo";
+      entry.byStatus[s] = (entry.byStatus[s] || 0) + 1;
+    });
+    return Array.from(m.entries()).sort((a, b) => b[1].total - a[1].total);
+  }, [equipe, filtroStatus]);
+
+  const listaFiltrada = useMemo(() => {
+    let lista = filtroStatus === "todos" ? equipe : equipe.filter((e: any) => e.effectiveStatus === filtroStatus);
+    if (busca) {
+      const q = busca.toLowerCase();
+      lista = lista.filter((e: any) =>
+        (e.nomeCompleto || "").toLowerCase().includes(q) ||
+        (e.funcao || "").toLowerCase().includes(q) ||
+        (e.cargo || "").toLowerCase().includes(q)
+      );
+    }
+    return lista;
+  }, [equipe, filtroStatus, busca]);
+
+  const maxBar = funcaoMap.length > 0 ? funcaoMap[0][1].total : 1;
+
+  if (!obraId) {
+    return (
+      <div className="text-center py-16 text-slate-400">
+        <HardHat className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+        <p className="text-sm font-medium">Nenhuma obra vinculada a este projeto</p>
+        <p className="text-xs mt-1">Vincule uma obra ao projeto para visualizar o efetivo.</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-3 justify-center py-16 text-slate-500">
+        <Loader2 className="h-5 w-5 animate-spin" /> Carregando efetivo da obra...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-blue-100">
+          <HardHat className="h-5 w-5 text-blue-700" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">Efetivo da Obra</h2>
+          <p className="text-xs text-muted-foreground">{equipe.length} funcionário(s) alocado(s) · exclui desligados</p>
+        </div>
+      </div>
+
+      {equipe.length === 0 ? (
+        <div className="text-center py-12 rounded-xl border border-dashed border-blue-200 bg-blue-50">
+          <HardHat className="h-10 w-10 mx-auto mb-3 text-blue-300" />
+          <p className="text-sm font-medium text-blue-600">Nenhum funcionário alocado nesta obra</p>
+          <p className="text-xs text-muted-foreground mt-1">Aloque funcionários pela tela de Obras para vê-los aqui.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <button
+              onClick={() => setFiltroStatus("todos")}
+              className={`text-center p-3 rounded-xl border transition-all cursor-pointer ${filtroStatus === "todos" ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200" : "border-slate-100 bg-white hover:bg-slate-50"}`}
+            >
+              <p className="text-2xl font-bold text-slate-800">{equipe.length}</p>
+              <p className="text-[10px] text-slate-500 mt-1 font-medium">Total</p>
+            </button>
+            {STATUS_ORDER.filter(s => (counts[s] || 0) > 0).map(s => {
+              const colors: Record<string, { bg: string; text: string; ring: string; border: string }> = {
+                Ativo:           { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-200", border: "border-emerald-400" },
+                Aviso:           { bg: "bg-red-50",     text: "text-red-700",     ring: "ring-red-200",     border: "border-red-400" },
+                AvisoDispensado: { bg: "bg-red-50",     text: "text-red-800",     ring: "ring-red-200",     border: "border-red-400" },
+                Ferias:          { bg: "bg-amber-50",   text: "text-amber-700",   ring: "ring-amber-200",   border: "border-amber-400" },
+                Afastado:        { bg: "bg-purple-50",  text: "text-purple-700",  ring: "ring-purple-200",  border: "border-purple-400" },
+                Licenca:         { bg: "bg-purple-50",  text: "text-purple-600",  ring: "ring-purple-200",  border: "border-purple-400" },
+                Recluso:         { bg: "bg-slate-50",   text: "text-slate-700",   ring: "ring-slate-200",   border: "border-slate-400" },
+              };
+              const c = colors[s] || colors.Ativo;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setFiltroStatus(filtroStatus === s ? "todos" : s)}
+                  className={`text-center p-3 rounded-xl border transition-all cursor-pointer ${filtroStatus === s ? `${c.border} ${c.bg} ring-2 ${c.ring}` : "border-slate-100 bg-white hover:bg-slate-50"}`}
+                >
+                  <p className={`text-2xl font-bold ${c.text}`}>{counts[s]}</p>
+                  <p className={`text-[10px] mt-1 font-medium ${c.text}`}>{STATUS_LABELS[s]}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+              <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-blue-500" />
+                Distribuição por Função
+                {filtroStatus !== "todos" && <span className="text-[10px] font-normal text-slate-400 ml-1">({STATUS_LABELS[filtroStatus]})</span>}
+              </p>
+              <div className="space-y-1.5 max-h-[400px] overflow-y-auto pr-1">
+                {funcaoMap.map(([funcao, data]) => (
+                  <div key={funcao} className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-600 w-44 truncate text-right shrink-0" title={funcao}>{funcao}</span>
+                    <div className="flex-1 h-6 bg-slate-100 rounded-md overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-md flex items-center justify-end pr-1.5 text-[10px] font-bold text-white transition-all"
+                        style={{ width: `${Math.max((data.total / maxBar) * 100, 8)}%`, minWidth: 28 }}
+                      >
+                        {data.total}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {funcaoMap.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
+                <p className="text-xs font-semibold text-slate-600 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-blue-500" /> Lista de Funcionários
+                  <span className="text-[10px] font-normal text-slate-400">({listaFiltrada.length})</span>
+                </p>
+                <div className="ml-auto">
+                  <input
+                    type="text"
+                    placeholder="Buscar nome ou função..."
+                    value={busca}
+                    onChange={e => setBusca(e.target.value)}
+                    className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs w-52"
+                  />
+                </div>
+              </div>
+              <div className="overflow-y-auto max-h-[400px]">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-semibold text-slate-500">Nome</th>
+                      <th className="text-left px-3 py-2 font-semibold text-slate-500">Função</th>
+                      <th className="text-left px-3 py-2 font-semibold text-slate-500">Status</th>
+                      <th className="text-left px-3 py-2 font-semibold text-slate-500">Admissão</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listaFiltrada.map((e: any, i: number) => (
+                      <tr key={e.id || i} className="border-b border-slate-50 hover:bg-slate-50/50">
+                        <td className="px-3 py-2 font-medium text-slate-800">{e.nomeCompleto}</td>
+                        <td className="px-3 py-2 text-slate-600">{e.funcao || e.cargo || "—"}</td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[e.effectiveStatus] || "bg-slate-100 text-slate-600"}`}>
+                            {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-slate-500">{e.dataAdmissao ? new Date(e.dataAdmissao).toLocaleDateString("pt-BR") : "—"}</td>
+                      </tr>
+                    ))}
+                    {listaFiltrada.length === 0 && (
+                      <tr><td colSpan={4} className="text-center py-8 text-slate-400">Nenhum resultado encontrado</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {filtroStatus !== "todos" && (
+            <div className="flex justify-center">
+              <button onClick={() => setFiltroStatus("todos")} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors">
+                <X className="h-3 w-3" /> Limpar filtro — mostrar todos
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

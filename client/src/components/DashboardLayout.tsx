@@ -1005,6 +1005,7 @@ function DashboardLayoutContent({
           "custo-rh": "custo_rh",
           "revisoes": "revisoes",
           "refis": "refis",
+          "efetivo": "efetivo",
           "bim-3d": "bim_3d",
         };
         const canSeeTab = (tabId: string) => {
@@ -1026,6 +1027,7 @@ function DashboardLayoutContent({
           { icon: CalendarDays,  label: "Prog. Semanal",     path: `/planejamento/${planId}?tab=prog-semanal`, tabId: "prog-semanal" },
           { icon: Network,       label: "Diagrama de Rede",  path: `/planejamento/${planId}?tab=diagrama-rede`, tabId: "diagrama-rede" },
           { icon: Users,         label: "Custo RH",          path: `/planejamento/${planId}?tab=custo-rh`, tabId: "custo-rh" },
+          { icon: HardHat,       label: "Efetivo",           path: `/planejamento/${planId}?tab=efetivo`, tabId: "efetivo" },
           { icon: GitBranch,     label: "Revisões",          path: `/planejamento/${planId}?tab=revisoes`, tabId: "revisoes" },
           { icon: FileText,      label: "REFIS",             path: `/planejamento/${planId}?tab=refis`, tabId: "refis" },
           { icon: Brain,         label: "BIM 3D",            path: `/planejamento/${planId}?tab=bim-3d`, tabId: "bim-3d" },
