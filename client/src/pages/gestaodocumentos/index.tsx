@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useLocation } from "wouter";
@@ -62,6 +62,7 @@ import {
   BookOpen,
   Download,
   Paperclip,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -198,6 +199,21 @@ export default function GestaoDocumentos() {
     },
     { enabled: companyId > 0 && !!activeFicheiroId }
   );
+  const pdfDocs = trpc.gestaoDocumentos.listDocumentos.useQuery(
+    {
+      companyId,
+      obraId: selectedObraId || undefined,
+      disciplinaId: selectedDiscId || undefined,
+      subpasta: "PDF",
+    },
+    { enabled: companyId > 0 && !!activeFicheiroId && selectedSubpasta === "DWG" && !!selectedDiscId }
+  );
+
+  const pdfTituloSet = useMemo(() => {
+    if (selectedSubpasta !== "DWG") return new Set<string>();
+    return new Set((pdfDocs.data || []).map((d: any) => (d.titulo || "").replace(/\.[^.]+$/, "").trim().toLowerCase()));
+  }, [pdfDocs.data, selectedSubpasta]);
+
   const arts = trpc.gestaoDocumentos.listArts.useQuery(
     { companyId, obraId: selectedObraId || undefined },
     { enabled: companyId > 0 }
@@ -1052,8 +1068,9 @@ export default function GestaoDocumentos() {
                         {filteredDocs.map((doc) => {
                           const st = STATUS_MAP[doc.status || "em_elaboracao"] || STATUS_MAP.em_elaboracao;
                           const disc = doc.disciplinaId ? discMap.get(doc.disciplinaId) : null;
+                          const missingPdf = selectedSubpasta === "DWG" && !pdfTituloSet.has((doc.titulo || "").replace(/\.[^.]+$/, "").trim().toLowerCase());
                           return (
-                            <TableRow key={doc.id} className={`border-gray-100 hover:bg-gray-50 cursor-pointer ${selectedDocIds.has(doc.id) ? "bg-blue-50" : ""}`} onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
+                            <TableRow key={doc.id} className={`border-gray-100 hover:bg-gray-50 cursor-pointer ${selectedDocIds.has(doc.id) ? "bg-blue-50" : ""} ${missingPdf ? "bg-red-50/50" : ""}`} onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
                               <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="checkbox"
@@ -1072,6 +1089,14 @@ export default function GestaoDocumentos() {
                                 <span className="flex items-center gap-1.5">
                                   {doc.arquivoUrl && <Paperclip className="w-3 h-3 text-blue-500 shrink-0" />}
                                   {doc.titulo}
+                                  {missingPdf && (
+                                    <span className="relative group/pdf shrink-0">
+                                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                                      <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 px-2 py-1 bg-red-600 text-white text-[10px] rounded shadow-lg whitespace-nowrap opacity-0 group-hover/pdf:opacity-100 transition-opacity pointer-events-none z-50">
+                                        PDF correspondente não encontrado
+                                      </span>
+                                    </span>
+                                  )}
                                 </span>
                               </TableCell>
                               <TableCell>
