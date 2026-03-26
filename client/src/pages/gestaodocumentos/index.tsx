@@ -705,10 +705,10 @@ export default function GestaoDocumentos() {
   const discMap = new Map((disciplinas.data || []).map(d => [d.id, d]));
   const tipoMap = new Map((tipos.data || []).map(t => [t.id, t]));
 
-  const filteredDocs = (documentos.data || []).filter(doc => {
+  const filteredDocs = selectedSubpasta ? (documentos.data || []).filter(doc => {
     if (selectedDiscId && doc.disciplinaId !== selectedDiscId) return false;
     return true;
-  });
+  }) : [];
 
   const breadcrumb = (() => {
     const parts: string[] = [];
@@ -994,7 +994,13 @@ export default function GestaoDocumentos() {
                       </div>
                     </div>
                   )}
-                  {filteredDocs.length === 0 ? (
+                  {!selectedSubpasta && selectedDiscId ? (
+                    <div className="text-center py-16">
+                      <Folder className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                      <p className="text-gray-500 text-sm mb-1">Selecione uma subpasta</p>
+                      <p className="text-gray-400 text-xs">Clique em DWG, PDF ou DOC para visualizar os documentos</p>
+                    </div>
+                  ) : filteredDocs.length === 0 ? (
                     <div
                       className="text-center py-16 border-2 border-dashed border-transparent rounded-lg transition-colors"
                       onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("border-blue-400", "bg-blue-50/50"); e.currentTarget.classList.remove("border-transparent"); }}
