@@ -661,18 +661,107 @@ export const gestaoDocumentosRouter = router({
       const totalRevisoes = revs.length;
       const pendentes = revs.filter(r => r.status === "pendente").length;
 
-      const arts = input.obraId
-        ? await db.select().from(gdArts)
-            .where(and(eq(gdArts.companyId, input.companyId), eq(gdArts.obraId, input.obraId)))
-        : [];
+      const artConditions: any[] = [eq(gdArts.companyId, input.companyId)];
+      if (input.obraId) artConditions.push(eq(gdArts.obraId, input.obraId));
+      const arts = await db.select().from(gdArts).where(and(...artConditions));
 
+      const hoje = new Date();
       const artsVencendo = arts.filter(a => {
         if (!a.dataValidade) return false;
-        const validade = new Date(a.dataValidade);
-        const hoje = new Date();
-        const diff = (validade.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24);
+        const diff = (new Date(a.dataValidade).getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24);
         return diff >= 0 && diff <= 30;
       });
+      const artsVencidas = arts.filter(a => {
+        if (!a.dataValidade) return false;
+        return new Date(a.dataValidade).getTime() < hoje.getTime();
+      });
+
+      const aprovados = porStatus.aprovado || 0;
+      const taxaAprovacao = total > 0 ? Math.round((aprovados / total) * 100) : 0;
+      const emRevisao = porStatus.em_revisao || 0;
+      const emElaboracao = porStatus.em_elaboracao || 0;
+      const reprovados = porStatus.reprovado || 0;
+      const obsoletos = porStatus.obsoleto || 0;
+      const cancelados = porStatus.cancelado || 0;
+
+      const docsAtivos = total - obsoletos - cancelados;
+      const dpi = docsAtivos > 0 ? Math.round((aprovados / docsAtivos) * 100) : 0;
+
+      const revisoesPorDoc: Record<number, number> = {};
+      revs.forEach(r => {
+        revisoesPorDoc[r.documentoId] = (revisoesPorDoc[r.documentoId] || 0) + 1;
+      });
+      const docsComRevisao = Object.keys(revisoesPorDoc).length;
+      const mediaRevisoesPorDoc = docsComRevisao > 0
+        ? Math.round((totalRevisoes / docsComRevisao) * 10) / 10 : 0;
+
+      const revsAprovadas = revs.filter(r => r.status === "aprovada");
+      const revsRejeitadas = revs.filter(r => r.status === "rejeitada");
+      const ftr = (revsAprovadas.length + revsRejeitadas.length) > 0
+        ? Math.round((revsAprovadas.length / (revsAprovadas.length + revsRejeitadas.length)) * 100) : 100;
+
+      const tempoRevisao: number[] = [];
+      const docCriadoMap: Record<number, Date> = {};
+      docs.forEach(d => { if (d.criadoEm) docCriadoMap[d.id] = new Date(d.criadoEm); });
+      revsAprovadas.forEach(r => {
+        if (r.criadoEm && r.aprovadoEm) {
+          const diff = (new Date(r.aprovadoEm).getTime() - new Date(r.criadoEm).getTime()) / (1000 * 60 * 60 * 24);
+          if (diff >= 0) tempoRevisao.push(diff);
+        }
+      });
+      const tempoMedioRevisaoDias = tempoRevisao.length > 0
+        ? Math.round((tempoRevisao.reduce((a, b) => a + b, 0) / tempoRevisao.length) * 10) / 10 : 0;
+
+      const disciplinasData = await db.select().from(gdDisciplinas)
+        .where(and(eq(gdDisciplinas.companyId, input.companyId), eq(gdDisciplinas.ativo, true)));
+      const porDisciplina: { id: number; nome: string; sigla: string; cor: string; total: number; aprovados: number }[] = [];
+      disciplinasData.forEach(disc => {
+        const discDocs = docs.filter(d => d.disciplinaId === disc.id);
+        const discAprovados = discDocs.filter(d => d.status === "aprovado").length;
+        porDisciplina.push({
+          id: disc.id,
+          nome: disc.nome,
+          sigla: disc.sigla,
+          cor: disc.cor || "#3b82f6",
+          total: discDocs.length,
+          aprovados: discAprovados,
+        });
+      });
+
+      const docsVencidos = docs.filter(d => {
+        if (!d.dataValidade) return false;
+        return new Date(d.dataValidade).getTime() < hoje.getTime() && d.status !== "cancelado" && d.status !== "obsoleto";
+      }).length;
+
+      const docsVencendoEm30 = docs.filter(d => {
+        if (!d.dataValidade) return false;
+        const diff = (new Date(d.dataValidade).getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24);
+        return diff >= 0 && diff <= 30 && d.status !== "cancelado" && d.status !== "obsoleto";
+      }).length;
+
+      const meses7 = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const mesAno = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const mesLabel = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+        const docsDoMes = docs.filter(doc => {
+          if (!doc.criadoEm) return false;
+          const created = new Date(doc.criadoEm);
+          return created.getFullYear() === d.getFullYear() && created.getMonth() === d.getMonth();
+        }).length;
+        const revsDoMes = revs.filter(rev => {
+          if (!rev.criadoEm) return false;
+          const created = new Date(rev.criadoEm);
+          return created.getFullYear() === d.getFullYear() && created.getMonth() === d.getMonth();
+        }).length;
+        meses7.push({ mesAno, mesLabel, documentos: docsDoMes, revisoes: revsDoMes });
+      }
+
+      const docsRecentes = docs
+        .sort((a, b) => (b.criadoEm ? new Date(b.criadoEm).getTime() : 0) - (a.criadoEm ? new Date(a.criadoEm).getTime() : 0))
+        .slice(0, 5)
+        .map(d => ({ id: d.id, codigo: d.codigo, titulo: d.titulo, status: d.status, criadoEm: d.criadoEm }));
 
       return {
         totalDocumentos: total,
@@ -681,6 +770,23 @@ export const gestaoDocumentosRouter = router({
         revisoesPendentes: pendentes,
         totalArts: arts.length,
         artsVencendo: artsVencendo.length,
+        artsVencidas: artsVencidas.length,
+        taxaAprovacao,
+        dpi,
+        emRevisao,
+        emElaboracao,
+        reprovados,
+        obsoletos,
+        cancelados,
+        mediaRevisoesPorDoc,
+        ftr,
+        tempoMedioRevisaoDias,
+        porDisciplina,
+        docsVencidos,
+        docsVencendoEm30,
+        tendencia7meses: meses7,
+        docsRecentes,
+        docsAtivos,
       };
     }),
 

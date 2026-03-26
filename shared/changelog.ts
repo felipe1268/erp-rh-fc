@@ -5334,4 +5334,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 15:00:00",
   },
+  {
+    version: 796,
+    titulo: "DASH — Dashboard Executivo de Gestão Documental",
+    descricao: "Nova aba DASH no módulo Proj./Doc. Técnicos com indicadores baseados na melhor literatura mundial de planejamento: DPI (Document Performance Index - ISO 19650), Taxa de Aprovação (PMBOK 7), FTR — First Time Right (Last Planner System), Tempo Médio de Revisão (AACE RP), Revisões/Doc (indicador de retrabalho). Inclui Pipeline Documental (barras de status com %), Alertas Críticos (docs vencidos, revisões pendentes, ARTs vencendo), ranking por Disciplina com barra de progresso, gráfico de Tendência 7 meses (documentos vs revisões), e lista de Últimos Documentos. Cards com semáforo verde/amarelo/vermelho e tooltips explicativos com referências normativas. Backend getDashboard ampliado com 20+ métricas calculadas.",
+    tipo: "feature",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 16:00:00",
+  },
 ];

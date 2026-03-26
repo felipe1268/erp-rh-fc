@@ -65,6 +65,19 @@ import {
   History,
   Users,
   Send,
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Target,
+  Gauge,
+  Timer,
+  ArrowUpRight,
+  ArrowDownRight,
+  CircleDot,
+  Layers,
+  RefreshCw,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -83,7 +96,7 @@ const ART_STATUS: Record<string, { label: string; color: string }> = {
   cancelada: { label: "Cancelada", color: "bg-gray-100 text-gray-800" },
 };
 
-type TabType = "painel" | "documentos" | "arts" | "configuracoes";
+type TabType = "dash" | "painel" | "documentos" | "arts" | "configuracoes";
 
 export default function GestaoDocumentos() {
   const { activeCompanyId } = useCompany();
@@ -91,15 +104,15 @@ export default function GestaoDocumentos() {
 
   const [location, setLocation] = useLocation();
   const urlTab = new URLSearchParams(window.location.search).get("tab") as TabType | null;
-  const [activeTab, setActiveTabState] = useState<TabType>(urlTab && ["painel", "documentos", "arts", "configuracoes"].includes(urlTab) ? urlTab : "painel");
+  const [activeTab, setActiveTabState] = useState<TabType>(urlTab && ["dash", "painel", "documentos", "arts", "configuracoes"].includes(urlTab) ? urlTab : "dash");
   const setActiveTab = (tab: TabType) => {
     setActiveTabState(tab);
     const base = window.location.pathname;
-    window.history.replaceState(null, "", tab === "painel" ? base : `${base}?tab=${tab}`);
+    window.history.replaceState(null, "", tab === "dash" ? base : `${base}?tab=${tab}`);
   };
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab") as TabType | null;
-    if (t && ["painel", "documentos", "arts", "configuracoes"].includes(t)) {
+    if (t && ["dash", "painel", "documentos", "arts", "configuracoes"].includes(t)) {
       setActiveTabState(t);
     }
   }, [location]);
@@ -418,6 +431,9 @@ export default function GestaoDocumentos() {
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
           <TabsList className="bg-[#1E293B] border border-gray-700">
+            <TabsTrigger value="dash" className="data-[state=active]:bg-[#D4A843] data-[state=active]:text-black">
+              <BarChart3 className="w-4 h-4 mr-2" /> DASH
+            </TabsTrigger>
             <TabsTrigger value="painel" className="data-[state=active]:bg-[#D4A843] data-[state=active]:text-black">
               <FileBarChart className="w-4 h-4 mr-2" /> Painel
             </TabsTrigger>
@@ -431,6 +447,10 @@ export default function GestaoDocumentos() {
               <Settings className="w-4 h-4 mr-2" /> Configurações
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="dash" className="mt-4">
+            <DashboardExecutivo kpis={kpis} />
+          </TabsContent>
 
           <TabsContent value="painel" className="mt-4">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -943,6 +963,355 @@ export default function GestaoDocumentos() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+}
+
+function DashboardExecutivo({ kpis }: { kpis: any }) {
+  const totalDocs = kpis.totalDocumentos || 0;
+  const aprovados = kpis.porStatus?.aprovado || 0;
+  const emRevisao = kpis.emRevisao || 0;
+  const emElaboracao = kpis.emElaboracao || 0;
+  const reprovados = kpis.reprovados || 0;
+  const pendentes = kpis.revisoesPendentes || 0;
+  const taxaAprovacao = kpis.taxaAprovacao || 0;
+  const dpi = kpis.dpi || 0;
+  const ftr = kpis.ftr ?? 100;
+  const tempoMedio = kpis.tempoMedioRevisaoDias || 0;
+  const mediaRevs = kpis.mediaRevisoesPorDoc || 0;
+  const docsVencidos = kpis.docsVencidos || 0;
+  const docsVencendo = kpis.docsVencendoEm30 || 0;
+  const artsVencendo = kpis.artsVencendo || 0;
+  const artsVencidas = kpis.artsVencidas || 0;
+  const totalArts = kpis.totalArts || 0;
+  const docsAtivos = kpis.docsAtivos || 0;
+  const tendencia = kpis.tendencia7meses || [];
+  const porDisciplina = kpis.porDisciplina || [];
+  const docsRecentes = kpis.docsRecentes || [];
+
+  const getGaugeColor = (val: number, type: "high" | "low") => {
+    if (type === "high") {
+      if (val >= 80) return "text-green-400";
+      if (val >= 50) return "text-yellow-400";
+      return "text-red-400";
+    }
+    if (val <= 2) return "text-green-400";
+    if (val <= 5) return "text-yellow-400";
+    return "text-red-400";
+  };
+
+  const getStatusBg = (val: number, type: "high" | "low") => {
+    if (type === "high") {
+      if (val >= 80) return "border-green-500/30 bg-green-500/10";
+      if (val >= 50) return "border-yellow-500/30 bg-yellow-500/10";
+      return "border-red-500/30 bg-red-500/10";
+    }
+    if (val <= 2) return "border-green-500/30 bg-green-500/10";
+    if (val <= 5) return "border-yellow-500/30 bg-yellow-500/10";
+    return "border-red-500/30 bg-red-500/10";
+  };
+
+  const maxTendencia = Math.max(...tendencia.map((t: any) => Math.max(t.documentos, t.revisoes)), 1);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 mb-2">
+        <BarChart3 className="w-5 h-5 text-[#D4A843]" />
+        <h2 className="text-lg font-bold text-white">Dashboard Executivo — Gestão Documental</h2>
+      </div>
+      <p className="text-xs text-gray-500 -mt-4 ml-7">Indicadores baseados em ISO 19650, PMBOK 7, AACE RP e Last Planner System</p>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <GaugeCard
+          title="DPI — Doc. Performance Index"
+          subtitle="% docs ativos aprovados"
+          value={dpi}
+          suffix="%"
+          icon={Target}
+          color={getGaugeColor(dpi, "high")}
+          bg={getStatusBg(dpi, "high")}
+          tooltip="Baseado em ISO 19650: razão entre docs aprovados e docs ativos (exclui cancelados/obsoletos). Meta: ≥ 80%"
+        />
+        <GaugeCard
+          title="Taxa de Aprovação"
+          subtitle="Aprovados / Total"
+          value={taxaAprovacao}
+          suffix="%"
+          icon={CheckCircle}
+          color={getGaugeColor(taxaAprovacao, "high")}
+          bg={getStatusBg(taxaAprovacao, "high")}
+          tooltip="PMBOK 7: razão entre docs aprovados vs total geral. Meta: ≥ 75%"
+        />
+        <GaugeCard
+          title="FTR — First Time Right"
+          subtitle="Aprovadas na 1ª revisão"
+          value={ftr}
+          suffix="%"
+          icon={Zap}
+          color={getGaugeColor(ftr, "high")}
+          bg={getStatusBg(ftr, "high")}
+          tooltip="Last Planner System: % revisões aprovadas vs (aprovadas + rejeitadas). Meta: ≥ 85%"
+        />
+        <GaugeCard
+          title="Tempo Médio Revisão"
+          subtitle="Dias entre envio e aprovação"
+          value={tempoMedio}
+          suffix=" d"
+          icon={Timer}
+          color={getGaugeColor(tempoMedio, "low")}
+          bg={getStatusBg(tempoMedio, "low")}
+          tooltip="AACE RP: Lead time médio do ciclo de revisão. Meta: ≤ 5 dias úteis"
+        />
+        <GaugeCard
+          title="Revisões/Doc"
+          subtitle="Média de revisões por doc"
+          value={mediaRevs}
+          suffix=""
+          icon={RefreshCw}
+          color={getGaugeColor(mediaRevs, "low")}
+          bg={getStatusBg(mediaRevs, "low")}
+          tooltip="Indicador de retrabalho. Valores altos indicam deficiência no controle de qualidade. Meta: ≤ 2.0"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
+          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-400" /> Pipeline Documental
+          </h3>
+          <div className="space-y-3">
+            <PipelineBar label="Em Elaboração" value={emElaboracao} total={totalDocs} color="bg-yellow-500" />
+            <PipelineBar label="Em Revisão" value={emRevisao} total={totalDocs} color="bg-blue-500" />
+            <PipelineBar label="Aprovados" value={aprovados} total={totalDocs} color="bg-green-500" />
+            <PipelineBar label="Reprovados" value={reprovados} total={totalDocs} color="bg-red-500" />
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-700 flex items-center justify-between">
+            <span className="text-xs text-gray-500">Total Ativos</span>
+            <span className="text-sm font-bold text-white">{docsAtivos}</span>
+          </div>
+        </div>
+
+        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
+          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-orange-400" /> Alertas Críticos
+          </h3>
+          <div className="space-y-2">
+            <AlertRow
+              icon={FileText}
+              label="Docs vencidos"
+              value={docsVencidos}
+              severity={docsVencidos > 0 ? "critical" : "ok"}
+            />
+            <AlertRow
+              icon={Clock}
+              label="Docs vencendo em 30 dias"
+              value={docsVencendo}
+              severity={docsVencendo > 0 ? "warning" : "ok"}
+            />
+            <AlertRow
+              icon={AlertTriangle}
+              label="Revisões pendentes"
+              value={pendentes}
+              severity={pendentes > 3 ? "critical" : pendentes > 0 ? "warning" : "ok"}
+            />
+            <AlertRow
+              icon={Shield}
+              label="ARTs vencendo (30 dias)"
+              value={artsVencendo}
+              severity={artsVencendo > 0 ? "warning" : "ok"}
+            />
+            <AlertRow
+              icon={Shield}
+              label="ARTs vencidas"
+              value={artsVencidas}
+              severity={artsVencidas > 0 ? "critical" : "ok"}
+            />
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-700 flex items-center justify-between">
+            <span className="text-xs text-gray-500">Total ARTs</span>
+            <span className="text-sm font-bold text-white">{totalArts}</span>
+          </div>
+        </div>
+
+        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
+          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-purple-400" /> Por Disciplina
+          </h3>
+          {porDisciplina.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-6">Nenhuma disciplina cadastrada.</p>
+          ) : (
+            <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
+              {porDisciplina.map((d: any) => {
+                const pct = d.total > 0 ? Math.round((d.aprovados / d.total) * 100) : 0;
+                return (
+                  <div key={d.id} className="flex items-center gap-2">
+                    <span
+                      className="w-8 text-center text-[10px] font-bold rounded py-0.5 shrink-0"
+                      style={{ backgroundColor: `${d.cor}25`, color: d.cor }}
+                    >
+                      {d.sigla}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-xs text-gray-400 truncate">{d.nome}</span>
+                        <span className="text-[10px] text-gray-500 ml-1 shrink-0">{d.aprovados}/{d.total}</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, backgroundColor: d.cor }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-medium text-gray-400 w-8 text-right">{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
+          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-cyan-400" /> Tendência — Últimos 7 Meses
+          </h3>
+          {tendencia.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-6">Sem dados.</p>
+          ) : (
+            <div className="flex items-end gap-1.5 h-[160px]">
+              {tendencia.map((m: any, i: number) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                  <div className="flex gap-0.5 items-end flex-1 w-full justify-center">
+                    <div
+                      className="w-3 bg-blue-500 rounded-t transition-all"
+                      style={{ height: `${Math.max((m.documentos / maxTendencia) * 120, 3)}px` }}
+                      title={`${m.documentos} docs`}
+                    />
+                    <div
+                      className="w-3 bg-purple-500 rounded-t transition-all"
+                      style={{ height: `${Math.max((m.revisoes / maxTendencia) * 120, 3)}px` }}
+                      title={`${m.revisoes} revs`}
+                    />
+                  </div>
+                  <span className="text-[9px] text-gray-500 leading-none">{m.mesLabel}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-4 mt-3 justify-center">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded bg-blue-500" />
+              <span className="text-[10px] text-gray-500">Documentos</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded bg-purple-500" />
+              <span className="text-[10px] text-gray-500">Revisões</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
+          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-[#D4A843]" /> Últimos Documentos
+          </h3>
+          {docsRecentes.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-6">Nenhum documento cadastrado.</p>
+          ) : (
+            <div className="space-y-2">
+              {docsRecentes.map((doc: any) => {
+                const st = doc.status || "em_elaboracao";
+                const stInfo: Record<string, { bg: string; text: string; label: string }> = {
+                  em_elaboracao: { bg: "bg-yellow-500/15", text: "text-yellow-400", label: "Elaboração" },
+                  em_revisao: { bg: "bg-blue-500/15", text: "text-blue-400", label: "Revisão" },
+                  aprovado: { bg: "bg-green-500/15", text: "text-green-400", label: "Aprovado" },
+                  reprovado: { bg: "bg-red-500/15", text: "text-red-400", label: "Reprovado" },
+                  cancelado: { bg: "bg-gray-500/15", text: "text-gray-400", label: "Cancelado" },
+                  obsoleto: { bg: "bg-gray-600/15", text: "text-gray-500", label: "Obsoleto" },
+                };
+                const s = stInfo[st] || stInfo.em_elaboracao;
+                return (
+                  <div key={doc.id} className="flex items-center justify-between p-2.5 rounded bg-[#0F172A] border border-gray-800">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-[#D4A843]">{doc.codigo}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.bg} ${s.text}`}>{s.label}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 truncate mt-0.5">{doc.titulo}</p>
+                    </div>
+                    <span className="text-[10px] text-gray-600 shrink-0 ml-2">
+                      {doc.criadoEm ? new Date(doc.criadoEm).toLocaleDateString("pt-BR") : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-[#0F172A] rounded-lg border border-gray-800 p-3">
+        <p className="text-[10px] text-gray-600 leading-relaxed">
+          <strong className="text-gray-500">Referências:</strong> ISO 19650 (Information Management using BIM) · PMBOK 7th Ed. (Project Management Institute) · AACE International Recommended Practices · Last Planner System (Lean Construction Institute) · PRINCE2 Configuration Management · CII Best Practices for Document Control in Capital Projects
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function GaugeCard({ title, subtitle, value, suffix, icon: Icon, color, bg, tooltip }: {
+  title: string; subtitle: string; value: number; suffix: string; icon: any; color: string; bg: string; tooltip: string;
+}) {
+  return (
+    <div className={`rounded-lg border p-3 ${bg} group relative`}>
+      <div className="flex items-center justify-between mb-1">
+        <Icon className={`w-4 h-4 ${color}`} />
+        <Gauge className="w-3 h-3 text-gray-600" />
+      </div>
+      <p className={`text-2xl font-bold ${color}`}>{value}{suffix}</p>
+      <p className="text-[11px] font-medium text-white mt-0.5 leading-tight">{title}</p>
+      <p className="text-[10px] text-gray-500 leading-tight">{subtitle}</p>
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 p-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50">
+        <p className="text-[10px] text-gray-300 leading-relaxed">{tooltip}</p>
+      </div>
+    </div>
+  );
+}
+
+function PipelineBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-gray-400">{label}</span>
+        <span className="text-xs font-medium text-white">{value} <span className="text-gray-600">({pct}%)</span></span>
+      </div>
+      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function AlertRow({ icon: Icon, label, value, severity }: { icon: any; label: string; value: number; severity: "ok" | "warning" | "critical" }) {
+  const colors = {
+    ok: "text-green-400 bg-green-500/10",
+    warning: "text-yellow-400 bg-yellow-500/10",
+    critical: "text-red-400 bg-red-500/10",
+  };
+  const iconColor = {
+    ok: "text-green-500",
+    warning: "text-yellow-500",
+    critical: "text-red-500",
+  };
+  return (
+    <div className="flex items-center justify-between p-2 rounded bg-[#0F172A] border border-gray-800">
+      <div className="flex items-center gap-2">
+        <Icon className={`w-3.5 h-3.5 ${iconColor[severity]}`} />
+        <span className="text-xs text-gray-400">{label}</span>
+      </div>
+      <span className={`text-xs font-bold px-2 py-0.5 rounded ${colors[severity]}`}>{value}</span>
+    </div>
   );
 }
 
