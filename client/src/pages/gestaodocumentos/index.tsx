@@ -1647,7 +1647,7 @@ export default function GestaoDocumentos() {
 
       {/* Modal — Visualização Rápida de Arquivo */}
       <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) setPreviewDoc(null); }}>
-        <DialogContent className="max-w-5xl bg-white border-gray-200 text-gray-900 max-h-[95vh] overflow-hidden flex flex-col p-0">
+        <DialogContent className="w-[98vw] max-w-[98vw] h-[95vh] bg-white border-gray-200 text-gray-900 overflow-hidden flex flex-col p-0">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
             <div className="flex items-center gap-2 min-w-0">
               <Eye className="w-5 h-5 text-blue-600 shrink-0" />
