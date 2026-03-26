@@ -29,7 +29,7 @@ export const telemetriaRouter = router({
       const cid = resolveCompanyId(ctx, input.companyId);
       if (cid <= 0) return { ok: true };
       try {
-        const db = getDb();
+        const db = await getDb();
         await db.execute(sql`
           INSERT INTO user_activity_log (company_id, user_id, user_name, tipo, pagina, modulo)
           VALUES (
@@ -57,7 +57,7 @@ export const telemetriaRouter = router({
       const cid = resolveCompanyId(ctx, input.companyId);
       if (cid <= 0) return { ok: true };
       try {
-        const db = getDb();
+        const db = await getDb();
         await db.execute(sql`
           UPDATE user_activity_log
           SET duracao_segundos = ${Math.round(input.duracao_segundos)}
@@ -89,7 +89,7 @@ export const telemetriaRouter = router({
       const cid = resolveCompanyId(ctx, input.companyId);
       if (cid <= 0) return { ok: true };
       try {
-        const db = getDb();
+        const db = await getDb();
         await db.execute(sql`
           INSERT INTO user_activity_log (company_id, user_id, user_name, tipo, pagina, acao, modulo, detalhes)
           VALUES (
@@ -116,7 +116,7 @@ export const telemetriaRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       requireAdminMaster(ctx);
-      const db = getDb();
+      const db = await getDb();
       const cid = resolveCompanyId(ctx, input.companyId);
       const intervalMap: Record<string, string> = {
         "7d": "7 days", "30d": "30 days", "90d": "90 days", "all": "3650 days",
@@ -226,7 +226,7 @@ export const telemetriaRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       requireAdminMaster(ctx);
-      const db = getDb();
+      const db = await getDb();
       const cid = resolveCompanyId(ctx, input.companyId);
       const intervalMap: Record<string, string> = {
         "7d": "7 days", "30d": "30 days", "90d": "90 days", "all": "3650 days",
@@ -296,7 +296,7 @@ export const telemetriaRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       requireAdminMaster(ctx);
-      const db = getDb();
+      const db = await getDb();
       const cid = resolveCompanyId(ctx, input.companyId);
       const intervalMap: Record<string, string> = {
         "7d": "7 days", "30d": "30 days", "90d": "90 days", "all": "3650 days",
@@ -360,7 +360,7 @@ export const telemetriaRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       requireAdminMaster(ctx);
-      const db = getDb();
+      const db = await getDb();
       const cid = resolveCompanyId(ctx, input.companyId);
 
       let query = sql`
@@ -382,7 +382,7 @@ export const telemetriaRouter = router({
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
       requireAdminMaster(ctx);
-      const db = getDb();
+      const db = await getDb();
       const cid = resolveCompanyId(ctx, input.companyId);
       const rows = await db.execute(sql`
         WITH user_stats AS (
