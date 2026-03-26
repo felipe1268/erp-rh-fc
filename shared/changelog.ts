@@ -5433,4 +5433,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 00:10:00",
   },
+  {
+    version: 807,
+    titulo: "Telemetria: horários convertidos para fuso de Brasília (America/Sao_Paulo)",
+    descricao: "Queries de 'Uso por Hora' e 'Evolução Diária' na Telemetria agora usam AT TIME ZONE 'America/Sao_Paulo' para converter do UTC do banco para o horário de Brasília. Antes, o gráfico mostrava horas em UTC (ex: 23h) quando na verdade era 20h em Brasília.",
+    tipo: "bugfix",
+    modulos: "Telemetria",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 00:15:00",
+  },
 ];
