@@ -438,7 +438,8 @@ const menuSectionsGestaoDocumentos: MenuSection[] = [
   {
     title: "Proj./Doc. Técnicos",
     items: [
-      { icon: LayoutDashboard, label: "Painel",          path: "/gestao-documentos" },
+      { icon: BarChart3,       label: "Dashboard",       path: "/gestao-documentos" },
+      { icon: LayoutDashboard, label: "Painel",          path: "/gestao-documentos?tab=painel" },
       { icon: FolderOpen,      label: "Documentos",      path: "/gestao-documentos?tab=documentos" },
       { icon: Shield,          label: "ARTs / RRTs",     path: "/gestao-documentos?tab=arts" },
       { icon: Settings,        label: "Configurações",   path: "/gestao-documentos?tab=configuracoes" },

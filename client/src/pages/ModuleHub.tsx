@@ -204,7 +204,7 @@ const MODULES: Module[] = [
     id: "gestao-documentos", title: "Proj./Doc. Técnicos", subtitle: "Projetos e Documentos Técnicos",
     description: "Controle de documentos técnicos de obra com revisões, aprovações, ARTs/RRTs e distribuição por disciplina.",
     icon: FolderOpen, accentFrom: "#6366F1", accentTo: "#4338CA", accentGlow: "rgba(99,102,241,0.35)", iconBg: "rgba(99,102,241,0.12)", path: "/gestao-documentos", active: true,
-    features: ["Documentos Técnicos", "Revisões e Aprovações", "ARTs / RRTs", "Disciplinas e Tipos"],
+    features: ["Dashboard Executivo", "Documentos Técnicos", "Revisões e Aprovações", "ARTs / RRTs", "Disciplinas e Tipos"],
   },
   {
     id: "indicadores-bi", title: "Indicadores / BI", subtitle: "Business Intelligence",

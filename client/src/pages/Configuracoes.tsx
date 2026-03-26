@@ -2221,7 +2221,8 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Medição", label: "Contratos de Medição", path: "/medicao" },
   ],
   "gestao-documentos": [
-    { section: "Principal", label: "Painel", path: "/gestao-documentos" },
+    { section: "Principal", label: "Dashboard", path: "/gestao-documentos" },
+    { section: "Principal", label: "Painel", path: "/gestao-documentos?tab=painel" },
     { section: "Documentos", label: "Documentos Técnicos", path: "/gestao-documentos?tab=documentos" },
     { section: "Documentos", label: "ARTs / RRTs", path: "/gestao-documentos?tab=arts" },
     { section: "Configurações", label: "Disciplinas e Tipos", path: "/gestao-documentos?tab=configuracoes" },

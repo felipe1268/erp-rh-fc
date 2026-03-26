@@ -325,7 +325,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     color: "indigo",
     icon: "FolderOpen",
     features: [
-      { key: "gd-painel",         label: "Painel",            route: "/gestao-documentos",             icon: "LayoutDashboard" },
+      { key: "gd-dash",           label: "Dashboard",         route: "/gestao-documentos",             icon: "BarChart3" },
+      { key: "gd-painel",         label: "Painel",            route: "/gestao-documentos?tab=painel",  icon: "LayoutDashboard" },
       { key: "gd-documentos",     label: "Documentos",        route: "/gestao-documentos?tab=documentos", icon: "FileText" },
       { key: "gd-arts",           label: "ARTs / RRTs",       route: "/gestao-documentos?tab=arts",    icon: "Shield" },
       { key: "gd-configuracoes",  label: "Configurações",     route: "/gestao-documentos?tab=configuracoes", icon: "Settings" },
