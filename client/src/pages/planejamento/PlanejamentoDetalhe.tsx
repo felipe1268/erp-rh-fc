@@ -43,7 +43,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(2)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "simulador" | "bim-3d";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "bim-3d";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -119,7 +119,6 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "custo-rh",             label: "Custo RH",           Icon: Users },
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
-  { id: "simulador",            label: "Simulador",          Icon: Calculator },
   { id: "bim-3d",               label: "BIM 3D",             Icon: Box },
 ];
 const TAB_IDS = TAB_DEFS.map(t => t.id);
@@ -176,7 +175,6 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     "custo-rh": "custo_rh",
     "revisoes": "revisoes",
     "refis": "refis",
-    "simulador": "simulador",
     "bim-3d": "bim_3d",
   };
 
@@ -886,19 +884,6 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
               );
             })()}
           </div>
-        )}
-
-        {/* ── Simulador de Cronograma por Orçamento Mensal ── */}
-        {canViewTab(aba) && aba === "simulador" && (
-          <SimuladorCronograma
-            proj={proj}
-            revisaoAtiva={revisaoAtiva}
-            atividades={atividades}
-            projetoId={projetoId}
-            utils={utils}
-            hideFinancial={hideFinancial}
-            onAdotado={() => { utils.planejamento.getProjetoById.invalidate({ id: projetoId }); setAba("cronograma"); }}
-          />
         )}
 
         {canViewTab(aba) && aba === "bim-3d" && (

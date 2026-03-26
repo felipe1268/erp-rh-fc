@@ -1005,9 +1005,7 @@ function DashboardLayoutContent({
           "custo-rh": "custo_rh",
           "revisoes": "revisoes",
           "refis": "refis",
-          "simulador": "simulador",
           "bim-3d": "bim_3d",
-          "ia-gestora": "ia_gestora",
         };
         const canSeeTab = (tabId: string) => {
           if (permIsAdminMaster) return true;
@@ -1030,9 +1028,7 @@ function DashboardLayoutContent({
           { icon: Users,         label: "Custo RH",          path: `/planejamento/${planId}?tab=custo-rh`, tabId: "custo-rh" },
           { icon: GitBranch,     label: "Revisões",          path: `/planejamento/${planId}?tab=revisoes`, tabId: "revisoes" },
           { icon: FileText,      label: "REFIS",             path: `/planejamento/${planId}?tab=refis`, tabId: "refis" },
-          { icon: Calculator,    label: "Simulador",         path: `/planejamento/${planId}?tab=simulador`, tabId: "simulador" },
           { icon: Brain,         label: "BIM 3D",            path: `/planejamento/${planId}?tab=bim-3d`, tabId: "bim-3d" },
-          { icon: Brain,         label: "IA Gestora",        path: `/planejamento/${planId}?tab=ia-gestora`, tabId: "ia-gestora" },
         ];
         const planTabItems: MenuItem[] = allPlanTabs.filter(t => canSeeTab(t.tabId));
         sections = [...sections, { title: "Abas do Projeto", items: planTabItems }];
