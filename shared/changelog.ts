@@ -5451,4 +5451,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 00:20:00",
   },
+  {
+    version: 809,
+    titulo: "Fluxo automático de revisões no upload de documentos",
+    descricao: "Upload em lote agora detecta automaticamente revisões pelo padrão -R## no nome do arquivo. Se existir um documento com a mesma base e revisão inferior (ex: R03), ao fazer upload do R04 o sistema: (1) salva o arquivo anterior no histórico de revisões, (2) atualiza o documento com o novo arquivo e revisão, (3) atualiza título/código para a nova revisão. Na lista principal aparece apenas a versão mais recente. Toast informativo indica quantos foram novos vs revisados.",
+    tipo: "feature",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 00:30:00",
+  },
 ];

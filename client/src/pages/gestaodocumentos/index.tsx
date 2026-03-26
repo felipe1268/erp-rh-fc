@@ -316,6 +316,15 @@ export default function GestaoDocumentos() {
     });
   }
 
+  function parseRevision(filename: string): { base: string; rev: number; revStr: string } {
+    const name = filename.replace(/\.[^.]+$/, "");
+    const match = name.match(/^(.+)-R(\d{2,3})$/i);
+    if (match) return { base: match[1], rev: parseInt(match[2], 10), revStr: match[2] };
+    return { base: name, rev: -1, revStr: "" };
+  }
+
+  const createRevisao = trpc.gestaoDocumentos.createRevisao.useMutation();
+
   async function handleBatchUpload(files: FileList) {
     if (!selectedObraId) { toast.error("Selecione uma obra primeiro"); return; }
     const validFiles = Array.from(files).filter(f => {
@@ -333,27 +342,65 @@ export default function GestaoDocumentos() {
     isBatchRef.current = true;
     let ok = 0;
     let fail = 0;
+    let revised = 0;
+
+    const currentDocs: any[] = documentos.data || [];
+
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i];
       setBatchProgress({ current: i + 1, total: validFiles.length });
       const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
       const discId = selectedDiscId || undefined;
+      const { base, rev, revStr } = parseRevision(nameWithoutExt);
+
+      const existingDoc = rev >= 0
+        ? currentDocs.find((d: any) => {
+            const p = parseRevision(d.titulo || d.codigo || "");
+            return p.base.toLowerCase() === base.toLowerCase() && p.rev < rev;
+          })
+        : null;
+
       try {
-        const doc = await createDoc.mutateAsync({
-          companyId,
-          obraId: selectedObraId,
-          ficheiroId: activeFicheiroId || undefined,
-          disciplinaId: discId,
-          pastaId: undefined,
-          subpasta: selectedSubpasta || undefined,
-          codigo: nameWithoutExt,
-          titulo: nameWithoutExt,
-          dataEmissao: new Date().toISOString().split("T")[0],
-        });
-        if (doc?.id) {
-          await uploadFileToDoc(doc.id, file);
+        if (existingDoc) {
+          const oldParsed = parseRevision(existingDoc.titulo || existingDoc.codigo || "");
+          await createRevisao.mutateAsync({
+            companyId,
+            documentoId: existingDoc.id,
+            numero: revStr,
+            descricao: `Atualização de R${oldParsed.revStr || "00"} para R${revStr}`,
+            arquivoUrl: existingDoc.arquivoUrl || undefined,
+            arquivoNome: existingDoc.arquivoNome || undefined,
+            arquivoTamanho: existingDoc.arquivoTamanho || undefined,
+            motivoRevisao: "Upload de nova revisão",
+          });
+          await uploadFileToDoc(existingDoc.id, file);
+          await updateDoc.mutateAsync({
+            id: existingDoc.id,
+            companyId,
+            titulo: nameWithoutExt,
+            codigo: nameWithoutExt,
+          });
+          existingDoc.titulo = nameWithoutExt;
+          existingDoc.codigo = nameWithoutExt;
+          revised++;
+          ok++;
+        } else {
+          const doc = await createDoc.mutateAsync({
+            companyId,
+            obraId: selectedObraId,
+            ficheiroId: activeFicheiroId || undefined,
+            disciplinaId: discId,
+            pastaId: undefined,
+            subpasta: selectedSubpasta || undefined,
+            codigo: nameWithoutExt,
+            titulo: nameWithoutExt,
+            dataEmissao: new Date().toISOString().split("T")[0],
+          });
+          if (doc?.id) {
+            await uploadFileToDoc(doc.id, file);
+          }
+          ok++;
         }
-        ok++;
       } catch {
         fail++;
       }
@@ -363,9 +410,12 @@ export default function GestaoDocumentos() {
     setBatchProgress({ current: 0, total: 0 });
     utils.gestaoDocumentos.listDocumentos.invalidate();
     if (fail === 0) {
-      toast.success(`${ok} documento(s) criado(s) com sucesso`);
+      const msg = revised > 0
+        ? `${ok} processado(s): ${ok - revised} novo(s), ${revised} revisão(ões) atualizada(s)`
+        : `${ok} documento(s) criado(s) com sucesso`;
+      toast.success(msg);
     } else {
-      toast.warning(`${ok} criado(s), ${fail} com erro`);
+      toast.warning(`${ok} processado(s), ${fail} com erro`);
     }
     if (batchFileInputRef.current) batchFileInputRef.current.value = "";
   }
