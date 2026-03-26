@@ -532,6 +532,9 @@ export default function ModuleHub() {
                       <DropdownMenuItem onClick={() => navigate("/lixeira")} className="cursor-pointer">
                         <Trash2 className="mr-2 h-4 w-4" /> Lixeira
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/admin/telemetria")} className="cursor-pointer">
+                        <BarChart3 className="mr-2 h-4 w-4" /> Telemetria & Analytics
+                      </DropdownMenuItem>
                     </>
                   )}
                   <DropdownMenuSeparator />

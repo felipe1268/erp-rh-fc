@@ -197,12 +197,6 @@ const menuSectionsJuridico: MenuSection[] = [
 // Shared admin sections (appended to every module)
 const adminSections: MenuSection[] = [
   {
-    title: "Administração",
-    items: [
-      { icon: BarChart3, label: "Telemetria & Analytics", path: "/admin/telemetria", adminMasterOnly: true },
-    ],
-  },
-  {
     title: "Ajuda",
     items: [
       { icon: BookOpen, label: "Biblioteca de Conhecimento", path: "/ajuda" },
