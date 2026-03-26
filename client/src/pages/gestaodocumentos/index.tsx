@@ -601,7 +601,23 @@ export default function GestaoDocumentos() {
           )}
         </div>
 
-        {!activeFicheiroId && activeTab !== "configuracoes" ? (
+        {activeTab === "configuracoes" && !activeFicheiroId ? (
+          <ConfiguracoesStandalone
+            disciplinas={disciplinas}
+            tipos={tipos}
+            tiposSubpasta={tiposSubpasta}
+            companyId={companyId}
+            createDisciplina={createDisciplina}
+            updateDisciplina={updateDisciplina}
+            deleteDisciplina={deleteDisciplina}
+            createTipo={createTipo}
+            updateTipo={updateTipo}
+            deleteTipo={deleteTipo}
+            createTipoSubpasta={createTipoSubpasta}
+            updateTipoSubpasta={updateTipoSubpasta}
+            deleteTipoSubpasta={deleteTipoSubpasta}
+          />
+        ) : !activeFicheiroId ? (
           <ObrasListing
             obras={obrasDisponiveis.data || []}
             ficheirosMap={ficheirosMap}
@@ -1478,6 +1494,60 @@ export default function GestaoDocumentos() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+}
+
+function ConfiguracoesStandalone({ disciplinas, tipos, tiposSubpasta, companyId, createDisciplina, updateDisciplina, deleteDisciplina, createTipo, updateTipo, deleteTipo, createTipoSubpasta, updateTipoSubpasta, deleteTipoSubpasta }: {
+  disciplinas: any;
+  tipos: any;
+  tiposSubpasta: any;
+  companyId: number;
+  createDisciplina: any;
+  updateDisciplina: any;
+  deleteDisciplina: any;
+  createTipo: any;
+  updateTipo: any;
+  deleteTipo: any;
+  createTipoSubpasta: any;
+  updateTipoSubpasta: any;
+  deleteTipoSubpasta: any;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+        <BookOpen className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-medium text-blue-800">Cadastro rápido pré-configurado</p>
+          <p className="text-xs text-blue-600 mt-0.5">As disciplinas, tipos de documento e sub-pastas mais comuns da construção civil já vêm cadastrados. Você pode adicionar, remover ou personalizar conforme a necessidade da sua empresa.</p>
+        </div>
+      </div>
+      <ConfigSection
+        title="Disciplinas"
+        subtitle="Disciplinas de engenharia/arquitetura que sua empresa trabalha. Aparecem como opções ao montar o ficheiro de cada obra."
+        items={disciplinas.data || []}
+        onAdd={(nome, sigla) => createDisciplina.mutate({ companyId, nome, sigla })}
+        onUpdate={(id, nome, sigla) => updateDisciplina.mutate({ id, companyId, nome, sigla })}
+        onDelete={(id) => { if (window.confirm("Excluir esta disciplina?")) deleteDisciplina.mutate({ id, companyId }); }}
+        fieldLabel1="Nome da Disciplina"
+        fieldLabel2="Sigla"
+      />
+      <ConfigSection
+        title="Tipos de Documento"
+        subtitle="Classificações para os documentos técnicos (PE, PB, Memorial, etc.)."
+        items={tipos.data || []}
+        onAdd={(nome, sigla) => createTipo.mutate({ companyId, nome, sigla })}
+        onUpdate={(id, nome, sigla) => updateTipo.mutate({ id, companyId, nome, sigla })}
+        onDelete={(id) => { if (window.confirm("Excluir este tipo de documento?")) deleteTipo.mutate({ id, companyId }); }}
+        fieldLabel1="Nome do Tipo"
+        fieldLabel2="Sigla"
+      />
+      <SubpastaConfigSection
+        items={tiposSubpasta.data || []}
+        onAdd={(nome) => createTipoSubpasta.mutate({ companyId, nome })}
+        onUpdate={(id, nome) => updateTipoSubpasta.mutate({ id, companyId, nome })}
+        onDelete={(id) => { if (window.confirm("Excluir este tipo de sub-pasta?")) deleteTipoSubpasta.mutate({ id, companyId }); }}
+      />
+    </div>
   );
 }
 
