@@ -7411,7 +7411,7 @@ function EfetivoObraTab({ proj }: { proj: any }) {
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Função / Cargo</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                    <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Admissão</th>
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Tempo de Empresa</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -7424,7 +7424,21 @@ function EfetivoObraTab({ proj }: { proj: any }) {
                           {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-slate-500 text-[13px]">{e.dataAdmissao ? new Date(e.dataAdmissao).toLocaleDateString("pt-BR") : "—"}</td>
+                      <td className="px-4 py-2 text-slate-500 text-[13px]">{(() => {
+                        if (!e.dataAdmissao) return "—";
+                        const adm = new Date(e.dataAdmissao);
+                        const hoje = new Date();
+                        let anos = hoje.getFullYear() - adm.getFullYear();
+                        let meses = hoje.getMonth() - adm.getMonth();
+                        let dias = hoje.getDate() - adm.getDate();
+                        if (dias < 0) { meses--; dias += new Date(hoje.getFullYear(), hoje.getMonth(), 0).getDate(); }
+                        if (meses < 0) { anos--; meses += 12; }
+                        const parts: string[] = [];
+                        if (anos > 0) parts.push(`${anos}a`);
+                        if (meses > 0) parts.push(`${meses}m`);
+                        if (dias > 0 || parts.length === 0) parts.push(`${dias}d`);
+                        return parts.join(" ");
+                      })()}</td>
                     </tr>
                   ))}
                   {listaFiltrada.length === 0 && (
