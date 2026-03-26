@@ -217,13 +217,34 @@ export default function GestaoDocumentos() {
       disciplinaId: selectedDiscId || undefined,
       subpasta: "PDF",
     },
-    { enabled: companyId > 0 && !!activeFicheiroId && selectedSubpasta === "DWG" && !!selectedDiscId }
+    { enabled: companyId > 0 && !!activeFicheiroId && (selectedSubpasta === "DWG" || selectedSubpasta === "PDF") && !!selectedDiscId }
+  );
+
+  const dwgDocs = trpc.gestaoDocumentos.listDocumentos.useQuery(
+    {
+      companyId,
+      obraId: selectedObraId || undefined,
+      disciplinaId: selectedDiscId || undefined,
+      subpasta: "DWG",
+    },
+    { enabled: companyId > 0 && !!activeFicheiroId && selectedSubpasta === "PDF" && !!selectedDiscId }
   );
 
   const pdfTituloSet = useMemo(() => {
     if (selectedSubpasta !== "DWG") return new Set<string>();
-    return new Set((pdfDocs.data || []).map((d: any) => (d.titulo || "").replace(/\.[^.]+$/, "").trim().toLowerCase()));
+    return new Set((pdfDocs.data || []).map((d: any) => {
+      const p = parseRevision((d.titulo || "").replace(/\.[^.]+$/, "").trim());
+      return p.base.toLowerCase();
+    }));
   }, [pdfDocs.data, selectedSubpasta]);
+
+  const dwgTituloSet = useMemo(() => {
+    if (selectedSubpasta !== "PDF") return new Set<string>();
+    return new Set((dwgDocs.data || []).map((d: any) => {
+      const p = parseRevision((d.titulo || "").replace(/\.[^.]+$/, "").trim());
+      return p.base.toLowerCase();
+    }));
+  }, [dwgDocs.data, selectedSubpasta]);
 
   const arts = trpc.gestaoDocumentos.listArts.useQuery(
     { companyId, obraId: selectedObraId || undefined },
@@ -1196,9 +1217,12 @@ export default function GestaoDocumentos() {
                         {filteredDocs.map((doc) => {
                           const st = STATUS_MAP[doc.status || "em_elaboracao"] || STATUS_MAP.em_elaboracao;
                           const disc = doc.disciplinaId ? discMap.get(doc.disciplinaId) : null;
-                          const missingPdf = selectedSubpasta === "DWG" && !pdfTituloSet.has((doc.titulo || "").replace(/\.[^.]+$/, "").trim().toLowerCase());
+                          const docBase = parseRevision((doc.titulo || "").replace(/\.[^.]+$/, "").trim()).base.toLowerCase();
+                          const missingPdf = selectedSubpasta === "DWG" && !pdfTituloSet.has(docBase);
+                          const missingDwg = selectedSubpasta === "PDF" && !dwgTituloSet.has(docBase);
+                          const missingCounterpart = missingPdf || missingDwg;
                           return (
-                            <TableRow key={doc.id} className={`border-gray-100 hover:bg-gray-50 cursor-pointer ${selectedDocIds.has(doc.id) ? "bg-blue-50" : ""} ${missingPdf ? "bg-red-50/50" : ""}`} onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
+                            <TableRow key={doc.id} className={`border-gray-100 hover:bg-gray-50 cursor-pointer ${selectedDocIds.has(doc.id) ? "bg-blue-50" : ""} ${missingCounterpart ? "bg-red-50/50" : ""}`} onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
                               <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="checkbox"
@@ -1222,6 +1246,12 @@ export default function GestaoDocumentos() {
                                         <span className="shrink-0 inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-semibold rounded-full border border-red-300 whitespace-nowrap">
                                           <AlertTriangle className="w-3 h-3" />
                                           Sem PDF
+                                        </span>
+                                      )}
+                                      {missingDwg && (
+                                        <span className="shrink-0 inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-semibold rounded-full border border-orange-300 whitespace-nowrap">
+                                          <AlertTriangle className="w-3 h-3" />
+                                          Sem DWG
                                         </span>
                                       )}
                                     </span>
