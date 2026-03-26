@@ -5442,4 +5442,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 00:15:00",
   },
+  {
+    version: 808,
+    titulo: "Contador de documentos na barra de busca do Proj./Doc. Técnicos",
+    descricao: "Adicionado badge contador ao lado da busca mostrando a quantidade de documentos na pasta atual (ex: '8 docs'). Informação rápida e visual sem precisar contar manualmente.",
+    tipo: "melhoria",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 00:20:00",
+  },
 ];
