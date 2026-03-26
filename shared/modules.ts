@@ -92,7 +92,8 @@ export type ActiveModuleId =
   | "compras"
   | "orcamento"
   | "medicao"
-  | "almoxarifado";
+  | "almoxarifado"
+  | "gestao-documentos";
 
 export interface ModuleFeature {
   key: string;
@@ -315,6 +316,19 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "financeiro-centros-custo",     label: "Centros de Custo",     route: "/financeiro/centros-de-custo",       icon: "Layers" },
       { key: "financeiro-obrigacoes-fiscais",label: "Obrigações Fiscais",   route: "/financeiro/obrigacoes-fiscais",     icon: "FileText" },
       { key: "financeiro-conciliacao",       label: "Conciliação Bancária", route: "/financeiro/conciliacao",            icon: "GitMerge" },
+    ],
+  },
+  {
+    id: "gestao-documentos",
+    label: "Gestão de Documentos",
+    description: "Controle de documentos técnicos de obra, revisões, disciplinas e ARTs/RRTs.",
+    color: "indigo",
+    icon: "FolderOpen",
+    features: [
+      { key: "gd-painel",         label: "Painel",            route: "/gestao-documentos",             icon: "LayoutDashboard" },
+      { key: "gd-documentos",     label: "Documentos",        route: "/gestao-documentos?tab=documentos", icon: "FileText" },
+      { key: "gd-arts",           label: "ARTs / RRTs",       route: "/gestao-documentos?tab=arts",    icon: "Shield" },
+      { key: "gd-configuracoes",  label: "Configurações",     route: "/gestao-documentos?tab=configuracoes", icon: "Settings" },
     ],
   },
   {

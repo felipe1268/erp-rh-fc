@@ -157,6 +157,9 @@ const OrcamentoDashPage  = lazy(() => import("./pages/orcamento/OrcamentoDashPag
 const PlanejamentoLista   = lazy(() => import("./pages/planejamento/PlanejamentoLista"));
 const PlanejamentoDetalhe = lazy(() => import("./pages/planejamento/PlanejamentoDetalhe"));
 
+// Gestão de Documentos
+const GestaoDocumentos = lazy(() => import("./pages/gestaodocumentos/index"));
+
 // Medição de Contratos
 const MedicaoContratos = lazy(() => import("./pages/medicao/MedicaoContratos"));
 const MedicaoDetalhe   = lazy(() => import("./pages/medicao/MedicaoDetalhe"));
@@ -344,6 +347,8 @@ function Router() {
         {/* Planejamento */}
         <Route path="/planejamento"              component={PlanejamentoLista} />
         <Route path="/planejamento/:id"          component={PlanejamentoDetalhe} />
+        {/* Gestão de Documentos */}
+        <Route path="/gestao-documentos"           component={GestaoDocumentos} />
         <Route path="/medicao"                   component={MedicaoContratos} />
         <Route path="/medicao/:id"               component={MedicaoDetalhe} />
         {/* Compras */}

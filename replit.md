@@ -14,6 +14,14 @@ A full-stack HR/ERP system built for FC Engenharia. It handles employees, payrol
 8. **Compras** (Rev.343) — 24 DB tables, 30+ tRPC endpoints, 8 novas páginas: SC emergencial, cotações (portal fornecedor), OC com numeração configurável, recebimentos, AP integrada, realocação de verba, comissões, bridge financeiro
 9. **BIM 3D/4D** (Rev.777-779) — Visualizador de modelos IFC no Planejamento. Three.js + web-ifc (WASM). Importação multi-disciplina com persistência no servidor. Seleção interativa de elementos 3D (raycasting + multi-select) para vincular a atividades do cronograma (BIM 4D). Tabelas: `bim_models`, `bim_links`. Router: `server/routers/bim.ts`. Frontend: `client/src/pages/planejamento/BimViewer.tsx`. Arquivos salvos em `server/uploads/bim/`. Limite 35MB por arquivo.
 
+## Gestão de Documentos Module (Rev. 791)
+- Route: `/gestao-documentos` (single SPA with tabs: painel, documentos, arts, configuracoes)
+- Backend: `server/routers/gestaodocumentos.ts` (25+ tRPC endpoints)
+- Schema tables: `gd_disciplinas`, `gd_tipos_documento`, `gd_documentos`, `gd_revisoes`, `gd_revisao_comentarios`, `gd_distribuicao`, `gd_download_log`, `gd_arts`
+- Features: Document CRUD with code/title/discipline/type, revision control (create/approve/reject), ART/RRT management with expiry alerts (30 days), KPI dashboard, discipline & doc-type configuration
+- Tab deep-linking via `?tab=` query param
+- Module ID: `gestao-documentos` (registered in shared/modules.ts, ModuleContext, DashboardLayout)
+
 ## Medição Module (Rev. 789-790)
 - Routes: `/medicao/:contratoId`
 - Backend: `server/routers/medicao.ts`

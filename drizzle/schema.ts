@@ -6085,3 +6085,143 @@ export const employeeFaceDescriptors = pgTable("employee_face_descriptors", {
   index("idx_efd_company").on(t.companyId),
   index("idx_efd_employee").on(t.employeeId),
 ]);
+
+export const gdDisciplinas = pgTable("gd_disciplinas", {
+  id:          serial("id").primaryKey(),
+  companyId:   integer("company_id").notNull(),
+  nome:        varchar("nome", { length: 100 }).notNull(),
+  sigla:       varchar("sigla", { length: 10 }).notNull(),
+  cor:         varchar("cor", { length: 7 }).default("#3b82f6"),
+  ativo:       boolean("ativo").default(true),
+  criadoEm:    timestamp("criado_em").defaultNow(),
+}, (t) => [index("idx_gd_disc_company").on(t.companyId)]);
+
+export const gdTiposDocumento = pgTable("gd_tipos_documento", {
+  id:              serial("id").primaryKey(),
+  companyId:       integer("company_id").notNull(),
+  nome:            varchar("nome", { length: 150 }).notNull(),
+  sigla:           varchar("sigla", { length: 10 }).notNull(),
+  requerAprovacao: boolean("requer_aprovacao").default(false),
+  ativo:           boolean("ativo").default(true),
+  criadoEm:        timestamp("criado_em").defaultNow(),
+}, (t) => [index("idx_gd_tipo_company").on(t.companyId)]);
+
+export const gdDocumentos = pgTable("gd_documentos", {
+  id:              serial("id").primaryKey(),
+  companyId:       integer("company_id").notNull(),
+  obraId:          integer("obra_id").notNull(),
+  disciplinaId:    integer("disciplina_id"),
+  tipoDocumentoId: integer("tipo_documento_id"),
+  codigo:          varchar("codigo", { length: 100 }).notNull(),
+  titulo:          varchar("titulo", { length: 500 }).notNull(),
+  descricao:       text("descricao"),
+  status:          varchar("status", { length: 30 }).default("em_elaboracao"),
+  revisaoAtual:    varchar("revisao_atual", { length: 10 }).default("0"),
+  emitente:        varchar("emitente", { length: 255 }),
+  responsavelId:   integer("responsavel_id"),
+  dataEmissao:     date("data_emissao"),
+  dataValidade:    date("data_validade"),
+  tags:            text("tags"),
+  metadata:        json("metadata"),
+  deletedAt:       timestamp("deleted_at"),
+  criadoPor:       integer("criado_por"),
+  criadoEm:        timestamp("criado_em").defaultNow(),
+  atualizadoEm:    timestamp("atualizado_em").defaultNow(),
+}, (t) => [
+  index("idx_gd_doc_company").on(t.companyId),
+  index("idx_gd_doc_obra").on(t.obraId),
+  index("idx_gd_doc_disciplina").on(t.disciplinaId),
+  index("idx_gd_doc_tipo").on(t.tipoDocumentoId),
+  index("idx_gd_doc_codigo").on(t.companyId, t.obraId, t.codigo),
+]);
+
+export const gdRevisoes = pgTable("gd_revisoes", {
+  id:            serial("id").primaryKey(),
+  companyId:     integer("company_id").notNull(),
+  documentoId:   integer("documento_id").notNull(),
+  numero:        varchar("numero", { length: 10 }).notNull(),
+  descricao:     text("descricao"),
+  status:        varchar("status", { length: 30 }).default("pendente"),
+  arquivoUrl:    text("arquivo_url"),
+  arquivoNome:   varchar("arquivo_nome", { length: 500 }),
+  arquivoTamanho: integer("arquivo_tamanho"),
+  arquivoMime:   varchar("arquivo_mime", { length: 100 }),
+  motivoRevisao: text("motivo_revisao"),
+  aprovadoPor:   integer("aprovado_por"),
+  aprovadoEm:    timestamp("aprovado_em"),
+  criadoPor:     integer("criado_por"),
+  criadoEm:      timestamp("criado_em").defaultNow(),
+}, (t) => [
+  index("idx_gd_rev_company").on(t.companyId),
+  index("idx_gd_rev_doc").on(t.documentoId),
+]);
+
+export const gdRevisaoComentarios = pgTable("gd_revisao_comentarios", {
+  id:          serial("id").primaryKey(),
+  companyId:   integer("company_id").notNull(),
+  revisaoId:   integer("revisao_id").notNull(),
+  usuarioId:   integer("usuario_id").notNull(),
+  comentario:  text("comentario").notNull(),
+  tipo:        varchar("tipo", { length: 30 }).default("comentario"),
+  posicaoX:    real("posicao_x"),
+  posicaoY:    real("posicao_y"),
+  pagina:      integer("pagina"),
+  resolvido:   boolean("resolvido").default(false),
+  criadoEm:    timestamp("criado_em").defaultNow(),
+}, (t) => [
+  index("idx_gd_com_company").on(t.companyId),
+  index("idx_gd_com_revisao").on(t.revisaoId),
+]);
+
+export const gdDistribuicao = pgTable("gd_distribuicao", {
+  id:           serial("id").primaryKey(),
+  companyId:    integer("company_id").notNull(),
+  documentoId:  integer("documento_id").notNull(),
+  revisaoId:    integer("revisao_id"),
+  usuarioId:    integer("usuario_id").notNull(),
+  dataEnvio:    timestamp("data_envio").defaultNow(),
+  visualizado:  boolean("visualizado").default(false),
+  visualizadoEm: timestamp("visualizado_em"),
+  confirmado:   boolean("confirmado").default(false),
+  confirmadoEm: timestamp("confirmado_em"),
+}, (t) => [
+  index("idx_gd_dist_company").on(t.companyId),
+  index("idx_gd_dist_doc").on(t.documentoId),
+  index("idx_gd_dist_usuario").on(t.usuarioId),
+]);
+
+export const gdDownloadLog = pgTable("gd_download_log", {
+  id:          serial("id").primaryKey(),
+  companyId:   integer("company_id").notNull(),
+  documentoId: integer("documento_id").notNull(),
+  revisaoId:   integer("revisao_id"),
+  usuarioId:   integer("usuario_id").notNull(),
+  ip:          varchar("ip", { length: 50 }),
+  criadoEm:    timestamp("criado_em").defaultNow(),
+}, (t) => [
+  index("idx_gd_dl_company").on(t.companyId),
+  index("idx_gd_dl_doc").on(t.documentoId),
+]);
+
+export const gdArts = pgTable("gd_arts", {
+  id:            serial("id").primaryKey(),
+  companyId:     integer("company_id").notNull(),
+  obraId:        integer("obra_id").notNull(),
+  documentoId:   integer("documento_id"),
+  tipo:          varchar("tipo", { length: 10 }).notNull(),
+  numero:        varchar("numero", { length: 50 }).notNull(),
+  profissional:  varchar("profissional", { length: 255 }).notNull(),
+  creaOuCau:     varchar("crea_ou_cau", { length: 50 }),
+  dataEmissao:   date("data_emissao"),
+  dataValidade:  date("data_validade"),
+  status:        varchar("status", { length: 30 }).default("vigente"),
+  arquivoUrl:    text("arquivo_url"),
+  observacoes:   text("observacoes"),
+  criadoPor:     integer("criado_por"),
+  criadoEm:      timestamp("criado_em").defaultNow(),
+  atualizadoEm:  timestamp("atualizado_em").defaultNow(),
+}, (t) => [
+  index("idx_gd_art_company").on(t.companyId),
+  index("idx_gd_art_obra").on(t.obraId),
+  index("idx_gd_art_doc").on(t.documentoId),
+]);

@@ -5289,4 +5289,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 00:30:00",
   },
+  {
+    version: 791,
+    titulo: "Novo Módulo: Gestão de Projetos e Documentos",
+    descricao: "Módulo completo e independente para gestão de documentos técnicos de obra. Inclui: cadastro de documentos com código, título, disciplina e tipo; controle de revisões com aprovação/rejeição; ARTs e RRTs com alerta de vencimento (30 dias); painel com KPIs (total de documentos, revisões pendentes, ARTs vencendo); configurações de disciplinas (ARQ, EST, ELE, HID, etc.) e tipos de documento (PRJ, MEM, DET, etc.); filtros por obra, disciplina, tipo e status. 8 tabelas novas: gd_disciplinas, gd_tipos_documento, gd_documentos, gd_revisoes, gd_revisao_comentarios, gd_distribuicao, gd_download_log, gd_arts. Backend com 25+ endpoints tRPC. Sidebar e módulo integrados ao sistema de navegação existente sem impacto nos demais módulos.",
+    tipo: "feature",
+    modulos: "Gestão de Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 12:00:00",
+  },
 ];

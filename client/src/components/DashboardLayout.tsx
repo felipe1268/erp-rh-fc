@@ -434,6 +434,18 @@ const menuSectionsMedicao: MenuSection[] = [
   },
 ];
 
+const menuSectionsGestaoDocumentos: MenuSection[] = [
+  {
+    title: "Gestão de Documentos",
+    items: [
+      { icon: LayoutDashboard, label: "Painel",          path: "/gestao-documentos" },
+      { icon: FolderOpen,      label: "Documentos",      path: "/gestao-documentos?tab=documentos" },
+      { icon: Shield,          label: "ARTs / RRTs",     path: "/gestao-documentos?tab=arts" },
+      { icon: Settings,        label: "Configurações",   path: "/gestao-documentos?tab=configuracoes" },
+    ],
+  },
+];
+
 const menuSectionsCadastro: MenuSection[] = [
   {
     title: "Cadastro",
@@ -468,6 +480,7 @@ const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "compras":       menuSectionsCompras,
   "almoxarifado":  menuSectionsAlmoxarifado,
   "financeiro":    menuSectionsFinanceiro,
+  "gestao-documentos": menuSectionsGestaoDocumentos,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
 
@@ -533,6 +546,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "compras":        "/compras/painel",
   "almoxarifado":   "/almoxarifado",
   "financeiro":     "/financeiro",
+  "gestao-documentos": "/gestao-documentos",
   "all": "/painel",
 };
 
@@ -551,6 +565,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "compras":       { icon: ShoppingCart,  color: "text-rose-400",    bg: "bg-rose-500/20"    },
   "almoxarifado":  { icon: Warehouse,     color: "text-emerald-400", bg: "bg-emerald-500/20" },
   "financeiro":    { icon: DollarSign,    color: "text-green-400",   bg: "bg-green-500/20"   },
+  "gestao-documentos": { icon: FolderOpen, color: "text-indigo-400", bg: "bg-indigo-500/20" },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
 
