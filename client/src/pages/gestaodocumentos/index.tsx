@@ -1091,12 +1091,12 @@ export default function GestaoDocumentos() {
                                 />
                               </TableCell>
                               <TableCell className="font-mono text-xs text-blue-600">{doc.codigo}</TableCell>
-                              <TableCell className="text-gray-900 text-sm truncate max-w-[300px]">
-                                <span className="flex items-center gap-1.5">
+                              <TableCell className="text-gray-900 text-sm overflow-visible">
+                                <span className="flex items-center gap-1.5 flex-nowrap">
                                   {doc.arquivoUrl && <Paperclip className="w-3 h-3 text-blue-500 shrink-0" />}
-                                  {doc.titulo}
+                                  <span className="truncate">{doc.titulo}</span>
                                   {missingPdf && (
-                                    <span className="shrink-0 inline-flex items-center gap-1.5 ml-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-semibold rounded-full border border-red-300 whitespace-nowrap">
+                                    <span className="shrink-0 inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-semibold rounded-full border border-red-300 whitespace-nowrap">
                                       <AlertTriangle className="w-3 h-3" />
                                       Sem PDF
                                     </span>
