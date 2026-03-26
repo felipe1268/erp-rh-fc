@@ -45,8 +45,28 @@ export const planejamentoRouter = router({
   // ── Projetos ──────────────────────────────────────────────────────────────
   listarProjetos: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+
+      let allowedObraIds: number[] | null = null;
+      if (!isAdmin) {
+        const userEmail = ctx.user.email ?? "";
+        if (!userEmail) return [];
+        const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
+        const empRows: any[] = empResult?.rows ?? empResult ?? [];
+        if (!empRows.length) return [];
+        const employeeId = empRows[0].id;
+        const obrasResult = await db.execute(sql`
+          SELECT DISTINCT of2."obraId" FROM obra_funcionarios of2
+          INNER JOIN obras o ON o.id = of2."obraId" AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL
+          WHERE of2."employeeId" = ${employeeId} AND of2."isActive" = 1
+        `);
+        const obrasRows: any[] = obrasResult?.rows ?? obrasResult ?? [];
+        allowedObraIds = obrasRows.map((r: any) => r.obraId);
+        if (allowedObraIds.length === 0) return [];
+      }
+
       const rows = await db.select({
         id:                    planejamentoProjetos.id,
         companyId:             planejamentoProjetos.companyId,
@@ -68,7 +88,11 @@ export const planejamentoRouter = router({
       })
         .from(planejamentoProjetos)
         .leftJoin(orcamentos, eq(planejamentoProjetos.orcamentoId, orcamentos.id))
-        .where(eq(planejamentoProjetos.companyId, input.companyId))
+        .where(
+          allowedObraIds !== null
+            ? and(eq(planejamentoProjetos.companyId, input.companyId), inArray(planejamentoProjetos.obraId, allowedObraIds.length > 0 ? allowedObraIds : [0]))
+            : eq(planejamentoProjetos.companyId, input.companyId)
+        )
         .orderBy(desc(planejamentoProjetos.criadoEm));
       return rows;
     }),
