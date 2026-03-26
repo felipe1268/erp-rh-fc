@@ -23,6 +23,23 @@ const isAdmin = (ctx: any) =>
 
 const PASTAS_PADRAO = ["DWG", "PDF", "IFC", "DOC"];
 
+const DISCIPLINAS_PADRAO = [
+  { nome: "Arquitetura", sigla: "ARQ", cor: "#3B82F6" },
+  { nome: "Estrutural", sigla: "EST", cor: "#EF4444" },
+  { nome: "Elétrica", sigla: "ELE", cor: "#F59E0B" },
+  { nome: "Hidrossanitário", sigla: "HID", cor: "#06B6D4" },
+  { nome: "HVAC / Climatização", sigla: "CLI", cor: "#8B5CF6" },
+  { nome: "Incêndio", sigla: "INC", cor: "#DC2626" },
+  { nome: "Fundações", sigla: "FUN", cor: "#78716C" },
+  { nome: "Topografia", sigla: "TOP", cor: "#22C55E" },
+  { nome: "Paisagismo", sigla: "PAI", cor: "#10B981" },
+  { nome: "Comunicação / Dados", sigla: "COM", cor: "#6366F1" },
+  { nome: "Automação", sigla: "AUT", cor: "#EC4899" },
+  { nome: "Geotecnia", sigla: "GEO", cor: "#A16207" },
+];
+
+const SUBPASTAS_PADRAO_COMPLETAS = ["DWG", "PDF", "IFC", "DOC", "REVIT", "SKP", "XLS", "FOTOS", "BIM", "MEMORIAIS"];
+
 export const gestaoDocumentosRouter = router({
 
   listObrasDisponiveis: protectedProcedure
@@ -398,14 +415,59 @@ export const gestaoDocumentosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const existing = await db.select().from(gdTiposSubpasta)
-        .where(eq(gdTiposSubpasta.companyId, input.companyId));
+        .where(and(eq(gdTiposSubpasta.companyId, input.companyId), eq(gdTiposSubpasta.ativo, true)));
       if (existing.length > 0) return existing;
-      const defaults = PASTAS_PADRAO.map(nome => ({
+      const defaults = SUBPASTAS_PADRAO_COMPLETAS.map(nome => ({
         companyId: input.companyId,
         nome,
-        padrao: true,
+        padrao: PASTAS_PADRAO.includes(nome),
       }));
       return db.insert(gdTiposSubpasta).values(defaults).returning();
+    }),
+
+  seedDisciplinasPadrao: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const existing = await db.select().from(gdDisciplinas)
+        .where(and(eq(gdDisciplinas.companyId, input.companyId), isNull(gdDisciplinas.ficheiroId)));
+      if (existing.length > 0) return existing;
+      const defaults = DISCIPLINAS_PADRAO.map(d => ({
+        companyId: input.companyId,
+        nome: d.nome,
+        sigla: d.sigla,
+        cor: d.cor,
+      }));
+      return db.insert(gdDisciplinas).values(defaults).returning();
+    }),
+
+  seedTiposDocumentoPadrao: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const existing = await db.select().from(gdTiposDocumento)
+        .where(eq(gdTiposDocumento.companyId, input.companyId));
+      if (existing.length > 0) return existing;
+      const TIPOS_DOC_PADRAO = [
+        { nome: "Projeto Executivo", sigla: "PE" },
+        { nome: "Projeto Básico", sigla: "PB" },
+        { nome: "Projeto Legal", sigla: "PL" },
+        { nome: "Memorial Descritivo", sigla: "MD" },
+        { nome: "Memorial de Cálculo", sigla: "MC" },
+        { nome: "Especificação Técnica", sigla: "ET" },
+        { nome: "Relatório Técnico", sigla: "RT" },
+        { nome: "Lista de Materiais", sigla: "LM" },
+        { nome: "Detalhamento", sigla: "DT" },
+        { nome: "As-Built", sigla: "AB" },
+      ];
+      const defaults = TIPOS_DOC_PADRAO.map(d => ({
+        companyId: input.companyId,
+        nome: d.nome,
+        sigla: d.sigla,
+      }));
+      return db.insert(gdTiposDocumento).values(defaults).returning();
     }),
 
   listDocumentos: protectedProcedure

@@ -356,12 +356,26 @@ export default function GestaoDocumentos() {
       utils.gestaoDocumentos.listTiposDocumento.invalidate();
     },
   });
+  const seedDisciplinas = trpc.gestaoDocumentos.seedDisciplinasPadrao.useMutation({
+    onSuccess: () => { utils.gestaoDocumentos.listDisciplinas.invalidate(); },
+  });
+  const seedTiposDocs = trpc.gestaoDocumentos.seedTiposDocumentoPadrao.useMutation({
+    onSuccess: () => { utils.gestaoDocumentos.listTiposDocumento.invalidate(); },
+  });
 
   useEffect(() => {
-    if (companyId > 0 && tiposSubpasta.data && tiposSubpasta.data.length === 0) {
-      seedSubpastas.mutate({ companyId });
+    if (companyId > 0) {
+      if (tiposSubpasta.data && tiposSubpasta.data.length === 0) {
+        seedSubpastas.mutate({ companyId });
+      }
+      if (disciplinas.data && disciplinas.data.length === 0) {
+        seedDisciplinas.mutate({ companyId });
+      }
+      if (tipos.data && tipos.data.length === 0) {
+        seedTiposDocs.mutate({ companyId });
+      }
     }
-  }, [companyId, tiposSubpasta.data]);
+  }, [companyId, tiposSubpasta.data, disciplinas.data, tipos.data]);
 
   function resetDocForm() {
     setDocForm({ codigo: "", titulo: "", descricao: "", disciplinaId: "", tipoDocumentoId: "", emitente: "", dataEmissao: "", dataValidade: "", tags: "" });
@@ -986,27 +1000,29 @@ export default function GestaoDocumentos() {
                 <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
                   <BookOpen className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-blue-800">Configure antes de começar</p>
-                    <p className="text-xs text-blue-600 mt-0.5">Cadastre as disciplinas, tipos de documento e tipos de sub-pasta que sua empresa utiliza. Eles aparecem como opções ao montar o ficheiro de cada obra.</p>
+                    <p className="text-sm font-medium text-blue-800">Cadastro rápido pré-configurado</p>
+                    <p className="text-xs text-blue-600 mt-0.5">As disciplinas, tipos de documento e sub-pastas mais comuns da construção civil já vêm cadastrados. Você pode adicionar, remover ou personalizar conforme a necessidade da sua empresa.</p>
                   </div>
                 </div>
                 <ConfigSection
                   title="Disciplinas"
+                  subtitle="Disciplinas de engenharia/arquitetura que sua empresa trabalha. Aparecem como opções ao montar o ficheiro de cada obra."
                   items={disciplinas.data || []}
                   onAdd={(nome, sigla) => createDisciplina.mutate({ companyId, nome, sigla })}
                   fieldLabel1="Nome da Disciplina"
                   fieldLabel2="Sigla"
                 />
-                <div className="mt-6">
+                <div className="mt-4">
                   <ConfigSection
                     title="Tipos de Documento"
+                    subtitle="Classificações para os documentos técnicos (PE, PB, Memorial, etc.)."
                     items={tipos.data || []}
                     onAdd={(nome, sigla) => createTipo.mutate({ companyId, nome, sigla })}
                     fieldLabel1="Nome do Tipo"
                     fieldLabel2="Sigla"
                   />
                 </div>
-                <div className="mt-6">
+                <div className="mt-4">
                   <SubpastaConfigSection
                     items={tiposSubpasta.data || []}
                     onAdd={(nome) => createTipoSubpasta.mutate({ companyId, nome })}
@@ -1781,8 +1797,9 @@ function InfoCell({ label, value }: { label: string; value: any }) {
   );
 }
 
-function ConfigSection({ title, items, onAdd, fieldLabel1, fieldLabel2 }: {
+function ConfigSection({ title, subtitle, items, onAdd, fieldLabel1, fieldLabel2 }: {
   title: string;
+  subtitle?: string;
   items: any[];
   onAdd: (nome: string, sigla: string) => void;
   fieldLabel1: string;
@@ -1790,39 +1807,48 @@ function ConfigSection({ title, items, onAdd, fieldLabel1, fieldLabel2 }: {
 }) {
   const [nome, setNome] = useState("");
   const [sigla, setSigla] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-      <div className="flex items-end gap-3 mb-4">
-        <div className="flex-1">
-          <Label className="text-gray-500 text-sm">{fieldLabel1}</Label>
-          <Input value={nome} onChange={(e) => setNome(e.target.value)} className="bg-gray-50 border-gray-300 text-gray-900" />
-        </div>
-        <div className="w-32">
-          <Label className="text-gray-500 text-sm">{fieldLabel2}</Label>
-          <Input value={sigla} onChange={(e) => setSigla(e.target.value)} className="bg-gray-50 border-gray-300 text-gray-900" />
-        </div>
-        <Button onClick={() => { if (nome && sigla) { onAdd(nome, sigla); setNome(""); setSigla(""); } }} className="bg-blue-600 text-white hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-1" /> Adicionar
-        </Button>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length} cadastrado(s)</span>
       </div>
-      <div className="space-y-2">
+      {subtitle && <p className="text-xs text-gray-500 mb-3">{subtitle}</p>}
+      <div className="flex flex-wrap gap-2 mb-3">
         {items.map((item) => (
-          <div key={item.id} className="flex items-center justify-between bg-gray-50 p-3 rounded border border-gray-200">
-            <div className="flex items-center gap-3">
-              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-mono">{item.sigla}</span>
-              <span className="text-gray-600">{item.nome}</span>
-            </div>
-            <span className={`text-xs px-2 py-0.5 rounded ${item.ativo !== false ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
-              {item.ativo !== false ? "Ativo" : "Inativo"}
-            </span>
+          <div key={item.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50">
+            <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-white" style={{ backgroundColor: item.cor || "#3B82F6" }}>{item.sigla}</span>
+            <span className="text-sm text-gray-700">{item.nome}</span>
           </div>
         ))}
         {items.length === 0 && (
-          <p className="text-gray-500 text-sm text-center py-4">Nenhum registro cadastrado.</p>
+          <p className="text-gray-400 text-sm py-2">Cadastro rápido será carregado automaticamente...</p>
         )}
       </div>
+      {!showAddForm ? (
+        <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="text-xs border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300">
+          <Plus className="w-3 h-3 mr-1" /> Adicionar manualmente
+        </Button>
+      ) : (
+        <div className="flex items-end gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+          <div className="flex-1">
+            <Label className="text-gray-500 text-xs">{fieldLabel1}</Label>
+            <Input value={nome} onChange={(e) => setNome(e.target.value)} className="bg-white border-gray-300 text-gray-900 h-8 text-sm" />
+          </div>
+          <div className="w-28">
+            <Label className="text-gray-500 text-xs">{fieldLabel2}</Label>
+            <Input value={sigla} onChange={(e) => setSigla(e.target.value.toUpperCase())} className="bg-white border-gray-300 text-gray-900 h-8 text-sm font-mono" maxLength={10} />
+          </div>
+          <Button size="sm" onClick={() => { if (nome && sigla) { onAdd(nome, sigla); setNome(""); setSigla(""); } }} className="bg-blue-600 text-white hover:bg-blue-700 h-8 text-xs">
+            <Plus className="w-3 h-3 mr-1" /> Adicionar
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setShowAddForm(false); setNome(""); setSigla(""); }} className="h-8 text-xs text-gray-400">
+            Cancelar
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
