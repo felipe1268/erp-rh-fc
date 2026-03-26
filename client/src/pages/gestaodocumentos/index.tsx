@@ -1083,7 +1083,7 @@ export default function GestaoDocumentos() {
       </div>
 
       <Dialog open={showDisciplinasModal} onOpenChange={setShowDisciplinasModal}>
-        <DialogContent className="w-[95vw] max-w-[95vw] h-[90vh] max-h-[90vh] bg-white border-gray-200 text-gray-900 overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 text-gray-900 overflow-y-auto" style={{ width: '98vw', maxWidth: '98vw', height: '95vh', maxHeight: '95vh' }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FolderPlus className="w-5 h-5 text-blue-600" />
