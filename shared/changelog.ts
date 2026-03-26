@@ -5415,4 +5415,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 23:45:00",
   },
+  {
+    version: 805,
+    titulo: "Telemetria corrigida + tabela documentos sem scroll horizontal + coluna código unificada",
+    descricao: "Correções: (1) Telemetria & Analytics não carregava dados — getDb() não tinha await em 8 ocorrências, causando 'db.execute is not a function'. Corrigido. (2) Tabela de documentos tinha barra de rolagem horizontal — removida coluna 'Código' (redundante com título/nome do arquivo) e unificada como 'Título / Código'. Layout ajustado para caber 100% na tela sem scroll.",
+    tipo: "bugfix",
+    modulos: "Telemetria, Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 23:55:00",
+  },
 ];
