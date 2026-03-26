@@ -427,6 +427,7 @@ export default function GestaoDocumentos() {
               codigo: pf.codigo,
               descricao: pf.titulo || undefined,
               status: "em_elaboracao",
+              revisaoAtual: revStr || "00",
             });
             existingDoc.titulo = pf.codigo;
             existingDoc.codigo = pf.codigo;

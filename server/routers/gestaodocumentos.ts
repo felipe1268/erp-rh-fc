@@ -592,6 +592,7 @@ export const gestaoDocumentosRouter = router({
       titulo: z.string().min(1).optional(),
       descricao: z.string().nullable().optional(),
       status: z.string().optional(),
+      revisaoAtual: z.string().nullable().optional(),
       emitente: z.string().nullable().optional(),
       responsavelId: z.number().nullable().optional(),
       dataEmissao: z.string().nullable().optional(),
@@ -700,15 +701,6 @@ export const gestaoDocumentosRouter = router({
         ...input,
         criadoPor: ctx.user.id,
       }).returning();
-
-      await db.update(gdDocumentos).set({
-        revisaoAtual: input.numero,
-        status: "em_revisao",
-        atualizadoEm: new Date(),
-      }).where(and(
-        eq(gdDocumentos.id, input.documentoId),
-        eq(gdDocumentos.companyId, input.companyId),
-      ));
 
       return rev;
     }),
