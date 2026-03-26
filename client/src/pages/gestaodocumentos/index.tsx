@@ -805,6 +805,14 @@ export default function GestaoDocumentos() {
 
   const filteredDocs = selectedSubpasta ? (documentos.data || []).filter(doc => {
     if (selectedDiscId && doc.disciplinaId !== selectedDiscId) return false;
+    if (search.trim()) {
+      const s = search.trim().toLowerCase();
+      const titulo = (doc.titulo || "").toLowerCase();
+      const codigo = (doc.codigo || "").toLowerCase();
+      const descricao = (doc.descricao || "").toLowerCase();
+      const arquivoNome = (doc.arquivoNome || "").toLowerCase();
+      if (!titulo.includes(s) && !codigo.includes(s) && !descricao.includes(s) && !arquivoNome.includes(s)) return false;
+    }
     return true;
   }) : [];
 
