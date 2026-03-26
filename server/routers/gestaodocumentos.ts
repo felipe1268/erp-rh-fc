@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { eq, and, desc, isNull, sql, ilike, or, inArray } from "drizzle-orm";
+import { storagePut } from "../storage";
 import {
   gdFicheirosObra,
   gdDisciplinas,
@@ -610,6 +611,37 @@ export const gestaoDocumentosRouter = router({
       await db.update(gdDocumentos).set({ deletedAt: new Date() })
         .where(and(eq(gdDocumentos.id, input.id), eq(gdDocumentos.companyId, input.companyId)));
       return { success: true };
+    }),
+
+  uploadArquivoDocumento: protectedProcedure
+    .input(z.object({
+      documentoId: z.number(),
+      companyId: z.number(),
+      fileName: z.string(),
+      fileBase64: z.string(),
+      contentType: z.string(),
+      fileSize: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const buf = Buffer.from(input.fileBase64, "base64");
+      if (buf.length > 50 * 1024 * 1024) {
+        throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Arquivo excede 50MB" });
+      }
+      const [doc] = await db.select().from(gdDocumentos)
+        .where(and(eq(gdDocumentos.id, input.documentoId), eq(gdDocumentos.companyId, input.companyId)));
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado" });
+      const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.{2,}/g, ".");
+      const key = `gestao-documentos/${input.companyId}/${doc.obraId}/${Date.now()}-${safeName}`;
+      const { url } = await storagePut(key, buf, input.contentType);
+      await db.update(gdDocumentos).set({
+        arquivoUrl: url,
+        arquivoNome: input.fileName,
+        arquivoTamanho: buf.length,
+        atualizadoEm: new Date(),
+      }).where(and(eq(gdDocumentos.id, input.documentoId), eq(gdDocumentos.companyId, input.companyId)));
+      return { url, fileName: input.fileName };
     }),
 
   listRevisoes: protectedProcedure

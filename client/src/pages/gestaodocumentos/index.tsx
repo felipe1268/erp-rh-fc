@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useLocation } from "wouter";
@@ -59,6 +59,8 @@ import {
   File,
   ArrowRight,
   BookOpen,
+  Download,
+  Paperclip,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -231,22 +233,71 @@ export default function GestaoDocumentos() {
     onError: (e) => toast.error(e.message),
   });
 
-  const createDoc = trpc.gestaoDocumentos.createDocumento.useMutation({
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadArquivo = trpc.gestaoDocumentos.uploadArquivoDocumento.useMutation({
     onSuccess: () => {
-      toast.success("Documento criado");
+      utils.gestaoDocumentos.listDocumentos.invalidate();
+    },
+    onError: (e) => toast.error("Erro no upload: " + e.message),
+  });
+
+  async function uploadFileToDoc(docId: number, file: File) {
+    const reader = new FileReader();
+    return new Promise<void>((resolve, reject) => {
+      reader.onload = async () => {
+        try {
+          const base64 = (reader.result as string).split(",")[1];
+          await uploadArquivo.mutateAsync({
+            documentoId: docId,
+            companyId,
+            fileName: file.name,
+            fileBase64: base64,
+            contentType: file.type || "application/octet-stream",
+            fileSize: file.size,
+          });
+          resolve();
+        } catch (e) { reject(e); }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const createDoc = trpc.gestaoDocumentos.createDocumento.useMutation({
+    onSuccess: async (data) => {
+      if (pendingFile && data?.id) {
+        toast.info("Enviando arquivo...");
+        try {
+          await uploadFileToDoc(data.id, pendingFile);
+          toast.success("Documento criado com arquivo");
+        } catch { toast.success("Documento criado (falha no upload do arquivo)"); }
+      } else {
+        toast.success("Documento criado");
+      }
       utils.gestaoDocumentos.listDocumentos.invalidate();
       setShowDocModal(false);
       resetDocForm();
+      setPendingFile(null);
     },
     onError: (e) => toast.error(e.message),
   });
   const updateDoc = trpc.gestaoDocumentos.updateDocumento.useMutation({
-    onSuccess: () => {
-      toast.success("Documento atualizado");
+    onSuccess: async () => {
+      if (pendingFile && editingDoc?.id) {
+        toast.info("Enviando arquivo...");
+        try {
+          await uploadFileToDoc(editingDoc.id, pendingFile);
+          toast.success("Documento atualizado com arquivo");
+        } catch { toast.success("Documento atualizado (falha no upload do arquivo)"); }
+      } else {
+        toast.success("Documento atualizado");
+      }
       utils.gestaoDocumentos.listDocumentos.invalidate();
       setShowDocModal(false);
       setEditingDoc(null);
       resetDocForm();
+      setPendingFile(null);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -370,6 +421,8 @@ export default function GestaoDocumentos() {
       dataValidade: "",
       tags: "",
     });
+    setPendingFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
   function resetArtForm() {
     setArtForm({ tipo: "ART", numero: "", profissional: "", creaOuCau: "", dataEmissao: "", dataValidade: "", observacoes: "" });
@@ -753,10 +806,40 @@ export default function GestaoDocumentos() {
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {filteredDocs.length === 0 ? (
-                    <div className="text-center py-16">
+                    <div
+                      className="text-center py-16 border-2 border-dashed border-transparent rounded-lg transition-colors"
+                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("border-blue-400", "bg-blue-50/50"); e.currentTarget.classList.remove("border-transparent"); }}
+                      onDragLeave={(e) => { e.currentTarget.classList.remove("border-blue-400", "bg-blue-50/50"); e.currentTarget.classList.add("border-transparent"); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove("border-blue-400", "bg-blue-50/50");
+                        e.currentTarget.classList.add("border-transparent");
+                        const f = e.dataTransfer.files[0];
+                        if (f) {
+                          if (f.size > 30 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 30MB)"); return; }
+                          const today = new Date().toISOString().split("T")[0];
+                          const discId = selectedDiscId ? String(selectedDiscId) : "";
+                          const nameWithoutExt = f.name.replace(/\.[^.]+$/, "");
+                          setDocForm({
+                            codigo: generateNextCode(),
+                            titulo: nameWithoutExt,
+                            descricao: "",
+                            disciplinaId: discId,
+                            tipoDocumentoId: "",
+                            emitente: "",
+                            dataEmissao: today,
+                            dataValidade: "",
+                            tags: "",
+                          });
+                          setPendingFile(f);
+                          setEditingDoc(null);
+                          setShowDocModal(true);
+                        }
+                      }}
+                    >
                       <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                       <p className="text-gray-500 text-sm mb-1">Nenhum documento nesta pasta</p>
-                      <p className="text-gray-400 text-xs">Clique em "+ Novo Documento" para começar</p>
+                      <p className="text-gray-400 text-xs">Clique em "+ Novo Documento" ou arraste um arquivo aqui</p>
                     </div>
                   ) : (
                     <Table>
@@ -777,7 +860,12 @@ export default function GestaoDocumentos() {
                           return (
                             <TableRow key={doc.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
                               <TableCell className="font-mono text-xs text-blue-600">{doc.codigo}</TableCell>
-                              <TableCell className="text-gray-900 text-sm truncate max-w-[300px]">{doc.titulo}</TableCell>
+                              <TableCell className="text-gray-900 text-sm truncate max-w-[300px]">
+                                <span className="flex items-center gap-1.5">
+                                  {doc.arquivoUrl && <Paperclip className="w-3 h-3 text-blue-500 shrink-0" />}
+                                  {doc.titulo}
+                                </span>
+                              </TableCell>
                               <TableCell>
                                 {disc ? (
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: `${disc.cor}20`, color: disc.cor || "#3b82f6" }}>
@@ -803,8 +891,23 @@ export default function GestaoDocumentos() {
                                     <DropdownMenuItem onClick={() => openEditDoc(doc)}>
                                       <Pencil className="w-4 h-4 mr-2" /> Editar
                                     </DropdownMenuItem>
+                                    {doc.arquivoUrl && (
+                                      <DropdownMenuItem onClick={() => {
+                                        const a = document.createElement("a");
+                                        a.href = doc.arquivoUrl;
+                                        a.download = doc.arquivoNome || "arquivo";
+                                        a.click();
+                                      }}>
+                                        <Download className="w-4 h-4 mr-2" /> Baixar Arquivo
+                                      </DropdownMenuItem>
+                                    )}
+                                    {!doc.arquivoUrl && (
+                                      <DropdownMenuItem onClick={() => openEditDoc(doc)}>
+                                        <Upload className="w-4 h-4 mr-2" /> Anexar Arquivo
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem onClick={() => { setSelectedDoc(doc); setShowRevModal(true); }}>
-                                      <Upload className="w-4 h-4 mr-2" /> Nova Revisão
+                                      <History className="w-4 h-4 mr-2" /> Nova Revisão
                                     </DropdownMenuItem>
                                     <DropdownMenuItem className="text-red-600" onClick={() => {
                                       if (confirm("Remover documento?")) deleteDoc.mutate({ id: doc.id, companyId });
@@ -1006,6 +1109,54 @@ export default function GestaoDocumentos() {
               </div>
             </div>
 
+            <div>
+              <Label className="text-gray-500 text-xs">Arquivo</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    if (f.size > 30 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 30MB)"); return; }
+                    setPendingFile(f);
+                  }
+                }}
+              />
+              {pendingFile ? (
+                <div className="mt-1 flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+                  <Paperclip className="w-4 h-4 text-blue-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-blue-800 font-medium truncate">{pendingFile.name}</p>
+                    <p className="text-[10px] text-blue-500">{(pendingFile.size / 1024).toFixed(0)} KB</p>
+                  </div>
+                  <button type="button" onClick={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="text-blue-400 hover:text-red-500">
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : editingDoc?.arquivoUrl ? (
+                <div className="mt-1 flex items-center gap-2 p-2.5 bg-green-50 border border-green-200 rounded-lg">
+                  <Paperclip className="w-4 h-4 text-green-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-green-800 font-medium truncate">{editingDoc.arquivoNome || "Arquivo"}</p>
+                    {editingDoc.arquivoTamanho && <p className="text-[10px] text-green-500">{(editingDoc.arquivoTamanho / 1024).toFixed(0)} KB</p>}
+                  </div>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="text-xs text-green-600 hover:text-green-800 underline">Substituir</button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mt-1 w-full border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-all group cursor-pointer"
+                >
+                  <Upload className="w-5 h-5 mx-auto text-gray-300 group-hover:text-blue-500 mb-1" />
+                  <p className="text-xs text-gray-400 group-hover:text-blue-600">Clique para anexar arquivo</p>
+                  <p className="text-[10px] text-gray-300">PDF, DWG, DXF, DOC, XLS, RVT, IFC — até 30MB</p>
+                </button>
+              )}
+            </div>
+
             {editingDoc && (
               <div className="space-y-3 border-t border-gray-200 pt-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -1161,6 +1312,24 @@ export default function GestaoDocumentos() {
                 <div>
                   <h4 className="text-sm text-gray-500 mb-1">Descrição</h4>
                   <p className="text-gray-600 text-sm">{selectedDoc.descricao}</p>
+                </div>
+              )}
+              {selectedDoc.arquivoUrl ? (
+                <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <Paperclip className="w-5 h-5 text-blue-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-blue-800 font-medium truncate">{selectedDoc.arquivoNome || "Arquivo"}</p>
+                    {selectedDoc.arquivoTamanho && <p className="text-xs text-blue-500">{(selectedDoc.arquivoTamanho / 1024).toFixed(0)} KB</p>}
+                  </div>
+                  <a href={selectedDoc.arquivoUrl} download={selectedDoc.arquivoNome || "arquivo"} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors">
+                    <Download className="w-4 h-4" /> Baixar
+                  </a>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <File className="w-5 h-5 text-gray-400 shrink-0" />
+                  <p className="text-sm text-gray-500 flex-1">Nenhum arquivo anexado</p>
+                  <button onClick={() => { setShowDetailModal(false); openEditDoc(selectedDoc); }} className="text-xs text-blue-600 hover:text-blue-800 underline">Anexar</button>
                 </div>
               )}
               <div>
