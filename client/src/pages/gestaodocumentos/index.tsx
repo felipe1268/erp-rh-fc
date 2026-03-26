@@ -653,10 +653,10 @@ export default function GestaoDocumentos() {
   })();
 
   return (
-    <DashboardLayout title="Proj./Doc. Técnicos">
-      <div className="space-y-4">
+    <DashboardLayout title="Proj./Doc. Técnicos" noPadding>
+      <div className="h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
         {viewMode === "configuracoes" ? (
-          <>
+          <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-bold text-gray-900">Configurações</h1>
               <Button variant="outline" size="sm" onClick={() => setViewMode("obras")} className="text-gray-600">
@@ -670,9 +670,9 @@ export default function GestaoDocumentos() {
               createTipo={createTipo} updateTipo={updateTipo} deleteTipo={deleteTipo}
               createTipoSubpasta={createTipoSubpasta} updateTipoSubpasta={updateTipoSubpasta} deleteTipoSubpasta={deleteTipoSubpasta}
             />
-          </>
+          </div>
         ) : viewMode === "arts" ? (
-          <>
+          <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-bold text-gray-900">ARTs / RRTs</h1>
               <div className="flex items-center gap-2">
@@ -685,10 +685,10 @@ export default function GestaoDocumentos() {
               </div>
             </div>
             <ArtsSection arts={arts.data || []} onEdit={openEditArt} onDelete={(id) => { if (confirm("Remover esta ART/RRT?")) deleteArt.mutate({ id, companyId }); }} />
-          </>
+          </div>
         ) : viewMode === "obras" ? (
-          <>
-            <div className="flex items-center justify-between">
+          <div className="flex-1 overflow-auto p-4 md:p-6">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Projetos / Documentos Técnicos</h1>
                 <p className="text-sm text-gray-500">Selecione uma obra para abrir suas pastas de documentos</p>
@@ -731,12 +731,12 @@ export default function GestaoDocumentos() {
                 <p className="text-sm text-gray-500">Cadastre obras no módulo de Obras para começar.</p>
               </div>
             )}
-          </>
+          </div>
         ) : (
           /* MODO FICHEIRO — Explorador de Pastas */
           <>
             {/* Barra superior */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 shrink-0">
               <div className="flex items-center gap-2 text-sm">
                 <button onClick={() => { setActiveFicheiroId(null); setSelectedObraId(null); setSelectedDiscId(null); setSelectedSubpasta(null); setViewMode("obras"); }} className="text-blue-600 hover:underline font-medium">
                   Obras
@@ -759,9 +759,9 @@ export default function GestaoDocumentos() {
             </div>
 
             {/* Layout duas colunas: árvore + documentos */}
-            <div className="flex gap-4" style={{ minHeight: "calc(100vh - 220px)" }}>
+            <div className="flex gap-0 flex-1 overflow-hidden">
               {/* Painel esquerdo — Árvore de Pastas */}
-              <div className="w-64 shrink-0 bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
+              <div className="w-64 shrink-0 bg-white border-r border-gray-200 overflow-hidden flex flex-col">
                 <div className="p-3 border-b border-gray-200 flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pastas</span>
                   <button onClick={() => setShowNewDiscModal(true)} className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600" title="Nova pasta">
@@ -843,7 +843,7 @@ export default function GestaoDocumentos() {
               </div>
 
               {/* Painel direito — Documentos */}
-              <div className="flex-1 bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
+              <div className="flex-1 bg-white overflow-hidden flex flex-col">
                 <div className="p-3 border-b border-gray-200 flex items-center justify-between gap-3">
                   <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1256,10 +1256,6 @@ export default function GestaoDocumentos() {
                   <div>
                     <Label className="text-gray-500 text-xs">Data de Emissão</Label>
                     <Input type="date" value={docForm.dataEmissao} onChange={(e) => setDocForm({ ...docForm, dataEmissao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900 h-8 text-sm" />
-                  </div>
-                  <div>
-                    <Label className="text-gray-500 text-xs">Data de Validade</Label>
-                    <Input type="date" value={docForm.dataValidade} onChange={(e) => setDocForm({ ...docForm, dataValidade: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900 h-8 text-sm" />
                   </div>
                 </div>
                 <div>

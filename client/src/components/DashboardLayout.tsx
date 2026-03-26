@@ -594,8 +594,10 @@ const MAX_WIDTH = 480;
 
 export default function DashboardLayout({
   children,
+  noPadding,
 }: {
   children: React.ReactNode;
+  noPadding?: boolean;
 }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
@@ -1419,7 +1421,7 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         <CompanyHeader isMobile={isMobile} activeLabel={activeMenuItem?.label ?? "Menu"} />
-        <main className="flex-1 p-3 sm:p-4 md:p-6">{children}</main>
+        <main className={`flex-1 ${noPadding ? "p-0 overflow-hidden" : "p-3 sm:p-4 md:p-6"}`}>{children}</main>
       </SidebarInset>
       <IAModuloAutoDetect location={location} />
       <ActivityTracker />
