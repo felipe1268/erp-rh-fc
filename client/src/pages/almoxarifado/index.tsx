@@ -941,6 +941,7 @@ export default function AlmoxarifadoPage() {
                     <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Código</th>
                     <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estoque</th>
                     <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Mínimo</th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor Unit.</th>
                     <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                     <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Ações</th>
                   </tr>
@@ -973,6 +974,11 @@ export default function AlmoxarifadoPage() {
                         </td>
                         <td className="px-3 py-3 text-right text-gray-500 text-sm">
                           {minimo > 0 ? `${minimo % 1 === 0 ? minimo.toFixed(0) : minimo.toFixed(2)} ${item.unidade}` : "—"}
+                        </td>
+                        <td className="px-3 py-3 text-right text-sm">
+                          {(item as any).valorUnitario && parseFloat((item as any).valorUnitario) > 0
+                            ? <span className="font-medium text-gray-700">R$ {parseFloat((item as any).valorUnitario).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                            : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-3 py-3 text-center">
                           <StatusBadge atual={atual} minimo={minimo} />
