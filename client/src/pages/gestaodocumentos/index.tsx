@@ -840,15 +840,6 @@ export default function GestaoDocumentos() {
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-                  {/* Raiz — Todos os Documentos */}
-                  <button
-                    onClick={() => { setSelectedDiscId(null); setSelectedSubpasta(null); }}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-colors ${!selectedDiscId ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}
-                  >
-                    <FolderOpen className="w-4 h-4 shrink-0" />
-                    <span className="truncate">Todos os Documentos</span>
-                  </button>
-
                   {(detail?.disciplinas || []).map((disc: any) => {
                     const isExpanded = expandedDiscs.has(disc.id);
                     const isSelected = selectedDiscId === disc.id && !selectedSubpasta;
