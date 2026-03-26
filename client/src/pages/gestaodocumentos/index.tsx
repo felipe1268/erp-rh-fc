@@ -141,13 +141,11 @@ export default function GestaoDocumentos() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showDisciplinasModal, setShowDisciplinasModal] = useState(false);
-  const [showCreateWizard, setShowCreateWizard] = useState(false);
-  const [wizardObraId, setWizardObraId] = useState<number | null>(null);
+  const [newDiscForm, setNewDiscForm] = useState({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"] as string[], newSubpasta: "" });
   const [editingDoc, setEditingDoc] = useState<any>(null);
   const [editingArt, setEditingArt] = useState<any>(null);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
 
-  const [selectedDisciplinas, setSelectedDisciplinas] = useState<Record<string, { checked: boolean; subpastas: Record<string, boolean> }>>({});
 
   const [docForm, setDocForm] = useState({
     codigo: "",
@@ -217,26 +215,6 @@ export default function GestaoDocumentos() {
     onSuccess: (data) => {
       toast.success("Ficheiro criado com sucesso!");
       utils.gestaoDocumentos.listFicheiros.invalidate();
-      setShowCreateWizard(false);
-
-      const allDiscs = (disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId);
-      const toCreate = Object.entries(selectedDisciplinas)
-        .filter(([_, v]) => v.checked)
-        .map(([discId, v]) => {
-          const disc = allDiscs.find(d => d.id === Number(discId));
-          if (!disc) return null;
-          const subpastas = Object.entries(v.subpastas)
-            .filter(([__, checked]) => checked)
-            .map(([name]) => name);
-          if (subpastas.length === 0) return null;
-          return { nome: disc.nome, sigla: disc.sigla, cor: disc.cor || undefined, subpastas };
-        })
-        .filter(Boolean) as any[];
-
-      if (toCreate.length > 0) {
-        bulkCreateDisc.mutate({ companyId, ficheiroId: data.id, disciplinas: toCreate });
-      }
-
       setActiveFicheiroId(data.id);
       setSelectedObraId(data.obraId);
       setActiveTab("painel");
@@ -252,12 +230,20 @@ export default function GestaoDocumentos() {
     },
     onError: (e) => toast.error(e.message),
   });
-  const bulkCreateDisc = trpc.gestaoDocumentos.bulkCreateDisciplinasFicheiro.useMutation({
+  const createDiscFicheiro = trpc.gestaoDocumentos.createDisciplinaFicheiro.useMutation({
     onSuccess: () => {
-      toast.success("Disciplinas e sub-pastas criadas");
+      toast.success("Disciplina criada com sucesso!");
       utils.gestaoDocumentos.getFicheiroDetail.invalidate();
       utils.gestaoDocumentos.listFicheiros.invalidate();
-      setShowDisciplinasModal(false);
+      setNewDiscForm({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"], newSubpasta: "" });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteDiscFicheiro = trpc.gestaoDocumentos.deleteDisciplinaFicheiro.useMutation({
+    onSuccess: () => {
+      toast.success("Disciplina removida");
+      utils.gestaoDocumentos.getFicheiroDetail.invalidate();
+      utils.gestaoDocumentos.listFicheiros.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -544,50 +530,38 @@ export default function GestaoDocumentos() {
     }
   }
 
-  function initDisciplinaSelection() {
-    const allDiscs = (disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId);
-    const subpastasArr = tiposSubpasta.data || [];
-    const init: Record<string, { checked: boolean; subpastas: Record<string, boolean> }> = {};
-    allDiscs.forEach(d => {
-      const subs: Record<string, boolean> = {};
-      subpastasArr.forEach(s => { subs[s.nome] = true; });
-      init[`${d.id}`] = { checked: false, subpastas: subs };
-    });
-    setSelectedDisciplinas(init);
-    return init;
-  }
-
   function openDisciplinasModal() {
-    initDisciplinaSelection();
+    setNewDiscForm({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"], newSubpasta: "" });
     setShowDisciplinasModal(true);
   }
 
-  function openDisciplinasModalDirect() {
-    initDisciplinaSelection();
-    setShowDisciplinasModal(true);
-  }
-
-  function handleBulkCreateDisciplinas() {
+  function handleAddDiscToFicheiro() {
     if (!activeFicheiroId) return;
-    const allDiscs = (disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId);
-    const toCreate = Object.entries(selectedDisciplinas)
-      .filter(([_, v]) => v.checked)
-      .map(([discId, v]) => {
-        const disc = allDiscs.find(d => d.id === Number(discId));
-        if (!disc) return null;
-        const subpastas = Object.entries(v.subpastas)
-          .filter(([__, checked]) => checked)
-          .map(([name]) => name);
-        if (subpastas.length === 0) return null;
-        return { nome: disc.nome, sigla: disc.sigla, cor: disc.cor || undefined, subpastas };
-      })
-      .filter(Boolean) as any[];
-
-    if (toCreate.length === 0) {
-      toast.error("Selecione ao menos uma disciplina com sub-pastas");
+    if (!newDiscForm.nome.trim() || !newDiscForm.sigla.trim()) {
+      toast.error("Preencha nome e sigla da disciplina");
       return;
     }
-    bulkCreateDisc.mutate({ companyId, ficheiroId: activeFicheiroId, disciplinas: toCreate });
+    if (newDiscForm.subpastas.length === 0) {
+      toast.error("Adicione ao menos uma sub-pasta");
+      return;
+    }
+    const existingDiscs = detail?.disciplinas || [];
+    if (existingDiscs.some((d: any) => d.sigla === newDiscForm.sigla.trim().toUpperCase())) {
+      toast.error(`Disciplina "${newDiscForm.sigla.trim().toUpperCase()}" já existe neste ficheiro`);
+      return;
+    }
+    createDiscFicheiro.mutate({
+      companyId,
+      ficheiroId: activeFicheiroId,
+      nome: newDiscForm.nome.trim(),
+      sigla: newDiscForm.sigla.trim().toUpperCase(),
+      cor: newDiscForm.cor,
+      subpastas: newDiscForm.subpastas,
+    });
+  }
+
+  function handleQuickAddDisc(disc: { nome: string; sigla: string; cor: string }) {
+    setNewDiscForm({ ...newDiscForm, nome: disc.nome, sigla: disc.sigla, cor: disc.cor });
   }
 
   function handleOpenFicheiro(fich: any) {
@@ -597,25 +571,7 @@ export default function GestaoDocumentos() {
   }
 
   function handleCreateFicheiro(obraId: number) {
-    setWizardObraId(obraId);
-    initDisciplinaSelection();
-    setShowCreateWizard(true);
-  }
-
-  function handleWizardConfirm() {
-    if (!wizardObraId) return;
-    const allDiscs = (disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId);
-    const checkedDiscs = Object.entries(selectedDisciplinas).filter(([_, v]) => v.checked);
-    if (checkedDiscs.length === 0) {
-      toast.error("Selecione ao menos uma disciplina");
-      return;
-    }
-    const hasAnySub = checkedDiscs.some(([_, v]) => Object.values(v.subpastas).some(Boolean));
-    if (!hasAnySub) {
-      toast.error("Selecione ao menos uma sub-pasta");
-      return;
-    }
-    createFicheiro.mutate({ companyId, obraId: wizardObraId });
+    createFicheiro.mutate({ companyId, obraId });
   }
 
   const discMap = new Map((disciplinas.data || []).map(d => [d.id, d]));
@@ -623,11 +579,7 @@ export default function GestaoDocumentos() {
 
   const kpis = dashboard.data || { totalDocumentos: 0, porStatus: {}, totalRevisoes: 0, revisoesPendentes: 0, totalArts: 0, artsVencendo: 0 };
 
-  const hasDisciplinas = (disciplinas.data || []).length > 0;
-  const hasTipos = (tipos.data || []).length > 0;
-  const hasConfig = hasDisciplinas && hasTipos;
   const hasObra = !!selectedObraId;
-  const hasDocs = kpis.totalDocumentos > 0;
 
   const ficheirosMap = new Map((ficheiros.data || []).map(f => [f.obraId, f]));
 
@@ -657,8 +609,6 @@ export default function GestaoDocumentos() {
             onOpenFicheiro={handleOpenFicheiro}
             onCreateFicheiro={handleCreateFicheiro}
             isCreating={createFicheiro.isPending}
-            hasConfig={hasConfig}
-            onGoConfig={() => { setActiveTab("configuracoes"); }}
           />
         ) : (
           <>
@@ -696,11 +646,14 @@ export default function GestaoDocumentos() {
             )}
 
             {detail && detail.disciplinas.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
-                <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                <FolderPlus className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-amber-800">Nenhuma disciplina configurada neste ficheiro</p>
-                  <p className="text-xs text-amber-600 mt-0.5">Clique em "Disciplinas" acima para selecionar as disciplinas e sub-pastas para esta obra.</p>
+                  <p className="text-sm font-medium text-blue-800">Ficheiro criado! Agora adicione as disciplinas.</p>
+                  <p className="text-xs text-blue-600 mt-0.5">Crie as disciplinas (ARQ, EST, HID...) com suas sub-pastas para organizar os documentos desta obra.</p>
+                  <Button size="sm" onClick={openDisciplinasModal} className="mt-2 text-xs h-7 bg-blue-600 text-white hover:bg-blue-700">
+                    <Plus className="w-3 h-3 mr-1" /> Adicionar Disciplina
+                  </Button>
                 </div>
               </div>
             )}
@@ -849,7 +802,7 @@ export default function GestaoDocumentos() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Todas</SelectItem>
-                          {(disciplinas.data || []).filter(d => d.ativo).map(d => (
+                          {(detail?.disciplinas || []).map((d: any) => (
                             <SelectItem key={d.id} value={String(d.id)}>{d.sigla} - {d.nome}</SelectItem>
                           ))}
                         </SelectContent>
@@ -1114,64 +1067,182 @@ export default function GestaoDocumentos() {
         )}
       </div>
 
-      <Dialog open={showCreateWizard} onOpenChange={setShowCreateWizard}>
-        <DialogContent className="max-w-2xl bg-white border-gray-200 text-gray-900 max-h-[90vh] overflow-y-auto">
+      <Dialog open={showDisciplinasModal} onOpenChange={setShowDisciplinasModal}>
+        <DialogContent className="max-w-lg bg-white border-gray-200 text-gray-900 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FolderPlus className="w-5 h-5 text-blue-600" />
-              Novo Ficheiro — {(obrasDisponiveis.data || []).find(o => o.id === wizardObraId)?.nome || "Obra"}
+              Adicionar Disciplina
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-500 -mt-2 mb-2">Selecione as disciplinas e sub-pastas que deseja incluir neste ficheiro. Você pode alterar depois.</p>
 
-          <DisciplinaSelector
-            selectedDisciplinas={selectedDisciplinas}
-            setSelectedDisciplinas={setSelectedDisciplinas}
-            allDiscs={(disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId)}
-          />
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs text-gray-500 mb-1">Atalhos — clique para preencher</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { nome: "Arquitetura", sigla: "ARQ", cor: "#3B82F6" },
+                  { nome: "Estrutural", sigla: "EST", cor: "#EF4444" },
+                  { nome: "Elétrica", sigla: "ELE", cor: "#F59E0B" },
+                  { nome: "Hidrossanitário", sigla: "HID", cor: "#06B6D4" },
+                  { nome: "HVAC / Climatização", sigla: "CLI", cor: "#8B5CF6" },
+                  { nome: "Incêndio", sigla: "INC", cor: "#DC2626" },
+                  { nome: "Fundações", sigla: "FUN", cor: "#78716C" },
+                  { nome: "Topografia", sigla: "TOP", cor: "#22C55E" },
+                  { nome: "Paisagismo", sigla: "PAI", cor: "#10B981" },
+                  { nome: "Geotecnia", sigla: "GEO", cor: "#A16207" },
+                  { nome: "Telecom / Dados", sigla: "TEL", cor: "#0EA5E9" },
+                  { nome: "Automação", sigla: "AUT", cor: "#6366F1" },
+                ].filter(d => {
+                  const existingDiscs = detail?.disciplinas || [];
+                  return !existingDiscs.some((ed: any) => ed.sigla === d.sigla);
+                }).map(d => (
+                  <button
+                    key={d.sigla}
+                    type="button"
+                    onClick={() => handleQuickAddDisc(d)}
+                    className="px-2 py-1 text-xs rounded-md border border-gray-200 hover:bg-gray-50 transition-colors"
+                    style={{ borderLeftColor: d.cor, borderLeftWidth: 3 }}
+                  >
+                    {d.sigla}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-500">Nome *</Label>
+                <Input
+                  value={newDiscForm.nome}
+                  onChange={(e) => setNewDiscForm({ ...newDiscForm, nome: e.target.value })}
+                  placeholder="Ex: Arquitetura"
+                  className="bg-gray-50 border-gray-300 text-gray-900"
+                />
+              </div>
+              <div>
+                <Label className="text-gray-500">Sigla *</Label>
+                <Input
+                  value={newDiscForm.sigla}
+                  onChange={(e) => setNewDiscForm({ ...newDiscForm, sigla: e.target.value.toUpperCase() })}
+                  placeholder="Ex: ARQ"
+                  maxLength={10}
+                  className="bg-gray-50 border-gray-300 text-gray-900"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-gray-500">Cor</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="color"
+                  value={newDiscForm.cor}
+                  onChange={(e) => setNewDiscForm({ ...newDiscForm, cor: e.target.value })}
+                  className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                />
+                <span className="text-xs text-gray-400">{newDiscForm.cor}</span>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-gray-500 mb-1">Sub-pastas</Label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {newDiscForm.subpastas.map((sp) => (
+                  <span key={sp} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                    {sp}
+                    <button
+                      type="button"
+                      onClick={() => setNewDiscForm({ ...newDiscForm, subpastas: newDiscForm.subpastas.filter(s => s !== sp) })}
+                      className="hover:text-red-600"
+                    >
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newDiscForm.newSubpasta}
+                  onChange={(e) => setNewDiscForm({ ...newDiscForm, newSubpasta: e.target.value.toUpperCase() })}
+                  placeholder="Nova sub-pasta (ex: REVIT)"
+                  className="bg-gray-50 border-gray-300 text-gray-900 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newDiscForm.newSubpasta.trim()) {
+                      e.preventDefault();
+                      if (!newDiscForm.subpastas.includes(newDiscForm.newSubpasta.trim())) {
+                        setNewDiscForm({ ...newDiscForm, subpastas: [...newDiscForm.subpastas, newDiscForm.newSubpasta.trim()], newSubpasta: "" });
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (newDiscForm.newSubpasta.trim() && !newDiscForm.subpastas.includes(newDiscForm.newSubpasta.trim())) {
+                      setNewDiscForm({ ...newDiscForm, subpastas: [...newDiscForm.subpastas, newDiscForm.newSubpasta.trim()], newSubpasta: "" });
+                    }
+                  }}
+                  className="shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <Label className="text-[10px] text-gray-400 w-full">Atalhos:</Label>
+                {["REVIT", "SKP", "XLS", "FOTOS", "BIM", "MEMORIAIS"].filter(s => !newDiscForm.subpastas.includes(s)).map(sp => (
+                  <button
+                    key={sp}
+                    type="button"
+                    onClick={() => setNewDiscForm({ ...newDiscForm, subpastas: [...newDiscForm.subpastas, sp] })}
+                    className="px-2 py-0.5 text-[10px] rounded border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    + {sp}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {detail && detail.disciplinas.length > 0 && (
+              <div>
+                <Label className="text-xs text-gray-400 mb-1">Disciplinas neste ficheiro</Label>
+                <div className="space-y-1">
+                  {detail.disciplinas.map((disc: any) => (
+                    <div key={disc.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: disc.cor || "#6B7280" }} />
+                        <span className="text-sm font-medium text-gray-900">{disc.sigla}</span>
+                        <span className="text-xs text-gray-500">— {disc.nome}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Remover a disciplina "${disc.sigla} - ${disc.nome}" deste ficheiro?`)) {
+                            deleteDiscFicheiro.mutate({ id: disc.id, companyId });
+                          }
+                        }}
+                        className="text-gray-400 hover:text-red-600"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowCreateWizard(false)} className="border-gray-300 text-gray-600">Cancelar</Button>
+            <Button variant="outline" onClick={() => setShowDisciplinasModal(false)} className="border-gray-300 text-gray-600">Fechar</Button>
             <Button
-              onClick={handleWizardConfirm}
+              onClick={handleAddDiscToFicheiro}
               className="bg-blue-600 text-white hover:bg-blue-700"
-              disabled={createFicheiro.isPending || bulkCreateDisc.isPending}
+              disabled={createDiscFicheiro.isPending || !newDiscForm.nome.trim() || !newDiscForm.sigla.trim()}
             >
-              <FolderPlus className="w-4 h-4 mr-1" />
-              {createFicheiro.isPending ? "Criando..." : `Criar Ficheiro (${Object.values(selectedDisciplinas).filter(v => v.checked).length} disciplinas)`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showDisciplinasModal} onOpenChange={setShowDisciplinasModal}>
-        <DialogContent className="max-w-2xl bg-white border-gray-200 text-gray-900 max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FolderPlus className="w-5 h-5 text-blue-600" />
-              Adicionar Disciplinas ao Ficheiro
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-gray-500 -mt-2">Marque as disciplinas desejadas e escolha quais sub-pastas criar para cada uma.</p>
-
-          <DisciplinaSelector
-            selectedDisciplinas={selectedDisciplinas}
-            setSelectedDisciplinas={setSelectedDisciplinas}
-            allDiscs={(disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId)}
-          />
-
-          {Object.keys(selectedDisciplinas).length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <Settings className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-              <p className="text-sm">Nenhuma disciplina cadastrada.</p>
-              <p className="text-xs text-gray-400">Vá em Configurações para cadastrar disciplinas primeiro.</p>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDisciplinasModal(false)} className="border-gray-300 text-gray-600">Cancelar</Button>
-            <Button onClick={handleBulkCreateDisciplinas} className="bg-blue-600 text-white hover:bg-blue-700" disabled={bulkCreateDisc.isPending}>
-              {bulkCreateDisc.isPending ? "Criando..." : "Criar Estrutura"}
+              <Plus className="w-4 h-4 mr-1" />
+              {createDiscFicheiro.isPending ? "Criando..." : "Adicionar Disciplina"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1201,7 +1272,7 @@ export default function GestaoDocumentos() {
                 <SelectTrigger className="bg-gray-50 border-gray-300 text-gray-900"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhuma</SelectItem>
-                  {(disciplinas.data || []).filter(d => d.ativo).map(d => (
+                  {(detail?.disciplinas || []).map((d: any) => (
                     <SelectItem key={d.id} value={String(d.id)}>{d.sigla} - {d.nome}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1410,30 +1481,16 @@ export default function GestaoDocumentos() {
   );
 }
 
-function ObrasListing({ obras, ficheirosMap, ficheiros, onOpenFicheiro, onCreateFicheiro, isCreating, hasConfig, onGoConfig }: {
+function ObrasListing({ obras, ficheirosMap, ficheiros, onOpenFicheiro, onCreateFicheiro, isCreating }: {
   obras: any[];
   ficheirosMap: Map<number, any>;
   ficheiros: any[];
   onOpenFicheiro: (fich: any) => void;
   onCreateFicheiro: (obraId: number) => void;
   isCreating: boolean;
-  hasConfig: boolean;
-  onGoConfig: () => void;
 }) {
   return (
     <div className="space-y-4">
-      {!hasConfig && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
-          <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-amber-800">Configure disciplinas e tipos de documento primeiro</p>
-            <p className="text-xs text-amber-600 mt-0.5">Antes de criar um ficheiro, cadastre as disciplinas (ARQ, EST, HID...) e tipos de documento (Planta, Memorial...) que sua empresa utiliza.</p>
-            <Button size="sm" variant="outline" onClick={onGoConfig} className="mt-2 text-xs h-7 border-amber-300 text-amber-700 hover:bg-amber-100">
-              <Settings className="w-3 h-3 mr-1" /> Ir para Configurações
-            </Button>
-          </div>
-        </div>
-      )}
 
       <div className="flex items-center gap-2 mb-2">
         <Building2 className="w-5 h-5 text-indigo-600" />
@@ -1497,100 +1554,6 @@ function ObrasListing({ obras, ficheirosMap, ficheiros, onOpenFicheiro, onCreate
               </div>
             );
           })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DisciplinaSelector({ selectedDisciplinas, setSelectedDisciplinas, allDiscs }: {
-  selectedDisciplinas: Record<string, { checked: boolean; subpastas: Record<string, boolean> }>;
-  setSelectedDisciplinas: (val: Record<string, { checked: boolean; subpastas: Record<string, boolean> }>) => void;
-  allDiscs: any[];
-}) {
-  const checkedCount = Object.values(selectedDisciplinas).filter(v => v.checked).length;
-  const totalCount = Object.keys(selectedDisciplinas).length;
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" className="text-xs h-7 border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => {
-            const updated = { ...selectedDisciplinas };
-            Object.keys(updated).forEach(k => { updated[k].checked = true; });
-            setSelectedDisciplinas(updated);
-          }}>
-            <CheckSquare className="w-3 h-3 mr-1" /> Todas
-          </Button>
-          <Button size="sm" variant="outline" className="text-xs h-7 border-gray-200 text-gray-500 hover:bg-gray-50" onClick={() => {
-            const updated = { ...selectedDisciplinas };
-            Object.keys(updated).forEach(k => { updated[k].checked = false; });
-            setSelectedDisciplinas(updated);
-          }}>
-            <Square className="w-3 h-3 mr-1" /> Nenhuma
-          </Button>
-        </div>
-        <span className="text-xs text-gray-500">{checkedCount} de {totalCount} selecionada(s)</span>
-      </div>
-
-      <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
-        {Object.entries(selectedDisciplinas).map(([discId, state]) => {
-          const disc = allDiscs.find(d => d.id === Number(discId));
-          if (!disc) return null;
-          return (
-            <div key={discId} className={`rounded-lg border p-3 transition-all cursor-pointer ${state.checked ? "border-blue-300 bg-blue-50/50 shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
-              onClick={() => {
-                setSelectedDisciplinas({
-                  ...selectedDisciplinas,
-                  [discId]: { ...selectedDisciplinas[discId], checked: !state.checked },
-                });
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={state.checked}
-                  onChange={() => {}}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 pointer-events-none"
-                />
-                <span className="px-2 py-0.5 rounded text-xs font-bold text-white" style={{ backgroundColor: disc.cor || "#3b82f6" }}>
-                  {disc.sigla}
-                </span>
-                <span className="text-sm font-medium text-gray-800">{disc.nome}</span>
-              </div>
-              {state.checked && (
-                <div className="mt-2 ml-7 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-                  <span className="text-[10px] text-gray-400 uppercase mr-1 self-center">Sub-pastas:</span>
-                  {Object.entries(state.subpastas).map(([subName, checked]) => (
-                    <button
-                      key={subName}
-                      type="button"
-                      onClick={() => {
-                        setSelectedDisciplinas({
-                          ...selectedDisciplinas,
-                          [discId]: {
-                            ...selectedDisciplinas[discId],
-                            subpastas: { ...selectedDisciplinas[discId].subpastas, [subName]: !checked },
-                          },
-                        });
-                      }}
-                      className={`px-2 py-0.5 rounded border text-xs font-mono transition-all ${checked ? "border-blue-300 bg-blue-100 text-blue-700" : "border-gray-200 bg-gray-50 text-gray-400 line-through"}`}
-                    >
-                      {subName}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {totalCount === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          <Settings className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-          <p className="text-sm">Nenhuma disciplina cadastrada.</p>
-          <p className="text-xs text-gray-400">Vá em Configurações para cadastrar disciplinas primeiro.</p>
         </div>
       )}
     </div>

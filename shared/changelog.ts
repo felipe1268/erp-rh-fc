@@ -5379,4 +5379,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 21:00:00",
   },
+  {
+    version: 801,
+    titulo: "Gestão de Documentos: Novo Fluxo — Criar Ficheiro Primeiro, Depois Disciplinas",
+    descricao: "Fluxo do módulo Proj./Doc. Técnicos totalmente reformulado. Agora o usuário cria o ficheiro diretamente com um clique (sem wizard prévio), e depois adiciona disciplinas com sub-pastas dentro do ficheiro. Modal 'Adicionar Disciplina' com: atalhos rápidos para disciplinas padrão (ARQ, EST, ELE, HID...), formulário para criar disciplinas customizadas (nome, sigla, cor), gerenciamento de sub-pastas com tags e atalhos, lista das disciplinas já cadastradas no ficheiro com opção de remover. Removido o bloqueio 'Configure disciplinas primeiro' — não é mais necessário ter configuração prévia.",
+    tipo: "melhoria",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 22:00:00",
+  },
 ];

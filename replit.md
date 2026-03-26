@@ -36,12 +36,14 @@ A full-stack HR/ERP system built for FC Engenharia. It handles employees, payrol
 - Filtro por obra individual, ordenação por avanço/SPI/valor/prazo/nome
 - Controle de acesso por obra para usuários não-admin (mesma lógica de `listarProjetos`)
 
-## Proj./Doc. Técnicos Module (Rev. 791-795)
+## Proj./Doc. Técnicos Module (Rev. 791-801)
 - Route: `/gestao-documentos` (hierarchical navigation: Ficheiros → Disciplinas → Pastas → Documentos)
 - Backend: `server/routers/gestaodocumentos.ts` (35+ tRPC endpoints)
-- Schema tables: `gd_ficheiros_obra`, `gd_disciplinas` (+ ficheiro_id), `gd_pastas`, `gd_documentos` (+ ficheiro_id, pasta_id), `gd_tipos_documento`, `gd_revisoes`, `gd_revisao_comentarios`, `gd_distribuicao`, `gd_download_log`, `gd_arts`
+- Schema tables: `gd_ficheiros_obra`, `gd_disciplinas` (+ ficheiro_id), `gd_pastas`, `gd_documentos` (+ ficheiro_id, pasta_id), `gd_tipos_documento`, `gd_revisoes`, `gd_revisao_comentarios`, `gd_distribuicao`, `gd_download_log`, `gd_arts`, `gd_tipos_subpasta`
 - New endpoints (Rev.795): listObrasDisponiveis, listFicheiros, createFicheiro, deleteFicheiro, getFicheiroDetail, createDisciplinaFicheiro (auto-creates DWG/PDF/IFC/DOC pastas), deleteDisciplinaFicheiro, listPastas
+- Flow (Rev.801): Create ficheiro first (one-click, no wizard), then add disciplinas with subpastas inside the ficheiro. No pre-configuration required. Modal with quick-add shortcuts for standard disciplinas (ARQ, EST, ELE, HID...) and custom form. Duplicate sigla check. Discipline list with delete option inside modal.
 - Features: Ficheiro de Obra (linked to obras em andamento), Disciplines with color-coded sigla, auto-created folder structure (DWG/PDF/IFC/DOC), Document CRUD per pasta, revision control (create/approve/reject), ART/RRT management with expiry alerts (30 days)
+- ConfigSection (Rev.800): Editable tables for Disciplinas, Tipos de Documento, Sub-pastas with inline edit/delete/create
 - All endpoints enforce companyId ownership validation (tenant isolation)
 - Tab deep-linking via `?tab=` query param
 - Module ID: `gestao-documentos` (registered in shared/modules.ts, ModuleContext, DashboardLayout)
