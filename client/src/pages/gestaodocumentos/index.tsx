@@ -408,15 +408,15 @@ export default function GestaoDocumentos() {
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Projetos/Documentos Técnicos</h1>
-            <p className="text-sm text-gray-400 mt-1">Controle de documentos técnicos, revisões e ARTs/RRTs</p>
+            <h1 className="text-2xl font-bold text-gray-900">Projetos/Documentos Técnicos</h1>
+            <p className="text-sm text-gray-500 mt-1">Controle de documentos técnicos, revisões e ARTs/RRTs</p>
           </div>
           <div className="flex items-center gap-3">
             <Select
               value={selectedObraId ? String(selectedObraId) : "all"}
               onValueChange={(v) => setSelectedObraId(v === "all" ? null : Number(v))}
             >
-              <SelectTrigger className="w-[250px] bg-[#1E293B] border-gray-700 text-white">
+              <SelectTrigger className="w-[250px] bg-white border-gray-200 text-gray-900">
                 <SelectValue placeholder="Todas as obras" />
               </SelectTrigger>
               <SelectContent>
@@ -430,20 +430,20 @@ export default function GestaoDocumentos() {
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
-          <TabsList className="bg-[#1E293B] border border-gray-700">
-            <TabsTrigger value="dash" className="data-[state=active]:bg-[#D4A843] data-[state=active]:text-black">
+          <TabsList className="bg-white border border-gray-200">
+            <TabsTrigger value="dash" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
               <BarChart3 className="w-4 h-4 mr-2" /> DASH
             </TabsTrigger>
-            <TabsTrigger value="painel" className="data-[state=active]:bg-[#D4A843] data-[state=active]:text-black">
+            <TabsTrigger value="painel" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
               <FileBarChart className="w-4 h-4 mr-2" /> Painel
             </TabsTrigger>
-            <TabsTrigger value="documentos" className="data-[state=active]:bg-[#D4A843] data-[state=active]:text-black">
+            <TabsTrigger value="documentos" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
               <FolderOpen className="w-4 h-4 mr-2" /> Documentos
             </TabsTrigger>
-            <TabsTrigger value="arts" className="data-[state=active]:bg-[#D4A843] data-[state=active]:text-black">
+            <TabsTrigger value="arts" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
               <Shield className="w-4 h-4 mr-2" /> ARTs / RRTs
             </TabsTrigger>
-            <TabsTrigger value="configuracoes" className="data-[state=active]:bg-[#D4A843] data-[state=active]:text-black">
+            <TabsTrigger value="configuracoes" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
               <Settings className="w-4 h-4 mr-2" /> Configurações
             </TabsTrigger>
           </TabsList>
@@ -463,14 +463,14 @@ export default function GestaoDocumentos() {
             </div>
 
             {kpis.totalDocumentos === 0 && (
-              <div className="mt-8 text-center py-12 bg-[#1E293B] rounded-lg border border-gray-700">
+              <div className="mt-8 text-center py-12 bg-white rounded-lg border border-gray-200">
                 <FolderOpen className="w-16 h-16 mx-auto text-gray-500 mb-4" />
-                <h3 className="text-lg font-medium text-gray-300 mb-2">Nenhum documento cadastrado</h3>
+                <h3 className="text-lg font-medium text-gray-600 mb-2">Nenhum documento cadastrado</h3>
                 <p className="text-sm text-gray-500 mb-4">
                   {selectedObraId ? "Selecione a aba Documentos para começar a cadastrar." : "Selecione uma obra para ver os documentos."}
                 </p>
                 {selectedObraId && (
-                  <Button onClick={() => { setActiveTab("documentos"); setShowDocModal(true); }} className="bg-[#D4A843] text-black hover:bg-[#C49A3B]">
+                  <Button onClick={() => { setActiveTab("documentos"); setShowDocModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700">
                     <Plus className="w-4 h-4 mr-2" /> Cadastrar Documento
                   </Button>
                 )}
@@ -482,16 +482,16 @@ export default function GestaoDocumentos() {
             <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <Input
                     placeholder="Buscar por código ou título..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="pl-10 w-[280px] bg-[#1E293B] border-gray-700 text-white"
+                    className="pl-10 w-[280px] bg-white border-gray-200 text-gray-900"
                   />
                 </div>
                 <Select value={filterDisciplina} onValueChange={setFilterDisciplina}>
-                  <SelectTrigger className="w-[160px] bg-[#1E293B] border-gray-700 text-white">
+                  <SelectTrigger className="w-[160px] bg-white border-gray-200 text-gray-900">
                     <SelectValue placeholder="Disciplina" />
                   </SelectTrigger>
                   <SelectContent>
@@ -502,7 +502,7 @@ export default function GestaoDocumentos() {
                   </SelectContent>
                 </Select>
                 <Select value={filterTipo} onValueChange={setFilterTipo}>
-                  <SelectTrigger className="w-[160px] bg-[#1E293B] border-gray-700 text-white">
+                  <SelectTrigger className="w-[160px] bg-white border-gray-200 text-gray-900">
                     <SelectValue placeholder="Tipo" />
                   </SelectTrigger>
                   <SelectContent>
@@ -513,7 +513,7 @@ export default function GestaoDocumentos() {
                   </SelectContent>
                 </Select>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[160px] bg-[#1E293B] border-gray-700 text-white">
+                  <SelectTrigger className="w-[160px] bg-white border-gray-200 text-gray-900">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -526,7 +526,7 @@ export default function GestaoDocumentos() {
               </div>
               <Button
                 onClick={() => { resetDocForm(); setEditingDoc(null); setShowDocModal(true); }}
-                className="bg-[#D4A843] text-black hover:bg-[#C49A3B]"
+                className="bg-blue-600 text-white hover:bg-blue-700"
                 disabled={!selectedObraId}
               >
                 <Plus className="w-4 h-4 mr-2" /> Novo Documento
@@ -534,27 +534,27 @@ export default function GestaoDocumentos() {
             </div>
 
             {!selectedObraId ? (
-              <div className="text-center py-12 bg-[#1E293B] rounded-lg border border-gray-700">
+              <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
                 <AlertTriangle className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
-                <p className="text-gray-400">Selecione uma obra no filtro acima para visualizar os documentos.</p>
+                <p className="text-gray-500">Selecione uma obra no filtro acima para visualizar os documentos.</p>
               </div>
             ) : (
-              <div className="bg-[#1E293B] rounded-lg border border-gray-700 overflow-hidden">
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-gray-700 hover:bg-transparent">
-                      <TableHead className="text-gray-400 w-[12%]">Código</TableHead>
-                      <TableHead className="text-gray-400 w-[30%]">Título</TableHead>
-                      <TableHead className="text-gray-400 w-[12%]">Disciplina</TableHead>
-                      <TableHead className="text-gray-400 w-[12%]">Tipo</TableHead>
-                      <TableHead className="text-gray-400 w-[8%] text-center">Rev.</TableHead>
-                      <TableHead className="text-gray-400 w-[14%]">Status</TableHead>
-                      <TableHead className="text-gray-400 w-[12%] text-right">Ações</TableHead>
+                    <TableRow className="border-gray-200 hover:bg-transparent">
+                      <TableHead className="text-gray-500 w-[12%]">Código</TableHead>
+                      <TableHead className="text-gray-500 w-[30%]">Título</TableHead>
+                      <TableHead className="text-gray-500 w-[12%]">Disciplina</TableHead>
+                      <TableHead className="text-gray-500 w-[12%]">Tipo</TableHead>
+                      <TableHead className="text-gray-500 w-[8%] text-center">Rev.</TableHead>
+                      <TableHead className="text-gray-500 w-[14%]">Status</TableHead>
+                      <TableHead className="text-gray-500 w-[12%] text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(documentos.data || []).length === 0 ? (
-                      <TableRow className="border-gray-700">
+                      <TableRow className="border-gray-200">
                         <TableCell colSpan={7} className="text-center text-gray-500 py-8">
                           Nenhum documento encontrado.
                         </TableCell>
@@ -565,9 +565,9 @@ export default function GestaoDocumentos() {
                         const disc = doc.disciplinaId ? discMap.get(doc.disciplinaId) : null;
                         const tipo = doc.tipoDocumentoId ? tipoMap.get(doc.tipoDocumentoId) : null;
                         return (
-                          <TableRow key={doc.id} className="border-gray-700 hover:bg-[#243044] cursor-pointer" onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
-                            <TableCell className="font-mono text-sm text-[#D4A843]">{doc.codigo}</TableCell>
-                            <TableCell className="text-white truncate max-w-[300px]" title={doc.titulo}>{doc.titulo}</TableCell>
+                          <TableRow key={doc.id} className="border-gray-200 hover:bg-gray-100 cursor-pointer" onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
+                            <TableCell className="font-mono text-sm text-blue-600">{doc.codigo}</TableCell>
+                            <TableCell className="text-gray-900 truncate max-w-[300px]" title={doc.titulo}>{doc.titulo}</TableCell>
                             <TableCell>
                               {disc ? (
                                 <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: `${disc.cor}20`, color: disc.cor || "#3b82f6" }}>
@@ -575,8 +575,8 @@ export default function GestaoDocumentos() {
                                 </span>
                               ) : <span className="text-gray-500">-</span>}
                             </TableCell>
-                            <TableCell className="text-gray-300 text-sm">{tipo?.sigla || "-"}</TableCell>
-                            <TableCell className="text-center text-white font-medium">{doc.revisaoAtual || "0"}</TableCell>
+                            <TableCell className="text-gray-600 text-sm">{tipo?.sigla || "-"}</TableCell>
+                            <TableCell className="text-center text-gray-900 font-medium">{doc.revisaoAtual || "0"}</TableCell>
                             <TableCell>
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${st.color}`}>
                                 {st.label}
@@ -585,7 +585,7 @@ export default function GestaoDocumentos() {
                             <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-500 hover:text-gray-900">
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -599,7 +599,7 @@ export default function GestaoDocumentos() {
                                   <DropdownMenuItem onClick={() => { setSelectedDoc(doc); setShowRevModal(true); }}>
                                     <Upload className="w-4 h-4 mr-2" /> Nova Revisão
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-red-400" onClick={() => {
+                                  <DropdownMenuItem className="text-red-600" onClick={() => {
                                     if (confirm("Deseja realmente remover este documento?")) {
                                       deleteDoc.mutate({ id: doc.id, companyId });
                                     }
@@ -621,10 +621,10 @@ export default function GestaoDocumentos() {
 
           <TabsContent value="arts" className="mt-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">ARTs e RRTs</h2>
+              <h2 className="text-lg font-semibold text-gray-900">ARTs e RRTs</h2>
               <Button
                 onClick={() => { resetArtForm(); setEditingArt(null); setShowArtModal(true); }}
-                className="bg-[#D4A843] text-black hover:bg-[#C49A3B]"
+                className="bg-blue-600 text-white hover:bg-blue-700"
                 disabled={!selectedObraId}
               >
                 <Plus className="w-4 h-4 mr-2" /> Nova ART/RRT
@@ -632,28 +632,28 @@ export default function GestaoDocumentos() {
             </div>
 
             {!selectedObraId ? (
-              <div className="text-center py-12 bg-[#1E293B] rounded-lg border border-gray-700">
+              <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
                 <AlertTriangle className="w-12 h-12 mx-auto text-yellow-500 mb-3" />
-                <p className="text-gray-400">Selecione uma obra para visualizar as ARTs/RRTs.</p>
+                <p className="text-gray-500">Selecione uma obra para visualizar as ARTs/RRTs.</p>
               </div>
             ) : (
-              <div className="bg-[#1E293B] rounded-lg border border-gray-700 overflow-hidden">
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-gray-700 hover:bg-transparent">
-                      <TableHead className="text-gray-400">Tipo</TableHead>
-                      <TableHead className="text-gray-400">Número</TableHead>
-                      <TableHead className="text-gray-400">Profissional</TableHead>
-                      <TableHead className="text-gray-400">CREA/CAU</TableHead>
-                      <TableHead className="text-gray-400">Emissão</TableHead>
-                      <TableHead className="text-gray-400">Validade</TableHead>
-                      <TableHead className="text-gray-400">Status</TableHead>
-                      <TableHead className="text-gray-400 text-right">Ações</TableHead>
+                    <TableRow className="border-gray-200 hover:bg-transparent">
+                      <TableHead className="text-gray-500">Tipo</TableHead>
+                      <TableHead className="text-gray-500">Número</TableHead>
+                      <TableHead className="text-gray-500">Profissional</TableHead>
+                      <TableHead className="text-gray-500">CREA/CAU</TableHead>
+                      <TableHead className="text-gray-500">Emissão</TableHead>
+                      <TableHead className="text-gray-500">Validade</TableHead>
+                      <TableHead className="text-gray-500">Status</TableHead>
+                      <TableHead className="text-gray-500 text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(arts.data || []).length === 0 ? (
-                      <TableRow className="border-gray-700">
+                      <TableRow className="border-gray-200">
                         <TableCell colSpan={8} className="text-center text-gray-500 py-8">
                           Nenhuma ART/RRT cadastrada.
                         </TableCell>
@@ -666,13 +666,13 @@ export default function GestaoDocumentos() {
                           return diff >= 0 && diff <= 30;
                         })();
                         return (
-                          <TableRow key={art.id} className="border-gray-700 hover:bg-[#243044]">
-                            <TableCell className="text-white font-medium">{art.tipo}</TableCell>
-                            <TableCell className="text-[#D4A843] font-mono">{art.numero}</TableCell>
-                            <TableCell className="text-gray-300">{art.profissional}</TableCell>
-                            <TableCell className="text-gray-400">{art.creaOuCau || "-"}</TableCell>
-                            <TableCell className="text-gray-400">{art.dataEmissao ? new Date(art.dataEmissao).toLocaleDateString("pt-BR") : "-"}</TableCell>
-                            <TableCell className={isVencendo ? "text-orange-400 font-medium" : "text-gray-400"}>
+                          <TableRow key={art.id} className="border-gray-200 hover:bg-gray-100">
+                            <TableCell className="text-gray-900 font-medium">{art.tipo}</TableCell>
+                            <TableCell className="text-blue-600 font-mono">{art.numero}</TableCell>
+                            <TableCell className="text-gray-600">{art.profissional}</TableCell>
+                            <TableCell className="text-gray-500">{art.creaOuCau || "-"}</TableCell>
+                            <TableCell className="text-gray-500">{art.dataEmissao ? new Date(art.dataEmissao).toLocaleDateString("pt-BR") : "-"}</TableCell>
+                            <TableCell className={isVencendo ? "text-orange-600 font-medium" : "text-gray-500"}>
                               {art.dataValidade ? new Date(art.dataValidade).toLocaleDateString("pt-BR") : "-"}
                               {isVencendo && <AlertTriangle className="inline w-3 h-3 ml-1" />}
                             </TableCell>
@@ -684,7 +684,7 @@ export default function GestaoDocumentos() {
                             <TableCell className="text-right">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400">
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-500">
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -692,7 +692,7 @@ export default function GestaoDocumentos() {
                                   <DropdownMenuItem onClick={() => openEditArt(art)}>
                                     <Pencil className="w-4 h-4 mr-2" /> Editar
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-red-400" onClick={() => {
+                                  <DropdownMenuItem className="text-red-600" onClick={() => {
                                     if (confirm("Remover esta ART/RRT?")) {
                                       deleteArt.mutate({ id: art.id, companyId });
                                     }
@@ -734,27 +734,27 @@ export default function GestaoDocumentos() {
       </div>
 
       <Dialog open={showDocModal} onOpenChange={setShowDocModal}>
-        <DialogContent className="max-w-2xl bg-[#1E293B] border-gray-700 text-white">
+        <DialogContent className="max-w-2xl bg-white border-gray-200 text-gray-900">
           <DialogHeader>
             <DialogTitle>{editingDoc ? "Editar Documento" : "Novo Documento"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-gray-400">Código *</Label>
-              <Input value={docForm.codigo} onChange={(e) => setDocForm({ ...docForm, codigo: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" placeholder="Ex: PRJ-ARQ-001" />
+              <Label className="text-gray-500">Código *</Label>
+              <Input value={docForm.codigo} onChange={(e) => setDocForm({ ...docForm, codigo: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" placeholder="Ex: PRJ-ARQ-001" />
             </div>
             <div>
-              <Label className="text-gray-400">Emitente</Label>
-              <Input value={docForm.emitente} onChange={(e) => setDocForm({ ...docForm, emitente: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" />
+              <Label className="text-gray-500">Emitente</Label>
+              <Input value={docForm.emitente} onChange={(e) => setDocForm({ ...docForm, emitente: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
             </div>
             <div className="col-span-2">
-              <Label className="text-gray-400">Título *</Label>
-              <Input value={docForm.titulo} onChange={(e) => setDocForm({ ...docForm, titulo: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" placeholder="Ex: Projeto Arquitetônico - Bloco A" />
+              <Label className="text-gray-500">Título *</Label>
+              <Input value={docForm.titulo} onChange={(e) => setDocForm({ ...docForm, titulo: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" placeholder="Ex: Projeto Arquitetônico - Bloco A" />
             </div>
             <div>
-              <Label className="text-gray-400">Disciplina</Label>
+              <Label className="text-gray-500">Disciplina</Label>
               <Select value={docForm.disciplinaId || "none"} onValueChange={(v) => setDocForm({ ...docForm, disciplinaId: v === "none" ? "" : v })}>
-                <SelectTrigger className="bg-[#0F172A] border-gray-600 text-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="bg-gray-50 border-gray-300 text-gray-900"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhuma</SelectItem>
                   {(disciplinas.data || []).filter(d => d.ativo).map(d => (
@@ -764,9 +764,9 @@ export default function GestaoDocumentos() {
               </Select>
             </div>
             <div>
-              <Label className="text-gray-400">Tipo de Documento</Label>
+              <Label className="text-gray-500">Tipo de Documento</Label>
               <Select value={docForm.tipoDocumentoId || "none"} onValueChange={(v) => setDocForm({ ...docForm, tipoDocumentoId: v === "none" ? "" : v })}>
-                <SelectTrigger className="bg-[#0F172A] border-gray-600 text-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="bg-gray-50 border-gray-300 text-gray-900"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhum</SelectItem>
                   {(tipos.data || []).filter(t => t.ativo).map(t => (
@@ -776,25 +776,25 @@ export default function GestaoDocumentos() {
               </Select>
             </div>
             <div>
-              <Label className="text-gray-400">Data de Emissão</Label>
-              <Input type="date" value={docForm.dataEmissao} onChange={(e) => setDocForm({ ...docForm, dataEmissao: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" />
+              <Label className="text-gray-500">Data de Emissão</Label>
+              <Input type="date" value={docForm.dataEmissao} onChange={(e) => setDocForm({ ...docForm, dataEmissao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
             </div>
             <div>
-              <Label className="text-gray-400">Data de Validade</Label>
-              <Input type="date" value={docForm.dataValidade} onChange={(e) => setDocForm({ ...docForm, dataValidade: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" />
+              <Label className="text-gray-500">Data de Validade</Label>
+              <Input type="date" value={docForm.dataValidade} onChange={(e) => setDocForm({ ...docForm, dataValidade: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
             </div>
             <div className="col-span-2">
-              <Label className="text-gray-400">Descrição</Label>
-              <Textarea value={docForm.descricao} onChange={(e) => setDocForm({ ...docForm, descricao: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" rows={3} />
+              <Label className="text-gray-500">Descrição</Label>
+              <Textarea value={docForm.descricao} onChange={(e) => setDocForm({ ...docForm, descricao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" rows={3} />
             </div>
             <div className="col-span-2">
-              <Label className="text-gray-400">Tags (separadas por vírgula)</Label>
-              <Input value={docForm.tags} onChange={(e) => setDocForm({ ...docForm, tags: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" placeholder="projeto, estrutural, bloco-a" />
+              <Label className="text-gray-500">Tags (separadas por vírgula)</Label>
+              <Input value={docForm.tags} onChange={(e) => setDocForm({ ...docForm, tags: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" placeholder="projeto, estrutural, bloco-a" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDocModal(false)} className="border-gray-600 text-gray-300">Cancelar</Button>
-            <Button onClick={handleSaveDoc} className="bg-[#D4A843] text-black hover:bg-[#C49A3B]" disabled={createDoc.isPending || updateDoc.isPending}>
+            <Button variant="outline" onClick={() => setShowDocModal(false)} className="border-gray-300 text-gray-600">Cancelar</Button>
+            <Button onClick={handleSaveDoc} className="bg-blue-600 text-white hover:bg-blue-700" disabled={createDoc.isPending || updateDoc.isPending}>
               {createDoc.isPending || updateDoc.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
@@ -802,27 +802,27 @@ export default function GestaoDocumentos() {
       </Dialog>
 
       <Dialog open={showRevModal} onOpenChange={setShowRevModal}>
-        <DialogContent className="max-w-lg bg-[#1E293B] border-gray-700 text-white">
+        <DialogContent className="max-w-lg bg-white border-gray-200 text-gray-900">
           <DialogHeader>
             <DialogTitle>Nova Revisão — {selectedDoc?.codigo}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-gray-400">Número da Revisão *</Label>
-              <Input value={revForm.numero} onChange={(e) => setRevForm({ ...revForm, numero: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" placeholder="Ex: 1, A, R01" />
+              <Label className="text-gray-500">Número da Revisão *</Label>
+              <Input value={revForm.numero} onChange={(e) => setRevForm({ ...revForm, numero: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" placeholder="Ex: 1, A, R01" />
             </div>
             <div>
-              <Label className="text-gray-400">Descrição da Revisão</Label>
-              <Textarea value={revForm.descricao} onChange={(e) => setRevForm({ ...revForm, descricao: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" rows={2} />
+              <Label className="text-gray-500">Descrição da Revisão</Label>
+              <Textarea value={revForm.descricao} onChange={(e) => setRevForm({ ...revForm, descricao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" rows={2} />
             </div>
             <div>
-              <Label className="text-gray-400">Motivo da Revisão</Label>
-              <Textarea value={revForm.motivoRevisao} onChange={(e) => setRevForm({ ...revForm, motivoRevisao: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" rows={2} />
+              <Label className="text-gray-500">Motivo da Revisão</Label>
+              <Textarea value={revForm.motivoRevisao} onChange={(e) => setRevForm({ ...revForm, motivoRevisao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" rows={2} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRevModal(false)} className="border-gray-600 text-gray-300">Cancelar</Button>
-            <Button onClick={handleSaveRev} className="bg-[#D4A843] text-black hover:bg-[#C49A3B]" disabled={createRev.isPending}>
+            <Button variant="outline" onClick={() => setShowRevModal(false)} className="border-gray-300 text-gray-600">Cancelar</Button>
+            <Button onClick={handleSaveRev} className="bg-blue-600 text-white hover:bg-blue-700" disabled={createRev.isPending}>
               {createRev.isPending ? "Salvando..." : "Criar Revisão"}
             </Button>
           </DialogFooter>
@@ -830,16 +830,16 @@ export default function GestaoDocumentos() {
       </Dialog>
 
       <Dialog open={showArtModal} onOpenChange={setShowArtModal}>
-        <DialogContent className="max-w-lg bg-[#1E293B] border-gray-700 text-white">
+        <DialogContent className="max-w-lg bg-white border-gray-200 text-gray-900">
           <DialogHeader>
             <DialogTitle>{editingArt ? "Editar ART/RRT" : "Nova ART/RRT"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-gray-400">Tipo *</Label>
+                <Label className="text-gray-500">Tipo *</Label>
                 <Select value={artForm.tipo} onValueChange={(v) => setArtForm({ ...artForm, tipo: v })}>
-                  <SelectTrigger className="bg-[#0F172A] border-gray-600 text-white"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-gray-50 border-gray-300 text-gray-900"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ART">ART</SelectItem>
                     <SelectItem value="RRT">RRT</SelectItem>
@@ -847,36 +847,36 @@ export default function GestaoDocumentos() {
                 </Select>
               </div>
               <div>
-                <Label className="text-gray-400">Número *</Label>
-                <Input value={artForm.numero} onChange={(e) => setArtForm({ ...artForm, numero: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" />
+                <Label className="text-gray-500">Número *</Label>
+                <Input value={artForm.numero} onChange={(e) => setArtForm({ ...artForm, numero: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
               </div>
             </div>
             <div>
-              <Label className="text-gray-400">Profissional Responsável *</Label>
-              <Input value={artForm.profissional} onChange={(e) => setArtForm({ ...artForm, profissional: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" />
+              <Label className="text-gray-500">Profissional Responsável *</Label>
+              <Input value={artForm.profissional} onChange={(e) => setArtForm({ ...artForm, profissional: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
             </div>
             <div>
-              <Label className="text-gray-400">CREA / CAU</Label>
-              <Input value={artForm.creaOuCau} onChange={(e) => setArtForm({ ...artForm, creaOuCau: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" />
+              <Label className="text-gray-500">CREA / CAU</Label>
+              <Input value={artForm.creaOuCau} onChange={(e) => setArtForm({ ...artForm, creaOuCau: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-gray-400">Data de Emissão</Label>
-                <Input type="date" value={artForm.dataEmissao} onChange={(e) => setArtForm({ ...artForm, dataEmissao: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" />
+                <Label className="text-gray-500">Data de Emissão</Label>
+                <Input type="date" value={artForm.dataEmissao} onChange={(e) => setArtForm({ ...artForm, dataEmissao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
               </div>
               <div>
-                <Label className="text-gray-400">Data de Validade</Label>
-                <Input type="date" value={artForm.dataValidade} onChange={(e) => setArtForm({ ...artForm, dataValidade: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" />
+                <Label className="text-gray-500">Data de Validade</Label>
+                <Input type="date" value={artForm.dataValidade} onChange={(e) => setArtForm({ ...artForm, dataValidade: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
               </div>
             </div>
             <div>
-              <Label className="text-gray-400">Observações</Label>
-              <Textarea value={artForm.observacoes} onChange={(e) => setArtForm({ ...artForm, observacoes: e.target.value })} className="bg-[#0F172A] border-gray-600 text-white" rows={2} />
+              <Label className="text-gray-500">Observações</Label>
+              <Textarea value={artForm.observacoes} onChange={(e) => setArtForm({ ...artForm, observacoes: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" rows={2} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowArtModal(false)} className="border-gray-600 text-gray-300">Cancelar</Button>
-            <Button onClick={handleSaveArt} className="bg-[#D4A843] text-black hover:bg-[#C49A3B]" disabled={createArt.isPending || updateArt.isPending}>
+            <Button variant="outline" onClick={() => setShowArtModal(false)} className="border-gray-300 text-gray-600">Cancelar</Button>
+            <Button onClick={handleSaveArt} className="bg-blue-600 text-white hover:bg-blue-700" disabled={createArt.isPending || updateArt.isPending}>
               {createArt.isPending || updateArt.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
@@ -884,10 +884,10 @@ export default function GestaoDocumentos() {
       </Dialog>
 
       <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-        <DialogContent className="max-w-3xl bg-[#1E293B] border-gray-700 text-white max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl bg-white border-gray-200 text-gray-900 max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-[#D4A843]" />
+              <FileText className="w-5 h-5 text-blue-600" />
               {selectedDoc?.codigo} — {selectedDoc?.titulo}
             </DialogTitle>
           </DialogHeader>
@@ -905,17 +905,17 @@ export default function GestaoDocumentos() {
               </div>
               {selectedDoc.descricao && (
                 <div>
-                  <h4 className="text-sm text-gray-400 mb-1">Descrição</h4>
-                  <p className="text-gray-300 text-sm">{selectedDoc.descricao}</p>
+                  <h4 className="text-sm text-gray-500 mb-1">Descrição</h4>
+                  <p className="text-gray-600 text-sm">{selectedDoc.descricao}</p>
                 </div>
               )}
 
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                  <h4 className="text-sm font-medium text-gray-600 flex items-center gap-2">
                     <History className="w-4 h-4" /> Histórico de Revisões
                   </h4>
-                  <Button size="sm" onClick={() => setShowRevModal(true)} className="bg-[#D4A843] text-black hover:bg-[#C49A3B] h-8">
+                  <Button size="sm" onClick={() => setShowRevModal(true)} className="bg-blue-600 text-white hover:bg-blue-700 h-8">
                     <Plus className="w-3 h-3 mr-1" /> Nova Revisão
                   </Button>
                 </div>
@@ -924,10 +924,10 @@ export default function GestaoDocumentos() {
                 ) : (
                   <div className="space-y-2">
                     {(revisoes.data || []).map(rev => (
-                      <div key={rev.id} className="flex items-center justify-between bg-[#0F172A] p-3 rounded-lg border border-gray-700">
+                      <div key={rev.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm text-[#D4A843]">Rev. {rev.numero}</span>
+                            <span className="font-mono text-sm text-blue-600">Rev. {rev.numero}</span>
                             <span className={`px-2 py-0.5 rounded-full text-xs ${
                               rev.status === "aprovada" ? "bg-green-100 text-green-800" :
                               rev.status === "rejeitada" ? "bg-red-100 text-red-800" :
@@ -936,18 +936,18 @@ export default function GestaoDocumentos() {
                               {rev.status === "aprovada" ? "Aprovada" : rev.status === "rejeitada" ? "Rejeitada" : "Pendente"}
                             </span>
                           </div>
-                          {rev.descricao && <p className="text-xs text-gray-400 mt-1">{rev.descricao}</p>}
+                          {rev.descricao && <p className="text-xs text-gray-500 mt-1">{rev.descricao}</p>}
                           <p className="text-xs text-gray-500 mt-1">
                             {rev.criadoEm ? new Date(rev.criadoEm).toLocaleString("pt-BR") : ""}
                           </p>
                         </div>
                         {rev.status === "pendente" && (
                           <div className="flex items-center gap-2">
-                            <Button size="sm" variant="outline" className="h-7 text-green-400 border-green-700 hover:bg-green-900/30"
+                            <Button size="sm" variant="outline" className="h-7 text-green-600 border-green-300 hover:bg-green-50"
                               onClick={() => aprovarRev.mutate({ id: rev.id, companyId, documentoId: selectedDoc.id })}>
                               <CheckCircle className="w-3 h-3 mr-1" /> Aprovar
                             </Button>
-                            <Button size="sm" variant="outline" className="h-7 text-red-400 border-red-700 hover:bg-red-900/30"
+                            <Button size="sm" variant="outline" className="h-7 text-red-600 border-red-300 hover:bg-red-50"
                               onClick={() => rejeitarRev.mutate({ id: rev.id, companyId, documentoId: selectedDoc.id })}>
                               <XCircle className="w-3 h-3 mr-1" /> Rejeitar
                             </Button>
@@ -990,24 +990,24 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
 
   const getGaugeColor = (val: number, type: "high" | "low") => {
     if (type === "high") {
-      if (val >= 80) return "text-green-400";
-      if (val >= 50) return "text-yellow-400";
-      return "text-red-400";
+      if (val >= 80) return "text-green-600";
+      if (val >= 50) return "text-yellow-600";
+      return "text-red-600";
     }
-    if (val <= 2) return "text-green-400";
-    if (val <= 5) return "text-yellow-400";
-    return "text-red-400";
+    if (val <= 2) return "text-green-600";
+    if (val <= 5) return "text-yellow-600";
+    return "text-red-600";
   };
 
   const getStatusBg = (val: number, type: "high" | "low") => {
     if (type === "high") {
-      if (val >= 80) return "border-green-500/30 bg-green-500/10";
-      if (val >= 50) return "border-yellow-500/30 bg-yellow-500/10";
-      return "border-red-500/30 bg-red-500/10";
+      if (val >= 80) return "border-green-200 bg-green-50";
+      if (val >= 50) return "border-yellow-200 bg-yellow-50";
+      return "border-red-200 bg-red-50";
     }
-    if (val <= 2) return "border-green-500/30 bg-green-500/10";
-    if (val <= 5) return "border-yellow-500/30 bg-yellow-500/10";
-    return "border-red-500/30 bg-red-500/10";
+    if (val <= 2) return "border-green-200 bg-green-50";
+    if (val <= 5) return "border-yellow-200 bg-yellow-50";
+    return "border-red-200 bg-red-50";
   };
 
   const maxTendencia = Math.max(...tendencia.map((t: any) => Math.max(t.documentos, t.revisoes)), 1);
@@ -1015,8 +1015,8 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 mb-2">
-        <BarChart3 className="w-5 h-5 text-[#D4A843]" />
-        <h2 className="text-lg font-bold text-white">Dashboard Executivo — Gestão Documental</h2>
+        <BarChart3 className="w-5 h-5 text-blue-600" />
+        <h2 className="text-lg font-bold text-gray-900">Dashboard Executivo — Gestão Documental</h2>
       </div>
       <p className="text-xs text-gray-500 -mt-4 ml-7">Indicadores baseados em ISO 19650, PMBOK 7, AACE RP e Last Planner System</p>
 
@@ -1074,9 +1074,9 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-blue-400" /> Pipeline Documental
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-600" /> Pipeline Documental
           </h3>
           <div className="space-y-3">
             <PipelineBar label="Em Elaboração" value={emElaboracao} total={totalDocs} color="bg-yellow-500" />
@@ -1084,15 +1084,15 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
             <PipelineBar label="Aprovados" value={aprovados} total={totalDocs} color="bg-green-500" />
             <PipelineBar label="Reprovados" value={reprovados} total={totalDocs} color="bg-red-500" />
           </div>
-          <div className="mt-4 pt-3 border-t border-gray-700 flex items-center justify-between">
+          <div className="mt-4 pt-3 border-t border-gray-200 flex items-center justify-between">
             <span className="text-xs text-gray-500">Total Ativos</span>
-            <span className="text-sm font-bold text-white">{docsAtivos}</span>
+            <span className="text-sm font-bold text-gray-900">{docsAtivos}</span>
           </div>
         </div>
 
-        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-orange-400" /> Alertas Críticos
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-orange-600" /> Alertas Críticos
           </h3>
           <div className="space-y-2">
             <AlertRow
@@ -1126,15 +1126,15 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
               severity={artsVencidas > 0 ? "critical" : "ok"}
             />
           </div>
-          <div className="mt-4 pt-3 border-t border-gray-700 flex items-center justify-between">
+          <div className="mt-4 pt-3 border-t border-gray-200 flex items-center justify-between">
             <span className="text-xs text-gray-500">Total ARTs</span>
-            <span className="text-sm font-bold text-white">{totalArts}</span>
+            <span className="text-sm font-bold text-gray-900">{totalArts}</span>
           </div>
         </div>
 
-        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-purple-400" /> Por Disciplina
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-purple-600" /> Por Disciplina
           </h3>
           {porDisciplina.length === 0 ? (
             <p className="text-gray-500 text-sm text-center py-6">Nenhuma disciplina cadastrada.</p>
@@ -1152,17 +1152,17 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-xs text-gray-400 truncate">{d.nome}</span>
+                        <span className="text-xs text-gray-500 truncate">{d.nome}</span>
                         <span className="text-[10px] text-gray-500 ml-1 shrink-0">{d.aprovados}/{d.total}</span>
                       </div>
-                      <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all"
                           style={{ width: `${pct}%`, backgroundColor: d.cor }}
                         />
                       </div>
                     </div>
-                    <span className="text-[10px] font-medium text-gray-400 w-8 text-right">{pct}%</span>
+                    <span className="text-[10px] font-medium text-gray-500 w-8 text-right">{pct}%</span>
                   </div>
                 );
               })}
@@ -1172,9 +1172,9 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-cyan-400" /> Tendência — Últimos 7 Meses
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-cyan-600" /> Tendência — Últimos 7 Meses
           </h3>
           {tendencia.length === 0 ? (
             <p className="text-gray-500 text-sm text-center py-6">Sem dados.</p>
@@ -1211,9 +1211,9 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
           </div>
         </div>
 
-        <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-[#D4A843]" /> Últimos Documentos
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-blue-600" /> Últimos Documentos
           </h3>
           {docsRecentes.length === 0 ? (
             <p className="text-gray-500 text-sm text-center py-6">Nenhum documento cadastrado.</p>
@@ -1222,22 +1222,22 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
               {docsRecentes.map((doc: any) => {
                 const st = doc.status || "em_elaboracao";
                 const stInfo: Record<string, { bg: string; text: string; label: string }> = {
-                  em_elaboracao: { bg: "bg-yellow-500/15", text: "text-yellow-400", label: "Elaboração" },
-                  em_revisao: { bg: "bg-blue-500/15", text: "text-blue-400", label: "Revisão" },
-                  aprovado: { bg: "bg-green-500/15", text: "text-green-400", label: "Aprovado" },
-                  reprovado: { bg: "bg-red-500/15", text: "text-red-400", label: "Reprovado" },
-                  cancelado: { bg: "bg-gray-500/15", text: "text-gray-400", label: "Cancelado" },
+                  em_elaboracao: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Elaboração" },
+                  em_revisao: { bg: "bg-blue-100", text: "text-blue-700", label: "Revisão" },
+                  aprovado: { bg: "bg-green-100", text: "text-green-700", label: "Aprovado" },
+                  reprovado: { bg: "bg-red-100", text: "text-red-700", label: "Reprovado" },
+                  cancelado: { bg: "bg-gray-500/15", text: "text-gray-500", label: "Cancelado" },
                   obsoleto: { bg: "bg-gray-600/15", text: "text-gray-500", label: "Obsoleto" },
                 };
                 const s = stInfo[st] || stInfo.em_elaboracao;
                 return (
-                  <div key={doc.id} className="flex items-center justify-between p-2.5 rounded bg-[#0F172A] border border-gray-800">
+                  <div key={doc.id} className="flex items-center justify-between p-2.5 rounded bg-gray-50 border border-gray-200">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-[#D4A843]">{doc.codigo}</span>
+                        <span className="text-xs font-mono text-blue-600">{doc.codigo}</span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.bg} ${s.text}`}>{s.label}</span>
                       </div>
-                      <p className="text-xs text-gray-400 truncate mt-0.5">{doc.titulo}</p>
+                      <p className="text-xs text-gray-500 truncate mt-0.5">{doc.titulo}</p>
                     </div>
                     <span className="text-[10px] text-gray-600 shrink-0 ml-2">
                       {doc.criadoEm ? new Date(doc.criadoEm).toLocaleDateString("pt-BR") : ""}
@@ -1250,7 +1250,7 @@ function DashboardExecutivo({ kpis }: { kpis: any }) {
         </div>
       </div>
 
-      <div className="bg-[#0F172A] rounded-lg border border-gray-800 p-3">
+      <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
         <p className="text-[10px] text-gray-600 leading-relaxed">
           <strong className="text-gray-500">Referências:</strong> ISO 19650 (Information Management using BIM) · PMBOK 7th Ed. (Project Management Institute) · AACE International Recommended Practices · Last Planner System (Lean Construction Institute) · PRINCE2 Configuration Management · CII Best Practices for Document Control in Capital Projects
         </p>
@@ -1269,10 +1269,10 @@ function GaugeCard({ title, subtitle, value, suffix, icon: Icon, color, bg, tool
         <Gauge className="w-3 h-3 text-gray-600" />
       </div>
       <p className={`text-2xl font-bold ${color}`}>{value}{suffix}</p>
-      <p className="text-[11px] font-medium text-white mt-0.5 leading-tight">{title}</p>
+      <p className="text-[11px] font-medium text-gray-900 mt-0.5 leading-tight">{title}</p>
       <p className="text-[10px] text-gray-500 leading-tight">{subtitle}</p>
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 p-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50">
-        <p className="text-[10px] text-gray-300 leading-relaxed">{tooltip}</p>
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 p-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50">
+        <p className="text-[10px] text-gray-600 leading-relaxed">{tooltip}</p>
       </div>
     </div>
   );
@@ -1283,10 +1283,10 @@ function PipelineBar({ label, value, total, color }: { label: string; value: num
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-gray-400">{label}</span>
-        <span className="text-xs font-medium text-white">{value} <span className="text-gray-600">({pct}%)</span></span>
+        <span className="text-xs text-gray-500">{label}</span>
+        <span className="text-xs font-medium text-gray-900">{value} <span className="text-gray-600">({pct}%)</span></span>
       </div>
-      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -1295,9 +1295,9 @@ function PipelineBar({ label, value, total, color }: { label: string; value: num
 
 function AlertRow({ icon: Icon, label, value, severity }: { icon: any; label: string; value: number; severity: "ok" | "warning" | "critical" }) {
   const colors = {
-    ok: "text-green-400 bg-green-500/10",
-    warning: "text-yellow-400 bg-yellow-500/10",
-    critical: "text-red-400 bg-red-500/10",
+    ok: "text-green-700 bg-green-100",
+    warning: "text-yellow-700 bg-yellow-100",
+    critical: "text-red-700 bg-red-100",
   };
   const iconColor = {
     ok: "text-green-500",
@@ -1305,10 +1305,10 @@ function AlertRow({ icon: Icon, label, value, severity }: { icon: any; label: st
     critical: "text-red-500",
   };
   return (
-    <div className="flex items-center justify-between p-2 rounded bg-[#0F172A] border border-gray-800">
+    <div className="flex items-center justify-between p-2 rounded bg-gray-50 border border-gray-200">
       <div className="flex items-center gap-2">
         <Icon className={`w-3.5 h-3.5 ${iconColor[severity]}`} />
-        <span className="text-xs text-gray-400">{label}</span>
+        <span className="text-xs text-gray-500">{label}</span>
       </div>
       <span className={`text-xs font-bold px-2 py-0.5 rounded ${colors[severity]}`}>{value}</span>
     </div>
@@ -1317,28 +1317,28 @@ function AlertRow({ icon: Icon, label, value, severity }: { icon: any; label: st
 
 function KpiCard({ title, value, icon: Icon, color }: { title: string; value: number; icon: any; color: string }) {
   const colors: Record<string, string> = {
-    blue: "border-blue-500/30 bg-blue-500/10",
-    yellow: "border-yellow-500/30 bg-yellow-500/10",
-    green: "border-green-500/30 bg-green-500/10",
-    purple: "border-purple-500/30 bg-purple-500/10",
-    orange: "border-orange-500/30 bg-orange-500/10",
-    red: "border-red-500/30 bg-red-500/10",
+    blue: "border-blue-200 bg-blue-50",
+    yellow: "border-yellow-200 bg-yellow-50",
+    green: "border-green-200 bg-green-50",
+    purple: "border-purple-200 bg-purple-50",
+    orange: "border-orange-200 bg-orange-50",
+    red: "border-red-200 bg-red-50",
   };
   const iconColors: Record<string, string> = {
-    blue: "text-blue-400",
-    yellow: "text-yellow-400",
-    green: "text-green-400",
-    purple: "text-purple-400",
-    orange: "text-orange-400",
-    red: "text-red-400",
+    blue: "text-blue-600",
+    yellow: "text-yellow-600",
+    green: "text-green-600",
+    purple: "text-purple-600",
+    orange: "text-orange-600",
+    red: "text-red-600",
   };
   return (
     <div className={`rounded-lg border p-4 ${colors[color] || colors.blue}`}>
       <div className="flex items-center justify-between mb-2">
         <Icon className={`w-5 h-5 ${iconColors[color] || iconColors.blue}`} />
       </div>
-      <p className="text-2xl font-bold text-white">{value}</p>
-      <p className="text-xs text-gray-400 mt-1">{title}</p>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      <p className="text-xs text-gray-500 mt-1">{title}</p>
     </div>
   );
 }
@@ -1347,7 +1347,7 @@ function InfoCell({ label, value }: { label: string; value: any }) {
   return (
     <div>
       <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-      <div className="text-sm text-gray-200">{value || "-"}</div>
+      <div className="text-sm text-gray-700">{value || "-"}</div>
     </div>
   );
 }
@@ -1363,29 +1363,29 @@ function ConfigSection({ title, items, onAdd, fieldLabel1, fieldLabel2 }: {
   const [sigla, setSigla] = useState("");
 
   return (
-    <div className="bg-[#1E293B] rounded-lg border border-gray-700 p-4">
-      <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
       <div className="flex items-end gap-3 mb-4">
         <div className="flex-1">
-          <Label className="text-gray-400 text-sm">{fieldLabel1}</Label>
-          <Input value={nome} onChange={(e) => setNome(e.target.value)} className="bg-[#0F172A] border-gray-600 text-white" />
+          <Label className="text-gray-500 text-sm">{fieldLabel1}</Label>
+          <Input value={nome} onChange={(e) => setNome(e.target.value)} className="bg-gray-50 border-gray-300 text-gray-900" />
         </div>
         <div className="w-32">
-          <Label className="text-gray-400 text-sm">{fieldLabel2}</Label>
-          <Input value={sigla} onChange={(e) => setSigla(e.target.value)} className="bg-[#0F172A] border-gray-600 text-white" />
+          <Label className="text-gray-500 text-sm">{fieldLabel2}</Label>
+          <Input value={sigla} onChange={(e) => setSigla(e.target.value)} className="bg-gray-50 border-gray-300 text-gray-900" />
         </div>
-        <Button onClick={() => { if (nome && sigla) { onAdd(nome, sigla); setNome(""); setSigla(""); } }} className="bg-[#D4A843] text-black hover:bg-[#C49A3B]">
+        <Button onClick={() => { if (nome && sigla) { onAdd(nome, sigla); setNome(""); setSigla(""); } }} className="bg-blue-600 text-white hover:bg-blue-700">
           <Plus className="w-4 h-4 mr-1" /> Adicionar
         </Button>
       </div>
       <div className="space-y-2">
         {items.map((item) => (
-          <div key={item.id} className="flex items-center justify-between bg-[#0F172A] p-3 rounded border border-gray-700">
+          <div key={item.id} className="flex items-center justify-between bg-gray-50 p-3 rounded border border-gray-200">
             <div className="flex items-center gap-3">
-              <span className="px-2 py-0.5 bg-[#D4A843]/20 text-[#D4A843] rounded text-xs font-mono">{item.sigla}</span>
-              <span className="text-gray-300">{item.nome}</span>
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-mono">{item.sigla}</span>
+              <span className="text-gray-600">{item.nome}</span>
             </div>
-            <span className={`text-xs px-2 py-0.5 rounded ${item.ativo !== false ? "bg-green-900/30 text-green-400" : "bg-red-900/30 text-red-400"}`}>
+            <span className={`text-xs px-2 py-0.5 rounded ${item.ativo !== false ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
               {item.ativo !== false ? "Ativo" : "Inativo"}
             </span>
           </div>
