@@ -7251,35 +7251,30 @@ function EfetivoObraTab({ proj }: { proj: any }) {
   );
 
   const equipe = useMemo(() =>
-    equipeRaw.filter((e: any) => e.effectiveStatus !== "Desligado" && e.effectiveStatus !== "Demitido"),
+    equipeRaw
+      .filter((e: any) => e.effectiveStatus !== "Desligado" && e.effectiveStatus !== "Demitido")
+      .map((e: any) => ({ ...e, effectiveStatus: e.effectiveStatus || "Ativo" })),
     [equipeRaw]
   );
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    equipe.forEach((e: any) => {
-      const s = e.effectiveStatus || "Ativo";
-      c[s] = (c[s] || 0) + 1;
-    });
+    equipe.forEach((e: any) => { c[e.effectiveStatus] = (c[e.effectiveStatus] || 0) + 1; });
     return c;
   }, [equipe]);
 
   const funcaoMap = useMemo(() => {
-    const m = new Map<string, { total: number; byStatus: Record<string, number> }>();
-    const filtered = filtroStatus === "todos" ? equipe : equipe.filter((e: any) => e.effectiveStatus === filtroStatus);
-    filtered.forEach((e: any) => {
+    const m = new Map<string, number>();
+    equipe.forEach((e: any) => {
+      if (filtroStatus !== "todos" && e.effectiveStatus !== filtroStatus) return;
       const f = e.funcao || e.cargo || "Não informado";
-      if (!m.has(f)) m.set(f, { total: 0, byStatus: {} });
-      const entry = m.get(f)!;
-      entry.total++;
-      const s = e.effectiveStatus || "Ativo";
-      entry.byStatus[s] = (entry.byStatus[s] || 0) + 1;
+      m.set(f, (m.get(f) || 0) + 1);
     });
-    return Array.from(m.entries()).sort((a, b) => b[1].total - a[1].total);
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
   }, [equipe, filtroStatus]);
 
   const listaFiltrada = useMemo(() => {
-    let lista = filtroStatus === "todos" ? equipe : equipe.filter((e: any) => e.effectiveStatus === filtroStatus);
+    let lista = filtroStatus === "todos" ? [...equipe] : equipe.filter((e: any) => e.effectiveStatus === filtroStatus);
     if (busca) {
       const q = busca.toLowerCase();
       lista = lista.filter((e: any) =>
@@ -7288,10 +7283,11 @@ function EfetivoObraTab({ proj }: { proj: any }) {
         (e.cargo || "").toLowerCase().includes(q)
       );
     }
+    lista.sort((a: any, b: any) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || ""));
     return lista;
   }, [equipe, filtroStatus, busca]);
 
-  const maxBar = funcaoMap.length > 0 ? funcaoMap[0][1].total : 1;
+  const maxBar = funcaoMap.length > 0 ? funcaoMap[0][1] : 1;
 
   if (!obraId) {
     return (
@@ -7311,138 +7307,133 @@ function EfetivoObraTab({ proj }: { proj: any }) {
     );
   }
 
+  const statusPills: { key: string; label: string; count: number; dot: string; activeBg: string; activeText: string; activeBorder: string }[] = [
+    { key: "todos",          label: "Total",        count: equipe.length,       dot: "bg-blue-500",    activeBg: "bg-blue-50",    activeText: "text-blue-700",    activeBorder: "border-blue-400" },
+    { key: "Ativo",          label: "Ativos",       count: counts.Ativo || 0,   dot: "bg-emerald-500", activeBg: "bg-emerald-50", activeText: "text-emerald-700", activeBorder: "border-emerald-400" },
+    { key: "Aviso",          label: "Aviso Prévio", count: counts.Aviso || 0,   dot: "bg-red-500",     activeBg: "bg-red-50",     activeText: "text-red-700",     activeBorder: "border-red-400" },
+    { key: "AvisoDispensado",label: "Dispensados",  count: counts.AvisoDispensado || 0, dot: "bg-red-400", activeBg: "bg-red-50", activeText: "text-red-800",     activeBorder: "border-red-400" },
+    { key: "Ferias",         label: "Férias",       count: counts.Ferias || 0,  dot: "bg-amber-500",   activeBg: "bg-amber-50",   activeText: "text-amber-700",   activeBorder: "border-amber-400" },
+    { key: "Afastado",       label: "Afastados",    count: counts.Afastado || 0,dot: "bg-purple-500",  activeBg: "bg-purple-50",  activeText: "text-purple-700",  activeBorder: "border-purple-400" },
+    { key: "Licenca",        label: "Licença",      count: counts.Licenca || 0, dot: "bg-purple-400",  activeBg: "bg-purple-50",  activeText: "text-purple-600",  activeBorder: "border-purple-400" },
+    { key: "Recluso",        label: "Reclusos",     count: counts.Recluso || 0, dot: "bg-slate-400",   activeBg: "bg-slate-100",  activeText: "text-slate-700",   activeBorder: "border-slate-400" },
+  ].filter(p => p.key === "todos" || p.count > 0);
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-blue-100">
-          <HardHat className="h-5 w-5 text-blue-700" />
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-blue-100">
+            <HardHat className="h-5 w-5 text-blue-700" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">Efetivo da Obra</h2>
+            <p className="text-xs text-muted-foreground">{equipe.length} funcionário(s) alocado(s)</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-lg font-bold text-slate-800">Efetivo da Obra</h2>
-          <p className="text-xs text-muted-foreground">{equipe.length} funcionário(s) alocado(s) · exclui desligados</p>
-        </div>
+        <input
+          type="text"
+          placeholder="Buscar nome ou função..."
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm w-full sm:w-64 bg-white shadow-sm"
+        />
       </div>
 
       {equipe.length === 0 ? (
         <div className="text-center py-12 rounded-xl border border-dashed border-blue-200 bg-blue-50">
           <HardHat className="h-10 w-10 mx-auto mb-3 text-blue-300" />
           <p className="text-sm font-medium text-blue-600">Nenhum funcionário alocado nesta obra</p>
-          <p className="text-xs text-muted-foreground mt-1">Aloque funcionários pela tela de Obras para vê-los aqui.</p>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <button
-              onClick={() => setFiltroStatus("todos")}
-              className={`text-center p-3 rounded-xl border transition-all cursor-pointer ${filtroStatus === "todos" ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200" : "border-slate-100 bg-white hover:bg-slate-50"}`}
-            >
-              <p className="text-2xl font-bold text-slate-800">{equipe.length}</p>
-              <p className="text-[10px] text-slate-500 mt-1 font-medium">Total</p>
-            </button>
-            {STATUS_ORDER.filter(s => (counts[s] || 0) > 0).map(s => {
-              const colors: Record<string, { bg: string; text: string; ring: string; border: string }> = {
-                Ativo:           { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-200", border: "border-emerald-400" },
-                Aviso:           { bg: "bg-red-50",     text: "text-red-700",     ring: "ring-red-200",     border: "border-red-400" },
-                AvisoDispensado: { bg: "bg-red-50",     text: "text-red-800",     ring: "ring-red-200",     border: "border-red-400" },
-                Ferias:          { bg: "bg-amber-50",   text: "text-amber-700",   ring: "ring-amber-200",   border: "border-amber-400" },
-                Afastado:        { bg: "bg-purple-50",  text: "text-purple-700",  ring: "ring-purple-200",  border: "border-purple-400" },
-                Licenca:         { bg: "bg-purple-50",  text: "text-purple-600",  ring: "ring-purple-200",  border: "border-purple-400" },
-                Recluso:         { bg: "bg-slate-50",   text: "text-slate-700",   ring: "ring-slate-200",   border: "border-slate-400" },
-              };
-              const c = colors[s] || colors.Ativo;
+          <div className="flex items-center gap-2 flex-wrap bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-2.5">
+            {statusPills.map(p => {
+              const active = filtroStatus === p.key;
               return (
                 <button
-                  key={s}
-                  onClick={() => setFiltroStatus(filtroStatus === s ? "todos" : s)}
-                  className={`text-center p-3 rounded-xl border transition-all cursor-pointer ${filtroStatus === s ? `${c.border} ${c.bg} ring-2 ${c.ring}` : "border-slate-100 bg-white hover:bg-slate-50"}`}
+                  key={p.key}
+                  onClick={() => setFiltroStatus(filtroStatus === p.key && p.key !== "todos" ? "todos" : p.key)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${active ? `${p.activeBg} ${p.activeText} ${p.activeBorder} border shadow-sm` : "text-slate-500 hover:bg-slate-50 border border-transparent"}`}
                 >
-                  <p className={`text-2xl font-bold ${c.text}`}>{counts[s]}</p>
-                  <p className={`text-[10px] mt-1 font-medium ${c.text}`}>{STATUS_LABELS[s]}</p>
+                  <span className={`w-2 h-2 rounded-full ${p.dot} shrink-0`} />
+                  <span className="font-bold">{p.count}</span>
+                  <span>{p.label}</span>
                 </button>
               );
             })}
+            {filtroStatus !== "todos" && (
+              <button onClick={() => setFiltroStatus("todos")} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1">
+                <X className="h-3 w-3" /> Limpar
+              </button>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-              <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-blue-500" />
-                Distribuição por Função
-                {filtroStatus !== "todos" && <span className="text-[10px] font-normal text-slate-400 ml-1">({STATUS_LABELS[filtroStatus]})</span>}
-              </p>
-              <div className="space-y-1.5 max-h-[400px] overflow-y-auto pr-1">
-                {funcaoMap.map(([funcao, data]) => (
-                  <div key={funcao} className="flex items-center gap-2">
-                    <span className="text-[11px] text-slate-600 w-44 truncate text-right shrink-0" title={funcao}>{funcao}</span>
-                    <div className="flex-1 h-6 bg-slate-100 rounded-md overflow-hidden">
-                      <div
-                        className="h-full bg-blue-500 rounded-md flex items-center justify-end pr-1.5 text-[10px] font-bold text-white transition-all"
-                        style={{ width: `${Math.max((data.total / maxBar) * 100, 8)}%`, minWidth: 28 }}
-                      >
-                        {data.total}
-                      </div>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-blue-500" />
+              Distribuição por Função
+              {filtroStatus !== "todos" && <span className="text-[10px] font-normal text-slate-400">— {statusPills.find(p => p.key === filtroStatus)?.label}</span>}
+              <span className="text-[10px] font-normal text-slate-400 ml-auto">{funcaoMap.reduce((s, [, c]) => s + c, 0)} funcionários em {funcaoMap.length} funções</span>
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+              {funcaoMap.map(([funcao, qtd]) => (
+                <div key={funcao} className="flex items-center gap-2 py-0.5">
+                  <span className="text-[11px] text-slate-600 w-40 truncate text-right shrink-0" title={funcao}>{funcao}</span>
+                  <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded flex items-center justify-end pr-1.5 text-[10px] font-bold text-white transition-all"
+                      style={{ width: `${Math.max((qtd / maxBar) * 100, 10)}%`, minWidth: 24 }}
+                    >
+                      {qtd}
                     </div>
                   </div>
-                ))}
-                {funcaoMap.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
-                <p className="text-xs font-semibold text-slate-600 flex items-center gap-2">
-                  <Users className="h-4 w-4 text-blue-500" /> Lista de Funcionários
-                  <span className="text-[10px] font-normal text-slate-400">({listaFiltrada.length})</span>
-                </p>
-                <div className="ml-auto">
-                  <input
-                    type="text"
-                    placeholder="Buscar nome ou função..."
-                    value={busca}
-                    onChange={e => setBusca(e.target.value)}
-                    className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs w-52"
-                  />
                 </div>
-              </div>
-              <div className="overflow-y-auto max-h-[400px]">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
-                    <tr>
-                      <th className="text-left px-3 py-2 font-semibold text-slate-500">Nome</th>
-                      <th className="text-left px-3 py-2 font-semibold text-slate-500">Função</th>
-                      <th className="text-left px-3 py-2 font-semibold text-slate-500">Status</th>
-                      <th className="text-left px-3 py-2 font-semibold text-slate-500">Admissão</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {listaFiltrada.map((e: any, i: number) => (
-                      <tr key={e.id || i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                        <td className="px-3 py-2 font-medium text-slate-800">{e.nomeCompleto}</td>
-                        <td className="px-3 py-2 text-slate-600">{e.funcao || e.cargo || "—"}</td>
-                        <td className="px-3 py-2">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[e.effectiveStatus] || "bg-slate-100 text-slate-600"}`}>
-                            {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-slate-500">{e.dataAdmissao ? new Date(e.dataAdmissao).toLocaleDateString("pt-BR") : "—"}</td>
-                      </tr>
-                    ))}
-                    {listaFiltrada.length === 0 && (
-                      <tr><td colSpan={4} className="text-center py-8 text-slate-400">Nenhum resultado encontrado</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              ))}
+              {funcaoMap.length === 0 && <p className="text-xs text-slate-400 text-center py-4 col-span-2">Nenhum resultado</p>}
             </div>
           </div>
 
-          {filtroStatus !== "todos" && (
-            <div className="flex justify-center">
-              <button onClick={() => setFiltroStatus("todos")} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors">
-                <X className="h-3 w-3" /> Limpar filtro — mostrar todos
-              </button>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50">
+              <Users className="h-4 w-4 text-blue-500" />
+              <span className="text-xs font-semibold text-slate-600">Lista de Funcionários</span>
+              <span className="text-[10px] text-slate-400">({listaFiltrada.length})</span>
+              {filtroStatus !== "todos" && (
+                <span className={`ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[filtroStatus] || "bg-slate-100 text-slate-600"}`}>
+                  {STATUS_LABELS[filtroStatus]}
+                </span>
+              )}
             </div>
-          )}
+            <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 480px)", minHeight: 200 }}>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                  <tr>
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Função / Cargo</th>
+                    <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Admissão</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {listaFiltrada.map((e: any, i: number) => (
+                    <tr key={e.id || i} className="hover:bg-blue-50/30 transition-colors">
+                      <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">{e.nomeCompleto}</td>
+                      <td className="px-4 py-2 text-slate-600 text-[13px]">{e.funcao || e.cargo || "—"}</td>
+                      <td className="px-4 py-2 text-center">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[e.effectiveStatus] || "bg-slate-100 text-slate-600"}`}>
+                          {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-slate-500 text-[13px]">{e.dataAdmissao ? new Date(e.dataAdmissao).toLocaleDateString("pt-BR") : "—"}</td>
+                    </tr>
+                  ))}
+                  {listaFiltrada.length === 0 && (
+                    <tr><td colSpan={4} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </>
       )}
     </div>
