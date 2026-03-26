@@ -312,6 +312,12 @@ export default function Telemetria() {
               <PerfilUsuario userId={selectedUser} companyId={companyId} periodo={periodo} onBack={() => setSelectedUser(null)} />
             ) : dashQuery.isLoading ? (
               <div className="flex justify-center p-12"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" /></div>
+            ) : dash && dash.totalAcessos === 0 ? (
+              <div className="text-center py-20">
+                <Monitor className="w-16 h-16 mx-auto text-gray-200 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-500 mb-2">Nenhum dado de uso registrado</h3>
+                <p className="text-sm text-gray-400 max-w-md mx-auto">Quando os usuários navegarem pela plataforma, as estatísticas de uso aparecerão aqui automaticamente.</p>
+              </div>
             ) : dash ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -480,6 +486,12 @@ export default function Telemetria() {
           <TabsContent value="ia" className="space-y-4 mt-4">
             {iaQuery.isLoading ? (
               <div className="flex justify-center p-12"><div className="animate-spin h-8 w-8 border-4 border-purple-500 border-t-transparent rounded-full" /></div>
+            ) : ia && ia.totalConsultas === 0 ? (
+              <div className="text-center py-20">
+                <Brain className="w-16 h-16 mx-auto text-gray-200 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-500 mb-2">Nenhuma conversa com a IA registrada</h3>
+                <p className="text-sm text-gray-400 max-w-md mx-auto">Quando os usuários utilizarem o assistente de IA nos módulos, as estatísticas aparecerão aqui automaticamente.</p>
+              </div>
             ) : ia ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

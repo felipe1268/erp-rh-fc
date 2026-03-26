@@ -5424,4 +5424,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 23:55:00",
   },
+  {
+    version: 806,
+    titulo: "Telemetria responsiva + estados vazios visuais nas abas",
+    descricao: "Melhorias na tela de Telemetria & Analytics: (1) Aba 'Analytics da IA' agora mostra mensagem visual clara quando não há conversas registradas, em vez de KPIs com zeros e cards 'Sem dados'. (2) Aba 'Uso da Plataforma' idem quando totalAcessos = 0. (3) Layout responsivo mantido com grid adaptativo.",
+    tipo: "melhoria",
+    modulos: "Telemetria",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 00:10:00",
+  },
 ];
