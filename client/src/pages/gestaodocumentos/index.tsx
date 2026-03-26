@@ -1062,8 +1062,7 @@ export default function GestaoDocumentos() {
                               }}
                             />
                           </TableHead>
-                          <TableHead className="text-gray-500 text-xs w-[120px]">Código</TableHead>
-                          <TableHead className="text-gray-500 text-xs">Título</TableHead>
+                          <TableHead className="text-gray-500 text-xs">Título / Código</TableHead>
                           <TableHead className="text-gray-500 text-xs w-[80px]">Disciplina</TableHead>
                           <TableHead className="text-gray-500 text-xs w-[60px] text-center">Rev.</TableHead>
                           <TableHead className="text-gray-500 text-xs w-[110px]">Status</TableHead>
@@ -1090,7 +1089,6 @@ export default function GestaoDocumentos() {
                                   }}
                                 />
                               </TableCell>
-                              <TableCell className="font-mono text-xs text-blue-600">{doc.codigo}</TableCell>
                               <TableCell className="text-gray-900 text-sm overflow-visible">
                                 <span className="flex items-center gap-1.5 flex-nowrap">
                                   {doc.arquivoUrl && <Paperclip className="w-3 h-3 text-blue-500 shrink-0" />}
