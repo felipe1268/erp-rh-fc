@@ -3282,4 +3282,191 @@ REGRAS TÉCNICAS:
 
       return { status: "ok" as const, divergencias: [], curva: curvaCompleta, totalVenda };
     }),
+
+  dashboardGeral: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+
+      let allowedObraIds: number[] | null = null;
+      if (!isAdmin) {
+        const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
+        const userRows: any[] = userResult?.rows ?? userResult ?? [];
+        const raw = userRows[0]?.allowed_obra_ids;
+        let parsed: number[] = [];
+        try { if (raw) parsed = JSON.parse(raw); } catch {}
+        if (parsed.length > 0) {
+          allowedObraIds = parsed;
+        } else {
+          const userEmail = ctx.user.email ?? "";
+          if (!userEmail) return { projetos: [], refisData: [], atividadesResumo: [] };
+          const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
+          const empRows: any[] = empResult?.rows ?? empResult ?? [];
+          if (!empRows.length) return { projetos: [], refisData: [], atividadesResumo: [] };
+          const employeeId = empRows[0].id;
+          const obrasResult = await db.execute(sql`
+            SELECT DISTINCT of2."obraId" FROM obra_funcionarios of2
+            INNER JOIN obras o ON o.id = of2."obraId" AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL
+            WHERE of2."employeeId" = ${employeeId} AND of2."isActive" = 1
+          `);
+          const obrasRows: any[] = obrasResult?.rows ?? obrasResult ?? [];
+          allowedObraIds = obrasRows.map((r: any) => r.obraId);
+          if (allowedObraIds.length === 0) return { projetos: [], refisData: [], atividadesResumo: [] };
+        }
+      }
+
+      const projRows = await db.select({
+        id:                    planejamentoProjetos.id,
+        obraId:                planejamentoProjetos.obraId,
+        nome:                  planejamentoProjetos.nome,
+        cliente:               planejamentoProjetos.cliente,
+        responsavel:           planejamentoProjetos.responsavel,
+        dataInicio:            planejamentoProjetos.dataInicio,
+        dataTerminoContratual: planejamentoProjetos.dataTerminoContratual,
+        valorContrato:         planejamentoProjetos.valorContrato,
+        status:                planejamentoProjetos.status,
+        orcamentoTotalVenda:   orcamentos.totalVenda,
+        orcamentoTotalCusto:   orcamentos.totalCusto,
+        orcamentoTotalMeta:    orcamentos.totalMeta,
+        orcamentoValorNegociado: orcamentos.valorNegociado,
+      })
+        .from(planejamentoProjetos)
+        .leftJoin(orcamentos, eq(planejamentoProjetos.orcamentoId, orcamentos.id))
+        .where(
+          allowedObraIds !== null
+            ? and(eq(planejamentoProjetos.companyId, input.companyId), inArray(planejamentoProjetos.obraId, allowedObraIds.length > 0 ? allowedObraIds : [0]))
+            : eq(planejamentoProjetos.companyId, input.companyId)
+        )
+        .orderBy(desc(planejamentoProjetos.criadoEm));
+
+      const projIds = projRows.map(p => p.id);
+      if (projIds.length === 0) {
+        return {
+          projetos: [],
+          refisData: [],
+          atividadesResumo: [],
+        };
+      }
+
+      const refisRows = await db.select({
+        projetoId:                 planejamentoRefis.projetoId,
+        semana:                    planejamentoRefis.semana,
+        avancoPrevisto:            planejamentoRefis.avancoPrevisto,
+        avancoRealizado:           planejamentoRefis.avancoRealizado,
+        avancoSemanalPrevisto:     planejamentoRefis.avancoSemanalPrevisto,
+        avancoSemanalRealizado:    planejamentoRefis.avancoSemanalRealizado,
+        spi:                       planejamentoRefis.spi,
+        cpi:                       planejamentoRefis.cpi,
+        custoPrevisto:             planejamentoRefis.custoPrevisto,
+        custoRealizado:            planejamentoRefis.custoRealizado,
+        status:                    planejamentoRefis.status,
+      })
+        .from(planejamentoRefis)
+        .where(inArray(planejamentoRefis.projetoId, projIds))
+        .orderBy(desc(planejamentoRefis.semana));
+
+      const atividadesResult = await db.execute(sql`
+        SELECT
+          a.projeto_id,
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE a.is_grupo = false AND a.is_marco = false) as total_folhas,
+          COUNT(*) FILTER (WHERE a.is_marco = true) as total_marcos
+        FROM planejamento_atividades a
+        INNER JOIN planejamento_revisoes r ON r.id = a.revisao_id
+        WHERE a.projeto_id = ANY(${projIds})
+          AND r.status = 'aprovada'
+          AND a.deleted_at IS NULL
+        GROUP BY a.projeto_id
+      `);
+      const atividadesResumo = (atividadesResult?.rows ?? atividadesResult ?? []) as any[];
+
+      const avancosResult = await db.execute(sql`
+        SELECT
+          av.projeto_id,
+          MAX(av.percentual_acumulado) as max_avanco
+        FROM planejamento_avancos av
+        INNER JOIN planejamento_revisoes r ON r.id = av.revisao_id
+        WHERE av.projeto_id = ANY(${projIds})
+          AND r.status = 'aprovada'
+        GROUP BY av.projeto_id
+      `);
+      const avancosMap: Record<number, number> = {};
+      for (const r of (avancosResult?.rows ?? avancosResult ?? []) as any[]) {
+        avancosMap[r.projeto_id] = n(r.max_avanco);
+      }
+
+      const refisMap = new Map<number, typeof refisRows[0]>();
+      for (const r of refisRows) {
+        if (r.status === "consolidado" && !refisMap.has(r.projetoId)) refisMap.set(r.projetoId, r);
+      }
+      const atvMap = new Map<number, any>();
+      for (const a of atividadesResumo) atvMap.set(a.projeto_id, a);
+
+      const projetosEnriquecidos = projRows.map(p => {
+        const ultimoRefis = refisMap.get(p.id);
+        const atv = atvMap.get(p.id);
+        const valor = n(p.valorContrato) || n(p.orcamentoValorNegociado) || n(p.orcamentoTotalVenda);
+        const custoMeta = n(p.orcamentoTotalMeta) || n(p.orcamentoTotalCusto);
+
+        const avancoPrev = ultimoRefis ? n(ultimoRefis.avancoPrevisto) : 0;
+        const avancoReal = ultimoRefis ? n(ultimoRefis.avancoRealizado) : (avancosMap[p.id] ?? 0);
+        const spi = ultimoRefis ? n(ultimoRefis.spi) : (avancoPrev > 0 ? avancoReal / avancoPrev : 1);
+        const cpi = ultimoRefis ? n(ultimoRefis.cpi) : 1;
+
+        const hoje = new Date().toISOString().split("T")[0];
+        const prazo = p.dataTerminoContratual ? toDateStr(p.dataTerminoContratual) : null;
+        const atrasado = prazo && prazo < hoje && !(p.status || "").toLowerCase().includes("conclu");
+
+        let diasRestantes: number | null = null;
+        if (prazo) {
+          const diff = new Date(prazo).getTime() - new Date(hoje).getTime();
+          diasRestantes = Math.ceil(diff / 86_400_000);
+        }
+
+        return {
+          id: p.id,
+          obraId: p.obraId,
+          nome: p.nome,
+          cliente: p.cliente,
+          responsavel: p.responsavel,
+          dataInicio: p.dataInicio ? toDateStr(p.dataInicio) : null,
+          dataTerminoContratual: prazo,
+          status: p.status,
+          valorContrato: valor,
+          custoMeta,
+          avancoPrevisto: avancoPrev,
+          avancoRealizado: avancoReal,
+          desvio: avancoReal - avancoPrev,
+          spi,
+          cpi,
+          custoPrevisto: ultimoRefis ? n(ultimoRefis.custoPrevisto) : 0,
+          custoRealizado: ultimoRefis ? n(ultimoRefis.custoRealizado) : 0,
+          totalAtividades: atv ? Number(atv.total_folhas) : 0,
+          totalMarcos: atv ? Number(atv.total_marcos) : 0,
+          atrasado: !!atrasado,
+          diasRestantes,
+          ultimoRefisSemana: ultimoRefis?.semana ? toDateStr(ultimoRefis.semana) : null,
+        };
+      });
+
+      return {
+        projetos: projetosEnriquecidos,
+        refisData: refisRows.map(r => ({
+          projetoId: r.projetoId,
+          semana: toDateStr(r.semana),
+          avancoPrevisto: n(r.avancoPrevisto),
+          avancoRealizado: n(r.avancoRealizado),
+          spi: n(r.spi),
+          cpi: n(r.cpi),
+          status: r.status,
+        })),
+        atividadesResumo: atividadesResumo.map((a: any) => ({
+          projetoId: a.projeto_id,
+          total: Number(a.total),
+          totalFolhas: Number(a.total_folhas),
+          totalMarcos: Number(a.total_marcos),
+        })),
+      };
+    }),
 });

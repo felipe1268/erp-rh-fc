@@ -5316,4 +5316,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 13:00:00",
   },
+  {
+    version: 794,
+    titulo: "Dashboard Executivo de Obras no Planejamento",
+    descricao: "Novo painel Dashboard na tela de Planejamento com indicadores consolidados de todas as obras: KPIs gerais (total de projetos, em andamento, concluídos, atrasados, valor total, atividades), avanço médio previsto vs realizado com barra dupla, SPI e CPI médios com semáforo, custo meta total e margem bruta, ranking detalhado por obra (avanço, SPI, CPI, dias restantes, valor), cards expansíveis com detalhes (datas, atividades, marcos, custos), e Matriz de Saúde visual com cores verde/amarelo/vermelho. Filtro por obra individual e ordenação por avanço/SPI/valor/prazo/nome. Toggle Dashboard ↔ Projetos na barra de ações.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 14:00:00",
+  },
 ];

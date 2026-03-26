@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, Search, Loader2, CalendarRange, Building2, User, DollarSign,
   TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin, ArrowLeft, Pencil,
-  Info,
+  Info, BarChart3, LayoutGrid,
 } from "lucide-react";
+import DashboardObras from "./DashboardObras";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -54,6 +55,7 @@ export default function PlanejamentoLista() {
   const [busca, setBusca] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [excluindo, setExcluindo] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"dashboard" | "projetos">("dashboard");
 
   // Formulário novo projeto
   const [form, setForm] = useState({
@@ -217,11 +219,40 @@ export default function PlanejamentoLista() {
               </p>
             </div>
           </div>
-          <DraggableCommandBar barId="planejamento-lista" items={[
-            ...(canCreate ? [{ id: "novo-projeto", node: <Button onClick={() => setModalAberto(true)} className="gap-2 bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /> Novo Projeto</Button> }] : []),
-          ]} />
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setViewMode("dashboard")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  viewMode === "dashboard" ? "bg-white shadow-sm text-blue-700" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+                Dashboard
+              </button>
+              <button
+                onClick={() => setViewMode("projetos")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  viewMode === "projetos" ? "bg-white shadow-sm text-blue-700" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Projetos
+              </button>
+            </div>
+            <DraggableCommandBar barId="planejamento-lista" items={[
+              ...(canCreate ? [{ id: "novo-projeto", node: <Button onClick={() => setModalAberto(true)} className="gap-2 bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /> Novo Projeto</Button> }] : []),
+            ]} />
+          </div>
         </div>
 
+        {/* Dashboard view */}
+        {viewMode === "dashboard" && (
+          <DashboardObras onNavigate={(id) => setLocation(`/planejamento/${id}`)} />
+        )}
+
+        {/* Projetos view */}
+        {viewMode === "projetos" && <>
         {/* KPIs rápidos */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           {[
@@ -358,6 +389,7 @@ export default function PlanejamentoLista() {
             ))}
           </div>
         )}
+        </>}
 
         {/* ── Modal Editar Projeto ──────────────────────────────────────────── */}
         <Dialog open={!!editandoProjeto} onOpenChange={open => { if (!open) setEditandoProjeto(null); }}>
