@@ -1096,9 +1096,9 @@ export default function GestaoDocumentos() {
                                   {doc.arquivoUrl && <Paperclip className="w-3 h-3 text-blue-500 shrink-0" />}
                                   {doc.titulo}
                                   {missingPdf && (
-                                    <span className="relative group/pdf shrink-0">
+                                    <span className="relative group/pdf shrink-0" title="PDF correspondente não encontrado">
                                       <AlertTriangle className="w-4 h-4 text-red-500" />
-                                      <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 px-2 py-1 bg-red-600 text-white text-[10px] rounded shadow-lg whitespace-nowrap opacity-0 group-hover/pdf:opacity-100 transition-opacity pointer-events-none z-50">
+                                      <span className="absolute left-0 bottom-full mb-2 px-3 py-1.5 bg-white text-red-600 text-xs font-medium rounded-md shadow-lg border border-red-200 whitespace-nowrap opacity-0 group-hover/pdf:opacity-100 transition-opacity pointer-events-none z-50">
                                         PDF correspondente não encontrado
                                       </span>
                                     </span>
