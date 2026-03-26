@@ -111,6 +111,7 @@ export default function GestaoDocumentos() {
   const [editingDoc, setEditingDoc] = useState<any>(null);
   const [editingArt, setEditingArt] = useState<any>(null);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set());
 
   const [newDiscForm, setNewDiscForm] = useState({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"] as string[], newSubpasta: "" });
 
@@ -363,6 +364,14 @@ export default function GestaoDocumentos() {
   const deleteDoc = trpc.gestaoDocumentos.deleteDocumento.useMutation({
     onSuccess: () => {
       toast.success("Documento removido");
+      utils.gestaoDocumentos.listDocumentos.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteDocsBatch = trpc.gestaoDocumentos.deleteDocumentosBatch.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.count} documento(s) removido(s)`);
+      setSelectedDocIds(new Set());
       utils.gestaoDocumentos.listDocumentos.invalidate();
     },
     onError: (e) => toast.error(e.message),
@@ -895,6 +904,22 @@ export default function GestaoDocumentos() {
                     <Plus className="w-4 h-4 mr-1" /> Novo Documento
                   </Button>
                 </div>
+
+                {selectedDocIds.size > 0 && (
+                  <div className="flex items-center gap-3 px-4 py-2 bg-red-50 border-b border-red-200 shrink-0">
+                    <span className="text-sm text-red-700 font-medium">{selectedDocIds.size} documento(s) selecionado(s)</span>
+                    <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => {
+                      if (confirm(`Remover ${selectedDocIds.size} documento(s)?`)) {
+                        deleteDocsBatch.mutate({ ids: Array.from(selectedDocIds), companyId });
+                      }
+                    }} disabled={deleteDocsBatch.isPending}>
+                      <Trash2 className="w-3 h-3 mr-1" /> Apagar Selecionados
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-gray-500" onClick={() => setSelectedDocIds(new Set())}>
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
                 <div className="flex-1 overflow-y-auto relative">
                   {batchUploading && (
                     <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
@@ -952,6 +977,20 @@ export default function GestaoDocumentos() {
                     <Table>
                       <TableHeader>
                         <TableRow className="border-gray-100 hover:bg-transparent">
+                          <TableHead className="w-[40px] text-center">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 rounded border-gray-300 accent-blue-600 cursor-pointer"
+                              checked={filteredDocs.length > 0 && filteredDocs.every((d: any) => selectedDocIds.has(d.id))}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedDocIds(new Set(filteredDocs.map((d: any) => d.id)));
+                                } else {
+                                  setSelectedDocIds(new Set());
+                                }
+                              }}
+                            />
+                          </TableHead>
                           <TableHead className="text-gray-500 text-xs w-[120px]">Código</TableHead>
                           <TableHead className="text-gray-500 text-xs">Título</TableHead>
                           <TableHead className="text-gray-500 text-xs w-[80px]">Disciplina</TableHead>
@@ -965,7 +1004,20 @@ export default function GestaoDocumentos() {
                           const st = STATUS_MAP[doc.status || "em_elaboracao"] || STATUS_MAP.em_elaboracao;
                           const disc = doc.disciplinaId ? discMap.get(doc.disciplinaId) : null;
                           return (
-                            <TableRow key={doc.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
+                            <TableRow key={doc.id} className={`border-gray-100 hover:bg-gray-50 cursor-pointer ${selectedDocIds.has(doc.id) ? "bg-blue-50" : ""}`} onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
+                              <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 rounded border-gray-300 accent-blue-600 cursor-pointer"
+                                  checked={selectedDocIds.has(doc.id)}
+                                  onChange={(e) => {
+                                    const next = new Set(selectedDocIds);
+                                    if (e.target.checked) next.add(doc.id);
+                                    else next.delete(doc.id);
+                                    setSelectedDocIds(next);
+                                  }}
+                                />
+                              </TableCell>
                               <TableCell className="font-mono text-xs text-blue-600">{doc.codigo}</TableCell>
                               <TableCell className="text-gray-900 text-sm truncate max-w-[300px]">
                                 <span className="flex items-center gap-1.5">
