@@ -986,7 +986,7 @@ export default function GestaoDocumentos() {
                         onClick={() => setDocForm({ ...docForm, tipoDocumentoId: isActive ? "" : String(t.id) })}
                         className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${isActive ? "bg-blue-600 text-white border-blue-600" : "text-gray-600 border-gray-200 hover:border-gray-300 bg-white"}`}
                       >
-                        {t.sigla}
+                        {t.sigla} — {t.nome}
                       </button>
                     );
                   })}
