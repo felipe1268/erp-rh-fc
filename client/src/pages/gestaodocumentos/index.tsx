@@ -202,6 +202,14 @@ export default function GestaoDocumentos() {
     },
     { enabled: companyId > 0 && !!activeFicheiroId }
   );
+  const allObraDocs = trpc.gestaoDocumentos.listDocumentos.useQuery(
+    {
+      companyId,
+      obraId: selectedObraId || undefined,
+    },
+    { enabled: companyId > 0 && !!selectedObraId }
+  );
+
   const pdfDocs = trpc.gestaoDocumentos.listDocumentos.useQuery(
     {
       companyId,
@@ -342,13 +350,7 @@ export default function GestaoDocumentos() {
     if (validFiles.length === 0) return;
 
     const currentDocs: any[] = documentos.data || [];
-    const allDocs: any[] = [];
-    const allSubpastas = ["DWG", "PDF", "DOC", "IFC", "REVIT", "SKP", "XLS", "FOTOS", "BIM", "MEMORIAIS"];
-    allSubpastas.forEach(sp => {
-      const spDocs = currentDocs.filter((d: any) => (d.subpasta || "").toUpperCase() === sp);
-      spDocs.forEach((d: any) => allDocs.push(d));
-    });
-    currentDocs.forEach(d => { if (!allDocs.find(x => x.id === d.id)) allDocs.push(d); });
+    const allDocs: any[] = allObraDocs.data || [];
 
     const prepared = validFiles.map(file => {
       const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
@@ -363,11 +365,11 @@ export default function GestaoDocumentos() {
 
       let autoTitle = "";
       if (base) {
-        const matchInOtherSubpasta = allDocs.find((d: any) => {
+        const matchAnyDoc = allDocs.find((d: any) => {
           const p = parseRevision(d.titulo || d.codigo || "");
           return p.base.toLowerCase() === base.toLowerCase() && d.descricao;
         });
-        if (matchInOtherSubpasta?.descricao) autoTitle = matchInOtherSubpasta.descricao;
+        if (matchAnyDoc?.descricao) autoTitle = matchAnyDoc.descricao;
         if (!autoTitle && existingDoc?.descricao) autoTitle = existingDoc.descricao;
       }
 
