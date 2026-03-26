@@ -234,7 +234,10 @@ export default function GestaoDocumentos() {
   });
 
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [batchUploading, setBatchUploading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const batchFileInputRef = useRef<HTMLInputElement>(null);
   const uploadArquivo = trpc.gestaoDocumentos.uploadArquivoDocumento.useMutation({
     onSuccess: () => {
       utils.gestaoDocumentos.listDocumentos.invalidate();
@@ -264,8 +267,59 @@ export default function GestaoDocumentos() {
     });
   }
 
+  async function handleBatchUpload(files: FileList) {
+    if (!selectedObraId) { toast.error("Selecione uma obra primeiro"); return; }
+    const validFiles = Array.from(files).filter(f => {
+      if (f.size > 30 * 1024 * 1024) { toast.error(`${f.name}: muito grande (máx 30MB)`); return false; }
+      return true;
+    });
+    if (validFiles.length === 0) return;
+    setBatchUploading(true);
+    setBatchProgress({ current: 0, total: validFiles.length });
+    isBatchRef.current = true;
+    let ok = 0;
+    let fail = 0;
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      setBatchProgress({ current: i + 1, total: validFiles.length });
+      const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
+      const discId = selectedDiscId || undefined;
+      const code = generateNextCode(discId);
+      try {
+        const doc = await createDoc.mutateAsync({
+          companyId,
+          obraId: selectedObraId,
+          ficheiroId: activeFicheiroId || undefined,
+          disciplinaId: discId,
+          pastaId: undefined,
+          codigo: code,
+          titulo: nameWithoutExt,
+          dataEmissao: new Date().toISOString().split("T")[0],
+        });
+        if (doc?.id) {
+          await uploadFileToDoc(doc.id, file);
+        }
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    isBatchRef.current = false;
+    setBatchUploading(false);
+    setBatchProgress({ current: 0, total: 0 });
+    utils.gestaoDocumentos.listDocumentos.invalidate();
+    if (fail === 0) {
+      toast.success(`${ok} documento(s) criado(s) com sucesso`);
+    } else {
+      toast.warning(`${ok} criado(s), ${fail} com erro`);
+    }
+    if (batchFileInputRef.current) batchFileInputRef.current.value = "";
+  }
+
+  const isBatchRef = useRef(false);
   const createDoc = trpc.gestaoDocumentos.createDocumento.useMutation({
     onSuccess: async (data) => {
+      if (isBatchRef.current) return;
       if (pendingFile && data?.id) {
         toast.info("Enviando arquivo...");
         try {
@@ -280,7 +334,7 @@ export default function GestaoDocumentos() {
       resetDocForm();
       setPendingFile(null);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { if (!isBatchRef.current) toast.error(e.message); },
   });
   const updateDoc = trpc.gestaoDocumentos.updateDocumento.useMutation({
     onSuccess: async () => {
@@ -800,11 +854,39 @@ export default function GestaoDocumentos() {
                       className="pl-9 h-8 text-sm bg-gray-50 border-gray-200"
                     />
                   </div>
+                  <input
+                    ref={batchFileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    accept=".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"
+                    onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleBatchUpload(e.target.files); }}
+                  />
+                  <Button size="sm" variant="outline" onClick={() => batchFileInputRef.current?.click()} className="border-blue-200 text-blue-600 hover:bg-blue-50 h-8" disabled={batchUploading}>
+                    {batchUploading ? (
+                      <><span className="animate-spin mr-1">⏳</span> {batchProgress.current}/{batchProgress.total}</>
+                    ) : (
+                      <><Upload className="w-4 h-4 mr-1" /> Enviar Vários</>
+                    )}
+                  </Button>
                   <Button size="sm" onClick={() => { resetDocForm(); setEditingDoc(null); setShowDocModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700 h-8">
                     <Plus className="w-4 h-4 mr-1" /> Novo Documento
                   </Button>
                 </div>
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto relative">
+                  {batchUploading && (
+                    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+                      <div className="text-center">
+                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-full text-sm font-medium mb-3">
+                          <span className="animate-spin">⏳</span>
+                          Enviando {batchProgress.current} de {batchProgress.total}...
+                        </div>
+                        <div className="w-48 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-600 transition-all duration-300 rounded-full" style={{ width: `${batchProgress.total > 0 ? (batchProgress.current / batchProgress.total) * 100 : 0}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {filteredDocs.length === 0 ? (
                     <div
                       className="text-center py-16 border-2 border-dashed border-transparent rounded-lg transition-colors"
@@ -814,8 +896,11 @@ export default function GestaoDocumentos() {
                         e.preventDefault();
                         e.currentTarget.classList.remove("border-blue-400", "bg-blue-50/50");
                         e.currentTarget.classList.add("border-transparent");
-                        const f = e.dataTransfer.files[0];
-                        if (f) {
+                        const files = e.dataTransfer.files;
+                        if (files.length > 1) {
+                          handleBatchUpload(files);
+                        } else if (files.length === 1) {
+                          const f = files[0];
                           if (f.size > 30 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 30MB)"); return; }
                           const today = new Date().toISOString().split("T")[0];
                           const discId = selectedDiscId ? String(selectedDiscId) : "";
@@ -839,7 +924,7 @@ export default function GestaoDocumentos() {
                     >
                       <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                       <p className="text-gray-500 text-sm mb-1">Nenhum documento nesta pasta</p>
-                      <p className="text-gray-400 text-xs">Clique em "+ Novo Documento" ou arraste um arquivo aqui</p>
+                      <p className="text-gray-400 text-xs">Clique em "+ Novo Documento" ou arraste arquivos aqui</p>
                     </div>
                   ) : (
                     <Table>
