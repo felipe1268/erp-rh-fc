@@ -347,8 +347,29 @@ export default function GestaoDocumentos() {
     }
   }, [companyId, tiposSubpasta.data, disciplinas.data, tipos.data]);
 
+  function generateNextCode(discId?: number) {
+    const disc = discId ? discMap.get(discId) : (selectedDiscId ? discMap.get(selectedDiscId) : null);
+    const sigla = disc?.sigla || "DOC";
+    const obraCode = detail?.obra?.codigo || "OBR";
+    const existing = (documentos.data || []).filter(d => d.disciplinaId === (discId || selectedDiscId));
+    const nextNum = String(existing.length + 1).padStart(3, "0");
+    return `${obraCode}-${sigla}-${nextNum}`;
+  }
+
   function resetDocForm() {
-    setDocForm({ codigo: "", titulo: "", descricao: "", disciplinaId: selectedDiscId ? String(selectedDiscId) : "", tipoDocumentoId: "", emitente: "", dataEmissao: "", dataValidade: "", tags: "" });
+    const today = new Date().toISOString().split("T")[0];
+    const discId = selectedDiscId ? String(selectedDiscId) : "";
+    setDocForm({
+      codigo: generateNextCode(),
+      titulo: "",
+      descricao: "",
+      disciplinaId: discId,
+      tipoDocumentoId: "",
+      emitente: "",
+      dataEmissao: today,
+      dataValidade: "",
+      tags: "",
+    });
   }
   function resetArtForm() {
     setArtForm({ tipo: "ART", numero: "", profissional: "", creaOuCau: "", dataEmissao: "", dataValidade: "", observacoes: "" });
@@ -385,9 +406,12 @@ export default function GestaoDocumentos() {
   }
 
   function handleSaveDoc() {
-    if (!docForm.codigo.trim() || !docForm.titulo.trim()) {
-      toast.error("Código e título são obrigatórios");
+    if (!docForm.titulo.trim()) {
+      toast.error("Título é obrigatório");
       return;
+    }
+    if (!docForm.codigo.trim()) {
+      docForm.codigo = generateNextCode(docForm.disciplinaId ? Number(docForm.disciplinaId) : undefined);
     }
     if (!selectedObraId) {
       toast.error("Selecione uma obra primeiro");
@@ -907,59 +931,107 @@ export default function GestaoDocumentos() {
 
       {/* Modal — Novo/Editar Documento */}
       <Dialog open={showDocModal} onOpenChange={setShowDocModal}>
-        <DialogContent className="max-w-xl bg-white border-gray-200 text-gray-900">
+        <DialogContent className="max-w-lg bg-white border-gray-200 text-gray-900">
           <DialogHeader>
             <DialogTitle>{editingDoc ? "Editar Documento" : "Novo Documento"}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-4">
             <div>
-              <Label className="text-gray-500">Código *</Label>
-              <Input value={docForm.codigo} onChange={(e) => setDocForm({ ...docForm, codigo: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" placeholder="Ex: PRJ-ARQ-001" />
+              <Label className="text-gray-700 font-medium">Título *</Label>
+              <Input
+                value={docForm.titulo}
+                onChange={(e) => setDocForm({ ...docForm, titulo: e.target.value })}
+                className="bg-gray-50 border-gray-300 text-gray-900 mt-1"
+                placeholder="Ex: Planta Baixa Pavimento Térreo"
+                autoFocus
+              />
             </div>
-            <div>
-              <Label className="text-gray-500">Emitente</Label>
-              <Input value={docForm.emitente} onChange={(e) => setDocForm({ ...docForm, emitente: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
+
+            {(detail?.disciplinas || []).length > 0 && (
+              <div>
+                <Label className="text-gray-500 text-xs">Pasta (Disciplina)</Label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {(detail?.disciplinas || []).map((d: any) => {
+                    const isActive = docForm.disciplinaId === String(d.id);
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => {
+                          const newDiscId = isActive ? "" : String(d.id);
+                          const newCode = generateNextCode(isActive ? undefined : d.id);
+                          setDocForm({ ...docForm, disciplinaId: newDiscId, codigo: editingDoc ? docForm.codigo : newCode });
+                        }}
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${isActive ? "text-white border-transparent shadow-sm" : "text-gray-600 border-gray-200 hover:border-gray-300 bg-white"}`}
+                        style={isActive ? { backgroundColor: d.cor || "#3B82F6" } : {}}
+                      >
+                        {d.sigla}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {(tipos.data || []).filter(t => t.ativo).length > 0 && (
+              <div>
+                <Label className="text-gray-500 text-xs">Tipo de Documento</Label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {(tipos.data || []).filter(t => t.ativo).map(t => {
+                    const isActive = docForm.tipoDocumentoId === String(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setDocForm({ ...docForm, tipoDocumentoId: isActive ? "" : String(t.id) })}
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${isActive ? "bg-blue-600 text-white border-blue-600" : "text-gray-600 border-gray-200 hover:border-gray-300 bg-white"}`}
+                      >
+                        {t.sigla}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-gray-400 uppercase">Código</span>
+                <span className="font-mono text-sm text-blue-600 font-medium">{docForm.codigo || "—"}</span>
+              </div>
+              <div className="w-px h-4 bg-gray-300" />
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-gray-400 uppercase">Emissão</span>
+                <span className="text-sm text-gray-700">{docForm.dataEmissao ? new Date(docForm.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR") : "Hoje"}</span>
+              </div>
             </div>
-            <div className="col-span-2">
-              <Label className="text-gray-500">Título *</Label>
-              <Input value={docForm.titulo} onChange={(e) => setDocForm({ ...docForm, titulo: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" placeholder="Ex: Projeto Arquitetônico - Bloco A" />
-            </div>
-            <div>
-              <Label className="text-gray-500">Pasta (Disciplina)</Label>
-              <Select value={docForm.disciplinaId || "none"} onValueChange={(v) => setDocForm({ ...docForm, disciplinaId: v === "none" ? "" : v })}>
-                <SelectTrigger className="bg-gray-50 border-gray-300 text-gray-900"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhuma</SelectItem>
-                  {(detail?.disciplinas || []).map((d: any) => (
-                    <SelectItem key={d.id} value={String(d.id)}>{d.sigla} - {d.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-gray-500">Tipo de Documento</Label>
-              <Select value={docForm.tipoDocumentoId || "none"} onValueChange={(v) => setDocForm({ ...docForm, tipoDocumentoId: v === "none" ? "" : v })}>
-                <SelectTrigger className="bg-gray-50 border-gray-300 text-gray-900"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {(tipos.data || []).filter(t => t.ativo).map(t => (
-                    <SelectItem key={t.id} value={String(t.id)}>{t.sigla} - {t.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-gray-500">Data de Emissão</Label>
-              <Input type="date" value={docForm.dataEmissao} onChange={(e) => setDocForm({ ...docForm, dataEmissao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
-            </div>
-            <div>
-              <Label className="text-gray-500">Data de Validade</Label>
-              <Input type="date" value={docForm.dataValidade} onChange={(e) => setDocForm({ ...docForm, dataValidade: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" />
-            </div>
-            <div className="col-span-2">
-              <Label className="text-gray-500">Descrição</Label>
-              <Textarea value={docForm.descricao} onChange={(e) => setDocForm({ ...docForm, descricao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900" rows={2} />
-            </div>
+
+            {editingDoc && (
+              <div className="space-y-3 border-t border-gray-200 pt-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-gray-500 text-xs">Código</Label>
+                    <Input value={docForm.codigo} onChange={(e) => setDocForm({ ...docForm, codigo: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900 h-8 text-sm" />
+                  </div>
+                  <div>
+                    <Label className="text-gray-500 text-xs">Emitente</Label>
+                    <Input value={docForm.emitente} onChange={(e) => setDocForm({ ...docForm, emitente: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900 h-8 text-sm" />
+                  </div>
+                  <div>
+                    <Label className="text-gray-500 text-xs">Data de Emissão</Label>
+                    <Input type="date" value={docForm.dataEmissao} onChange={(e) => setDocForm({ ...docForm, dataEmissao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900 h-8 text-sm" />
+                  </div>
+                  <div>
+                    <Label className="text-gray-500 text-xs">Data de Validade</Label>
+                    <Input type="date" value={docForm.dataValidade} onChange={(e) => setDocForm({ ...docForm, dataValidade: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900 h-8 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-gray-500 text-xs">Descrição</Label>
+                  <Textarea value={docForm.descricao} onChange={(e) => setDocForm({ ...docForm, descricao: e.target.value })} className="bg-gray-50 border-gray-300 text-gray-900 text-sm" rows={2} />
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDocModal(false)} className="border-gray-300 text-gray-600">Cancelar</Button>
