@@ -449,24 +449,24 @@ export default function MedicaoDetalhe() {
                     </div>
                   )}
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto max-h-[65vh]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-gray-50 sticky top-0 z-10">
-                            <TableHead className="w-24">EAP</TableHead>
-                            <TableHead>Descrição</TableHead>
-                            <TableHead className="text-center w-14">Und</TableHead>
-                            <TableHead className="text-right w-16">Qtd</TableHead>
-                            <TableHead className="text-right w-24">V. Unit.</TableHead>
-                            <TableHead className="text-right w-28">V. Contratual</TableHead>
-                            <TableHead className="text-right w-24 text-orange-700">Material</TableHead>
-                            <TableHead className="text-right w-24 text-indigo-700">Mão de Obra</TableHead>
-                            <TableHead className="text-right w-16">% Med.</TableHead>
-                            <TableHead className="text-right w-28">V. Medido</TableHead>
-                            <TableHead className="text-right w-28">Saldo</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
+                    <div className="overflow-y-auto max-h-[65vh]">
+                      <table className="w-full text-xs table-fixed border-collapse">
+                        <thead>
+                          <tr className="bg-gray-50 sticky top-0 z-10 border-b text-left">
+                            <th className="w-[7%] px-2 py-1.5 font-semibold text-gray-600">EAP</th>
+                            <th className="px-2 py-1.5 font-semibold text-gray-600">Descrição</th>
+                            <th className="w-[3.5%] px-1 py-1.5 font-semibold text-gray-600 text-center">Und</th>
+                            <th className="w-[5%] px-1 py-1.5 font-semibold text-gray-600 text-right">Qtd</th>
+                            <th className="w-[8%] px-1 py-1.5 font-semibold text-gray-600 text-right">V. Unit.</th>
+                            <th className="w-[10%] px-1 py-1.5 font-semibold text-gray-600 text-right">V. Contratual</th>
+                            <th className="w-[9%] px-1 py-1.5 font-semibold text-orange-700 text-right">Material</th>
+                            <th className="w-[9%] px-1 py-1.5 font-semibold text-indigo-700 text-right">M. Obra</th>
+                            <th className="w-[5%] px-1 py-1.5 font-semibold text-gray-600 text-right">% Med.</th>
+                            <th className="w-[10%] px-1 py-1.5 font-semibold text-gray-600 text-right">V. Medido</th>
+                            <th className="w-[9%] px-1 py-1.5 font-semibold text-gray-600 text-right">Saldo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
                           {visibleItems.map((i: any) => {
                             const eap = i.eapCodigo || "";
                             const isGroup = !!childMap[eap];
@@ -481,51 +481,52 @@ export default function MedicaoDetalhe() {
                             const saldo = vContr - vMed;
                             const nivelBg = NIVEL_BG[i.nivel] || "";
                             return (
-                              <TableRow
+                              <tr
                                 key={i.id}
-                                className={`${isGroup ? `${nivelBg} font-semibold cursor-pointer hover:bg-slate-200/60` : pctMed >= 100 ? "bg-emerald-50/50" : ""}`}
+                                className={`border-b border-gray-100 ${isGroup ? `${nivelBg} font-semibold cursor-pointer hover:bg-slate-200/60` : pctMed >= 100 ? "bg-emerald-50/50 hover:bg-emerald-50" : "hover:bg-gray-50"}`}
                                 onClick={() => isGroup && toggleCollapse(eap)}
                               >
-                                <TableCell className={`font-mono text-xs whitespace-nowrap ${isGroup ? "font-bold text-slate-700" : ""}`}>
+                                <td className={`px-2 py-1 font-mono whitespace-nowrap ${isGroup ? "font-bold text-slate-700" : ""}`}>
                                   {isGroup && (
                                     isCollapsed
-                                      ? <ChevronRight className="h-3.5 w-3.5 inline mr-1 text-slate-400" />
-                                      : <ChevronDown className="h-3.5 w-3.5 inline mr-1 text-slate-400" />
+                                      ? <ChevronRight className="h-3 w-3 inline mr-0.5 text-slate-400" />
+                                      : <ChevronDown className="h-3 w-3 inline mr-0.5 text-slate-400" />
                                   )}
                                   {eap}
-                                </TableCell>
-                                <TableCell
-                                  className={`text-sm ${isGroup ? "font-bold" : ""} ${i.nivel <= 2 && isGroup ? "uppercase" : ""}`}
-                                  style={{ paddingLeft: `${Math.max(0, (i.nivel - 1)) * 16 + 8}px` }}
+                                </td>
+                                <td
+                                  className={`px-2 py-1 truncate ${isGroup ? "font-bold" : ""} ${i.nivel <= 2 && isGroup ? "uppercase" : ""}`}
+                                  style={{ paddingLeft: `${Math.max(0, (i.nivel - 1)) * 12 + 8}px` }}
+                                  title={i.descricao}
                                 >
                                   {i.descricao}
-                                </TableCell>
-                                <TableCell className="text-center text-xs text-gray-500">{isGroup ? "" : (i.unidade || "—")}</TableCell>
-                                <TableCell className="text-right text-xs">{isGroup ? "" : n(i.quantidade).toLocaleString("pt-BR")}</TableCell>
-                                <TableCell className="text-right text-xs">{isGroup ? "" : brl(n(i.vendaUnitTotal) * fatorContrato)}</TableCell>
-                                <TableCell className="text-right text-sm font-medium">{brl(vContr)}</TableCell>
-                                <TableCell className="text-right text-xs text-orange-700">{matVal > 0 ? brl(matVal) : <span className="text-gray-300">—</span>}</TableCell>
-                                <TableCell className="text-right text-xs text-indigo-700">{mdoVal > 0 ? brl(mdoVal) : <span className="text-gray-300">—</span>}</TableCell>
-                                <TableCell className="text-right text-sm">
+                                </td>
+                                <td className="px-1 py-1 text-center text-gray-500">{isGroup ? "" : (i.unidade || "—")}</td>
+                                <td className="px-1 py-1 text-right">{isGroup ? "" : n(i.quantidade).toLocaleString("pt-BR")}</td>
+                                <td className="px-1 py-1 text-right">{isGroup ? "" : brl(n(i.vendaUnitTotal) * fatorContrato)}</td>
+                                <td className="px-1 py-1 text-right font-medium">{brl(vContr)}</td>
+                                <td className="px-1 py-1 text-right text-orange-700">{matVal > 0 ? brl(matVal) : <span className="text-gray-300">—</span>}</td>
+                                <td className="px-1 py-1 text-right text-indigo-700">{mdoVal > 0 ? brl(mdoVal) : <span className="text-gray-300">—</span>}</td>
+                                <td className="px-1 py-1 text-right">
                                   {isGroup ? "" : (
                                     <span className={pctMed >= 100 ? "text-emerald-600 font-bold" : pctMed > 0 ? "text-blue-600 font-medium" : "text-gray-400"}>
                                       {pct(pctMed)}
                                     </span>
                                   )}
-                                </TableCell>
-                                <TableCell className="text-right text-sm font-medium text-emerald-700">{vMed > 0 ? brl(vMed) : isGroup ? "" : <span className="text-gray-300">—</span>}</TableCell>
-                                <TableCell className="text-right text-sm">
+                                </td>
+                                <td className="px-1 py-1 text-right font-medium text-emerald-700">{vMed > 0 ? brl(vMed) : isGroup ? "" : <span className="text-gray-300">—</span>}</td>
+                                <td className="px-1 py-1 text-right">
                                   {isGroup ? "" : (
                                     <span className={saldo < 0 ? "text-red-600 font-bold" : saldo === vContr ? "text-gray-400" : "text-amber-600"}>
                                       {brl(saldo)}
                                     </span>
                                   )}
-                                </TableCell>
-                              </TableRow>
+                                </td>
+                              </tr>
                             );
                           })}
-                        </TableBody>
-                      </Table>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
