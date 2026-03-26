@@ -15,12 +15,13 @@ import {
 
 const EMPTY_ITEM = {
   nome: "", unidade: "un", categoria: "", codigoInterno: "",
-  quantidadeAtual: 0, quantidadeMinima: 0, observacoes: "", fotoUrl: "",
-  valorUnitario: 0,
+  quantidadeAtual: "", quantidadeMinima: "", observacoes: "", fotoUrl: "",
+  valorUnitario: "",
   origem: "proprio" as "proprio" | "alugado",
   fornecedorLocacao: "", dataInicioLocacao: "", dataVencimentoLocacao: "",
-  valorLocacaoMensal: 0, diasAlertaLocacao: 7, observacoesLocacao: "",
+  valorLocacaoMensal: "", diasAlertaLocacao: "7", observacoesLocacao: "",
 };
+const parseNum = (v: string) => parseFloat(String(v).replace(",", ".")) || 0;
 const EMPTY_MOV = {
   tipo: "entrada" as "entrada" | "saida" | "ajuste",
   quantidade: 0, obraId: 0, motivo: "", observacoes: "",
@@ -130,7 +131,7 @@ export default function AlmoxarifadoPage() {
   const [sugerindoPreco, setSugerindoPreco] = useState(false);
   const sugerirPrecoMut = trpc.compras.sugerirPrecoIA.useMutation({
     onSuccess: (d: any) => {
-      setFormItem(p => ({ ...p, valorUnitario: d.precoSugerido }));
+      setFormItem(p => ({ ...p, valorUnitario: String(d.precoSugerido).replace(".", ",") }));
       toast.success(`💡 IA sugeriu R$ ${d.precoSugerido.toFixed(2)} — ${d.justificativa}`);
       setSugerindoPreco(false);
     },
@@ -185,14 +186,15 @@ export default function AlmoxarifadoPage() {
   function abrirEditar(i: any) {
     setFormItem({
       nome: i.nome, unidade: i.unidade, categoria: i.categoria ?? "", codigoInterno: i.codigoInterno ?? "",
-      quantidadeAtual: n(i.quantidadeAtual), quantidadeMinima: n(i.quantidadeMinima),
+      quantidadeAtual: n(i.quantidadeAtual) ? String(n(i.quantidadeAtual)) : "",
+      quantidadeMinima: n(i.quantidadeMinima) ? String(n(i.quantidadeMinima)) : "",
       observacoes: i.observacoes ?? "", fotoUrl: i.fotoUrl ?? "",
-      valorUnitario: parseFloat((i as any).valorUnitario ?? "0") || 0,
+      valorUnitario: n(i.valorUnitario) ? String(n(i.valorUnitario)).replace(".", ",") : "",
       origem: (i.origem === "alugado" ? "alugado" : "proprio") as "proprio" | "alugado",
       fornecedorLocacao: i.fornecedorLocacao ?? "", dataInicioLocacao: i.dataInicioLocacao ?? "",
       dataVencimentoLocacao: i.dataVencimentoLocacao ?? "",
-      valorLocacaoMensal: parseFloat(i.valorLocacaoMensal ?? "0") || 0,
-      diasAlertaLocacao: (i.diasAlertaLocacao ?? 7) as number,
+      valorLocacaoMensal: n(i.valorLocacaoMensal) ? String(n(i.valorLocacaoMensal)).replace(".", ",") : "",
+      diasAlertaLocacao: String(i.diasAlertaLocacao ?? 7),
       observacoesLocacao: i.observacoesLocacao ?? "",
     });
     setEditandoId(i.id);
@@ -272,13 +274,18 @@ export default function AlmoxarifadoPage() {
 
   function salvarItem() {
     if (!formItem.nome.trim()) { toast.error("Nome é obrigatório."); return; }
+    const pQtdAtual = parseNum(formItem.quantidadeAtual);
+    const pQtdMin = parseNum(formItem.quantidadeMinima);
+    const pValUnit = parseNum(formItem.valorUnitario);
+    const pValLoc = parseNum(formItem.valorLocacaoMensal);
+    const pDiasAlerta = parseInt(formItem.diasAlertaLocacao) || 7;
     const locacaoPayload = formItem.origem === "alugado" ? {
       origem: "alugado" as const,
       fornecedorLocacao: formItem.fornecedorLocacao || undefined,
       dataInicioLocacao: formItem.dataInicioLocacao || undefined,
       dataVencimentoLocacao: formItem.dataVencimentoLocacao || undefined,
-      valorLocacaoMensal: formItem.valorLocacaoMensal || undefined,
-      diasAlertaLocacao: formItem.diasAlertaLocacao || 7,
+      valorLocacaoMensal: pValLoc || undefined,
+      diasAlertaLocacao: pDiasAlerta,
       observacoesLocacao: formItem.observacoesLocacao || undefined,
     } : { origem: "proprio" as const, fornecedorLocacao: null, dataInicioLocacao: null, dataVencimentoLocacao: null, valorLocacaoMensal: null, diasAlertaLocacao: null, observacoesLocacao: null };
     const obraParaCriar = obraContexto === "todos" ? null : obraContexto;
@@ -286,18 +293,18 @@ export default function AlmoxarifadoPage() {
       atualizarMut.mutate({
         id: editandoId, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
-        quantidadeMinima: formItem.quantidadeMinima, observacoes: formItem.observacoes || undefined,
-        fotoUrl: formItem.fotoUrl || null, quantidadeAtual: formItem.quantidadeAtual,
-        valorUnitario: formItem.valorUnitario || null,
+        quantidadeMinima: pQtdMin, observacoes: formItem.observacoes || undefined,
+        fotoUrl: formItem.fotoUrl || null, quantidadeAtual: pQtdAtual,
+        valorUnitario: pValUnit || null,
         ...locacaoPayload,
       });
     } else {
       criarMut.mutate({
         companyId, obraId: obraParaCriar, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
-        quantidadeAtual: formItem.quantidadeAtual, quantidadeMinima: formItem.quantidadeMinima,
+        quantidadeAtual: pQtdAtual, quantidadeMinima: pQtdMin,
         observacoes: formItem.observacoes || undefined, fotoUrl: formItem.fotoUrl || undefined,
-        valorUnitario: formItem.valorUnitario || null,
+        valorUnitario: pValUnit || null,
         ...locacaoPayload,
       } as any);
     }
@@ -1122,9 +1129,9 @@ export default function AlmoxarifadoPage() {
                       <input
                         type="text" inputMode="decimal"
                         className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
-                        value={formItem.quantidadeMinima === 0 ? "" : formItem.quantidadeMinima}
+                        value={formItem.quantidadeMinima}
                         placeholder="0"
-                        onChange={e => setFormItem(p => ({ ...p, quantidadeMinima: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
+                        onChange={e => setFormItem(p => ({ ...p, quantidadeMinima: e.target.value }))}
                       />
                     </div>
                     <div>
@@ -1137,9 +1144,9 @@ export default function AlmoxarifadoPage() {
                       <input
                         type="text" inputMode="decimal"
                         className={`mt-1 w-full h-9 px-3 text-sm rounded-lg border bg-white text-gray-900 outline-none transition ${editandoId ? "border-amber-300 focus:border-amber-500" : "border-gray-200 focus:border-emerald-400"}`}
-                        value={formItem.quantidadeAtual === 0 ? "" : formItem.quantidadeAtual}
+                        value={formItem.quantidadeAtual}
                         placeholder="0"
-                        onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
+                        onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: e.target.value }))}
                       />
                     </div>
                   </div>
@@ -1163,8 +1170,8 @@ export default function AlmoxarifadoPage() {
                     <div className="mt-1 flex gap-2">
                       <input type="text" inputMode="decimal" placeholder="0,00"
                         className="flex-1 h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
-                        value={formItem.valorUnitario === 0 ? "" : formItem.valorUnitario}
-                        onChange={e => setFormItem(p => ({ ...p, valorUnitario: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
+                        value={formItem.valorUnitario}
+                        onChange={e => setFormItem(p => ({ ...p, valorUnitario: e.target.value }))} />
                       <button type="button"
                         disabled={sugerindoPreco || !formItem.nome.trim()}
                         title={formItem.fotoUrl ? "IA sugere preço com base na foto e nome" : "IA sugere preço com base no nome do item"}
@@ -1228,15 +1235,15 @@ export default function AlmoxarifadoPage() {
                             <label className="text-xs font-medium text-gray-700">Valor Mensal (R$)</label>
                             <input type="text" inputMode="decimal" placeholder="0,00"
                               className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
-                              value={formItem.valorLocacaoMensal === 0 ? "" : formItem.valorLocacaoMensal}
-                              onChange={e => setFormItem(p => ({ ...p, valorLocacaoMensal: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
+                              value={formItem.valorLocacaoMensal}
+                              onChange={e => setFormItem(p => ({ ...p, valorLocacaoMensal: e.target.value }))} />
                           </div>
                           <div>
                             <label className="text-xs font-medium text-amber-700">Alerta (dias antes)</label>
                             <input type="text" inputMode="numeric" placeholder="7"
                               className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-amber-200 bg-amber-50 text-gray-900 outline-none focus:border-amber-500"
-                              value={formItem.diasAlertaLocacao === 7 && !formItem.dataVencimentoLocacao ? "" : formItem.diasAlertaLocacao}
-                              onChange={e => setFormItem(p => ({ ...p, diasAlertaLocacao: parseInt(e.target.value) || 7 }))} />
+                              value={formItem.diasAlertaLocacao === "7" && !formItem.dataVencimentoLocacao ? "" : formItem.diasAlertaLocacao}
+                              onChange={e => setFormItem(p => ({ ...p, diasAlertaLocacao: e.target.value }))} />
                           </div>
                         </div>
                         <div>
