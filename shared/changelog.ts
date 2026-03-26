@@ -5370,4 +5370,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 20:00:00",
   },
+  {
+    version: 800,
+    titulo: "Sugestões IA para Disciplinas e Tipos de Documento",
+    descricao: "Botão 'Sugestões IA' nas seções de Disciplinas e Tipos de Documento da aba Configurações do módulo Gestão de Documentos. 40 disciplinas pré-cadastradas de construção civil (Arquitetura, Estrutural, Elétrica, Hidrossanitário, Incêndio, Fundações, Topografia, Paisagismo, Geotecnia, Impermeabilização, Acústica, Luminotécnica, Drenagem, Terraplanagem, Contenções, BIM, etc.) organizadas por categoria (Projeto, Instalações, Infraestrutura, Segurança, Gestão, Sustentabilidade). 20 tipos de documento (PE, PB, Memorial Descritivo, ART/RRT, Alvará, Habite-se, etc.). Filtro por categoria, autocomplete inteligente no campo de digitação, itens já cadastrados são ocultados automaticamente.",
+    tipo: "feature",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 21:00:00",
+  },
 ];

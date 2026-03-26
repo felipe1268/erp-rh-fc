@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useLocation } from "wouter";
@@ -89,6 +89,7 @@ import {
   Square,
   FolderPlus,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -1049,6 +1050,7 @@ export default function GestaoDocumentos() {
                   onAdd={(nome, sigla) => createDisciplina.mutate({ companyId, nome, sigla })}
                   fieldLabel1="Nome da Disciplina"
                   fieldLabel2="Sigla"
+                  sugestoes={SUGESTOES_DISCIPLINAS}
                 />
                 <div className="mt-4">
                   <ConfigSection
@@ -1058,6 +1060,7 @@ export default function GestaoDocumentos() {
                     onAdd={(nome, sigla) => createTipo.mutate({ companyId, nome, sigla })}
                     fieldLabel1="Nome do Tipo"
                     fieldLabel2="Sigla"
+                    sugestoes={SUGESTOES_TIPOS_DOC}
                   />
                 </div>
                 <div className="mt-4">
@@ -1896,17 +1899,127 @@ function InfoCell({ label, value }: { label: string; value: any }) {
   );
 }
 
-function ConfigSection({ title, subtitle, items, onAdd, fieldLabel1, fieldLabel2 }: {
+const SUGESTOES_DISCIPLINAS: Array<{ nome: string; sigla: string; categoria: string }> = [
+  { nome: "Arquitetura", sigla: "ARQ", categoria: "Projeto" },
+  { nome: "Estrutural", sigla: "EST", categoria: "Projeto" },
+  { nome: "Elétrica", sigla: "ELE", categoria: "Instalações" },
+  { nome: "Hidrossanitário", sigla: "HID", categoria: "Instalações" },
+  { nome: "HVAC / Climatização", sigla: "CLI", categoria: "Instalações" },
+  { nome: "Incêndio", sigla: "INC", categoria: "Segurança" },
+  { nome: "Fundações", sigla: "FUN", categoria: "Projeto" },
+  { nome: "Topografia", sigla: "TOP", categoria: "Projeto" },
+  { nome: "Paisagismo", sigla: "PAI", categoria: "Projeto" },
+  { nome: "Comunicação / Dados", sigla: "COM", categoria: "Instalações" },
+  { nome: "Automação", sigla: "AUT", categoria: "Instalações" },
+  { nome: "Geotecnia", sigla: "GEO", categoria: "Projeto" },
+  { nome: "Impermeabilização", sigla: "IMP", categoria: "Projeto" },
+  { nome: "Acústica", sigla: "ACU", categoria: "Projeto" },
+  { nome: "Luminotécnica", sigla: "LUM", categoria: "Instalações" },
+  { nome: "Gás", sigla: "GAS", categoria: "Instalações" },
+  { nome: "Drenagem", sigla: "DRE", categoria: "Infraestrutura" },
+  { nome: "Terraplanagem", sigla: "TER", categoria: "Infraestrutura" },
+  { nome: "Pavimentação", sigla: "PAV", categoria: "Infraestrutura" },
+  { nome: "Contenções", sigla: "CON", categoria: "Projeto" },
+  { nome: "Segurança do Trabalho", sigla: "SST", categoria: "Segurança" },
+  { nome: "Meio Ambiente", sigla: "AMB", categoria: "Licenciamento" },
+  { nome: "Urbanismo", sigla: "URB", categoria: "Projeto" },
+  { nome: "Interiores / Design", sigla: "INT", categoria: "Projeto" },
+  { nome: "Sinalização", sigla: "SIN", categoria: "Segurança" },
+  { nome: "Subestação / SPDA", sigla: "SPD", categoria: "Instalações" },
+  { nome: "Acessibilidade", sigla: "ACE", categoria: "Projeto" },
+  { nome: "Elevadores / Transporte Vertical", sigla: "ELV", categoria: "Instalações" },
+  { nome: "Piscinas / Fontes", sigla: "PIS", categoria: "Instalações" },
+  { nome: "Energia Solar / Fotovoltaica", sigla: "SOL", categoria: "Instalações" },
+  { nome: "Estrutura Metálica", sigla: "MET", categoria: "Projeto" },
+  { nome: "Pré-Moldados", sigla: "PRE", categoria: "Projeto" },
+  { nome: "Reuso de Água", sigla: "REU", categoria: "Sustentabilidade" },
+  { nome: "Esquadrias", sigla: "ESQ", categoria: "Projeto" },
+  { nome: "Fachada / Pele de Vidro", sigla: "FAC", categoria: "Projeto" },
+  { nome: "Proteção Contra Incêndio", sigla: "PCI", categoria: "Segurança" },
+  { nome: "Cabeamento Estruturado", sigla: "CAB", categoria: "Instalações" },
+  { nome: "BIM / Coordenação 3D", sigla: "BIM", categoria: "Gestão" },
+  { nome: "As-Built", sigla: "ASB", categoria: "Gestão" },
+  { nome: "Compatibilização", sigla: "CMP", categoria: "Gestão" },
+];
+
+const SUGESTOES_TIPOS_DOC: Array<{ nome: string; sigla: string; categoria: string }> = [
+  { nome: "Projeto Executivo", sigla: "PE", categoria: "Projeto" },
+  { nome: "Projeto Básico", sigla: "PB", categoria: "Projeto" },
+  { nome: "Projeto Legal", sigla: "PL", categoria: "Projeto" },
+  { nome: "Anteprojeto", sigla: "AP", categoria: "Projeto" },
+  { nome: "Estudo Preliminar", sigla: "EP", categoria: "Projeto" },
+  { nome: "Memorial Descritivo", sigla: "MD", categoria: "Documento" },
+  { nome: "Memorial de Cálculo", sigla: "MC", categoria: "Documento" },
+  { nome: "Especificação Técnica", sigla: "ET", categoria: "Documento" },
+  { nome: "Planilha de Quantidades", sigla: "PQ", categoria: "Documento" },
+  { nome: "Cronograma", sigla: "CR", categoria: "Documento" },
+  { nome: "Relatório Técnico", sigla: "RT", categoria: "Documento" },
+  { nome: "Laudo Técnico", sigla: "LT", categoria: "Documento" },
+  { nome: "ART / RRT", sigla: "ART", categoria: "Legal" },
+  { nome: "Alvará", sigla: "ALV", categoria: "Legal" },
+  { nome: "Licença Ambiental", sigla: "LA", categoria: "Legal" },
+  { nome: "Habite-se", sigla: "HAB", categoria: "Legal" },
+  { nome: "Caderno de Encargos", sigla: "CE", categoria: "Documento" },
+  { nome: "Perspectiva / Render", sigla: "3D", categoria: "Imagem" },
+  { nome: "Detalhamento", sigla: "DT", categoria: "Projeto" },
+  { nome: "As-Built", sigla: "AB", categoria: "Projeto" },
+];
+
+function ConfigSection({ title, subtitle, items, onAdd, fieldLabel1, fieldLabel2, sugestoes }: {
   title: string;
   subtitle?: string;
   items: any[];
   onAdd: (nome: string, sigla: string) => void;
   fieldLabel1: string;
   fieldLabel2: string;
+  sugestoes?: Array<{ nome: string; sigla: string; categoria: string }>;
 }) {
   const [nome, setNome] = useState("");
   const [sigla, setSigla] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showSugestoes, setShowSugestoes] = useState(false);
+  const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
+  const [pendingAdds, setPendingAdds] = useState<Set<string>>(new Set());
+  const sugRef = useRef<HTMLDivElement>(null);
+
+  const existingNames = new Set((items || []).map((i: any) => i.nome?.toLowerCase()));
+  const existingSiglas = new Set((items || []).map((i: any) => i.sigla?.toLowerCase()));
+
+  const filteredSugestoes = (sugestoes || []).filter(s => {
+    if (existingNames.has(s.nome.toLowerCase()) || existingSiglas.has(s.sigla.toLowerCase()) || pendingAdds.has(s.sigla)) return false;
+    if (selectedCategoria && s.categoria !== selectedCategoria) return false;
+    if (nome.length >= 2) {
+      const term = nome.toLowerCase();
+      return s.nome.toLowerCase().includes(term) || s.sigla.toLowerCase().includes(term);
+    }
+    return true;
+  });
+
+  const categorias = [...new Set((sugestoes || []).map(s => s.categoria))];
+
+  const inputSugestoes = nome.length >= 2 && sugestoes
+    ? (sugestoes || []).filter(s =>
+        !existingNames.has(s.nome.toLowerCase()) &&
+        !existingSiglas.has(s.sigla.toLowerCase()) &&
+        (s.nome.toLowerCase().includes(nome.toLowerCase()) || s.sigla.toLowerCase().includes(nome.toLowerCase()))
+      ).slice(0, 5)
+    : [];
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sugRef.current && !sugRef.current.contains(e.target as Node)) {
+        setShowSugestoes(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const pickSugestao = (s: { nome: string; sigla: string }) => {
+    if (pendingAdds.has(s.sigla)) return;
+    setPendingAdds(prev => new Set(prev).add(s.sigla));
+    onAdd(s.nome, s.sigla);
+  };
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -1926,15 +2039,90 @@ function ConfigSection({ title, subtitle, items, onAdd, fieldLabel1, fieldLabel2
           <p className="text-gray-400 text-sm py-2">Cadastro rápido será carregado automaticamente...</p>
         )}
       </div>
-      {!showAddForm ? (
-        <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="text-xs border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300">
-          <Plus className="w-3 h-3 mr-1" /> Adicionar manualmente
-        </Button>
-      ) : (
-        <div className="flex items-end gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
-          <div className="flex-1">
+
+      <div className="flex gap-2 mb-2">
+        {!showAddForm && (
+          <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="text-xs border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300">
+            <Plus className="w-3 h-3 mr-1" /> Adicionar manualmente
+          </Button>
+        )}
+        {sugestoes && sugestoes.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSugestoes(!showSugestoes)}
+            className="text-xs border-dashed border-purple-300 text-purple-600 hover:text-purple-700 hover:border-purple-400 hover:bg-purple-50"
+          >
+            <Sparkles className="w-3 h-3 mr-1" /> Sugestões IA
+          </Button>
+        )}
+      </div>
+
+      {showSugestoes && sugestoes && (
+        <div ref={sugRef} className="bg-gradient-to-br from-purple-50 to-blue-50 p-3 rounded-lg border border-purple-200 mb-3 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-4 h-4 text-purple-600" />
+            <span className="text-sm font-medium text-purple-800">Sugestões para construção civil</span>
+            <span className="text-xs text-purple-500 ml-auto">{filteredSugestoes.length} disponíveis</span>
+          </div>
+
+          <div className="flex flex-wrap gap-1 mb-2">
+            <button
+              onClick={() => setSelectedCategoria(null)}
+              className={`px-2 py-0.5 rounded-full text-xs transition-colors ${!selectedCategoria ? 'bg-purple-600 text-white' : 'bg-white text-purple-600 border border-purple-200 hover:bg-purple-100'}`}
+            >
+              Todas
+            </button>
+            {categorias.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategoria(selectedCategoria === cat ? null : cat)}
+                className={`px-2 py-0.5 rounded-full text-xs transition-colors ${selectedCategoria === cat ? 'bg-purple-600 text-white' : 'bg-white text-purple-600 border border-purple-200 hover:bg-purple-100'}`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+            {filteredSugestoes.map(s => (
+              <button
+                key={s.sigla}
+                onClick={() => pickSugestao(s)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-purple-100 hover:border-purple-400 hover:bg-purple-50 transition-all text-left group shadow-sm"
+              >
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-100 text-purple-700 group-hover:bg-purple-200">{s.sigla}</span>
+                <span className="text-xs text-gray-700 group-hover:text-purple-900">{s.nome}</span>
+                <Plus className="w-3 h-3 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
+              </button>
+            ))}
+            {filteredSugestoes.length === 0 && (
+              <p className="text-xs text-purple-400 py-2 w-full text-center">Todas as sugestões já foram adicionadas!</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showAddForm && (
+        <div className="flex items-end gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200 relative">
+          <div className="flex-1 relative">
             <Label className="text-gray-500 text-xs">{fieldLabel1}</Label>
-            <Input value={nome} onChange={(e) => setNome(e.target.value)} className="bg-white border-gray-300 text-gray-900 h-8 text-sm" />
+            <Input value={nome} onChange={(e) => setNome(e.target.value)} className="bg-white border-gray-300 text-gray-900 h-8 text-sm" placeholder="Digite para ver sugestões..." />
+            {inputSugestoes.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
+                {inputSugestoes.map(s => (
+                  <button
+                    key={s.sigla}
+                    onClick={() => { setNome(s.nome); setSigla(s.sigla); }}
+                    className="flex items-center gap-2 px-3 py-2 w-full text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-0"
+                  >
+                    <Sparkles className="w-3 h-3 text-purple-400" />
+                    <span className="text-sm text-gray-700">{s.nome}</span>
+                    <span className="text-xs font-mono text-gray-400 ml-auto">{s.sigla}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="w-28">
             <Label className="text-gray-500 text-xs">{fieldLabel2}</Label>
