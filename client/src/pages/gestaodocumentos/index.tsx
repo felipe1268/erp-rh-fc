@@ -558,6 +558,13 @@ export default function GestaoDocumentos() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const deleteRev = trpc.gestaoDocumentos.deleteRevisao.useMutation({
+    onSuccess: () => {
+      toast.success("Revisão apagada");
+      utils.gestaoDocumentos.listRevisoes.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const createArt = trpc.gestaoDocumentos.createArt.useMutation({
     onSuccess: () => {
       toast.success("ART/RRT cadastrada");
@@ -1892,18 +1899,28 @@ export default function GestaoDocumentos() {
                                   )}
                                   <p className="text-xs text-gray-400 mt-1">{dbRev.criadoEm ? new Date(dbRev.criadoEm).toLocaleString("pt-BR") : ""}</p>
                                 </div>
-                                {dbRev.status === "pendente" && (
-                                  <div className="flex items-center gap-2">
-                                    <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-300 hover:bg-green-50"
-                                      onClick={() => aprovarRev.mutate({ id: dbRev.id, companyId, documentoId: selectedDoc.id })}>
-                                      <CheckCircle className="w-3 h-3 mr-1" /> Aprovar
-                                    </Button>
-                                    <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300 hover:bg-red-50"
-                                      onClick={() => rejeitarRev.mutate({ id: dbRev.id, companyId, documentoId: selectedDoc.id })}>
-                                      <XCircle className="w-3 h-3 mr-1" /> Rejeitar
-                                    </Button>
-                                  </div>
-                                )}
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {dbRev.status === "pendente" && (
+                                    <>
+                                      <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-300 hover:bg-green-50"
+                                        onClick={() => aprovarRev.mutate({ id: dbRev.id, companyId, documentoId: selectedDoc.id })}>
+                                        <CheckCircle className="w-3 h-3 mr-1" /> Aprovar
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300 hover:bg-red-50"
+                                        onClick={() => rejeitarRev.mutate({ id: dbRev.id, companyId, documentoId: selectedDoc.id })}>
+                                        <XCircle className="w-3 h-3 mr-1" /> Rejeitar
+                                      </Button>
+                                    </>
+                                  )}
+                                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                    onClick={() => {
+                                      if (confirm("Apagar esta revisão permanentemente?")) {
+                                        deleteRev.mutate({ id: dbRev.id, companyId });
+                                      }
+                                    }}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </div>
                             );
                           }

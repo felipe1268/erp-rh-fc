@@ -766,6 +766,21 @@ export const gestaoDocumentosRouter = router({
       return { success: true };
     }),
 
+  deleteRevisao: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(gdRevisoes).where(and(
+        eq(gdRevisoes.id, input.id),
+        eq(gdRevisoes.companyId, input.companyId),
+      ));
+      return { success: true };
+    }),
+
   listComentarios: protectedProcedure
     .input(z.object({ companyId: z.number(), revisaoId: z.number() }))
     .query(async ({ input }) => {
