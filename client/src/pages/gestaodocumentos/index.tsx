@@ -142,6 +142,9 @@ export default function GestaoDocumentos() {
   const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any>(null);
 
+  const [showUploadConfirm, setShowUploadConfirm] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<{ file: File; codigo: string; titulo: string; isRevision: boolean; existingDocId?: number }[]>([]);
+
   const [newDiscForm, setNewDiscForm] = useState({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"] as string[], newSubpasta: "" });
 
   const [docForm, setDocForm] = useState({
@@ -325,7 +328,7 @@ export default function GestaoDocumentos() {
 
   const createRevisao = trpc.gestaoDocumentos.createRevisao.useMutation();
 
-  async function handleBatchUpload(files: FileList) {
+  function handleBatchUpload(files: FileList) {
     if (!selectedObraId) { toast.error("Selecione uma obra primeiro"); return; }
     const validFiles = Array.from(files).filter(f => {
       if (f.size > 30 * 1024 * 1024) { toast.error(`${f.name}: muito grande (máx 30MB)`); return false; }
@@ -337,20 +340,18 @@ export default function GestaoDocumentos() {
       return true;
     });
     if (validFiles.length === 0) return;
-    setBatchUploading(true);
-    setBatchProgress({ current: 0, total: validFiles.length });
-    isBatchRef.current = true;
-    let ok = 0;
-    let fail = 0;
-    let revised = 0;
 
     const currentDocs: any[] = documentos.data || [];
+    const allDocs: any[] = [];
+    const allSubpastas = ["DWG", "PDF", "DOC", "IFC", "REVIT", "SKP", "XLS", "FOTOS", "BIM", "MEMORIAIS"];
+    allSubpastas.forEach(sp => {
+      const spDocs = currentDocs.filter((d: any) => (d.subpasta || "").toUpperCase() === sp);
+      spDocs.forEach((d: any) => allDocs.push(d));
+    });
+    currentDocs.forEach(d => { if (!allDocs.find(x => x.id === d.id)) allDocs.push(d); });
 
-    for (let i = 0; i < validFiles.length; i++) {
-      const file = validFiles[i];
-      setBatchProgress({ current: i + 1, total: validFiles.length });
+    const prepared = validFiles.map(file => {
       const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
-      const discId = selectedDiscId || undefined;
       const { base, rev, revStr } = parseRevision(nameWithoutExt);
 
       const existingDoc = rev >= 0
@@ -360,29 +361,75 @@ export default function GestaoDocumentos() {
           })
         : null;
 
+      let autoTitle = "";
+      if (base) {
+        const matchInOtherSubpasta = allDocs.find((d: any) => {
+          const p = parseRevision(d.titulo || d.codigo || "");
+          return p.base.toLowerCase() === base.toLowerCase() && d.descricao;
+        });
+        if (matchInOtherSubpasta?.descricao) autoTitle = matchInOtherSubpasta.descricao;
+        if (!autoTitle && existingDoc?.descricao) autoTitle = existingDoc.descricao;
+      }
+
+      return {
+        file,
+        codigo: nameWithoutExt,
+        titulo: autoTitle,
+        isRevision: !!existingDoc,
+        existingDocId: existingDoc?.id,
+      };
+    });
+
+    setPendingFiles(prepared);
+    setShowUploadConfirm(true);
+    if (batchFileInputRef.current) batchFileInputRef.current.value = "";
+  }
+
+  async function handleConfirmUpload() {
+    if (!selectedObraId) return;
+    setShowUploadConfirm(false);
+    setBatchUploading(true);
+    setBatchProgress({ current: 0, total: pendingFiles.length });
+    isBatchRef.current = true;
+    let ok = 0;
+    let fail = 0;
+    let revised = 0;
+
+    const currentDocs: any[] = documentos.data || [];
+
+    for (let i = 0; i < pendingFiles.length; i++) {
+      const pf = pendingFiles[i];
+      setBatchProgress({ current: i + 1, total: pendingFiles.length });
+      const discId = selectedDiscId || undefined;
+      const { rev, revStr } = parseRevision(pf.codigo);
+
       try {
-        if (existingDoc) {
-          const oldParsed = parseRevision(existingDoc.titulo || existingDoc.codigo || "");
-          await createRevisao.mutateAsync({
-            companyId,
-            documentoId: existingDoc.id,
-            numero: revStr,
-            descricao: `Atualização de R${oldParsed.revStr || "00"} para R${revStr}`,
-            arquivoUrl: existingDoc.arquivoUrl || undefined,
-            arquivoNome: existingDoc.arquivoNome || undefined,
-            arquivoTamanho: existingDoc.arquivoTamanho || undefined,
-            motivoRevisao: "Upload de nova revisão",
-          });
-          await uploadFileToDoc(existingDoc.id, file);
-          await updateDoc.mutateAsync({
-            id: existingDoc.id,
-            companyId,
-            titulo: nameWithoutExt,
-            codigo: nameWithoutExt,
-          });
-          existingDoc.titulo = nameWithoutExt;
-          existingDoc.codigo = nameWithoutExt;
-          revised++;
+        if (pf.isRevision && pf.existingDocId) {
+          const existingDoc = currentDocs.find((d: any) => d.id === pf.existingDocId);
+          if (existingDoc) {
+            const oldParsed = parseRevision(existingDoc.titulo || existingDoc.codigo || "");
+            await createRevisao.mutateAsync({
+              companyId,
+              documentoId: existingDoc.id,
+              numero: revStr,
+              descricao: `Atualização de R${oldParsed.revStr || "00"} para R${revStr}`,
+              arquivoUrl: existingDoc.arquivoUrl || undefined,
+              arquivoNome: existingDoc.arquivoNome || undefined,
+              arquivoTamanho: existingDoc.arquivoTamanho || undefined,
+              motivoRevisao: "Upload de nova revisão",
+            });
+            await uploadFileToDoc(existingDoc.id, pf.file);
+            await updateDoc.mutateAsync({
+              id: existingDoc.id,
+              companyId,
+              titulo: pf.codigo,
+              codigo: pf.codigo,
+              descricao: pf.titulo || undefined,
+            });
+            existingDoc.titulo = pf.codigo;
+            existingDoc.codigo = pf.codigo;
+            revised++;
+          }
           ok++;
         } else {
           const doc = await createDoc.mutateAsync({
@@ -392,12 +439,13 @@ export default function GestaoDocumentos() {
             disciplinaId: discId,
             pastaId: undefined,
             subpasta: selectedSubpasta || undefined,
-            codigo: nameWithoutExt,
-            titulo: nameWithoutExt,
+            codigo: pf.codigo,
+            titulo: pf.codigo,
+            descricao: pf.titulo || undefined,
             dataEmissao: new Date().toISOString().split("T")[0],
           });
           if (doc?.id) {
-            await uploadFileToDoc(doc.id, file);
+            await uploadFileToDoc(doc.id, pf.file);
           }
           ok++;
         }
@@ -408,6 +456,7 @@ export default function GestaoDocumentos() {
     isBatchRef.current = false;
     setBatchUploading(false);
     setBatchProgress({ current: 0, total: 0 });
+    setPendingFiles([]);
     utils.gestaoDocumentos.listDocumentos.invalidate();
     if (fail === 0) {
       const msg = revised > 0
@@ -417,7 +466,6 @@ export default function GestaoDocumentos() {
     } else {
       toast.warning(`${ok} processado(s), ${fail} com erro`);
     }
-    if (batchFileInputRef.current) batchFileInputRef.current.value = "";
   }
 
   const isBatchRef = useRef(false);
@@ -1144,16 +1192,23 @@ export default function GestaoDocumentos() {
                                 />
                               </TableCell>
                               <TableCell className="text-gray-900 text-sm overflow-visible">
-                                <span className="flex items-center gap-1.5 flex-nowrap">
-                                  {doc.arquivoUrl && <Paperclip className="w-3 h-3 text-blue-500 shrink-0" />}
-                                  <span className="truncate">{doc.titulo}</span>
-                                  {missingPdf && (
-                                    <span className="shrink-0 inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-semibold rounded-full border border-red-300 whitespace-nowrap">
-                                      <AlertTriangle className="w-3 h-3" />
-                                      Sem PDF
+                                <div className="flex items-start gap-1.5 flex-nowrap">
+                                  {doc.arquivoUrl && <Paperclip className="w-3 h-3 text-blue-500 shrink-0 mt-1" />}
+                                  <div className="min-w-0">
+                                    <span className="flex items-center gap-1.5 flex-nowrap">
+                                      <span className="truncate text-xs font-mono text-gray-600">{doc.titulo}</span>
+                                      {missingPdf && (
+                                        <span className="shrink-0 inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-semibold rounded-full border border-red-300 whitespace-nowrap">
+                                          <AlertTriangle className="w-3 h-3" />
+                                          Sem PDF
+                                        </span>
+                                      )}
                                     </span>
-                                  )}
-                                </span>
+                                    {doc.descricao && (
+                                      <p className="text-[11px] text-gray-500 truncate mt-0.5">{doc.descricao}</p>
+                                    )}
+                                  </div>
+                                </div>
                               </TableCell>
                               <TableCell>
                                 {disc ? (
@@ -1592,17 +1647,100 @@ export default function GestaoDocumentos() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal — Confirmação de Upload */}
+      <Dialog open={showUploadConfirm} onOpenChange={(open) => { if (!open) { setShowUploadConfirm(false); setPendingFiles([]); } }}>
+        <DialogContent resizable={false} className="w-[95vw] max-w-[900px] max-h-[85vh] bg-white border-gray-200 text-gray-900 overflow-hidden flex flex-col p-0">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-100 shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Upload className="w-5 h-5 text-blue-600" />
+              Confirmar Upload — {pendingFiles.length} arquivo(s)
+            </DialogTitle>
+            <p className="text-sm text-gray-500 mt-1">Preencha o título da planta para cada documento. Se já existir um DWG/PDF cadastrado com o mesmo nome, o título é preenchido automaticamente.</p>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="space-y-3">
+              {pendingFiles.map((pf, idx) => (
+                <div key={idx} className={`p-4 rounded-xl border ${pf.isRevision ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50"}`}>
+                  <div className="flex items-start gap-4">
+                    <div className="shrink-0 mt-1">
+                      {pf.isRevision ? (
+                        <span className="px-2 py-1 rounded text-[10px] font-bold bg-amber-100 text-amber-700">REVISÃO</span>
+                      ) : (
+                        <span className="px-2 py-1 rounded text-[10px] font-bold bg-green-100 text-green-700">NOVO</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Código (arquivo)</p>
+                        <p className="text-xs font-mono text-gray-600 truncate">{pf.codigo}</p>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5 block">Título da Planta</label>
+                        <input
+                          type="text"
+                          value={pf.titulo}
+                          onChange={(e) => {
+                            const updated = [...pendingFiles];
+                            updated[idx] = { ...updated[idx], titulo: e.target.value };
+                            const { base } = parseRevision(pf.codigo);
+                            updated.forEach((uf, uidx) => {
+                              if (uidx !== idx && !uf.titulo) {
+                                const ub = parseRevision(uf.codigo);
+                                if (ub.base.toLowerCase() === base.toLowerCase()) {
+                                  updated[uidx] = { ...updated[uidx], titulo: e.target.value };
+                                }
+                              }
+                            });
+                            setPendingFiles(updated);
+                          }}
+                          placeholder="Ex: Planta Baixa Layout 5° Pavimento"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      <button
+                        onClick={() => setPendingFiles(pendingFiles.filter((_, i) => i !== idx))}
+                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between shrink-0">
+            <p className="text-xs text-gray-400">
+              {pendingFiles.filter(f => f.isRevision).length > 0 && (
+                <span className="text-amber-600 font-medium">{pendingFiles.filter(f => f.isRevision).length} revisão(ões) detectada(s)</span>
+              )}
+              {pendingFiles.filter(f => !f.isRevision).length > 0 && (
+                <span className="text-green-600 font-medium ml-2">{pendingFiles.filter(f => !f.isRevision).length} novo(s)</span>
+              )}
+            </p>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={() => { setShowUploadConfirm(false); setPendingFiles([]); }} className="border-gray-300 text-gray-600">
+                Cancelar
+              </Button>
+              <Button onClick={handleConfirmUpload} className="bg-blue-600 text-white hover:bg-blue-700" disabled={pendingFiles.length === 0}>
+                <Upload className="w-4 h-4 mr-1" /> Confirmar e Enviar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal — Detalhe do Documento */}
       <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
         <DialogContent resizable={false} className="w-[98vw] max-w-[98vw] h-[95vh] max-h-[95vh] bg-white border-gray-200 text-gray-900 overflow-hidden flex flex-col p-0">
           <DialogHeader className="px-8 pt-6 pb-4 border-b border-gray-100 shrink-0">
             <DialogTitle className="flex items-center gap-3 text-xl">
               <FileText className="w-6 h-6 text-blue-600" />
-              {selectedDoc?.titulo}
+              {selectedDoc?.descricao || selectedDoc?.titulo}
             </DialogTitle>
-            {selectedDoc?.codigo && selectedDoc.codigo !== selectedDoc.titulo && (
-              <p className="text-sm text-gray-500 mt-1 ml-9">Código: {selectedDoc.codigo}</p>
-            )}
+            <p className="text-xs font-mono text-gray-400 mt-1 ml-9">{selectedDoc?.titulo}</p>
           </DialogHeader>
           {selectedDoc && (
             <div className="flex-1 overflow-y-auto px-8 py-6">

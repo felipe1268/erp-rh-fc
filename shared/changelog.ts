@@ -5460,4 +5460,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 00:30:00",
   },
+  {
+    version: 810,
+    titulo: "Tela de confirmação de upload com título da planta e auto-preenchimento",
+    descricao: "Ao enviar documentos, abre uma tela de confirmação listando todos os arquivos com: código do arquivo (menor, em fonte mono) e campo editável 'Título da Planta'. Se um documento com a mesma base já existir (DWG/PDF/DOC), o título é preenchido automaticamente. Na lista principal, o código aparece menor e o título da planta aparece abaixo. No modal de detalhes, o título da planta é exibido como título principal.",
+    tipo: "feature",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 00:40:00",
+  },
 ];
