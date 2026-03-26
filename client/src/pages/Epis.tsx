@@ -1216,9 +1216,9 @@ export default function Epis() {
                 <SearchableSelect
                   options={episList.map((e: any) => ({
                     value: String(e.id),
-                    label: `${e.nome} ${e.ca ? `(CA: ${e.ca})` : ""}`,
+                    label: `${e.nome}${e.tamanho ? ` (Tam: ${e.tamanho})` : ""} ${e.ca ? `(CA: ${e.ca})` : ""}`,
                     subtitle: `Estoque: ${e.quantidadeEstoque ?? 0}${e.valorProduto ? ` — ${parseFloat(String(e.valorProduto)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ""}`,
-                    searchExtra: `${e.ca || ""} ${e.nome || ""}`,
+                    searchExtra: `${e.ca || ""} ${e.nome || ""} ${e.tamanho || ""}`,
                   }))}
                   value={entregaForm.epiId || undefined}
                   onValueChange={v => {
@@ -1253,7 +1253,7 @@ export default function Epis() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-gray-900 truncate">{epiSel.nome}</p>
+                        <p className="font-semibold text-sm text-gray-900 truncate">{epiSel.nome}{epiSel.tamanho ? ` (Tam: ${epiSel.tamanho})` : ""}</p>
                         {epiSel.ca && <p className="text-xs text-gray-500">CA: {epiSel.ca}</p>}
                         <p className="text-xs text-gray-500">
                           Estoque: <span className={`font-medium ${(epiSel.quantidadeEstoque ?? 0) > 0 ? "text-green-600" : "text-red-500"}`}>{epiSel.quantidadeEstoque ?? 0} unid.</span>
@@ -2918,7 +2918,7 @@ export default function Epis() {
                   <SelectTrigger className="w-full"><SelectValue placeholder="Selecione o EPI..." /></SelectTrigger>
                   <SelectContent>
                     {(episQ.data || []).map((e: any) => (
-                      <SelectItem key={e.id} value={String(e.id)}>{e.nome} {e.ca ? `(CA ${e.ca})` : ''}</SelectItem>
+                      <SelectItem key={e.id} value={String(e.id)}>{e.nome}{e.tamanho ? ` (Tam: ${e.tamanho})` : ''} {e.ca ? `(CA ${e.ca})` : ''}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
