@@ -1162,7 +1162,10 @@ export default function GestaoDocumentos() {
                                   </span>
                                 ) : <span className="text-gray-400">—</span>}
                               </TableCell>
-                              <TableCell className="text-center text-gray-700 text-sm font-medium">{doc.revisaoAtual || "0"}</TableCell>
+                              <TableCell className="text-center text-gray-700 text-sm font-medium">{(() => {
+                                const p = parseRevision(doc.titulo || doc.codigo || "");
+                                return p.rev >= 0 ? p.rev : (doc.revisaoAtual || "0");
+                              })()}</TableCell>
                               <TableCell onClick={(e) => e.stopPropagation()}>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
@@ -1667,61 +1670,107 @@ export default function GestaoDocumentos() {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-xs text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                      <History className="w-4 h-4" /> Histórico de Revisões
+                      <History className="w-4 h-4" /> Histórico Completo de Revisões
                     </h4>
                     <Button size="sm" onClick={() => setShowRevModal(true)} className="bg-blue-600 text-white hover:bg-blue-700 h-9 px-4">
                       <Plus className="w-4 h-4 mr-1" /> Nova Revisão
                     </Button>
                   </div>
-                  {(revisoes.data || []).length === 0 ? (
-                    <div className="text-center py-8 bg-gray-50 rounded-xl border border-gray-100">
-                      <History className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                      <p className="text-gray-500 text-sm">Nenhuma revisão registrada.</p>
-                      <p className="text-gray-400 text-xs mt-1">Faça upload de uma nova versão do arquivo para criar uma revisão automaticamente.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {(revisoes.data || []).map(rev => (
-                        <div key={rev.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-sm font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">Rev. {rev.numero}</span>
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                rev.status === "aprovada" ? "bg-green-100 text-green-800" :
-                                rev.status === "rejeitada" ? "bg-red-100 text-red-800" :
-                                "bg-yellow-100 text-yellow-800"
-                              }`}>
-                                {rev.status === "aprovada" ? "Aprovada" : rev.status === "rejeitada" ? "Rejeitada" : "Pendente"}
-                              </span>
-                            </div>
-                            {rev.descricao && <p className="text-sm text-gray-600 mt-2">{rev.descricao}</p>}
-                            {rev.arquivoNome && (
-                              <div className="flex items-center gap-2 mt-2">
-                                <Paperclip className="w-3 h-3 text-gray-400" />
-                                <span className="text-xs text-gray-500">{rev.arquivoNome}</span>
-                                {rev.arquivoUrl && (
-                                  <a href={rev.arquivoUrl} download={rev.arquivoNome} className="text-xs text-blue-600 hover:text-blue-800 underline ml-1">Baixar</a>
+                  {(() => {
+                    const dbRevs = revisoes.data || [];
+                    const parsed = parseRevision(selectedDoc.titulo || selectedDoc.codigo || "");
+                    const currentRevNum = parsed.rev >= 0 ? parsed.rev : 0;
+                    const dbRevMap = new Map<number, typeof dbRevs[0]>();
+                    dbRevs.forEach(r => {
+                      const num = parseInt(r.numero, 10);
+                      if (!isNaN(num)) dbRevMap.set(num, r);
+                    });
+                    const allRevNums: number[] = [];
+                    for (let i = 0; i <= currentRevNum; i++) allRevNums.push(i);
+                    dbRevMap.forEach((_, k) => { if (!allRevNums.includes(k)) allRevNums.push(k); });
+                    allRevNums.sort((a, b) => b - a);
+
+                    return (
+                      <div className="space-y-2">
+                        {allRevNums.map(revNum => {
+                          const dbRev = dbRevMap.get(revNum);
+                          const isCurrent = revNum === currentRevNum;
+                          const revLabel = revNum.toString().padStart(2, "0");
+
+                          if (isCurrent) {
+                            return (
+                              <div key={`rev-${revNum}`} className="flex items-center justify-between p-4 rounded-xl border-2 border-blue-300 bg-blue-50">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-mono text-sm font-bold text-white bg-blue-600 px-3 py-1 rounded">R{revLabel}</span>
+                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Atual</span>
+                                  </div>
+                                  <p className="text-sm text-blue-700 mt-2 font-medium">{selectedDoc.arquivoNome || selectedDoc.titulo}</p>
+                                  {selectedDoc.arquivoTamanho && <p className="text-xs text-blue-500 mt-0.5">{(selectedDoc.arquivoTamanho / 1024).toFixed(0)} KB</p>}
+                                </div>
+                                {selectedDoc.arquivoUrl && (
+                                  <a href={selectedDoc.arquivoUrl} download={selectedDoc.arquivoNome || "arquivo"} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
+                                    <Download className="w-3 h-3" /> Baixar
+                                  </a>
                                 )}
                               </div>
-                            )}
-                            <p className="text-xs text-gray-400 mt-1">{rev.criadoEm ? new Date(rev.criadoEm).toLocaleString("pt-BR") : ""}</p>
-                          </div>
-                          {rev.status === "pendente" && (
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-300 hover:bg-green-50"
-                                onClick={() => aprovarRev.mutate({ id: rev.id, companyId, documentoId: selectedDoc.id })}>
-                                <CheckCircle className="w-3 h-3 mr-1" /> Aprovar
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300 hover:bg-red-50"
-                                onClick={() => rejeitarRev.mutate({ id: rev.id, companyId, documentoId: selectedDoc.id })}>
-                                <XCircle className="w-3 h-3 mr-1" /> Rejeitar
-                              </Button>
+                            );
+                          }
+
+                          if (dbRev) {
+                            return (
+                              <div key={`rev-${revNum}`} className="flex items-center justify-between p-4 rounded-xl border border-gray-200 bg-gray-50">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-mono text-sm font-semibold text-gray-700 bg-gray-200 px-3 py-1 rounded">R{revLabel}</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                      dbRev.status === "aprovada" ? "bg-green-100 text-green-800" :
+                                      dbRev.status === "rejeitada" ? "bg-red-100 text-red-800" :
+                                      "bg-yellow-100 text-yellow-800"
+                                    }`}>
+                                      {dbRev.status === "aprovada" ? "Aprovada" : dbRev.status === "rejeitada" ? "Rejeitada" : "Pendente"}
+                                    </span>
+                                  </div>
+                                  {dbRev.descricao && <p className="text-sm text-gray-600 mt-2">{dbRev.descricao}</p>}
+                                  {dbRev.arquivoNome && (
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <Paperclip className="w-3 h-3 text-gray-400" />
+                                      <span className="text-xs text-gray-500">{dbRev.arquivoNome}</span>
+                                      {dbRev.arquivoUrl && (
+                                        <a href={dbRev.arquivoUrl} download={dbRev.arquivoNome} className="text-xs text-blue-600 hover:text-blue-800 underline ml-1">Baixar</a>
+                                      )}
+                                    </div>
+                                  )}
+                                  <p className="text-xs text-gray-400 mt-1">{dbRev.criadoEm ? new Date(dbRev.criadoEm).toLocaleString("pt-BR") : ""}</p>
+                                </div>
+                                {dbRev.status === "pendente" && (
+                                  <div className="flex items-center gap-2">
+                                    <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-300 hover:bg-green-50"
+                                      onClick={() => aprovarRev.mutate({ id: dbRev.id, companyId, documentoId: selectedDoc.id })}>
+                                      <CheckCircle className="w-3 h-3 mr-1" /> Aprovar
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300 hover:bg-red-50"
+                                      onClick={() => rejeitarRev.mutate({ id: dbRev.id, companyId, documentoId: selectedDoc.id })}>
+                                      <XCircle className="w-3 h-3 mr-1" /> Rejeitar
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={`rev-${revNum}`} className="flex items-center p-3 rounded-xl border border-dashed border-gray-200 bg-white">
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-sm text-gray-400 bg-gray-100 px-3 py-1 rounded">R{revLabel}</span>
+                                <span className="text-xs text-gray-400 italic">Sem registro — anterior ao cadastro no sistema</span>
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
