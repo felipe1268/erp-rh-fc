@@ -14,6 +14,7 @@ import {
   gdDistribuicao,
   gdDownloadLog,
   gdArts,
+  gdTiposSubpasta,
   obras,
 } from "../../drizzle/schema";
 
@@ -178,6 +179,7 @@ export const gestaoDocumentosRouter = router({
       nome: z.string().min(1),
       sigla: z.string().min(1).max(10),
       cor: z.string().optional(),
+      subpastas: z.array(z.string()).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -192,7 +194,8 @@ export const gestaoDocumentosRouter = router({
         sigla: input.sigla,
         cor: input.cor,
       }).returning();
-      const pastasValues = PASTAS_PADRAO.map(nome => ({
+      const selectedPastas = input.subpastas && input.subpastas.length > 0 ? input.subpastas : PASTAS_PADRAO;
+      const pastasValues = selectedPastas.map(nome => ({
         companyId: input.companyId,
         ficheiroId: input.ficheiroId,
         disciplinaId: disc.id,
@@ -200,6 +203,44 @@ export const gestaoDocumentosRouter = router({
       }));
       await db.insert(gdPastas).values(pastasValues);
       return disc;
+    }),
+
+  bulkCreateDisciplinasFicheiro: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ficheiroId: z.number(),
+      disciplinas: z.array(z.object({
+        nome: z.string().min(1),
+        sigla: z.string().min(1).max(10),
+        cor: z.string().optional(),
+        subpastas: z.array(z.string()).min(1),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [fichCheck] = await db.select({ id: gdFicheirosObra.id }).from(gdFicheirosObra)
+        .where(and(eq(gdFicheirosObra.id, input.ficheiroId), eq(gdFicheirosObra.companyId, input.companyId)));
+      if (!fichCheck) throw new TRPCError({ code: "NOT_FOUND", message: "Ficheiro não encontrado" });
+      const results = [];
+      for (const d of input.disciplinas) {
+        const [disc] = await db.insert(gdDisciplinas).values({
+          companyId: input.companyId,
+          ficheiroId: input.ficheiroId,
+          nome: d.nome,
+          sigla: d.sigla,
+          cor: d.cor,
+        }).returning();
+        const pastasValues = d.subpastas.map(nome => ({
+          companyId: input.companyId,
+          ficheiroId: input.ficheiroId,
+          disciplinaId: disc.id,
+          nome,
+        }));
+        await db.insert(gdPastas).values(pastasValues);
+        results.push(disc);
+      }
+      return results;
     }),
 
   deleteDisciplinaFicheiro: protectedProcedure
@@ -231,7 +272,7 @@ export const gestaoDocumentosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select().from(gdDisciplinas)
-        .where(eq(gdDisciplinas.companyId, input.companyId))
+        .where(and(eq(gdDisciplinas.companyId, input.companyId), isNull(gdDisciplinas.ficheiroId)))
         .orderBy(gdDisciplinas.nome);
     }),
 
@@ -317,6 +358,54 @@ export const gestaoDocumentosRouter = router({
       await db.update(gdTiposDocumento).set(data)
         .where(and(eq(gdTiposDocumento.id, id), eq(gdTiposDocumento.companyId, companyId)));
       return { success: true };
+    }),
+
+  listTiposSubpasta: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(gdTiposSubpasta)
+        .where(and(eq(gdTiposSubpasta.companyId, input.companyId), eq(gdTiposSubpasta.ativo, true)))
+        .orderBy(gdTiposSubpasta.nome);
+    }),
+
+  createTipoSubpasta: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      nome: z.string().min(1).max(50),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [row] = await db.insert(gdTiposSubpasta).values(input).returning();
+      return row;
+    }),
+
+  deleteTipoSubpasta: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(gdTiposSubpasta).set({ ativo: false })
+        .where(and(eq(gdTiposSubpasta.id, input.id), eq(gdTiposSubpasta.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  seedTiposSubpastaPadrao: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const existing = await db.select().from(gdTiposSubpasta)
+        .where(eq(gdTiposSubpasta.companyId, input.companyId));
+      if (existing.length > 0) return existing;
+      const defaults = PASTAS_PADRAO.map(nome => ({
+        companyId: input.companyId,
+        nome,
+        padrao: true,
+      }));
+      return db.insert(gdTiposSubpasta).values(defaults).returning();
     }),
 
   listDocumentos: protectedProcedure

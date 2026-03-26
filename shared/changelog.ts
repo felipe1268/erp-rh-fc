@@ -5352,4 +5352,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 17:00:00",
   },
+  {
+    version: 798,
+    titulo: "Proj./Doc. Técnicos — Novo Fluxo de Ficheiros por Obra",
+    descricao: "Fluxo completamente redesenhado: tela inicial mostra cards das obras em andamento com mini-resumo (disciplinas, documentos, ARTs). Ao clicar, cria/abre o Ficheiro da Obra. Dentro do ficheiro, modal com checkboxes para selecionar disciplinas (com 'Selecionar Todas') e sub-pastas (DWG, PDF, IFC, DOC — personalizáveis). Nova seção 'Tipos de Sub-pasta' nas Configurações permite adicionar novos tipos (REVIT, SKP, XLS, FOTOS). ARTs aparecem como seção obrigatória com alerta visual. Backend: novo endpoint bulkCreateDisciplinasFicheiro, tabela gd_tipos_subpasta, endpoints CRUD para tipos de sub-pasta, seed automático dos padrões.",
+    tipo: "feature",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 18:00:00",
+  },
 ];

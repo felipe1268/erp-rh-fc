@@ -6233,6 +6233,15 @@ export const gdDownloadLog = pgTable("gd_download_log", {
   index("idx_gd_dl_doc").on(t.documentoId),
 ]);
 
+export const gdTiposSubpasta = pgTable("gd_tipos_subpasta", {
+  id:        serial("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  nome:      varchar("nome", { length: 50 }).notNull(),
+  padrao:    boolean("padrao").default(false),
+  ativo:     boolean("ativo").default(true),
+  criadoEm:  timestamp("criado_em").defaultNow(),
+}, (t) => [index("idx_gd_tsub_company").on(t.companyId)]);
+
 export const gdArts = pgTable("gd_arts", {
   id:            serial("id").primaryKey(),
   companyId:     integer("company_id").notNull(),
