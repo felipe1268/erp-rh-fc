@@ -19,6 +19,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -105,6 +106,8 @@ export default function GestaoDocumentos() {
   const [showArtModal, setShowArtModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showNewDiscModal, setShowNewDiscModal] = useState(false);
+  const [showNewFicheiroModal, setShowNewFicheiroModal] = useState(false);
+  const [ficheiroSearchTerm, setFicheiroSearchTerm] = useState("");
   const [editingDoc, setEditingDoc] = useState<any>(null);
   const [editingArt, setEditingArt] = useState<any>(null);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
@@ -691,46 +694,62 @@ export default function GestaoDocumentos() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Projetos / Documentos Técnicos</h1>
-                <p className="text-sm text-gray-500">Selecione uma obra para abrir suas pastas de documentos</p>
+                <p className="text-sm text-gray-500">Ficheiros criados para suas obras</p>
               </div>
+              <Button onClick={() => { setFicheiroSearchTerm(""); setShowNewFicheiroModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700" size="sm">
+                <Plus className="w-4 h-4 mr-1" /> Novo Ficheiro
+              </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {(obrasDisponiveis.data || []).map((obra) => {
-                const fich = ficheirosMap.get(obra.id);
-                const hasFicheiro = !!fich;
+            {(() => {
+              const ficheirosList = (ficheiros.data || []);
+              const obrasMap = new Map((obrasDisponiveis.data || []).map((o: any) => [o.id, o]));
+              if (ficheirosList.length === 0) {
                 return (
-                  <button
-                    key={obra.id}
-                    onClick={() => handleOpenObra(obra)}
-                    className={`text-left p-4 rounded-lg border transition-all hover:shadow-md ${hasFicheiro ? "border-blue-200 bg-blue-50/30 hover:border-blue-400" : "border-gray-200 bg-white hover:border-gray-400"}`}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <FolderOpen className={`w-8 h-8 ${hasFicheiro ? "text-blue-500" : "text-gray-400"}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{obra.nome}</p>
-                        <p className="text-[11px] text-gray-500">{obra.codigo || "—"}</p>
-                      </div>
-                    </div>
-                    {hasFicheiro && (
-                      <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
-                        <span>{fich.totalDisciplinas || 0} pastas</span>
-                        <span>{fich.totalDocumentos || 0} docs</span>
-                      </div>
-                    )}
-                    {!hasFicheiro && (
-                      <p className="text-[11px] text-gray-400 mt-1">Clique para criar pasta</p>
-                    )}
-                  </button>
+                  <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                    <FolderOpen className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">Nenhum ficheiro criado</h3>
+                    <p className="text-sm text-gray-500 mb-4">Clique em "Novo Ficheiro" para vincular uma obra e começar a organizar seus documentos.</p>
+                    <Button onClick={() => { setFicheiroSearchTerm(""); setShowNewFicheiroModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700">
+                      <Plus className="w-4 h-4 mr-1" /> Novo Ficheiro
+                    </Button>
+                  </div>
                 );
-              })}
-            </div>
-            {(obrasDisponiveis.data || []).length === 0 && (
-              <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-                <FolderOpen className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-700 mb-2">Nenhuma obra disponível</h3>
-                <p className="text-sm text-gray-500">Cadastre obras no módulo de Obras para começar.</p>
-              </div>
-            )}
+              }
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {ficheirosList.map((fich: any) => {
+                    const obra = obrasMap.get(fich.obraId);
+                    return (
+                      <button
+                        key={fich.id}
+                        onClick={() => {
+                          setActiveFicheiroId(fich.id);
+                          setSelectedObraId(fich.obraId);
+                          setSelectedDiscId(null);
+                          setSelectedSubpasta(null);
+                          setExpandedDiscs(new Set());
+                          setSearch("");
+                          setViewMode("ficheiro");
+                        }}
+                        className="text-left p-4 rounded-lg border border-blue-200 bg-blue-50/30 hover:border-blue-400 transition-all hover:shadow-md"
+                      >
+                        <div className="flex items-center gap-3 mb-2">
+                          <FolderOpen className="w-8 h-8 text-blue-500" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{obra?.nome || "Obra"}</p>
+                            <p className="text-[11px] text-gray-500">{obra?.codigo || "—"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
+                          <span>{fich.totalDisciplinas || 0} pastas</span>
+                          <span>{fich.totalDocumentos || 0} docs</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         ) : (
           /* MODO FICHEIRO — Explorador de Pastas */
@@ -1461,6 +1480,60 @@ export default function GestaoDocumentos() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Modal — Novo Ficheiro (selecionar obra) */}
+      <Dialog open={showNewFicheiroModal} onOpenChange={setShowNewFicheiroModal}>
+        <DialogContent className="max-w-lg bg-white border-gray-200 text-gray-900 max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-blue-600" />
+              Novo Ficheiro
+            </DialogTitle>
+            <DialogDescription>Selecione uma obra para criar o ficheiro de documentos</DialogDescription>
+          </DialogHeader>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Buscar obra..."
+              value={ficheiroSearchTerm}
+              onChange={(e) => setFicheiroSearchTerm(e.target.value)}
+              className="pl-9 bg-white border-gray-300 text-gray-900"
+            />
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+            {(() => {
+              const obrasComFicheiro = new Set((ficheiros.data || []).map((f: any) => f.obraId));
+              const obrasSemFicheiro = (obrasDisponiveis.data || []).filter((o: any) => !obrasComFicheiro.has(o.id));
+              const filtradas = obrasSemFicheiro.filter((o: any) =>
+                !ficheiroSearchTerm || o.nome?.toLowerCase().includes(ficheiroSearchTerm.toLowerCase()) || o.codigo?.toLowerCase().includes(ficheiroSearchTerm.toLowerCase())
+              );
+              if (filtradas.length === 0) {
+                return (
+                  <div className="text-center py-8 text-gray-500 text-sm">
+                    {obrasSemFicheiro.length === 0 ? "Todas as obras já possuem ficheiro." : "Nenhuma obra encontrada."}
+                  </div>
+                );
+              }
+              return filtradas.map((obra: any) => (
+                <button
+                  key={obra.id}
+                  onClick={() => {
+                    setShowNewFicheiroModal(false);
+                    handleOpenObra(obra);
+                  }}
+                  className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50/30 transition-all flex items-center gap-3"
+                >
+                  <FolderOpen className="w-6 h-6 text-gray-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{obra.nome}</p>
+                    <p className="text-[11px] text-gray-500">{obra.codigo || "—"}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+                </button>
+              ));
+            })()}
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
