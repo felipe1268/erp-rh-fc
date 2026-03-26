@@ -1005,256 +1005,259 @@ export default function AlmoxarifadoPage() {
       {modalItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black/50" onClick={() => setModalItem(false)} />
-          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-4xl mx-4 max-h-[95vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
               <h2 className="text-base font-semibold text-gray-900">{editandoId ? "Editar Item" : "Novo Item de Estoque"}</h2>
               <button onClick={() => setModalItem(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
             </div>
-            <div className="p-5 space-y-4">
-              {/* Foto */}
-              <div>
-                <label className="text-xs font-medium text-gray-700 mb-2 block">Foto do Produto</label>
-                <div className="flex items-start gap-4">
-                  <div
-                    className="relative w-28 h-28 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden cursor-pointer hover:border-emerald-400 transition group"
-                    onClick={() => fotoInputRef.current?.click()}
-                  >
-                    {uploadingFoto ? (
-                      <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
-                    ) : formItem.fotoUrl ? (
-                      <>
-                        <img src={formItem.fotoUrl} alt="Produto" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
-                          <Camera className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition" />
+            <div className="flex-1 overflow-y-auto p-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                {/* ── Coluna Esquerda ── */}
+                <div className="space-y-4">
+                  {/* Foto */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 mb-2 block">Foto do Produto</label>
+                    <div className="flex items-start gap-4">
+                      <div
+                        className="relative w-24 h-24 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden cursor-pointer hover:border-emerald-400 transition group shrink-0"
+                        onClick={() => fotoInputRef.current?.click()}
+                      >
+                        {uploadingFoto ? (
+                          <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+                        ) : formItem.fotoUrl ? (
+                          <>
+                            <img src={formItem.fotoUrl} alt="Produto" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
+                              <Camera className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition" />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center gap-1 text-gray-300 group-hover:text-emerald-400 transition">
+                            <Camera className="h-7 w-7" />
+                            <span className="text-[10px] text-center leading-tight">Adicionar<br/>foto</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        {editandoId === null ? (
+                          <p className="text-xs text-gray-500">
+                            Tire ou envie uma foto — a <span className="font-medium text-violet-600">IA preencherá os campos automaticamente</span>.
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-500">Foto para identificar o produto visualmente.</p>
+                        )}
+                        {analisandoFotoIA && (
+                          <div className="flex items-center gap-1.5 text-xs text-violet-600 font-medium">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando com IA…
+                          </div>
+                        )}
+                        {camposPreenchidosIA && !analisandoFotoIA && (
+                          <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1">
+                            <Sparkles className="h-3.5 w-3.5" /> Campos preenchidos pela IA
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={() => fotoInputRef.current?.click()} className="text-xs border border-gray-200 px-3 py-1.5 rounded-lg bg-white text-gray-600 hover:bg-gray-50 transition">
+                            {formItem.fotoUrl ? "Trocar foto" : "Escolher imagem"}
+                          </button>
+                          {formItem.fotoUrl && (
+                            <button type="button" onClick={() => { setFormItem(p => ({ ...p, fotoUrl: "" })); setCamposPreenchidosIA(false); }} className="text-xs text-red-500 hover:text-red-700">
+                              Remover
+                            </button>
+                          )}
                         </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center gap-1 text-gray-300 group-hover:text-emerald-400 transition">
-                        <Camera className="h-8 w-8" />
-                        <span className="text-[10px] text-center">Clique para<br/>adicionar foto</span>
+                        <p className="text-[11px] text-gray-400">JPG, PNG ou WEBP • Comprimido automaticamente</p>
                       </div>
-                    )}
+                    </div>
+                    <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleFotoChange} />
                   </div>
-                  <div className="flex-1 space-y-2">
-                    {editandoId === null ? (
-                      <p className="text-xs text-gray-500">
-                        Tire ou envie uma foto — a <span className="font-medium text-violet-600">IA preencherá os campos automaticamente</span>.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-gray-500">Adicione uma foto para identificar visualmente o produto no almoxarifado.</p>
-                    )}
-                    {analisandoFotoIA && (
-                      <div className="flex items-center gap-1.5 text-xs text-violet-600 font-medium">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando com IA…
+
+                  {/* Nome */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-700">Nome do Item *</label>
+                    <input
+                      className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
+                      placeholder="Ex: Cimento CP-II 50kg"
+                      value={formItem.nome} onChange={e => setFormItem(p => ({ ...p, nome: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Unidade + Categoria */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-700">Unidade</label>
+                        <button type="button" onClick={() => setModalUnidades(true)} className="text-xs text-emerald-600 hover:text-emerald-700 underline">
+                          Gerenciar
+                        </button>
                       </div>
-                    )}
-                    {camposPreenchidosIA && !analisandoFotoIA && (
-                      <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1">
-                        <Sparkles className="h-3.5 w-3.5" /> Campos preenchidos pela IA — revise antes de salvar
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => fotoInputRef.current?.click()} className="text-xs border border-gray-200 px-3 py-1.5 rounded-lg bg-white text-gray-600 hover:bg-gray-50 transition">
-                      {formItem.fotoUrl ? "Trocar foto" : "Escolher imagem"}
-                    </button>
-                    {formItem.fotoUrl && (
-                      <button type="button" onClick={() => { setFormItem(p => ({ ...p, fotoUrl: "" })); setCamposPreenchidosIA(false); }} className="text-xs text-red-500 hover:text-red-700">
-                        Remover
+                      <select
+                        value={formItem.unidade}
+                        onChange={e => setFormItem(p => ({ ...p, unidade: e.target.value }))}
+                        className="w-full h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white outline-none focus:border-emerald-400 text-gray-900"
+                      >
+                        {unidades.map(u => (
+                          <option key={u.id} value={u.sigla}>
+                            {u.sigla}{u.descricao ? ` — ${u.descricao}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-700">Categoria</label>
+                      <select
+                        className="mt-1 w-full h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white outline-none focus:border-emerald-400 text-gray-900"
+                        value={formItem.categoria} onChange={e => setFormItem(p => ({ ...p, categoria: e.target.value }))}
+                      >
+                        <option value="">— Selecionar —</option>
+                        {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Qtd mínima + Estoque lado a lado */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-700">Qtd. Mínima (alerta)</label>
+                      <input
+                        type="text" inputMode="decimal"
+                        className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
+                        value={formItem.quantidadeMinima === 0 ? "" : formItem.quantidadeMinima}
+                        placeholder="0"
+                        onChange={e => setFormItem(p => ({ ...p, quantidadeMinima: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-700">
+                        {editandoId ? "Corrigir Estoque Atual" : "Qtd. Inicial"}
+                      </label>
+                      {editandoId && (
+                        <p className="text-[11px] text-amber-600 mt-0.5 leading-tight">⚠ Correção de inventário</p>
+                      )}
+                      <input
+                        type="text" inputMode="decimal"
+                        className={`mt-1 w-full h-9 px-3 text-sm rounded-lg border bg-white text-gray-900 outline-none transition ${editandoId ? "border-amber-300 focus:border-amber-500" : "border-gray-200 focus:border-emerald-400"}`}
+                        value={formItem.quantidadeAtual === 0 ? "" : formItem.quantidadeAtual}
+                        placeholder="0"
+                        onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Observações */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-700">Observações</label>
+                    <textarea
+                      className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 resize-none"
+                      rows={2} value={formItem.observacoes}
+                      onChange={e => setFormItem(p => ({ ...p, observacoes: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                {/* ── Coluna Direita ── */}
+                <div className="space-y-4">
+                  {/* Valor Unitário + IA */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-700">Valor Unitário (R$)</label>
+                    <div className="mt-1 flex gap-2">
+                      <input type="text" inputMode="decimal" placeholder="0,00"
+                        className="flex-1 h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
+                        value={formItem.valorUnitario === 0 ? "" : formItem.valorUnitario}
+                        onChange={e => setFormItem(p => ({ ...p, valorUnitario: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
+                      <button type="button"
+                        disabled={sugerindoPreco || !formItem.nome.trim()}
+                        title={formItem.fotoUrl ? "IA sugere preço com base na foto e nome" : "IA sugere preço com base no nome do item"}
+                        onClick={() => {
+                          setSugerindoPreco(true);
+                          sugerirPrecoMut.mutate({ nome: formItem.nome, unidade: formItem.unidade || undefined, categoria: formItem.categoria || undefined, fotoUrl: formItem.fotoUrl || undefined });
+                        }}
+                        className="flex items-center gap-1 px-3 h-9 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold disabled:opacity-50 transition whitespace-nowrap"
+                      >
+                        {sugerindoPreco ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                        {sugerindoPreco ? "..." : "IA"}
                       </button>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-0.5">O botão IA estima o preço de mercado automaticamente.</p>
+                  </div>
+
+                  {/* Origem (Próprio / Alugado) */}
+                  <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                    <div>
+                      <label className="text-xs font-semibold text-gray-700 mb-2 block">Origem do Equipamento</label>
+                      <div className="flex gap-2">
+                        <button type="button"
+                          onClick={() => setFormItem(p => ({ ...p, origem: "proprio" }))}
+                          className={`flex-1 h-9 text-sm rounded-lg border font-medium transition ${formItem.origem === "proprio" ? "bg-emerald-600 border-emerald-600 text-white" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                          Proprio
+                        </button>
+                        <button type="button"
+                          onClick={() => setFormItem(p => ({ ...p, origem: "alugado" }))}
+                          className={`flex-1 h-9 text-sm rounded-lg border font-medium transition ${formItem.origem === "alugado" ? "bg-amber-500 border-amber-500 text-white" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                          Alugado / Locado
+                        </button>
+                      </div>
+                    </div>
+                    {formItem.origem === "alugado" && (
+                      <div className="space-y-3 pt-2 border-t border-amber-100">
+                        <div>
+                          <label className="text-xs font-medium text-gray-700">Fornecedor / Locadora</label>
+                          <input type="text" placeholder="Ex: Locamig Equipamentos"
+                            className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
+                            value={formItem.fornecedorLocacao}
+                            onChange={e => setFormItem(p => ({ ...p, fornecedorLocacao: e.target.value }))} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs font-medium text-gray-700">Início Locação</label>
+                            <input type="date"
+                              className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
+                              value={formItem.dataInicioLocacao}
+                              onChange={e => setFormItem(p => ({ ...p, dataInicioLocacao: e.target.value }))} />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-amber-700 font-semibold">Vencimento</label>
+                            <input type="date"
+                              className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-amber-300 bg-amber-50 text-gray-900 outline-none focus:border-amber-500"
+                              value={formItem.dataVencimentoLocacao}
+                              onChange={e => setFormItem(p => ({ ...p, dataVencimentoLocacao: e.target.value }))} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs font-medium text-gray-700">Valor Mensal (R$)</label>
+                            <input type="text" inputMode="decimal" placeholder="0,00"
+                              className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
+                              value={formItem.valorLocacaoMensal === 0 ? "" : formItem.valorLocacaoMensal}
+                              onChange={e => setFormItem(p => ({ ...p, valorLocacaoMensal: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-amber-700">Alerta (dias antes)</label>
+                            <input type="text" inputMode="numeric" placeholder="7"
+                              className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-amber-200 bg-amber-50 text-gray-900 outline-none focus:border-amber-500"
+                              value={formItem.diasAlertaLocacao === 7 && !formItem.dataVencimentoLocacao ? "" : formItem.diasAlertaLocacao}
+                              onChange={e => setFormItem(p => ({ ...p, diasAlertaLocacao: parseInt(e.target.value) || 7 }))} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-700">Obs. da Locação</label>
+                          <textarea rows={2} placeholder="Nº do contrato, condições, etc."
+                            className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 resize-none"
+                            value={formItem.observacoesLocacao}
+                            onChange={e => setFormItem(p => ({ ...p, observacoesLocacao: e.target.value }))} />
+                        </div>
+                      </div>
                     )}
-                    </div>
-                    <p className="text-[11px] text-gray-400">JPG, PNG ou WEBP • Max. comprimido automaticamente</p>
                   </div>
                 </div>
-                <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleFotoChange} />
               </div>
-
-              {/* Nome */}
-              <div>
-                <label className="text-xs font-medium text-gray-700">Nome do Item *</label>
-                <input
-                  className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
-                  placeholder="Ex: Cimento CP-II 50kg"
-                  value={formItem.nome} onChange={e => setFormItem(p => ({ ...p, nome: e.target.value }))}
-                />
-              </div>
-
-              {/* Unidade + Categoria */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-gray-700">Unidade</label>
-                    <button
-                      type="button"
-                      onClick={() => setModalUnidades(true)}
-                      className="text-xs text-emerald-600 hover:text-emerald-700 underline"
-                    >
-                      Gerenciar
-                    </button>
-                  </div>
-                  <select
-                    value={formItem.unidade}
-                    onChange={e => setFormItem(p => ({ ...p, unidade: e.target.value }))}
-                    className="w-full h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white outline-none focus:border-emerald-400 text-gray-900"
-                  >
-                    {unidades.map(u => (
-                      <option key={u.id} value={u.sigla}>
-                        {u.sigla}{u.descricao ? ` — ${u.descricao}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-700">Categoria</label>
-                  <select
-                    className="mt-1 w-full h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white outline-none focus:border-emerald-400 text-gray-900"
-                    value={formItem.categoria} onChange={e => setFormItem(p => ({ ...p, categoria: e.target.value }))}
-                  >
-                    <option value="">— Selecionar —</option>
-                    {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-gray-700">Qtd. Mínima (alerta)</label>
-                <input
-                  type="text" inputMode="decimal"
-                  className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
-                  value={formItem.quantidadeMinima === 0 ? "" : formItem.quantidadeMinima}
-                  placeholder="0"
-                  onChange={e => setFormItem(p => ({ ...p, quantidadeMinima: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
-                />
-              </div>
-
-              {/* Quantidade: Inicial no cadastro | Corrigir no edit */}
-              <div>
-                <label className="text-xs font-medium text-gray-700">
-                  {editandoId ? "Corrigir Estoque Atual" : "Quantidade Inicial em Estoque"}
-                </label>
-                {editandoId && (
-                  <p className="text-[11px] text-amber-600 mt-0.5">⚠ Altera diretamente o saldo em estoque. Use apenas para correções de inventário.</p>
-                )}
-                <input
-                  type="text" inputMode="decimal"
-                  className={`mt-1 w-full h-9 px-3 text-sm rounded-lg border bg-white text-gray-900 outline-none transition ${editandoId ? "border-amber-300 focus:border-amber-500" : "border-gray-200 focus:border-emerald-400"}`}
-                  value={formItem.quantidadeAtual === 0 ? "" : formItem.quantidadeAtual}
-                  placeholder="0"
-                  onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: parseFloat(e.target.value.replace(",", ".")) || 0 }))}
-                />
-              </div>
-
-              {/* Observações */}
-              <div>
-                <label className="text-xs font-medium text-gray-700">Observações</label>
-                <textarea
-                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 resize-none"
-                  rows={2} value={formItem.observacoes}
-                  onChange={e => setFormItem(p => ({ ...p, observacoes: e.target.value }))}
-                />
-              </div>
-
-              {/* Valor Unitário + IA */}
-              <div>
-                <label className="text-xs font-medium text-gray-700">Valor Unitário (R$)</label>
-                <div className="mt-1 flex gap-2">
-                  <input type="text" inputMode="decimal" placeholder="0,00"
-                    className="flex-1 h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-emerald-400"
-                    value={formItem.valorUnitario === 0 ? "" : formItem.valorUnitario}
-                    onChange={e => setFormItem(p => ({ ...p, valorUnitario: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
-                  <button type="button"
-                    disabled={sugerindoPreco || !formItem.nome.trim()}
-                    title={formItem.fotoUrl ? "IA sugere preço com base na foto e nome" : "IA sugere preço com base no nome do item"}
-                    onClick={() => {
-                      setSugerindoPreco(true);
-                      sugerirPrecoMut.mutate({ nome: formItem.nome, unidade: formItem.unidade || undefined, categoria: formItem.categoria || undefined, fotoUrl: formItem.fotoUrl || undefined });
-                    }}
-                    className="flex items-center gap-1 px-3 h-9 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold disabled:opacity-50 transition whitespace-nowrap"
-                  >
-                    {sugerindoPreco ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                    {sugerindoPreco ? "..." : "IA"}
-                  </button>
-                </div>
-                <p className="text-[10px] text-gray-400 mt-0.5">Usado no cálculo do valor total do estoque. O botão IA estima o preço de mercado automaticamente.</p>
-              </div>
-
-              {/* Origem (Próprio / Alugado) */}
-              <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-2 block">Origem do Equipamento</label>
-                  <div className="flex gap-2">
-                    <button type="button"
-                      onClick={() => setFormItem(p => ({ ...p, origem: "proprio" }))}
-                      className={`flex-1 h-9 text-sm rounded-lg border font-medium transition ${formItem.origem === "proprio" ? "bg-emerald-600 border-emerald-600 text-white" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                      🏢 Próprio da Empresa
-                    </button>
-                    <button type="button"
-                      onClick={() => setFormItem(p => ({ ...p, origem: "alugado" }))}
-                      className={`flex-1 h-9 text-sm rounded-lg border font-medium transition ${formItem.origem === "alugado" ? "bg-amber-500 border-amber-500 text-white" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                      🔑 Alugado / Locado
-                    </button>
-                  </div>
-                </div>
-                {formItem.origem === "alugado" && (
-                  <div className="space-y-3 pt-2 border-t border-amber-100">
-                    <div>
-                      <label className="text-xs font-medium text-gray-700">Fornecedor / Locadora</label>
-                      <input type="text" placeholder="Ex: Locamig Equipamentos"
-                        className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
-                        value={formItem.fornecedorLocacao}
-                        onChange={e => setFormItem(p => ({ ...p, fornecedorLocacao: e.target.value }))} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-gray-700">Início da Locação</label>
-                        <input type="date"
-                          className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
-                          value={formItem.dataInicioLocacao}
-                          onChange={e => setFormItem(p => ({ ...p, dataInicioLocacao: e.target.value }))} />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-amber-700 font-semibold">⚠ Vencimento</label>
-                        <input type="date"
-                          className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-amber-300 bg-amber-50 text-gray-900 outline-none focus:border-amber-500"
-                          value={formItem.dataVencimentoLocacao}
-                          onChange={e => setFormItem(p => ({ ...p, dataVencimentoLocacao: e.target.value }))} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-gray-700">Valor Mensal da Locação (R$)</label>
-                        <input type="text" inputMode="decimal" placeholder="0,00"
-                          className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 outline-none focus:border-amber-400"
-                          value={formItem.valorLocacaoMensal === 0 ? "" : formItem.valorLocacaoMensal}
-                          onChange={e => setFormItem(p => ({ ...p, valorLocacaoMensal: parseFloat(e.target.value.replace(",", ".")) || 0 }))} />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-amber-700">Alertar X dias antes</label>
-                        <p className="text-[10px] text-gray-400">Ex: 1d para diário, 30d para anual</p>
-                        <input type="text" inputMode="numeric" placeholder="7"
-                          className="mt-0.5 w-full h-9 px-3 text-sm rounded-lg border border-amber-200 bg-amber-50 text-gray-900 outline-none focus:border-amber-500"
-                          value={formItem.diasAlertaLocacao === 7 && !formItem.dataVencimentoLocacao ? "" : formItem.diasAlertaLocacao}
-                          onChange={e => setFormItem(p => ({ ...p, diasAlertaLocacao: parseInt(e.target.value) || 7 }))} />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-700">Observações da Locação</label>
-                      <textarea rows={2} placeholder="Nº do contrato, condições, etc."
-                        className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 resize-none"
-                        value={formItem.observacoesLocacao}
-                        onChange={e => setFormItem(p => ({ ...p, observacoesLocacao: e.target.value }))} />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3 pt-1 border-t border-gray-100">
-                <button onClick={() => setModalItem(false)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Cancelar</button>
-                <button onClick={salvarItem} disabled={criarMut.isPending || atualizarMut.isPending} className="flex-1 h-9 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2">
-                  {(criarMut.isPending || atualizarMut.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {editandoId ? "Salvar Alterações" : "Criar Item"}
-                </button>
-              </div>
+            </div>
+            <div className="flex gap-3 px-5 py-3 border-t border-gray-100 shrink-0">
+              <button onClick={() => setModalItem(false)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Cancelar</button>
+              <button onClick={salvarItem} disabled={criarMut.isPending || atualizarMut.isPending} className="flex-1 h-9 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2">
+                {(criarMut.isPending || atualizarMut.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+                {editandoId ? "Salvar Alterações" : "Criar Item"}
+              </button>
             </div>
           </div>
         </div>
