@@ -7316,7 +7316,7 @@ function EfetivoObraTab({ proj }: { proj: any }) {
     { key: "Afastado",       label: "Afastados",    count: counts.Afastado || 0,dot: "bg-purple-500",  activeBg: "bg-purple-50",  activeText: "text-purple-700",  activeBorder: "border-purple-400" },
     { key: "Licenca",        label: "Licença",      count: counts.Licenca || 0, dot: "bg-purple-400",  activeBg: "bg-purple-50",  activeText: "text-purple-600",  activeBorder: "border-purple-400" },
     { key: "Recluso",        label: "Reclusos",     count: counts.Recluso || 0, dot: "bg-slate-400",   activeBg: "bg-slate-100",  activeText: "text-slate-700",   activeBorder: "border-slate-400" },
-  ].filter(p => p.key === "todos" || p.count > 0);
+  ].filter(p => p.key === "todos" || p.key === "Ativo" || p.key === "Ferias" || p.key === "Afastado" || p.key === "Aviso" || p.count > 0);
 
   return (
     <div className="space-y-4">
