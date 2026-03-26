@@ -803,15 +803,16 @@ export default function GestaoDocumentos() {
   const discMap = new Map((disciplinas.data || []).map(d => [d.id, d]));
   const tipoMap = new Map((tipos.data || []).map(t => [t.id, t]));
 
+  function normalize(str: string) {
+    return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ");
+  }
+
   const filteredDocs = selectedSubpasta ? (documentos.data || []).filter(doc => {
     if (selectedDiscId && doc.disciplinaId !== selectedDiscId) return false;
     if (search.trim()) {
-      const s = search.trim().toLowerCase();
-      const titulo = (doc.titulo || "").toLowerCase();
-      const codigo = (doc.codigo || "").toLowerCase();
-      const descricao = (doc.descricao || "").toLowerCase();
-      const arquivoNome = (doc.arquivoNome || "").toLowerCase();
-      if (!titulo.includes(s) && !codigo.includes(s) && !descricao.includes(s) && !arquivoNome.includes(s)) return false;
+      const s = normalize(search.trim());
+      const fields = normalize([doc.titulo, doc.codigo, doc.descricao, doc.arquivoNome].filter(Boolean).join(" "));
+      if (!s.split(/\s+/).every(word => fields.includes(word))) return false;
     }
     return true;
   }) : [];
