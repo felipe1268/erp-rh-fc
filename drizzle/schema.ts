@@ -6086,15 +6086,43 @@ export const employeeFaceDescriptors = pgTable("employee_face_descriptors", {
   index("idx_efd_employee").on(t.employeeId),
 ]);
 
+export const gdFicheirosObra = pgTable("gd_ficheiros_obra", {
+  id:        serial("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  obraId:    integer("obra_id").notNull(),
+  status:    varchar("status", { length: 30 }).default("ativo"),
+  criadoPor: integer("criado_por"),
+  criadoEm:  timestamp("criado_em").defaultNow(),
+}, (t) => [
+  index("idx_gd_fich_company").on(t.companyId),
+  index("idx_gd_fich_obra").on(t.companyId, t.obraId),
+]);
+
 export const gdDisciplinas = pgTable("gd_disciplinas", {
   id:          serial("id").primaryKey(),
   companyId:   integer("company_id").notNull(),
+  ficheiroId:  integer("ficheiro_id"),
   nome:        varchar("nome", { length: 100 }).notNull(),
   sigla:       varchar("sigla", { length: 10 }).notNull(),
   cor:         varchar("cor", { length: 7 }).default("#3b82f6"),
   ativo:       boolean("ativo").default(true),
   criadoEm:    timestamp("criado_em").defaultNow(),
-}, (t) => [index("idx_gd_disc_company").on(t.companyId)]);
+}, (t) => [
+  index("idx_gd_disc_company").on(t.companyId),
+  index("idx_gd_disc_ficheiro").on(t.ficheiroId),
+]);
+
+export const gdPastas = pgTable("gd_pastas", {
+  id:           serial("id").primaryKey(),
+  companyId:    integer("company_id").notNull(),
+  ficheiroId:   integer("ficheiro_id").notNull(),
+  disciplinaId: integer("disciplina_id").notNull(),
+  nome:         varchar("nome", { length: 50 }).notNull(),
+  criadoEm:     timestamp("criado_em").defaultNow(),
+}, (t) => [
+  index("idx_gd_pasta_company").on(t.companyId),
+  index("idx_gd_pasta_disc").on(t.disciplinaId),
+]);
 
 export const gdTiposDocumento = pgTable("gd_tipos_documento", {
   id:              serial("id").primaryKey(),
@@ -6110,7 +6138,9 @@ export const gdDocumentos = pgTable("gd_documentos", {
   id:              serial("id").primaryKey(),
   companyId:       integer("company_id").notNull(),
   obraId:          integer("obra_id").notNull(),
+  ficheiroId:      integer("ficheiro_id"),
   disciplinaId:    integer("disciplina_id"),
+  pastaId:         integer("pasta_id"),
   tipoDocumentoId: integer("tipo_documento_id"),
   codigo:          varchar("codigo", { length: 100 }).notNull(),
   titulo:          varchar("titulo", { length: 500 }).notNull(),

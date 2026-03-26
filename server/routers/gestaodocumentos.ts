@@ -4,7 +4,9 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { eq, and, desc, isNull, sql, ilike, or, inArray } from "drizzle-orm";
 import {
+  gdFicheirosObra,
   gdDisciplinas,
+  gdPastas,
   gdTiposDocumento,
   gdDocumentos,
   gdRevisoes,
@@ -12,12 +14,216 @@ import {
   gdDistribuicao,
   gdDownloadLog,
   gdArts,
+  obras,
 } from "../../drizzle/schema";
 
 const isAdmin = (ctx: any) =>
   ctx.user.role === "admin" || ctx.user.role === "admin_master";
 
+const PASTAS_PADRAO = ["DWG", "PDF", "IFC", "DOC"];
+
 export const gestaoDocumentosRouter = router({
+
+  listObrasDisponiveis: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allObras = await db.select({
+        id: obras.id,
+        nome: obras.nome,
+        codigo: obras.codigo,
+        cliente: obras.cliente,
+        status: obras.status,
+      }).from(obras)
+        .where(and(
+          eq(obras.companyId, input.companyId),
+          isNull(obras.deletedAt),
+        ));
+      return allObras.filter(o => {
+        const s = (o.status || "").toLowerCase();
+        return s.includes("andamento") || s.includes("planejamento") || s.includes("execu");
+      });
+    }),
+
+  listFicheiros: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const ficheiros = await db.select().from(gdFicheirosObra)
+        .where(eq(gdFicheirosObra.companyId, input.companyId))
+        .orderBy(desc(gdFicheirosObra.criadoEm));
+      const obraIds = ficheiros.map(f => f.obraId).filter(Boolean);
+      let obrasMap: Record<number, any> = {};
+      if (obraIds.length > 0) {
+        const obrasData = await db.select({
+          id: obras.id,
+          nome: obras.nome,
+          codigo: obras.codigo,
+          cliente: obras.cliente,
+          status: obras.status,
+        }).from(obras)
+          .where(and(inArray(obras.id, obraIds), eq(obras.companyId, input.companyId)));
+        obrasData.forEach(o => { obrasMap[o.id] = o; });
+      }
+      const disciplinasCounts = await db.select({
+        ficheiroId: gdDisciplinas.ficheiroId,
+        count: sql<number>`count(*)::int`,
+      }).from(gdDisciplinas)
+        .where(and(
+          eq(gdDisciplinas.companyId, input.companyId),
+          eq(gdDisciplinas.ativo, true),
+        ))
+        .groupBy(gdDisciplinas.ficheiroId);
+      const discMap: Record<number, number> = {};
+      disciplinasCounts.forEach((d: any) => { if (d.ficheiroId) discMap[d.ficheiroId] = d.count; });
+      const docCounts = await db.select({
+        ficheiroId: gdDocumentos.ficheiroId,
+        count: sql<number>`count(*)::int`,
+      }).from(gdDocumentos)
+        .where(and(
+          eq(gdDocumentos.companyId, input.companyId),
+          isNull(gdDocumentos.deletedAt),
+        ))
+        .groupBy(gdDocumentos.ficheiroId);
+      const docMap: Record<number, number> = {};
+      docCounts.forEach((d: any) => { if (d.ficheiroId) docMap[d.ficheiroId] = d.count; });
+      return ficheiros.map(f => ({
+        ...f,
+        obra: obrasMap[f.obraId] || null,
+        totalDisciplinas: discMap[f.id] || 0,
+        totalDocumentos: docMap[f.id] || 0,
+      }));
+    }),
+
+  createFicheiro: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [obraCheck] = await db.select({ id: obras.id }).from(obras)
+        .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId)));
+      if (!obraCheck) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada ou não pertence à empresa" });
+      const existing = await db.select().from(gdFicheirosObra)
+        .where(and(
+          eq(gdFicheirosObra.companyId, input.companyId),
+          eq(gdFicheirosObra.obraId, input.obraId),
+        ));
+      if (existing.length > 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "Já existe um ficheiro para esta obra" });
+      }
+      const [row] = await db.insert(gdFicheirosObra).values({
+        companyId: input.companyId,
+        obraId: input.obraId,
+        criadoPor: ctx.user.id,
+      }).returning();
+      return row;
+    }),
+
+  deleteFicheiro: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(gdFicheirosObra)
+        .where(and(eq(gdFicheirosObra.id, input.id), eq(gdFicheirosObra.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  getFicheiroDetail: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [ficheiro] = await db.select().from(gdFicheirosObra)
+        .where(and(eq(gdFicheirosObra.id, input.id), eq(gdFicheirosObra.companyId, input.companyId)));
+      if (!ficheiro) throw new TRPCError({ code: "NOT_FOUND" });
+      const [obra] = await db.select({
+        id: obras.id,
+        nome: obras.nome,
+        codigo: obras.codigo,
+        cliente: obras.cliente,
+        status: obras.status,
+      }).from(obras).where(and(eq(obras.id, ficheiro.obraId), eq(obras.companyId, input.companyId)));
+      const disciplinas = await db.select().from(gdDisciplinas)
+        .where(and(
+          eq(gdDisciplinas.companyId, input.companyId),
+          eq(gdDisciplinas.ficheiroId, input.id),
+          eq(gdDisciplinas.ativo, true),
+        ))
+        .orderBy(gdDisciplinas.nome);
+      const pastas = await db.select().from(gdPastas)
+        .where(and(
+          eq(gdPastas.companyId, input.companyId),
+          eq(gdPastas.ficheiroId, input.id),
+        ));
+      const docs = await db.select().from(gdDocumentos)
+        .where(and(
+          eq(gdDocumentos.companyId, input.companyId),
+          eq(gdDocumentos.ficheiroId, input.id),
+          isNull(gdDocumentos.deletedAt),
+        ))
+        .orderBy(desc(gdDocumentos.criadoEm));
+      return { ficheiro, obra, disciplinas, pastas, docs };
+    }),
+
+  createDisciplinaFicheiro: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ficheiroId: z.number(),
+      nome: z.string().min(1),
+      sigla: z.string().min(1).max(10),
+      cor: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [fichCheck] = await db.select({ id: gdFicheirosObra.id }).from(gdFicheirosObra)
+        .where(and(eq(gdFicheirosObra.id, input.ficheiroId), eq(gdFicheirosObra.companyId, input.companyId)));
+      if (!fichCheck) throw new TRPCError({ code: "NOT_FOUND", message: "Ficheiro não encontrado" });
+      const [disc] = await db.insert(gdDisciplinas).values({
+        companyId: input.companyId,
+        ficheiroId: input.ficheiroId,
+        nome: input.nome,
+        sigla: input.sigla,
+        cor: input.cor,
+      }).returning();
+      const pastasValues = PASTAS_PADRAO.map(nome => ({
+        companyId: input.companyId,
+        ficheiroId: input.ficheiroId,
+        disciplinaId: disc.id,
+        nome,
+      }));
+      await db.insert(gdPastas).values(pastasValues);
+      return disc;
+    }),
+
+  deleteDisciplinaFicheiro: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(gdDisciplinas).set({ ativo: false })
+        .where(and(eq(gdDisciplinas.id, input.id), eq(gdDisciplinas.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  listPastas: protectedProcedure
+    .input(z.object({ companyId: z.number(), disciplinaId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(gdPastas)
+        .where(and(
+          eq(gdPastas.companyId, input.companyId),
+          eq(gdPastas.disciplinaId, input.disciplinaId),
+        ))
+        .orderBy(gdPastas.nome);
+    }),
 
   listDisciplinas: protectedProcedure
     .input(z.object({ companyId: z.number() }))
@@ -161,7 +367,9 @@ export const gestaoDocumentosRouter = router({
     .input(z.object({
       companyId: z.number(),
       obraId: z.number(),
+      ficheiroId: z.number().nullable().optional(),
       disciplinaId: z.number().nullable().optional(),
+      pastaId: z.number().nullable().optional(),
       tipoDocumentoId: z.number().nullable().optional(),
       codigo: z.string().min(1),
       titulo: z.string().min(1),

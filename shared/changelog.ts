@@ -5325,4 +5325,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 14:00:00",
   },
+  {
+    version: 795,
+    titulo: "Proj./Doc. Técnicos — Ficheiros de Obra com Disciplinas e Pastas",
+    descricao: "Módulo Proj./Doc. Técnicos reestruturado com fluxo hierárquico: Ficheiros de Obra → Disciplinas → Pastas (DWG/PDF/IFC/DOC auto-criadas) → Documentos. Novos endpoints: listObrasDisponiveis, listFicheiros, createFicheiro, deleteFicheiro, getFicheiroDetail, createDisciplinaFicheiro (auto-cria pastas DWG/PDF/IFC/DOC), deleteDisciplinaFicheiro, listPastas. Novas tabelas gd_ficheiros_obra e gd_pastas; campos ficheiro_id e pasta_id adicionados a gd_disciplinas e gd_documentos. Frontend reescrito com navegação multi-nível: cards de ficheiros vinculados a obras em andamento, visualização de disciplinas com sigla e cor, pastas com ícones por tipo, tabela de documentos por pasta, e gestão de ARTs/RRTs por ficheiro.",
+    tipo: "feature",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 15:00:00",
+  },
 ];
