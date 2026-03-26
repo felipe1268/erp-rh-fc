@@ -1141,6 +1141,9 @@ function DashboardLayoutContent({
     { id: "cadastro",     label: "Cadastro",      icon: BookOpen,    color: "text-indigo-400",  bg: "bg-indigo-500/20",  path: "/empresas",              canSee: () => (permIsAdminMaster || canAccessModule("cadastro"))     && isModEnabled("cadastro") },
     { id: "compras",      label: "Compras",       icon: ShoppingCart,color: "text-rose-400",    bg: "bg-rose-500/20",    path: "/compras/solicitacoes",  canSee: () => (permIsAdminMaster || canAccessModule("compras"))      && isModEnabled("compras") },
     { id: "almoxarifado", label: "Almoxarifado",  icon: Warehouse,   color: "text-emerald-400", bg: "bg-emerald-500/20", path: "/almoxarifado",          canSee: () => (permIsAdminMaster || canAccessModule("almoxarifado")) && isModEnabled("almoxarifado") },
+    { id: "financeiro",   label: "Financeiro",    icon: DollarSign,  color: "text-yellow-400",  bg: "bg-yellow-500/20",  path: "/financeiro",            canSee: () => (permIsAdminMaster || canAccessModule("financeiro"))   && isModEnabled("financeiro") },
+    { id: "medicao",      label: "Medição",       icon: Construction,color: "text-orange-400",  bg: "bg-orange-500/20",  path: "/medicao",               canSee: () => (permIsAdminMaster || canAccessModule("medicao"))      && isModEnabled("medicao") },
+    { id: "gestao-documentos", label: "Proj./Doc. Técnicos", icon: FolderOpen, color: "text-sky-400", bg: "bg-sky-500/20", path: "/gestao-documentos", canSee: () => (permIsAdminMaster || canAccessModule("gestao-documentos")) && isModEnabled("gestao-documentos") },
   ];
   const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
   const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :
