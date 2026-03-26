@@ -196,6 +196,16 @@ export default function GestaoDocumentos() {
     onError: (e) => toast.error(e.message),
   });
 
+  const deletePasta = trpc.gestaoDocumentos.deletePasta.useMutation({
+    onSuccess: () => {
+      toast.success("Sub-pasta removida");
+      utils.gestaoDocumentos.getFicheiroDetail.invalidate();
+      utils.gestaoDocumentos.listFicheiros.invalidate();
+      setSelectedSubpasta(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const deleteDiscFicheiro = trpc.gestaoDocumentos.deleteDisciplinaFicheiro.useMutation({
     onSuccess: () => {
       toast.success("Pasta removida");
@@ -667,14 +677,21 @@ export default function GestaoDocumentos() {
                             {discPastas.map((sp: any) => {
                               const isSp = selectedDiscId === disc.id && selectedSubpasta === sp.nome;
                               return (
-                                <button
-                                  key={sp.id}
-                                  onClick={() => selectSubpasta(disc.id, sp.nome)}
-                                  className={`w-full flex items-center gap-2 px-2 py-1 rounded text-xs text-left transition-colors ${isSp ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"}`}
-                                >
-                                  <Folder className="w-3.5 h-3.5 shrink-0 text-gray-400" />
-                                  <span className="truncate">{sp.nome}</span>
-                                </button>
+                                <div key={sp.id} className="flex items-center group/sp">
+                                  <button
+                                    onClick={() => selectSubpasta(disc.id, sp.nome)}
+                                    className={`flex-1 flex items-center gap-2 px-2 py-1 rounded text-xs text-left transition-colors ${isSp ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"}`}
+                                  >
+                                    <Folder className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                                    <span className="truncate">{sp.nome}</span>
+                                  </button>
+                                  <button
+                                    onClick={() => { if (confirm(`Remover sub-pasta "${sp.nome}"?`)) deletePasta.mutate({ id: sp.id, companyId }); }}
+                                    className="p-0.5 rounded opacity-0 group-hover/sp:opacity-100 text-gray-400 hover:text-red-500 transition-all shrink-0"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
                               );
                             })}
                           </div>

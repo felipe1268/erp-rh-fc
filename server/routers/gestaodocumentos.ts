@@ -270,6 +270,16 @@ export const gestaoDocumentosRouter = router({
       return { success: true };
     }),
 
+  deletePasta: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(gdPastas)
+        .where(and(eq(gdPastas.id, input.id), eq(gdPastas.companyId, input.companyId)));
+      return { success: true };
+    }),
+
   listPastas: protectedProcedure
     .input(z.object({ companyId: z.number(), disciplinaId: z.number() }))
     .query(async ({ input }) => {
