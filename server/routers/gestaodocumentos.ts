@@ -581,6 +581,50 @@ export const gestaoDocumentosRouter = router({
       return row;
     }),
 
+  syncCounterpartStatus: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      docIds: z.array(z.number()).min(1),
+      status: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const docs = await db.select().from(gdDocumentos)
+        .where(and(
+          inArray(gdDocumentos.id, input.docIds),
+          eq(gdDocumentos.companyId, input.companyId),
+          isNull(gdDocumentos.deletedAt),
+        ));
+      const counterpartSubpasta: Record<string, string> = { DWG: "PDF", PDF: "DWG" };
+      let synced = 0;
+      for (const doc of docs) {
+        const sp = (doc.subpasta || "").toUpperCase();
+        const targetSp = counterpartSubpasta[sp];
+        if (!targetSp) continue;
+        const titulo = (doc.titulo || doc.codigo || "").replace(/\.[^.]+$/, "").trim();
+        const baseMatch = titulo.replace(/-R\d{2,3}$/i, "");
+        if (!baseMatch) continue;
+        const counterparts = await db.select().from(gdDocumentos)
+          .where(and(
+            eq(gdDocumentos.companyId, input.companyId),
+            eq(gdDocumentos.obraId, doc.obraId),
+            sql`UPPER(${gdDocumentos.subpasta}) = ${targetSp}`,
+            isNull(gdDocumentos.deletedAt),
+          ));
+        for (const cp of counterparts) {
+          const cpTitulo = (cp.titulo || cp.codigo || "").replace(/\.[^.]+$/, "").trim();
+          const cpBase = cpTitulo.replace(/-R\d{2,3}$/i, "");
+          if (cpBase.toLowerCase() === baseMatch.toLowerCase() && cp.status !== input.status) {
+            await db.update(gdDocumentos).set({ status: input.status, atualizadoEm: new Date() })
+              .where(and(eq(gdDocumentos.id, cp.id), eq(gdDocumentos.companyId, input.companyId)));
+            synced++;
+          }
+        }
+      }
+      return { success: true, synced };
+    }),
+
   updateDocumento: protectedProcedure
     .input(z.object({
       id: z.number(),

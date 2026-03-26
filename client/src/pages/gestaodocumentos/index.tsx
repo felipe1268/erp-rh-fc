@@ -548,9 +548,18 @@ export default function GestaoDocumentos() {
     },
     onError: (e) => toast.error(e.message),
   });
-  const updateStatusBatch = trpc.gestaoDocumentos.updateStatusBatch.useMutation({
+  const syncCounterpart = trpc.gestaoDocumentos.syncCounterpartStatus.useMutation({
     onSuccess: (data) => {
+      if (data.synced > 0) {
+        toast.success(`Status sincronizado com ${data.synced} documento(s) correspondente(s)`);
+        utils.gestaoDocumentos.listDocumentos.invalidate();
+      }
+    },
+  });
+  const updateStatusBatch = trpc.gestaoDocumentos.updateStatusBatch.useMutation({
+    onSuccess: (data, variables) => {
       toast.success(`Status de ${data.count} documento(s) atualizado`);
+      syncCounterpart.mutate({ companyId: variables.companyId, docIds: variables.ids, status: variables.status });
       setSelectedDocIds(new Set());
       utils.gestaoDocumentos.listDocumentos.invalidate();
     },
@@ -1283,7 +1292,10 @@ export default function GestaoDocumentos() {
                                     {Object.entries(STATUS_MAP).map(([key, val]) => (
                                       <DropdownMenuItem
                                         key={key}
-                                        onClick={() => updateDoc.mutate({ id: doc.id, companyId, status: key })}
+                                        onClick={() => {
+                                          updateDoc.mutate({ id: doc.id, companyId, status: key });
+                                          syncCounterpart.mutate({ companyId, docIds: [doc.id], status: key });
+                                        }}
                                         className="text-xs"
                                       >
                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${val.color}`}>{val.label}</span>
