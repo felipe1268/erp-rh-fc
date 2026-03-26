@@ -814,8 +814,8 @@ export default function GestaoDocumentos() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-xs text-gray-500 mb-1">Atalhos — clique para preencher</Label>
-              <div className="flex flex-wrap gap-1.5">
+              <Label className="text-xs text-gray-500 mb-2">Atalhos — clique para preencher automaticamente</Label>
+              <div className="grid grid-cols-2 gap-2">
                 {[
                   { nome: "Arquitetura", sigla: "ARQ", cor: "#3B82F6" },
                   { nome: "Estrutural", sigla: "EST", cor: "#EF4444" },
@@ -834,10 +834,12 @@ export default function GestaoDocumentos() {
                     key={d.sigla}
                     type="button"
                     onClick={() => setNewDiscForm({ ...newDiscForm, nome: d.nome, sigla: d.sigla, cor: d.cor })}
-                    className="px-2 py-1 text-xs rounded-md border border-gray-200 hover:bg-gray-50 transition-colors"
-                    style={{ borderLeftColor: d.cor, borderLeftWidth: 3 }}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm transition-all text-left"
                   >
-                    {d.sigla}
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ backgroundColor: d.cor }}>
+                      {d.sigla}
+                    </span>
+                    <span className="text-sm text-gray-700">{d.nome}</span>
                   </button>
                 ))}
               </div>
