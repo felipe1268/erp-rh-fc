@@ -997,15 +997,12 @@ export default function GestaoDocumentos() {
                     accept={getAcceptForSubpasta(selectedSubpasta) || ".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"}
                     onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleBatchUpload(e.target.files); }}
                   />
-                  <Button size="sm" variant="outline" onClick={() => batchFileInputRef.current?.click()} className="border-blue-200 text-blue-600 hover:bg-blue-50 h-8" disabled={batchUploading}>
+                  <Button size="sm" onClick={() => batchFileInputRef.current?.click()} className="bg-blue-600 text-white hover:bg-blue-700 h-8" disabled={batchUploading}>
                     {batchUploading ? (
-                      <><span className="animate-spin mr-1">⏳</span> {batchProgress.current}/{batchProgress.total}</>
+                      <><span className="animate-spin mr-1">⏳</span> Enviando {batchProgress.current}/{batchProgress.total}</>
                     ) : (
-                      <><Upload className="w-4 h-4 mr-1" /> Enviar Vários</>
+                      <><Upload className="w-4 h-4 mr-1" /> Enviar Documentos</>
                     )}
-                  </Button>
-                  <Button size="sm" onClick={() => { resetDocForm(); setEditingDoc(null); setShowDocModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700 h-8">
-                    <Plus className="w-4 h-4 mr-1" /> Novo Documento
                   </Button>
                 </div>
 
@@ -1099,7 +1096,7 @@ export default function GestaoDocumentos() {
                     >
                       <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                       <p className="text-gray-500 text-sm mb-1">Nenhum documento nesta pasta</p>
-                      <p className="text-gray-400 text-xs">Clique em "+ Novo Documento" ou arraste arquivos aqui</p>
+                      <p className="text-gray-400 text-xs">Clique em "Enviar Documentos" ou arraste arquivos aqui</p>
                     </div>
                   ) : (
                     <Table>
