@@ -1594,7 +1594,7 @@ export default function GestaoDocumentos() {
 
       {/* Modal — Detalhe do Documento */}
       <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-        <DialogContent className="w-[98vw] max-w-[98vw] h-[95vh] max-h-[95vh] bg-white border-gray-200 text-gray-900 overflow-hidden flex flex-col p-0">
+        <DialogContent resizable={false} className="w-[98vw] max-w-[98vw] h-[95vh] max-h-[95vh] bg-white border-gray-200 text-gray-900 overflow-hidden flex flex-col p-0">
           <DialogHeader className="px-8 pt-6 pb-4 border-b border-gray-100 shrink-0">
             <DialogTitle className="flex items-center gap-3 text-xl">
               <FileText className="w-6 h-6 text-blue-600" />
@@ -1788,7 +1788,7 @@ export default function GestaoDocumentos() {
 
       {/* Modal — Visualização Rápida de Arquivo */}
       <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) setPreviewDoc(null); }}>
-        <DialogContent className="w-[98vw] max-w-[98vw] h-[95vh] bg-white border-gray-200 text-gray-900 overflow-hidden flex flex-col p-0">
+        <DialogContent resizable={false} className="w-[98vw] max-w-[98vw] h-[95vh] bg-white border-gray-200 text-gray-900 overflow-hidden flex flex-col p-0">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
             <div className="flex items-center gap-2 min-w-0">
               <Eye className="w-5 h-5 text-blue-600 shrink-0" />
