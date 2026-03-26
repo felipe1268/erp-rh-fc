@@ -769,11 +769,14 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
               const allHes: any[] = (heCustosData as any)?.hes ?? [];
               const atividadesLookup: any[] = (heCustosData as any)?.atividades ?? [];
               const aprovadas = allHes.filter(h => h.status === "aprovada");
+              const rejeitadas = allHes.filter(h => h.status === "rejeitada");
+              const solicitadas = allHes.filter(h => h.status !== "rejeitada");
 
               /* resumo cards */
               const totalCusto = (heCustosData as any)?.totalCustoPrevisto ?? 0;
               const totalCustoAprov = (heCustosData as any)?.totalCustoRealizado ?? 0;
-              const totalHE = allHes.reduce((s: number, h: any) => s + (h.horas || 0), 0);
+              const totalHE = solicitadas.reduce((s: number, h: any) => s + (h.horas || 0), 0);
+              const totalHERejeitadas = rejeitadas.reduce((s: number, h: any) => s + (h.horas || 0), 0);
 
               /* lookup atividade por id */
               const atividadeById: Record<number, any> = {};
@@ -796,7 +799,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
               return (
                 <div className="space-y-5">
                   {/* Cards resumo */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     {!hideFinancial && (
                     <div className="rounded-xl bg-indigo-600 text-white p-4">
                       <p className="text-xs opacity-80 mb-1">Custo Total (HE aprovadas)</p>
@@ -814,6 +817,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                     <div className="rounded-xl bg-white border p-4">
                       <p className="text-xs text-muted-foreground mb-1">Total de Horas</p>
                       <p className="text-xl font-bold text-slate-800">{totalHE.toFixed(1)}h</p>
+                    </div>
+                    <div className="rounded-xl bg-red-50 border border-red-200 p-4">
+                      <p className="text-xs text-red-500 mb-1">Horas Rejeitadas</p>
+                      <p className="text-xl font-bold text-red-600">{totalHERejeitadas.toFixed(1)}h</p>
                     </div>
                   </div>
 
