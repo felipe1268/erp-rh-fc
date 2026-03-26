@@ -141,6 +141,8 @@ export default function GestaoDocumentos() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showDisciplinasModal, setShowDisciplinasModal] = useState(false);
+  const [showCreateWizard, setShowCreateWizard] = useState(false);
+  const [wizardObraId, setWizardObraId] = useState<number | null>(null);
   const [editingDoc, setEditingDoc] = useState<any>(null);
   const [editingArt, setEditingArt] = useState<any>(null);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
@@ -213,13 +215,31 @@ export default function GestaoDocumentos() {
   const utils = trpc.useUtils();
   const createFicheiro = trpc.gestaoDocumentos.createFicheiro.useMutation({
     onSuccess: (data) => {
-      toast.success("Ficheiro criado com sucesso");
+      toast.success("Ficheiro criado com sucesso!");
       utils.gestaoDocumentos.listFicheiros.invalidate();
+      setShowCreateWizard(false);
+
+      const allDiscs = (disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId);
+      const toCreate = Object.entries(selectedDisciplinas)
+        .filter(([_, v]) => v.checked)
+        .map(([discId, v]) => {
+          const disc = allDiscs.find(d => d.id === Number(discId));
+          if (!disc) return null;
+          const subpastas = Object.entries(v.subpastas)
+            .filter(([__, checked]) => checked)
+            .map(([name]) => name);
+          if (subpastas.length === 0) return null;
+          return { nome: disc.nome, sigla: disc.sigla, cor: disc.cor || undefined, subpastas };
+        })
+        .filter(Boolean) as any[];
+
+      if (toCreate.length > 0) {
+        bulkCreateDisc.mutate({ companyId, ficheiroId: data.id, disciplinas: toCreate });
+      }
+
       setActiveFicheiroId(data.id);
       setSelectedObraId(data.obraId);
-      setTimeout(() => {
-        openDisciplinasModalDirect();
-      }, 100);
+      setActiveTab("painel");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -541,7 +561,25 @@ export default function GestaoDocumentos() {
   }
 
   function handleCreateFicheiro(obraId: number) {
-    createFicheiro.mutate({ companyId, obraId });
+    setWizardObraId(obraId);
+    initDisciplinaSelection();
+    setShowCreateWizard(true);
+  }
+
+  function handleWizardConfirm() {
+    if (!wizardObraId) return;
+    const allDiscs = (disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId);
+    const checkedDiscs = Object.entries(selectedDisciplinas).filter(([_, v]) => v.checked);
+    if (checkedDiscs.length === 0) {
+      toast.error("Selecione ao menos uma disciplina");
+      return;
+    }
+    const hasAnySub = checkedDiscs.some(([_, v]) => Object.values(v.subpastas).some(Boolean));
+    if (!hasAnySub) {
+      toast.error("Selecione ao menos uma sub-pasta");
+      return;
+    }
+    createFicheiro.mutate({ companyId, obraId: wizardObraId });
   }
 
   const discMap = new Map((disciplinas.data || []).map(d => [d.id, d]));
@@ -1035,84 +1073,51 @@ export default function GestaoDocumentos() {
         )}
       </div>
 
+      <Dialog open={showCreateWizard} onOpenChange={setShowCreateWizard}>
+        <DialogContent className="max-w-2xl bg-white border-gray-200 text-gray-900 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderPlus className="w-5 h-5 text-blue-600" />
+              Novo Ficheiro — {(obrasDisponiveis.data || []).find(o => o.id === wizardObraId)?.nome || "Obra"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-500 -mt-2 mb-2">Selecione as disciplinas e sub-pastas que deseja incluir neste ficheiro. Você pode alterar depois.</p>
+
+          <DisciplinaSelector
+            selectedDisciplinas={selectedDisciplinas}
+            setSelectedDisciplinas={setSelectedDisciplinas}
+            allDiscs={(disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId)}
+          />
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowCreateWizard(false)} className="border-gray-300 text-gray-600">Cancelar</Button>
+            <Button
+              onClick={handleWizardConfirm}
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              disabled={createFicheiro.isPending || bulkCreateDisc.isPending}
+            >
+              <FolderPlus className="w-4 h-4 mr-1" />
+              {createFicheiro.isPending ? "Criando..." : `Criar Ficheiro (${Object.values(selectedDisciplinas).filter(v => v.checked).length} disciplinas)`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showDisciplinasModal} onOpenChange={setShowDisciplinasModal}>
         <DialogContent className="max-w-2xl bg-white border-gray-200 text-gray-900 max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FolderPlus className="w-5 h-5 text-blue-600" />
-              Montar Ficheiro — Selecionar Disciplinas
+              Adicionar Disciplinas ao Ficheiro
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-500 -mt-2">Marque as disciplinas desejadas e escolha quais sub-pastas criar para cada uma.</p>
 
-          <div className="flex items-center gap-2 mb-2">
-            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => {
-              const updated = { ...selectedDisciplinas };
-              Object.keys(updated).forEach(k => { updated[k].checked = true; });
-              setSelectedDisciplinas(updated);
-            }}>
-              <CheckSquare className="w-3 h-3 mr-1" /> Selecionar Todas
-            </Button>
-            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => {
-              const updated = { ...selectedDisciplinas };
-              Object.keys(updated).forEach(k => { updated[k].checked = false; });
-              setSelectedDisciplinas(updated);
-            }}>
-              <Square className="w-3 h-3 mr-1" /> Desmarcar Todas
-            </Button>
-          </div>
-
-          <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
-            {Object.entries(selectedDisciplinas).map(([discId, state]) => {
-              const disc = (disciplinas.data || []).find(d => d.id === Number(discId));
-              if (!disc) return null;
-              return (
-                <div key={discId} className={`rounded-lg border p-3 transition-all ${state.checked ? "border-blue-300 bg-blue-50/50" : "border-gray-200 bg-white"}`}>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={state.checked}
-                      onChange={(e) => {
-                        setSelectedDisciplinas(prev => ({
-                          ...prev,
-                          [discId]: { ...prev[discId], checked: e.target.checked },
-                        }));
-                      }}
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="px-2 py-0.5 rounded text-xs font-bold" style={{ backgroundColor: `${disc.cor || "#3b82f6"}20`, color: disc.cor || "#3b82f6" }}>
-                      {disc.sigla}
-                    </span>
-                    <span className="text-sm font-medium text-gray-800">{disc.nome}</span>
-                  </label>
-                  {state.checked && (
-                    <div className="mt-2 ml-7 flex flex-wrap gap-2">
-                      <span className="text-[10px] text-gray-500 uppercase mr-1 self-center">Sub-pastas:</span>
-                      {Object.entries(state.subpastas).map(([subName, checked]) => (
-                        <label key={subName} className={`flex items-center gap-1.5 px-2 py-1 rounded border cursor-pointer text-xs transition-all ${checked ? "border-blue-300 bg-blue-100 text-blue-700" : "border-gray-200 bg-gray-50 text-gray-500"}`}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              setSelectedDisciplinas(prev => ({
-                                ...prev,
-                                [discId]: {
-                                  ...prev[discId],
-                                  subpastas: { ...prev[discId].subpastas, [subName]: e.target.checked },
-                                },
-                              }));
-                            }}
-                            className="w-3 h-3 rounded border-gray-300 text-blue-600"
-                          />
-                          <span className="font-mono">{subName}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <DisciplinaSelector
+            selectedDisciplinas={selectedDisciplinas}
+            setSelectedDisciplinas={setSelectedDisciplinas}
+            allDiscs={(disciplinas.data || []).filter(d => d.ativo !== false && !d.ficheiroId)}
+          />
 
           {Object.keys(selectedDisciplinas).length === 0 && (
             <div className="text-center py-8 text-gray-500">
@@ -1451,6 +1456,100 @@ function ObrasListing({ obras, ficheirosMap, ficheiros, onOpenFicheiro, onCreate
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DisciplinaSelector({ selectedDisciplinas, setSelectedDisciplinas, allDiscs }: {
+  selectedDisciplinas: Record<string, { checked: boolean; subpastas: Record<string, boolean> }>;
+  setSelectedDisciplinas: (val: Record<string, { checked: boolean; subpastas: Record<string, boolean> }>) => void;
+  allDiscs: any[];
+}) {
+  const checkedCount = Object.values(selectedDisciplinas).filter(v => v.checked).length;
+  const totalCount = Object.keys(selectedDisciplinas).length;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="text-xs h-7 border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => {
+            const updated = { ...selectedDisciplinas };
+            Object.keys(updated).forEach(k => { updated[k].checked = true; });
+            setSelectedDisciplinas(updated);
+          }}>
+            <CheckSquare className="w-3 h-3 mr-1" /> Todas
+          </Button>
+          <Button size="sm" variant="outline" className="text-xs h-7 border-gray-200 text-gray-500 hover:bg-gray-50" onClick={() => {
+            const updated = { ...selectedDisciplinas };
+            Object.keys(updated).forEach(k => { updated[k].checked = false; });
+            setSelectedDisciplinas(updated);
+          }}>
+            <Square className="w-3 h-3 mr-1" /> Nenhuma
+          </Button>
+        </div>
+        <span className="text-xs text-gray-500">{checkedCount} de {totalCount} selecionada(s)</span>
+      </div>
+
+      <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+        {Object.entries(selectedDisciplinas).map(([discId, state]) => {
+          const disc = allDiscs.find(d => d.id === Number(discId));
+          if (!disc) return null;
+          return (
+            <div key={discId} className={`rounded-lg border p-3 transition-all cursor-pointer ${state.checked ? "border-blue-300 bg-blue-50/50 shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+              onClick={() => {
+                setSelectedDisciplinas({
+                  ...selectedDisciplinas,
+                  [discId]: { ...selectedDisciplinas[discId], checked: !state.checked },
+                });
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={state.checked}
+                  onChange={() => {}}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 pointer-events-none"
+                />
+                <span className="px-2 py-0.5 rounded text-xs font-bold text-white" style={{ backgroundColor: disc.cor || "#3b82f6" }}>
+                  {disc.sigla}
+                </span>
+                <span className="text-sm font-medium text-gray-800">{disc.nome}</span>
+              </div>
+              {state.checked && (
+                <div className="mt-2 ml-7 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-[10px] text-gray-400 uppercase mr-1 self-center">Sub-pastas:</span>
+                  {Object.entries(state.subpastas).map(([subName, checked]) => (
+                    <button
+                      key={subName}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDisciplinas({
+                          ...selectedDisciplinas,
+                          [discId]: {
+                            ...selectedDisciplinas[discId],
+                            subpastas: { ...selectedDisciplinas[discId].subpastas, [subName]: !checked },
+                          },
+                        });
+                      }}
+                      className={`px-2 py-0.5 rounded border text-xs font-mono transition-all ${checked ? "border-blue-300 bg-blue-100 text-blue-700" : "border-gray-200 bg-gray-50 text-gray-400 line-through"}`}
+                    >
+                      {subName}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {totalCount === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          <Settings className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+          <p className="text-sm">Nenhuma disciplina cadastrada.</p>
+          <p className="text-xs text-gray-400">Vá em Configurações para cadastrar disciplinas primeiro.</p>
         </div>
       )}
     </div>
