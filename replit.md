@@ -14,6 +14,17 @@ A full-stack HR/ERP system built for FC Engenharia. It handles employees, payrol
 8. **Compras** (Rev.343) — 24 DB tables, 30+ tRPC endpoints, 8 novas páginas: SC emergencial, cotações (portal fornecedor), OC com numeração configurável, recebimentos, AP integrada, realocação de verba, comissões, bridge financeiro
 9. **BIM 3D/4D** (Rev.777-779) — Visualizador de modelos IFC no Planejamento. Three.js + web-ifc (WASM). Importação multi-disciplina com persistência no servidor. Seleção interativa de elementos 3D (raycasting + multi-select) para vincular a atividades do cronograma (BIM 4D). Tabelas: `bim_models`, `bim_links`. Router: `server/routers/bim.ts`. Frontend: `client/src/pages/planejamento/BimViewer.tsx`. Arquivos salvos em `server/uploads/bim/`. Limite 35MB por arquivo.
 
+## Telemetria & Analytics Module (Rev. 799)
+- Route: `/admin/telemetria` (admin_master only, MasterOnlyGuard)
+- Backend: `server/routers/telemetria.ts` (7 tRPC endpoints)
+- Schema table: `user_activity_log` (company_id, user_id, user_name, tipo, pagina, acao, modulo, detalhes, duracao_segundos, criado_em)
+- Tracker: `client/src/components/ActivityTracker.tsx` — invisible component in DashboardLayout that logs page visits, time spent, and supports action tracking via `trackAction()` export
+- Frontend: `client/src/pages/Telemetria.tsx` — full analytics dashboard with 2 tabs:
+  - **Uso da Plataforma**: KPIs (acessos, usuários ativos, tempo médio, inativos), daily/hourly charts, page ranking, module usage, engagement score (0-100), user ranking with drill-down profile, dead features alert, inactive users alert
+  - **Analytics da IA**: total conversations, per-module breakdown, user ranking, full history with search/expand
+- Endpoints: trackPageVisit, trackPageLeave, trackAction, dashboardGeral, perfilUsuario, analyticsIA, historicoCompleto, scoreEngajamento
+- Menu: sidebar "Administração" section, visible only to admin_master (adminMasterOnly flag)
+
 ## Dashboard Executivo de Obras (Rev. 794)
 - Backend: `planejamento.dashboardGeral` endpoint in `server/routers/planejamento.ts`
 - Frontend: `client/src/pages/planejamento/DashboardObras.tsx`

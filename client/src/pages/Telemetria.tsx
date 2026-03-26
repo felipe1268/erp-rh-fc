@@ -1,0 +1,587 @@
+import DashboardLayout from "@/components/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { trpc } from "@/lib/trpc";
+import {
+  BarChart3, Users, Clock, Eye, ArrowLeft, Search, Brain, Activity,
+  TrendingUp, AlertTriangle, Monitor, MousePointerClick, ChevronDown, ChevronUp,
+  Download, User, Calendar,
+} from "lucide-react";
+import { useState, useMemo } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
+
+type Periodo = "7d" | "30d" | "90d" | "all";
+
+const PERIODO_LABELS: Record<Periodo, string> = {
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  "90d": "Últimos 90 dias",
+  "all": "Todo período",
+};
+
+function formatDuracao(segundos: number): string {
+  if (segundos < 60) return `${Math.round(segundos)}s`;
+  if (segundos < 3600) return `${Math.round(segundos / 60)}min`;
+  const h = Math.floor(segundos / 3600);
+  const m = Math.round((segundos % 3600) / 60);
+  return `${h}h ${m}min`;
+}
+
+function formatDate(d: string | Date): string {
+  if (!d) return "-";
+  const date = new Date(d);
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
+function formatDateTime(d: string | Date): string {
+  if (!d) return "-";
+  const date = new Date(d);
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function ScoreBar({ score }: { score: number }) {
+  const color = score >= 70 ? "bg-green-500" : score >= 40 ? "bg-yellow-500" : "bg-red-500";
+  const label = score >= 70 ? "Engajado" : score >= 40 ? "Moderado" : "Baixo";
+  return (
+    <div className="flex items-center gap-2 min-w-[160px]">
+      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${score}%` }} />
+      </div>
+      <span className="text-xs font-medium w-8 text-right">{Math.round(score)}</span>
+      <Badge variant="outline" className={`text-xs ${score >= 70 ? 'text-green-700 border-green-300' : score >= 40 ? 'text-yellow-700 border-yellow-300' : 'text-red-700 border-red-300'}`}>
+        {label}
+      </Badge>
+    </div>
+  );
+}
+
+function HorizontalBar({ value, max, label, color = "bg-blue-500" }: { value: number; max: number; label: string; color?: string }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <span className="text-sm text-gray-600 w-48 truncate" title={label}>{label}</span>
+      <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-sm font-semibold w-12 text-right">{value}</span>
+    </div>
+  );
+}
+
+function SimpleBarChart({ data, labelKey, valueKey, color = "bg-blue-500" }: {
+  data: any[]; labelKey: string; valueKey: string; color?: string;
+}) {
+  if (!data?.length) return <p className="text-sm text-gray-400 py-4">Sem dados</p>;
+  const max = Math.max(...data.map(d => Number(d[valueKey] ?? 0)));
+  return (
+    <div className="space-y-1">
+      {data.map((d, i) => (
+        <HorizontalBar key={i} value={Number(d[valueKey])} max={max} label={String(d[labelKey])} color={color} />
+      ))}
+    </div>
+  );
+}
+
+function DailyChart({ data }: { data: Array<{ dia: string; total: string | number }> }) {
+  if (!data?.length) return <p className="text-sm text-gray-400 py-4">Sem dados</p>;
+  const max = Math.max(...data.map(d => Number(d.total)));
+  return (
+    <div className="flex items-end gap-1 h-40 overflow-x-auto pb-6 relative">
+      {data.map((d, i) => {
+        const h = max > 0 ? (Number(d.total) / max) * 100 : 0;
+        return (
+          <div key={i} className="flex flex-col items-center min-w-[20px] flex-1 group relative">
+            <div className="absolute -top-5 text-xs font-medium text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+              {Number(d.total)}
+            </div>
+            <div className="w-full bg-blue-500 rounded-t transition-all hover:bg-blue-600" style={{ height: `${h}%`, minHeight: h > 0 ? 4 : 0 }} />
+            <span className="text-[9px] text-gray-400 mt-1 rotate-45 origin-left whitespace-nowrap absolute -bottom-5">
+              {formatDate(d.dia)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HourChart({ data }: { data: Array<{ hora: number; total: string | number }> }) {
+  const hours = Array.from({ length: 24 }, (_, i) => {
+    const found = data?.find(d => Number(d.hora) === i);
+    return { hora: i, total: Number(found?.total ?? 0) };
+  });
+  const max = Math.max(...hours.map(h => h.total));
+  return (
+    <div className="flex items-end gap-1 h-32">
+      {hours.map((h) => {
+        const pct = max > 0 ? (h.total / max) * 100 : 0;
+        return (
+          <div key={h.hora} className="flex flex-col items-center flex-1 group relative">
+            <div className="absolute -top-5 text-xs font-medium text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+              {h.total}
+            </div>
+            <div className="w-full bg-purple-500 rounded-t transition-all hover:bg-purple-600" style={{ height: `${pct}%`, minHeight: pct > 0 ? 4 : 0 }} />
+            <span className="text-[9px] text-gray-400 mt-1">{h.hora}h</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function KPICard({ icon: Icon, label, value, sub, color = "text-blue-600" }: {
+  icon: any; label: string; value: string | number; sub?: string; color?: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div className={`p-2 rounded-lg bg-gray-50 ${color}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
+            <p className="text-2xl font-bold">{value}</p>
+            {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PerfilUsuario({ userId, companyId, periodo, onBack }: {
+  userId: number; companyId: number; periodo: Periodo; onBack: () => void;
+}) {
+  const { data, isLoading } = trpc.telemetria.perfilUsuario.useQuery(
+    { companyId, userId, periodo },
+    { enabled: companyId > 0 }
+  );
+
+  if (isLoading) return <div className="flex justify-center p-8"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" /></div>;
+  if (!data?.info) return <p className="text-gray-400 p-8">Nenhum dado encontrado para este usuário.</p>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button>
+        <h2 className="text-xl font-bold">{data.info.user_name}</h2>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KPICard icon={Eye} label="Páginas Visitadas" value={Number(data.info.total_paginas)} color="text-blue-600" />
+        <KPICard icon={MousePointerClick} label="Ações Realizadas" value={Number(data.info.total_acoes)} color="text-green-600" />
+        <KPICard icon={Monitor} label="Páginas Únicas" value={Number(data.info.paginas_distintas)} color="text-purple-600" />
+        <KPICard icon={Clock} label="Tempo Total" value={formatDuracao(Number(data.info.tempo_total))} color="text-orange-600" />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Páginas Mais Acessadas</CardTitle></CardHeader>
+          <CardContent><SimpleBarChart data={data.paginas} labelKey="pagina" valueKey="total" /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Ações Mais Frequentes</CardTitle></CardHeader>
+          <CardContent><SimpleBarChart data={data.acoes} labelKey="acao" valueKey="total" color="bg-green-500" /></CardContent>
+        </Card>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Uso por Dia</CardTitle></CardHeader>
+          <CardContent><DailyChart data={data.porDia} /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Uso por Hora</CardTitle></CardHeader>
+          <CardContent><HourChart data={data.porHora} /></CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Info</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div><span className="text-gray-500">Primeiro acesso:</span> <strong>{formatDateTime(data.info.primeiro_acesso)}</strong></div>
+            <div><span className="text-gray-500">Último acesso:</span> <strong>{formatDateTime(data.info.ultimo_acesso)}</strong></div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default function Telemetria() {
+  const { user } = useAuth();
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId && selectedCompanyId !== "construtoras"
+    ? parseInt(selectedCompanyId, 10) : 0;
+  const [periodo, setPeriodo] = useState<Periodo>("30d");
+  const [activeTab, setActiveTab] = useState("plataforma");
+  const [selectedUser, setSelectedUser] = useState<number | null>(null);
+  const [searchFilter, setSearchFilter] = useState("");
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  const dashQuery = trpc.telemetria.dashboardGeral.useQuery(
+    { companyId, periodo },
+    { enabled: companyId > 0 && activeTab === "plataforma" && !selectedUser }
+  );
+  const scoreQuery = trpc.telemetria.scoreEngajamento.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && activeTab === "plataforma" && !selectedUser }
+  );
+  const iaQuery = trpc.telemetria.analyticsIA.useQuery(
+    { companyId, periodo },
+    { enabled: companyId > 0 && activeTab === "ia" }
+  );
+
+  const dash = dashQuery.data;
+  const scores = scoreQuery.data ?? [];
+  const ia = iaQuery.data;
+
+  if (user?.role !== "admin_master") {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-gray-500">Acesso restrito a Admin Master.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const toggleRow = (id: number) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const MODULE_LABELS_MAP: Record<string, string> = {
+    planejamento: "Planejamento", orcamento: "Orçamento", compras: "Compras",
+    rh: "RH/DP", financeiro: "Financeiro", sst: "SST", medicao: "Medição",
+    "rh-dp": "RH/DP", juridico: "Jurídico", terceiros: "Terceiros",
+    parceiros: "Parceiros", almoxarifado: "Almoxarifado",
+    "gestao-documentos": "Gestão Documentos",
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Activity className="h-6 w-6 text-blue-600" />
+              Telemetria & Analytics
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">Monitoramento completo de uso da plataforma</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
+              <SelectTrigger className="w-44">
+                <Calendar className="h-4 w-4 mr-1" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(PERIODO_LABELS).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setSelectedUser(null); }}>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="plataforma" className="flex items-center gap-1">
+              <Monitor className="h-4 w-4" /> Uso da Plataforma
+            </TabsTrigger>
+            <TabsTrigger value="ia" className="flex items-center gap-1">
+              <Brain className="h-4 w-4" /> Analytics da IA
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="plataforma" className="space-y-4 mt-4">
+            {selectedUser ? (
+              <PerfilUsuario userId={selectedUser} companyId={companyId} periodo={periodo} onBack={() => setSelectedUser(null)} />
+            ) : dashQuery.isLoading ? (
+              <div className="flex justify-center p-12"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" /></div>
+            ) : dash ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <KPICard icon={Eye} label="Total de Acessos" value={dash.totalAcessos.toLocaleString("pt-BR")} color="text-blue-600" />
+                  <KPICard icon={Users} label="Usuários Ativos" value={dash.usuariosAtivos} color="text-green-600" />
+                  <KPICard icon={Clock} label="Tempo Médio/Página" value={formatDuracao(dash.tempoMedio)} color="text-purple-600" />
+                  <KPICard icon={AlertTriangle} label="Usuários Inativos (7d+)" value={dash.usuariosInativos.length} color="text-red-600" />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1"><TrendingUp className="h-4 w-4" /> Evolução Diária</CardTitle></CardHeader>
+                    <CardContent><DailyChart data={dash.usoPorDia} /></CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1"><Clock className="h-4 w-4" /> Uso por Hora</CardTitle></CardHeader>
+                    <CardContent><HourChart data={dash.usoPorHora} /></CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Páginas Mais Acessadas (Top 15)</CardTitle></CardHeader>
+                    <CardContent>
+                      <SimpleBarChart data={dash.paginasMaisAcessadas.slice(0, 15)} labelKey="pagina" valueKey="total" />
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Uso por Módulo</CardTitle></CardHeader>
+                    <CardContent>
+                      <SimpleBarChart
+                        data={(dash.usoPorModulo ?? []).map((m: any) => ({ ...m, modulo: MODULE_LABELS_MAP[m.modulo] || m.modulo }))}
+                        labelKey="modulo" valueKey="total" color="bg-indigo-500"
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-1"><Users className="h-4 w-4" /> Score de Engajamento (últimos 30 dias)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {scores.length === 0 ? (
+                      <p className="text-sm text-gray-400 py-4">Sem dados de engajamento ainda.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b text-left text-gray-500">
+                              <th className="py-2 pr-4">Usuário</th>
+                              <th className="py-2 pr-2 text-center">Dias Ativos</th>
+                              <th className="py-2 pr-2 text-center">Visitas</th>
+                              <th className="py-2 pr-2 text-center">Ações</th>
+                              <th className="py-2 pr-2 text-center">Págs. Únicas</th>
+                              <th className="py-2 pr-2 text-center">Tempo</th>
+                              <th className="py-2">Score</th>
+                              <th className="py-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {scores.map((s: any) => (
+                              <tr key={s.user_id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedUser(Number(s.user_id))}>
+                                <td className="py-2 pr-4 font-medium">{s.user_name}</td>
+                                <td className="py-2 pr-2 text-center">{Number(s.dias_ativos)}</td>
+                                <td className="py-2 pr-2 text-center">{Number(s.visitas)}</td>
+                                <td className="py-2 pr-2 text-center">{Number(s.acoes)}</td>
+                                <td className="py-2 pr-2 text-center">{Number(s.paginas_unicas)}</td>
+                                <td className="py-2 pr-2 text-center">{formatDuracao(Number(s.tempo_total))}</td>
+                                <td className="py-2"><ScoreBar score={Number(s.score)} /></td>
+                                <td className="py-2"><Button variant="ghost" size="sm"><Eye className="h-3 w-3" /></Button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-1"><Users className="h-4 w-4" /> Ranking de Usuários</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-gray-500">
+                            <th className="py-2 pr-4">#</th>
+                            <th className="py-2 pr-4">Usuário</th>
+                            <th className="py-2 pr-2 text-center">Visitas</th>
+                            <th className="py-2 pr-2 text-center">Ações</th>
+                            <th className="py-2 pr-2 text-center">Págs. Únicas</th>
+                            <th className="py-2 pr-2 text-center">Tempo Total</th>
+                            <th className="py-2">Último Acesso</th>
+                            <th className="py-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(dash.rankingUsuarios ?? []).map((u: any, i: number) => (
+                            <tr key={u.user_id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedUser(Number(u.user_id))}>
+                              <td className="py-2 pr-4 font-bold text-gray-400">{i + 1}</td>
+                              <td className="py-2 pr-4 font-medium">{u.user_name}</td>
+                              <td className="py-2 pr-2 text-center">{Number(u.total_paginas)}</td>
+                              <td className="py-2 pr-2 text-center">{Number(u.total_acoes)}</td>
+                              <td className="py-2 pr-2 text-center">{Number(u.paginas_distintas)}</td>
+                              <td className="py-2 pr-2 text-center">{formatDuracao(Number(u.tempo_total))}</td>
+                              <td className="py-2 text-gray-500">{formatDateTime(u.ultimo_acesso)}</td>
+                              <td className="py-2"><Button variant="ghost" size="sm"><Eye className="h-3 w-3" /></Button></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {dash.paginasSemAcesso.length > 0 && (
+                  <Card className="border-red-200">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-1 text-red-600">
+                        <AlertTriangle className="h-4 w-4" /> Funcionalidades Pouco Usadas (sem acesso há 30+ dias)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {dash.paginasSemAcesso.map((p: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between p-2 bg-red-50 rounded text-sm">
+                            <span className="font-medium">{p.pagina}</span>
+                            <span className="text-gray-500">Último acesso: {formatDate(p.ultimo_acesso)} ({Number(p.total_historico)} acessos totais)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {dash.usuariosInativos.length > 0 && (
+                  <Card className="border-orange-200">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-1 text-orange-600">
+                        <AlertTriangle className="h-4 w-4" /> Usuários Inativos (7+ dias sem acesso)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {dash.usuariosInativos.map((u: any) => (
+                          <div key={u.user_id} className="flex items-center gap-2 p-2 bg-orange-50 rounded text-sm cursor-pointer hover:bg-orange-100"
+                            onClick={() => setSelectedUser(Number(u.user_id))}>
+                            <User className="h-4 w-4 text-orange-500" />
+                            <div>
+                              <p className="font-medium">{u.user_name}</p>
+                              <p className="text-xs text-gray-500">Último: {formatDateTime(u.ultimo_acesso)} | {Number(u.total_acessos)} acessos</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : null}
+          </TabsContent>
+
+          <TabsContent value="ia" className="space-y-4 mt-4">
+            {iaQuery.isLoading ? (
+              <div className="flex justify-center p-12"><div className="animate-spin h-8 w-8 border-4 border-purple-500 border-t-transparent rounded-full" /></div>
+            ) : ia ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <KPICard icon={Brain} label="Total de Conversas" value={ia.totalConsultas.toLocaleString("pt-BR")} color="text-purple-600" />
+                  <KPICard icon={Users} label="Usuários Únicos" value={ia.porUsuario.length} color="text-green-600" />
+                  <KPICard icon={BarChart3} label="Módulos Utilizados" value={ia.porModulo.length} color="text-blue-600" />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Evolução Diária</CardTitle></CardHeader>
+                    <CardContent><DailyChart data={ia.porDia} /></CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Uso por Módulo da IA</CardTitle></CardHeader>
+                    <CardContent>
+                      <SimpleBarChart
+                        data={(ia.porModulo ?? []).map((m: any) => ({ ...m, modulo: MODULE_LABELS_MAP[m.modulo] || m.modulo }))}
+                        labelKey="modulo" valueKey="total" color="bg-purple-500"
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Ranking de Uso da IA</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-gray-500">
+                            <th className="py-2 pr-4">#</th>
+                            <th className="py-2 pr-4">Usuário</th>
+                            <th className="py-2 pr-2 text-center">Consultas</th>
+                            <th className="py-2">Último Uso</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ia.porUsuario.map((u: any, i: number) => (
+                            <tr key={u.user_id} className="border-b hover:bg-gray-50">
+                              <td className="py-2 pr-4 font-bold text-gray-400">{i + 1}</td>
+                              <td className="py-2 pr-4 font-medium">{u.user_name}</td>
+                              <td className="py-2 pr-2 text-center font-semibold">{Number(u.total)}</td>
+                              <td className="py-2 text-gray-500">{formatDateTime(u.ultimo_uso)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm">Histórico de Conversas com a IA</CardTitle>
+                      <div className="relative w-64">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          placeholder="Buscar nas perguntas..."
+                          value={searchFilter}
+                          onChange={(e) => setSearchFilter(e.target.value)}
+                          className="pl-8 h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-0 max-h-[500px] overflow-y-auto">
+                      {(ia.ultimasPerguntas ?? [])
+                        .filter((p: any) => !searchFilter || p.pergunta?.toLowerCase().includes(searchFilter.toLowerCase()) || p.user_name?.toLowerCase().includes(searchFilter.toLowerCase()))
+                        .map((p: any) => (
+                        <div key={p.id} className="border-b py-2">
+                          <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleRow(p.id)}>
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <Badge variant="outline" className="text-xs shrink-0">
+                                {MODULE_LABELS_MAP[p.modulo] || p.modulo}
+                              </Badge>
+                              <span className="text-sm font-medium truncate">{p.user_name}</span>
+                              <span className="text-xs text-gray-400 shrink-0">{formatDateTime(p.criado_em)}</span>
+                            </div>
+                            {expandedRows.has(p.id) ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1 truncate">{p.pergunta}</p>
+                          {expandedRows.has(p.id) && (
+                            <div className="mt-2 p-3 bg-gray-50 rounded text-sm">
+                              <p className="font-medium text-gray-500 mb-1">Pergunta:</p>
+                              <p className="mb-3 whitespace-pre-wrap">{p.pergunta}</p>
+                              <p className="font-medium text-gray-500 mb-1">Resposta:</p>
+                              <p className="whitespace-pre-wrap text-gray-700">{p.resposta}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : null}
+          </TabsContent>
+        </Tabs>
+      </div>
+    </DashboardLayout>
+  );
+}

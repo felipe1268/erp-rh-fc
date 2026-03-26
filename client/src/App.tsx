@@ -87,6 +87,7 @@ const PainelSST = lazy(() => import("./pages/PainelSST"));
 const PainelJuridico = lazy(() => import("./pages/PainelJuridico"));
 const BibliotecaConhecimento = lazy(() => import("./pages/BibliotecaConhecimento"));
 const AvaliacaoDesempenho = lazy(() => import("./pages/AvaliacaoDesempenho"));
+const Telemetria = lazy(() => import("./pages/Telemetria"));
 const ImportData = lazy(() => import("./pages/ImportData"));
 
 // Relatórios
@@ -241,6 +242,7 @@ function Router() {
         <Route path={"/usuarios"} component={() => <MasterOnlyGuard component={Usuarios} />} />
         <Route path={"/grupos-usuarios"} component={() => <MasterOnlyGuard component={GruposUsuarios} />} />
         <Route path={"/auditoria"} component={() => <MasterOnlyGuard component={Auditoria} />} />
+        <Route path={"/admin/telemetria"} component={() => <MasterOnlyGuard component={Telemetria} />} />
         <Route path={"/fechamento-ponto"} component={FechamentoPonto} />
         <Route path={"/espelho-ponto"} component={EspelhoPonto} />
         <Route path={"/folha-pagamento"} component={FolhaPagamento} />

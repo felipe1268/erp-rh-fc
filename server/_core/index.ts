@@ -468,6 +468,23 @@ async function startServer() {
           criado_em TIMESTAMP DEFAULT NOW()
         )`);
         console.log("[ColFix] ia_modulo_conversas OK");
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS user_activity_log (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL DEFAULT 0,
+          user_id INTEGER NOT NULL DEFAULT 0,
+          user_name VARCHAR(200) DEFAULT '',
+          tipo VARCHAR(50) NOT NULL DEFAULT 'page_visit',
+          pagina VARCHAR(500) NOT NULL DEFAULT '',
+          acao VARCHAR(500),
+          modulo VARCHAR(100),
+          detalhes TEXT,
+          duracao_segundos INTEGER DEFAULT 0,
+          criado_em TIMESTAMP DEFAULT NOW()
+        )`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_company_criado ON user_activity_log(company_id, criado_em)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_user_company ON user_activity_log(user_id, company_id, criado_em DESC)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_company_tipo ON user_activity_log(company_id, tipo, criado_em)`);
+        console.log("[Telemetria] user_activity_log OK");
       } catch (e: any) { console.warn("[MedicaoMigration] Aviso:", e?.message ?? e); }
     });
     // Rev.547: migração aviso prévio — adiciona dataBaixa e move concluidos auto-marcados → aguardando_pagamento

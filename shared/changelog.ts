@@ -5361,4 +5361,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 18:00:00",
   },
+  {
+    version: 799,
+    titulo: "Telemetria & Analytics — Monitoramento Completo da Plataforma",
+    descricao: "Novo módulo de telemetria com rastreamento invisível de toda a navegação dos usuários. Tracker silencioso grava: página visitada, tempo de permanência, ações realizadas, módulo ativo. Nova página /admin/telemetria (admin_master only) com: KPIs (acessos, usuários ativos, tempo médio), evolução diária, uso por hora, ranking de páginas mais acessadas, ranking de usuários, score de engajamento (0-100) com indicadores verde/amarelo/vermelho, perfil individual (drill-down por usuário), funcionalidades mortas (sem acesso 30+ dias), alertas de inatividade. Aba Analytics da IA: total de conversas por módulo, ranking de uso, histórico completo com busca e expansão. Backend: tabela user_activity_log com índices, router telemetria com 7 endpoints.",
+    tipo: "feature",
+    modulos: "Administração",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 20:00:00",
+  },
 ];

@@ -45,6 +45,7 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { ActivityTracker } from "./ActivityTracker";
 import { useModule, ModuleId, MODULE_LABELS } from "@/contexts/ModuleContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import { useModuleConfig } from "@/contexts/ModuleConfigContext";
@@ -195,6 +196,12 @@ const menuSectionsJuridico: MenuSection[] = [
 
 // Shared admin sections (appended to every module)
 const adminSections: MenuSection[] = [
+  {
+    title: "Administração",
+    items: [
+      { icon: BarChart3, label: "Telemetria & Analytics", path: "/admin/telemetria", adminMasterOnly: true },
+    ],
+  },
   {
     title: "Ajuda",
     items: [
@@ -1409,6 +1416,7 @@ function DashboardLayoutContent({
         <main className="flex-1 p-3 sm:p-4 md:p-6">{children}</main>
       </SidebarInset>
       <IAModuloAutoDetect location={location} />
+      <ActivityTracker />
     </>
   );
 }
