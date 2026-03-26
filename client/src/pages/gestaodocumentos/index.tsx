@@ -408,15 +408,16 @@ export default function GestaoDocumentos() {
           const existingDoc = currentDocs.find((d: any) => d.id === pf.existingDocId);
           if (existingDoc) {
             const oldParsed = parseRevision(existingDoc.titulo || existingDoc.codigo || "");
+            const oldRevStr = oldParsed.revStr || "00";
             await createRevisao.mutateAsync({
               companyId,
               documentoId: existingDoc.id,
-              numero: revStr,
-              descricao: `Atualização de R${oldParsed.revStr || "00"} para R${revStr}`,
+              numero: oldRevStr,
+              descricao: `Arquivo da revisão R${oldRevStr} (substituído por R${revStr})`,
               arquivoUrl: existingDoc.arquivoUrl || undefined,
               arquivoNome: existingDoc.arquivoNome || undefined,
               arquivoTamanho: existingDoc.arquivoTamanho || undefined,
-              motivoRevisao: "Upload de nova revisão",
+              motivoRevisao: `Substituído por revisão R${revStr}`,
             });
             await uploadFileToDoc(existingDoc.id, pf.file);
             await updateDoc.mutateAsync({
@@ -425,6 +426,7 @@ export default function GestaoDocumentos() {
               titulo: pf.codigo,
               codigo: pf.codigo,
               descricao: pf.titulo || undefined,
+              status: "em_elaboracao",
             });
             existingDoc.titulo = pf.codigo;
             existingDoc.codigo = pf.codigo;
