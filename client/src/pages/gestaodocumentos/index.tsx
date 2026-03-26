@@ -322,7 +322,6 @@ export default function GestaoDocumentos() {
       setBatchProgress({ current: i + 1, total: validFiles.length });
       const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
       const discId = selectedDiscId || undefined;
-      const code = generateNextCode(discId);
       try {
         const doc = await createDoc.mutateAsync({
           companyId,
@@ -331,7 +330,7 @@ export default function GestaoDocumentos() {
           disciplinaId: discId,
           pastaId: undefined,
           subpasta: selectedSubpasta || undefined,
-          codigo: code,
+          codigo: nameWithoutExt,
           titulo: nameWithoutExt,
           dataEmissao: new Date().toISOString().split("T")[0],
         });
@@ -1012,7 +1011,7 @@ export default function GestaoDocumentos() {
                           const discId = selectedDiscId ? String(selectedDiscId) : "";
                           const nameWithoutExt = f.name.replace(/\.[^.]+$/, "");
                           setDocForm({
-                            codigo: generateNextCode(),
+                            codigo: nameWithoutExt,
                             titulo: nameWithoutExt,
                             descricao: "",
                             disciplinaId: discId,
