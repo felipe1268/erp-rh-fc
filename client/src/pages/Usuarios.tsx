@@ -10,7 +10,7 @@ import {
   ChevronDown, Save, Trash2, RefreshCw, User, Mail, KeyRound,
   Settings2, AlertTriangle, CheckSquare, Square, ArrowLeft,
   Layers, Plus, UserCheck, Edit2, Check, Palette, UsersRound,
-  ShieldCheck, ShieldAlert, Crown, Info, ChevronRight,
+  ShieldCheck, ShieldAlert, Crown, Info, ChevronRight, HardHat,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -258,11 +258,16 @@ export default function Usuarios() {
 
   const [activeTab, setActiveTab] = useState<"usuarios" | "grupos">("usuarios");
 
+  const { selectedCompanyId } = useCompany();
+  const companyId = Number(selectedCompanyId) || 0;
+
   // ── Dados base ──
   const usersQuery        = trpc.userManagement.listUsers.useQuery();
   const allCompaniesQuery = trpc.companies.list.useQuery();
   const groupsQuery       = trpc.userGroups.list.useQuery();
   const allMembersQuery   = trpc.userGroups.listAllMembers.useQuery();
+  const obrasAtivasQuery  = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
+  const obrasAtivas       = obrasAtivasQuery.data ?? [];
   const utils             = trpc.useUtils();
 
   const allUsers   = usersQuery.data ?? [];
@@ -293,6 +298,7 @@ export default function Usuarios() {
   const [editRole, setEditRole]       = useState("user");
   const [editCos, setEditCos]         = useState<number[]>([]);
   const [editGroupIds, setEditGroupIds] = useState<number[]>([]);
+  const [editObras, setEditObras]     = useState<number[]>([]);
 
   // Formulário novo usuário
   const [newUser, setNewUser]   = useState({ username:"", name:"", email:"", role:"user" as any, password:"", companyIds:[] as number[], groupIds:[] as number[] });
@@ -334,6 +340,9 @@ export default function Usuarios() {
       utils.userGroups.listAllMembers.invalidate();
     },
   });
+  const setObrasMut = trpc.userManagement.setUserObras.useMutation({
+    onSuccess: () => utils.userManagement.listUsers.invalidate(),
+  });
 
   const openUser = (u: any) => {
     setSelectedUser(u);
@@ -343,7 +352,7 @@ export default function Usuarios() {
     setEditPwd("");
     setEditRole(u.role || "user");
     setEditCos(u.companyIds || []);
-    // Grupo do usuário — lê de userGroupIdMap (fonte: listAllMembers)
+    setEditObras(u.allowedObraIds || []);
     const gid = userGroupIdMap[u.id];
     setEditGroupIds(gid ? [gid] : []);
     setUPanel("detail");
@@ -354,6 +363,7 @@ export default function Usuarios() {
     await updateUserMut.mutateAsync({ userId: selectedUser.id, name: editName, email: editEmail||undefined, username: editUser, role: editRole as any, password: editPwd||undefined });
     await setCosMut.mutateAsync({ userId: selectedUser.id, companyIds: editCos });
     await setGroupsMut.mutateAsync({ userId: selectedUser.id, groupIds: editGroupIds });
+    await setObrasMut.mutateAsync({ userId: selectedUser.id, obraIds: editObras });
     utils.userGroups.list.invalidate();
   };
 
@@ -730,6 +740,43 @@ export default function Usuarios() {
                                 <span className="truncate">{c.nomeFantasia||c.razaoSocial}</span>
                               </label>
                             ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Obras com Acesso */}
+                      {editRole !== "admin_master" && editRole !== "admin" && obrasAtivas.length > 0 && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-semibold text-amber-700 uppercase tracking-wide flex items-center gap-1.5">
+                              <HardHat className="h-3.5 w-3.5" /> Obras com Acesso
+                              <span className="text-[10px] font-normal text-amber-500 ml-1">({editObras.length} de {obrasAtivas.length})</span>
+                            </h3>
+                            <div className="flex gap-2">
+                              <button className="text-xs text-amber-600 hover:underline" onClick={()=>setEditObras(obrasAtivas.map((o:any) => o.id ?? o.obraIds?.[0]))}>Todas</button>
+                              <span className="text-amber-300 text-xs">·</span>
+                              <button className="text-xs text-muted-foreground hover:underline" onClick={()=>setEditObras([])}>Limpar</button>
+                            </div>
+                          </div>
+                          {editObras.length === 0 && (
+                            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-100/50 border border-amber-200 text-xs text-amber-700">
+                              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                              <span>Sem obras selecionadas — acesso será determinado pela alocação do funcionário (obra_funcionarios).</span>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto">
+                            {obrasAtivas.map((o: any) => {
+                              const oid = o.id ?? o.obraIds?.[0];
+                              const checked = editObras.includes(oid);
+                              return (
+                                <label key={oid} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer text-xs transition-all ${checked ? "bg-amber-50 border-amber-400 shadow-sm" : "bg-white border-border hover:bg-slate-50"}`}>
+                                  <input type="checkbox" className="rounded accent-amber-500" checked={checked}
+                                    onChange={e => setEditObras(e.target.checked ? [...editObras, oid] : editObras.filter(id => id !== oid))} />
+                                  <HardHat className={`h-3 w-3 shrink-0 ${checked ? "text-amber-600" : "text-slate-300"}`} />
+                                  <span className={`truncate ${checked ? "font-medium text-amber-800" : "text-slate-600"}`}>{o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</span>
+                                </label>
+                              );
+                            })}
                           </div>
                         </div>
                       )}

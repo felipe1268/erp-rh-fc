@@ -2809,6 +2809,7 @@ export const users = pgTable("users", {
         deletedBy: varchar({ length: 255 }),
         deletedByUserId: integer(),
         modulesAccess: text(),
+        allowedObraIds: text("allowed_obra_ids"),
 },
 (table) => [
         index("users_openId_unique").on(table.openId),

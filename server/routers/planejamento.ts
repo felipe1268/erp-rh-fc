@@ -51,20 +51,29 @@ export const planejamentoRouter = router({
 
       let allowedObraIds: number[] | null = null;
       if (!isAdmin) {
-        const userEmail = ctx.user.email ?? "";
-        if (!userEmail) return [];
-        const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
-        const empRows: any[] = empResult?.rows ?? empResult ?? [];
-        if (!empRows.length) return [];
-        const employeeId = empRows[0].id;
-        const obrasResult = await db.execute(sql`
-          SELECT DISTINCT of2."obraId" FROM obra_funcionarios of2
-          INNER JOIN obras o ON o.id = of2."obraId" AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL
-          WHERE of2."employeeId" = ${employeeId} AND of2."isActive" = 1
-        `);
-        const obrasRows: any[] = obrasResult?.rows ?? obrasResult ?? [];
-        allowedObraIds = obrasRows.map((r: any) => r.obraId);
-        if (allowedObraIds.length === 0) return [];
+        const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
+        const userRows: any[] = userResult?.rows ?? userResult ?? [];
+        const raw = userRows[0]?.allowed_obra_ids;
+        let parsed: number[] = [];
+        try { if (raw) parsed = JSON.parse(raw); } catch {}
+        if (parsed.length > 0) {
+          allowedObraIds = parsed;
+        } else {
+          const userEmail = ctx.user.email ?? "";
+          if (!userEmail) return [];
+          const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
+          const empRows: any[] = empResult?.rows ?? empResult ?? [];
+          if (!empRows.length) return [];
+          const employeeId = empRows[0].id;
+          const obrasResult = await db.execute(sql`
+            SELECT DISTINCT of2."obraId" FROM obra_funcionarios of2
+            INNER JOIN obras o ON o.id = of2."obraId" AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL
+            WHERE of2."employeeId" = ${employeeId} AND of2."isActive" = 1
+          `);
+          const obrasRows: any[] = obrasResult?.rows ?? obrasResult ?? [];
+          allowedObraIds = obrasRows.map((r: any) => r.obraId);
+          if (allowedObraIds.length === 0) return [];
+        }
       }
 
       const rows = await db.select({

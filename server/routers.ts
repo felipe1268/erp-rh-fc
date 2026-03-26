@@ -864,8 +864,25 @@ export const appRouter = router({
     listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input, ctx }) => {
       const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
       if (isAdmin) return getObrasByCompanyActive(input.companyId);
+
+      const db = await getDb();
+      const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
+      const userRows: any[] = userResult?.rows ?? userResult ?? [];
+      const rawObras = userRows[0]?.allowed_obra_ids;
+      let parsedObras: number[] = [];
+      try { if (rawObras) parsedObras = JSON.parse(rawObras); } catch {}
+      if (parsedObras.length > 0) {
+        const obrasResult = await db.execute(sql`
+          SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
+          FROM obras o
+          WHERE o.id = ANY(${parsedObras}) AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o.status = 'ativa'
+          ORDER BY o.nome
+        `);
+        return (obrasResult?.rows ?? obrasResult ?? []) as any[];
+      }
+
       const userEmail = ctx.user.email ?? '';
-      if (!userEmail) return getObrasByCompanyActive(input.companyId);
+      if (!userEmail) return [];
       const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
       const empRows = empResult?.rows ?? empResult ?? [];
       if (!empRows.length) return [];
@@ -1249,10 +1266,11 @@ export const appRouter = router({
   userManagement: router({
     listUsers: protectedProcedure.query(async () => {
       const allUsers = await getAllUsers();
-      // Buscar vínculos de empresa para cada usuário
       const usersWithCompanies = await Promise.all(allUsers.map(async (u: any) => {
         const links = await getUserCompanyLinks(u.id);
-        return { ...u, password: undefined, companyIds: links.map((l: any) => l.companyId) };
+        let parsedObras: number[] = [];
+        try { if (u.allowedObraIds) parsedObras = JSON.parse(u.allowedObraIds); } catch {}
+        return { ...u, password: undefined, companyIds: links.map((l: any) => l.companyId), allowedObraIds: parsedObras };
       }));
       return usersWithCompanies;
     }),
@@ -1271,6 +1289,18 @@ export const appRouter = router({
       }
       await setUserCompanies(input.userId, input.companyIds);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_companies', entityId: input.userId, details: `Empresas do usuário atualizadas: [${input.companyIds.join(', ')}]` });
+      return { success: true };
+    }),
+    setUserObras: protectedProcedure.input(z.object({
+      userId: z.number(),
+      obraIds: z.array(z.number()),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar acesso a obras' });
+      }
+      const db = await getDb();
+      await db.execute(sql`UPDATE users SET allowed_obra_ids = ${JSON.stringify(input.obraIds)} WHERE id = ${input.userId}`);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_obras', entityId: input.userId, details: `Obras do usuário atualizadas: [${input.obraIds.join(', ')}]` });
       return { success: true };
     }),
     // Listar permissões granulares de um usuário
