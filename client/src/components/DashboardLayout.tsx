@@ -436,7 +436,7 @@ const menuSectionsMedicao: MenuSection[] = [
 
 const menuSectionsGestaoDocumentos: MenuSection[] = [
   {
-    title: "Gestão de Documentos",
+    title: "Proj./Doc. Técnicos",
     items: [
       { icon: LayoutDashboard, label: "Painel",          path: "/gestao-documentos" },
       { icon: FolderOpen,      label: "Documentos",      path: "/gestao-documentos?tab=documentos" },

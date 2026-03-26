@@ -320,7 +320,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   },
   {
     id: "gestao-documentos",
-    label: "Gestão de Documentos",
+    label: "Proj./Doc. Técnicos",
     description: "Controle de documentos técnicos de obra, revisões, disciplinas e ARTs/RRTs.",
     color: "indigo",
     icon: "FolderOpen",

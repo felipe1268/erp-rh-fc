@@ -5307,4 +5307,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 12:30:00",
   },
+  {
+    version: 793,
+    titulo: "Módulo Proj./Doc. Técnicos no Hub e renomeação",
+    descricao: "Módulo 'Gestão de Documentos' renomeado para 'Proj./Doc. Técnicos' em todas as telas (Hub, sidebar, Configurações, cabeçalho da página). Card do módulo adicionado à tela inicial (ModuleHub) com ícone, cores e features.",
+    tipo: "melhoria",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 13:00:00",
+  },
 ];

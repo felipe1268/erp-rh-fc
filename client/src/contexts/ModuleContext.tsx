@@ -122,7 +122,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "compras": "Compras",
   "almoxarifado": "Almoxarifado",
   "financeiro": "Financeiro",
-  "gestao-documentos": "Gestão de Documentos",
+  "gestao-documentos": "Proj./Doc. Técnicos",
   "all": "Todos os Módulos",
 };
 

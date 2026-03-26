@@ -391,11 +391,11 @@ export default function GestaoDocumentos() {
   const kpis = dashboard.data || { totalDocumentos: 0, porStatus: {}, totalRevisoes: 0, revisoesPendentes: 0, totalArts: 0, artsVencendo: 0 };
 
   return (
-    <DashboardLayout title="Gestão de Documentos">
+    <DashboardLayout title="Proj./Doc. Técnicos">
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Gestão de Projetos e Documentos</h1>
+            <h1 className="text-2xl font-bold text-white">Projetos/Documentos Técnicos</h1>
             <p className="text-sm text-gray-400 mt-1">Controle de documentos técnicos, revisões e ARTs/RRTs</p>
           </div>
           <div className="flex items-center gap-3">
