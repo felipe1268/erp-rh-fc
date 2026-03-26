@@ -409,6 +409,14 @@ export default function GestaoDocumentos() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const updateStatusBatch = trpc.gestaoDocumentos.updateStatusBatch.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Status de ${data.count} documento(s) atualizado`);
+      setSelectedDocIds(new Set());
+      utils.gestaoDocumentos.listDocumentos.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const createRev = trpc.gestaoDocumentos.createRevisao.useMutation({
     onSuccess: () => {
       toast.success("Revisão criada");
@@ -939,14 +947,27 @@ export default function GestaoDocumentos() {
                 </div>
 
                 {selectedDocIds.size > 0 && (
-                  <div className="flex items-center gap-3 px-4 py-2 bg-red-50 border-b border-red-200 shrink-0">
-                    <span className="text-sm text-red-700 font-medium">{selectedDocIds.size} documento(s) selecionado(s)</span>
+                  <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-200 shrink-0 flex-wrap">
+                    <span className="text-sm text-blue-700 font-medium">{selectedDocIds.size} documento(s) selecionado(s)</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-500 mr-1">Status:</span>
+                      {Object.entries(STATUS_MAP).map(([key, val]) => (
+                        <button
+                          key={key}
+                          onClick={() => updateStatusBatch.mutate({ ids: Array.from(selectedDocIds), companyId, status: key })}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${val.color} hover:opacity-80 transition-opacity`}
+                          disabled={updateStatusBatch.isPending}
+                        >
+                          {val.label}
+                        </button>
+                      ))}
+                    </div>
                     <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => {
                       if (confirm(`Remover ${selectedDocIds.size} documento(s)?`)) {
                         deleteDocsBatch.mutate({ ids: Array.from(selectedDocIds), companyId });
                       }
                     }} disabled={deleteDocsBatch.isPending}>
-                      <Trash2 className="w-3 h-3 mr-1" /> Apagar Selecionados
+                      <Trash2 className="w-3 h-3 mr-1" /> Apagar
                     </Button>
                     <Button size="sm" variant="ghost" className="h-7 text-xs text-gray-500" onClick={() => setSelectedDocIds(new Set())}>
                       Cancelar
@@ -1071,8 +1092,25 @@ export default function GestaoDocumentos() {
                                 ) : <span className="text-gray-400">—</span>}
                               </TableCell>
                               <TableCell className="text-center text-gray-700 text-sm font-medium">{doc.revisaoAtual || "0"}</TableCell>
-                              <TableCell>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${st.color}`}>{st.label}</span>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${st.color} hover:opacity-80 cursor-pointer transition-opacity`}>
+                                      {st.label}
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="min-w-[140px]">
+                                    {Object.entries(STATUS_MAP).map(([key, val]) => (
+                                      <DropdownMenuItem
+                                        key={key}
+                                        onClick={() => updateDoc.mutate({ id: doc.id, companyId, status: key })}
+                                        className="text-xs"
+                                      >
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${val.color}`}>{val.label}</span>
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </TableCell>
                               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                 <DropdownMenu>

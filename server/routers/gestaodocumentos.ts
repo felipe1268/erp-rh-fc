@@ -627,6 +627,16 @@ export const gestaoDocumentosRouter = router({
       return { success: true, count: input.ids.length };
     }),
 
+  updateStatusBatch: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number(), status: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(gdDocumentos).set({ status: input.status, atualizadoEm: new Date() })
+        .where(and(inArray(gdDocumentos.id, input.ids), eq(gdDocumentos.companyId, input.companyId)));
+      return { success: true, count: input.ids.length };
+    }),
+
   uploadArquivoDocumento: protectedProcedure
     .input(z.object({
       documentoId: z.number(),
