@@ -448,6 +448,15 @@ const menuSectionsGestaoDocumentos: MenuSection[] = [
   },
 ];
 
+const menuSectionsAdmin: MenuSection[] = [
+  {
+    title: "Administração",
+    items: [
+      { icon: BarChart3, label: "Telemetria & Analytics", path: "/admin/telemetria" },
+    ],
+  },
+];
+
 const menuSectionsCadastro: MenuSection[] = [
   {
     title: "Cadastro",
@@ -483,6 +492,7 @@ const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "almoxarifado":  menuSectionsAlmoxarifado,
   "financeiro":    menuSectionsFinanceiro,
   "gestao-documentos": menuSectionsGestaoDocumentos,
+  "admin": menuSectionsAdmin,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
 

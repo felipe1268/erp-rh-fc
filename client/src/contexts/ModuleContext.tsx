@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "admin" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -96,6 +96,8 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/financeiro/conciliacao":          "financeiro" as ModuleId,
   // Gestão de Documentos
   "/gestao-documentos":              "gestao-documentos" as ModuleId,
+  // Admin routes
+  "/admin/telemetria":               "admin" as ModuleId,
   // Shared routes (appear in all modules)
   "/empresas": "all",
   "/obras": "all",
@@ -123,6 +125,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "almoxarifado": "Almoxarifado",
   "financeiro": "Financeiro",
   "gestao-documentos": "Proj./Doc. Técnicos",
+  "admin": "Administração",
   "all": "Todos os Módulos",
 };
 
