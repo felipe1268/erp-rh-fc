@@ -5372,8 +5372,8 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 800,
-    titulo: "Sugestões IA para Disciplinas e Tipos de Documento",
-    descricao: "Botão 'Sugestões IA' nas seções de Disciplinas e Tipos de Documento da aba Configurações do módulo Gestão de Documentos. 40 disciplinas pré-cadastradas de construção civil (Arquitetura, Estrutural, Elétrica, Hidrossanitário, Incêndio, Fundações, Topografia, Paisagismo, Geotecnia, Impermeabilização, Acústica, Luminotécnica, Drenagem, Terraplanagem, Contenções, BIM, etc.) organizadas por categoria (Projeto, Instalações, Infraestrutura, Segurança, Gestão, Sustentabilidade). 20 tipos de documento (PE, PB, Memorial Descritivo, ART/RRT, Alvará, Habite-se, etc.). Filtro por categoria, autocomplete inteligente no campo de digitação, itens já cadastrados são ocultados automaticamente.",
+    titulo: "Configurações: Lista Editável de Disciplinas, Tipos de Documento e Sub-pastas",
+    descricao: "Aba Configurações do módulo Gestão de Documentos totalmente reformulada. Disciplinas, Tipos de Documento e Tipos de Sub-pasta agora aparecem em tabelas completas com: edição inline (lápis), exclusão com confirmação (lixeira), criação manual via formulário. 12 disciplinas padrão (ARQ, EST, ELE, HID, CLI, INC, FUN, TOP, PAI, COM, AUT, GEO) e 10 tipos de documento padrão (PE, PB, PL, MD, MC, ET, RT, LM, DT) são pré-carregados automaticamente na primeira vez. 10 tipos de sub-pasta padrão (DWG, PDF, IFC, DOC, REVIT, SKP, XLS, FOTOS, BIM, MEMORIAIS). Backend: novos endpoints deleteTipoDocumento e updateTipoSubpasta.",
     tipo: "feature",
     modulos: "Proj./Doc. Técnicos",
     criadoPor: "Sistema",

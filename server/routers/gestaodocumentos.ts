@@ -330,8 +330,8 @@ export const gestaoDocumentosRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(gdDisciplinas).set({ ativo: false })
-        .where(and(eq(gdDisciplinas.id, input.id), eq(gdDisciplinas.companyId, input.companyId)));
+      await db.delete(gdDisciplinas)
+        .where(and(eq(gdDisciplinas.id, input.id), eq(gdDisciplinas.companyId, input.companyId), isNull(gdDisciplinas.ficheiroId)));
       return { success: true };
     }),
 
@@ -374,6 +374,32 @@ export const gestaoDocumentosRouter = router({
       const { id, companyId, ...data } = input;
       await db.update(gdTiposDocumento).set(data)
         .where(and(eq(gdTiposDocumento.id, id), eq(gdTiposDocumento.companyId, companyId)));
+      return { success: true };
+    }),
+
+  deleteTipoDocumento: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(gdTiposDocumento)
+        .where(and(eq(gdTiposDocumento.id, input.id), eq(gdTiposDocumento.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  updateTipoSubpasta: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      nome: z.string().min(1).max(50).optional(),
+      ativo: z.boolean().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { id, companyId, ...data } = input;
+      await db.update(gdTiposSubpasta).set(data)
+        .where(and(eq(gdTiposSubpasta.id, id), eq(gdTiposSubpasta.companyId, companyId)));
       return { success: true };
     }),
 

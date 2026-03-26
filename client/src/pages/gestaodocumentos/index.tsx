@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useLocation } from "wouter";
@@ -89,7 +89,6 @@ import {
   Square,
   FolderPlus,
   ChevronDown,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -371,11 +370,47 @@ export default function GestaoDocumentos() {
       utils.gestaoDocumentos.listDisciplinas.invalidate();
     },
   });
+  const updateDisciplina = trpc.gestaoDocumentos.updateDisciplina.useMutation({
+    onSuccess: () => {
+      toast.success("Disciplina atualizada");
+      utils.gestaoDocumentos.listDisciplinas.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteDisciplina = trpc.gestaoDocumentos.deleteDisciplina.useMutation({
+    onSuccess: () => {
+      toast.success("Disciplina removida");
+      utils.gestaoDocumentos.listDisciplinas.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const createTipo = trpc.gestaoDocumentos.createTipoDocumento.useMutation({
     onSuccess: () => {
       toast.success("Tipo de documento criado");
       utils.gestaoDocumentos.listTiposDocumento.invalidate();
     },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateTipo = trpc.gestaoDocumentos.updateTipoDocumento.useMutation({
+    onSuccess: () => {
+      toast.success("Tipo de documento atualizado");
+      utils.gestaoDocumentos.listTiposDocumento.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteTipo = trpc.gestaoDocumentos.deleteTipoDocumento.useMutation({
+    onSuccess: () => {
+      toast.success("Tipo de documento removido");
+      utils.gestaoDocumentos.listTiposDocumento.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateTipoSubpasta = trpc.gestaoDocumentos.updateTipoSubpasta.useMutation({
+    onSuccess: () => {
+      toast.success("Tipo de sub-pasta atualizado");
+      utils.gestaoDocumentos.listTiposSubpasta.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
   });
   const seedDisciplinas = trpc.gestaoDocumentos.seedDisciplinasPadrao.useMutation({
     onSuccess: () => { utils.gestaoDocumentos.listDisciplinas.invalidate(); },
@@ -1048,9 +1083,10 @@ export default function GestaoDocumentos() {
                   subtitle="Disciplinas de engenharia/arquitetura que sua empresa trabalha. Aparecem como opções ao montar o ficheiro de cada obra."
                   items={disciplinas.data || []}
                   onAdd={(nome, sigla) => createDisciplina.mutate({ companyId, nome, sigla })}
+                  onUpdate={(id, nome, sigla) => updateDisciplina.mutate({ id, companyId, nome, sigla })}
+                  onDelete={(id) => { if (window.confirm("Excluir esta disciplina?")) deleteDisciplina.mutate({ id, companyId }); }}
                   fieldLabel1="Nome da Disciplina"
                   fieldLabel2="Sigla"
-                  sugestoes={SUGESTOES_DISCIPLINAS}
                 />
                 <div className="mt-4">
                   <ConfigSection
@@ -1058,16 +1094,18 @@ export default function GestaoDocumentos() {
                     subtitle="Classificações para os documentos técnicos (PE, PB, Memorial, etc.)."
                     items={tipos.data || []}
                     onAdd={(nome, sigla) => createTipo.mutate({ companyId, nome, sigla })}
+                    onUpdate={(id, nome, sigla) => updateTipo.mutate({ id, companyId, nome, sigla })}
+                    onDelete={(id) => { if (window.confirm("Excluir este tipo de documento?")) deleteTipo.mutate({ id, companyId }); }}
                     fieldLabel1="Nome do Tipo"
                     fieldLabel2="Sigla"
-                    sugestoes={SUGESTOES_TIPOS_DOC}
                   />
                 </div>
                 <div className="mt-4">
                   <SubpastaConfigSection
                     items={tiposSubpasta.data || []}
                     onAdd={(nome) => createTipoSubpasta.mutate({ companyId, nome })}
-                    onDelete={(id) => deleteTipoSubpasta.mutate({ id, companyId })}
+                    onUpdate={(id, nome) => updateTipoSubpasta.mutate({ id, companyId, nome })}
+                    onDelete={(id) => { if (window.confirm("Excluir este tipo de sub-pasta?")) deleteTipoSubpasta.mutate({ id, companyId }); }}
                   />
                 </div>
               </TabsContent>
@@ -1559,40 +1597,101 @@ function DisciplinaSelector({ selectedDisciplinas, setSelectedDisciplinas, allDi
   );
 }
 
-function SubpastaConfigSection({ items, onAdd, onDelete }: {
+function SubpastaConfigSection({ items, onAdd, onUpdate, onDelete }: {
   items: any[];
   onAdd: (nome: string) => void;
+  onUpdate: (id: number, nome: string) => void;
   onDelete: (id: number) => void;
 }) {
   const [nome, setNome] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editNome, setEditNome] = useState("");
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h3 className="text-lg font-semibold text-gray-900 mb-1">Tipos de Sub-pasta</h3>
-      <p className="text-xs text-gray-500 mb-4">Tipos de arquivo/pasta que serão criados dentro de cada disciplina (ex: DWG, PDF, IFC, DOC). Adicione quantos precisar.</p>
-      <div className="flex items-end gap-3 mb-4">
-        <div className="flex-1">
-          <Label className="text-gray-500 text-sm">Nome do Tipo</Label>
-          <Input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} className="bg-gray-50 border-gray-300 text-gray-900" placeholder="Ex: REVIT, SKP, XLS, FOTOS" />
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-lg font-semibold text-gray-900">Tipos de Sub-pasta</h3>
+        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length} cadastrado(s)</span>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">Tipos de arquivo/pasta que serão criados dentro de cada disciplina (ex: DWG, PDF, IFC, DOC). Adicione quantos precisar.</p>
+
+      {items.length > 0 && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden mb-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">Nome</th>
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase w-20">Tipo</th>
+                <th className="text-right px-3 py-2 text-xs font-medium text-gray-500 uppercase w-24">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, idx) => (
+                <tr key={item.id} className={`border-b border-gray-100 last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"} hover:bg-blue-50/40 transition-colors`}>
+                  {editingId === item.id ? (
+                    <>
+                      <td className="px-3 py-1.5" colSpan={2}>
+                        <Input value={editNome} onChange={(e) => setEditNome(e.target.value.toUpperCase())} className="h-7 text-xs font-mono bg-white" />
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button size="sm" onClick={() => { if (editNome) { onUpdate(editingId, editNome); setEditingId(null); } }} className="h-6 px-2 text-[10px] bg-green-600 text-white hover:bg-green-700">Salvar</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingId(null)} className="h-6 px-2 text-[10px] text-gray-400">Cancelar</Button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-3 py-2">
+                        <span className="font-mono font-medium text-gray-800">{item.nome}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {item.padrao && <span className="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded uppercase">padrão</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => { setEditingId(item.id); setEditNome(item.nome); }} className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors" title="Editar">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => onDelete(item.id)} className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors" title="Excluir">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <Button onClick={() => { if (nome.trim()) { onAdd(nome.trim()); setNome(""); } }} className="bg-blue-600 text-white hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-1" /> Adicionar
+      )}
+
+      {items.length === 0 && (
+        <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 mb-3">
+          <p className="text-gray-400 text-sm">Carregando itens pré-configurados...</p>
+        </div>
+      )}
+
+      {!showAddForm ? (
+        <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="text-xs border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300">
+          <Plus className="w-3 h-3 mr-1" /> Adicionar novo
         </Button>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {items.map((item) => (
-          <div key={item.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${item.padrao ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50"}`}>
-            <span className="text-sm font-mono font-medium text-gray-800">{item.nome}</span>
-            {item.padrao && <span className="text-[9px] text-blue-500 uppercase">padrão</span>}
-            <button onClick={() => onDelete(item.id)} className="text-gray-400 hover:text-red-500 transition-colors ml-1">
-              <XCircle className="w-3.5 h-3.5" />
-            </button>
+      ) : (
+        <div className="flex items-end gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+          <div className="flex-1">
+            <Label className="text-gray-500 text-xs">Nome do Tipo</Label>
+            <Input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} className="bg-white border-gray-300 text-gray-900 h-8 text-sm font-mono" placeholder="Ex: REVIT, SKP, XLS, FOTOS" />
           </div>
-        ))}
-        {items.length === 0 && (
-          <p className="text-gray-500 text-sm py-2">Nenhum tipo cadastrado. Os padrões (DWG, PDF, IFC, DOC) serão criados automaticamente.</p>
-        )}
-      </div>
+          <Button size="sm" onClick={() => { if (nome.trim()) { onAdd(nome.trim()); setNome(""); } }} className="bg-blue-600 text-white hover:bg-blue-700 h-8 text-xs">
+            <Plus className="w-3 h-3 mr-1" /> Adicionar
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setShowAddForm(false); setNome(""); }} className="h-8 text-xs text-gray-400">
+            Cancelar
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1899,126 +1998,40 @@ function InfoCell({ label, value }: { label: string; value: any }) {
   );
 }
 
-const SUGESTOES_DISCIPLINAS: Array<{ nome: string; sigla: string; categoria: string }> = [
-  { nome: "Arquitetura", sigla: "ARQ", categoria: "Projeto" },
-  { nome: "Estrutural", sigla: "EST", categoria: "Projeto" },
-  { nome: "Elétrica", sigla: "ELE", categoria: "Instalações" },
-  { nome: "Hidrossanitário", sigla: "HID", categoria: "Instalações" },
-  { nome: "HVAC / Climatização", sigla: "CLI", categoria: "Instalações" },
-  { nome: "Incêndio", sigla: "INC", categoria: "Segurança" },
-  { nome: "Fundações", sigla: "FUN", categoria: "Projeto" },
-  { nome: "Topografia", sigla: "TOP", categoria: "Projeto" },
-  { nome: "Paisagismo", sigla: "PAI", categoria: "Projeto" },
-  { nome: "Comunicação / Dados", sigla: "COM", categoria: "Instalações" },
-  { nome: "Automação", sigla: "AUT", categoria: "Instalações" },
-  { nome: "Geotecnia", sigla: "GEO", categoria: "Projeto" },
-  { nome: "Impermeabilização", sigla: "IMP", categoria: "Projeto" },
-  { nome: "Acústica", sigla: "ACU", categoria: "Projeto" },
-  { nome: "Luminotécnica", sigla: "LUM", categoria: "Instalações" },
-  { nome: "Gás", sigla: "GAS", categoria: "Instalações" },
-  { nome: "Drenagem", sigla: "DRE", categoria: "Infraestrutura" },
-  { nome: "Terraplanagem", sigla: "TER", categoria: "Infraestrutura" },
-  { nome: "Pavimentação", sigla: "PAV", categoria: "Infraestrutura" },
-  { nome: "Contenções", sigla: "CON", categoria: "Projeto" },
-  { nome: "Segurança do Trabalho", sigla: "SST", categoria: "Segurança" },
-  { nome: "Meio Ambiente", sigla: "AMB", categoria: "Licenciamento" },
-  { nome: "Urbanismo", sigla: "URB", categoria: "Projeto" },
-  { nome: "Interiores / Design", sigla: "INT", categoria: "Projeto" },
-  { nome: "Sinalização", sigla: "SIN", categoria: "Segurança" },
-  { nome: "Subestação / SPDA", sigla: "SPD", categoria: "Instalações" },
-  { nome: "Acessibilidade", sigla: "ACE", categoria: "Projeto" },
-  { nome: "Elevadores / Transporte Vertical", sigla: "ELV", categoria: "Instalações" },
-  { nome: "Piscinas / Fontes", sigla: "PIS", categoria: "Instalações" },
-  { nome: "Energia Solar / Fotovoltaica", sigla: "SOL", categoria: "Instalações" },
-  { nome: "Estrutura Metálica", sigla: "MET", categoria: "Projeto" },
-  { nome: "Pré-Moldados", sigla: "PRE", categoria: "Projeto" },
-  { nome: "Reuso de Água", sigla: "REU", categoria: "Sustentabilidade" },
-  { nome: "Esquadrias", sigla: "ESQ", categoria: "Projeto" },
-  { nome: "Fachada / Pele de Vidro", sigla: "FAC", categoria: "Projeto" },
-  { nome: "Proteção Contra Incêndio", sigla: "PCI", categoria: "Segurança" },
-  { nome: "Cabeamento Estruturado", sigla: "CAB", categoria: "Instalações" },
-  { nome: "BIM / Coordenação 3D", sigla: "BIM", categoria: "Gestão" },
-  { nome: "As-Built", sigla: "ASB", categoria: "Gestão" },
-  { nome: "Compatibilização", sigla: "CMP", categoria: "Gestão" },
-];
-
-const SUGESTOES_TIPOS_DOC: Array<{ nome: string; sigla: string; categoria: string }> = [
-  { nome: "Projeto Executivo", sigla: "PE", categoria: "Projeto" },
-  { nome: "Projeto Básico", sigla: "PB", categoria: "Projeto" },
-  { nome: "Projeto Legal", sigla: "PL", categoria: "Projeto" },
-  { nome: "Anteprojeto", sigla: "AP", categoria: "Projeto" },
-  { nome: "Estudo Preliminar", sigla: "EP", categoria: "Projeto" },
-  { nome: "Memorial Descritivo", sigla: "MD", categoria: "Documento" },
-  { nome: "Memorial de Cálculo", sigla: "MC", categoria: "Documento" },
-  { nome: "Especificação Técnica", sigla: "ET", categoria: "Documento" },
-  { nome: "Planilha de Quantidades", sigla: "PQ", categoria: "Documento" },
-  { nome: "Cronograma", sigla: "CR", categoria: "Documento" },
-  { nome: "Relatório Técnico", sigla: "RT", categoria: "Documento" },
-  { nome: "Laudo Técnico", sigla: "LT", categoria: "Documento" },
-  { nome: "ART / RRT", sigla: "ART", categoria: "Legal" },
-  { nome: "Alvará", sigla: "ALV", categoria: "Legal" },
-  { nome: "Licença Ambiental", sigla: "LA", categoria: "Legal" },
-  { nome: "Habite-se", sigla: "HAB", categoria: "Legal" },
-  { nome: "Caderno de Encargos", sigla: "CE", categoria: "Documento" },
-  { nome: "Perspectiva / Render", sigla: "3D", categoria: "Imagem" },
-  { nome: "Detalhamento", sigla: "DT", categoria: "Projeto" },
-  { nome: "As-Built", sigla: "AB", categoria: "Projeto" },
-];
-
-function ConfigSection({ title, subtitle, items, onAdd, fieldLabel1, fieldLabel2, sugestoes }: {
+function ConfigSection({ title, subtitle, items, onAdd, onUpdate, onDelete, fieldLabel1, fieldLabel2 }: {
   title: string;
   subtitle?: string;
   items: any[];
   onAdd: (nome: string, sigla: string) => void;
+  onUpdate: (id: number, nome: string, sigla: string) => void;
+  onDelete: (id: number) => void;
   fieldLabel1: string;
   fieldLabel2: string;
-  sugestoes?: Array<{ nome: string; sigla: string; categoria: string }>;
 }) {
   const [nome, setNome] = useState("");
   const [sigla, setSigla] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showSugestoes, setShowSugestoes] = useState(false);
-  const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
-  const [pendingAdds, setPendingAdds] = useState<Set<string>>(new Set());
-  const sugRef = useRef<HTMLDivElement>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editNome, setEditNome] = useState("");
+  const [editSigla, setEditSigla] = useState("");
 
-  const existingNames = new Set((items || []).map((i: any) => i.nome?.toLowerCase()));
-  const existingSiglas = new Set((items || []).map((i: any) => i.sigla?.toLowerCase()));
+  const startEdit = (item: any) => {
+    setEditingId(item.id);
+    setEditNome(item.nome);
+    setEditSigla(item.sigla);
+  };
 
-  const filteredSugestoes = (sugestoes || []).filter(s => {
-    if (existingNames.has(s.nome.toLowerCase()) || existingSiglas.has(s.sigla.toLowerCase()) || pendingAdds.has(s.sigla)) return false;
-    if (selectedCategoria && s.categoria !== selectedCategoria) return false;
-    if (nome.length >= 2) {
-      const term = nome.toLowerCase();
-      return s.nome.toLowerCase().includes(term) || s.sigla.toLowerCase().includes(term);
+  const saveEdit = () => {
+    if (editingId && editNome && editSigla) {
+      onUpdate(editingId, editNome, editSigla);
+      setEditingId(null);
     }
-    return true;
-  });
+  };
 
-  const categorias = [...new Set((sugestoes || []).map(s => s.categoria))];
-
-  const inputSugestoes = nome.length >= 2 && sugestoes
-    ? (sugestoes || []).filter(s =>
-        !existingNames.has(s.nome.toLowerCase()) &&
-        !existingSiglas.has(s.sigla.toLowerCase()) &&
-        (s.nome.toLowerCase().includes(nome.toLowerCase()) || s.sigla.toLowerCase().includes(nome.toLowerCase()))
-      ).slice(0, 5)
-    : [];
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (sugRef.current && !sugRef.current.contains(e.target as Node)) {
-        setShowSugestoes(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const pickSugestao = (s: { nome: string; sigla: string }) => {
-    if (pendingAdds.has(s.sigla)) return;
-    setPendingAdds(prev => new Set(prev).add(s.sigla));
-    onAdd(s.nome, s.sigla);
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditNome("");
+    setEditSigla("");
   };
 
   return (
@@ -2028,101 +2041,75 @@ function ConfigSection({ title, subtitle, items, onAdd, fieldLabel1, fieldLabel2
         <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length} cadastrado(s)</span>
       </div>
       {subtitle && <p className="text-xs text-gray-500 mb-3">{subtitle}</p>}
-      <div className="flex flex-wrap gap-2 mb-3">
-        {items.map((item) => (
-          <div key={item.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50">
-            <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-white" style={{ backgroundColor: item.cor || "#3B82F6" }}>{item.sigla}</span>
-            <span className="text-sm text-gray-700">{item.nome}</span>
-          </div>
-        ))}
-        {items.length === 0 && (
-          <p className="text-gray-400 text-sm py-2">Cadastro rápido será carregado automaticamente...</p>
-        )}
-      </div>
 
-      <div className="flex gap-2 mb-2">
-        {!showAddForm && (
-          <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="text-xs border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300">
-            <Plus className="w-3 h-3 mr-1" /> Adicionar manualmente
-          </Button>
-        )}
-        {sugestoes && sugestoes.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSugestoes(!showSugestoes)}
-            className="text-xs border-dashed border-purple-300 text-purple-600 hover:text-purple-700 hover:border-purple-400 hover:bg-purple-50"
-          >
-            <Sparkles className="w-3 h-3 mr-1" /> Sugestões IA
-          </Button>
-        )}
-      </div>
-
-      {showSugestoes && sugestoes && (
-        <div ref={sugRef} className="bg-gradient-to-br from-purple-50 to-blue-50 p-3 rounded-lg border border-purple-200 mb-3 animate-in fade-in duration-200">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-purple-600" />
-            <span className="text-sm font-medium text-purple-800">Sugestões para construção civil</span>
-            <span className="text-xs text-purple-500 ml-auto">{filteredSugestoes.length} disponíveis</span>
-          </div>
-
-          <div className="flex flex-wrap gap-1 mb-2">
-            <button
-              onClick={() => setSelectedCategoria(null)}
-              className={`px-2 py-0.5 rounded-full text-xs transition-colors ${!selectedCategoria ? 'bg-purple-600 text-white' : 'bg-white text-purple-600 border border-purple-200 hover:bg-purple-100'}`}
-            >
-              Todas
-            </button>
-            {categorias.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategoria(selectedCategoria === cat ? null : cat)}
-                className={`px-2 py-0.5 rounded-full text-xs transition-colors ${selectedCategoria === cat ? 'bg-purple-600 text-white' : 'bg-white text-purple-600 border border-purple-200 hover:bg-purple-100'}`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
-            {filteredSugestoes.map(s => (
-              <button
-                key={s.sigla}
-                onClick={() => pickSugestao(s)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-purple-100 hover:border-purple-400 hover:bg-purple-50 transition-all text-left group shadow-sm"
-              >
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-100 text-purple-700 group-hover:bg-purple-200">{s.sigla}</span>
-                <span className="text-xs text-gray-700 group-hover:text-purple-900">{s.nome}</span>
-                <Plus className="w-3 h-3 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
-              </button>
-            ))}
-            {filteredSugestoes.length === 0 && (
-              <p className="text-xs text-purple-400 py-2 w-full text-center">Todas as sugestões já foram adicionadas!</p>
-            )}
-          </div>
+      {items.length > 0 && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden mb-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">{fieldLabel2}</th>
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">{fieldLabel1}</th>
+                <th className="text-right px-3 py-2 text-xs font-medium text-gray-500 uppercase w-24">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, idx) => (
+                <tr key={item.id} className={`border-b border-gray-100 last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"} hover:bg-blue-50/40 transition-colors`}>
+                  {editingId === item.id ? (
+                    <>
+                      <td className="px-3 py-1.5">
+                        <Input value={editSigla} onChange={(e) => setEditSigla(e.target.value.toUpperCase())} className="h-7 text-xs font-mono w-20 bg-white" maxLength={10} />
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <Input value={editNome} onChange={(e) => setEditNome(e.target.value)} className="h-7 text-xs bg-white" />
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button size="sm" onClick={saveEdit} className="h-6 px-2 text-[10px] bg-green-600 text-white hover:bg-green-700">Salvar</Button>
+                          <Button size="sm" variant="ghost" onClick={cancelEdit} className="h-6 px-2 text-[10px] text-gray-400">Cancelar</Button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-3 py-2">
+                        <span className="px-2 py-0.5 rounded text-xs font-mono font-bold text-white" style={{ backgroundColor: item.cor || "#3B82F6" }}>{item.sigla}</span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">{item.nome}</td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => startEdit(item)} className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors" title="Editar">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => onDelete(item.id)} className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors" title="Excluir">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {showAddForm && (
-        <div className="flex items-end gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200 relative">
-          <div className="flex-1 relative">
+      {items.length === 0 && (
+        <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 mb-3">
+          <p className="text-gray-400 text-sm">Carregando itens pré-configurados...</p>
+        </div>
+      )}
+
+      {!showAddForm ? (
+        <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)} className="text-xs border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300">
+          <Plus className="w-3 h-3 mr-1" /> Adicionar novo
+        </Button>
+      ) : (
+        <div className="flex items-end gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+          <div className="flex-1">
             <Label className="text-gray-500 text-xs">{fieldLabel1}</Label>
-            <Input value={nome} onChange={(e) => setNome(e.target.value)} className="bg-white border-gray-300 text-gray-900 h-8 text-sm" placeholder="Digite para ver sugestões..." />
-            {inputSugestoes.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
-                {inputSugestoes.map(s => (
-                  <button
-                    key={s.sigla}
-                    onClick={() => { setNome(s.nome); setSigla(s.sigla); }}
-                    className="flex items-center gap-2 px-3 py-2 w-full text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-0"
-                  >
-                    <Sparkles className="w-3 h-3 text-purple-400" />
-                    <span className="text-sm text-gray-700">{s.nome}</span>
-                    <span className="text-xs font-mono text-gray-400 ml-auto">{s.sigla}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <Input value={nome} onChange={(e) => setNome(e.target.value)} className="bg-white border-gray-300 text-gray-900 h-8 text-sm" placeholder={`Nome do item...`} />
           </div>
           <div className="w-28">
             <Label className="text-gray-500 text-xs">{fieldLabel2}</Label>
