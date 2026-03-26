@@ -512,6 +512,7 @@ export const gestaoDocumentosRouter = router({
       companyId: z.number(),
       obraId: z.number().optional(),
       disciplinaId: z.number().optional(),
+      subpasta: z.string().optional(),
       tipoDocumentoId: z.number().optional(),
       status: z.string().optional(),
       search: z.string().optional(),
@@ -526,6 +527,7 @@ export const gestaoDocumentosRouter = router({
       ];
       if (input.obraId) conditions.push(eq(gdDocumentos.obraId, input.obraId));
       if (input.disciplinaId) conditions.push(eq(gdDocumentos.disciplinaId, input.disciplinaId));
+      if (input.subpasta) conditions.push(eq(gdDocumentos.subpasta, input.subpasta));
       if (input.tipoDocumentoId) conditions.push(eq(gdDocumentos.tipoDocumentoId, input.tipoDocumentoId));
       if (input.status) conditions.push(eq(gdDocumentos.status, input.status));
       if (input.search) {
@@ -558,6 +560,7 @@ export const gestaoDocumentosRouter = router({
       ficheiroId: z.number().nullable().optional(),
       disciplinaId: z.number().nullable().optional(),
       pastaId: z.number().nullable().optional(),
+      subpasta: z.string().nullable().optional(),
       tipoDocumentoId: z.number().nullable().optional(),
       codigo: z.string().min(1),
       titulo: z.string().min(1),
@@ -583,6 +586,7 @@ export const gestaoDocumentosRouter = router({
       id: z.number(),
       companyId: z.number(),
       disciplinaId: z.number().nullable().optional(),
+      subpasta: z.string().nullable().optional(),
       tipoDocumentoId: z.number().nullable().optional(),
       codigo: z.string().min(1).optional(),
       titulo: z.string().min(1).optional(),

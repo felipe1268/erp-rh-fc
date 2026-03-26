@@ -6141,6 +6141,7 @@ export const gdDocumentos = pgTable("gd_documentos", {
   ficheiroId:      integer("ficheiro_id"),
   disciplinaId:    integer("disciplina_id"),
   pastaId:         integer("pasta_id"),
+  subpasta:        varchar("subpasta", { length: 50 }),
   tipoDocumentoId: integer("tipo_documento_id"),
   codigo:          varchar("codigo", { length: 100 }).notNull(),
   titulo:          varchar("titulo", { length: 500 }).notNull(),

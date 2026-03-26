@@ -164,6 +164,7 @@ export default function GestaoDocumentos() {
       companyId,
       obraId: selectedObraId || undefined,
       disciplinaId: selectedDiscId || undefined,
+      subpasta: selectedSubpasta || undefined,
       search: search || undefined,
     },
     { enabled: companyId > 0 && !!activeFicheiroId }
@@ -295,6 +296,7 @@ export default function GestaoDocumentos() {
           ficheiroId: activeFicheiroId || undefined,
           disciplinaId: discId,
           pastaId: undefined,
+          subpasta: selectedSubpasta || undefined,
           codigo: code,
           titulo: nameWithoutExt,
           dataEmissao: new Date().toISOString().split("T")[0],
@@ -534,6 +536,7 @@ export default function GestaoDocumentos() {
       ficheiroId: activeFicheiroId || undefined,
       disciplinaId: docForm.disciplinaId ? Number(docForm.disciplinaId) : undefined,
       tipoDocumentoId: docForm.tipoDocumentoId ? Number(docForm.tipoDocumentoId) : undefined,
+      subpasta: selectedSubpasta || undefined,
     };
     if (editingDoc) {
       updateDoc.mutate({ ...payload, id: editingDoc.id });
