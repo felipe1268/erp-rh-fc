@@ -5298,4 +5298,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 12:00:00",
   },
+  {
+    version: 792,
+    titulo: "Módulos Medição e Gestão de Documentos na tela de Configurações",
+    descricao: "Os módulos Medição e Gestão de Documentos agora aparecem na tela Configurações → Módulos do Sistema, com toggle de habilitação/desabilitação, listagem de funcionalidades e controle granular por página. Inclui ícones, cores e descrições dedicados para ambos os módulos.",
+    tipo: "melhoria",
+    modulos: "Configurações, Medição, Gestão de Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 12:30:00",
+  },
 ];

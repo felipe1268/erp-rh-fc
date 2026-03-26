@@ -17,7 +17,7 @@ import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -2217,6 +2217,15 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Cadastros", label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
     { section: "Cadastros", label: "Configurações", path: "/financeiro/configuracoes" },
   ],
+  medicao: [
+    { section: "Medição", label: "Contratos de Medição", path: "/medicao" },
+  ],
+  "gestao-documentos": [
+    { section: "Principal", label: "Painel", path: "/gestao-documentos" },
+    { section: "Documentos", label: "Documentos Técnicos", path: "/gestao-documentos?tab=documentos" },
+    { section: "Documentos", label: "ARTs / RRTs", path: "/gestao-documentos?tab=arts" },
+    { section: "Configurações", label: "Disciplinas e Tipos", path: "/gestao-documentos?tab=configuracoes" },
+  ],
 };
 
 function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: boolean }) {
@@ -2261,6 +2270,8 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     compras:        { label: "Compras",        subtitle: "Suprimentos e Procurement",            icon: ShoppingCart,  color: "text-rose-600",   bgColor: "bg-rose-50",   borderColor: "border-rose-200",   description: "Solicitações de compra, cotações, ordens de compra, fornecedores e integração com MAS Controle." },
     almoxarifado:   { label: "Almoxarifado",   subtitle: "Controle de Estoque",                  icon: Warehouse,     color: "text-teal-600",   bgColor: "bg-teal-50",   borderColor: "border-teal-200",   description: "Gestão de materiais, entradas e saídas, inventário, requisições e transferências entre obras." },
     financeiro:     { label: "Financeiro",     subtitle: "Gestão Financeira",                    icon: DollarSign,    color: "text-yellow-600", bgColor: "bg-yellow-50", borderColor: "border-yellow-200", description: "Lançamentos, contas a pagar/receber, DRE, fluxo de caixa, plano de contas e obrigações fiscais." },
+    medicao:        { label: "Medição",        subtitle: "Medição de Contratos",                 icon: FileBarChart,  color: "text-teal-600",   bgColor: "bg-teal-50",   borderColor: "border-teal-200",   description: "Boletins de medição por contrato, planilha EAP com avanço físico, faturamento direto e controle de FDs." },
+    "gestao-documentos": { label: "Gestão de Documentos", subtitle: "Documentos Técnicos de Obra", icon: FolderOpen, color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200", description: "Controle de documentos técnicos, revisões com aprovação, disciplinas, ARTs/RRTs e distribuição." },
   };
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
