@@ -5397,4 +5397,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 23:00:00",
   },
+  {
+    version: 803,
+    titulo: "Proj./Doc. Técnicos: UI redesenhada como explorador de arquivos",
+    descricao: "Módulo Proj./Doc. Técnicos completamente reescrito com layout tipo explorador de arquivos. Tela de obras como cards → clique abre layout duas colunas (árvore de pastas à esquerda com disciplinas/sub-pastas, documentos à direita). Breadcrumb de navegação. Modal 'Nova Pasta' simplificado com atalhos rápidos. ARTs e Configurações acessíveis via botões no topo. Código reduzido de 2161 para ~900 linhas, removendo Dashboard/KPIs/tabs desnecessários.",
+    tipo: "melhoria",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 23:30:00",
+  },
 ];
