@@ -5406,4 +5406,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 23:30:00",
   },
+  {
+    version: 804,
+    titulo: "Proj./Doc. Técnicos: código = nome do arquivo, subpasta obrigatória, alerta PDF, fullscreen",
+    descricao: "Melhorias no módulo Proj./Doc. Técnicos: (1) Código do documento agora usa o nome do arquivo sem extensão (padrão HPAPA-ARQ-xxx). (2) Removido 'Todos os Documentos' — documentos só aparecem ao clicar numa subpasta (DWG, PDF, DOC). (3) Na pasta DWG, cada documento verifica se existe PDF correspondente na mesma disciplina; se não houver, exibe badge vermelho 'Sem PDF'. (4) Modal de detalhes em fullscreen (98vw x 95vh). (5) Tooltip de alerta PDF melhorado para legibilidade total.",
+    tipo: "melhoria",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 23:45:00",
+  },
 ];
