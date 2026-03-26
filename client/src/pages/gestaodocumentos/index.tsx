@@ -110,8 +110,7 @@ const ART_STATUS: Record<string, { label: string; color: string }> = {
 type TabType = "dash" | "painel" | "documentos" | "arts" | "configuracoes";
 
 export default function GestaoDocumentos() {
-  const { activeCompanyId } = useCompany();
-  const companyId = activeCompanyId || 0;
+  const { companyId } = useCompany();
 
   const [location, setLocation] = useLocation();
   const urlTab = new URLSearchParams(window.location.search).get("tab") as TabType | null;

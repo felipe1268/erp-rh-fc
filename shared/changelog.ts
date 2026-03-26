@@ -5388,4 +5388,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-26 22:00:00",
   },
+  {
+    version: 802,
+    titulo: "Bugfix: Obras não apareciam no módulo Proj./Doc. Técnicos + Almoxarifado filtro corrigido",
+    descricao: "Corrigidos dois bugs críticos: (1) No módulo Proj./Doc. Técnicos, o companyId era extraído como 'activeCompanyId' (inexistente no hook useCompany), resultando em companyId=0 e 0 obras listadas. Corrigido para usar 'companyId' diretamente do hook. (2) No Almoxarifado, o endpoint listForAlmoxarifado filtrava obras por status='ativa' (inexistente), quando o correto é isActive=1. Usuários não-admin agora veem suas obras atribuídas.",
+    tipo: "bugfix",
+    modulos: "Proj./Doc. Técnicos, Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-26 23:00:00",
+  },
 ];
