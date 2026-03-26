@@ -1360,7 +1360,7 @@ export default function GestaoDocumentos() {
 
       {/* Modal — Detalhe do Documento */}
       <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-        <DialogContent className="max-w-2xl bg-white border-gray-200 text-gray-900 max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl bg-white border-gray-200 text-gray-900 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-600" />
