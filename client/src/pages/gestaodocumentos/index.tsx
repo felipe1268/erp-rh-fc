@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCompany } from "@/hooks/useCompany";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
