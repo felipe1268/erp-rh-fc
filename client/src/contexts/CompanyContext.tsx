@@ -10,13 +10,8 @@ interface CompanyContextType {
   companies: any[] | undefined;
   isLoading: boolean;
   selectedCompany: any | undefined;
-  /** true quando "CONSTRUTORAS" está selecionado */
   isConstrutoras: boolean;
-  /** IDs das empresas do pool Construtoras (para queries) */
   construtorasIds: number[];
-  /** Retorna o array de companyIds para usar em queries:
-   *  - Se Construtoras selecionado: retorna todos os IDs do pool
-   *  - Se empresa individual: retorna [companyId] */
   getCompanyIdsForQuery: () => number[];
 }
 
@@ -33,21 +28,19 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem(STORAGE_KEY) || "";
   });
 
-  // When companies load, ensure we have a valid selection
   useEffect(() => {
     if (!companies || companies.length === 0) return;
     const ids = companies.map((c: any) => String(c.id));
     const validIds = [...ids, CONSTRUTORAS_ID];
-    // If current selection is valid, keep it
     if (selectedCompanyId && validIds.includes(selectedCompanyId)) return;
-    // Otherwise use stored default or first company
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && validIds.includes(stored)) {
       setSelectedCompanyIdState(stored);
     } else {
       setSelectedCompanyIdState(ids[0]);
+      localStorage.setItem(STORAGE_KEY, ids[0]);
     }
-  }, [companies]);
+  }, [companies, selectedCompanyId]);
 
   const setSelectedCompanyId = (id: string) => {
     setSelectedCompanyIdState(id);
@@ -56,24 +49,32 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   const isConstrutoras = selectedCompanyId === CONSTRUTORAS_ID;
 
+  const effectiveCompanyId = useMemo(() => {
+    if (isConstrutoras) return CONSTRUTORAS_ID;
+    if (!companies || companies.length === 0) return selectedCompanyId;
+    const ids = companies.map((c: any) => String(c.id));
+    if (ids.includes(selectedCompanyId)) return selectedCompanyId;
+    return ids[0] || selectedCompanyId;
+  }, [companies, selectedCompanyId, isConstrutoras]);
+
   const selectedCompany = isConstrutoras
     ? { id: CONSTRUTORAS_ID, razaoSocial: "CONSTRUTORAS", nomeFantasia: "CONSTRUTORAS", isConstrutoras: true }
-    : companies?.find((c: any) => String(c.id) === selectedCompanyId);
+    : companies?.find((c: any) => String(c.id) === effectiveCompanyId);
 
   const getCompanyIdsForQuery = useMemo(() => {
     return () => {
       if (isConstrutoras && construtorasIds.length > 0) {
         return construtorasIds;
       }
-      const numId = parseInt(selectedCompanyId);
+      const numId = parseInt(effectiveCompanyId);
       return isNaN(numId) ? [] : [numId];
     };
-  }, [isConstrutoras, construtorasIds, selectedCompanyId]);
+  }, [isConstrutoras, construtorasIds, effectiveCompanyId]);
 
   return (
     <CompanyContext.Provider
       value={{
-        selectedCompanyId,
+        selectedCompanyId: effectiveCompanyId,
         setSelectedCompanyId,
         companies,
         isLoading,

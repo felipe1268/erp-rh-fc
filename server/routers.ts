@@ -870,6 +870,13 @@ export const appRouter = router({
       if (isAdmin) return getObrasByCompanyActive(input.companyId, input.companyIds);
 
       const db = await getDb();
+
+      const userCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedCompanyIds = userCompanies.map((c: any) => c.id);
+      if (allowedCompanyIds.length > 0 && !allowedCompanyIds.includes(input.companyId)) {
+        return [];
+      }
+
       const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
       const userRows: any[] = userResult?.rows ?? userResult ?? [];
       const rawObras = userRows[0]?.allowed_obra_ids;
