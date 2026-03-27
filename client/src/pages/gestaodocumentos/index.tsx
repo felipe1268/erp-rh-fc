@@ -108,7 +108,7 @@ function isExtensionAllowed(fileName: string, subpasta: string | null): boolean 
   return exts.includes(ext);
 }
 
-type ViewMode = "obras" | "ficheiro" | "configuracoes" | "arts";
+type ViewMode = "obras" | "ficheiro" | "configuracoes" | "arts" | "painel";
 
 export default function GestaoDocumentos() {
   const { companyId } = useCompany();
@@ -119,7 +119,8 @@ export default function GestaoDocumentos() {
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (urlTab === "configuracoes") return "configuracoes";
     if (urlTab === "arts") return "arts";
-    if (urlTab === "painel" || urlTab === "documentos") return "obras";
+    if (urlTab === "painel") return "painel";
+    if (urlTab === "documentos") return "obras";
     return "obras";
   });
   const [selectedObraId, setSelectedObraId] = useState<number | null>(null);
@@ -182,7 +183,8 @@ export default function GestaoDocumentos() {
     const t = new URLSearchParams(window.location.search).get("tab");
     if (t === "configuracoes") setViewMode("configuracoes");
     else if (t === "arts") setViewMode("arts");
-    else if (t === "painel" || t === "documentos" || t === null) setViewMode("obras");
+    else if (t === "painel") setViewMode("painel");
+    else if (t === "documentos" || t === null) setViewMode("obras");
   }, [location]);
 
   const obrasDisponiveis = trpc.gestaoDocumentos.listObrasDisponiveis.useQuery({ companyId }, { enabled: companyId > 0 });
@@ -255,6 +257,11 @@ export default function GestaoDocumentos() {
   const revisoes = trpc.gestaoDocumentos.listRevisoes.useQuery(
     { companyId, documentoId: selectedDoc?.id || 0 },
     { enabled: !!selectedDoc }
+  );
+
+  const dashStats = trpc.gestaoDocumentos.getDashboardStats.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && viewMode === "painel" }
   );
 
   const utils = trpc.useUtils();
@@ -891,7 +898,135 @@ export default function GestaoDocumentos() {
   return (
     <DashboardLayout title="Proj./Doc. Técnicos" noPadding>
       <div className="h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
-        {viewMode === "configuracoes" ? (
+        {viewMode === "painel" ? (
+          <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <h1 className="text-xl font-bold text-gray-900">Painel — Proj./Doc. Tecnicos</h1>
+              <Button variant="outline" size="sm" onClick={() => setViewMode("obras")} className="text-gray-600">
+                <FolderOpen className="w-4 h-4 mr-1" /> Ir para Documentos
+              </Button>
+            </div>
+
+            {dashStats.isLoading ? (
+              <div className="flex items-center justify-center py-20 text-gray-400">Carregando...</div>
+            ) : dashStats.data ? (() => {
+              const s = dashStats.data;
+              const statusMap: Record<string, { label: string; color: string }> = {
+                em_elaboracao: { label: "Em Elaboracao", color: "bg-blue-100 text-blue-700" },
+                em_revisao: { label: "Em Revisao", color: "bg-amber-100 text-amber-700" },
+                aprovado: { label: "Aprovado", color: "bg-green-100 text-green-700" },
+                reprovado: { label: "Reprovado", color: "bg-red-100 text-red-700" },
+                cancelado: { label: "Cancelado", color: "bg-gray-100 text-gray-600" },
+              };
+              return (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Documentos</p>
+                      <p className="text-3xl font-bold text-gray-900">{s.totalDocs}</p>
+                    </div>
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Revisoes Registradas</p>
+                      <p className="text-3xl font-bold text-indigo-600">{s.totalRevisoes}</p>
+                    </div>
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">ARTs / RRTs</p>
+                      <p className="text-3xl font-bold text-emerald-600">{s.totalArts}</p>
+                    </div>
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Obras com Docs</p>
+                      <p className="text-3xl font-bold text-amber-600">{s.obraCounts.length}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Por Status</h3>
+                      <div className="space-y-2">
+                        {s.statusCounts.map((sc) => {
+                          const sm = statusMap[sc.status || "em_elaboracao"] || { label: sc.status, color: "bg-gray-100 text-gray-600" };
+                          const pct = s.totalDocs > 0 ? Math.round((sc.count / s.totalDocs) * 100) : 0;
+                          return (
+                            <div key={sc.status} className="flex items-center gap-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${sm.color} w-28 text-center`}>{sm.label}</span>
+                              <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                                <div className={`h-full rounded-full ${sc.status === "aprovado" ? "bg-green-500" : sc.status === "em_revisao" ? "bg-amber-500" : sc.status === "reprovado" ? "bg-red-500" : "bg-blue-500"}`} style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 w-12 text-right">{sc.count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Por Tipo de Arquivo</h3>
+                      <div className="space-y-2">
+                        {s.subpastaCounts.map((sp) => {
+                          const pct = s.totalDocs > 0 ? Math.round((sp.count / s.totalDocs) * 100) : 0;
+                          return (
+                            <div key={sp.subpasta} className="flex items-center gap-3">
+                              <span className="text-xs font-mono text-gray-600 w-20">{sp.subpasta || "—"}</span>
+                              <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                                <div className="h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 w-12 text-right">{sp.count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {s.obraCounts.length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Documentos por Obra</h3>
+                      <div className="space-y-2">
+                        {s.obraCounts.sort((a, b) => b.count - a.count).map((oc) => {
+                          const pct = s.totalDocs > 0 ? Math.round((oc.count / s.totalDocs) * 100) : 0;
+                          return (
+                            <div key={oc.obraId} className="flex items-center gap-3">
+                              <span className="text-xs text-gray-600 w-48 truncate">{oc.obraNome}</span>
+                              <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                                <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 w-12 text-right">{oc.count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {s.recentDocs.length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Ultimos Documentos Atualizados</h3>
+                      <div className="divide-y divide-gray-100">
+                        {s.recentDocs.map((rd: any) => {
+                          const sm = statusMap[rd.status || "em_elaboracao"] || statusMap.em_elaboracao;
+                          return (
+                            <div key={rd.id} className="flex items-center justify-between py-2.5">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-mono text-gray-700 truncate">{rd.titulo || rd.codigo}</p>
+                                {rd.descricao && <p className="text-[11px] text-gray-500 truncate">{rd.descricao}</p>}
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0 ml-4">
+                                <span className="text-[10px] text-gray-400 font-mono">{rd.subpasta}</span>
+                                {rd.revisaoAtual && <span className="text-[10px] text-gray-500">R{rd.revisaoAtual}</span>}
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${sm.color}`}>{sm.label}</span>
+                                <span className="text-[10px] text-gray-400">{rd.atualizadoEm ? new Date(rd.atualizadoEm).toLocaleDateString("pt-BR") : ""}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })() : null}
+          </div>
+        ) : viewMode === "configuracoes" ? (
           <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-bold text-gray-900">Configurações</h1>

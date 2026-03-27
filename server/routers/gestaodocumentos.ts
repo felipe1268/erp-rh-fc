@@ -1150,4 +1150,76 @@ export const gestaoDocumentosRouter = router({
         .where(and(eq(gdArts.id, input.id), eq(gdArts.companyId, input.companyId)));
       return { success: true };
     }),
+
+  getDashboardStats: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [totalDocs] = await db.select({ count: sql<number>`count(*)::int` }).from(gdDocumentos)
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)));
+
+      const statusCounts = await db.select({
+        status: gdDocumentos.status,
+        count: sql<number>`count(*)::int`,
+      }).from(gdDocumentos)
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .groupBy(gdDocumentos.status);
+
+      const subpastaCounts = await db.select({
+        subpasta: gdDocumentos.subpasta,
+        count: sql<number>`count(*)::int`,
+      }).from(gdDocumentos)
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .groupBy(gdDocumentos.subpasta);
+
+      const obraCounts = await db.select({
+        obraId: gdDocumentos.obraId,
+        obraNome: obras.nome,
+        count: sql<number>`count(*)::int`,
+      }).from(gdDocumentos)
+        .innerJoin(obras, eq(obras.id, gdDocumentos.obraId))
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .groupBy(gdDocumentos.obraId, obras.nome);
+
+      const [totalRevisoes] = await db.select({ count: sql<number>`count(*)::int` }).from(gdRevisoes)
+        .where(eq(gdRevisoes.companyId, input.companyId));
+
+      const [totalArts] = await db.select({ count: sql<number>`count(*)::int` }).from(gdArts)
+        .where(eq(gdArts.companyId, input.companyId));
+
+      const recentDocs = await db.select({
+        id: gdDocumentos.id,
+        titulo: gdDocumentos.titulo,
+        codigo: gdDocumentos.codigo,
+        descricao: gdDocumentos.descricao,
+        status: gdDocumentos.status,
+        subpasta: gdDocumentos.subpasta,
+        revisaoAtual: gdDocumentos.revisaoAtual,
+        criadoEm: gdDocumentos.criadoEm,
+        atualizadoEm: gdDocumentos.atualizadoEm,
+      }).from(gdDocumentos)
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .orderBy(desc(gdDocumentos.atualizadoEm))
+        .limit(10);
+
+      const discCounts = await db.select({
+        disciplinaId: gdDocumentos.disciplinaId,
+        count: sql<number>`count(*)::int`,
+      }).from(gdDocumentos)
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt), sql`${gdDocumentos.disciplinaId} IS NOT NULL`))
+        .groupBy(gdDocumentos.disciplinaId);
+
+      return {
+        totalDocs: totalDocs?.count || 0,
+        totalRevisoes: totalRevisoes?.count || 0,
+        totalArts: totalArts?.count || 0,
+        statusCounts: statusCounts as { status: string; count: number }[],
+        subpastaCounts: subpastaCounts as { subpasta: string; count: number }[],
+        obraCounts: obraCounts as { obraId: number; obraNome: string; count: number }[],
+        discCounts: discCounts as { disciplinaId: number; count: number }[],
+        recentDocs,
+      };
+    }),
 });
