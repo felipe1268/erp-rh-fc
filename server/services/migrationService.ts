@@ -141,7 +141,7 @@ export interface ImportResult {
 export async function exportDatabase(
   onProgress?: (p: ExportProgress) => void
 ): Promise<{ tables: Record<string, any[]>; meta: any; fileUrls: Array<{ table: string; field: string; rowId: any; url: string }> }> {
-  const db = getDb();
+  const db = await getDb();
   const tables: Record<string, any[]> = {};
   const fileUrls: Array<{ table: string; field: string; rowId: any; url: string }> = [];
   let totalRecords = 0;
@@ -475,7 +475,7 @@ export async function importDatabase(
   mode: "replace" | "merge" = "replace",
   onProgress?: (p: ExportProgress) => void
 ): Promise<ImportResult> {
-  const db = getDb();
+  const db = await getDb();
   const startTime = Date.now();
   const errors: string[] = [];
   let tablesImported = 0;

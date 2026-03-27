@@ -9,7 +9,7 @@ function minsToHHMM(mins: number): string {
 }
 
 async function getCriteria(companyId: number) {
-  const db = getDb();
+  const db = await getDb();
   const rows = await db.select().from(systemCriteria)
     .where(eq(systemCriteria.companyId, companyId)).limit(1);
   const c = rows[0];
@@ -27,7 +27,7 @@ async function getCriteria(companyId: number) {
  * Ignora registros com ajusteManual = 1 para preservar correções manuais.
  */
 export async function corrigirPontoFuncionario(companyId: number, employeeId: number): Promise<void> {
-  const db = getDb();
+  const db = await getDb();
   const criteria = await getCriteria(companyId);
 
   // ── 1. FÉRIAS ─────────────────────────────────────────────────────────────

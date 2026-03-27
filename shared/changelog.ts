@@ -5487,4 +5487,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 01:15:00",
   },
+  {
+    version: 813,
+    titulo: "Correcao critica: getDb() sem await em 10 endpoints",
+    descricao: "Corrigido bug critico onde getDb() (funcao async) era chamada sem await em iaModulos.ts (chat/historico/analytics), fechamentoPonto.ts (correcaoAviso/correcaoRetroativa), terceiroContratos.ts (template/gerar/revisao/listar/restaurar), pontoCorrecaoAuto.ts e migrationService.ts. Isso causava falha silenciosa ao salvar conversas da IA, correcoes de ponto e operacoes de contratos PJ.",
+    tipo: "bugfix",
+    modulos: "IA, Ponto, Contratos PJ, Migracao",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 01:30:00",
+  },
 ];

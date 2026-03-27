@@ -318,7 +318,7 @@ export const iaModulosRouter = router({
           : "Desculpe, não consegui gerar uma resposta.";
 
       try {
-        const db = getDb();
+        const db = await getDb();
         await db.execute(sql`
           INSERT INTO ia_modulo_conversas (
             company_id, user_id, user_name, modulo, pergunta, resposta, projeto_id
@@ -346,7 +346,7 @@ export const iaModulosRouter = router({
       limite: z.number().default(50),
     }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       const rows = await db.execute(sql`
         SELECT id, user_name, pergunta, resposta, projeto_id, criado_em
         FROM ia_modulo_conversas
@@ -363,7 +363,7 @@ export const iaModulosRouter = router({
       companyId: z.number(),
     }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
 
       const totalResult = await db.execute(sql`
         SELECT COUNT(*) as total FROM ia_modulo_conversas

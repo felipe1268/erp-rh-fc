@@ -3274,7 +3274,7 @@ export const fechamentoPontoRouter = router({
       tipo:        z.enum(['ferias', 'aviso_2h', 'aviso_7dias']),
     }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
 
       if (input.tipo === 'ferias') {
         // ── Férias: zera faltas e atrasos (preserva ajuste manual) ──────────
@@ -3388,7 +3388,7 @@ export const fechamentoPontoRouter = router({
   aplicarCorrecaoRetroativa: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       const criteria = await getCriteriaMap(input.companyId);
 
       let corrigidasFerias = 0;

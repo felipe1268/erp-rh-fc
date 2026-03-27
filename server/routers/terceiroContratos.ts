@@ -739,7 +739,7 @@ export const terceiroContratosRouter = router({
   getTemplate: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       const [tpl] = await db.select().from(terceiroContratoTemplates)
         .where(and(
           eq(terceiroContratoTemplates.companyId, input.companyId),
@@ -758,7 +758,7 @@ export const terceiroContratosRouter = router({
       id: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (input.id) {
         const [cur] = await db.select({ versao: terceiroContratoTemplates.versao }).from(terceiroContratoTemplates).where(eq(terceiroContratoTemplates.id, input.id));
         const novaVersao = (cur?.versao ?? 1) + 1;
@@ -780,7 +780,7 @@ export const terceiroContratosRouter = router({
   gerarTextoContrato: protectedProcedure
     .input(z.object({ contratoId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      const db = getDb();
+      const db = await getDb();
 
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
       if (!contrato) throw new Error("Contrato não encontrado");
@@ -862,7 +862,7 @@ export const terceiroContratosRouter = router({
       observacao: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const db = getDb();
+      const db = await getDb();
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
       if (!contrato) throw new Error("Contrato não encontrado");
 
@@ -890,7 +890,7 @@ export const terceiroContratosRouter = router({
   listarRevisoes: protectedProcedure
     .input(z.object({ contratoId: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       return db.select().from(terceiroContratoRevisoes)
         .where(eq(terceiroContratoRevisoes.contratoId, input.contratoId))
         .orderBy(desc(terceiroContratoRevisoes.versao));
@@ -899,7 +899,7 @@ export const terceiroContratosRouter = router({
   restaurarRevisao: protectedProcedure
     .input(z.object({ contratoId: z.number(), revisaoId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      const db = getDb();
+      const db = await getDb();
       const [rev] = await db.select().from(terceiroContratoRevisoes).where(eq(terceiroContratoRevisoes.id, input.revisaoId));
       if (!rev) throw new Error("Revisão não encontrada");
 
