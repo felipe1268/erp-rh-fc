@@ -5523,4 +5523,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 14:00:00",
   },
+  {
+    version: 817,
+    titulo: "Download em lote na Gestão de Documentos",
+    descricao: "Adicionada funcionalidade de download em lote na Gestão de Documentos: botão 'Baixar Selecionados' na barra de seleção para baixar todos os documentos marcados, botão 'Baixar Pasta' para baixar todos os documentos da subpasta atual, botão 'Baixar Disciplina' para baixar todos os documentos de uma disciplina inteira, e ícone de download rápido no hover de cada disciplina na árvore de pastas. Também corrigido timezone de queries adicionais na Telemetria (uso por dia em IA Módulos e dias ativos no ranking).",
+    tipo: "feature",
+    modulos: "Gestão de Documentos, Telemetria",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 15:00:00",
+  },
 ];

@@ -61,8 +61,10 @@ import {
   ArrowRight,
   BookOpen,
   Download,
+  FolderDown,
   Paperclip,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -174,6 +176,7 @@ export default function GestaoDocumentos() {
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const [showUploadConfirm, setShowUploadConfirm] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<{ file: File; codigo: string; titulo: string; isRevision: boolean; existingDocId?: number }[]>([]);
@@ -902,6 +905,68 @@ export default function GestaoDocumentos() {
     return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ");
   }
 
+  async function downloadBatch(docs: any[], label: string) {
+    const withFile = docs.filter((d: any) => d.arquivoUrl);
+    if (withFile.length === 0) {
+      toast.error("Nenhum documento com arquivo para baixar");
+      return;
+    }
+    setDownloading(true);
+    const toastId = toast.loading(`Baixando 0/${withFile.length} arquivo(s)...`);
+    let ok = 0;
+    let fail = 0;
+    for (const doc of withFile) {
+      try {
+        const res = await fetch(doc.arquivoUrl);
+        if (!res.ok) { fail++; continue; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = doc.arquivoNome || doc.codigo || "arquivo";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        ok++;
+        toast.loading(`Baixando ${ok}/${withFile.length} arquivo(s)...`, { id: toastId });
+        await new Promise(r => setTimeout(r, 400));
+      } catch {
+        fail++;
+      }
+    }
+    setDownloading(false);
+    if (fail === 0) {
+      toast.success(`${ok} arquivo(s) baixado(s) com sucesso`, { id: toastId });
+    } else {
+      toast.warning(`${ok} baixado(s), ${fail} com erro`, { id: toastId });
+    }
+  }
+
+  async function downloadAllFromDiscipline(discId: number) {
+    if (allObraDocs.isLoading) {
+      toast.info("Aguarde o carregamento dos documentos...");
+      return;
+    }
+    const allDocs = allObraDocs.data || [];
+    const discDocs = allDocs.filter((d: any) => d.disciplinaId === discId);
+    const disc = discMap.get(discId);
+    await downloadBatch(discDocs, disc ? `${disc.sigla} — ${disc.nome}` : "Disciplina");
+  }
+
+  async function downloadAllFromSubpasta() {
+    const allSubpastaDocs = (documentos.data || []).filter((doc: any) => {
+      if (selectedDiscId && doc.disciplinaId !== selectedDiscId) return false;
+      return true;
+    });
+    await downloadBatch(allSubpastaDocs, selectedSubpasta || "Pasta");
+  }
+
+  async function downloadSelected() {
+    const docs = (documentos.data || []).filter((d: any) => selectedDocIds.has(d.id));
+    await downloadBatch(docs, "Selecionados");
+  }
+
   const filteredDocs = selectedSubpasta ? (documentos.data || []).filter(doc => {
     if (selectedDiscId && doc.disciplinaId !== selectedDiscId) return false;
     if (search.trim()) {
@@ -1308,6 +1373,14 @@ export default function GestaoDocumentos() {
                             <span className="truncate">{disc.sigla} — {disc.nome}</span>
                           </button>
                           <button
+                            onClick={() => downloadAllFromDiscipline(disc.id)}
+                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 transition-all"
+                            title={`Baixar todos de ${disc.sigla}`}
+                            disabled={downloading}
+                          >
+                            <FolderDown className="w-3 h-3" />
+                          </button>
+                          <button
                             onClick={() => { if (confirm(`Remover pasta "${disc.sigla}"?`)) deleteDiscFicheiro.mutate({ id: disc.id, companyId, ficheiroId: activeFicheiroId! }); }}
                             className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
                           >
@@ -1380,6 +1453,16 @@ export default function GestaoDocumentos() {
                     accept={getAcceptForSubpasta(selectedSubpasta) || ".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"}
                     onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleBatchUpload(e.target.files); }}
                   />
+                  {selectedSubpasta && (documentos.data || []).length > 0 && (
+                    <Button size="sm" variant="outline" onClick={downloadAllFromSubpasta} className="h-8 border-blue-300 text-blue-700 hover:bg-blue-50" disabled={downloading || documentos.isLoading}>
+                      {downloading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FolderDown className="w-4 h-4 mr-1" />} Baixar Pasta ({(documentos.data || []).length})
+                    </Button>
+                  )}
+                  {!selectedSubpasta && selectedDiscId && (
+                    <Button size="sm" variant="outline" onClick={() => downloadAllFromDiscipline(selectedDiscId)} className="h-8 border-blue-300 text-blue-700 hover:bg-blue-50" disabled={downloading || allObraDocs.isLoading}>
+                      {downloading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FolderDown className="w-4 h-4 mr-1" />} Baixar Disciplina
+                    </Button>
+                  )}
                   <Button size="sm" onClick={() => batchFileInputRef.current?.click()} className="bg-blue-600 text-white hover:bg-blue-700 h-8" disabled={batchUploading}>
                     {batchUploading ? (
                       <><span className="animate-spin mr-1">⏳</span> Enviando {batchProgress.current}/{batchProgress.total}</>
@@ -1405,6 +1488,9 @@ export default function GestaoDocumentos() {
                         </button>
                       ))}
                     </div>
+                    <Button size="sm" variant="outline" className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-100" onClick={downloadSelected} disabled={downloading}>
+                      {downloading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Download className="w-3 h-3 mr-1" />} Baixar Selecionados
+                    </Button>
                     <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => {
                       if (confirm(`Remover ${selectedDocIds.size} documento(s)?`)) {
                         deleteDocsBatch.mutate({ ids: Array.from(selectedDocIds), companyId });
