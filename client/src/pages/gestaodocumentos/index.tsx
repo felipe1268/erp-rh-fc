@@ -119,6 +119,7 @@ export default function GestaoDocumentos() {
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (urlTab === "configuracoes") return "configuracoes";
     if (urlTab === "arts") return "arts";
+    if (urlTab === "painel" || urlTab === "documentos") return "obras";
     return "obras";
   });
   const [selectedObraId, setSelectedObraId] = useState<number | null>(null);
@@ -181,6 +182,7 @@ export default function GestaoDocumentos() {
     const t = new URLSearchParams(window.location.search).get("tab");
     if (t === "configuracoes") setViewMode("configuracoes");
     else if (t === "arts") setViewMode("arts");
+    else if (t === "painel" || t === "documentos" || t === null) setViewMode("obras");
   }, [location]);
 
   const obrasDisponiveis = trpc.gestaoDocumentos.listObrasDisponiveis.useQuery({ companyId }, { enabled: companyId > 0 });
