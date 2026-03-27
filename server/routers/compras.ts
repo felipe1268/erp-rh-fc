@@ -999,6 +999,13 @@ Responda APENAS com um objeto JSON no formato:
       const db = await getDb();
 
       if (input.solicitacaoId) {
+        const [sc] = await db.select({ id: comprasSolicitacoes.id, aprovacaoStatus: comprasSolicitacoes.aprovacaoStatus, status: comprasSolicitacoes.status })
+          .from(comprasSolicitacoes)
+          .where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+        if (sc && sc.aprovacaoStatus !== "aprovada") {
+          throw new Error("Esta solicitação ainda não foi aprovada. Só é possível criar cotação após a aprovação da SC.");
+        }
+
         const existingCots = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao, status: comprasCotacoes.status })
           .from(comprasCotacoes)
           .where(and(

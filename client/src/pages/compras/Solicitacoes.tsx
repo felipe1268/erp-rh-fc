@@ -690,18 +690,24 @@ export default function Solicitacoes() {
               </div>
 
               {/* Ações */}
-              {["cotacao", "aprovado"].includes(detalhe.status) && (
+              {detalhe.status === "cotacao" && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
                   <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
                   <span className="text-xs text-amber-700 font-medium">
-                    {detalhe.status === "aprovado"
-                      ? "Esta solicitação já foi aprovada e possui Ordem de Compra em andamento."
-                      : "Esta solicitação já possui cotação em andamento. Não é possível enviar novamente."}
+                    Esta solicitação já possui cotação em andamento. Não é possível enviar novamente.
+                  </span>
+                </div>
+              )}
+              {!["cotacao", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus !== "aprovada" && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0" />
+                  <span className="text-xs text-blue-700 font-medium">
+                    Aguardando aprovação. Só é possível enviar para cotação após a aprovação da solicitação.
                   </span>
                 </div>
               )}
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
-                {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && (
+                {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus === "aprovada" && (
                   <Button size="sm"
                     onClick={handleEnviarParaCotacao}
                     disabled={criarCotacao.isPending || (detalhe.itens as any[]).length === 0}
