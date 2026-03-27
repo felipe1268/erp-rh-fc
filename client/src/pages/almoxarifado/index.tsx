@@ -11,6 +11,7 @@ import {
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight,
 } from "lucide-react";
+import SmartEntry from "./SmartEntry";
 
 
 const EMPTY_ITEM = {
@@ -343,7 +344,7 @@ export default function AlmoxarifadoPage() {
   // ── AÇÕES RÁPIDAS MOBILE ─────────────────────────────────────────
   const utils = trpc.useUtils();
 
-  // Modal Entrada Rápida
+  // Modal Entrada Rápida (legacy)
   const [modalEntrada, setModalEntrada] = useState(false);
   const [entradaItemId, setEntradaItemId] = useState<number>(0);
   const [entradaQtd, setEntradaQtd] = useState("");
@@ -353,6 +354,9 @@ export default function AlmoxarifadoPage() {
     onSuccess: (d) => { refetch(); setEntradaOk(true); },
     onError: (e) => { toast.error(e.message); setEntradaOk(false); },
   });
+
+  // Modal Smart Entry (Recebimento Inteligente)
+  const [modalSmartEntry, setModalSmartEntry] = useState(false);
 
   // Modal Saída Rápida
   const [modalSaida, setModalSaida] = useState(false);
@@ -499,7 +503,7 @@ export default function AlmoxarifadoPage() {
     if (!modal) return;
     // Remove o param da URL sem recarregar
     setLocation("/almoxarifado", { replace: true });
-    if (modal === "entrada")      { resetEntrada(); setModalEntrada(true); }
+    if (modal === "entrada")      { setModalSmartEntry(true); }
     if (modal === "ferramentas")  { resetEmprestimo(); setModalEmprestimo(true); }
     if (modal === "insumo")       { resetInsumo(); setModalInsumo(true); }
     if (modal === "transferir")   { resetTransf(); setModalTransf(true); }
@@ -609,7 +613,7 @@ export default function AlmoxarifadoPage() {
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
             {/* ENTRADA */}
             <button
-              onClick={() => { resetEntrada(); setModalEntrada(true); }}
+              onClick={() => setModalSmartEntry(true)}
               className="flex flex-col items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
             >
               <ArrowDownCircle className="w-8 h-8" />
@@ -1459,6 +1463,18 @@ export default function AlmoxarifadoPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ══ MODAL RECEBIMENTO INTELIGENTE ═══════════════════════════════ */}
+      {modalSmartEntry && (
+        <SmartEntry
+          companyId={companyId}
+          obraId={typeof obraContexto === "number" ? obraContexto : undefined}
+          obraNome={typeof obraContexto === "number" ? (obrasAtivas.find((o: any) => o.id === obraContexto) as any)?.nome : undefined}
+          itens={itens.map((i: any) => ({ id: i.id, nome: i.nome, unidade: i.unidade, categoria: i.categoria, quantidadeAtual: parseFloat(String(i.quantidadeAtual) || "0") }))}
+          onClose={() => setModalSmartEntry(false)}
+          onSuccess={() => { refetch(); utils.warehouse.getDashboard.invalidate(); }}
+        />
       )}
 
       {/* ══ MODAL SAÍDA RÁPIDA ════════════════════════════════════════ */}

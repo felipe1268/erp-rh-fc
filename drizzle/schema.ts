@@ -4882,6 +4882,7 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   valorLocacaoMensal:    numeric("valor_locacao_mensal", { precision: 14, scale: 2 }),
   diasAlertaLocacao:     integer("dias_alerta_locacao").default(7),
   observacoesLocacao:    text("observacoes_locacao"),
+  dataValidade:          varchar("data_validade", { length: 10 }),
   criadoEm:             timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
   atualizadoEm:         timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
 });
@@ -5200,6 +5201,66 @@ export const warehouseInventorySessionItems = pgTable("warehouse_inventory_sessi
   status:           varchar({ length: 20 }).notNull().default("pendente"),
   observacoes:      text(),
   conferidoEm:      timestamp("conferido_em", { mode: "string" }),
+});
+
+// ============================================================
+// MÓDULO ALMOXARIFADO — RECEBIMENTO INTELIGENTE (Rev. 814)
+// Recebimento via foto NF (IA), via OC, cruzamento NF×OC,
+// cadastro automático de itens, controle de divergências.
+// ============================================================
+
+export const almoxarifadoRecebimentos = pgTable("almoxarifado_recebimentos", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  obraId:           integer("obra_id"),
+  obraNome:         varchar("obra_nome", { length: 255 }),
+  ordemCompraId:    integer("ordem_compra_id"),
+  numeroOc:         varchar("numero_oc", { length: 20 }),
+  numeroNf:         varchar("numero_nf", { length: 50 }),
+  fornecedorNome:   varchar("fornecedor_nome", { length: 255 }),
+  fornecedorCnpj:   varchar("fornecedor_cnpj", { length: 20 }),
+  fotoNfUrl:        text("foto_nf_url"),
+  fotoMaterialUrl:  text("foto_material_url"),
+  metodoEntrada:    varchar("metodo_entrada", { length: 20 }).notNull().default("manual"),
+  status:           varchar({ length: 30 }).notNull().default("pendente"),
+  totalItensNf:     integer("total_itens_nf").default(0),
+  totalItensRecebidos: integer("total_itens_recebidos").default(0),
+  temDivergencia:   boolean("tem_divergencia").default(false),
+  observacoes:      text(),
+  usuarioId:        integer("usuario_id"),
+  usuarioNome:      varchar("usuario_nome", { length: 255 }),
+  criadoEm:         timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const almoxarifadoRecebimentoItens = pgTable("almoxarifado_recebimento_itens", {
+  id:               serial().primaryKey(),
+  recebimentoId:    integer("recebimento_id").notNull(),
+  itemId:           integer("item_id"),
+  itemNome:         varchar("item_nome", { length: 255 }).notNull(),
+  unidade:          varchar({ length: 30 }),
+  categoria:        varchar({ length: 100 }),
+  quantidadeNf:     numeric("quantidade_nf", { precision: 14, scale: 3 }).notNull().default("0"),
+  quantidadeRecebida: numeric("quantidade_recebida", { precision: 14, scale: 3 }).default("0"),
+  valorUnitario:    numeric("valor_unitario", { precision: 14, scale: 4 }),
+  ocItemId:         integer("oc_item_id"),
+  quantidadeOc:     numeric("quantidade_oc", { precision: 14, scale: 3 }),
+  statusItem:       varchar("status_item", { length: 20 }).notNull().default("pendente"),
+  itemNovo:         boolean("item_novo").default(false),
+  motivoDivergencia: text("motivo_divergencia"),
+  fotoAvariaUrl:    text("foto_avaria_url"),
+  criadoEm:         timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const almoxarifadoNotificacoes = pgTable("almoxarifado_notificacoes", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  recebimentoId:    integer("recebimento_id"),
+  tipo:             varchar({ length: 30 }).notNull(),
+  destinoModulo:    varchar("destino_modulo", { length: 30 }).notNull(),
+  titulo:           varchar({ length: 255 }).notNull(),
+  mensagem:         text(),
+  lida:             boolean().default(false),
+  criadoEm:         timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 });
 
 // ============================================================

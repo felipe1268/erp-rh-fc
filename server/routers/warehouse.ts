@@ -10,11 +10,17 @@ import {
   almoxarifadoDescontoFolha,
   almoxarifadoSaidasInsumo,
   almoxarifadoTransferencias,
+  almoxarifadoRecebimentos,
+  almoxarifadoRecebimentoItens,
+  almoxarifadoNotificacoes,
   warehouseLoans,
   warehouseInventorySessions,
   warehouseInventorySessionItems,
+  comprasOrdens,
+  comprasOrdensItens,
   employees,
   warnings,
+  obras,
 } from "../../drizzle/schema";
 
 const isAdmin = (ctx: any) =>
@@ -1195,5 +1201,527 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         }
       }
       return { total: itens.length, atualizados, semResultado: erros };
+    }),
+
+  // ════════════════════════════════════════════════════════════════
+  // RECEBIMENTO INTELIGENTE — Rev. 814
+  // ════════════════════════════════════════════════════════════════
+
+  analyzeNFPhoto: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      base64: z.string(),
+      mimeType: z.string().default("image/jpeg"),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const { invokeAnthropicVision } = await import("../_core/llm");
+
+        const prompt = `Você é um sistema de leitura de Notas Fiscais (DANFE) brasileiras para um sistema de almoxarifado de construção civil.
+
+Analise esta foto de uma Nota Fiscal e extraia TODOS os dados possíveis.
+
+Responda SOMENTE com JSON válido (sem markdown, sem explicações):
+{
+  "numeroNf": "número da NF",
+  "fornecedorNome": "razão social do fornecedor",
+  "fornecedorCnpj": "CNPJ do fornecedor (só números)",
+  "dataEmissao": "data de emissão DD/MM/YYYY",
+  "itens": [
+    {
+      "descricao": "descrição do produto",
+      "quantidade": 0,
+      "unidade": "un/kg/m²/m/L/cx/sc/pç/rolo/barra/pct",
+      "valorUnitario": 0.00,
+      "valorTotal": 0.00
+    }
+  ],
+  "valorTotalNf": 0.00
+}
+
+REGRAS:
+- Se não conseguir ler algum campo, coloque null
+- Quantidades e valores devem ser numéricos (não strings)
+- Descreva os produtos da forma mais completa possível
+- Unidades devem ser abreviadas: un, kg, m², m, L, cx, sc, pç, rolo, barra, pct
+- Se a foto estiver ilegível, retorne {"erro": "Foto ilegível, tente novamente"}`;
+
+        const text = await invokeAnthropicVision({
+          prompt,
+          base64: input.base64,
+          mimeType: input.mimeType,
+          maxTokens: 4096,
+        });
+
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        const clean = jsonMatch ? jsonMatch[0] : text.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(clean);
+
+        if (parsed.erro) {
+          return { success: false, erro: parsed.erro, dados: null };
+        }
+
+        return {
+          success: true,
+          erro: null,
+          dados: {
+            numeroNf: parsed.numeroNf || null,
+            fornecedorNome: parsed.fornecedorNome || null,
+            fornecedorCnpj: parsed.fornecedorCnpj || null,
+            dataEmissao: parsed.dataEmissao || null,
+            valorTotalNf: parsed.valorTotalNf || 0,
+            itens: (parsed.itens || []).map((it: any) => ({
+              descricao: String(it.descricao || ""),
+              quantidade: Number(it.quantidade) || 0,
+              unidade: String(it.unidade || "un"),
+              valorUnitario: Number(it.valorUnitario) || 0,
+              valorTotal: Number(it.valorTotal) || 0,
+            })),
+          },
+        };
+      } catch (err: any) {
+        console.error("[analyzeNFPhoto] Erro:", err?.message ?? err);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao analisar foto da NF" });
+      }
+    }),
+
+  listPendingOCs: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const conditions: any[] = [
+        eq(comprasOrdens.companyId, input.companyId),
+        sql`${comprasOrdens.status} IN ('pendente', 'aprovada', 'parcial')`,
+      ];
+      if (input.obraId) {
+        conditions.push(eq(comprasOrdens.obraId, input.obraId));
+      }
+
+      const ocs = await db
+        .select({
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          fornecedorNome: comprasOrdens.fornecedorNome,
+          obraId: comprasOrdens.obraId,
+          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+          status: comprasOrdens.status,
+          total: comprasOrdens.total,
+          criadoEm: comprasOrdens.criadoEm,
+        })
+        .from(comprasOrdens)
+        .where(and(...conditions))
+        .orderBy(desc(comprasOrdens.criadoEm));
+
+      return ocs;
+    }),
+
+  getOCItemsForReceiving: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ordemCompraId: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [oc] = await db
+        .select()
+        .from(comprasOrdens)
+        .where(and(
+          eq(comprasOrdens.id, input.ordemCompraId),
+          eq(comprasOrdens.companyId, input.companyId),
+        ));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "OC não encontrada" });
+
+      const itens = await db
+        .select()
+        .from(comprasOrdensItens)
+        .where(eq(comprasOrdensItens.ordemId, input.ordemCompraId));
+
+      return {
+        oc: {
+          id: oc.id,
+          numeroOc: oc.numeroOc,
+          fornecedorNome: oc.fornecedorNome,
+          obraId: oc.obraId,
+          status: oc.status,
+        },
+        itens: itens.map((it) => ({
+          id: it.id,
+          descricao: it.descricao,
+          unidade: it.unidade,
+          quantidade: parseFloat(String(it.quantidade) || "0"),
+          quantidadeEntregue: parseFloat(String(it.quantidadeEntregue) || "0"),
+          quantidadePendente: parseFloat(String(it.quantidade) || "0") - parseFloat(String(it.quantidadeEntregue) || "0"),
+          precoUnitario: parseFloat(String(it.precoUnitario) || "0"),
+        })),
+      };
+    }),
+
+  matchNFtoOC: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().optional(),
+      fornecedorNome: z.string().optional(),
+      itensNf: z.array(z.object({
+        descricao: z.string(),
+        quantidade: z.number(),
+        unidade: z.string(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const conditions: any[] = [
+        eq(comprasOrdens.companyId, input.companyId),
+        sql`${comprasOrdens.status} IN ('pendente', 'aprovada', 'parcial')`,
+      ];
+      if (input.obraId) conditions.push(eq(comprasOrdens.obraId, input.obraId));
+
+      const ocs = await db.select().from(comprasOrdens).where(and(...conditions));
+
+      let bestMatch: { ocId: number; numeroOc: string; fornecedorNome: string; score: number; matchedItems: any[] } | null = null;
+
+      for (const oc of ocs) {
+        const ocItens = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+        let score = 0;
+        const matchedItems: any[] = [];
+
+        if (input.fornecedorNome && oc.fornecedorNome) {
+          const fornNf = input.fornecedorNome.toLowerCase().trim();
+          const fornOc = oc.fornecedorNome.toLowerCase().trim();
+          if (fornOc.includes(fornNf) || fornNf.includes(fornOc)) {
+            score += 50;
+          }
+        }
+
+        for (const nfItem of input.itensNf) {
+          const descNf = nfItem.descricao.toLowerCase().trim();
+          for (const ocItem of ocItens) {
+            const descOc = ocItem.descricao.toLowerCase().trim();
+            const words = descNf.split(/\s+/).filter(w => w.length > 2);
+            const matchCount = words.filter(w => descOc.includes(w)).length;
+            if (matchCount >= Math.max(1, words.length * 0.4)) {
+              score += 10;
+              matchedItems.push({
+                nfDescricao: nfItem.descricao,
+                ocItemId: ocItem.id,
+                ocDescricao: ocItem.descricao,
+                quantidadeNf: nfItem.quantidade,
+                quantidadeOc: parseFloat(String(ocItem.quantidade) || "0"),
+                quantidadeEntregue: parseFloat(String(ocItem.quantidadeEntregue) || "0"),
+              });
+              break;
+            }
+          }
+        }
+
+        if (score > 0 && (!bestMatch || score > bestMatch.score)) {
+          bestMatch = {
+            ocId: oc.id,
+            numeroOc: oc.numeroOc,
+            fornecedorNome: oc.fornecedorNome || "",
+            score,
+            matchedItems,
+          };
+        }
+      }
+
+      return { match: bestMatch };
+    }),
+
+  registerSmartEntry: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().optional(),
+      obraNome: z.string().optional(),
+      ordemCompraId: z.number().optional(),
+      numeroOc: z.string().optional(),
+      numeroNf: z.string().optional(),
+      fornecedorNome: z.string().optional(),
+      fornecedorCnpj: z.string().optional(),
+      fotoNfUrl: z.string().optional(),
+      fotoMaterialUrl: z.string().optional(),
+      metodoEntrada: z.enum(["manual", "foto_nf", "ordem_compra"]).default("manual"),
+      itens: z.array(z.object({
+        itemId: z.number().optional(),
+        itemNome: z.string(),
+        unidade: z.string().default("un"),
+        categoria: z.string().optional(),
+        quantidadeNf: z.number(),
+        quantidadeRecebida: z.number(),
+        valorUnitario: z.number().optional(),
+        ocItemId: z.number().optional(),
+        quantidadeOc: z.number().optional(),
+        itemNovo: z.boolean().default(false),
+        motivoDivergencia: z.string().optional(),
+        fotoAvariaUrl: z.string().optional(),
+        recebido: z.boolean().default(true),
+      })),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const itensRecebidos = input.itens.filter(i => i.recebido);
+      const temDivergencia = input.itens.some(i =>
+        !i.recebido ||
+        (i.quantidadeNf > 0 && i.quantidadeRecebida < i.quantidadeNf) ||
+        i.fotoAvariaUrl
+      );
+
+      const [recebimento] = await db.insert(almoxarifadoRecebimentos).values({
+        companyId: input.companyId,
+        obraId: input.obraId || null,
+        obraNome: input.obraNome || null,
+        ordemCompraId: input.ordemCompraId || null,
+        numeroOc: input.numeroOc || null,
+        numeroNf: input.numeroNf || null,
+        fornecedorNome: input.fornecedorNome || null,
+        fornecedorCnpj: input.fornecedorCnpj || null,
+        fotoNfUrl: input.fotoNfUrl || null,
+        fotoMaterialUrl: input.fotoMaterialUrl || null,
+        metodoEntrada: input.metodoEntrada,
+        status: temDivergencia ? "com_divergencia" : "concluido",
+        totalItensNf: input.itens.length,
+        totalItensRecebidos: itensRecebidos.length,
+        temDivergencia,
+        observacoes: input.observacoes || null,
+        usuarioId: ctx.user.id,
+        usuarioNome: ctx.user.name || "",
+      } as any).returning();
+
+      const createdItems: number[] = [];
+      const divergencias: string[] = [];
+
+      for (const item of input.itens) {
+        let itemId = item.itemId;
+        let statusItem = "recebido";
+
+        if (!item.recebido) {
+          statusItem = "nao_recebido";
+        } else if (item.quantidadeNf > 0 && item.quantidadeRecebida < item.quantidadeNf) {
+          statusItem = "parcial";
+        } else if (item.fotoAvariaUrl) {
+          statusItem = "avariado";
+        }
+
+        if (item.itemNovo && !itemId && item.recebido) {
+          const [newItem] = await db.insert(almoxarifadoItens).values({
+            companyId: input.companyId,
+            obraId: input.obraId || null,
+            nome: item.itemNome,
+            unidade: item.unidade,
+            categoria: item.categoria || "Outros",
+            quantidadeAtual: "0",
+            quantidadeMinima: "0",
+            origem: "proprio",
+          } as any).returning();
+          itemId = newItem.id;
+          createdItems.push(newItem.id);
+        }
+
+        if (item.recebido && itemId && item.quantidadeRecebida > 0) {
+          const [existing] = await db
+            .select()
+            .from(almoxarifadoItens)
+            .where(and(eq(almoxarifadoItens.id, itemId), eq(almoxarifadoItens.companyId, input.companyId)));
+
+          if (existing) {
+            const antes = parseFloat(String(existing.quantidadeAtual) || "0");
+            const depois = antes + item.quantidadeRecebida;
+            await db
+              .update(almoxarifadoItens)
+              .set({ quantidadeAtual: String(depois) } as any)
+              .where(and(eq(almoxarifadoItens.id, itemId), eq(almoxarifadoItens.companyId, input.companyId)));
+
+            await db.insert(almoxarifadoMovimentacoes).values({
+              companyId: input.companyId,
+              itemId,
+              tipo: "entrada",
+              quantidade: String(item.quantidadeRecebida),
+              obraId: input.obraId || null,
+              obraNome: input.obraNome || null,
+              motivo: input.numeroNf ? `Recebimento NF: ${input.numeroNf}` : "Recebimento inteligente",
+              usuarioId: ctx.user.id,
+              usuarioNome: ctx.user.name || "",
+            } as any);
+          }
+        }
+
+        if (item.ocItemId && item.recebido && item.quantidadeRecebida > 0 && input.ordemCompraId) {
+          const [validOc] = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
+            .where(and(eq(comprasOrdens.id, input.ordemCompraId), eq(comprasOrdens.companyId, input.companyId)));
+          if (validOc) {
+            const [ocItem] = await db.select().from(comprasOrdensItens)
+              .where(and(eq(comprasOrdensItens.id, item.ocItemId), eq(comprasOrdensItens.ordemId, input.ordemCompraId)));
+            if (ocItem) {
+              const entregueAtual = parseFloat(String(ocItem.quantidadeEntregue) || "0");
+              await db.update(comprasOrdensItens)
+                .set({ quantidadeEntregue: String(entregueAtual + item.quantidadeRecebida) } as any)
+                .where(and(eq(comprasOrdensItens.id, item.ocItemId), eq(comprasOrdensItens.ordemId, input.ordemCompraId)));
+            }
+          }
+        }
+
+        if (statusItem !== "recebido") {
+          divergencias.push(`${item.itemNome}: ${statusItem === "parcial"
+            ? `recebido ${item.quantidadeRecebida} de ${item.quantidadeNf} ${item.unidade}`
+            : statusItem === "nao_recebido"
+            ? "não recebido"
+            : "avariado"}`);
+        }
+
+        await db.insert(almoxarifadoRecebimentoItens).values({
+          recebimentoId: recebimento.id,
+          itemId: itemId || null,
+          itemNome: item.itemNome,
+          unidade: item.unidade,
+          categoria: item.categoria || null,
+          quantidadeNf: String(item.quantidadeNf),
+          quantidadeRecebida: String(item.quantidadeRecebida),
+          valorUnitario: item.valorUnitario ? String(item.valorUnitario) : null,
+          ocItemId: item.ocItemId || null,
+          quantidadeOc: item.quantidadeOc ? String(item.quantidadeOc) : null,
+          statusItem,
+          itemNovo: item.itemNovo,
+          motivoDivergencia: item.motivoDivergencia || null,
+          fotoAvariaUrl: item.fotoAvariaUrl || null,
+        } as any);
+      }
+
+      if (input.ordemCompraId) {
+        const allOcItens = await db.select().from(comprasOrdensItens)
+          .where(eq(comprasOrdensItens.ordemId, input.ordemCompraId));
+        const allDelivered = allOcItens.every(it =>
+          parseFloat(String(it.quantidadeEntregue) || "0") >= parseFloat(String(it.quantidade) || "0")
+        );
+        await db.update(comprasOrdens)
+          .set({ status: allDelivered ? "entregue" : "parcial" } as any)
+          .where(and(eq(comprasOrdens.id, input.ordemCompraId), eq(comprasOrdens.companyId, input.companyId)));
+      }
+
+      if (temDivergencia && divergencias.length > 0) {
+        const msgDivergencia = divergencias.join("\n");
+
+        await db.insert(almoxarifadoNotificacoes).values({
+          companyId: input.companyId,
+          recebimentoId: recebimento.id,
+          tipo: "divergencia",
+          destinoModulo: "compras",
+          titulo: `Divergência no recebimento${input.numeroNf ? ` NF ${input.numeroNf}` : ""}`,
+          mensagem: `Obra: ${input.obraNome || "N/A"}\nFornecedor: ${input.fornecedorNome || "N/A"}\n\nItens com divergência:\n${msgDivergencia}`,
+        } as any);
+
+        await db.insert(almoxarifadoNotificacoes).values({
+          companyId: input.companyId,
+          recebimentoId: recebimento.id,
+          tipo: "divergencia",
+          destinoModulo: "financeiro",
+          titulo: `Pagamento pendente — divergência${input.numeroNf ? ` NF ${input.numeroNf}` : ""}`,
+          mensagem: `Recebimento com divergência. Aguardar resolução antes de liberar pagamento.\nFornecedor: ${input.fornecedorNome || "N/A"}\n\nDivergências:\n${msgDivergencia}`,
+        } as any);
+      }
+
+      return {
+        success: true,
+        recebimentoId: recebimento.id,
+        totalRecebido: itensRecebidos.length,
+        totalItens: input.itens.length,
+        itensNovosCriados: createdItems.length,
+        temDivergencia,
+        divergencias,
+      };
+    }),
+
+  listRecebimentos: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().optional(),
+      limit: z.number().default(20),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const conditions: any[] = [eq(almoxarifadoRecebimentos.companyId, input.companyId)];
+      if (input.obraId) conditions.push(eq(almoxarifadoRecebimentos.obraId, input.obraId));
+
+      const recebimentos = await db
+        .select()
+        .from(almoxarifadoRecebimentos)
+        .where(and(...conditions))
+        .orderBy(desc(almoxarifadoRecebimentos.criadoEm))
+        .limit(input.limit);
+
+      return recebimentos;
+    }),
+
+  getRecebimentoDetails: protectedProcedure
+    .input(z.object({ companyId: z.number(), recebimentoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [rec] = await db
+        .select()
+        .from(almoxarifadoRecebimentos)
+        .where(and(
+          eq(almoxarifadoRecebimentos.id, input.recebimentoId),
+          eq(almoxarifadoRecebimentos.companyId, input.companyId),
+        ));
+      if (!rec) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const itens = await db
+        .select()
+        .from(almoxarifadoRecebimentoItens)
+        .where(eq(almoxarifadoRecebimentoItens.recebimentoId, input.recebimentoId));
+
+      return { recebimento: rec, itens };
+    }),
+
+  getNotificacoes: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      modulo: z.string().optional(),
+      apenasNaoLidas: z.boolean().default(false),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const conditions: any[] = [eq(almoxarifadoNotificacoes.companyId, input.companyId)];
+      if (input.modulo) conditions.push(eq(almoxarifadoNotificacoes.destinoModulo, input.modulo));
+      if (input.apenasNaoLidas) conditions.push(eq(almoxarifadoNotificacoes.lida, false));
+
+      const notifs = await db
+        .select()
+        .from(almoxarifadoNotificacoes)
+        .where(and(...conditions))
+        .orderBy(desc(almoxarifadoNotificacoes.criadoEm))
+        .limit(50);
+
+      return notifs;
+    }),
+
+  marcarNotificacaoLida: protectedProcedure
+    .input(z.object({ companyId: z.number(), notificacaoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(almoxarifadoNotificacoes)
+        .set({ lida: true } as any)
+        .where(and(
+          eq(almoxarifadoNotificacoes.id, input.notificacaoId),
+          eq(almoxarifadoNotificacoes.companyId, input.companyId),
+        ));
+      return { success: true };
     }),
 });

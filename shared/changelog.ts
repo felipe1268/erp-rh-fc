@@ -5496,4 +5496,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 01:30:00",
   },
+  {
+    version: 814,
+    titulo: "Almoxarifado Inteligente: Recebimento via Foto NF (IA) e Ordem de Compra",
+    descricao: "Novo sistema de recebimento de materiais com 3 modos: (1) Foto da NF — IA le a nota fiscal e extrai itens automaticamente, (2) Via Ordem de Compra — seleciona OC pendente e confirma recebimento, (3) Manual. Inclui: cruzamento automatico NF x OC com status verde/amarelo/vermelho, cadastro automatico de itens novos, deteccao de divergencias com notificacao para Compras e Financeiro, interface simplificada com botoes grandes para operadores com pouco treinamento. Novas tabelas: almoxarifado_recebimentos, almoxarifado_recebimento_itens, almoxarifado_notificacoes.",
+    tipo: "feature",
+    modulos: "Almoxarifado, Compras, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 12:00:00",
+  },
 ];
