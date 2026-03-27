@@ -634,12 +634,15 @@ export default function Solicitacoes() {
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Aprovação</span>
                   <AprovBadge status={detalhe.aprovacaoStatus} />
                 </div>
+                {detalhe.status === "cotacao" || detalhe.status === "aprovado" ? (
+                  <p className="text-xs text-gray-500">Esta solicitação já está em andamento no fluxo de compras.</p>
+                ) : (
                 <div className="flex gap-2">
                   {[
-                    { key: "aguardando", label: "Aguardando",    cls: "border-amber-300 text-amber-700 hover:bg-amber-50" },
-                    { key: "aprovada",   label: "Aprovar",        cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" },
-                    { key: "recusada",   label: "Recusar",        cls: "border-red-300 text-red-700 hover:bg-red-50" },
-                  ].filter(a => a.key !== detalhe.aprovacaoStatus).map(a => (
+                    ...(detalhe.aprovacaoStatus !== "aguardando" ? [{ key: "aguardando", label: "Voltar p/ Aguardando", cls: "border-amber-300 text-amber-700 hover:bg-amber-50" }] : []),
+                    ...(detalhe.aprovacaoStatus !== "aprovada" ? [{ key: "aprovada", label: "Aprovar", cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" }] : []),
+                    ...(detalhe.aprovacaoStatus !== "recusada" ? [{ key: "recusada", label: "Recusar", cls: "border-red-300 text-red-700 hover:bg-red-50" }] : []),
+                  ].map(a => (
                     <Button key={a.key} size="sm" variant="outline"
                       onClick={() => aprovar.mutate({ id: detalhe.id, aprovacaoStatus: a.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined })}
                       disabled={aprovar.isPending}
@@ -648,6 +651,7 @@ export default function Solicitacoes() {
                     </Button>
                   ))}
                 </div>
+                )}
               </div>
 
               {/* Itens */}
