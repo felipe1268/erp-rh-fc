@@ -33,12 +33,10 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     const ids = companies.map((c: any) => String(c.id));
     const validIds = [...ids, CONSTRUTORAS_ID];
     if (selectedCompanyId && validIds.includes(selectedCompanyId)) return;
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && validIds.includes(stored)) {
-      setSelectedCompanyIdState(stored);
-    } else {
-      setSelectedCompanyIdState(ids[0]);
-      localStorage.setItem(STORAGE_KEY, ids[0]);
+    const firstValid = ids[0];
+    if (firstValid) {
+      setSelectedCompanyIdState(firstValid);
+      localStorage.setItem(STORAGE_KEY, firstValid);
     }
   }, [companies, selectedCompanyId]);
 
@@ -47,34 +45,34 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, id);
   };
 
-  const isConstrutoras = selectedCompanyId === CONSTRUTORAS_ID;
-
-  const effectiveCompanyId = useMemo(() => {
-    if (isConstrutoras) return CONSTRUTORAS_ID;
+  const validCompanyId = useMemo(() => {
+    if (selectedCompanyId === CONSTRUTORAS_ID) return CONSTRUTORAS_ID;
     if (!companies || companies.length === 0) return selectedCompanyId;
     const ids = companies.map((c: any) => String(c.id));
     if (ids.includes(selectedCompanyId)) return selectedCompanyId;
     return ids[0] || selectedCompanyId;
-  }, [companies, selectedCompanyId, isConstrutoras]);
+  }, [companies, selectedCompanyId]);
+
+  const isConstrutoras = validCompanyId === CONSTRUTORAS_ID;
 
   const selectedCompany = isConstrutoras
     ? { id: CONSTRUTORAS_ID, razaoSocial: "CONSTRUTORAS", nomeFantasia: "CONSTRUTORAS", isConstrutoras: true }
-    : companies?.find((c: any) => String(c.id) === effectiveCompanyId);
+    : companies?.find((c: any) => String(c.id) === validCompanyId);
 
   const getCompanyIdsForQuery = useMemo(() => {
     return () => {
       if (isConstrutoras && construtorasIds.length > 0) {
         return construtorasIds;
       }
-      const numId = parseInt(effectiveCompanyId);
+      const numId = parseInt(validCompanyId);
       return isNaN(numId) ? [] : [numId];
     };
-  }, [isConstrutoras, construtorasIds, effectiveCompanyId]);
+  }, [isConstrutoras, construtorasIds, validCompanyId]);
 
   return (
     <CompanyContext.Provider
       value={{
-        selectedCompanyId: effectiveCompanyId,
+        selectedCompanyId: validCompanyId,
         setSelectedCompanyId,
         companies,
         isLoading,
