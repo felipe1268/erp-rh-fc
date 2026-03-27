@@ -133,8 +133,8 @@ export const cipaRouter = router({
           dataEleicao: input.dataEleicao || null,
           dataPosse: input.dataPosse || null,
           observacoes: input.observacoes || null,
-        });
-        return { success: true, id: result[0].id };
+        }).returning({ id: cipaElections.id });
+        return { success: true, id: result.id };
       }),
 
     update: protectedProcedure
