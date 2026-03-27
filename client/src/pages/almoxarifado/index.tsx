@@ -65,8 +65,9 @@ function StatusBadge({ atual, minimo }: { atual: number; minimo: number }) {
 }
 
 export default function AlmoxarifadoPage() {
-  const { selectedCompany } = useCompany();
-  const companyId = selectedCompany?.id ?? 0;
+  const { selectedCompany, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  const companyIds = getCompanyIdsForQuery();
+  const companyId = isConstrutoras ? (companyIds[0] ?? 0) : (selectedCompany?.id ?? 0);
   const [location, setLocation] = useLocation();
 
   const [busca, setBusca] = useState("");
@@ -113,7 +114,7 @@ export default function AlmoxarifadoPage() {
   }
 
   const { data: obrasAtivas = [] } = trpc.obras.listForAlmoxarifado.useQuery(
-    { companyId }, { enabled: !!companyId }
+    { companyId, companyIds: companyIds.length > 1 ? companyIds : undefined }, { enabled: !!companyId }
   );
 
   useEffect(() => {

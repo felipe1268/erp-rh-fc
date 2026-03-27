@@ -865,9 +865,9 @@ export const appRouter = router({
       return getObras(input.companyId);
     }),
     listActive: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getObrasByCompanyActive(input.companyId, input.companyIds)),
-    listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input, ctx }) => {
+    listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
       const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
-      if (isAdmin) return getObrasByCompanyActive(input.companyId);
+      if (isAdmin) return getObrasByCompanyActive(input.companyId, input.companyIds);
 
       const db = await getDb();
       const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
