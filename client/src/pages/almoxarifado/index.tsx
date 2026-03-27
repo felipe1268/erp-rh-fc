@@ -12,6 +12,7 @@ import {
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
+import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
 
 
 const EMPTY_ITEM = {
@@ -181,9 +182,11 @@ export default function AlmoxarifadoPage() {
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [analisandoFotoIA, setAnalisandoFotoIA] = useState(false);
   const [camposPreenchidosIA, setCamposPreenchidosIA] = useState(false);
+  const [categoriaManualment, setCategoriaManualment] = useState(false);
+  const [categoriaAutoSugerida, setCategoriaAutoSugerida] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
-  function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setCamposPreenchidosIA(false); setModalItem(true); }
+  function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setCamposPreenchidosIA(false); setCategoriaManualment(false); setCategoriaAutoSugerida(false); setModalItem(true); }
   function abrirEditar(i: any) {
     setFormItem({
       nome: i.nome, unidade: i.unidade, categoria: i.categoria ?? "", codigoInterno: i.codigoInterno ?? "",
@@ -200,6 +203,8 @@ export default function AlmoxarifadoPage() {
     });
     setEditandoId(i.id);
     setCamposPreenchidosIA(false);
+    setCategoriaManualment(!!i.categoria);
+    setCategoriaAutoSugerida(false);
     setModalItem(true);
   }
 
@@ -1101,7 +1106,22 @@ export default function AlmoxarifadoPage() {
                     <input
                       className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
                       placeholder="Ex: Cimento CP-II 50kg"
-                      value={formItem.nome} onChange={e => setFormItem(p => ({ ...p, nome: e.target.value }))}
+                      value={formItem.nome} onChange={e => {
+                        const nome = e.target.value;
+                        if (!categoriaManualment) {
+                          const catList = (categorias as string[]).length > 0 ? categorias as string[] : Object.keys(CATEGORIA_KEYWORDS);
+                          const sugestao = inferirCategoria(nome, catList);
+                          if (sugestao) {
+                            setFormItem(p => ({ ...p, nome, categoria: sugestao }));
+                            setCategoriaAutoSugerida(true);
+                          } else {
+                            setFormItem(p => ({ ...p, nome, categoria: categoriaAutoSugerida ? "" : p.categoria }));
+                            setCategoriaAutoSugerida(false);
+                          }
+                        } else {
+                          setFormItem(p => ({ ...p, nome }));
+                        }
+                      }}
                     />
                   </div>
 
@@ -1127,10 +1147,17 @@ export default function AlmoxarifadoPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-700">Categoria</label>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <label className="text-xs font-medium text-gray-700">Categoria</label>
+                        {categoriaAutoSugerida && formItem.categoria && !categoriaManualment && (
+                          <span className="text-[10px] text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                            <Sparkles className="h-2.5 w-2.5" /> Auto
+                          </span>
+                        )}
+                      </div>
                       <select
-                        className="mt-1 w-full h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white outline-none focus:border-emerald-400 text-gray-900"
-                        value={formItem.categoria} onChange={e => setFormItem(p => ({ ...p, categoria: e.target.value }))}
+                        className={`w-full h-9 text-sm border rounded-lg px-3 bg-white outline-none text-gray-900 ${categoriaAutoSugerida && !categoriaManualment ? "border-violet-300 focus:border-violet-400" : "border-gray-200 focus:border-emerald-400"}`}
+                        value={formItem.categoria} onChange={e => { setFormItem(p => ({ ...p, categoria: e.target.value })); setCategoriaManualment(true); setCategoriaAutoSugerida(false); }}
                       >
                         <option value="">— Selecionar —</option>
                         {categorias.map(c => <option key={c} value={c}>{c}</option>)}

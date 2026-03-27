@@ -5505,4 +5505,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 12:00:00",
   },
+  {
+    version: 815,
+    titulo: "Auto-categorização de itens do almoxarifado + segurança tenant isolation",
+    descricao: "Categoria do item agora é sugerida automaticamente ao digitar o nome, usando mapeamento de palavras-chave para categorias de construção civil (cimento, ferragens, elétrica, hidráulica, EPI, etc.). Badge 'Auto' indica sugestão automática; usuário pode editar a qualquer momento. Também aplicado no SmartEntry (NF e OC). Correções de segurança: companyId agora é validado em todas as operações de recebimento (getRecebimentoDetails, marcarNotificacaoLida, registerSmartEntry) para isolamento de dados entre empresas.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 13:00:00",
+  },
 ];

@@ -6,6 +6,7 @@ import {
   AlertTriangle, XCircle, ArrowDownCircle, ChevronRight,
   ImagePlus, Mic, MicOff, RefreshCw,
 } from "lucide-react";
+import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
 
 type SmartEntryProps = {
   companyId: number;
@@ -117,11 +118,13 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
             nfItem.descricao.toLowerCase().includes(i.nome.toLowerCase().split(" ")[0])
           );
 
+          const catAuto = !existing?.categoria ? inferirCategoria(nfItem.descricao, Object.keys(CATEGORIA_KEYWORDS)) : "";
+
           return {
             itemId: existing?.id,
             itemNome: nfItem.descricao,
             unidade: nfItem.unidade,
-            categoria: existing?.categoria,
+            categoria: existing?.categoria || catAuto || undefined,
             quantidadeNf: nfItem.quantidade,
             quantidadeRecebida: nfItem.quantidade,
             valorUnitario: nfItem.valorUnitario,
@@ -193,22 +196,26 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
     if (!ocItems.data) return;
     const items: EntryItem[] = ocItems.data.itens
       .filter(i => i.quantidadePendente > 0)
-      .map(i => ({
-        itemNome: i.descricao,
-        unidade: i.unidade || "un",
-        quantidadeNf: i.quantidadePendente,
-        quantidadeRecebida: i.quantidadePendente,
-        valorUnitario: i.precoUnitario,
-        ocItemId: i.id,
-        quantidadeOc: i.quantidadePendente,
-        itemNovo: false,
-        recebido: true,
-        status: "ok" as const,
-        itemId: itens.find(it =>
+      .map(i => {
+        const existing = itens.find(it =>
           it.nome.toLowerCase().includes(i.descricao.toLowerCase().split(" ")[0]) ||
           i.descricao.toLowerCase().includes(it.nome.toLowerCase().split(" ")[0])
-        )?.id,
-      }));
+        );
+        return {
+          itemNome: i.descricao,
+          unidade: i.unidade || "un",
+          categoria: existing?.categoria || inferirCategoria(i.descricao, Object.keys(CATEGORIA_KEYWORDS)) || undefined,
+          quantidadeNf: i.quantidadePendente,
+          quantidadeRecebida: i.quantidadePendente,
+          valorUnitario: i.precoUnitario,
+          ocItemId: i.id,
+          quantidadeOc: i.quantidadePendente,
+          itemNovo: !existing,
+          recebido: true,
+          status: "ok" as const,
+          itemId: existing?.id,
+        };
+      });
     setEntryItems(items);
     setStep("review");
   }, [ocItems.data, itens]);
