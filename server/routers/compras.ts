@@ -888,6 +888,34 @@ Responda APENAS com um objeto JSON no formato:
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+
+      const linkedCots = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao, status: comprasCotacoes.status })
+        .from(comprasCotacoes)
+        .where(eq(comprasCotacoes.solicitacaoId, input.id));
+      const activeCots = linkedCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
+      if (activeCots.length > 0) {
+        const linkedOCs = await db.select({ id: comprasOrdens.id, numeroOc: comprasOrdens.numeroOc })
+          .from(comprasOrdens)
+          .where(inArray(comprasOrdens.cotacaoId, activeCots.map(c => c.id)));
+        if (linkedOCs.length > 0) {
+          throw new Error(`Não é possível excluir: esta SC possui Ordem de Compra em andamento (${linkedOCs.map(o => o.numeroOc).join(", ")}).`);
+        }
+        throw new Error(`Não é possível excluir: esta SC possui cotação ativa (${activeCots.map(c => c.numeroCotacao).join(", ")}). Cancele a cotação primeiro.`);
+      }
+
+      const cotItemsRef = await db.select({ id: comprasCotacoesItens.id })
+        .from(comprasCotacoesItens)
+        .innerJoin(comprasSolicitacoesItens, eq(comprasCotacoesItens.solicitacaoItemId, comprasSolicitacoesItens.id))
+        .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id))
+        .limit(1);
+      if (cotItemsRef.length > 0) {
+        await db.update(comprasCotacoesItens)
+          .set({ solicitacaoItemId: null })
+          .where(inArray(comprasCotacoesItens.solicitacaoItemId,
+            db.select({ id: comprasSolicitacoesItens.id }).from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id))
+          ));
+      }
+
       await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
       await db.delete(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
       return { ok: true };
