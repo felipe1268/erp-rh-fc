@@ -265,14 +265,14 @@ export const telemetriaRouter = router({
           GROUP BY acao, pagina ORDER BY total DESC LIMIT 30
         `),
         db.execute(sql`
-          SELECT DATE(criado_em) as dia, COUNT(*) as total
+          SELECT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') as dia, COUNT(*) as total
           FROM user_activity_log
           WHERE company_id = ${cid} AND user_id = ${input.userId}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
-          GROUP BY DATE(criado_em) ORDER BY dia
+          GROUP BY dia ORDER BY dia
         `),
         db.execute(sql`
-          SELECT EXTRACT(HOUR FROM criado_em)::int as hora, COUNT(*) as total
+          SELECT EXTRACT(HOUR FROM criado_em AT TIME ZONE 'America/Sao_Paulo')::int as hora, COUNT(*) as total
           FROM user_activity_log
           WHERE company_id = ${cid} AND user_id = ${input.userId}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
@@ -324,11 +324,11 @@ export const telemetriaRouter = router({
           GROUP BY user_name, user_id ORDER BY total DESC
         `),
         db.execute(sql`
-          SELECT DATE(criado_em) as dia, COUNT(*) as total
+          SELECT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') as dia, COUNT(*) as total
           FROM ia_modulo_conversas
           WHERE company_id = ${cid}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
-          GROUP BY DATE(criado_em) ORDER BY dia
+          GROUP BY dia ORDER BY dia
         `),
         db.execute(sql`
           SELECT id, user_name, modulo, pergunta, resposta, criado_em
@@ -391,7 +391,7 @@ export const telemetriaRouter = router({
             COUNT(*) FILTER (WHERE tipo = 'page_visit') as visitas,
             COUNT(*) FILTER (WHERE tipo = 'action') as acoes,
             COUNT(DISTINCT pagina) as paginas_unicas,
-            COUNT(DISTINCT DATE(criado_em)) as dias_ativos,
+            COUNT(DISTINCT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')) as dias_ativos,
             COALESCE(SUM(duracao_segundos) FILTER (WHERE duracao_segundos > 0), 0) as tempo_total,
             MAX(criado_em) as ultimo_acesso
           FROM user_activity_log
