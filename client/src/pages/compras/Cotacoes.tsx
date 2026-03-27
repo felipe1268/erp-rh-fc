@@ -1029,8 +1029,8 @@ export default function Cotacoes() {
                                       <div className="flex-1 px-1 py-1 text-center col-span-3 truncate" style={{ minWidth: 0 }}>
                                         {editingFornId === p.fornecedorId ? (
                                           <div className="flex gap-1 px-1">
-                                            <input type="number" placeholder="Prazo" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-14 h-5 text-xs border border-gray-300 rounded px-1 bg-white text-gray-900" />
-                                            <select value={editCondPag[p.fornecedorId] ?? ""} onChange={e => setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="flex-1 h-5 text-xs border border-gray-300 rounded px-1 bg-white text-gray-900">
+                                            <input type="number" placeholder="Prazo" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-20 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900" />
+                                            <select value={editCondPag[p.fornecedorId] ?? ""} onChange={e => setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="flex-1 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900">
                                               <option value="">— cond. —</option>
                                               {condPagOptions.map(c => <option key={c} value={c}>{c}</option>)}
                                             </select>
@@ -1093,7 +1093,7 @@ export default function Cotacoes() {
                                             <Input type="number" step="0.001" min="0"
                                               value={editQtds[key] ?? String(savedQty)}
                                               onChange={e => setEditQtds(prev => ({ ...prev, [key]: e.target.value }))}
-                                              className="h-6 text-xs text-right border-gray-300 bg-white text-gray-900 w-20 ml-auto" />
+                                              className="h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-28 ml-auto" />
                                           ) : (
                                             <span className="text-xs text-gray-600">{savedQty > 0 ? savedQty.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}</span>
                                           )}
@@ -1104,7 +1104,7 @@ export default function Cotacoes() {
                                             <Input type="number" step="0.01" min="0"
                                               value={editPrecos[key] ?? ""}
                                               onChange={e => setEditPrecos(prev => ({ ...prev, [key]: e.target.value }))}
-                                              className={`h-6 text-xs text-right border-gray-300 bg-white text-gray-900 w-24 ml-auto ${isBest ? "border-emerald-400" : ""}`}
+                                              className={`h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-32 ml-auto ${isBest ? "border-emerald-400" : ""}`}
                                               placeholder="0,00" />
                                           ) : (
                                             <span className={`text-xs font-medium ${isBest ? "text-emerald-700 font-bold" : "text-gray-700"}`}>
