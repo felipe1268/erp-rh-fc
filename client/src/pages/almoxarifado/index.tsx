@@ -1200,8 +1200,8 @@ export default function AlmoxarifadoPage() {
                     <p className="text-[10px] text-gray-400 mt-0.5">O botão IA estima o preço de mercado automaticamente.</p>
                   </div>
 
-                  {/* Origem (Próprio / Alugado) */}
-                  <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                  {/* Origem (Próprio / Alugado) — só para Equipamentos e Escoramento */}
+                  {(formItem.categoria === "Equipamentos" || formItem.categoria === "Escoramento") && <div className="border border-gray-200 rounded-xl p-4 space-y-3">
                     <div>
                       <label className="text-xs font-semibold text-gray-700 mb-2 block">Origem do Equipamento</label>
                       <div className="flex gap-2">
@@ -1267,7 +1267,7 @@ export default function AlmoxarifadoPage() {
                         </div>
                       </div>
                     )}
-                  </div>
+                  </div>}
                 </div>
               </div>
             </div>

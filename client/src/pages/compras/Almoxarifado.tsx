@@ -479,8 +479,8 @@ export default function Almoxarifado() {
               </p>
             </div>
 
-            {/* ── Origem: Próprio / Alugado ── */}
-            <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+            {/* ── Origem: Próprio / Alugado — só para Equipamentos e Escoramento ── */}
+            {(formItem.categoria === "Equipamentos" || formItem.categoria === "Escoramento") && <div className="border border-slate-200 rounded-xl p-4 space-y-3">
               <div>
                 <Label className="text-xs font-semibold text-slate-700 mb-2 block">Origem do Equipamento/Insumo</Label>
                 <div className="flex gap-2">
@@ -541,7 +541,7 @@ export default function Almoxarifado() {
                   </div>
                 </div>
               )}
-            </div>
+            </div>}
 
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setModalItem(false)}>Cancelar</Button>
