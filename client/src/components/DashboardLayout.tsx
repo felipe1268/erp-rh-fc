@@ -441,8 +441,6 @@ const menuSectionsGestaoDocumentos: MenuSection[] = [
     items: [
       { icon: LayoutDashboard, label: "Painel",          path: "/gestao-documentos?tab=painel" },
       { icon: FolderOpen,      label: "Documentos",      path: "/gestao-documentos?tab=documentos" },
-      { icon: Shield,          label: "ARTs / RRTs",     path: "/gestao-documentos?tab=arts" },
-      { icon: Settings,        label: "Configurações",   path: "/gestao-documentos?tab=configuracoes" },
     ],
   },
 ];
