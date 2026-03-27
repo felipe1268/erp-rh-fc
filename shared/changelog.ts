@@ -5478,4 +5478,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 01:00:00",
   },
+  {
+    version: 812,
+    titulo: "Painel de Controle redesenhado com KPIs avancados e tabela por obra",
+    descricao: "Painel completamente redesenhado: 4 KPIs principais (total docs com breakdown DWG/PDF, taxa de aprovacao %, media de revisoes por doc, alertas vencimento); tabela detalhada por obra com colunas Total/DWG/PDF/Aprovados/Em Revisao/Progresso com barra visual; cards de status com porcentagem; atividade de revisoes e ultimos documentos lado a lado com scroll interno.",
+    tipo: "melhoria",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 01:15:00",
+  },
 ];

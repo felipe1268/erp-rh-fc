@@ -930,12 +930,12 @@ export default function GestaoDocumentos() {
               </div>
             ) : dashStats.data ? (() => {
               const s = dashStats.data;
-              const stMap: Record<string, { label: string; color: string }> = {
-                em_elaboracao: { label: "Em Elaboracao", color: "bg-blue-100 text-blue-700" },
-                em_revisao: { label: "Em Revisao", color: "bg-amber-100 text-amber-700" },
-                aprovado: { label: "Aprovado", color: "bg-green-100 text-green-700" },
-                reprovado: { label: "Reprovado", color: "bg-red-100 text-red-700" },
-                cancelado: { label: "Cancelado", color: "bg-gray-100 text-gray-600" },
+              const stMap: Record<string, { label: string; color: string; bg: string }> = {
+                em_elaboracao: { label: "Em Elaboracao", color: "bg-blue-100 text-blue-700", bg: "bg-blue-500" },
+                em_revisao: { label: "Em Revisao", color: "bg-amber-100 text-amber-700", bg: "bg-amber-500" },
+                aprovado: { label: "Aprovado", color: "bg-green-100 text-green-700", bg: "bg-green-500" },
+                reprovado: { label: "Reprovado", color: "bg-red-100 text-red-700", bg: "bg-red-500" },
+                cancelado: { label: "Cancelado", color: "bg-gray-100 text-gray-600", bg: "bg-gray-400" },
               };
               const now = new Date();
               const expArts = (s.expiringArts || []) as any[];
@@ -945,60 +945,138 @@ export default function GestaoDocumentos() {
                 ...expDocs.map((d: any) => ({ ...d, _type: "doc" as const, _label: d.titulo || d.codigo, _sub: d.descricao || d.subpasta, _obra: d.obraNome, _date: d.dataValidade })),
               ].sort((a, b) => new Date(a._date).getTime() - new Date(b._date).getTime());
               const expiredCount = allExpiring.filter(e => new Date(e._date) < now).length;
-              const expiringCount = allExpiring.length - expiredCount;
+              const aprovPct = s.totalDocs > 0 ? Math.round(((s as any).docsAprovados / s.totalDocs) * 100) : 0;
+              const revMediaPorDoc = s.totalDocs > 0 ? (s.totalRevisoes / s.totalDocs).toFixed(1) : "0";
+              const obraDetailsSorted = ((s as any).obraDetails || []).sort((a: any, b: any) => b.total - a.total);
 
               return (
                 <>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Total Documentos</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Documentos</p>
                       <p className="text-3xl font-bold text-gray-900">{s.totalDocs}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        {s.subpastaCounts.map((sp: any) => (
+                          <span key={sp.subpasta} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{sp.subpasta}: {sp.count}</span>
+                        ))}
+                      </div>
                     </div>
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Revisoes</p>
-                      <p className="text-3xl font-bold text-indigo-600">{s.totalRevisoes}</p>
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Taxa de Aprovacao</p>
+                      <p className="text-3xl font-bold text-green-600">{aprovPct}%</p>
+                      <p className="text-[10px] text-gray-400 mt-2">{(s as any).docsAprovados || 0} de {s.totalDocs} aprovados</p>
                     </div>
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">ARTs / RRTs</p>
-                      <p className="text-3xl font-bold text-emerald-600">{s.totalArts}</p>
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Revisoes / Doc</p>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-3xl font-bold text-indigo-600">{revMediaPorDoc}</p>
+                        <p className="text-sm text-gray-400">media</p>
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-2">{s.totalRevisoes} revisoes total · {(s as any).docsR0 || 0} docs sem revisao</p>
                     </div>
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Obras</p>
-                      <p className="text-3xl font-bold text-sky-600">{s.obraCounts.length}</p>
+                    <div className={`border rounded-xl p-4 shadow-sm ${expiredCount > 0 ? "bg-red-50 border-red-200" : allExpiring.length > 0 ? "bg-amber-50 border-amber-200" : "bg-white border-gray-200"}`}>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Alertas</p>
+                      <p className={`text-3xl font-bold ${expiredCount > 0 ? "text-red-600" : allExpiring.length > 0 ? "text-amber-600" : "text-gray-400"}`}>{allExpiring.length}</p>
+                      <p className="text-[10px] mt-2">{expiredCount > 0 ? <span className="text-red-600 font-semibold">{expiredCount} vencido(s)</span> : <span className="text-gray-400">Nenhum vencido</span>} · {s.totalArts} ARTs</p>
                     </div>
-                    <div className={`border rounded-xl p-5 shadow-sm ${expiredCount > 0 ? "bg-red-50 border-red-200" : expiringCount > 0 ? "bg-amber-50 border-amber-200" : "bg-white border-gray-200"}`}>
-                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Vencendo / Vencidos</p>
-                      <p className={`text-3xl font-bold ${expiredCount > 0 ? "text-red-600" : expiringCount > 0 ? "text-amber-600" : "text-gray-400"}`}>{allExpiring.length}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <h3 className="text-xs font-semibold text-gray-700 mb-3 uppercase tracking-wider">Status dos Documentos</h3>
+                      <div className="space-y-2.5">
+                        {s.statusCounts.map((sc) => {
+                          const sm = stMap[sc.status || "em_elaboracao"] || { label: sc.status, color: "bg-gray-100 text-gray-600", bg: "bg-gray-400" };
+                          const pct = s.totalDocs > 0 ? Math.round((sc.count / s.totalDocs) * 100) : 0;
+                          return (
+                            <div key={sc.status}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${sm.color}`}>{sm.label}</span>
+                                <span className="text-xs font-semibold text-gray-700">{sc.count} <span className="text-gray-400 font-normal">({pct}%)</span></span>
+                              </div>
+                              <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${sm.bg}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <h3 className="text-xs font-semibold text-gray-700 mb-3 uppercase tracking-wider">Resumo por Obra</h3>
+                      {obraDetailsSorted.length === 0 ? (
+                        <p className="text-sm text-gray-400 py-4 text-center">Nenhuma obra com documentos</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-[10px] text-gray-500 uppercase tracking-wider border-b border-gray-100">
+                                <th className="text-left py-2 font-medium">Obra</th>
+                                <th className="text-center py-2 font-medium w-14">Total</th>
+                                <th className="text-center py-2 font-medium w-14">DWG</th>
+                                <th className="text-center py-2 font-medium w-14">PDF</th>
+                                <th className="text-center py-2 font-medium w-20">Aprovados</th>
+                                <th className="text-center py-2 font-medium w-20">Revisao</th>
+                                <th className="text-center py-2 font-medium w-16">Progresso</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {obraDetailsSorted.map((od: any) => {
+                                const pctAprov = od.total > 0 ? Math.round((od.aprovados / od.total) * 100) : 0;
+                                return (
+                                  <tr key={od.obraId} className="hover:bg-gray-50/50">
+                                    <td className="py-2 text-gray-800 font-medium truncate max-w-[200px]">{od.obraNome}</td>
+                                    <td className="py-2 text-center font-semibold text-gray-700">{od.total}</td>
+                                    <td className="py-2 text-center text-gray-600">{od.dwgs || 0}</td>
+                                    <td className="py-2 text-center text-gray-600">{od.pdfs || 0}</td>
+                                    <td className="py-2 text-center"><span className="px-1.5 py-0.5 rounded bg-green-50 text-green-700 text-xs font-medium">{od.aprovados || 0}</span></td>
+                                    <td className="py-2 text-center"><span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-xs font-medium">{od.emRevisao || 0}</span></td>
+                                    <td className="py-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+                                          <div className="h-full rounded-full bg-green-500" style={{ width: `${pctAprov}%` }} />
+                                        </div>
+                                        <span className="text-[10px] text-gray-500 w-8 text-right">{pctAprov}%</span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {allExpiring.length > 0 && (
-                    <div className={`border rounded-xl p-5 shadow-sm ${expiredCount > 0 ? "bg-red-50/50 border-red-200" : "bg-amber-50/50 border-amber-200"}`}>
-                      <h3 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                    <div className={`border rounded-xl p-4 shadow-sm ${expiredCount > 0 ? "bg-red-50/50 border-red-200" : "bg-amber-50/50 border-amber-200"}`}>
+                      <h3 className="text-xs font-semibold text-gray-800 mb-1 flex items-center gap-2 uppercase tracking-wider">
                         <AlertTriangle className={`w-4 h-4 ${expiredCount > 0 ? "text-red-500" : "text-amber-500"}`} />
-                        Documentos com Vencimento Proximo ou Vencidos
+                        Documentos / ARTs Vencendo ou Vencidos (30 dias)
                       </h3>
-                      <p className="text-xs text-gray-500 mb-3">Atencao: documentos vencidos podem causar paralizacao de obras.</p>
+                      <p className="text-[10px] text-gray-500 mb-3">Documentos vencidos podem causar paralizacao de obras. Providencie a renovacao.</p>
                       <div className="divide-y divide-gray-200/50">
                         {allExpiring.map((item: any, idx: number) => {
                           const dt = new Date(item._date);
                           const isExpired = dt < now;
                           const daysLeft = Math.ceil((dt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                           return (
-                            <div key={`${item._type}-${item.id}-${idx}`} className="flex items-center justify-between py-2.5">
+                            <div key={`${item._type}-${item.id}-${idx}`} className="flex items-center justify-between py-2">
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item._type === "art" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${item._type === "art" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
                                     {item._type === "art" ? item.tipo || "ART" : item.subpasta || "DOC"}
                                   </span>
                                   <span className="text-sm text-gray-800 font-medium truncate">{item._label}</span>
                                 </div>
-                                <p className="text-[11px] text-gray-500 truncate mt-0.5">{item._obra} — {item._sub}</p>
+                                <p className="text-[10px] text-gray-500 truncate mt-0.5">{item._obra} — {item._sub}</p>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0 ml-4">
-                                <span className="text-xs text-gray-500">{dt.toLocaleDateString("pt-BR")}</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isExpired ? "bg-red-100 text-red-700 border border-red-300" : daysLeft <= 7 ? "bg-amber-100 text-amber-700 border border-amber-300" : "bg-yellow-50 text-yellow-700 border border-yellow-300"}`}>
-                                  {isExpired ? `Vencido ha ${Math.abs(daysLeft)}d` : `${daysLeft}d restante${daysLeft !== 1 ? "s" : ""}`}
+                              <div className="flex items-center gap-2 shrink-0 ml-3">
+                                <span className="text-[10px] text-gray-500">{dt.toLocaleDateString("pt-BR")}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isExpired ? "bg-red-100 text-red-700" : daysLeft <= 7 ? "bg-amber-100 text-amber-700" : "bg-yellow-50 text-yellow-700"}`}>
+                                  {isExpired ? `Vencido ha ${Math.abs(daysLeft)}d` : `${daysLeft}d`}
                                 </span>
                               </div>
                             </div>
@@ -1008,102 +1086,59 @@ export default function GestaoDocumentos() {
                     </div>
                   )}
 
-                  {(s.recentRevisions || []).length > 0 && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                        <History className="w-4 h-4 text-indigo-500" />
-                        Atividade Recente de Revisoes
-                      </h3>
-                      <div className="divide-y divide-gray-100">
-                        {(s.recentRevisions as any[]).map((rv: any) => (
-                          <div key={rv.id} className="flex items-center justify-between py-2.5">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[10px] font-bold">R{rv.numero}</span>
-                                <span className="text-sm text-gray-800 font-mono truncate">{rv.docTitulo}</span>
-                              </div>
-                              <p className="text-[11px] text-gray-500 truncate mt-0.5">
-                                {rv.obraNome}
-                                {rv.descricao && <> — {rv.descricao}</>}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0 ml-4">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${rv.status === "aprovada" ? "bg-green-100 text-green-700" : rv.status === "rejeitada" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
-                                {rv.status === "aprovada" ? "Aprovada" : rv.status === "rejeitada" ? "Rejeitada" : "Pendente"}
-                              </span>
-                              <span className="text-[10px] text-gray-400 whitespace-nowrap">
-                                {rv.criadoEm ? new Date(rv.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Por Status</h3>
-                      <div className="space-y-2">
-                        {s.statusCounts.map((sc) => {
-                          const sm = stMap[sc.status || "em_elaboracao"] || { label: sc.status, color: "bg-gray-100 text-gray-600" };
-                          const pct = s.totalDocs > 0 ? Math.round((sc.count / s.totalDocs) * 100) : 0;
-                          return (
-                            <div key={sc.status} className="flex items-center gap-3">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${sm.color} w-28 text-center`}>{sm.label}</span>
-                              <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                                <div className={`h-full rounded-full ${sc.status === "aprovado" ? "bg-green-500" : sc.status === "em_revisao" ? "bg-amber-500" : sc.status === "reprovado" ? "bg-red-500" : "bg-blue-500"}`} style={{ width: `${pct}%` }} />
-                              </div>
-                              <span className="text-sm font-medium text-gray-700 w-12 text-right">{sc.count}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Documentos por Obra</h3>
-                      <div className="space-y-2">
-                        {s.obraCounts.sort((a, b) => b.count - a.count).map((oc) => {
-                          const pct = s.totalDocs > 0 ? Math.round((oc.count / s.totalDocs) * 100) : 0;
-                          return (
-                            <div key={oc.obraId} className="flex items-center gap-3">
-                              <span className="text-xs text-gray-600 w-40 truncate">{oc.obraNome}</span>
-                              <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                                <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
-                              </div>
-                              <span className="text-sm font-medium text-gray-700 w-12 text-right">{oc.count}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {(s.recentDocs || []).length > 0 && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Ultimos Documentos Atualizados</h3>
-                      <div className="divide-y divide-gray-100">
-                        {(s.recentDocs as any[]).map((rd: any) => {
-                          const sm = stMap[rd.status || "em_elaboracao"] || stMap.em_elaboracao;
-                          return (
-                            <div key={rd.id} className="flex items-center justify-between py-2.5">
+                    {(s.recentRevisions || []).length > 0 && (
+                      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                        <h3 className="text-xs font-semibold text-gray-700 mb-3 flex items-center gap-2 uppercase tracking-wider">
+                          <History className="w-3.5 h-3.5 text-indigo-500" />
+                          Atividade de Revisoes
+                        </h3>
+                        <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                          {(s.recentRevisions as any[]).map((rv: any) => (
+                            <div key={rv.id} className="flex items-center justify-between py-2">
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-mono text-gray-700 truncate">{rd.titulo}</p>
-                                <p className="text-[11px] text-gray-500 truncate">{rd.obraNome}{rd.descricao ? ` — ${rd.descricao}` : ""}</p>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[10px] font-bold">R{rv.numero}</span>
+                                  <span className="text-xs text-gray-800 font-mono truncate">{rv.docTitulo}</span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 truncate mt-0.5">{rv.obraNome}</p>
                               </div>
-                              <div className="flex items-center gap-3 shrink-0 ml-4">
-                                <span className="text-[10px] text-gray-400 font-mono">{rd.subpasta}</span>
-                                {rd.revisaoAtual && <span className="text-[10px] text-gray-500">R{rd.revisaoAtual}</span>}
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${sm.color}`}>{sm.label}</span>
-                                <span className="text-[10px] text-gray-400">{rd.atualizadoEm ? new Date(rd.atualizadoEm).toLocaleDateString("pt-BR") : ""}</span>
+                              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${rv.status === "aprovada" ? "bg-green-100 text-green-700" : rv.status === "rejeitada" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
+                                  {rv.status === "aprovada" ? "Aprov." : rv.status === "rejeitada" ? "Rej." : "Pend."}
+                                </span>
+                                <span className="text-[10px] text-gray-400">{rv.criadoEm ? new Date(rv.criadoEm).toLocaleDateString("pt-BR") : ""}</span>
                               </div>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+
+                    {(s.recentDocs || []).length > 0 && (
+                      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                        <h3 className="text-xs font-semibold text-gray-700 mb-3 uppercase tracking-wider">Ultimos Documentos</h3>
+                        <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                          {(s.recentDocs as any[]).map((rd: any) => {
+                            const sm = stMap[rd.status || "em_elaboracao"] || stMap.em_elaboracao;
+                            return (
+                              <div key={rd.id} className="flex items-center justify-between py-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-mono text-gray-700 truncate">{rd.titulo}</p>
+                                  <p className="text-[10px] text-gray-500 truncate">{rd.obraNome}</p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                  <span className="text-[10px] text-gray-400 font-mono">{rd.subpasta}</span>
+                                  {rd.revisaoAtual && rd.revisaoAtual !== "0" && <span className="text-[10px] text-indigo-600 font-bold">R{rd.revisaoAtual}</span>}
+                                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${sm.color}`}>{sm.label}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               );
             })() : null}

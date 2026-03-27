@@ -1179,7 +1179,7 @@ export const gestaoDocumentosRouter = router({
         obraNome: obras.nome,
         count: sql<number>`count(*)::int`,
       }).from(gdDocumentos)
-        .innerJoin(obras, eq(obras.id, gdDocumentos.obraId))
+        .innerJoin(obras, and(eq(obras.id, gdDocumentos.obraId), eq(obras.companyId, input.companyId)))
         .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
         .groupBy(gdDocumentos.obraId, obras.nome);
 
@@ -1262,13 +1262,40 @@ export const gestaoDocumentosRouter = router({
         .orderBy(desc(gdDocumentos.atualizadoEm))
         .limit(10);
 
+      const [docsComValidade] = await db.select({ count: sql<number>`count(*)::int` }).from(gdDocumentos)
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt), sql`${gdDocumentos.dataValidade} IS NOT NULL`));
+
+      const [docsAprovados] = await db.select({ count: sql<number>`count(*)::int` }).from(gdDocumentos)
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt), eq(gdDocumentos.status, "aprovado")));
+
+      const [docsR0] = await db.select({ count: sql<number>`count(*)::int` }).from(gdDocumentos)
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt), sql`(${gdDocumentos.revisaoAtual} IS NULL OR ${gdDocumentos.revisaoAtual} = '0')`));
+
+      const obraDetails = await db.select({
+        obraId: gdDocumentos.obraId,
+        obraNome: obras.nome,
+        total: sql<number>`count(*)::int`,
+        aprovados: sql<number>`sum(case when ${gdDocumentos.status} = 'aprovado' then 1 else 0 end)::int`,
+        emRevisao: sql<number>`sum(case when ${gdDocumentos.status} = 'em_revisao' then 1 else 0 end)::int`,
+        reprovados: sql<number>`sum(case when ${gdDocumentos.status} = 'reprovado' then 1 else 0 end)::int`,
+        dwgs: sql<number>`sum(case when ${gdDocumentos.subpasta} = 'DWG' then 1 else 0 end)::int`,
+        pdfs: sql<number>`sum(case when ${gdDocumentos.subpasta} = 'PDF' then 1 else 0 end)::int`,
+      }).from(gdDocumentos)
+        .innerJoin(obras, and(eq(obras.id, gdDocumentos.obraId), eq(obras.companyId, input.companyId)))
+        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .groupBy(gdDocumentos.obraId, obras.nome);
+
       return {
         totalDocs: totalDocs?.count || 0,
         totalRevisoes: totalRevisoes?.count || 0,
         totalArts: totalArts?.count || 0,
+        docsComValidade: docsComValidade?.count || 0,
+        docsAprovados: docsAprovados?.count || 0,
+        docsR0: docsR0?.count || 0,
         statusCounts: statusCounts as { status: string; count: number }[],
         subpastaCounts: subpastaCounts as { subpasta: string; count: number }[],
         obraCounts: obraCounts as { obraId: number; obraNome: string; count: number }[],
+        obraDetails: obraDetails as any[],
         recentRevisions,
         expiringArts,
         expiringDocs,
