@@ -230,19 +230,19 @@ export default function GestaoDocumentos() {
     { enabled: companyId > 0 && !!activeFicheiroId && selectedSubpasta === "PDF" && !!selectedDiscId }
   );
 
-  const pdfTituloSet = useMemo(() => {
-    if (selectedSubpasta !== "DWG") return new Set<string>();
-    return new Set((pdfDocs.data || []).map((d: any) => {
+  const pdfTituloMap = useMemo(() => {
+    if (selectedSubpasta !== "DWG" && selectedSubpasta !== "PDF") return new Map<string, number>();
+    return new Map((pdfDocs.data || []).map((d: any) => {
       const p = parseRevision((d.titulo || "").replace(/\.[^.]+$/, "").trim());
-      return p.base.toLowerCase();
+      return [p.base.toLowerCase(), p.rev] as [string, number];
     }));
   }, [pdfDocs.data, selectedSubpasta]);
 
-  const dwgTituloSet = useMemo(() => {
-    if (selectedSubpasta !== "PDF") return new Set<string>();
-    return new Set((dwgDocs.data || []).map((d: any) => {
+  const dwgTituloMap = useMemo(() => {
+    if (selectedSubpasta !== "PDF" && selectedSubpasta !== "DWG") return new Map<string, number>();
+    return new Map((dwgDocs.data || []).map((d: any) => {
       const p = parseRevision((d.titulo || "").replace(/\.[^.]+$/, "").trim());
-      return p.base.toLowerCase();
+      return [p.base.toLowerCase(), p.rev] as [string, number];
     }));
   }, [dwgDocs.data, selectedSubpasta]);
 
@@ -1226,10 +1226,19 @@ export default function GestaoDocumentos() {
                         {filteredDocs.map((doc) => {
                           const st = STATUS_MAP[doc.status || "em_elaboracao"] || STATUS_MAP.em_elaboracao;
                           const disc = doc.disciplinaId ? discMap.get(doc.disciplinaId) : null;
-                          const docBase = parseRevision((doc.titulo || "").replace(/\.[^.]+$/, "").trim()).base.toLowerCase();
-                          const missingPdf = selectedSubpasta === "DWG" && !pdfTituloSet.has(docBase);
-                          const missingDwg = selectedSubpasta === "PDF" && !dwgTituloSet.has(docBase);
-                          const missingCounterpart = missingPdf || missingDwg;
+                          const docParsed = parseRevision((doc.titulo || "").replace(/\.[^.]+$/, "").trim());
+                          const docBase = docParsed.base.toLowerCase();
+                          const docRev = docParsed.rev;
+                          const missingPdf = selectedSubpasta === "DWG" && !pdfTituloMap.has(docBase);
+                          const missingDwg = selectedSubpasta === "PDF" && !dwgTituloMap.has(docBase);
+                          const pdfRev = pdfTituloMap.get(docBase);
+                          const dwgRev = dwgTituloMap.get(docBase);
+                          const revMismatch = selectedSubpasta === "DWG" && !missingPdf && pdfRev !== undefined && docRev >= 0 && pdfRev !== docRev
+                            ? pdfRev
+                            : selectedSubpasta === "PDF" && !missingDwg && dwgRev !== undefined && docRev >= 0 && dwgRev !== docRev
+                            ? dwgRev
+                            : null;
+                          const missingCounterpart = missingPdf || missingDwg || revMismatch !== null;
                           return (
                             <TableRow key={doc.id} className={`border-gray-100 hover:bg-gray-50 cursor-pointer ${selectedDocIds.has(doc.id) ? "bg-blue-50" : ""} ${missingCounterpart ? "bg-red-50/50" : ""}`} onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
                               <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
@@ -1261,6 +1270,12 @@ export default function GestaoDocumentos() {
                                         <span className="shrink-0 inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-semibold rounded-full border border-orange-300 whitespace-nowrap">
                                           <AlertTriangle className="w-3 h-3" />
                                           Sem DWG
+                                        </span>
+                                      )}
+                                      {revMismatch !== null && (
+                                        <span className="shrink-0 inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-semibold rounded-full border border-amber-300 whitespace-nowrap">
+                                          <AlertTriangle className="w-3 h-3" />
+                                          {selectedSubpasta === "DWG" ? "PDF" : "DWG"} R{String(revMismatch).padStart(2, "0")}
                                         </span>
                                       )}
                                     </span>
