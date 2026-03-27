@@ -5514,4 +5514,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 13:00:00",
   },
+  {
+    version: 816,
+    titulo: "Fix: obras não aparecendo para usuários não-admin no Almoxarifado",
+    descricao: "Corrigido bug onde usuários não-admin vinculados a empresas deletadas (ou sem vínculo em user_companies) não conseguiam ver nenhuma empresa nem obras. getCompaniesForUser agora retorna a primeira empresa ativa como fallback quando todos os vínculos apontam para empresas deletadas. listForAlmoxarifado agora retorna todas as obras ativas da empresa como fallback quando o usuário não tem allowed_obra_ids nem cadastro em obra_funcionarios, garantindo que almoxarifes consigam operar mesmo sem configuração explícita de permissões.",
+    tipo: "bugfix",
+    modulos: "Almoxarifado, Empresas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 14:00:00",
+  },
 ];

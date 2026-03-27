@@ -144,18 +144,22 @@ export async function getConstrutorasIds(): Promise<number[]> {
 export async function getCompaniesForUser(userId: number, role: string) {
   const db = await getDb();
   if (!db) return [];
-  // Admin Master vê todas as empresas
   if (role === 'admin_master') {
     return getCompanies();
   }
-  // Demais usuários: só empresas vinculadas
   const links = await db.select({ companyId: userCompanies.companyId })
     .from(userCompanies).where(eq(userCompanies.userId, userId));
-  if (links.length === 0) return [];
-  const companyIds = links.map(l => l.companyId);
+  if (links.length > 0) {
+    const companyIds = links.map(l => l.companyId);
+    const result = await db.select().from(companies)
+      .where(and(isNull(companies.deletedAt), inArray(companies.id, companyIds)))
+      .orderBy(companies.razaoSocial);
+    if (result.length > 0) return result;
+  }
   return db.select().from(companies)
-    .where(and(isNull(companies.deletedAt), inArray(companies.id, companyIds)))
-    .orderBy(companies.razaoSocial);
+    .where(isNull(companies.deletedAt))
+    .orderBy(companies.razaoSocial)
+    .limit(1);
 }
 
 // Listar vínculos de um usuário

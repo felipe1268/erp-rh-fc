@@ -882,24 +882,29 @@ export const appRouter = router({
           WHERE o.id = ANY(${parsedObras}) AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1
           ORDER BY o.nome
         `);
-        return (obrasResult?.rows ?? obrasResult ?? []) as any[];
+        const rows = (obrasResult?.rows ?? obrasResult ?? []) as any[];
+        if (rows.length > 0) return rows;
       }
 
       const userEmail = ctx.user.email ?? '';
-      if (!userEmail) return [];
-      const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
-      const empRows = empResult?.rows ?? empResult ?? [];
-      if (!empRows.length) return [];
-      const employeeId = (empRows[0] as any).id;
-      const obrasResult = await db.execute(sql`
-        SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
-        FROM obras o
-        INNER JOIN obra_funcionarios of2 ON of2."obraId" = o.id AND of2."employeeId" = ${employeeId} AND of2."isActive" = 1
-        WHERE o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1
-        ORDER BY o.nome
-      `);
-      const obrasRows = obrasResult?.rows ?? obrasResult ?? [];
-      return obrasRows as any[];
+      if (userEmail) {
+        const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
+        const empRows = empResult?.rows ?? empResult ?? [];
+        if (empRows.length > 0) {
+          const employeeId = (empRows[0] as any).id;
+          const obrasResult = await db.execute(sql`
+            SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
+            FROM obras o
+            INNER JOIN obra_funcionarios of2 ON of2."obraId" = o.id AND of2."employeeId" = ${employeeId} AND of2."isActive" = 1
+            WHERE o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1
+            ORDER BY o.nome
+          `);
+          const rows = (obrasResult?.rows ?? obrasResult ?? []) as any[];
+          if (rows.length > 0) return rows;
+        }
+      }
+
+      return getObrasByCompanyActive(input.companyId);
     }),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(({ input }) => getObraById(input.id)),
     create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1),
