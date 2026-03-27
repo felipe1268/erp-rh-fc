@@ -114,7 +114,22 @@ export default function GestaoDocumentos() {
   const { companyId } = useCompany();
   const [location] = useLocation();
 
-  const urlTab = new URLSearchParams(window.location.search).get("tab");
+  const [currentSearch, setCurrentSearch2] = useState(window.location.search);
+  useEffect(() => {
+    const onPop = () => setCurrentSearch2(window.location.search);
+    window.addEventListener("popstate", onPop);
+    const orig = window.history.pushState.bind(window.history);
+    window.history.pushState = function (...args: any[]) {
+      orig(...args);
+      setCurrentSearch2(window.location.search);
+    };
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.history.pushState = orig;
+    };
+  }, []);
+
+  const urlTab = new URLSearchParams(currentSearch).get("tab");
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (urlTab === "configuracoes") return "configuracoes";
@@ -180,12 +195,11 @@ export default function GestaoDocumentos() {
   });
 
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("tab");
-    if (t === "configuracoes") setViewMode("configuracoes");
-    else if (t === "arts") setViewMode("arts");
-    else if (t === "painel") setViewMode("painel");
-    else if (t === "documentos" || t === null) setViewMode("obras");
-  }, [location]);
+    if (urlTab === "configuracoes") setViewMode("configuracoes");
+    else if (urlTab === "arts") setViewMode("arts");
+    else if (urlTab === "painel") setViewMode("painel");
+    else if (urlTab === "documentos" || urlTab === null) setViewMode("obras");
+  }, [urlTab]);
 
   const obrasDisponiveis = trpc.gestaoDocumentos.listObrasDisponiveis.useQuery({ companyId }, { enabled: companyId > 0 });
   const ficheiros = trpc.gestaoDocumentos.listFicheiros.useQuery({ companyId }, { enabled: companyId > 0 });
