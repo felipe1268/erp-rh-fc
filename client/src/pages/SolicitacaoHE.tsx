@@ -296,25 +296,25 @@ export default function SolicitacaoHE() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card className="border-l-4 border-l-yellow-500">
+          <Card className="border-l-4 border-l-yellow-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab("historico"); setFilterStatus("pendente"); setFilterMes(""); }}>
             <CardContent className="p-3 md:p-4">
               <div className="text-xl md:text-2xl font-bold text-yellow-600">{fmtNum(countsQuery.data?.pendentes || 0)}</div>
               <div className="text-[10px] md:text-xs text-muted-foreground">Pendentes</div>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-green-500">
+          <Card className="border-l-4 border-l-green-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab("historico"); setFilterStatus("aprovada"); setFilterMes(""); }}>
             <CardContent className="p-3 md:p-4">
               <div className="text-xl md:text-2xl font-bold text-green-600">{fmtNum(countsQuery.data?.aprovadas || 0)}</div>
               <div className="text-[10px] md:text-xs text-muted-foreground">Aprovadas</div>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-red-500">
+          <Card className="border-l-4 border-l-red-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab("historico"); setFilterStatus("rejeitada"); setFilterMes(""); }}>
             <CardContent className="p-3 md:p-4">
               <div className="text-xl md:text-2xl font-bold text-red-600">{fmtNum(countsQuery.data?.rejeitadas || 0)}</div>
               <div className="text-[10px] md:text-xs text-muted-foreground">Rejeitadas</div>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-blue-500">
+          <Card className="border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setActiveTab("historico"); setFilterStatus("todas"); setFilterMes(""); }}>
             <CardContent className="p-3 md:p-4">
               <div className="text-xl md:text-2xl font-bold text-blue-600">{fmtNum(countsQuery.data?.total || 0)}</div>
               <div className="text-[10px] md:text-xs text-muted-foreground">Total</div>
