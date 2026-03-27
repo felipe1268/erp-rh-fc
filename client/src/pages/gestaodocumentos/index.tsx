@@ -373,9 +373,19 @@ export default function GestaoDocumentos() {
     const currentDocs: any[] = documentos.data || [];
     const allDocs: any[] = allObraDocs.data || [];
 
-    const prepared = validFiles.map(file => {
+    const prepared: typeof pendingFiles = [];
+    for (const file of validFiles) {
       const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
       const { base, rev, revStr } = parseRevision(nameWithoutExt);
+
+      const exactDup = currentDocs.find((d: any) => {
+        const dName = (d.titulo || d.codigo || "").replace(/\.[^.]+$/, "").trim().toLowerCase();
+        return dName === nameWithoutExt.toLowerCase();
+      });
+      if (exactDup) {
+        toast.error(`"${file.name}" já está cadastrado nesta pasta. Use uma revisão diferente.`);
+        continue;
+      }
 
       const existingDoc = rev >= 0
         ? currentDocs.find((d: any) => {
@@ -394,15 +404,19 @@ export default function GestaoDocumentos() {
         if (!autoTitle && existingDoc?.descricao) autoTitle = existingDoc.descricao;
       }
 
-      return {
+      prepared.push({
         file,
         codigo: nameWithoutExt,
         titulo: autoTitle,
         isRevision: !!existingDoc,
         existingDocId: existingDoc?.id,
-      };
-    });
+      });
+    }
 
+    if (prepared.length === 0) {
+      if (batchFileInputRef.current) batchFileInputRef.current.value = "";
+      return;
+    }
     setPendingFiles(prepared);
     setShowUploadConfirm(true);
     if (batchFileInputRef.current) batchFileInputRef.current.value = "";
