@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, Loader2,
-  CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart,
+  CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -690,6 +690,16 @@ export default function Solicitacoes() {
               </div>
 
               {/* Ações */}
+              {["cotacao", "aprovado"].includes(detalhe.status) && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                  <span className="text-xs text-amber-700 font-medium">
+                    {detalhe.status === "aprovado"
+                      ? "Esta solicitação já foi aprovada e possui Ordem de Compra em andamento."
+                      : "Esta solicitação já possui cotação em andamento. Não é possível enviar novamente."}
+                  </span>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
                 {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && (
                   <Button size="sm"

@@ -1393,7 +1393,7 @@ export default function Cotacoes() {
                   </SelectTrigger>
                   <SelectContent className="bg-white border-gray-200">
                     <SelectItem value="none">Nenhuma</SelectItem>
-                    {(scsQ.data ?? []).filter(s => ["pendente", "cotacao"].includes(s.status)).map(s => (
+                    {(scsQ.data ?? []).filter(s => s.status === "pendente").map(s => (
                       <SelectItem key={s.id} value={String(s.id)}>{s.numeroSc}{(s as any).titulo ? ` — ${(s as any).titulo}` : s.departamento ? ` — ${s.departamento}` : ""}</SelectItem>
                     ))}
                   </SelectContent>

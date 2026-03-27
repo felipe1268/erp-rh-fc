@@ -5532,4 +5532,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 15:00:00",
   },
+  {
+    version: 818,
+    titulo: "Bloqueio de cotação duplicada para solicitações",
+    descricao: "Implementado bloqueio no backend e frontend para impedir criação de cotação quando a Solicitação de Compra (SC) já possui cotação ativa ou Ordem de Compra em andamento. No backend, a mutation criarCotacao agora verifica cotações existentes e OCs vinculadas antes de permitir nova cotação. No frontend, a página de Solicitações exibe aviso visual (banner amarelo) quando a SC já tem cotação ou OC. Na página de Cotações, o seletor de SC agora lista apenas SCs com status 'pendente', impedindo seleção de SCs que já estão em processo de cotação.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 15:30:00",
+  },
 ];

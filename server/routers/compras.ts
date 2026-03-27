@@ -969,6 +969,29 @@ Responda APENAS com um objeto JSON no formato:
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+
+      if (input.solicitacaoId) {
+        const existingCots = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao, status: comprasCotacoes.status })
+          .from(comprasCotacoes)
+          .where(and(
+            eq(comprasCotacoes.solicitacaoId, input.solicitacaoId),
+            eq(comprasCotacoes.companyId, input.companyId),
+          ));
+        const activeCots = existingCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
+        if (activeCots.length > 0) {
+          const existingOCs = await db.select({ id: comprasOrdens.id, numeroOc: comprasOrdens.numeroOc })
+            .from(comprasOrdens)
+            .where(and(
+              inArray(comprasOrdens.cotacaoId, activeCots.map(c => c.id)),
+              eq(comprasOrdens.companyId, input.companyId),
+            ));
+          if (existingOCs.length > 0) {
+            throw new Error(`Esta solicitação já possui Ordem de Compra em andamento (${existingOCs.map(o => o.numeroOc).join(", ")}). Não é possível criar nova cotação.`);
+          }
+          throw new Error(`Esta solicitação já possui cotação ativa (${activeCots.map(c => c.numeroCotacao).join(", ")}). Cancele a cotação existente antes de criar uma nova.`);
+        }
+      }
+
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
