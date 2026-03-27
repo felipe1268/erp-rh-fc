@@ -5469,4 +5469,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 00:40:00",
   },
+  {
+    version: 811,
+    titulo: "Painel de Controle expandido: revisoes recentes, vencimentos e alertas",
+    descricao: "Painel reformulado com: feed de atividade recente de revisoes (15 ultimas, com doc, obra e status); alertas de documentos e ARTs vencendo em 30 dias ou ja vencidos (com contagem de dias); KPI de vencidos/vencendo no topo; resumo por obra com nome da obra nos documentos recentes.",
+    tipo: "feature",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 01:00:00",
+  },
 ];

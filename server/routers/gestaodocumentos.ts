@@ -1189,27 +1189,78 @@ export const gestaoDocumentosRouter = router({
       const [totalArts] = await db.select({ count: sql<number>`count(*)::int` }).from(gdArts)
         .where(eq(gdArts.companyId, input.companyId));
 
-      const recentDocs = await db.select({
+      const recentRevisions = await db.select({
+        id: gdRevisoes.id,
+        documentoId: gdRevisoes.documentoId,
+        numero: gdRevisoes.numero,
+        descricao: gdRevisoes.descricao,
+        status: gdRevisoes.status,
+        arquivoNome: gdRevisoes.arquivoNome,
+        criadoEm: gdRevisoes.criadoEm,
+        docTitulo: gdDocumentos.titulo,
+        docDescricao: gdDocumentos.descricao,
+        obraNome: obras.nome,
+      }).from(gdRevisoes)
+        .innerJoin(gdDocumentos, and(eq(gdDocumentos.id, gdRevisoes.documentoId), eq(gdDocumentos.companyId, input.companyId)))
+        .innerJoin(obras, and(eq(obras.id, gdDocumentos.obraId), eq(obras.companyId, input.companyId)))
+        .where(eq(gdRevisoes.companyId, input.companyId))
+        .orderBy(desc(gdRevisoes.criadoEm))
+        .limit(15);
+
+      const now = new Date();
+      const in30days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const expiringArts = await db.select({
+        id: gdArts.id,
+        tipo: gdArts.tipo,
+        numero: gdArts.numero,
+        profissional: gdArts.profissional,
+        dataValidade: gdArts.dataValidade,
+        status: gdArts.status,
+        obraNome: obras.nome,
+      }).from(gdArts)
+        .innerJoin(obras, and(eq(obras.id, gdArts.obraId), eq(obras.companyId, input.companyId)))
+        .where(and(
+          eq(gdArts.companyId, input.companyId),
+          sql`${gdArts.dataValidade} IS NOT NULL`,
+          sql`${gdArts.dataValidade}::date <= ${in30days.toISOString().split("T")[0]}::date`,
+        ))
+        .orderBy(gdArts.dataValidade)
+        .limit(20);
+
+      const expiringDocs = await db.select({
         id: gdDocumentos.id,
         titulo: gdDocumentos.titulo,
         codigo: gdDocumentos.codigo,
         descricao: gdDocumentos.descricao,
+        subpasta: gdDocumentos.subpasta,
+        dataValidade: gdDocumentos.dataValidade,
+        status: gdDocumentos.status,
+        obraNome: obras.nome,
+      }).from(gdDocumentos)
+        .innerJoin(obras, and(eq(obras.id, gdDocumentos.obraId), eq(obras.companyId, input.companyId)))
+        .where(and(
+          eq(gdDocumentos.companyId, input.companyId),
+          isNull(gdDocumentos.deletedAt),
+          sql`${gdDocumentos.dataValidade} IS NOT NULL`,
+          sql`${gdDocumentos.dataValidade}::date <= ${in30days.toISOString().split("T")[0]}::date`,
+        ))
+        .orderBy(gdDocumentos.dataValidade)
+        .limit(20);
+
+      const recentDocs = await db.select({
+        id: gdDocumentos.id,
+        titulo: gdDocumentos.titulo,
+        descricao: gdDocumentos.descricao,
         status: gdDocumentos.status,
         subpasta: gdDocumentos.subpasta,
         revisaoAtual: gdDocumentos.revisaoAtual,
-        criadoEm: gdDocumentos.criadoEm,
         atualizadoEm: gdDocumentos.atualizadoEm,
+        obraNome: obras.nome,
       }).from(gdDocumentos)
+        .innerJoin(obras, and(eq(obras.id, gdDocumentos.obraId), eq(obras.companyId, input.companyId)))
         .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
         .orderBy(desc(gdDocumentos.atualizadoEm))
         .limit(10);
-
-      const discCounts = await db.select({
-        disciplinaId: gdDocumentos.disciplinaId,
-        count: sql<number>`count(*)::int`,
-      }).from(gdDocumentos)
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt), sql`${gdDocumentos.disciplinaId} IS NOT NULL`))
-        .groupBy(gdDocumentos.disciplinaId);
 
       return {
         totalDocs: totalDocs?.count || 0,
@@ -1218,7 +1269,9 @@ export const gestaoDocumentosRouter = router({
         statusCounts: statusCounts as { status: string; count: number }[],
         subpastaCounts: subpastaCounts as { subpasta: string; count: number }[],
         obraCounts: obraCounts as { obraId: number; obraNome: string; count: number }[],
-        discCounts: discCounts as { disciplinaId: number; count: number }[],
+        recentRevisions,
+        expiringArts,
+        expiringDocs,
         recentDocs,
       };
     }),

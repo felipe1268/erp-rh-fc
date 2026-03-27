@@ -901,7 +901,7 @@ export default function GestaoDocumentos() {
         {viewMode === "painel" ? (
           <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6">
             <div className="flex items-center justify-between">
-              <h1 className="text-xl font-bold text-gray-900">Painel — Proj./Doc. Tecnicos</h1>
+              <h1 className="text-xl font-bold text-gray-900">Painel de Controle</h1>
               <Button variant="outline" size="sm" onClick={() => setViewMode("obras")} className="text-gray-600">
                 <FolderOpen className="w-4 h-4 mr-1" /> Ir para Documentos
               </Button>
@@ -909,42 +909,130 @@ export default function GestaoDocumentos() {
 
             {dashStats.isLoading ? (
               <div className="flex items-center justify-center py-20 text-gray-400">Carregando...</div>
+            ) : dashStats.isError ? (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
+                <p>Erro ao carregar dados do painel.</p>
+                <Button variant="outline" size="sm" onClick={() => dashStats.refetch()}>Tentar novamente</Button>
+              </div>
             ) : dashStats.data ? (() => {
               const s = dashStats.data;
-              const statusMap: Record<string, { label: string; color: string }> = {
+              const stMap: Record<string, { label: string; color: string }> = {
                 em_elaboracao: { label: "Em Elaboracao", color: "bg-blue-100 text-blue-700" },
                 em_revisao: { label: "Em Revisao", color: "bg-amber-100 text-amber-700" },
                 aprovado: { label: "Aprovado", color: "bg-green-100 text-green-700" },
                 reprovado: { label: "Reprovado", color: "bg-red-100 text-red-700" },
                 cancelado: { label: "Cancelado", color: "bg-gray-100 text-gray-600" },
               };
+              const now = new Date();
+              const expArts = (s.expiringArts || []) as any[];
+              const expDocs = (s.expiringDocs || []) as any[];
+              const allExpiring = [
+                ...expArts.map((a: any) => ({ ...a, _type: "art" as const, _label: `${a.tipo} ${a.numero}`, _sub: a.profissional, _obra: a.obraNome, _date: a.dataValidade })),
+                ...expDocs.map((d: any) => ({ ...d, _type: "doc" as const, _label: d.titulo || d.codigo, _sub: d.descricao || d.subpasta, _obra: d.obraNome, _date: d.dataValidade })),
+              ].sort((a, b) => new Date(a._date).getTime() - new Date(b._date).getTime());
+              const expiredCount = allExpiring.filter(e => new Date(e._date) < now).length;
+              const expiringCount = allExpiring.length - expiredCount;
+
               return (
                 <>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Documentos</p>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Total Documentos</p>
                       <p className="text-3xl font-bold text-gray-900">{s.totalDocs}</p>
                     </div>
                     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Revisoes Registradas</p>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Revisoes</p>
                       <p className="text-3xl font-bold text-indigo-600">{s.totalRevisoes}</p>
                     </div>
                     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">ARTs / RRTs</p>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">ARTs / RRTs</p>
                       <p className="text-3xl font-bold text-emerald-600">{s.totalArts}</p>
                     </div>
                     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Obras com Docs</p>
-                      <p className="text-3xl font-bold text-amber-600">{s.obraCounts.length}</p>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Obras</p>
+                      <p className="text-3xl font-bold text-sky-600">{s.obraCounts.length}</p>
+                    </div>
+                    <div className={`border rounded-xl p-5 shadow-sm ${expiredCount > 0 ? "bg-red-50 border-red-200" : expiringCount > 0 ? "bg-amber-50 border-amber-200" : "bg-white border-gray-200"}`}>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Vencendo / Vencidos</p>
+                      <p className={`text-3xl font-bold ${expiredCount > 0 ? "text-red-600" : expiringCount > 0 ? "text-amber-600" : "text-gray-400"}`}>{allExpiring.length}</p>
                     </div>
                   </div>
+
+                  {allExpiring.length > 0 && (
+                    <div className={`border rounded-xl p-5 shadow-sm ${expiredCount > 0 ? "bg-red-50/50 border-red-200" : "bg-amber-50/50 border-amber-200"}`}>
+                      <h3 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                        <AlertTriangle className={`w-4 h-4 ${expiredCount > 0 ? "text-red-500" : "text-amber-500"}`} />
+                        Documentos com Vencimento Proximo ou Vencidos
+                      </h3>
+                      <p className="text-xs text-gray-500 mb-3">Atencao: documentos vencidos podem causar paralizacao de obras.</p>
+                      <div className="divide-y divide-gray-200/50">
+                        {allExpiring.map((item: any, idx: number) => {
+                          const dt = new Date(item._date);
+                          const isExpired = dt < now;
+                          const daysLeft = Math.ceil((dt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                          return (
+                            <div key={`${item._type}-${item.id}-${idx}`} className="flex items-center justify-between py-2.5">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item._type === "art" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                                    {item._type === "art" ? item.tipo || "ART" : item.subpasta || "DOC"}
+                                  </span>
+                                  <span className="text-sm text-gray-800 font-medium truncate">{item._label}</span>
+                                </div>
+                                <p className="text-[11px] text-gray-500 truncate mt-0.5">{item._obra} — {item._sub}</p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 ml-4">
+                                <span className="text-xs text-gray-500">{dt.toLocaleDateString("pt-BR")}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isExpired ? "bg-red-100 text-red-700 border border-red-300" : daysLeft <= 7 ? "bg-amber-100 text-amber-700 border border-amber-300" : "bg-yellow-50 text-yellow-700 border border-yellow-300"}`}>
+                                  {isExpired ? `Vencido ha ${Math.abs(daysLeft)}d` : `${daysLeft}d restante${daysLeft !== 1 ? "s" : ""}`}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {(s.recentRevisions || []).length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <History className="w-4 h-4 text-indigo-500" />
+                        Atividade Recente de Revisoes
+                      </h3>
+                      <div className="divide-y divide-gray-100">
+                        {(s.recentRevisions as any[]).map((rv: any) => (
+                          <div key={rv.id} className="flex items-center justify-between py-2.5">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[10px] font-bold">R{rv.numero}</span>
+                                <span className="text-sm text-gray-800 font-mono truncate">{rv.docTitulo}</span>
+                              </div>
+                              <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                                {rv.obraNome}
+                                {rv.descricao && <> — {rv.descricao}</>}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${rv.status === "aprovada" ? "bg-green-100 text-green-700" : rv.status === "rejeitada" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
+                                {rv.status === "aprovada" ? "Aprovada" : rv.status === "rejeitada" ? "Rejeitada" : "Pendente"}
+                              </span>
+                              <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                                {rv.criadoEm ? new Date(rv.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
                       <h3 className="text-sm font-semibold text-gray-700 mb-3">Por Status</h3>
                       <div className="space-y-2">
                         {s.statusCounts.map((sc) => {
-                          const sm = statusMap[sc.status || "em_elaboracao"] || { label: sc.status, color: "bg-gray-100 text-gray-600" };
+                          const sm = stMap[sc.status || "em_elaboracao"] || { label: sc.status, color: "bg-gray-100 text-gray-600" };
                           const pct = s.totalDocs > 0 ? Math.round((sc.count / s.totalDocs) * 100) : 0;
                           return (
                             <div key={sc.status} className="flex items-center gap-3">
@@ -960,33 +1048,13 @@ export default function GestaoDocumentos() {
                     </div>
 
                     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Por Tipo de Arquivo</h3>
-                      <div className="space-y-2">
-                        {s.subpastaCounts.map((sp) => {
-                          const pct = s.totalDocs > 0 ? Math.round((sp.count / s.totalDocs) * 100) : 0;
-                          return (
-                            <div key={sp.subpasta} className="flex items-center gap-3">
-                              <span className="text-xs font-mono text-gray-600 w-20">{sp.subpasta || "—"}</span>
-                              <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                                <div className="h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
-                              </div>
-                              <span className="text-sm font-medium text-gray-700 w-12 text-right">{sp.count}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {s.obraCounts.length > 0 && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
                       <h3 className="text-sm font-semibold text-gray-700 mb-3">Documentos por Obra</h3>
                       <div className="space-y-2">
                         {s.obraCounts.sort((a, b) => b.count - a.count).map((oc) => {
                           const pct = s.totalDocs > 0 ? Math.round((oc.count / s.totalDocs) * 100) : 0;
                           return (
                             <div key={oc.obraId} className="flex items-center gap-3">
-                              <span className="text-xs text-gray-600 w-48 truncate">{oc.obraNome}</span>
+                              <span className="text-xs text-gray-600 w-40 truncate">{oc.obraNome}</span>
                               <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
                                 <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
                               </div>
@@ -996,19 +1064,19 @@ export default function GestaoDocumentos() {
                         })}
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {s.recentDocs.length > 0 && (
+                  {(s.recentDocs || []).length > 0 && (
                     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
                       <h3 className="text-sm font-semibold text-gray-700 mb-3">Ultimos Documentos Atualizados</h3>
                       <div className="divide-y divide-gray-100">
-                        {s.recentDocs.map((rd: any) => {
-                          const sm = statusMap[rd.status || "em_elaboracao"] || statusMap.em_elaboracao;
+                        {(s.recentDocs as any[]).map((rd: any) => {
+                          const sm = stMap[rd.status || "em_elaboracao"] || stMap.em_elaboracao;
                           return (
                             <div key={rd.id} className="flex items-center justify-between py-2.5">
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-mono text-gray-700 truncate">{rd.titulo || rd.codigo}</p>
-                                {rd.descricao && <p className="text-[11px] text-gray-500 truncate">{rd.descricao}</p>}
+                                <p className="text-sm font-mono text-gray-700 truncate">{rd.titulo}</p>
+                                <p className="text-[11px] text-gray-500 truncate">{rd.obraNome}{rd.descricao ? ` — ${rd.descricao}` : ""}</p>
                               </div>
                               <div className="flex items-center gap-3 shrink-0 ml-4">
                                 <span className="text-[10px] text-gray-400 font-mono">{rd.subpasta}</span>
