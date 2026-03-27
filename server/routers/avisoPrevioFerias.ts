@@ -2129,7 +2129,7 @@ export const avisoPrevioFeriasRouter = router({
         .from(employees)
         .where(and(
           companyFilter(employees.companyId, input),
-          eq(employees.status, 'Ativo'),
+          sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
         ));
 
