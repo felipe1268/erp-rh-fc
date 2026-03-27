@@ -856,7 +856,69 @@ Responda APENAS com um objeto JSON no formato:
         aprovadoEm: input.aprovacaoStatus !== "aguardando" ? new Date().toISOString() : null,
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasSolicitacoes.id, input.id));
-      return { ok: true };
+
+      let cotacaoCriada: any = null;
+
+      if (input.aprovacaoStatus === "aprovada") {
+        const [sc] = await db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
+        if (sc) {
+          const existingCots = await db.select({ id: comprasCotacoes.id, status: comprasCotacoes.status })
+            .from(comprasCotacoes)
+            .where(and(
+              eq(comprasCotacoes.solicitacaoId, input.id),
+              eq(comprasCotacoes.companyId, sc.companyId),
+            ));
+          const activeCots = existingCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
+
+          if (activeCots.length === 0) {
+            const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+
+            const count = await db.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, sc.companyId));
+            const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+            const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
+
+            const itensMapped = scItens.map(it => ({
+              descricao: it.descricao,
+              unidade: it.unidade ?? "un",
+              quantidade: n(it.quantidade),
+              precoUnitario: 0,
+              solicitacaoItemId: it.id,
+            }));
+            const totalGeral = 0;
+
+            const [cot] = await db.insert(comprasCotacoes).values({
+              companyId: sc.companyId,
+              numeroCotacao,
+              descricao: sc.titulo || sc.departamento || "Cotação automática",
+              prioridade: sc.prioridade ?? "normal",
+              obraId: sc.obraId ?? null,
+              solicitacaoId: sc.id,
+              total: String(totalGeral.toFixed(2)),
+              status: "pendente",
+            }).returning();
+
+            if (itensMapped.length > 0) {
+              await db.insert(comprasCotacoesItens).values(
+                itensMapped.map(it => ({
+                  cotacaoId: cot.id,
+                  solicitacaoItemId: it.solicitacaoItemId ?? null,
+                  descricao: it.descricao,
+                  unidade: it.unidade,
+                  quantidade: String(it.quantidade),
+                  precoUnitario: "0",
+                  descontoPct: "0",
+                  total: "0",
+                }))
+              );
+            }
+
+            await db.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.id));
+            cotacaoCriada = { id: cot.id, numeroCotacao };
+          }
+        }
+      }
+
+      return { ok: true, cotacaoCriada };
     }),
 
   registrarRecebimentoItem: protectedProcedure

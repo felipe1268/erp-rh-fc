@@ -29,8 +29,10 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 
 const APROV_CFG: Record<string, { label: string; icon: JSX.Element; cls: string }> = {
   aguardando: { label: "Aguardando", icon: <Clock className="h-3 w-3" />,        cls: "text-amber-600" },
-  aprovado:   { label: "Aprovado",   icon: <CheckCircle2 className="h-3 w-3" />, cls: "text-emerald-600" },
-  recusado:   { label: "Recusado",   icon: <XCircle className="h-3 w-3" />,      cls: "text-red-600" },
+  aprovado:   { label: "Aprovada",   icon: <CheckCircle2 className="h-3 w-3" />, cls: "text-emerald-600" },
+  aprovada:   { label: "Aprovada",   icon: <CheckCircle2 className="h-3 w-3" />, cls: "text-emerald-600" },
+  recusado:   { label: "Recusada",   icon: <XCircle className="h-3 w-3" />,      cls: "text-red-600" },
+  recusada:   { label: "Recusada",   icon: <XCircle className="h-3 w-3" />,      cls: "text-red-600" },
 };
 
 const PRIORIDADES = ["baixa", "normal", "alta", "urgente"];
@@ -90,7 +92,14 @@ export default function Solicitacoes() {
     onError: (e) => toast.error(e.message),
   });
   const aprovar = trpc.compras.aprovarSolicitacao.useMutation({
-    onSuccess: () => { toast.success("Aprovação registrada!"); q.refetch(); detalheQ.refetch(); },
+    onSuccess: (data) => {
+      if (data.cotacaoCriada) {
+        toast.success(`SC aprovada! Cotação ${data.cotacaoCriada.numeroCotacao} criada automaticamente.`);
+      } else {
+        toast.success("Status de aprovação atualizado!");
+      }
+      q.refetch(); detalheQ.refetch();
+    },
     onError: (e) => toast.error(e.message),
   });
   const receber = trpc.compras.registrarRecebimentoItem.useMutation({
@@ -628,8 +637,8 @@ export default function Solicitacoes() {
                 <div className="flex gap-2">
                   {[
                     { key: "aguardando", label: "Aguardando",    cls: "border-amber-300 text-amber-700 hover:bg-amber-50" },
-                    { key: "aprovado",   label: "Aprovar",        cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" },
-                    { key: "recusado",   label: "Recusar",        cls: "border-red-300 text-red-700 hover:bg-red-50" },
+                    { key: "aprovada",   label: "Aprovar",        cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" },
+                    { key: "recusada",   label: "Recusar",        cls: "border-red-300 text-red-700 hover:bg-red-50" },
                   ].filter(a => a.key !== detalhe.aprovacaoStatus).map(a => (
                     <Button key={a.key} size="sm" variant="outline"
                       onClick={() => aprovar.mutate({ id: detalhe.id, aprovacaoStatus: a.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined })}
