@@ -12,10 +12,11 @@ import {
   comprasCotacoes, comprasCotacoesItens,
   comprasCotacaoFornecedores, comprasCotacaoRespostas,
   comprasCondicoesPagamento,
-  comprasOrdens, comprasOrdensItens,
+  comprasOrdens, comprasOrdensItens, comprasEntregasProgramadas,
   comprasRiscoDebitos,
   obras,
   orcamentos, orcamentoItens,
+  composicaoInsumos, composicoesCatalogo, insumosCatalogo,
   bdiIndiretos, orcamentoBdi,
   planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades,
   financialEntries, financialAccounts,
@@ -800,6 +801,12 @@ Responda APENAS com um objeto JSON no formato:
         observacoes: z.string().optional(),
         orcamentoItemId: z.number().optional(),
         eapCodigo: z.string().optional(),
+        insumoCodigo: z.string().optional(),
+        composicaoCodigo: z.string().optional(),
+        precoMeta: z.number().optional(),
+        quantidadeServico: z.number().optional(),
+        coeficiente: z.number().optional(),
+        origemEap: z.boolean().optional(),
       })),
     }))
     .mutation(async ({ input }) => {
@@ -832,6 +839,12 @@ Responda APENAS com um objeto JSON no formato:
             statusItem: "pendente",
             orcamentoItemId: it.orcamentoItemId ?? null,
             eapCodigo: it.eapCodigo ?? null,
+            insumoCodigo: it.insumoCodigo ?? null,
+            composicaoCodigo: it.composicaoCodigo ?? null,
+            precoMeta: it.precoMeta ? String(it.precoMeta) : null,
+            quantidadeServico: it.quantidadeServico ? String(it.quantidadeServico) : null,
+            coeficiente: it.coeficiente ? String(it.coeficiente) : null,
+            origemEap: it.origemEap ?? false,
           }))
         );
       }
@@ -1218,6 +1231,11 @@ Responda APENAS com um objeto JSON no formato:
         scItens = await db.select({
           id: comprasSolicitacoesItens.id,
           orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+          eapCodigo: comprasSolicitacoesItens.eapCodigo,
+          insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+          composicaoCodigo: comprasSolicitacoesItens.composicaoCodigo,
+          origemEap: comprasSolicitacoesItens.origemEap,
+          solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
         }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
       }
       const orcItemIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
@@ -1269,7 +1287,18 @@ Responda APENAS com um objeto JSON no formato:
       for (const a of ancestorItens) ancestorMap[`${a.orcamentoId}:${a.eapCodigo}`] = a.descricao;
 
       const scItemToOrcItem: Record<number, number> = {};
-      for (const s of scItens) if (s.orcamentoItemId) scItemToOrcItem[s.id] = s.orcamentoItemId;
+      const scItemToTraceability: Record<number, { eapCodigo?: string; insumoCodigo?: string; composicaoCodigo?: string; origemEap?: boolean; solicitacaoId?: number }> = {};
+      for (const s of scItens) {
+        if (s.orcamentoItemId) scItemToOrcItem[s.id] = s.orcamentoItemId;
+        scItemToTraceability[s.id] = { eapCodigo: s.eapCodigo, insumoCodigo: s.insumoCodigo, composicaoCodigo: s.composicaoCodigo, origemEap: s.origemEap, solicitacaoId: s.solicitacaoId };
+      }
+
+      const scIds = [...new Set(scItens.map(s => s.solicitacaoId).filter(Boolean))] as number[];
+      let scMap: Record<number, string> = {};
+      if (scIds.length > 0) {
+        const scs = await db.select({ id: comprasSolicitacoes.id, numeroSc: comprasSolicitacoes.numeroSc }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.id, scIds));
+        for (const sc of scs) scMap[sc.id] = sc.numeroSc;
+      }
 
       // Mapa: orcamentoItemId → { metaUnitario, eapPath }
       const orcItemToMeta: Record<number, number> = {};
@@ -1299,7 +1328,9 @@ Responda APENAS com um objeto JSON no formato:
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
         const metaUnitario = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
         const eapPath = orcId ? (orcItemToPath[orcId] ?? "") : "";
-        return { ...it, metaUnitario, eapPath };
+        const trace = it.solicitacaoItemId ? scItemToTraceability[it.solicitacaoItemId] : undefined;
+        const scNumero = trace?.solicitacaoId ? (scMap[trace.solicitacaoId] ?? "") : "";
+        return { ...it, metaUnitario, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: trace?.insumoCodigo ?? "" };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
@@ -2326,6 +2357,125 @@ Responda APENAS com um objeto JSON no formato:
   // EAP PARA SC — retorna itens do orçamento + prazo do planejamento
   // SEM custos/metas (blind quotation até equalização)
   // ══════════════════════════════════════════════════════════════
+  getInsumosComposicao: protectedProcedure
+    .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const insumos = await db.select({
+        insumoCodigo: composicaoInsumos.insumoCodigo,
+        insumoDescricao: composicaoInsumos.insumoDescricao,
+        unidade: composicaoInsumos.unidade,
+        quantidade: composicaoInsumos.quantidade,
+        precoUnitario: composicaoInsumos.precoUnitario,
+        custoUnitTotal: composicaoInsumos.custoUnitTotal,
+        alocacaoMat: composicaoInsumos.alocacaoMat,
+        alocacaoMdo: composicaoInsumos.alocacaoMdo,
+      }).from(composicaoInsumos)
+        .where(and(
+          eq(composicaoInsumos.companyId, input.companyId),
+          eq(composicaoInsumos.composicaoCodigo, input.servicoCodigo),
+        ))
+        .orderBy(asc(composicaoInsumos.insumoDescricao));
+
+      const materiaisOnly = insumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+
+      return materiaisOnly.map(i => ({
+        insumoCodigo: i.insumoCodigo,
+        descricao: i.insumoDescricao || "",
+        unidade: i.unidade || "un",
+        coeficiente: n(i.quantidade),
+        precoUnitario: n(i.precoUnitario),
+        custoUnitTotal: n(i.custoUnitTotal),
+      }));
+    }),
+
+  getSaldoOrcamentario: protectedProcedure
+    .input(z.object({ companyId: z.number(), orcamentoItemId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      const [orcItem] = await db.select({
+        id: orcamentoItens.id,
+        eapCodigo: orcamentoItens.eapCodigo,
+        servicoCodigo: orcamentoItens.servicoCodigo,
+        descricao: orcamentoItens.descricao,
+        unidade: orcamentoItens.unidade,
+        quantidade: orcamentoItens.quantidade,
+        metaUnitTotal: orcamentoItens.metaUnitTotal,
+        metaTotal: orcamentoItens.metaTotal,
+      }).from(orcamentoItens)
+        .where(and(eq(orcamentoItens.id, input.orcamentoItemId), eq(orcamentoItens.companyId, input.companyId)));
+
+      if (!orcItem) return null;
+
+      const qtdOrcada = n(orcItem.quantidade);
+
+      const scItens = await db.select({
+        quantidade: comprasSolicitacoesItens.quantidade,
+        quantidadeServico: comprasSolicitacoesItens.quantidadeServico,
+        statusItem: comprasSolicitacoesItens.statusItem,
+      }).from(comprasSolicitacoesItens)
+        .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
+        .where(and(
+          eq(comprasSolicitacoesItens.orcamentoItemId, input.orcamentoItemId),
+          eq(comprasSolicitacoes.companyId, input.companyId),
+          sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`,
+        ));
+
+      const qtdJaSolicitada = scItens.reduce((acc, it) => acc + n(it.quantidadeServico), 0);
+      const saldoDisponivel = qtdOrcada - qtdJaSolicitada;
+
+      return {
+        orcamentoItemId: orcItem.id,
+        eapCodigo: orcItem.eapCodigo,
+        descricao: orcItem.descricao,
+        unidade: orcItem.unidade,
+        qtdOrcada,
+        qtdJaSolicitada,
+        saldoDisponivel,
+        metaUnitTotal: n(orcItem.metaUnitTotal),
+        metaTotal: n(orcItem.metaTotal),
+      };
+    }),
+
+  getHistoricoPrecos: protectedProcedure
+    .input(z.object({ companyId: z.number(), insumoCodigo: z.string().optional(), descricao: z.string().optional(), descricaoInsumo: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      const conditions = [eq(comprasOrdensItens.id, comprasOrdensItens.id)];
+
+      const rows = await db.select({
+        descricao: comprasOrdensItens.descricao,
+        unidade: comprasOrdensItens.unidade,
+        precoUnitario: comprasOrdensItens.precoUnitario,
+        quantidade: comprasOrdensItens.quantidade,
+        fornecedorNome: comprasOrdens.fornecedorNome,
+        dataOc: comprasOrdens.criadoEm,
+        numeroOc: comprasOrdens.numeroOc,
+      }).from(comprasOrdensItens)
+        .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          (input.descricaoInsumo || input.descricao) ? ilike(comprasOrdensItens.descricao, `%${input.descricaoInsumo || input.descricao}%`) : undefined,
+        ))
+        .orderBy(desc(comprasOrdens.criadoEm))
+        .limit(20);
+
+      return rows.map(r => ({
+        descricao: r.descricao,
+        unidade: r.unidade,
+        precoUnitario: n(r.precoUnitario),
+        quantidade: n(r.quantidade),
+        fornecedor: r.fornecedorNome,
+        fornecedorNome: r.fornecedorNome,
+        data: r.dataOc,
+        dataOc: r.dataOc,
+        numeroCotacao: r.numeroOc,
+        numeroOc: r.numeroOc,
+      }));
+    }),
+
   getEapParaObra: protectedProcedure
     .input(z.object({ obraId: z.number(), companyId: z.number() }))
     .query(async ({ input }) => {
@@ -2353,6 +2503,7 @@ Responda APENAS com um objeto JSON no formato:
         eapCodigo: orcamentoItens.eapCodigo,
         nivel: orcamentoItens.nivel,
         tipo: orcamentoItens.tipo,
+        servicoCodigo: orcamentoItens.servicoCodigo,
         descricao: orcamentoItens.descricao,
         unidade: orcamentoItens.unidade,
         quantidade: orcamentoItens.quantidade,
@@ -2443,5 +2594,70 @@ Responda APENAS com um objeto JSON no formato:
       const db = await getDb();
       await db.delete(comprasCondicoesPagamento).where(eq(comprasCondicoesPagamento.id, input.id));
       return { ok: true };
+    }),
+
+  getEntregasProgramadas: protectedProcedure
+    .input(z.object({ ordemItemId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [item] = await db.select({ id: comprasOrdensItens.id, ordemId: comprasOrdensItens.ordemId }).from(comprasOrdensItens).where(eq(comprasOrdensItens.id, input.ordemItemId));
+      if (!item) return [];
+      const [ordem] = await db.select({ companyId: comprasOrdens.companyId }).from(comprasOrdens).where(eq(comprasOrdens.id, item.ordemId));
+      if (!ordem || ordem.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      return db.select().from(comprasEntregasProgramadas)
+        .where(eq(comprasEntregasProgramadas.ordemItemId, input.ordemItemId))
+        .orderBy(asc(comprasEntregasProgramadas.dataEntrega));
+    }),
+
+  salvarEntregasProgramadas: protectedProcedure
+    .input(z.object({
+      ordemItemId: z.number(),
+      companyId: z.number(),
+      entregas: z.array(z.object({
+        id: z.number().optional(),
+        dataEntrega: z.string(),
+        quantidade: z.number(),
+        observacoes: z.string().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [item] = await db.select({ id: comprasOrdensItens.id, ordemId: comprasOrdensItens.ordemId }).from(comprasOrdensItens).where(eq(comprasOrdensItens.id, input.ordemItemId));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      const [ordem] = await db.select({ companyId: comprasOrdens.companyId }).from(comprasOrdens).where(eq(comprasOrdens.id, item.ordemId));
+      if (!ordem || ordem.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      await db.delete(comprasEntregasProgramadas).where(eq(comprasEntregasProgramadas.ordemItemId, input.ordemItemId));
+      if (input.entregas.length > 0) {
+        await db.insert(comprasEntregasProgramadas).values(
+          input.entregas.map(e => ({
+            ordemItemId: input.ordemItemId,
+            dataEntrega: e.dataEntrega,
+            quantidade: String(e.quantidade),
+            observacoes: e.observacoes || null,
+            status: "pendente",
+          }))
+        );
+      }
+      return { ok: true };
+    }),
+
+  registrarEntregaProgramada: protectedProcedure
+    .input(z.object({ id: z.number(), quantidadeEntregue: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [entrega] = await db.select().from(comprasEntregasProgramadas).where(eq(comprasEntregasProgramadas.id, input.id));
+      if (!entrega) throw new TRPCError({ code: "NOT_FOUND" });
+      const [item] = await db.select({ ordemId: comprasOrdensItens.ordemId }).from(comprasOrdensItens).where(eq(comprasOrdensItens.id, entrega.ordemItemId));
+      if (item) {
+        const [ordem] = await db.select({ companyId: comprasOrdens.companyId }).from(comprasOrdens).where(eq(comprasOrdens.id, item.ordemId));
+        if (!ordem || ordem.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      }
+      const novaQtd = n(entrega.quantidadeEntregue) + input.quantidadeEntregue;
+      const qtdProg = n(entrega.quantidade);
+      const novoStatus = novaQtd >= qtdProg ? "entregue" : "parcial";
+      await db.update(comprasEntregasProgramadas)
+        .set({ quantidadeEntregue: String(novaQtd), status: novoStatus })
+        .where(eq(comprasEntregasProgramadas.id, input.id));
+      return { ok: true, novoStatus };
     }),
 });

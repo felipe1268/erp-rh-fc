@@ -14,8 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
-  Plus, Search, Trash2, ClipboardList, ChevronRight, Loader2,
-  CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle,
+  Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
+  CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -41,7 +41,12 @@ const PRIORIDADE_COR: Record<string, string> = {
 };
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
 
-interface ItemForm { descricao: string; unidade: string; quantidade: string; observacoes: string; orcamentoItemId?: number; eapCodigo?: string; }
+interface ItemForm {
+  descricao: string; unidade: string; quantidade: string; observacoes: string;
+  orcamentoItemId?: number; eapCodigo?: string;
+  insumoCodigo?: string; composicaoCodigo?: string; precoMeta?: number;
+  quantidadeServico?: number; coeficiente?: number; origemEap?: boolean;
+}
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", observacoes: "" });
 
 function StatusBadge({ status }: { status: string }) {
@@ -75,6 +80,12 @@ export default function Solicitacoes() {
   const [recebQtd, setRecebQtd] = useState<Record<number, string>>({});
   const [selectedEapIds, setSelectedEapIds] = useState<Set<number>>(new Set());
   const [eapSearch, setEapSearch] = useState("");
+  const [modoSC, setModoSC] = useState<"eap" | "manual">("eap");
+  const [eapExpanded, setEapExpanded] = useState<number | null>(null);
+  const [eapQtdServico, setEapQtdServico] = useState<Record<number, string>>({});
+  const [eapInsumos, setEapInsumos] = useState<Record<number, any[]>>({});
+  const [loadingInsumos, setLoadingInsumos] = useState<number | null>(null);
+  const [saldoData, setSaldoData] = useState<Record<number, any>>({});
 
   const q = trpc.compras.listarSolicitacoes.useQuery(
     { companyId, busca: busca || undefined, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -143,12 +154,69 @@ export default function Solicitacoes() {
     });
   }
 
+  const trpcCtx = trpc.useUtils();
+
   function resetForm() {
     setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
     setObraSearch(""); setObraOpen(false);
     setItens([newItem()]);
     setSelectedEapIds(new Set());
-    setEapSearch("");
+    setEapSearch(""); setModoSC("eap");
+    setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({});
+  }
+
+  async function handleEapExpand(it: any) {
+    if (eapExpanded === it.id) { setEapExpanded(null); return; }
+    setEapExpanded(it.id);
+
+    if (!eapInsumos[it.id] && it.servicoCodigo) {
+      setLoadingInsumos(it.id);
+      try {
+        const insumos = await trpcCtx.compras.getInsumosComposicao.fetch({ companyId, servicoCodigo: it.servicoCodigo });
+        setEapInsumos(prev => ({ ...prev, [it.id]: insumos }));
+      } catch { setEapInsumos(prev => ({ ...prev, [it.id]: [] })); }
+      setLoadingInsumos(null);
+    }
+
+    if (!saldoData[it.id]) {
+      try {
+        const saldo = await trpcCtx.compras.getSaldoOrcamentario.fetch({ companyId, orcamentoItemId: it.id, obraId: parseInt(form.obraId) });
+        if (saldo) setSaldoData(prev => ({ ...prev, [it.id]: saldo }));
+      } catch {}
+    }
+  }
+
+  function handleEapQtdChange(orcItemId: number, qtdStr: string, eapItem: any) {
+    setEapQtdServico(prev => ({ ...prev, [orcItemId]: qtdStr }));
+    const qtdServ = parseFloat(qtdStr) || 0;
+    const insumosList = eapInsumos[orcItemId] || [];
+
+    if (qtdServ > 0 && insumosList.length > 0) {
+      const newItems: ItemForm[] = insumosList.map(ins => ({
+        descricao: ins.descricao,
+        unidade: ins.unidade,
+        quantidade: String(Math.ceil((qtdServ * ins.coeficiente) * 1000) / 1000),
+        observacoes: "",
+        orcamentoItemId: orcItemId,
+        eapCodigo: eapItem.eapCodigo,
+        insumoCodigo: ins.insumoCodigo,
+        composicaoCodigo: eapItem.servicoCodigo,
+        precoMeta: ins.precoUnitario,
+        quantidadeServico: qtdServ,
+        coeficiente: ins.coeficiente,
+        origemEap: true,
+      }));
+
+      setItens(prev => {
+        const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
+        const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
+        return [...semVazios, ...newItems];
+      });
+      setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
+    } else {
+      setItens(prev => prev.filter(x => x.orcamentoItemId !== orcItemId));
+      setSelectedEapIds(prev => { const n = new Set(prev); n.delete(orcItemId); return n; });
+    }
   }
 
   function toggleEapItem(it: any) {
@@ -157,6 +225,7 @@ export default function Solicitacoes() {
       if (next.has(it.id)) {
         next.delete(it.id);
         setItens(p => p.filter(x => x.orcamentoItemId !== it.id));
+        setEapQtdServico(prev => { const n = { ...prev }; delete n[it.id]; return n; });
       } else {
         next.add(it.id);
         const novoItem: ItemForm = {
@@ -181,6 +250,32 @@ export default function Solicitacoes() {
     if (!form.obraId || form.obraId === "none") return toast.error("Selecione a Obra (centro de custo) para esta solicitação.");
     const validos = itens.filter(i => i.descricao.trim());
     if (validos.length === 0) return toast.error("Adicione pelo menos um item.");
+
+    const consolidados = new Map<string, ItemForm>();
+    for (const it of validos) {
+      const key = it.insumoCodigo || it.descricao;
+      if (consolidados.has(key)) {
+        const prev = consolidados.get(key)!;
+        prev.quantidade = String(parseFloat(prev.quantidade) + parseFloat(it.quantidade));
+      } else {
+        consolidados.set(key, { ...it });
+      }
+    }
+
+    const saldoProblems: string[] = [];
+    for (const [orcId, saldo] of Object.entries(saldoData)) {
+      const qtdServ = parseFloat(eapQtdServico[parseInt(orcId)] || "0");
+      if (qtdServ > 0 && saldo.saldoDisponivel < qtdServ) {
+        const excesso = ((qtdServ - saldo.saldoDisponivel) / saldo.qtdOrcada * 100).toFixed(0);
+        saldoProblems.push(`${saldo.descricao}: excede saldo em ${excesso}%`);
+      }
+    }
+
+    if (saldoProblems.length > 0) {
+      const msg = `Atenção: ${saldoProblems.join("; ")}. Deseja continuar mesmo assim?`;
+      if (!confirm(msg)) return;
+    }
+
     criar.mutate({
       companyId,
       solicitanteId: user?.id ? parseInt(String(user.id)) : undefined,
@@ -189,13 +284,19 @@ export default function Solicitacoes() {
       dataNecessidade: form.dataNecessidade || undefined,
       prioridade: form.prioridade,
       observacoes: form.observacoes || undefined,
-      itens: validos.map(i => ({
+      itens: Array.from(consolidados.values()).map(i => ({
         descricao: i.descricao,
         unidade: i.unidade,
         quantidade: parseFloat(i.quantidade) || 1,
         observacoes: i.observacoes || undefined,
         orcamentoItemId: i.orcamentoItemId,
         eapCodigo: i.eapCodigo,
+        insumoCodigo: i.insumoCodigo,
+        composicaoCodigo: i.composicaoCodigo,
+        precoMeta: i.precoMeta,
+        quantidadeServico: i.quantidadeServico,
+        coeficiente: i.coeficiente,
+        origemEap: i.origemEap,
       })),
     });
   }
@@ -397,6 +498,7 @@ export default function Solicitacoes() {
                           setItens([newItem()]);
                           setObraSearch("");
                           setObraOpen(false);
+                          setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({});
                         }}
                       >
                         {o.codigo ? <span className="text-gray-400 mr-1">[{o.codigo}]</span> : null}{o.nome}
@@ -407,90 +509,198 @@ export default function Solicitacoes() {
               </div>
             </div>
 
-            {/* Painel EAP — aparece quando obra é selecionada */}
+            {/* Modo SC: EAP ou Manual */}
             {form.obraId && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                    <ListTree className="h-3.5 w-3.5 text-amber-600" />
-                    Itens da EAP — selecione para incluir na SC
-                  </label>
-                  {selectedEapIds.size > 0 && (
-                    <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                      {selectedEapIds.size} selecionado{selectedEapIds.size > 1 ? "s" : ""}
-                    </span>
-                  )}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setModoSC("eap")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${modoSC === "eap" ? "bg-white text-amber-700 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}
+                  >
+                    <Zap className="h-3 w-3" /> Via EAP (Inteligente)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModoSC("manual")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${modoSC === "manual" ? "bg-white text-gray-700 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}
+                  >
+                    <FileText className="h-3 w-3" /> Manual / Avulso
+                  </button>
                 </div>
 
-                {eapQ.data?.semOrcamento ? (
-                  <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    Esta obra não possui orçamento vinculado. Adicione os itens manualmente abaixo.
-                  </div>
-                ) : eapQ.data && eapQ.data.items.length > 0 ? (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    {/* Filtro */}
-                    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
-                      <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                      <input
-                        className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
-                        placeholder="Filtrar itens da EAP..."
-                        value={eapSearch}
-                        onChange={e => setEapSearch(e.target.value)}
-                      />
-                    </div>
-                    {/* Lista de itens selecionáveis */}
-                    <div className="max-h-52 overflow-y-auto divide-y divide-gray-50">
-                      {eapQ.data.items
-                        .filter(it => it.nivel >= 2 && it.tipo !== "grupo")
-                        .filter(it => !eapSearch || `${it.eapCodigo} ${it.descricao}`.toLowerCase().includes(eapSearch.toLowerCase()))
-                        .map(it => {
-                          const sel = selectedEapIds.has(it.id);
-                          return (
-                            <div
-                              key={it.id}
-                              onClick={() => toggleEapItem(it)}
-                              className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${sel ? "bg-amber-50" : "hover:bg-gray-50"}`}
-                            >
-                              <input
-                                type="checkbox"
-                                readOnly
-                                checked={sel}
-                                className="h-3.5 w-3.5 accent-amber-600 shrink-0 pointer-events-none"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs text-gray-900 truncate">
-                                  <span className="font-semibold text-amber-700 mr-1.5">{it.eapCodigo}</span>
-                                  {it.descricao}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0 text-xs text-gray-400">
-                                <span>{parseFloat(String(it.quantidade ?? "0")).toLocaleString("pt-BR")} {it.unidade || "vb"}</span>
-                                {(it as any).prazoFim && (
-                                  <span className="text-blue-500">
-                                    até {new Date((it as any).prazoFim + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })
-                      }
-                      {eapQ.data.items.filter(it => it.nivel >= 2 && it.tipo !== "grupo").length === 0 && (
-                        <div className="px-3 py-4 text-xs text-center text-gray-400">Nenhum item de EAP encontrado</div>
+                {modoSC === "eap" && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                        <ListTree className="h-3.5 w-3.5 text-amber-600" />
+                        Serviços da EAP — clique para explodir insumos
+                      </label>
+                      {selectedEapIds.size > 0 && (
+                        <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                          {selectedEapIds.size} serviço{selectedEapIds.size > 1 ? "s" : ""}
+                        </span>
                       )}
                     </div>
+
+                    {eapQ.data?.semOrcamento ? (
+                      <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        Esta obra não possui orçamento vinculado. Use o modo Manual.
+                      </div>
+                    ) : eapQ.data && eapQ.data.items.length > 0 ? (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
+                          <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                          <input
+                            className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                            placeholder="Filtrar serviços da EAP..."
+                            value={eapSearch}
+                            onChange={e => setEapSearch(e.target.value)}
+                          />
+                        </div>
+                        <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                          {eapQ.data.items
+                            .filter(it => it.nivel >= 2 && it.tipo !== "grupo")
+                            .filter(it => !eapSearch || `${it.eapCodigo} ${it.descricao}`.toLowerCase().includes(eapSearch.toLowerCase()))
+                            .map(it => {
+                              const expanded = eapExpanded === it.id;
+                              const insLista = eapInsumos[it.id];
+                              const saldo = saldoData[it.id];
+                              const qtdStr = eapQtdServico[it.id] || "";
+                              const qtdVal = parseFloat(qtdStr) || 0;
+                              const estouro = saldo && qtdVal > 0 && qtdVal > saldo.saldoDisponivel;
+
+                              return (
+                                <div key={it.id} className="group">
+                                  <div
+                                    onClick={() => handleEapExpand(it)}
+                                    className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : "hover:bg-gray-50"}`}
+                                  >
+                                    {expanded ? <ChevronDown className="h-3.5 w-3.5 text-amber-600 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs text-gray-900 truncate">
+                                        <span className="font-semibold text-amber-700 mr-1.5">{it.eapCodigo}</span>
+                                        {it.descricao}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0 text-xs text-gray-400">
+                                      <span>{parseFloat(String(it.quantidade ?? "0")).toLocaleString("pt-BR")} {it.unidade || "vb"}</span>
+                                      {qtdVal > 0 && <span className="text-amber-600 font-medium">✓</span>}
+                                    </div>
+                                  </div>
+
+                                  {expanded && (
+                                    <div className="px-4 py-3 bg-gray-50 border-l-2 border-l-amber-500 space-y-3">
+                                      {saldo && (
+                                        <div className="grid grid-cols-4 gap-2 text-[10px]">
+                                          <div className="bg-white rounded px-2 py-1.5 border border-gray-200 text-center">
+                                            <div className="text-gray-400 uppercase font-medium">Orçado</div>
+                                            <div className="text-gray-900 font-bold text-xs">{parseFloat(String(saldo.qtdOrcada)).toLocaleString("pt-BR")}</div>
+                                          </div>
+                                          <div className="bg-white rounded px-2 py-1.5 border border-gray-200 text-center">
+                                            <div className="text-gray-400 uppercase font-medium">Solicitado</div>
+                                            <div className="text-blue-600 font-bold text-xs">{parseFloat(String(saldo.qtdJaSolicitada)).toLocaleString("pt-BR")}</div>
+                                          </div>
+                                          <div className={`rounded px-2 py-1.5 border text-center ${estouro ? "bg-red-50 border-red-200" : "bg-white border-gray-200"}`}>
+                                            <div className={`uppercase font-medium ${estouro ? "text-red-500" : "text-gray-400"}`}>Saldo</div>
+                                            <div className={`font-bold text-xs ${estouro ? "text-red-600" : "text-emerald-600"}`}>{parseFloat(String(saldo.saldoDisponivel)).toLocaleString("pt-BR")}</div>
+                                          </div>
+                                          <div className="bg-amber-50 rounded px-2 py-1.5 border border-amber-200 text-center">
+                                            <div className="text-amber-500 uppercase font-medium">Solicitando</div>
+                                            <div className="text-amber-700 font-bold text-xs">{qtdVal.toLocaleString("pt-BR")}</div>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {estouro && (
+                                        <div className="flex items-center gap-1.5 text-[11px] text-red-600 bg-red-50 border border-red-200 rounded px-2.5 py-1.5">
+                                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                                          <span>Estouro de saldo! Quantidade excede o orçado em {((qtdVal - saldo.saldoDisponivel) / parseFloat(String(saldo.qtdOrcada)) * 100).toFixed(0)}%</span>
+                                        </div>
+                                      )}
+
+                                      <div className="flex items-center gap-2">
+                                        <label className="text-xs text-gray-600 font-medium whitespace-nowrap">Qtd. serviço a executar:</label>
+                                        <input
+                                          type="number" min="0" step="0.01"
+                                          className={`w-28 h-7 px-2 text-xs rounded border bg-white text-gray-900 outline-none focus:ring-1 ${estouro ? "border-red-300 focus:border-red-400 focus:ring-red-200" : "border-gray-300 focus:border-amber-400 focus:ring-amber-200"}`}
+                                          placeholder="0"
+                                          value={qtdStr}
+                                          onChange={e => handleEapQtdChange(it.id, e.target.value, it)}
+                                        />
+                                        <span className="text-xs text-gray-400">{it.unidade || "vb"}</span>
+                                        {saldo && saldo.saldoDisponivel > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleEapQtdChange(it.id, String(saldo.saldoDisponivel), it)}
+                                            className="text-[10px] text-amber-600 hover:text-amber-700 underline font-medium"
+                                          >
+                                            Compra total
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      {loadingInsumos === it.id ? (
+                                        <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando insumos da composição...
+                                        </div>
+                                      ) : insLista && insLista.length > 0 ? (
+                                        <div className="space-y-1">
+                                          <div className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide flex items-center gap-1">
+                                            <Package className="h-3 w-3" /> Insumos da composição ({insLista.length})
+                                          </div>
+                                          <div className="bg-white rounded border border-gray-200 divide-y divide-gray-100 max-h-36 overflow-y-auto">
+                                            {insLista.map((ins: any, idx: number) => {
+                                              const qtdCalc = qtdVal > 0 ? Math.ceil((qtdVal * ins.coeficiente) * 1000) / 1000 : 0;
+                                              return (
+                                                <div key={idx} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                                                  <div className="flex-1 min-w-0">
+                                                    <div className="text-gray-900 truncate">{ins.descricao}</div>
+                                                    <div className="text-[10px] text-gray-400">Coef: {ins.coeficiente} | Meta: R$ {parseFloat(ins.precoUnitario || "0").toFixed(2)}</div>
+                                                  </div>
+                                                  <div className="text-right shrink-0">
+                                                    <div className="font-semibold text-gray-700">{qtdCalc.toLocaleString("pt-BR")} {ins.unidade}</div>
+                                                    {qtdCalc > 0 && <div className="text-[10px] text-gray-400">R$ {(qtdCalc * parseFloat(ins.precoUnitario || "0")).toFixed(2)}</div>}
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      ) : insLista && insLista.length === 0 ? (
+                                        <div className="text-xs text-gray-400 py-1">Nenhum insumo cadastrado para esta composição. Use o modo Manual.</div>
+                                      ) : null}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          }
+                          {eapQ.data.items.filter(it => it.nivel >= 2 && it.tipo !== "grupo").length === 0 && (
+                            <div className="px-3 py-4 text-xs text-center text-gray-400">Nenhum serviço encontrado na EAP</div>
+                          )}
+                        </div>
+                      </div>
+                    ) : eapQ.isLoading ? (
+                      <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando EAP...
+                      </div>
+                    ) : eapQ.isError ? (
+                      <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        Erro ao carregar EAP — use o modo Manual.
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                        Nenhum serviço encontrado para esta obra.
+                      </div>
+                    )}
                   </div>
-                ) : eapQ.isLoading ? (
-                  <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando itens da EAP...
-                  </div>
-                ) : eapQ.isError ? (
-                  <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                    Erro ao carregar EAP — adicione os itens manualmente.
-                  </div>
-                ) : (
-                  <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                    Nenhum item de EAP encontrado para esta obra.
+                )}
+
+                {modoSC === "manual" && (
+                  <div className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
+                    <FileText className="h-3 w-3 text-blue-500 shrink-0" />
+                    Modo manual — adicione os itens livremente na seção abaixo.
                   </div>
                 )}
               </div>
@@ -529,47 +739,97 @@ export default function Solicitacoes() {
               />
             </div>
 
-            {/* Linha 5: Itens */}
+            {/* Itens Solicitados */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-gray-700">Itens Solicitados *</label>
-                <button
-                  type="button"
-                  onClick={() => setItens(p => [...p, newItem()])}
-                  className="flex items-center gap-1 px-2 py-1 text-xs border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 transition"
-                >
-                  <Plus className="h-3 w-3" /> Item
-                </button>
+                <label className="text-xs font-semibold text-gray-700">
+                  Itens Solicitados * {itens.filter(i => i.descricao.trim()).length > 0 && (
+                    <span className="text-gray-400 font-normal ml-1">({itens.filter(i => i.descricao.trim()).length} ite{itens.filter(i => i.descricao.trim()).length === 1 ? "m" : "ns"})</span>
+                  )}
+                </label>
+                {modoSC === "manual" && (
+                  <button
+                    type="button"
+                    onClick={() => setItens(p => [...p, newItem()])}
+                    className="flex items-center gap-1 px-2 py-1 text-xs border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 transition"
+                  >
+                    <Plus className="h-3 w-3" /> Item
+                  </button>
+                )}
               </div>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                {itens.map((it, idx) => (
-                  <div key={idx} className="flex gap-2 items-center p-2 rounded-lg bg-gray-50 border border-gray-200">
-                    <input
-                      className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
-                      placeholder="Descrição do item *"
-                      value={it.descricao}
-                      onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
-                    />
-                    <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
-                      <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-white border-gray-200">
-                        {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <input
-                      className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
-                      type="number" min="0.001" step="0.001" placeholder="Qtd"
-                      value={it.quantidade}
-                      onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
-                    />
-                    {itens.length > 1 && (
-                      <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+
+              {modoSC === "eap" && itens.filter(i => i.origemEap).length > 0 ? (
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                  {(() => {
+                    const consolidados = new Map<string, { descricao: string; unidade: string; qtdTotal: number; precoMeta: number; origens: string[] }>();
+                    for (const it of itens.filter(i => i.origemEap)) {
+                      const key = it.insumoCodigo || it.descricao;
+                      if (consolidados.has(key)) {
+                        const prev = consolidados.get(key)!;
+                        prev.qtdTotal += parseFloat(it.quantidade) || 0;
+                        if (it.eapCodigo && !prev.origens.includes(it.eapCodigo)) prev.origens.push(it.eapCodigo);
+                      } else {
+                        consolidados.set(key, {
+                          descricao: it.descricao,
+                          unidade: it.unidade,
+                          qtdTotal: parseFloat(it.quantidade) || 0,
+                          precoMeta: it.precoMeta || 0,
+                          origens: it.eapCodigo ? [it.eapCodigo] : [],
+                        });
+                      }
+                    }
+                    return Array.from(consolidados.entries()).map(([key, c]) => (
+                      <div key={key} className="flex items-center gap-2 p-2 rounded-lg bg-amber-50/50 border border-amber-200/50 text-xs">
+                        <Zap className="h-3 w-3 text-amber-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-gray-900 truncate">{c.descricao}</div>
+                          {c.origens.length > 1 && (
+                            <div className="text-[10px] text-amber-600">Consolidado de {c.origens.length} serviços: {c.origens.join(", ")}</div>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-semibold text-gray-700">{c.qtdTotal.toLocaleString("pt-BR")} {c.unidade}</div>
+                          {c.precoMeta > 0 && <div className="text-[10px] text-gray-400">Meta: R$ {(c.qtdTotal * c.precoMeta).toFixed(2)}</div>}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              ) : modoSC === "eap" && itens.filter(i => i.origemEap).length === 0 ? (
+                <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-3 text-center">
+                  Selecione um serviço acima e informe a quantidade para gerar os itens automaticamente.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {itens.map((it, idx) => (
+                    <div key={idx} className="flex gap-2 items-center p-2 rounded-lg bg-gray-50 border border-gray-200">
+                      <input
+                        className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
+                        placeholder="Descrição do item *"
+                        value={it.descricao}
+                        onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
+                      />
+                      <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
+                        <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-white border-gray-200">
+                          {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <input
+                        className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
+                        type="number" min="0.001" step="0.001" placeholder="Qtd"
+                        value={it.quantidade}
+                        onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
+                      />
+                      {itens.length > 1 && (
+                        <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
           </div>{/* fim space-y-3 */}

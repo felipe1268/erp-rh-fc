@@ -4937,6 +4937,12 @@ export const comprasSolicitacoesItens = pgTable("compras_solicitacoes_itens", {
   observacoes:        text(),
   orcamentoItemId:    integer("orcamento_item_id"),
   eapCodigo:          varchar("eap_codigo", { length: 50 }),
+  insumoCodigo:       varchar("insumo_codigo", { length: 100 }),
+  composicaoCodigo:   varchar("composicao_codigo", { length: 100 }),
+  precoMeta:          numeric("preco_meta", { precision: 18, scale: 4 }).default("0"),
+  quantidadeServico:  numeric("quantidade_servico", { precision: 14, scale: 4 }),
+  coeficiente:        numeric({ precision: 18, scale: 6 }),
+  origemEap:          boolean("origem_eap").default(false),
 });
 
 export const comprasCotacoes = pgTable("compras_cotacoes", {
@@ -5042,6 +5048,17 @@ export const comprasOrdensItens = pgTable("compras_ordens_itens", {
   quantidadeEntregue:numeric("quantidade_entregue", { precision: 10, scale: 3 }).default("0"),
   precoUnitario:    numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
+});
+
+export const comprasEntregasProgramadas = pgTable("compras_entregas_programadas", {
+  id:               serial().primaryKey(),
+  ordemItemId:      integer("ordem_item_id").notNull(),
+  dataEntrega:      varchar("data_entrega", { length: 10 }).notNull(),
+  quantidade:       numeric({ precision: 10, scale: 3 }).notNull().default("0"),
+  quantidadeEntregue: numeric("quantidade_entregue", { precision: 10, scale: 3 }).default("0"),
+  status:           varchar({ length: 30 }).notNull().default("pendente"),
+  observacoes:      text(),
+  criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
 // ── Alocação MO: configuração de cargos ──────────────────────

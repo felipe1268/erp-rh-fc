@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2 } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -265,6 +265,75 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
 
 const COND_PAG_PADRAO = ["À Vista", "7 dias", "14 dias", "21 dias", "28 dias", "30 dias", "45 dias", "60 dias", "90 dias", "Medição", "Parcelado"];
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
+
+function HistoricoPrecoPopover({ companyId, descricao }: { companyId: number; descricao: string }) {
+  const [open, setOpen] = useState(false);
+  const histQ = trpc.compras.getHistoricoPrecos.useQuery(
+    { companyId, descricaoInsumo: descricao },
+    { enabled: open && companyId > 0 }
+  );
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="text-gray-400 hover:text-blue-500 transition p-0.5" title="Histórico de preços">
+          <History className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-0 bg-white border-gray-200 shadow-lg" side="right" align="start">
+        <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+          <div className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+            <History className="h-3 w-3 text-blue-500" /> Histórico de Preços
+          </div>
+          <div className="text-[10px] text-gray-400 truncate mt-0.5">{descricao}</div>
+        </div>
+        <div className="max-h-48 overflow-y-auto">
+          {histQ.isLoading ? (
+            <div className="flex items-center gap-2 px-3 py-4 text-xs text-gray-400"><Loader2 className="h-3 w-3 animate-spin" /> Buscando...</div>
+          ) : !histQ.data || histQ.data.length === 0 ? (
+            <div className="px-3 py-4 text-xs text-gray-400 text-center">Nenhum histórico encontrado</div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {histQ.data.map((h: any, i: number) => (
+                <div key={i} className="px-3 py-1.5 flex items-center justify-between text-xs">
+                  <div className="min-w-0">
+                    <div className="text-gray-700 truncate">{h.fornecedor || "—"}</div>
+                    <div className="text-[10px] text-gray-400">{h.data ? new Date(h.data).toLocaleDateString("pt-BR") : "—"} · {h.numeroCotacao || h.numeroOc || "—"}</div>
+                  </div>
+                  <div className="font-semibold text-gray-900 shrink-0 ml-2">
+                    {parseFloat(h.precoUnitario || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function RastreabilidadeTag({ scNumero, eapCodigo, origemEap }: { scNumero?: string; eapCodigo?: string; origemEap?: boolean }) {
+  if (!scNumero && !eapCodigo) return null;
+  return (
+    <div className="flex items-center gap-1 mt-0.5">
+      {scNumero && (
+        <span className="inline-flex items-center gap-0.5 text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full border border-blue-200">
+          <Link2 className="h-2 w-2" />{scNumero}
+        </span>
+      )}
+      {eapCodigo && (
+        <span className="inline-flex items-center gap-0.5 text-[9px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full border border-amber-200">
+          EAP {eapCodigo}
+        </span>
+      )}
+      {origemEap && (
+        <span className="inline-flex items-center gap-0.5 text-[9px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full border border-green-200">
+          <RefreshCw className="h-2 w-2" />Explosão
+        </span>
+      )}
+    </div>
+  );
+}
 
 interface ItemForm { descricao: string; unidade: string; quantidade: string; precoUnitario: string; descontoPct: string; solicitacaoItemId?: number | null; }
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", precoUnitario: "", descontoPct: "0" });
@@ -1055,10 +1124,20 @@ export default function Cotacoes() {
                               return (
                                 <tr key={it.id} className="border-b border-gray-100 hover:bg-gray-50/60">
                                   <td className="px-4 py-2 border-r border-gray-100">
-                                    <span className="text-gray-900 text-xs font-medium">{it.descricao}</span>
-                                    {it.eapPath && (
-                                      <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">{it.eapPath}</div>
-                                    )}
+                                    <div className="flex items-start gap-1.5">
+                                      <div className="flex-1 min-w-0">
+                                        <span className="text-gray-900 text-xs font-medium">{it.descricao}</span>
+                                        {it.eapPath && (
+                                          <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">{it.eapPath}</div>
+                                        )}
+                                        <RastreabilidadeTag
+                                          scNumero={(it as any).scNumero}
+                                          eapCodigo={(it as any).eapCodigo}
+                                          origemEap={(it as any).origemEap}
+                                        />
+                                      </div>
+                                      <HistoricoPrecoPopover companyId={companyId} descricao={it.descricao} />
+                                    </div>
                                   </td>
                                   <td className="px-3 py-2 text-gray-500 text-xs text-center border-r border-gray-100">{it.unidade || "un"}</td>
                                   {/* Meta cols */}

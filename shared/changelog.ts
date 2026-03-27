@@ -5541,4 +5541,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 15:30:00",
   },
+  {
+    version: 819,
+    titulo: "Compras Inteligentes — EAP explosion, saldo orçamentário, rastreabilidade",
+    descricao: "Implementação completa das 11 features de Compras Inteligentes: (1) SC via EAP com explosão de insumos — dialog redesenhado com 2 modos (Via EAP Inteligente / Manual), seleção de serviço EAP, input de quantidade, auto-cálculo de insumos por coeficiente da composição; (2) Saldo orçamentário em tempo real — painel Orçado/Solicitado/Saldo/Solicitando com alerta visual de estouro; (3) Sugestão de compra total via saldo disponível; (4) Consolidação automática de insumos iguais vindos de múltiplos serviços; (5) Meta×Real no mapa de cotação com comparativo por item e total; (6) Histórico de preços por insumo via popover na cotação; (7) Rastreabilidade completa SC→Cotação→OC com tags de origem EAP/explosão/SC; (8) Entregas programadas na OC com cronograma de entregas parciais por item; (9) Novos campos no schema (insumoCodigo, composicaoCodigo, precoMeta, quantidadeServico, coeficiente, origemEap); (10) Endpoints getInsumosComposicao, getSaldoOrcamentario, getHistoricoPrecos; (11) Tabela compras_entregas_programadas com endpoints CRUD.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-27 19:45:00",
+  },
 ];
