@@ -114,22 +114,38 @@ export default function GestaoDocumentos() {
   const { companyId } = useCompany();
   const [location] = useLocation();
 
-  const [currentSearch, setCurrentSearch2] = useState(window.location.search);
+  const [urlTab, setUrlTab] = useState<string | null>(() => {
+    const stored = sessionStorage.getItem('_navParams');
+    if (stored) {
+      const p = new URLSearchParams(stored);
+      return p.get("tab");
+    }
+    return new URLSearchParams(window.location.search).get("tab");
+  });
+
   useEffect(() => {
-    const onPop = () => setCurrentSearch2(window.location.search);
-    window.addEventListener("popstate", onPop);
+    const readTab = () => {
+      const stored = sessionStorage.getItem('_navParams');
+      if (stored) {
+        const p = new URLSearchParams(stored);
+        setUrlTab(p.get("tab"));
+      } else {
+        setUrlTab(new URLSearchParams(window.location.search).get("tab"));
+      }
+    };
+    window.addEventListener("navParamsUpdated", readTab);
+    window.addEventListener("popstate", readTab);
     const orig = window.history.pushState.bind(window.history);
     window.history.pushState = function (...args: any[]) {
       orig(...args);
-      setCurrentSearch2(window.location.search);
+      readTab();
     };
     return () => {
-      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("navParamsUpdated", readTab);
+      window.removeEventListener("popstate", readTab);
       window.history.pushState = orig;
     };
   }, []);
-
-  const urlTab = new URLSearchParams(currentSearch).get("tab");
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (urlTab === "configuracoes") return "configuracoes";
