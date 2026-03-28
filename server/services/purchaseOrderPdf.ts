@@ -78,9 +78,15 @@ export async function fetchOCData(ocId: number): Promise<OCData> {
   return { oc, itens, fornecedor, company: company ?? null, obra };
 }
 
-function resolveLogoPath(logoUrl: string | null | undefined): string | null {
+function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer | null {
   if (!logoUrl) return null;
-  if (logoUrl.startsWith("data:image")) return null;
+  if (logoUrl.startsWith("data:image")) {
+    const matches = logoUrl.match(/^data:image\/\w+;base64,(.+)$/);
+    if (matches?.[1]) {
+      return Buffer.from(matches[1], "base64");
+    }
+    return null;
+  }
   if (logoUrl.startsWith("/uploads/")) {
     const localPath = path.join(process.cwd(), "server", logoUrl);
     if (fs.existsSync(localPath)) return localPath;
@@ -148,11 +154,11 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   const headerH = 70;
   doc.rect(0, 0, pageW, headerH).fill(primary);
 
-  const logoPath = resolveLogoPath(company?.logoUrl);
+  const logoSrc = resolveLogoSource(company?.logoUrl);
   let logoRendered = false;
-  if (logoPath) {
+  if (logoSrc) {
     try {
-      doc.image(logoPath, mL, 12, { height: 46, fit: [90, 46] });
+      doc.image(logoSrc, mL + 8, 12, { height: 46, fit: [80, 46] });
       logoRendered = true;
     } catch {
       logoRendered = false;
