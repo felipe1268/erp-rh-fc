@@ -5550,4 +5550,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-27 19:45:00",
   },
+  {
+    version: 820,
+    titulo: "Imagem de Referência na Solicitação de Compra",
+    descricao: "Nova funcionalidade para anexar imagem de referência ao criar uma SC: botões 'Anexar Foto' e 'Câmera' no dialog Nova SC, preview com remoção, upload via base64, campo imagemReferenciaUrl salvo na SC. Na lista de SCs, ícone azul indica quando há imagem anexada. No detalhe da SC, exibição da imagem com clique para abrir em nova aba.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 10:00:00",
+  },
 ];

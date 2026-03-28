@@ -794,6 +794,7 @@ Responda APENAS com um objeto JSON no formato:
       prioridade: z.string().optional(),
       dataNecessidade: z.string().optional(),
       observacoes: z.string().optional(),
+      imagemReferenciaUrl: z.string().optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
@@ -825,6 +826,7 @@ Responda APENAS com um objeto JSON no formato:
         prioridade: input.prioridade ?? "normal",
         dataNecessidade: input.dataNecessidade,
         observacoes: input.observacoes,
+        imagemReferenciaUrl: input.imagemReferenciaUrl ?? null,
         status: "pendente",
         aprovacaoStatus: "aguardando",
       }).returning();
@@ -849,6 +851,38 @@ Responda APENAS com um objeto JSON no formato:
         );
       }
       return sc;
+    }),
+
+  uploadImagemReferenciaSC: protectedProcedure
+    .input(z.object({
+      solicitacaoId: z.number().optional(),
+      companyId: z.number(),
+      fileBase64: z.string().max(14_000_000),
+      fileName: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+      const ext = input.fileName.split(".").pop()?.toLowerCase() || "jpg";
+      if (!allowedExts.has(ext)) throw new TRPCError({ code: "BAD_REQUEST", message: "Formato de imagem não suportado." });
+      const buffer = Buffer.from(input.fileBase64, "base64");
+      if (buffer.length > 10 * 1024 * 1024) throw new TRPCError({ code: "BAD_REQUEST", message: "Imagem muito grande (máx. 10 MB)." });
+      if (input.solicitacaoId) {
+        const [sc] = await db.select({ id: comprasSolicitacoes.id }).from(comprasSolicitacoes)
+          .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
+        if (!sc) throw new TRPCError({ code: "FORBIDDEN", message: "SC não encontrada ou sem permissão." });
+      }
+      const ts = Date.now();
+      const key = `compras/sc-imagens/${input.companyId}-${input.solicitacaoId || 'new'}-${ts}.${ext}`;
+      const mimeMap: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
+      const contentType = mimeMap[ext] || "image/jpeg";
+      const { url } = await storagePut(key, buffer, contentType);
+      if (input.solicitacaoId) {
+        await db.update(comprasSolicitacoes)
+          .set({ imagemReferenciaUrl: url, atualizadoEm: new Date().toISOString() })
+          .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
+      }
+      return { url };
     }),
 
   atualizarStatusSolicitacao: protectedProcedure

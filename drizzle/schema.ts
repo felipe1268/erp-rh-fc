@@ -4922,6 +4922,7 @@ export const comprasSolicitacoes = pgTable("compras_solicitacoes", {
   aprovadorId:      integer("aprovador_id"),
   aprovadoEm:       timestamp("aprovado_em", { mode: "string" }),
   observacoes:      text(),
+  imagemReferenciaUrl: text("imagem_referencia_url"),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:     timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });

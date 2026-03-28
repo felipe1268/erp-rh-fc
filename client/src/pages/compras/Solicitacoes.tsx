@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
+  Camera, ImageIcon, X,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -86,6 +87,12 @@ export default function Solicitacoes() {
   const [eapInsumos, setEapInsumos] = useState<Record<number, any[]>>({});
   const [loadingInsumos, setLoadingInsumos] = useState<number | null>(null);
   const [saldoData, setSaldoData] = useState<Record<number, any>>({});
+  const [imagemPreview, setImagemPreview] = useState<string | null>(null);
+  const [imagemBase64, setImagemBase64] = useState<string | null>(null);
+  const [imagemNome, setImagemNome] = useState<string>("");
+  const [uploadingImagem, setUploadingImagem] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const q = trpc.compras.listarSolicitacoes.useQuery(
     { companyId, busca: busca || undefined, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -98,6 +105,7 @@ export default function Solicitacoes() {
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 }
   );
 
+  const uploadImagem = trpc.compras.uploadImagemReferenciaSC.useMutation();
   const criar = trpc.compras.criarSolicitacao.useMutation({
     onSuccess: () => { toast.success("SC criada!"); setShowNova(false); resetForm(); q.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -163,6 +171,20 @@ export default function Solicitacoes() {
     setSelectedEapIds(new Set());
     setEapSearch(""); setModoSC("eap");
     setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({});
+    setImagemPreview(null); setImagemBase64(null); setImagemNome("");
+  }
+
+  function handleImagemFile(file: File) {
+    if (!file.type.startsWith("image/")) { toast.error("Selecione uma imagem válida."); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("Imagem muito grande (máx. 10 MB)."); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setImagemPreview(dataUrl);
+      setImagemBase64(dataUrl.split(",")[1]);
+      setImagemNome(file.name);
+    };
+    reader.readAsDataURL(file);
   }
 
   async function handleEapExpand(it: any) {
@@ -245,7 +267,7 @@ export default function Solicitacoes() {
     });
   }
 
-  function handleSalvar() {
+  async function handleSalvar() {
     if (!form.titulo.trim()) return toast.error("Informe o título da solicitação.");
     if (!form.obraId || form.obraId === "none") return toast.error("Selecione a Obra (centro de custo) para esta solicitação.");
     const validos = itens.filter(i => i.descricao.trim());
@@ -276,6 +298,16 @@ export default function Solicitacoes() {
       if (!confirm(msg)) return;
     }
 
+    let imgUrl: string | undefined;
+    if (imagemBase64 && imagemNome) {
+      setUploadingImagem(true);
+      try {
+        const res = await uploadImagem.mutateAsync({ companyId, fileBase64: imagemBase64, fileName: imagemNome });
+        imgUrl = res.url;
+      } catch { toast.error("Erro ao enviar imagem de referência."); }
+      setUploadingImagem(false);
+    }
+
     criar.mutate({
       companyId,
       solicitanteId: user?.id ? parseInt(String(user.id)) : undefined,
@@ -284,6 +316,7 @@ export default function Solicitacoes() {
       dataNecessidade: form.dataNecessidade || undefined,
       prioridade: form.prioridade,
       observacoes: form.observacoes || undefined,
+      imagemReferenciaUrl: imgUrl,
       itens: Array.from(consolidados.values()).map(i => ({
         descricao: i.descricao,
         unidade: i.unidade,
@@ -403,7 +436,10 @@ export default function Solicitacoes() {
                 <TableRow key={sc.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setShowDetalhe(sc.id)}>
                   <TableCell className="text-gray-900 font-mono font-semibold text-xs">{sc.numeroSc}</TableCell>
                   <TableCell>
-                    <div className="text-gray-900 text-sm font-medium">{sc.titulo || "—"}</div>
+                    <div className="text-gray-900 text-sm font-medium flex items-center gap-1.5">
+                      {sc.titulo || "—"}
+                      {sc.imagemReferenciaUrl && <ImageIcon className="h-3.5 w-3.5 text-blue-400 shrink-0" title="Possui imagem de referência" />}
+                    </div>
                     {sc.departamento && <div className="text-gray-400 text-xs">{sc.departamento}</div>}
                     {sc.prioridade && sc.prioridade !== "normal" && (
                       <span className={`text-[10px] font-semibold uppercase ${PRIORIDADE_COR[sc.prioridade] ?? "text-gray-400"}`}>{sc.prioridade}</span>
@@ -739,6 +775,31 @@ export default function Solicitacoes() {
               />
             </div>
 
+            {/* Imagem de Referência */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-700">Imagem de Referência (opcional)</label>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImagemFile(f); e.target.value = ""; }} />
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImagemFile(f); e.target.value = ""; }} />
+              {imagemPreview ? (
+                <div className="relative inline-block">
+                  <img src={imagemPreview} alt="Referência" className="h-24 w-auto rounded-lg border border-gray-200 object-cover" />
+                  <button type="button" onClick={() => { setImagemPreview(null); setImagemBase64(null); setImagemNome(""); }} className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600">
+                    <X className="h-3 w-3" />
+                  </button>
+                  <div className="text-[10px] text-gray-500 mt-1 truncate max-w-[200px]">{imagemNome}</div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                    <ImageIcon className="h-3.5 w-3.5" /> Anexar Foto
+                  </button>
+                  <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                    <Camera className="h-3.5 w-3.5" /> Câmera
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Itens Solicitados */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -845,10 +906,10 @@ export default function Solicitacoes() {
               </button>
               <button
                 onClick={handleSalvar}
-                disabled={criar.isPending}
+                disabled={criar.isPending || uploadingImagem}
                 className="flex-1 h-9 text-sm rounded-md bg-amber-600 hover:bg-amber-500 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                {criar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Solicitação"}
+                {(criar.isPending || uploadingImagem) ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Solicitação"}
               </button>
           </div>
         </DialogContent>
@@ -887,6 +948,16 @@ export default function Solicitacoes() {
                   </div>
                 ))}
               </div>
+
+              {/* Imagem de Referência */}
+              {detalhe.imagemReferenciaUrl && (
+                <div className="border border-gray-200 rounded-lg p-3 space-y-1">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Imagem de Referência</span>
+                  <a href={detalhe.imagemReferenciaUrl} target="_blank" rel="noopener noreferrer">
+                    <img src={detalhe.imagemReferenciaUrl} alt="Referência" className="h-32 w-auto rounded-lg border border-gray-200 object-cover cursor-pointer hover:opacity-90 transition" />
+                  </a>
+                </div>
+              )}
 
               {/* Aprovação */}
               <div className="border border-gray-200 rounded-lg p-3">
