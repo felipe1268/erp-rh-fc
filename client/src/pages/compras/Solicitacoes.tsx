@@ -610,7 +610,7 @@ export default function Solicitacoes() {
                   <TableCell><StatusBadge status={sc.status} /></TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      {!["cancelado", "aprovado", "cotacao"].includes(sc.status) && (
+                      {!["cancelado"].includes(sc.status) && (
                         <button
                           title="Editar SC"
                           className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
@@ -1364,7 +1364,7 @@ export default function Solicitacoes() {
                     </Button>
                   </>
                 )}
-                {!editMode && !["cancelado", "aprovado", "cotacao"].includes(detalhe.status) && (
+                {!editMode && !["cancelado"].includes(detalhe.status) && (
                   <Button size="sm" variant="outline"
                     onClick={() => {
                       setEditForm({
