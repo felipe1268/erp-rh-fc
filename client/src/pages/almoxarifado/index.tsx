@@ -1875,8 +1875,8 @@ export default function AlmoxarifadoPage() {
 
       {/* ══ MODAL TRANSFERÊNCIA ══════════════════════════════════════ */}
       {modalTransf && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
-          <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{ background: "#ffffff", color: "#111827" }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white w-full h-full overflow-y-auto" style={{ background: "#ffffff", color: "#111827" }}>
             {transfOk ? (
               <>
                 <div className="p-8 text-center space-y-3">
