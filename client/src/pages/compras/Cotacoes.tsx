@@ -265,19 +265,11 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   expirada:  { label: "Expirada",  cls: "bg-gray-100 text-gray-500 border-gray-200" },
 };
 
-const COND_PAG_PADRAO = ["À Vista", "7 dias", "14 dias", "21 dias", "28 dias", "30 dias", "45 dias", "60 dias", "90 dias", "Medição", "Parcelado"];
-
-const TIPOS_PAGAMENTO = [
-  { value: "a_vista", label: "À Vista" },
-  { value: "30ddl", label: "30 DDL" },
-  { value: "30_60", label: "30/60 DDL" },
-  { value: "30_60_90", label: "30/60/90 DDL" },
-  { value: "entrada_parcelas", label: "Entrada + Parcelas" },
-  { value: "personalizado", label: "Personalizado" },
-] as const;
+const COND_PAG_PADRAO = TIPOS_PAGAMENTO.map(t => t.label);
 
 function getTipoPagamentoLabel(value: string): string {
-  return TIPOS_PAGAMENTO.find(t => t.value === value)?.label ?? value;
+  const info = getTipoPagamentoInfo(value);
+  return info?.label ?? value;
 }
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
 
