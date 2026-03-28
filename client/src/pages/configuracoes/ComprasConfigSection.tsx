@@ -5,19 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ChevronRight, ShoppingCart, Hash, ShieldCheck } from "lucide-react";
+import { Save, ChevronRight, ShoppingCart, Hash, ShieldCheck, Percent } from "lucide-react";
 import { toast } from "sonner";
 
 export function ComprasConfigSection() {
   const { selectedCompanyId, isConstrutoras, construtorasIds } = useCompany();
   const companyId = isConstrutoras ? (construtorasIds[0] || 0) : (Number(selectedCompanyId) || 0);
 
-  const [expanded, setExpanded] = useState<"numeracao" | "aprovacao" | null>(null);
+  const [expanded, setExpanded] = useState<"numeracao" | "aprovacao" | "comissao" | null>(null);
 
   const [prefixo, setPrefixo] = useState("OC");
   const [separador, setSeparador] = useState("-");
   const [formatoAno, setFormatoAno] = useState("4dig");
   const [digitos, setDigitos] = useState("3");
+  const [comissaoPercentual, setComissaoPercentual] = useState("10");
 
   const { data } = trpc.purchase.getConfigCompras.useQuery(
     { companyId },
@@ -30,6 +31,7 @@ export function ComprasConfigSection() {
       setSeparador(data.config.separador || "-");
       setFormatoAno(data.config.formatoAno || "4dig");
       setDigitos(String(data.config.digitosSequencial || 3));
+      setComissaoPercentual(String(data.config.comissaoPercentual ?? "10"));
     }
   }, [data]);
 
@@ -120,6 +122,65 @@ export function ComprasConfigSection() {
                 className="bg-rose-600 hover:bg-rose-700 text-white"
                 disabled={salvarMut.isPending}
                 onClick={() => salvarMut.mutate({ companyId, prefixo, separador, formatoAno, digitosSequencial: parseInt(digitos) })}
+              >
+                <Save className="w-3.5 h-3.5 mr-1" />
+                {salvarMut.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Sub-seção: Comissão de Compradores */}
+      <div className="border-b border-rose-100">
+        <button
+          onClick={() => setExpanded(expanded === "comissao" ? null : "comissao")}
+          className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-rose-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Percent className="w-4 h-4 text-rose-500" />
+            <span className="font-medium text-gray-800 text-sm">Comissão de Compradores</span>
+            <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-xs font-mono">
+              {comissaoPercentual}%
+            </span>
+          </div>
+          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expanded === "comissao" ? "rotate-90" : ""}`} />
+        </button>
+
+        {expanded === "comissao" && (
+          <div className="px-4 pb-4 bg-white space-y-4">
+            <p className="text-xs text-gray-500">
+              Percentual da economia (diferença entre orçamento e valor negociado) que será creditado como comissão ao comprador responsável pela negociação.
+            </p>
+            <div className="flex items-end gap-4">
+              <div className="w-40">
+                <Label className="text-xs">Percentual (%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={comissaoPercentual}
+                  onChange={e => setComissaoPercentual(e.target.value)}
+                  className="mt-1 font-mono text-center"
+                />
+              </div>
+              <div className="flex-1 p-3 bg-rose-50 rounded-lg text-xs text-gray-600">
+                <p className="font-medium text-gray-700 mb-1">Exemplo de cálculo:</p>
+                <p>Orçamento: R$ 10.000,00</p>
+                <p>Negociado: R$ 8.500,00</p>
+                <p>Economia: R$ 1.500,00</p>
+                <p className="font-bold text-rose-700 mt-1">
+                  Comissão ({comissaoPercentual}%): R$ {(1500 * parseFloat(comissaoPercentual || "0") / 100).toFixed(2)}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2 border-t">
+              <Button
+                size="sm"
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+                disabled={salvarMut.isPending}
+                onClick={() => salvarMut.mutate({ companyId, comissaoPercentual: parseFloat(comissaoPercentual || "10") })}
               >
                 <Save className="w-3.5 h-3.5 mr-1" />
                 {salvarMut.isPending ? "Salvando..." : "Salvar"}

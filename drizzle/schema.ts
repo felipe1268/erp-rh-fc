@@ -5806,6 +5806,7 @@ export const ocNumberConfig = pgTable("oc_number_config", {
   digitosSequencial: integer("digitos_sequencial").default(3),
   reiniciarAnualmente: smallint("reiniciar_anualmente").default(1),
   proximoNumero: integer("proximo_numero").default(1),
+  comissaoPercentual: numeric("comissao_percentual", { precision: 5, scale: 2 }).default("10"),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_onc_company").on(t.companyId)]);
 

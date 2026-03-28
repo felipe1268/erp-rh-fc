@@ -5676,4 +5676,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 19:35:00",
   },
+  {
+    version: 835,
+    titulo: "Comissoes: tela de analise + configuracao de percentual",
+    descricao: "Tela de Comissoes redesenhada como painel de analise (somente leitura, sem botoes de acao). Mostra economia gerada, comissoes acumuladas, pagas e aguardando aprovacao. Percentual de comissao agora e configuravel pelo usuario master em Configuracoes Gerais > Compras > Comissao de Compradores (padrao 10%). Exemplo de calculo exibido na configuracao para facilitar o entendimento.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 20:00:00",
+  },
 ];

@@ -610,9 +610,14 @@ export const purchaseRouter = router({
     }),
 
   calcularComissoes: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number(), compradorId: z.number(), compradorNome: z.string().optional(), obraNome: z.string().optional(), percentualParticipacao: z.number().default(5) }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), compradorId: z.number(), compradorNome: z.string().optional(), obraNome: z.string().optional(), percentualParticipacao: z.number().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      let pct = input.percentualParticipacao;
+      if (pct === undefined || pct === null) {
+        const cfg = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
+        pct = cfg.length ? Number(cfg[0].comissaoPercentual ?? 10) : 10;
+      }
       const ocs = await db.select().from(purchaseOrders)
         .where(and(eq(purchaseOrders.companyId, input.companyId), eq(purchaseOrders.obraId, input.obraId), eq(purchaseOrders.compradorId, input.compradorId)));
       const valorComprado = ocs.reduce((s: number, o: any) => s + n(o.valorTotal), 0);
@@ -620,12 +625,12 @@ export const purchaseRouter = router({
         .where(and(eq(purchaseRequests.companyId, input.companyId), eq(purchaseRequests.obraId, input.obraId)));
       const valorMeta = scs.reduce((s: number, sc: any) => s + n(sc.valorMetaTotal), 0);
       const economia = Math.max(0, valorMeta - valorComprado);
-      const comissao = economia * (input.percentualParticipacao / 100);
+      const comissao = economia * (pct / 100);
       const [c] = await db.insert(buyerCommissions).values({
         companyId: input.companyId, obraId: input.obraId, obraNome: input.obraNome,
         compradorId: input.compradorId, compradorNome: input.compradorNome,
         valorMetaTotal: String(valorMeta.toFixed(2)), valorCompradoTotal: String(valorComprado.toFixed(2)),
-        economiaTotal: String(economia.toFixed(2)), percentualParticipacao: String(input.percentualParticipacao),
+        economiaTotal: String(economia.toFixed(2)), percentualParticipacao: String(pct),
         valorComissao: String(comissao.toFixed(2)), calculadoEm: new Date().toISOString(),
       } as any).returning();
       return c;
@@ -801,15 +806,20 @@ export const purchaseRouter = router({
     .input(z.object({
       companyId: z.number(), prefixo: z.string().optional(), separador: z.string().optional(),
       formatoAno: z.string().optional(), digitosSequencial: z.number().optional(),
+      comissaoPercentual: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       const { companyId, ...rest } = input;
+      const vals: any = { ...rest, updatedAt: new Date().toISOString() };
+      if (vals.comissaoPercentual !== undefined) {
+        vals.comissaoPercentual = String(vals.comissaoPercentual);
+      }
       const existing = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, companyId)).limit(1);
       if (existing.length) {
-        await db.update(ocNumberConfig).set({ ...rest, updatedAt: new Date().toISOString() } as any).where(eq(ocNumberConfig.companyId, companyId));
+        await db.update(ocNumberConfig).set(vals).where(eq(ocNumberConfig.companyId, companyId));
       } else {
-        await db.insert(ocNumberConfig).values({ companyId, ...rest } as any);
+        await db.insert(ocNumberConfig).values({ companyId, ...vals } as any);
       }
       return { ok: true };
     }),
