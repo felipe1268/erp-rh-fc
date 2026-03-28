@@ -978,6 +978,8 @@ Responda APENAS com um objeto JSON no formato:
         quantidadeServico: z.number().optional(),
         coeficiente: z.number().optional(),
         origemEap: z.boolean().optional(),
+        semVerba: z.boolean().optional(),
+        motivoSemVerba: z.string().optional(),
       })),
     }))
     .mutation(async ({ input }) => {
@@ -1017,6 +1019,8 @@ Responda APENAS com um objeto JSON no formato:
             quantidadeServico: it.quantidadeServico ? String(it.quantidadeServico) : null,
             coeficiente: it.coeficiente ? String(it.coeficiente) : null,
             origemEap: it.origemEap ?? false,
+            semVerba: it.semVerba ?? false,
+            motivoSemVerba: it.motivoSemVerba ?? null,
           }))
         );
       }
@@ -1100,6 +1104,8 @@ Responda APENAS com um objeto JSON no formato:
               quantidade: n(it.quantidade),
               precoUnitario: 0,
               solicitacaoItemId: it.id,
+              semVerba: it.semVerba ?? false,
+              motivoSemVerba: it.motivoSemVerba ?? null,
             }));
             const totalGeral = 0;
 
@@ -1125,6 +1131,8 @@ Responda APENAS com um objeto JSON no formato:
                   precoUnitario: "0",
                   descontoPct: "0",
                   total: "0",
+                  semVerba: it.semVerba ?? false,
+                  motivoSemVerba: it.motivoSemVerba ?? null,
                 }))
               );
             }
@@ -2670,6 +2678,7 @@ Retorne APENAS um JSON válido neste formato:
         formaPagamento: (fornInfo as any)?.formaPagamento ?? (cot as any).formaPagamento ?? null,
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
         dataEntregaPrevista: dataEntregaPrevista,
+        pendenteCoberturaOrcamentaria: itens.some(it => (it as any).semVerba === true),
       } as any).returning();
       if (itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
@@ -4950,6 +4959,8 @@ Retorne APENAS um JSON válido neste formato:
                     precoUnitario: "0",
                     descontoPct: "0",
                     total: "0",
+                    semVerba: it.semVerba ?? false,
+                    motivoSemVerba: it.motivoSemVerba ?? null,
                   }))
                 );
               }

@@ -4944,6 +4944,8 @@ export const comprasSolicitacoesItens = pgTable("compras_solicitacoes_itens", {
   quantidadeServico:  numeric("quantidade_servico", { precision: 14, scale: 4 }),
   coeficiente:        numeric({ precision: 18, scale: 6 }),
   origemEap:          boolean("origem_eap").default(false),
+  semVerba:           boolean("sem_verba").default(false),
+  motivoSemVerba:     varchar("motivo_sem_verba", { length: 50 }),
 });
 
 export const comprasCotacoes = pgTable("compras_cotacoes", {
@@ -4979,6 +4981,8 @@ export const comprasCotacoesItens = pgTable("compras_cotacoes_itens", {
   precoUnitario:    numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
   descontoPct:      numeric("desconto_pct", { precision: 5, scale: 2 }).default("0"),
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
+  semVerba:         boolean("sem_verba").default(false),
+  motivoSemVerba:   varchar("motivo_sem_verba", { length: 50 }),
 });
 
 export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores", {
@@ -5072,6 +5076,7 @@ export const comprasOrdens = pgTable("compras_ordens", {
   solicitacaoId:      integer("solicitacao_id"),
   observacoes:        text(),
   pdfUrl:             text("pdf_url"),
+  pendenteCoberturaOrcamentaria: boolean("pendente_cobertura_orcamentaria").default(false),
   criadoEm:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });

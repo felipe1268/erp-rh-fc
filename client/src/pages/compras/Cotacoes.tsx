@@ -2301,12 +2301,24 @@ export default function Cotacoes() {
                                           eapCodigo={(it as any).eapCodigo}
                                           origemEap={(it as any).origemEap}
                                         />
+                                        {(it as any).semVerba && (
+                                          <div className="mt-1 flex items-center gap-1.5">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                              SEM VERBA
+                                            </span>
+                                            {(it as any).motivoSemVerba && (
+                                              <span className="text-[9px] text-red-500 italic">
+                                                {(it as any).motivoSemVerba === "quebra_dano" ? "Quebra/Dano" : (it as any).motivoSemVerba === "furto" ? "Furto" : (it as any).motivoSemVerba === "erro_orcamento" ? "Erro Orçamento" : (it as any).motivoSemVerba === "qtd_insuficiente" ? "Qtd Insuficiente" : (it as any).motivoSemVerba === "retrabalho" ? "Retrabalho" : "Outro"}
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
                                         {(it as any).qtdOrcada > 0 && (() => {
                                           const orcada = (it as any).qtdOrcada;
                                           const estaSC = metaQtd;
                                           const totalSolic = (it as any).qtdTotalSolicitada;
                                           const outrasSC = Math.max(0, totalSolic - estaSC);
-                                          const saldoRestante = Math.max(0, orcada - totalSolic);
+                                          const saldoRestante = orcada - totalSolic;
                                           const rawPctEsta = (estaSC / orcada) * 100;
                                           const rawPctOutras = (outrasSC / orcada) * 100;
                                           const rawTotal = rawPctEsta + rawPctOutras;
@@ -2314,26 +2326,29 @@ export default function Cotacoes() {
                                           const pctEsta = rawPctEsta * scale;
                                           const pctOutras = rawPctOutras * scale;
                                           const isTotal = totalSolic >= orcada;
+                                          const isEstouro = totalSolic > orcada;
                                           return (
                                             <div className="mt-1.5 space-y-0.5">
                                               <div className="flex items-center gap-1.5">
                                                 <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden flex">
                                                   {pctOutras > 0 && <div className="h-full bg-blue-300" style={{ width: `${pctOutras}%` }} title={`Outras SCs: ${outrasSC}`} />}
-                                                  <div className="h-full bg-amber-500" style={{ width: `${pctEsta}%` }} title={`Esta SC: ${estaSC}`} />
+                                                  <div className={`h-full ${isEstouro ? "bg-red-500" : "bg-amber-500"}`} style={{ width: `${pctEsta}%` }} title={`Esta SC: ${estaSC}`} />
                                                 </div>
-                                                <span className={`text-[10px] font-bold shrink-0 ${isTotal ? "text-emerald-600" : "text-amber-600"}`}>
+                                                <span className={`text-[10px] font-bold shrink-0 ${isEstouro ? "text-red-600" : isTotal ? "text-emerald-600" : "text-amber-600"}`}>
                                                   {Math.round(((totalSolic) / orcada) * 100)}%
                                                 </span>
                                               </div>
                                               <div className="flex gap-2 text-[9px] text-gray-400">
-                                                {isTotal ? (
+                                                {isEstouro ? (
+                                                  <span className="text-red-600 font-medium">Saldo: {saldoRestante.toFixed(1)} (estouro de {Math.abs(saldoRestante).toFixed(1)})</span>
+                                                ) : isTotal ? (
                                                   <span className="text-emerald-600 font-medium">Compra total do orçamento</span>
                                                 ) : (
                                                   <>
                                                     <span>Orç: {orcada}</span>
                                                     <span className="text-amber-600">Esta SC: {estaSC}</span>
                                                     {outrasSC > 0 && <span className="text-blue-500">Outras: {outrasSC}</span>}
-                                                    <span className="text-gray-500">Falta: {saldoRestante}</span>
+                                                    <span className="text-gray-500">Falta: {Math.max(0, saldoRestante)}</span>
                                                   </>
                                                 )}
                                               </div>

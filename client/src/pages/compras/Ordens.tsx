@@ -353,7 +353,16 @@ export default function Ordens() {
                     {parseFloat(oc.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                   </TableCell>
                   <TableCell className="text-gray-500 text-sm">{oc.dataEntregaPrevista ? new Date(oc.dataEntregaPrevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
-                  <TableCell><span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${st.cls}`}>{st.label}</span></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${st.cls}`}>{st.label}</span>
+                      {(oc as any).pendenteCoberturaOrcamentaria && (
+                        <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200" title="Itens sem verba orçamentária — pendente de realocação">
+                          S/ VERBA
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell><ChevronRight className="h-4 w-4 text-gray-400" /></TableCell>
                 </TableRow>
               );
@@ -527,6 +536,15 @@ export default function Ordens() {
                         {semaforoDetalhe.dias === 0 ? "Entrega prevista para hoje" : `Faltam ${semaforoDetalhe.dias} dia${semaforoDetalhe.dias !== 1 ? "s" : ""} para a entrega`}
                         {semaforoDetalhe.dataReferencia && ` — ${new Date(semaforoDetalhe.dataReferencia + "T00:00:00").toLocaleDateString("pt-BR")}`}
                       </p>
+                    </div>
+                  </div>
+                )}
+                {(detalhe as any).pendenteCoberturaOrcamentaria && (
+                  <div className="flex items-center gap-3 rounded-lg border border-red-300 bg-red-50 p-3">
+                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-800">Pendente de Cobertura Orçamentária</p>
+                      <p className="text-xs text-red-600">Esta OC contém itens sem verba disponível no orçamento. É necessário realizar uma realocação de verba para cobrir o custo.</p>
                     </div>
                   </div>
                 )}

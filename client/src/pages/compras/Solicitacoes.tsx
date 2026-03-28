@@ -47,7 +47,16 @@ interface ItemForm {
   orcamentoItemId?: number; eapCodigo?: string;
   insumoCodigo?: string; composicaoCodigo?: string; precoMeta?: number;
   quantidadeServico?: number; coeficiente?: number; origemEap?: boolean;
+  semVerba?: boolean; motivoSemVerba?: string;
 }
+const MOTIVOS_SEM_VERBA = [
+  { value: "quebra_dano", label: "Quebra / Dano" },
+  { value: "furto", label: "Furto / Roubo" },
+  { value: "erro_orcamento", label: "Erro de Orçamento" },
+  { value: "qtd_insuficiente", label: "Quantidade Insuficiente" },
+  { value: "retrabalho", label: "Retrabalho" },
+  { value: "outro", label: "Outro" },
+];
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", observacoes: "" });
 
 function UltimaCompraCard({ companyId, descricao, insumoCodigo }: { companyId: number; descricao: string; insumoCodigo?: string }) {
@@ -384,17 +393,31 @@ export default function Solicitacoes() {
     }
 
     const saldoProblems: string[] = [];
+    const itensSemVerba = new Set<string>();
     for (const [orcId, saldo] of Object.entries(saldoData)) {
       const qtdServ = parseFloat(eapQtdServico[parseInt(orcId)] || "0");
-      if (qtdServ > 0 && saldo.saldoDisponivel < qtdServ) {
+      if (qtdServ > 0 && saldo.saldoDisponivel <= 0) {
+        saldoProblems.push(`${saldo.descricao}: SEM VERBA DISPONÍVEL (100%+ consumido)`);
+        itensSemVerba.add(orcId);
+      } else if (qtdServ > 0 && saldo.saldoDisponivel < qtdServ) {
         const excesso = ((qtdServ - saldo.saldoDisponivel) / saldo.qtdOrcada * 100).toFixed(0);
         saldoProblems.push(`${saldo.descricao}: excede saldo em ${excesso}%`);
+        itensSemVerba.add(orcId);
       }
     }
 
     if (saldoProblems.length > 0) {
-      const msg = `Atenção: ${saldoProblems.join("; ")}. Deseja continuar mesmo assim?`;
-      if (!confirm(msg)) return;
+      const msg = `⚠️ ATENÇÃO - Itens sem verba:\n\n${saldoProblems.join("\n")}\n\nInforme o motivo e clique OK para continuar.`;
+      const motivo = prompt(msg + "\n\nMotivo:\n1 - Quebra/Dano\n2 - Furto/Roubo\n3 - Erro de Orçamento\n4 - Qtd Insuficiente\n5 - Retrabalho\n6 - Outro\n\nDigite o número:");
+      if (!motivo) return;
+      const motivoMap: Record<string, string> = { "1": "quebra_dano", "2": "furto", "3": "erro_orcamento", "4": "qtd_insuficiente", "5": "retrabalho", "6": "outro" };
+      const motivoVal = motivoMap[motivo.trim()] ?? "outro";
+      for (const [, item] of consolidados) {
+        if (item.orcamentoItemId && itensSemVerba.has(String(item.orcamentoItemId))) {
+          item.semVerba = true;
+          item.motivoSemVerba = motivoVal;
+        }
+      }
     }
 
     let imgUrl: string | undefined;
@@ -429,6 +452,8 @@ export default function Solicitacoes() {
         quantidadeServico: i.quantidadeServico,
         coeficiente: i.coeficiente,
         origemEap: i.origemEap,
+        semVerba: i.semVerba,
+        motivoSemVerba: i.motivoSemVerba,
       })),
     });
   }
@@ -1211,6 +1236,12 @@ export default function Solicitacoes() {
                         <div>
                           <p className="text-gray-900 text-sm font-medium">{it.descricao}</p>
                           <p className="text-gray-400 text-xs">{it.unidade || "un"} · Qtd: {qtdTotal.toLocaleString("pt-BR")}</p>
+                          {it.semVerba && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">SEM VERBA</span>
+                              {it.motivoSemVerba && <span className="text-[9px] text-red-500 italic">{it.motivoSemVerba === "quebra_dano" ? "Quebra/Dano" : it.motivoSemVerba === "furto" ? "Furto" : it.motivoSemVerba === "erro_orcamento" ? "Erro Orçamento" : it.motivoSemVerba === "qtd_insuficiente" ? "Qtd Insuficiente" : it.motivoSemVerba === "retrabalho" ? "Retrabalho" : "Outro"}</span>}
+                            </div>
+                          )}
                         </div>
                         <span className={`text-xs px-2 py-0.5 rounded border ${it.statusItem === "recebido" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : it.statusItem === "recebido_parcial" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
                           {it.statusItem === "recebido" ? "Recebido" : it.statusItem === "recebido_parcial" ? `Parcial (${pct}%)` : "Pendente"}
