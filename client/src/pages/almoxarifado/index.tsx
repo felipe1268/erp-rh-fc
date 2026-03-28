@@ -148,7 +148,7 @@ export default function AlmoxarifadoPage() {
   );
 
   const normNomeItem = (nome: string) =>
-    nome.replace(/^\[[\d.]+\]\s*/, "").trim().toLowerCase().replace(/\s+/g, " ");
+    nome.replace(/^\[[\d.]+\]\s*/, "").replace(/\s*\[[\d.]+\]\s*$/, "").trim().toLowerCase().replace(/\s+/g, " ");
 
   const lista = useMemo(() => {
     let r = itens;
@@ -168,9 +168,10 @@ export default function AlmoxarifadoPage() {
     }
 
     const merged: any[] = [];
+    const stripCode = (s: string) => s.replace(/^\[[\d.]+\]\s*/, "").replace(/\s*\[[\d.]+\]\s*$/, "").trim();
     for (const [, arr] of groups) {
       if (arr.length === 1) {
-        merged.push(arr[0]);
+        merged.push({ ...arr[0], nome: stripCode(arr[0].nome) });
       } else {
         const first = arr[0];
         const qtdTotal = arr.reduce((s: number, i: any) => s + n(i.quantidadeAtual), 0);
@@ -185,7 +186,7 @@ export default function AlmoxarifadoPage() {
           valorUnitario: valUnit ? valUnit.valorUnitario : first.valorUnitario,
           fotoUrl: foto ? foto.fotoUrl : first.fotoUrl,
           _subItems: arr,
-          nome: first.nome.replace(/^\[[\d.]+\]\s*/, "").trim(),
+          nome: stripCode(first.nome),
           codigoInterno: arr.map((i: any) => i.codigoInterno).filter(Boolean).join(", ") || first.codigoInterno,
         });
       }
