@@ -818,6 +818,7 @@ export default function Solicitacoes() {
                               const qtdStr = eapQtdServico[it.id] || "";
                               const qtdVal = parseFloat(qtdStr) || 0;
                               const estouro = saldo && qtdVal > 0 && qtdVal > saldo.saldoDisponivel;
+                              const saldoJaNegativo = saldo && saldo.saldoDisponivel < 0;
                               const statusColor = getStatusColor(it.id);
 
                               return (
@@ -842,6 +843,7 @@ export default function Solicitacoes() {
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0 text-xs text-gray-400">
                                       <span>{parseFloat(String(it.quantidade ?? "0")).toLocaleString("pt-BR")} {it.unidade || "vb"}</span>
+                                      {saldoJaNegativo && <span className="text-[9px] font-bold text-red-600 bg-red-50 border border-red-200 px-1 py-0.5 rounded">SALDO: {saldo.saldoDisponivel.toLocaleString("pt-BR")}</span>}
                                       {qtdVal > 0 && <span className="text-amber-600 font-medium">✓</span>}
                                     </div>
                                   </div>
@@ -866,9 +868,16 @@ export default function Solicitacoes() {
                                             <div className="text-teal-400 uppercase font-medium">Recebido</div>
                                             <div className="text-teal-600 font-bold text-xs">{parseFloat(String(saldo.qtdRecebida ?? 0)).toLocaleString("pt-BR")}</div>
                                           </div>
-                                          <div className={`rounded px-1.5 py-1.5 border text-center ${estouro ? "bg-red-50 border-red-200" : saldo.saldoDisponivel <= 0 ? "bg-gray-100 border-gray-300" : "bg-emerald-50 border-emerald-200"}`}>
-                                            <div className={`uppercase font-medium ${estouro ? "text-red-500" : saldo.saldoDisponivel <= 0 ? "text-gray-500" : "text-emerald-500"}`}>Saldo</div>
-                                            <div className={`font-bold text-xs ${estouro ? "text-red-600" : saldo.saldoDisponivel <= 0 ? "text-gray-600" : "text-emerald-600"}`}>{parseFloat(String(saldo.saldoDisponivel)).toLocaleString("pt-BR")}</div>
+                                          <div className={`rounded px-1.5 py-1.5 border text-center ${estouro || saldo.saldoDisponivel < 0 ? "bg-red-50 border-red-200" : saldo.saldoDisponivel === 0 ? "bg-gray-100 border-gray-300" : "bg-emerald-50 border-emerald-200"}`}>
+                                            <div className={`uppercase font-medium ${estouro || saldo.saldoDisponivel < 0 ? "text-red-500" : saldo.saldoDisponivel === 0 ? "text-gray-500" : "text-emerald-500"}`}>Saldo</div>
+                                            <div className={`font-bold text-xs ${estouro || saldo.saldoDisponivel < 0 ? "text-red-600" : saldo.saldoDisponivel === 0 ? "text-gray-600" : "text-emerald-600"}`}>
+                                              {(() => {
+                                                const saldoAposReq = estouro ? saldo.saldoDisponivel - qtdVal : saldo.saldoDisponivel;
+                                                return saldoAposReq < 0
+                                                  ? `-${Math.abs(saldoAposReq).toLocaleString("pt-BR")}`
+                                                  : saldoAposReq.toLocaleString("pt-BR");
+                                              })()}
+                                            </div>
                                           </div>
                                           <div className="bg-amber-50 rounded px-1.5 py-1.5 border border-amber-200 text-center">
                                             <div className="text-amber-500 uppercase font-medium">Solic.</div>
@@ -880,7 +889,7 @@ export default function Solicitacoes() {
                                       {estouro && (
                                         <div className="flex items-center gap-1.5 text-[11px] text-red-600 bg-red-50 border border-red-200 rounded px-2.5 py-1.5">
                                           <AlertTriangle className="h-3 w-3 shrink-0" />
-                                          <span>Estouro de saldo! Quantidade excede o orçado em {((qtdVal - saldo.saldoDisponivel) / parseFloat(String(saldo.qtdOrcada)) * 100).toFixed(0)}%</span>
+                                          <span>Estouro de saldo! Excede em {(qtdVal - saldo.saldoDisponivel).toLocaleString("pt-BR")} {saldo.unidade || "un"} ({((qtdVal - saldo.saldoDisponivel) / parseFloat(String(saldo.qtdOrcada)) * 100).toFixed(0)}%) — Saldo resultante: <strong className="text-red-700">-{(qtdVal - saldo.saldoDisponivel).toLocaleString("pt-BR")}</strong></span>
                                         </div>
                                       )}
 
