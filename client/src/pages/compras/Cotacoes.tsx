@@ -2231,10 +2231,12 @@ export default function Cotacoes() {
                                     <div className={`border-t border-gray-100 border-r border-gray-200 text-xs text-gray-400 bg-blue-50/20 ${isMelhor ? "bg-emerald-50/20" : ""}`}>
                                       <div className="px-1 py-1 text-center truncate" style={{ minWidth: 0 }}>
                                         {(() => {
-                                          const fp = editingFornId === p.fornecedorId ? editFormaPag[p.fornecedorId] : (p as any).formaPagamento;
-                                          const tp = editingFornId === p.fornecedorId ? editTipoPag[p.fornecedorId] : (p as any).tipoPagamento;
+                                          const fp = editFormaPag[p.fornecedorId] ?? (p as any).formaPagamento;
+                                          const tp = editTipoPag[p.fornecedorId] ?? (p as any).tipoPagamento;
+                                          const prazoLocal = editPrazo[p.fornecedorId];
                                           const tpInfo = tp ? getTipoPagamentoInfo(tp) : null;
-                                          const hasCond = fp || tp || p.prazoEntregaDias;
+                                          const modo = condModo[p.fornecedorId];
+                                          const hasCond = fp || tp || p.prazoEntregaDias || prazoLocal || (modo && modo !== "padrao");
                                           const fpLabel = fp === "pix" ? "⚡PIX" : fp === "boleto" ? "📄Bol." : fp === "transferencia" ? "🏦Transf" : fp === "cheque" ? "📝Cheq" : fp === "cartao" ? "💳Cart" : fp === "deposito" ? "💰Dep" : "";
                                           return (
                                             <div className="space-y-0.5">
@@ -2242,8 +2244,10 @@ export default function Cotacoes() {
                                                 <div className="flex items-center gap-1 flex-wrap justify-center">
                                                   {fp && <span className={`px-1 py-0.5 rounded-full text-[8px] font-bold ${fp === "pix" ? "bg-green-100 text-green-700" : fp === "boleto" ? "bg-blue-100 text-blue-700" : fp === "transferencia" ? "bg-indigo-100 text-indigo-700" : fp === "cheque" ? "bg-amber-100 text-amber-700" : fp === "cartao" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>{fpLabel}</span>}
                                                   {tpInfo && <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-violet-100 text-violet-700">{tpInfo.label}</span>}
-                                                  {p.prazoEntregaDias && <span className="text-[9px] text-gray-400">{p.prazoEntregaDias}d</span>}
-                                                  {(p as any).freteTipo === "fob" && <span className="text-[8px] font-bold text-orange-600">FOB</span>}
+                                                  {(prazoLocal || p.prazoEntregaDias) && <span className="text-[9px] text-gray-400">{prazoLocal || p.prazoEntregaDias}d</span>}
+                                                  {((editFreteTipo[p.fornecedorId] ?? (p as any).freteTipo) === "fob") && <span className="text-[8px] font-bold text-orange-600">FOB</span>}
+                                                  {modo === "custom" && <span className="text-[8px] font-bold text-amber-600">Custom</span>}
+                                                  {modo === "fechamento" && <span className="text-[8px] font-bold text-blue-600">Fech.</span>}
                                                 </div>
                                               ) : (
                                                 <span className="text-[9px] text-gray-300 italic">Sem condição</span>
