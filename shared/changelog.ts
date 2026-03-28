@@ -5703,4 +5703,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 21:30:00",
   },
+  {
+    version: 838,
+    titulo: "Compras: unidade (m2, m3, un, h) visivel nos cards de saldo e campo de quantidade",
+    descricao: "Cada card de saldo (Orcado, Solicit., Comprado, Recebido, Saldo, Solic.) agora exibe a unidade de medida de forma destacada abaixo do valor. Campo 'Qtd. servico a executar' tambem exibe a unidade com destaque (fundo cinza, borda, negrito).",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 22:45:00",
+  },
 ];

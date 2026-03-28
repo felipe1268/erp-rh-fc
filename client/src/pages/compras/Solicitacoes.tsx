@@ -855,18 +855,22 @@ export default function Solicitacoes() {
                                           <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
                                             <div className="text-gray-400 uppercase font-medium">Orçado</div>
                                             <div className="text-gray-900 font-bold text-xs">{parseFloat(String(saldo.qtdOrcada)).toLocaleString("pt-BR")}</div>
+                                            <div className="text-[9px] text-gray-500 font-semibold mt-0.5 bg-gray-100 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
                                           </div>
                                           <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
                                             <div className="text-blue-400 uppercase font-medium">Solicit.</div>
                                             <div className="text-blue-600 font-bold text-xs">{parseFloat(String(saldo.qtdJaSolicitada)).toLocaleString("pt-BR")}</div>
+                                            <div className="text-[9px] text-blue-500 font-semibold mt-0.5 bg-blue-50 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
                                           </div>
                                           <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
                                             <div className="text-purple-400 uppercase font-medium">Comprado</div>
                                             <div className="text-purple-600 font-bold text-xs">{parseFloat(String(saldo.qtdComprada ?? 0)).toLocaleString("pt-BR")}</div>
+                                            <div className="text-[9px] text-purple-500 font-semibold mt-0.5 bg-purple-50 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
                                           </div>
                                           <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
                                             <div className="text-teal-400 uppercase font-medium">Recebido</div>
                                             <div className="text-teal-600 font-bold text-xs">{parseFloat(String(saldo.qtdRecebida ?? 0)).toLocaleString("pt-BR")}</div>
+                                            <div className="text-[9px] text-teal-500 font-semibold mt-0.5 bg-teal-50 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
                                           </div>
                                           <div className={`rounded px-1.5 py-1.5 border text-center ${estouro || saldo.saldoDisponivel < 0 ? "bg-red-50 border-red-200" : saldo.saldoDisponivel === 0 ? "bg-gray-100 border-gray-300" : "bg-emerald-50 border-emerald-200"}`}>
                                             <div className={`uppercase font-medium ${estouro || saldo.saldoDisponivel < 0 ? "text-red-500" : saldo.saldoDisponivel === 0 ? "text-gray-500" : "text-emerald-500"}`}>Saldo</div>
@@ -878,10 +882,12 @@ export default function Solicitacoes() {
                                                   : saldoAposReq.toLocaleString("pt-BR");
                                               })()}
                                             </div>
+                                            <div className={`text-[9px] font-semibold mt-0.5 rounded px-1 py-0.5 inline-block ${estouro || saldo.saldoDisponivel < 0 ? "text-red-500 bg-red-100" : saldo.saldoDisponivel === 0 ? "text-gray-500 bg-gray-200" : "text-emerald-500 bg-emerald-100"}`}>{saldo.unidade || it.unidade || "un"}</div>
                                           </div>
                                           <div className="bg-amber-50 rounded px-1.5 py-1.5 border border-amber-200 text-center">
                                             <div className="text-amber-500 uppercase font-medium">Solic.</div>
                                             <div className="text-amber-700 font-bold text-xs">{qtdVal.toLocaleString("pt-BR")}</div>
+                                            <div className="text-[9px] text-amber-600 font-semibold mt-0.5 bg-amber-100 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
                                           </div>
                                         </div>
                                       )}
@@ -902,7 +908,7 @@ export default function Solicitacoes() {
                                           value={qtdStr}
                                           onChange={e => handleEapQtdChange(it.id, e.target.value, it)}
                                         />
-                                        <span className="text-xs text-gray-400">{it.unidade || "vb"}</span>
+                                        <span className="text-xs font-bold text-gray-700 bg-gray-100 border border-gray-300 rounded px-1.5 py-0.5">{it.unidade || "vb"}</span>
                                         {saldo && saldo.saldoDisponivel > 0 && (
                                           <button
                                             type="button"
