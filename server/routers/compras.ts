@@ -2598,6 +2598,13 @@ Retorne APENAS um JSON válido neste formato:
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta cotação já foi aprovada e possui OC gerada." });
+
+      const existingOC = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
+        .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'cancelada'`))
+        .limit(1);
+      if (existingOC.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma OC ativa para esta cotação." });
+
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
 
       // Busca preços do fornecedor vencedor no mapa de cotação
