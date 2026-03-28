@@ -5724,7 +5724,7 @@ export const CHANGELOG: RevisionEntry[] = [
   {
     version: 840,
     titulo: "Compras: Indicador visual de cobertura de insumos por servico EAP",
-    descricao: "Cada servico na lista EAP agora mostra uma barra de progresso e contador (ex: 3/7 insumos) indicando quantos insumos da composicao ja foram solicitados. Bolinha de status fica laranja automaticamente quando a cobertura e parcial (nem todos os insumos foram comprados). Cobertura 100% mostra barra verde.",
+    descricao: "Cada servico na lista EAP agora mostra uma barra de progresso e contador (ex: 3/7 insumos) indicando quantos insumos da composicao ja foram solicitados. Bolinha de status fica laranja automaticamente quando a cobertura e parcial (nem todos os insumos foram comprados). Cobertura 100% mostra barra verde. Na secao 'Onde este insumo e utilizado' do modo consolidado, cada item agora mostra o caminho completo da EAP (breadcrumb) com grupo, disciplina, pavimento etc, facilitando rastrear onde cada insumo foi comprado.",
     tipo: "feature",
     modulos: "Compras",
     criadoPor: "Sistema",

@@ -278,6 +278,26 @@ export default function Solicitacoes() {
   const trpcCtx = trpc.useUtils();
   const [batchSaldo, setBatchSaldo] = useState<Record<number, { qtdSolicitada: number; qtdComprada: number; qtdRecebida: number; saldoDisponivel: number; qtdOrcada: number }>>({});
 
+  const eapBreadcrumbMap = useMemo(() => {
+    if (!eapQ.data?.items) return {} as Record<string, { code: string; desc: string }[]>;
+    const byCode: Record<string, string> = {};
+    for (const it of eapQ.data.items) {
+      if (it.eapCodigo) byCode[it.eapCodigo] = it.descricao || "";
+    }
+    const result: Record<string, { code: string; desc: string }[]> = {};
+    for (const it of eapQ.data.items) {
+      if (!it.eapCodigo) continue;
+      const parts = it.eapCodigo.split(".");
+      const trail: { code: string; desc: string }[] = [];
+      for (let i = 1; i < parts.length; i++) {
+        const parentCode = parts.slice(0, i).join(".");
+        if (byCode[parentCode]) trail.push({ code: parentCode, desc: byCode[parentCode] });
+      }
+      result[it.eapCodigo] = trail;
+    }
+    return result;
+  }, [eapQ.data?.items]);
+
   function getStatusColor(itemId: number): { dot: string; label: string; bg: string } {
     const s = batchSaldo[itemId];
     if (!s) return { dot: "bg-gray-300", label: "Sem info", bg: "" };
@@ -1189,16 +1209,31 @@ export default function Solicitacoes() {
                                       <ListTree className="h-3 w-3" />
                                       Onde este insumo é utilizado:
                                     </div>
-                                    <div className="space-y-1">
-                                      {(ins.eapItens as any[]).map((eap: any, idx: number) => (
-                                        <div key={idx} className="flex items-center gap-2 text-[10px] bg-white rounded px-2 py-1 border border-purple-100">
-                                          <span className="font-mono text-purple-600 font-semibold shrink-0">{eap.eapCodigo}</span>
-                                          <span className="text-gray-700 truncate flex-1">{eap.servicoDescricao}</span>
-                                          <span className="text-gray-500 shrink-0">Qtd serviço: <b className="text-gray-800">{eap.qtdServico.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b></span>
-                                          <span className="text-gray-500 shrink-0">× {eap.coeficiente.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}</span>
-                                          <span className="text-purple-700 font-bold shrink-0">= {eap.qtdInsumo.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {ins.unidade}</span>
-                                        </div>
-                                      ))}
+                                    <div className="space-y-1.5">
+                                      {(ins.eapItens as any[]).map((eap: any, idx: number) => {
+                                        const trail = eapBreadcrumbMap[eap.eapCodigo] || [];
+                                        return (
+                                          <div key={idx} className="bg-white rounded px-2.5 py-1.5 border border-purple-100">
+                                            {trail.length > 0 && (
+                                              <div className="flex items-center gap-0.5 mb-1 flex-wrap">
+                                                {trail.map((t: any, ti: number) => (
+                                                  <span key={ti} className="flex items-center gap-0.5">
+                                                    {ti > 0 && <span className="text-gray-300 text-[8px]">›</span>}
+                                                    <span className="text-[9px] text-gray-400 bg-gray-50 rounded px-1 py-0.5 leading-none">{t.desc}</span>
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            )}
+                                            <div className="flex items-center gap-2 text-[10px]">
+                                              <span className="font-mono text-purple-600 font-semibold shrink-0">{eap.eapCodigo}</span>
+                                              <span className="text-gray-700 truncate flex-1">{eap.servicoDescricao}</span>
+                                              <span className="text-gray-500 shrink-0">Qtd: <b className="text-gray-800">{eap.qtdServico.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b></span>
+                                              <span className="text-gray-500 shrink-0">× {eap.coeficiente.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}</span>
+                                              <span className="text-purple-700 font-bold shrink-0">= {eap.qtdInsumo.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {ins.unidade}</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                 )}
