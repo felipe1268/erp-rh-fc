@@ -32,6 +32,8 @@ import {
   almoxarifadoRecebimentos,
   almoxarifadoRecebimentoItens,
   comprasOrdens,
+  comprasOrdensItens,
+  comprasSolicitacoesItens,
 } from "../../drizzle/schema";
 import { onOCEmitida, onOCCancelada, onRecebimentoConfirmado, onComissaoAprovada } from "../services/purchaseFinancialBridge";
 import crypto from "crypto";
@@ -630,6 +632,48 @@ export const purchaseRouter = router({
       if (input.status) conditions.push(eq(buyerCommissions.status, input.status));
       if (input.compradorId) conditions.push(eq(buyerCommissions.compradorId, input.compradorId));
       return db.select().from(buyerCommissions).where(and(...conditions)).orderBy(desc(buyerCommissions.createdAt));
+    }),
+
+  analiseComissoesOCs: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ocs = await db.select().from(comprasOrdens)
+        .where(eq(comprasOrdens.companyId, input.companyId))
+        .orderBy(desc(comprasOrdens.criadoEm));
+      const result: any[] = [];
+      for (const oc of ocs) {
+        const itens = await db.select().from(comprasOrdensItens)
+          .where(eq(comprasOrdensItens.ordemId, oc.id));
+        let valorMeta = 0;
+        let temMeta = false;
+        for (const item of itens) {
+          if (item.solicitacaoItemId) {
+            const [scItem] = await db.select().from(comprasSolicitacoesItens)
+              .where(eq(comprasSolicitacoesItens.id, item.solicitacaoItemId)).limit(1);
+            if (scItem && n((scItem as any).precoMeta) > 0) {
+              valorMeta += n((scItem as any).precoMeta) * n(item.quantidade);
+              temMeta = true;
+            }
+          }
+        }
+        const valorComprado = n(oc.total);
+        const economia = temMeta ? Math.max(0, valorMeta - valorComprado) : 0;
+        result.push({
+          id: oc.id,
+          numeroOc: oc.numeroOc,
+          fornecedorNome: oc.fornecedorNome,
+          obraId: oc.obraId,
+          status: oc.status,
+          valorComprado,
+          valorMeta: temMeta ? valorMeta : null,
+          economia,
+          temMeta,
+          totalItens: itens.length,
+          criadoEm: oc.criadoEm,
+        });
+      }
+      return result;
     }),
 
   calcularComissoes: protectedProcedure
