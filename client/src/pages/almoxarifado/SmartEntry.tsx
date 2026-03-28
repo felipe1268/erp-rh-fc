@@ -194,9 +194,12 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
 
   const handleOCItemsLoaded = useCallback(() => {
     if (!ocItems.data) return;
-    const items: EntryItem[] = ocItems.data.itens
-      .filter(i => i.quantidadePendente > 0)
-      .map(i => {
+    const pending = ocItems.data.itens.filter(i => i.quantidadePendente > 0);
+    if (pending.length === 0) {
+      toast.error("Todos os itens desta OC já foram entregues. Nada a receber.");
+      return;
+    }
+    const items: EntryItem[] = pending.map(i => {
         const existing = itens.find(it =>
           it.nome.toLowerCase().includes(i.descricao.toLowerCase().split(" ")[0]) ||
           i.descricao.toLowerCase().includes(it.nome.toLowerCase().split(" ")[0])
@@ -236,12 +239,14 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
   const updateItemQty = (idx: number, qty: number) => {
     setEntryItems(prev => prev.map((item, i) => {
       if (i !== idx) return item;
-      const isPartial = qty < item.quantidadeNf && qty > 0;
+      const maxQty = item.quantidadeOc && item.quantidadeOc > 0 ? item.quantidadeOc : item.quantidadeNf;
+      const cappedQty = maxQty > 0 ? Math.min(qty, maxQty) : qty;
+      const isPartial = cappedQty < item.quantidadeNf && cappedQty > 0;
       return {
         ...item,
-        quantidadeRecebida: qty,
-        recebido: qty > 0,
-        status: qty === 0 ? "nao_recebido" : isPartial ? "parcial" : "ok",
+        quantidadeRecebida: cappedQty,
+        recebido: cappedQty > 0,
+        status: cappedQty === 0 ? "nao_recebido" : isPartial ? "parcial" : "ok",
       };
     }));
   };
@@ -594,7 +599,7 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
                             <span className="text-amber-600 font-semibold"> (NF: {item.quantidadeNf})</span>
                           )}
                           {item.quantidadeOc !== undefined && item.quantidadeOc > 0 && (
-                            <span className="text-blue-600 font-semibold"> (OC: {item.quantidadeOc})</span>
+                            <span className="text-blue-600 font-semibold"> (pendente: {item.quantidadeOc})</span>
                           )}
                         </span>
                       </div>

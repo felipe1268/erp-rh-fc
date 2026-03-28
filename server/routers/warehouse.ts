@@ -1470,6 +1470,24 @@ REGRAS:
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      if (input.ordemCompraId) {
+        const [ocCheck] = await db.select().from(comprasOrdens)
+          .where(and(eq(comprasOrdens.id, input.ordemCompraId), eq(comprasOrdens.companyId, input.companyId)));
+        if (ocCheck && ocCheck.status === "entregue") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Esta OC já foi totalmente entregue. Não é possível registrar novo recebimento." });
+        }
+        if (ocCheck) {
+          const ocItensCheck = await db.select().from(comprasOrdensItens)
+            .where(eq(comprasOrdensItens.ordemId, input.ordemCompraId));
+          const allDelivered = ocItensCheck.every(it =>
+            parseFloat(String(it.quantidadeEntregue) || "0") >= parseFloat(String(it.quantidade) || "0")
+          );
+          if (allDelivered) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Todos os itens desta OC já foram entregues. Não há pendências de recebimento." });
+          }
+        }
+      }
+
       const itensRecebidos = input.itens.filter(i => i.recebido);
       const temDivergencia = input.itens.some(i =>
         !i.recebido ||
@@ -1564,8 +1582,12 @@ REGRAS:
               .where(and(eq(comprasOrdensItens.id, item.ocItemId), eq(comprasOrdensItens.ordemId, input.ordemCompraId)));
             if (ocItem) {
               const entregueAtual = parseFloat(String(ocItem.quantidadeEntregue) || "0");
+              const qtdOc = parseFloat(String(ocItem.quantidade) || "0");
+              const pendente = Math.max(0, qtdOc - entregueAtual);
+              if (pendente <= 0) continue;
+              const qtdAceita = Math.min(item.quantidadeRecebida, pendente);
               await db.update(comprasOrdensItens)
-                .set({ quantidadeEntregue: String(entregueAtual + item.quantidadeRecebida) } as any)
+                .set({ quantidadeEntregue: String(entregueAtual + qtdAceita) } as any)
                 .where(and(eq(comprasOrdensItens.id, item.ocItemId), eq(comprasOrdensItens.ordemId, input.ordemCompraId)));
             }
           }
