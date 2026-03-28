@@ -483,6 +483,8 @@ export default function Cotacoes() {
   const [iaFileBuffer, setIaFileBuffer] = useState<{ fornecedorId: number; base64: string; fileName: string; mimeType: string } | null>(null);
   const [iaProgress, setIaProgress] = useState<{ fornecedorId: number; percent: number; etapa: string } | null>(null);
   const iaProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [iaJobId, setIaJobId] = useState<string | null>(null);
+  const [iaPollingFornId, setIaPollingFornId] = useState<number | null>(null);
 
   const startIaProgress = useCallback((fornecedorId: number) => {
     if (iaProgressRef.current) clearInterval(iaProgressRef.current);
@@ -514,7 +516,7 @@ export default function Cotacoes() {
     }
   }, []);
 
-  useEffect(() => { setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); setIaProgress(null); }, [showDetalhe]);
+  useEffect(() => { setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); setIaProgress(null); setIaJobId(null); setIaPollingFornId(null); }, [showDetalhe]);
 
   const q = trpc.compras.listarCotacoes.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -611,21 +613,37 @@ export default function Cotacoes() {
     onSuccess: () => { toast.success("Arquivo enviado!"); setShowAnexoInput(null); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const iaPollingQ = trpc.compras.getIaExtractionResult.useQuery(
+    { jobId: iaJobId! },
+    { enabled: !!iaJobId, refetchInterval: 2000 }
+  );
+
+  useEffect(() => {
+    if (!iaPollingQ.data || !iaJobId) return;
+    const d = iaPollingQ.data;
+    if (d.status === "done") {
+      stopIaProgress(true);
+      setIaExtracao({ fornecedorId: iaPollingFornId!, dados: d });
+      toast.success(`IA extraiu ${d.totalItensExtraidos} item(ns), ${d.totalMatches} match(es)`);
+      setIaJobId(null);
+      setIaPollingFornId(null);
+    } else if (d.status === "error") {
+      stopIaProgress(false);
+      toast.error("Erro na leitura IA: " + (d as any).error);
+      setIaJobId(null);
+      setIaPollingFornId(null);
+    }
+  }, [iaPollingQ.data, iaJobId]);
+
   const extrairIA = trpc.compras.extrairCotacaoIA.useMutation({
     onMutate: (vars) => { startIaProgress(vars.fornecedorId); },
     onSuccess: (dados, vars) => {
-      console.log("[IA] onSuccess chamado, dados:", JSON.stringify(dados).substring(0, 300));
-      stopIaProgress(true);
-      setIaExtracao({ fornecedorId: vars.fornecedorId, dados });
-      toast.success(`IA extraiu ${dados.totalItensExtraidos} item(ns), ${dados.totalMatches} match(es)`);
+      setIaJobId(dados.jobId);
+      setIaPollingFornId(vars.fornecedorId);
     },
     onError: (e) => {
-      console.error("[IA] onError chamado:", e.message);
       stopIaProgress(false);
       toast.error("Erro na leitura IA: " + e.message);
-    },
-    onSettled: () => {
-      console.log("[IA] onSettled chamado");
     },
   });
   const cancelarAprovacao = trpc.compras.cancelarAprovacaoCotacao.useMutation({
@@ -1453,7 +1471,7 @@ export default function Cotacoes() {
                                                 }).catch(() => toast.error("Não foi possível baixar o arquivo para leitura IA"));
                                               }
                                             }}
-                                            disabled={extrairIA.isPending}
+                                            disabled={extrairIA.isPending || !!iaJobId}
                                             className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors disabled:opacity-50"
                                             title="Ler documento com IA e preencher preços automaticamente">
                                             <Sparkles className="h-3.5 w-3.5" />

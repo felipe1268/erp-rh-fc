@@ -28,6 +28,14 @@ import {
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
+const iaExtractionJobs = new Map<string, { status: string; startedAt: number; result?: any; error?: string }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of iaExtractionJobs) {
+    if (now - v.startedAt > 10 * 60 * 1000) iaExtractionJobs.delete(k);
+  }
+}, 60000);
+
 async function calcScoreFornecedor(db: any, fornecedorId: number, companyId: number) {
   const ocsRows = await db.select().from(comprasOrdens)
     .where(and(
@@ -1738,6 +1746,7 @@ Responda APENAS com um objeto JSON no formato:
 
       if (itens.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum item na cotação" });
 
+      const jobId = `ia-${input.cotacaoId}-${input.fornecedorId}-${Date.now()}`;
       const itensRef = itens.map(it => ({
         id: it.id,
         descricao: it.descricao,
@@ -1745,7 +1754,11 @@ Responda APENAS com um objeto JSON no formato:
         quantidade: it.quantidade,
       }));
 
-      const systemPrompt = `Você é um assistente especializado em compras de construção civil. Sua tarefa é extrair itens, quantidades e preços unitários de documentos de cotação/orçamento de fornecedores.
+      iaExtractionJobs.set(jobId, { status: "processing", startedAt: Date.now() });
+
+      (async () => {
+        try {
+          const systemPrompt = `Você é um assistente especializado em compras de construção civil. Sua tarefa é extrair itens, quantidades e preços unitários de documentos de cotação/orçamento de fornecedores.
 
 REGRAS:
 - Extraia TODOS os itens do documento com: descrição, quantidade, unidade, preço unitário e preço total
@@ -1753,7 +1766,7 @@ REGRAS:
 - Se não conseguir identificar um campo, use null
 - Retorne JSON válido, sem texto adicional`;
 
-      const prompt = `Analise este documento de cotação/orçamento de fornecedor e extraia todos os itens.
+          const prompt = `Analise este documento de cotação/orçamento de fornecedor e extraia todos os itens.
 
 ITENS DA SOLICITAÇÃO DE COMPRA (para referência de matching):
 ${itensRef.map((it, i) => `${i + 1}. [ID:${it.id}] ${it.descricao} | Qtd: ${it.quantidade} ${it.unidade || "un"}`).join("\n")}
@@ -1783,73 +1796,81 @@ Retorne APENAS um JSON válido neste formato:
   "observacoes": "informações relevantes extraídas" ou null
 }`;
 
-      let resultText: string;
-      const isPdf = input.mimeType === "application/pdf";
+          const isPdf = input.mimeType === "application/pdf";
+          const resultText = await invokeAnthropicVision({
+            prompt,
+            base64: input.fileBase64,
+            mimeType: isPdf ? "application/pdf" : input.mimeType,
+            systemPrompt,
+            maxTokens: 4096,
+          });
 
-      if (isPdf) {
-        resultText = await invokeAnthropicVision({
-          prompt,
-          base64: input.fileBase64,
-          mimeType: "application/pdf",
-          systemPrompt,
-          maxTokens: 4096,
-        });
-      } else {
-        resultText = await invokeAnthropicVision({
-          prompt,
-          base64: input.fileBase64,
-          mimeType: input.mimeType,
-          systemPrompt,
-          maxTokens: 4096,
-        });
+          console.log("[extrairCotacaoIA] Resultado bruto (500 chars):", resultText.substring(0, 500));
+
+          let jsonStr = resultText.trim();
+          const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (jsonMatch) jsonStr = jsonMatch[1].trim();
+          const startIdx = jsonStr.indexOf("{");
+          const endIdx = jsonStr.lastIndexOf("}");
+          if (startIdx >= 0 && endIdx > startIdx) jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+
+          const parsed = JSON.parse(jsonStr);
+          console.log("[extrairCotacaoIA] Parsed OK. itens:", (parsed.itensExtraidos ?? parsed.itens ?? []).length);
+
+          const itensExtraidos = (parsed.itensExtraidos ?? parsed.itens ?? []).map((item: any) => ({
+            descricaoFornecedor: String(item.descricaoFornecedor ?? item.descricao ?? ""),
+            quantidade: parseFloat(item.quantidade) || null,
+            unidade: item.unidade || null,
+            precoUnitario: parseFloat(item.precoUnitario ?? item.preco_unitario) || null,
+            precoTotal: parseFloat(item.precoTotal ?? item.preco_total) || null,
+            matchItemId: item.matchItemId ?? item.match_item_id ?? null,
+            matchConfianca: item.matchConfianca ?? item.match_confianca ?? null,
+            matchDescricaoSC: item.matchDescricaoSC ?? item.match_descricao_sc ?? null,
+          }));
+
+          const matchedIds = new Set(itensExtraidos.filter((i: any) => i.matchItemId).map((i: any) => i.matchItemId));
+          const itensSemMatch = itensRef.filter(it => !matchedIds.has(it.id));
+          const itensExtras = itensExtraidos.filter((i: any) => !i.matchItemId);
+
+          iaExtractionJobs.set(jobId, {
+            status: "done",
+            startedAt: Date.now(),
+            result: {
+              itensExtraidos,
+              itensSemMatch,
+              itensExtras,
+              condicaoPagamento: parsed.condicaoPagamento ?? null,
+              prazoEntrega: parsed.prazoEntrega ?? null,
+              observacoes: parsed.observacoes ?? null,
+              totalItensExtraidos: itensExtraidos.length,
+              totalMatches: matchedIds.size,
+              totalSemMatch: itensSemMatch.length,
+              totalExtras: itensExtras.length,
+            },
+          });
+          console.log("[extrairCotacaoIA] Job", jobId, "concluído com sucesso");
+        } catch (err: any) {
+          console.error("[extrairCotacaoIA] Erro no job:", err.message);
+          iaExtractionJobs.set(jobId, { status: "error", startedAt: Date.now(), error: err.message || "Erro desconhecido" });
+        }
+      })();
+
+      return { jobId };
+    }),
+
+  getIaExtractionResult: protectedProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(({ input }) => {
+      const job = iaExtractionJobs.get(input.jobId);
+      if (!job) return { status: "not_found" as const };
+      if (job.status === "processing") return { status: "processing" as const };
+      if (job.status === "error") {
+        iaExtractionJobs.delete(input.jobId);
+        return { status: "error" as const, error: job.error };
       }
-
-      console.log("[extrairCotacaoIA] Resultado bruto da IA (primeiros 500 chars):", resultText.substring(0, 500));
-
-      let jsonStr = resultText.trim();
-      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) jsonStr = jsonMatch[1].trim();
-      const startIdx = jsonStr.indexOf("{");
-      const endIdx = jsonStr.lastIndexOf("}");
-      if (startIdx >= 0 && endIdx > startIdx) jsonStr = jsonStr.substring(startIdx, endIdx + 1);
-
-      let parsed: any;
-      try {
-        parsed = JSON.parse(jsonStr);
-      } catch {
-        console.error("[extrairCotacaoIA] JSON parse error:", jsonStr.substring(0, 500));
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "A IA não retornou dados estruturados válidos. Tente novamente." });
-      }
-
-      console.log("[extrairCotacaoIA] Parsed OK. itens:", (parsed.itensExtraidos ?? parsed.itens ?? []).length, "matches:", (parsed.itensExtraidos ?? parsed.itens ?? []).filter((i: any) => i.matchItemId).length);
-
-      const itensExtraidos = (parsed.itensExtraidos ?? parsed.itens ?? []).map((item: any) => ({
-        descricaoFornecedor: String(item.descricaoFornecedor ?? item.descricao ?? ""),
-        quantidade: parseFloat(item.quantidade) || null,
-        unidade: item.unidade || null,
-        precoUnitario: parseFloat(item.precoUnitario ?? item.preco_unitario) || null,
-        precoTotal: parseFloat(item.precoTotal ?? item.preco_total) || null,
-        matchItemId: item.matchItemId ?? item.match_item_id ?? null,
-        matchConfianca: item.matchConfianca ?? item.match_confianca ?? null,
-        matchDescricaoSC: item.matchDescricaoSC ?? item.match_descricao_sc ?? null,
-      }));
-
-      const matchedIds = new Set(itensExtraidos.filter((i: any) => i.matchItemId).map((i: any) => i.matchItemId));
-      const itensSemMatch = itensRef.filter(it => !matchedIds.has(it.id));
-      const itensExtras = itensExtraidos.filter((i: any) => !i.matchItemId);
-
-      return {
-        itensExtraidos,
-        itensSemMatch,
-        itensExtras,
-        condicaoPagamento: parsed.condicaoPagamento ?? null,
-        prazoEntrega: parsed.prazoEntrega ?? null,
-        observacoes: parsed.observacoes ?? null,
-        totalItensExtraidos: itensExtraidos.length,
-        totalMatches: matchedIds.size,
-        totalSemMatch: itensSemMatch.length,
-        totalExtras: itensExtras.length,
-      };
+      const result = job.result;
+      iaExtractionJobs.delete(input.jobId);
+      return { status: "done" as const, ...result };
     }),
 
   getSaldosRealocacaoGeral: protectedProcedure
