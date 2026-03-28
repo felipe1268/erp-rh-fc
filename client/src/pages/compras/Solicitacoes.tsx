@@ -764,12 +764,12 @@ export default function Solicitacoes() {
                       <div className="space-y-1.5">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-gray-500">
                           <span className="font-medium text-gray-600 mr-0.5">Legenda:</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-gray-300" />Disponível</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-blue-500" />Solicitado</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-purple-500" />Em compra</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-orange-500" />Comprado parcial</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />Concluído</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500" />Estouro</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-gray-300" />Disponível</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-500" />Solicitado</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-500" />Em compra</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-orange-500" />Comprado parcial</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500" />Concluído</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-red-500" />Estouro</span>
                         </div>
                       <div className="border border-gray-200 rounded-lg overflow-hidden">
                         <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
@@ -800,7 +800,7 @@ export default function Solicitacoes() {
                                     onClick={() => handleEapExpand(it)}
                                     className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : "hover:bg-gray-50"}`}
                                   >
-                                    <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${statusColor.dot}`} title={statusColor.label} />
+                                    <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${statusColor.dot} ring-1 ring-white shadow-sm`} title={statusColor.label} />
                                     <input
                                       type="checkbox"
                                       checked={selectedEapIds.has(it.id) || qtdVal > 0}
