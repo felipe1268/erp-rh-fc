@@ -316,7 +316,7 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
     const descH = doc.heightOfString(descText, { width: colWidths[1] - 10, fontSize: 7 });
     const rowH = Math.max(16, descH + 8);
 
-    if (y + rowH > pageH - 60) {
+    if (y + rowH > pageH - 160) {
       doc.addPage();
       y = 40;
       y = drawTableHeader(y);
@@ -445,31 +445,23 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // ASSINATURAS + RODAPÉ
+  // ASSINATURAS + RODAPÉ (tudo junto, sem posição absoluta)
   // ══════════════════════════════════════════════════════════════════════
-  const footerBlock = 70;
-  if (y + footerBlock > pageH - 20) {
-    doc.addPage();
-    y = 40;
-  }
-
-  const sigY = Math.max(y + 20, pageH - footerBlock);
+  y += 15;
   const sigW = (cW - 60) / 2;
-
-  doc.strokeColor(dark).lineWidth(0.5).moveTo(mL, sigY).lineTo(mL + sigW, sigY).stroke();
+  doc.strokeColor(dark).lineWidth(0.5).moveTo(mL, y).lineTo(mL + sigW, y).stroke();
   doc.font("Helvetica").fontSize(7.5).fillColor(dark)
-    .text("Responsável pela Compra", mL, sigY + 5, { width: sigW, align: "center" });
-
-  doc.strokeColor(dark).lineWidth(0.5).moveTo(pageW - mR - sigW, sigY).lineTo(pageW - mR, sigY).stroke();
+    .text("Responsável pela Compra", mL, y + 4, { width: sigW, align: "center" });
+  doc.strokeColor(dark).lineWidth(0.5).moveTo(pageW - mR - sigW, y).lineTo(pageW - mR, y).stroke();
   doc.font("Helvetica").fontSize(7.5).fillColor(dark)
-    .text("Aprovação", pageW - mR - sigW, sigY + 5, { width: sigW, align: "center" });
-
-  const fY = sigY + 25;
-  drawHLine(fY, borderColor, 0.3);
+    .text("Aprovação", pageW - mR - sigW, y + 4, { width: sigW, align: "center" });
+  y += 18;
+  drawHLine(y, borderColor, 0.3);
+  y += 3;
   doc.font("Helvetica").fontSize(6).fillColor(midGray)
     .text(
       `Documento gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")} — ${company?.razaoSocial || "FC Engenharia"}`,
-      mL, fY + 4, { width: cW, align: "center" }
+      mL, y, { width: cW, align: "center", lineBreak: false }
     );
 
   return doc;
