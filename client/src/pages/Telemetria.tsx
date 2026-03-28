@@ -171,6 +171,33 @@ function HourChart({ data, companyId, periodo }: { data: Array<{ hora: number; t
   );
 }
 
+const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const DIAS_SEMANA_CORES = ["bg-red-400", "bg-blue-500", "bg-blue-500", "bg-blue-500", "bg-blue-500", "bg-blue-500", "bg-orange-400"];
+
+function WeekdayChart({ data }: { data: Array<{ dia_semana: number; total: string | number }> }) {
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const found = data?.find(d => Number(d.dia_semana) === i);
+    return { dia: i, total: Number(found?.total ?? 0) };
+  });
+  const max = Math.max(...days.map(d => d.total), 1);
+  return (
+    <div className="flex items-end gap-2 h-32">
+      {days.map((d) => {
+        const pct = max > 0 ? (d.total / max) * 100 : 0;
+        return (
+          <div key={d.dia} className="flex flex-col items-center flex-1 group relative">
+            <div className="absolute -top-5 text-xs font-medium text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+              {d.total}
+            </div>
+            <div className={`w-full rounded-t transition-all hover:opacity-80 ${DIAS_SEMANA_CORES[d.dia]}`} style={{ height: `${pct}%`, minHeight: pct > 0 ? 4 : 0 }} />
+            <span className={`text-[10px] mt-1 font-medium ${d.dia === 0 || d.dia === 6 ? "text-red-400" : "text-gray-500"}`}>{DIAS_SEMANA[d.dia]}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function KPICard({ icon: Icon, label, value, sub, color = "text-blue-600" }: {
   icon: any; label: string; value: string | number; sub?: string; color?: string;
 }) {
@@ -362,7 +389,7 @@ export default function Telemetria() {
                   <KPICard icon={AlertTriangle} label="Usuários Inativos (7d+)" value={dash.usuariosInativos.length} color="text-red-600" />
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid md:grid-cols-3 gap-4">
                   <Card>
                     <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1"><TrendingUp className="h-4 w-4" /> Evolução Diária</CardTitle></CardHeader>
                     <CardContent><DailyChart data={dash.usoPorDia} /></CardContent>
@@ -370,6 +397,10 @@ export default function Telemetria() {
                   <Card>
                     <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1"><Clock className="h-4 w-4" /> Uso por Hora</CardTitle></CardHeader>
                     <CardContent><HourChart data={dash.usoPorHora} companyId={companyId} periodo={periodo} /></CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1"><Calendar className="h-4 w-4" /> Uso por Dia da Semana</CardTitle></CardHeader>
+                    <CardContent><WeekdayChart data={dash.usoPorDiaSemana ?? []} /></CardContent>
                   </Card>
                 </div>
 

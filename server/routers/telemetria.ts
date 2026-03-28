@@ -125,7 +125,7 @@ export const telemetriaRouter = router({
 
       const [totalAcessos, usuariosAtivos, tempoMedio, paginasMaisAcessadas,
              rankingUsuarios, usoPorDia, usoPorHora, usoPorModulo,
-             paginasSemAcesso, usuariosInativos] = await Promise.all([
+             paginasSemAcesso, usuariosInativos, usoPorDiaSemana] = await Promise.all([
         db.execute(sql`
           SELECT COUNT(*) as total FROM user_activity_log
           WHERE company_id = ${cid} AND tipo = 'page_visit'
@@ -202,6 +202,13 @@ export const telemetriaRouter = router({
           HAVING MAX(criado_em) < NOW() - INTERVAL '7 days'
           ORDER BY ultimo_acesso ASC
         `),
+        db.execute(sql`
+          SELECT EXTRACT(DOW FROM criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::int as dia_semana, COUNT(*) as total
+          FROM user_activity_log
+          WHERE company_id = ${cid}
+            AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
+          GROUP BY dia_semana ORDER BY dia_semana
+        `),
       ]);
 
       return {
@@ -215,6 +222,7 @@ export const telemetriaRouter = router({
         usoPorModulo: (usoPorModulo as any).rows ?? [],
         paginasSemAcesso: (paginasSemAcesso as any).rows ?? [],
         usuariosInativos: (usuariosInativos as any).rows ?? [],
+        usoPorDiaSemana: (usoPorDiaSemana as any).rows ?? [],
       };
     }),
 
