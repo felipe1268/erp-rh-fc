@@ -631,7 +631,19 @@ export const comprasRouter = router({
     .mutation(async ({ input }) => {
       const content: any[] = [];
       if (input.fotoUrl) {
-        content.push({ type: "image_url", image_url: { url: input.fotoUrl, detail: "low" } });
+        try {
+          if (input.fotoUrl.startsWith("data:")) {
+            content.push({ type: "image_url", image_url: { url: input.fotoUrl, detail: "low" } });
+          } else {
+            const imgResp = await fetch(input.fotoUrl);
+            if (imgResp.ok) {
+              const buf = Buffer.from(await imgResp.arrayBuffer());
+              const ct = imgResp.headers.get("content-type") || "image/jpeg";
+              const b64 = `data:${ct};base64,${buf.toString("base64")}`;
+              content.push({ type: "image_url", image_url: { url: b64, detail: "low" } });
+            }
+          }
+        } catch {}
       }
       content.push({
         type: "text",
