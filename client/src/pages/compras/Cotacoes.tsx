@@ -792,6 +792,144 @@ export default function Cotacoes() {
     return obras.find((o: any) => o.id === id)?.nome ?? null;
   }
 
+  const iaOverlayPortal = iaExtracao ? createPortal((() => {
+    const d = iaExtracao.dados;
+    const matched = (d.itensExtraidos ?? []).filter((i: any) => i.matchItemId);
+    const extras = d.itensExtras ?? [];
+    const semMatch = d.itensSemMatch ?? [];
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
+        <div className="absolute inset-0 bg-black/50" onClick={() => setIaExtracao(null)} />
+        <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 max-w-3xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-violet-700">
+              <Sparkles className="h-5 w-5" /> Conferência — Leitura IA
+            </h3>
+            <button onClick={() => setIaExtracao(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          </div>
+
+          {d.condicaoPagamento && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-sm text-blue-800">
+              <strong>Condição de Pagamento:</strong> {d.condicaoPagamento}
+              {d.prazoEntrega && <> | <strong>Prazo Entrega:</strong> {d.prazoEntrega}</>}
+            </div>
+          )}
+          {d.observacoes && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-600">{d.observacoes}</div>
+          )}
+
+          {matched.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5 mb-2">
+                <CheckCircle className="h-4 w-4" /> Itens com Match ({matched.length})
+              </h4>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-emerald-50">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium text-emerald-700">Item SC</th>
+                      <th className="text-left px-3 py-2 font-medium text-emerald-700">Fornecedor</th>
+                      <th className="text-right px-3 py-2 font-medium text-emerald-700">Qtd</th>
+                      <th className="text-right px-3 py-2 font-medium text-emerald-700">Preço Unit.</th>
+                      <th className="text-right px-3 py-2 font-medium text-emerald-700">Total</th>
+                      <th className="text-center px-3 py-2 font-medium text-emerald-700">Conf.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matched.map((it: any, idx: number) => (
+                      <tr key={idx} className="border-t border-emerald-100 hover:bg-emerald-50/50">
+                        <td className="px-3 py-2 text-gray-700">{it.matchDescricaoSC || "—"}</td>
+                        <td className="px-3 py-2 text-gray-500">{it.descricaoFornecedor}</td>
+                        <td className="px-3 py-2 text-right font-mono">{it.quantidade ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700">
+                          {it.precoUnitario != null ? `R$ ${Number(it.precoUnitario).toFixed(2)}` : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          {it.precoTotal != null ? `R$ ${Number(it.precoTotal).toFixed(2)}` : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${it.matchConfianca === "alta" ? "bg-emerald-100 text-emerald-700" : it.matchConfianca === "media" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>
+                            {it.matchConfianca || "?"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {semMatch.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-amber-700 flex items-center gap-1.5 mb-2">
+                <AlertTriangle className="h-4 w-4" /> Itens da SC sem correspondência ({semMatch.length})
+              </h4>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <ul className="space-y-1 text-xs text-amber-800">
+                  {semMatch.map((it: any) => (
+                    <li key={it.id}>• {it.descricao} (Qtd: {it.quantidade} {it.unidade || "un"})</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {extras.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-orange-700 flex items-center gap-1.5 mb-2">
+                <Package className="h-4 w-4" /> Itens extras do fornecedor ({extras.length})
+              </h4>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <ul className="space-y-1 text-xs text-orange-800">
+                  {extras.map((it: any, idx: number) => (
+                    <li key={idx}>• {it.descricaoFornecedor} — Qtd: {it.quantidade ?? "?"} — R$ {it.precoUnitario != null ? Number(it.precoUnitario).toFixed(2) : "?"}</li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-orange-500 mt-2">Estes itens não foram associados a nenhum item da SC. Revise manualmente se necessário.</p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button variant="outline" onClick={() => setIaExtracao(null)}>Cancelar</Button>
+            <Button
+              disabled={matched.length === 0}
+              onClick={() => {
+                const respostas = matched
+                  .filter((it: any) => it.matchItemId && it.precoUnitario != null)
+                  .map((it: any) => ({
+                    itemId: it.matchItemId,
+                    precoUnitario: Number(it.precoUnitario),
+                    quantidade: it.quantidade ? Number(it.quantidade) : undefined,
+                    descontoPct: 0,
+                  }));
+                if (respostas.length === 0) { toast.error("Nenhum item com preço para salvar"); return; }
+                salvarRespostas.mutate({
+                  cotacaoId: showDetalhe!,
+                  fornecedorId: iaExtracao.fornecedorId,
+                  respostas,
+                  condicaoPagamento: d.condicaoPagamento ?? undefined,
+                }, {
+                  onSuccess: () => {
+                    toast.success(`${respostas.length} preço(s) salvos com sucesso!`);
+                    setIaExtracao(null);
+                    mapaQ.refetch();
+                  },
+                  onError: (e: any) => toast.error("Erro ao salvar: " + e.message),
+                });
+              }}
+              className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Confirmar e Salvar ({matched.filter((i: any) => i.precoUnitario != null).length} itens)
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  })(), document.body) : null;
+
   /* ── Tela cheia de detalhe ── */
   if (showDetalhe !== null) {
     const detalheFullscreen = detalheQ.data;
@@ -921,144 +1059,6 @@ export default function Cotacoes() {
       agrupados[chave].qtdTotal += parseFloat(it.quantidade ?? "0");
     }
     const gruposAgrupados = Object.values(agrupados).filter(g => g.qtdTotal > 0);
-
-    const iaOverlayPortal = iaExtracao ? createPortal((() => {
-      const d = iaExtracao.dados;
-      const matched = (d.itensExtraidos ?? []).filter((i: any) => i.matchItemId);
-      const extras = d.itensExtras ?? [];
-      const semMatch = d.itensSemMatch ?? [];
-      return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
-          <div className="absolute inset-0 bg-black/50" onClick={() => setIaExtracao(null)} />
-          <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 max-w-3xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-lg font-semibold text-violet-700">
-                <Sparkles className="h-5 w-5" /> Conferência — Leitura IA
-              </h3>
-              <button onClick={() => setIaExtracao(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
-            </div>
-
-            {d.condicaoPagamento && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-sm text-blue-800">
-                <strong>Condição de Pagamento:</strong> {d.condicaoPagamento}
-                {d.prazoEntrega && <> | <strong>Prazo Entrega:</strong> {d.prazoEntrega}</>}
-              </div>
-            )}
-            {d.observacoes && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-600">{d.observacoes}</div>
-            )}
-
-            {matched.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5 mb-2">
-                  <CheckCircle className="h-4 w-4" /> Itens com Match ({matched.length})
-                </h4>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-emerald-50">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-medium text-emerald-700">Item SC</th>
-                        <th className="text-left px-3 py-2 font-medium text-emerald-700">Fornecedor</th>
-                        <th className="text-right px-3 py-2 font-medium text-emerald-700">Qtd</th>
-                        <th className="text-right px-3 py-2 font-medium text-emerald-700">Preço Unit.</th>
-                        <th className="text-right px-3 py-2 font-medium text-emerald-700">Total</th>
-                        <th className="text-center px-3 py-2 font-medium text-emerald-700">Conf.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {matched.map((it: any, idx: number) => (
-                        <tr key={idx} className="border-t border-emerald-100 hover:bg-emerald-50/50">
-                          <td className="px-3 py-2 text-gray-700">{it.matchDescricaoSC || "—"}</td>
-                          <td className="px-3 py-2 text-gray-500">{it.descricaoFornecedor}</td>
-                          <td className="px-3 py-2 text-right font-mono">{it.quantidade ?? "—"}</td>
-                          <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700">
-                            {it.precoUnitario != null ? `R$ ${Number(it.precoUnitario).toFixed(2)}` : "—"}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono">
-                            {it.precoTotal != null ? `R$ ${Number(it.precoTotal).toFixed(2)}` : "—"}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${it.matchConfianca === "alta" ? "bg-emerald-100 text-emerald-700" : it.matchConfianca === "media" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>
-                              {it.matchConfianca || "?"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {semMatch.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-amber-700 flex items-center gap-1.5 mb-2">
-                  <AlertTriangle className="h-4 w-4" /> Itens da SC sem correspondência ({semMatch.length})
-                </h4>
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <ul className="space-y-1 text-xs text-amber-800">
-                    {semMatch.map((it: any) => (
-                      <li key={it.id}>• {it.descricao} (Qtd: {it.quantidade} {it.unidade || "un"})</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-
-            {extras.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-orange-700 flex items-center gap-1.5 mb-2">
-                  <Package className="h-4 w-4" /> Itens extras do fornecedor ({extras.length})
-                </h4>
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                  <ul className="space-y-1 text-xs text-orange-800">
-                    {extras.map((it: any, idx: number) => (
-                      <li key={idx}>• {it.descricaoFornecedor} — Qtd: {it.quantidade ?? "?"} — R$ {it.precoUnitario != null ? Number(it.precoUnitario).toFixed(2) : "?"}</li>
-                    ))}
-                  </ul>
-                  <p className="text-[10px] text-orange-500 mt-2">Estes itens não foram associados a nenhum item da SC. Revise manualmente se necessário.</p>
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <Button variant="outline" onClick={() => setIaExtracao(null)}>Cancelar</Button>
-              <Button
-                disabled={matched.length === 0}
-                onClick={() => {
-                  const respostas = matched
-                    .filter((it: any) => it.matchItemId && it.precoUnitario != null)
-                    .map((it: any) => ({
-                      itemId: it.matchItemId,
-                      precoUnitario: Number(it.precoUnitario),
-                      quantidade: it.quantidade ? Number(it.quantidade) : undefined,
-                      descontoPct: 0,
-                    }));
-                  if (respostas.length === 0) { toast.error("Nenhum item com preço para salvar"); return; }
-                  salvarRespostas.mutate({
-                    cotacaoId: showDetalhe!,
-                    fornecedorId: iaExtracao.fornecedorId,
-                    respostas,
-                    condicaoPagamento: d.condicaoPagamento ?? undefined,
-                  }, {
-                    onSuccess: () => {
-                      toast.success(`${respostas.length} preço(s) salvos com sucesso!`);
-                      setIaExtracao(null);
-                      mapaQ.refetch();
-                    },
-                    onError: (e: any) => toast.error("Erro ao salvar: " + e.message),
-                  });
-                }}
-                className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
-              >
-                <CheckCircle className="h-4 w-4" />
-                Confirmar e Salvar ({matched.filter((i: any) => i.precoUnitario != null).length} itens)
-              </Button>
-            </div>
-          </div>
-        </div>
-      );
-    })(), document.body) : null;
 
     return (
       <DashboardLayout>
