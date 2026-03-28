@@ -3751,6 +3751,7 @@ export const orcamentoRouter = router({
 
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
         .from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
+      console.log('[getCompCat] orcId=', input.orcamentoId, 'inputCompany=', input.companyId, 'orc=', orc ? { id: orc.id, companyId: orc.companyId } : 'NOT_FOUND');
       if (!orc || Number(orc.companyId) !== Number(input.companyId)) return [];
 
       const itens = await db.select({

@@ -283,9 +283,10 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
     { enabled: bibLoaded && id > 0 && bibCompanyId > 0, staleTime: 0 }
   );
 
+  const orcCompanyId = Number((data as any)?.companyId ?? 0);
   const composicoesQuery = trpc.orcamento.getComposicoesCatalogo.useQuery(
-    { orcamentoId: id, companyId: bibCompanyId },
-    { enabled: activeTab === "composicoes" && id > 0 && bibCompanyId > 0, staleTime: 30_000 }
+    { orcamentoId: id, companyId: orcCompanyId },
+    { enabled: activeTab === "composicoes" && id > 0 && orcCompanyId > 0, staleTime: 30_000 }
   );
   const composicoesCatalogo = (composicoesQuery.data ?? []) as any[];
 
