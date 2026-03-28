@@ -943,6 +943,11 @@ export default function Solicitacoes() {
                                         </div>
                                       ) : insLista && insLista.length === 0 ? (
                                         <div className="text-xs text-gray-400 py-1">Nenhum insumo cadastrado para esta composição. Use o modo Manual.</div>
+                                      ) : !it.servicoCodigo ? (
+                                        <div className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2.5 py-2 mt-1">
+                                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                          <span>Este item nao possui codigo de composição vinculado no orçamento. Vincule o codigo da composição no modulo de Orcamento para ver os insumos detalhados aqui, ou use o <strong>modo Manual</strong> para adicionar itens diretamente.</span>
+                                        </div>
                                       ) : null}
                                     </div>
                                   )}
