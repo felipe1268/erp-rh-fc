@@ -3749,7 +3749,10 @@ export const orcamentoRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      // Pega todos os itens do orçamento para encontrar os servicoCodigos únicos
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
+      if (!orc || Number(orc.companyId) !== Number(input.companyId)) return [];
+
       const itens = await db.select({
         eapCodigo:    orcamentoItens.eapCodigo,
         descricao:    orcamentoItens.descricao,

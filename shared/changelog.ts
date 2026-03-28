@@ -5694,4 +5694,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 21:00:00",
   },
+  {
+    version: 837,
+    titulo: "Orcamento: aba Composicoes reescrita com agrupamento por codigo proprio",
+    descricao: "Aba Composicoes agora agrupa por codigo da composicao (Cod. Servico da aba CPUs), nao mais por EAP. Composicoes usadas por multiplos itens EAP aparecem uma unica vez. Colunas: Cod. Servico, Cod. Insumo, Descricao, Un, Qtd, PU Insumo, Alocacao MAT, Alocacao MO, Custo Total. Aba EAP recebe botao toggle 'Exibir/Ocultar Composicao' para mostrar coluna de Cod. Servico vinculado.",
+    tipo: "melhoria",
+    modulos: "Orcamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 21:30:00",
+  },
 ];
