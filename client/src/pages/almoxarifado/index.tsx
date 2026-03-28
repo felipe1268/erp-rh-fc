@@ -1797,6 +1797,17 @@ export default function AlmoxarifadoPage() {
                   {/* Item */}
                   <div className="relative">
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Item *</label>
+                    {isLoading && (
+                      <div className="mb-2">
+                        <div className="flex items-center gap-2 text-xs text-amber-600 mb-1">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Carregando itens...</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                          <div className="bg-amber-500 h-1.5 rounded-full animate-pulse" style={{ width: "60%" }} />
+                        </div>
+                      </div>
+                    )}
                     {insItemId ? (
                       <div className="w-full border-2 border-amber-300 bg-amber-50 rounded-xl p-3 text-base flex items-center justify-between">
                         <span className="truncate">{(() => { const it = itens.find((i: any) => i.id === insItemId); return it ? `${it.nome} — Estoque: ${n(it.quantidadeAtual)} ${it.unidade || "un"}` : ""; })()}</span>
