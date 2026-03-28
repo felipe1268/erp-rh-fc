@@ -5649,4 +5649,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 18:30:00",
   },
+  {
+    version: 832,
+    titulo: "Correção: Recebimentos Compras agora exibe registros do Almoxarifado",
+    descricao: "Corrigido bug onde recebimentos vindos do Almoxarifado não apareciam na tela de Recebimentos de Compras. A causa era que o enriquecimento de dados da OC consultava a tabela errada (purchase_orders em vez de compras_ordens). Agora o sistema consulta a tabela correta para cada fonte de dados.",
+    tipo: "bugfix",
+    modulos: "Compras, Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 18:45:00",
+  },
 ];

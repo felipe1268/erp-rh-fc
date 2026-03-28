@@ -31,6 +31,7 @@ import {
   obras,
   almoxarifadoRecebimentos,
   almoxarifadoRecebimentoItens,
+  comprasOrdens,
 } from "../../drizzle/schema";
 import { onOCEmitida, onOCCancelada, onRecebimentoConfirmado, onComissaoAprovada } from "../services/purchaseFinancialBridge";
 import crypto from "crypto";
@@ -441,28 +442,52 @@ export const purchaseRouter = router({
         ...almoxMapped.filter(am => !rows.some(r => r.ordemId === am.ordemId && r.recebidoEm === am.recebidoEm)),
       ].sort((a, b) => new Date(b.recebidoEm || b.createdAt).getTime() - new Date(a.recebidoEm || a.createdAt).getTime());
 
-      const ordemIds = [...new Set(allRows.map(r => r.ordemId).filter(Boolean))];
-      const ocMap = new Map<number, any>();
-      if (ordemIds.length > 0) {
-        for (const oid of ordemIds) {
+      const purchaseOcMap = new Map<number, any>();
+      const almoxOcMap = new Map<number, any>();
+
+      const purchaseOcIds = [...new Set(rows.map(r => r.ordemId).filter(Boolean))];
+      for (const oid of purchaseOcIds) {
+        try {
           const [oc] = await db.select({
             transportadora: (purchaseOrders as any).transportadora,
             codigoRastreamento: (purchaseOrders as any).codigoRastreamento,
             freteTipo: (purchaseOrders as any).freteTipo,
             fornecedorNome: (purchaseOrders as any).fornecedorNome,
             numeroOc: (purchaseOrders as any).numeroOc,
-          }).from(purchaseOrders).where(eq(purchaseOrders.id, oid)).limit(1);
-          if (oc) ocMap.set(oid, oc);
+          }).from(purchaseOrders).where(and(eq(purchaseOrders.id, oid), eq(purchaseOrders.companyId, input.companyId))).limit(1);
+          if (oc) purchaseOcMap.set(oid, oc);
+        } catch (e: any) {
+          console.warn(`[listarRecebimentos] Erro ao buscar purchaseOrder ${oid}:`, e.message);
         }
       }
-      return allRows.map(r => ({
-        ...r,
-        transportadora: ocMap.get(r.ordemId)?.transportadora ?? null,
-        codigoRastreamento: ocMap.get(r.ordemId)?.codigoRastreamento ?? null,
-        freteTipo: ocMap.get(r.ordemId)?.freteTipo ?? null,
-        fornecedorNome: ocMap.get(r.ordemId)?.fornecedorNome ?? null,
-        numeroOc: ocMap.get(r.ordemId)?.numeroOc ?? null,
-      }));
+
+      const almoxOcIds = [...new Set(almoxMapped.map(r => r.ordemId).filter(Boolean))];
+      for (const oid of almoxOcIds) {
+        try {
+          const [oc] = await db.select({
+            transportadora: comprasOrdens.transportadora,
+            codigoRastreamento: comprasOrdens.codigoRastreamento,
+            freteTipo: comprasOrdens.freteTipo,
+            fornecedorNome: comprasOrdens.fornecedorNome,
+            numeroOc: comprasOrdens.numeroOc,
+          }).from(comprasOrdens).where(and(eq(comprasOrdens.id, oid), eq(comprasOrdens.companyId, input.companyId))).limit(1);
+          if (oc) almoxOcMap.set(oid, oc);
+        } catch (e: any) {
+          console.warn(`[listarRecebimentos] Erro ao buscar comprasOrdens ${oid}:`, e.message);
+        }
+      }
+
+      return allRows.map(r => {
+        const ocData = r._source === "almoxarifado" ? almoxOcMap.get(r.ordemId) : purchaseOcMap.get(r.ordemId);
+        return {
+          ...r,
+          transportadora: ocData?.transportadora ?? null,
+          codigoRastreamento: ocData?.codigoRastreamento ?? null,
+          freteTipo: ocData?.freteTipo ?? null,
+          fornecedorNome: ocData?.fornecedorNome ?? null,
+          numeroOc: ocData?.numeroOc ?? null,
+        };
+      });
     }),
 
   criarRecebimento: protectedProcedure
