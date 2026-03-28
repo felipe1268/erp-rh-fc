@@ -297,6 +297,13 @@ export default function Solicitacoes() {
     { companyId, obraId: parseInt(form.obraId || "0") },
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
   );
+  const coberturaQ = trpc.compras.getCoberturaInsumosEAP.useQuery(
+    { companyId, obraId: parseInt(form.obraId || "0") },
+    { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
+  );
+  const coberturaMap = Object.fromEntries(
+    (coberturaQ.data ?? []).map((c: any) => [c.orcamentoItemId, c])
+  );
 
   useEffect(() => {
     if (batchSaldoQ.data) {
@@ -894,6 +901,9 @@ export default function Solicitacoes() {
                               const estouro = saldo && qtdVal > 0 && qtdVal > saldo.saldoDisponivel;
                               const saldoJaNegativo = saldo && saldo.saldoDisponivel < 0;
                               const statusColor = getStatusColor(it.id);
+                              const cob = coberturaMap[it.id];
+                              const cobPct = cob && cob.totalInsumos > 0 ? Math.round((cob.insumosCobertos / cob.totalInsumos) * 100) : null;
+                              const cobParcial = cob && cob.totalInsumos > 0 && cob.insumosCobertos > 0 && cob.insumosCobertos < cob.totalInsumos;
 
                               return (
                                 <div key={it.id} className={`group ${statusColor.bg}`}>
@@ -901,7 +911,7 @@ export default function Solicitacoes() {
                                     onClick={() => handleEapExpand(it)}
                                     className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : "hover:bg-gray-50"}`}
                                   >
-                                    <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${statusColor.dot} ring-1 ring-white shadow-sm`} title={statusColor.label} />
+                                    <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${cobParcial && statusColor.label !== "Estouro" ? "bg-orange-500" : statusColor.dot} ring-1 ring-white shadow-sm`} title={cobParcial ? `Parcial: ${cob.insumosCobertos}/${cob.totalInsumos} insumos` : statusColor.label} />
                                     <input
                                       type="checkbox"
                                       checked={selectedEapIds.has(it.id) || qtdVal > 0}
@@ -914,6 +924,19 @@ export default function Solicitacoes() {
                                         <span className="font-semibold text-amber-700 mr-1.5">{it.eapCodigo}</span>
                                         {it.descricao}
                                       </div>
+                                      {cob && cob.totalInsumos > 0 && cob.insumosCobertos > 0 && (
+                                        <div className="flex items-center gap-1.5 mt-0.5 ml-0.5">
+                                          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                            <div
+                                              className={`h-full rounded-full transition-all ${cobPct === 100 ? "bg-emerald-500" : "bg-orange-400"}`}
+                                              style={{ width: `${cobPct}%` }}
+                                            />
+                                          </div>
+                                          <span className={`text-[9px] font-semibold ${cobPct === 100 ? "text-emerald-600" : "text-orange-600"}`}>
+                                            {cob.insumosCobertos}/{cob.totalInsumos} insumos
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0 text-xs text-gray-400">
                                       <span>{parseFloat(String(it.quantidade ?? "0")).toLocaleString("pt-BR")} {it.unidade || "vb"}</span>

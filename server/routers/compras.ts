@@ -5116,6 +5116,69 @@ Retorne APENAS um JSON válido neste formato:
       });
     }),
 
+  getCoberturaInsumosEAP: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos)
+        .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId), isNull(orcamentos.deletedAt)))
+        .orderBy(desc(orcamentos.createdAt)).limit(1);
+      if (!orc) return [];
+
+      const servicos = await db.select({
+        id: orcamentoItens.id,
+        servicoCodigo: orcamentoItens.servicoCodigo,
+      }).from(orcamentoItens)
+        .where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId), sql`${orcamentoItens.servicoCodigo} IS NOT NULL`));
+
+      if (!servicos.length) return [];
+
+      const servicoCodigos = [...new Set(servicos.map(s => s.servicoCodigo!))];
+      const insumos = await db.select({
+        composicaoCodigo: composicaoInsumos.composicaoCodigo,
+        insumoCodigo: composicaoInsumos.insumoCodigo,
+        alocacaoMat: composicaoInsumos.alocacaoMat,
+        alocacaoMdo: composicaoInsumos.alocacaoMdo,
+      }).from(composicaoInsumos)
+        .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
+
+      const materiaisOnly = insumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+
+      const totalInsumosPorComposicao: Record<string, Set<string>> = {};
+      for (const ins of materiaisOnly) {
+        if (!totalInsumosPorComposicao[ins.composicaoCodigo]) totalInsumosPorComposicao[ins.composicaoCodigo] = new Set();
+        totalInsumosPorComposicao[ins.composicaoCodigo].add(ins.insumoCodigo);
+      }
+
+      const scItens = await db.select({
+        insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+        orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+      }).from(comprasSolicitacoesItens)
+        .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
+        .where(and(eq(comprasSolicitacoes.companyId, input.companyId), eq(comprasSolicitacoes.obraId, input.obraId), sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`));
+
+      const insumosCobertosPorOrcItem: Record<number, Set<string>> = {};
+      for (const sc of scItens) {
+        if (sc.insumoCodigo && sc.orcamentoItemId) {
+          if (!insumosCobertosPorOrcItem[sc.orcamentoItemId]) insumosCobertosPorOrcItem[sc.orcamentoItemId] = new Set();
+          insumosCobertosPorOrcItem[sc.orcamentoItemId].add(sc.insumoCodigo);
+        }
+      }
+
+      return servicos.map(svc => {
+        const totalSet = totalInsumosPorComposicao[svc.servicoCodigo!] || new Set();
+        const totalInsumos = totalSet.size;
+        const cobertos = insumosCobertosPorOrcItem[svc.id] || new Set();
+        const insumosCobertos = [...cobertos].filter(ic => totalSet.has(ic)).length;
+        return {
+          orcamentoItemId: svc.id,
+          totalInsumos,
+          insumosCobertos,
+        };
+      }).filter(r => r.totalInsumos > 0);
+    }),
+
   editarSolicitacao: protectedProcedure
     .input(z.object({
       id: z.number(),

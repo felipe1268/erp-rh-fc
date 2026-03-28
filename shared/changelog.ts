@@ -5721,4 +5721,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 22:55:00",
   },
+  {
+    version: 840,
+    titulo: "Compras: Indicador visual de cobertura de insumos por servico EAP",
+    descricao: "Cada servico na lista EAP agora mostra uma barra de progresso e contador (ex: 3/7 insumos) indicando quantos insumos da composicao ja foram solicitados. Bolinha de status fica laranja automaticamente quando a cobertura e parcial (nem todos os insumos foram comprados). Cobertura 100% mostra barra verde.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 23:30:00",
+  },
 ];
