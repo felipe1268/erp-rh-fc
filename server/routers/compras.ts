@@ -4028,11 +4028,16 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
+      const parseDate = (d: string): Date => {
+        const clean = d.replace(" ", "T").replace(/\+00$/, "Z");
+        return new Date(clean.includes("T") ? clean : clean + "T00:00:00");
+      };
       const daysBetween = (d1: string | null | undefined, d2: string | null | undefined): number | null => {
         if (!d1 || !d2) return null;
         try {
-          const a = new Date(d1.includes("T") ? d1 : d1 + "T00:00:00");
-          const b = new Date(d2.includes("T") ? d2 : d2 + "T00:00:00");
+          const a = parseDate(d1);
+          const b = parseDate(d2);
+          if (isNaN(a.getTime()) || isNaN(b.getTime())) return null;
           return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
         } catch { return null; }
       };

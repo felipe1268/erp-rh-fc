@@ -31,7 +31,10 @@ const STATUS_STYLES: Record<string, { dot: string; line: string; text: string; b
 function formatDate(d?: string | null) {
   if (!d) return "—";
   try {
-    return new Date(d.includes("T") ? d : d + "T00:00:00").toLocaleDateString("pt-BR");
+    const clean = d.replace(" ", "T").replace(/\+00$/, "Z");
+    const dt = new Date(clean.includes("T") ? clean : clean + "T00:00:00");
+    if (isNaN(dt.getTime())) return "—";
+    return dt.toLocaleDateString("pt-BR");
   } catch {
     return "—";
   }
