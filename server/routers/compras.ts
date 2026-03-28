@@ -3770,6 +3770,283 @@ Retorne APENAS um JSON válido neste formato:
       }));
     }),
 
+  getInsumosConsolidados: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos)
+        .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId), isNull(orcamentos.deletedAt)))
+        .orderBy(desc(orcamentos.createdAt)).limit(1);
+      if (!orc) return [];
+
+      const orcItems = await db.select({
+        id: orcamentoItens.id,
+        eapCodigo: orcamentoItens.eapCodigo,
+        servicoCodigo: orcamentoItens.servicoCodigo,
+        descricao: orcamentoItens.descricao,
+        unidade: orcamentoItens.unidade,
+        quantidade: orcamentoItens.quantidade,
+      }).from(orcamentoItens)
+        .where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId)));
+
+      const servicos = orcItems.filter(it => it.servicoCodigo);
+      if (!servicos.length) return [];
+
+      const servicoCodigos = [...new Set(servicos.map(it => it.servicoCodigo!))];
+      const allInsumos = await db.select({
+        composicaoCodigo: composicaoInsumos.composicaoCodigo,
+        insumoCodigo: composicaoInsumos.insumoCodigo,
+        insumoDescricao: composicaoInsumos.insumoDescricao,
+        unidade: composicaoInsumos.unidade,
+        quantidade: composicaoInsumos.quantidade,
+        precoUnitario: composicaoInsumos.precoUnitario,
+        alocacaoMat: composicaoInsumos.alocacaoMat,
+        alocacaoMdo: composicaoInsumos.alocacaoMdo,
+      }).from(composicaoInsumos)
+        .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
+
+      const materiaisOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+
+      const consolidado: Record<string, {
+        insumoCodigo: string; descricao: string; unidade: string;
+        qtdTotalOrcada: number; precoMedio: number; composicoes: string[];
+        eapItens: { orcamentoItemId: number; eapCodigo: string; servicoCodigo: string; qtdServico: number; coeficiente: number; qtdInsumo: number }[];
+      }> = {};
+
+      for (const ins of materiaisOnly) {
+        const key = ins.insumoCodigo || ins.insumoDescricao || "";
+        if (!consolidado[key]) {
+          consolidado[key] = {
+            insumoCodigo: ins.insumoCodigo || "",
+            descricao: ins.insumoDescricao || "",
+            unidade: ins.unidade || "un",
+            qtdTotalOrcada: 0,
+            precoMedio: 0,
+            composicoes: [],
+            eapItens: [],
+          };
+        }
+        const entry = consolidado[key];
+        if (!entry.composicoes.includes(ins.composicaoCodigo)) entry.composicoes.push(ins.composicaoCodigo);
+        const coef = n(ins.quantidade);
+        const pu = n(ins.precoUnitario);
+        const matchingServicos = servicos.filter(s => s.servicoCodigo === ins.composicaoCodigo);
+        for (const svc of matchingServicos) {
+          const qtdServico = n(svc.quantidade);
+          const qtdInsumo = qtdServico * coef;
+          entry.qtdTotalOrcada += qtdInsumo;
+          entry.eapItens.push({ orcamentoItemId: svc.id, eapCodigo: svc.eapCodigo, servicoCodigo: svc.servicoCodigo!, qtdServico, coeficiente: coef, qtdInsumo });
+        }
+        if (pu > 0) entry.precoMedio = pu;
+      }
+
+      let result = Object.values(consolidado).filter(c => c.qtdTotalOrcada > 0);
+      if (input.busca && input.busca.trim().length >= 2) {
+        const term = input.busca.trim().toLowerCase();
+        result = result.filter(c => c.descricao.toLowerCase().includes(term) || c.insumoCodigo.toLowerCase().includes(term));
+      }
+
+      const scRows = await db.select({
+        orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+        insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+        quantidade: comprasSolicitacoesItens.quantidade,
+      }).from(comprasSolicitacoesItens)
+        .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
+        .where(and(eq(comprasSolicitacoes.companyId, input.companyId), eq(comprasSolicitacoes.obraId, input.obraId), sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`));
+      const scMap: Record<string, number> = {};
+      for (const sc of scRows) {
+        const key = sc.insumoCodigo || "";
+        scMap[key] = (scMap[key] || 0) + n(sc.quantidade);
+      }
+
+      const ocRows = await db.select({
+        insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+        quantidade: comprasOrdensItens.quantidade,
+        quantidadeEntregue: comprasOrdensItens.quantidadeEntregue,
+      }).from(comprasOrdensItens)
+        .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+        .innerJoin(comprasSolicitacoesItens, eq(comprasOrdensItens.solicitacaoItemId, comprasSolicitacoesItens.id))
+        .where(and(eq(comprasOrdens.companyId, input.companyId), eq(comprasOrdens.obraId, input.obraId), sql`${comprasOrdens.status} NOT IN ('cancelada')`));
+      const ocMapComprado: Record<string, number> = {};
+      const ocMapRecebido: Record<string, number> = {};
+      for (const oc of ocRows) {
+        const key = oc.insumoCodigo || "";
+        ocMapComprado[key] = (ocMapComprado[key] || 0) + n(oc.quantidade);
+        ocMapRecebido[key] = (ocMapRecebido[key] || 0) + n(oc.quantidadeEntregue);
+      }
+
+      return result.map(c => ({
+        ...c,
+        qtdJaSolicitada: scMap[c.insumoCodigo] || 0,
+        qtdComprada: ocMapComprado[c.insumoCodigo] || 0,
+        qtdRecebida: ocMapRecebido[c.insumoCodigo] || 0,
+        saldoDisponivel: c.qtdTotalOrcada - (scMap[c.insumoCodigo] || 0),
+      })).sort((a, b) => a.descricao.localeCompare(b.descricao));
+    }),
+
+  getSugestoesCompra: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos)
+        .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId), isNull(orcamentos.deletedAt)))
+        .orderBy(desc(orcamentos.createdAt)).limit(1);
+      if (!orc) return [];
+
+      const proj = await db.select({ id: planejamentoProjetos.id })
+        .from(planejamentoProjetos)
+        .where(and(eq(planejamentoProjetos.companyId, input.companyId), eq(planejamentoProjetos.obraId, input.obraId)))
+        .limit(1);
+      if (!proj.length) return [];
+
+      const [rev] = await db.select({ id: planejamentoRevisoes.id })
+        .from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.projetoId, proj[0].id))
+        .orderBy(desc(planejamentoRevisoes.id)).limit(1);
+      if (!rev) return [];
+
+      const hoje = new Date();
+      const em14dias = new Date(hoje.getTime() + 14 * 24 * 60 * 60 * 1000);
+      const hojeStr = hoje.toISOString().slice(0, 10);
+      const em14Str = em14dias.toISOString().slice(0, 10);
+
+      const atividades = await db.select({
+        eapCodigo: planejamentoAtividades.eapCodigo,
+        nome: planejamentoAtividades.nome,
+        dataInicio: planejamentoAtividades.dataInicio,
+        dataFim: planejamentoAtividades.dataFim,
+      }).from(planejamentoAtividades)
+        .where(and(
+          eq(planejamentoAtividades.revisaoId, rev.id),
+          sql`${planejamentoAtividades.dataInicio} IS NOT NULL`,
+          sql`${planejamentoAtividades.dataInicio} <= ${em14Str}`,
+          sql`(${planejamentoAtividades.dataFim} IS NULL OR ${planejamentoAtividades.dataFim} >= ${hojeStr})`,
+        ));
+
+      if (!atividades.length) return [];
+
+      const orcItems = await db.select({
+        id: orcamentoItens.id,
+        eapCodigo: orcamentoItens.eapCodigo,
+        servicoCodigo: orcamentoItens.servicoCodigo,
+        descricao: orcamentoItens.descricao,
+        unidade: orcamentoItens.unidade,
+        quantidade: orcamentoItens.quantidade,
+      }).from(orcamentoItens)
+        .where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId)));
+
+      const atividadeEaps = new Set(atividades.map(a => a.eapCodigo).filter(Boolean));
+      const servicosProximos = orcItems.filter(it => it.servicoCodigo && atividadeEaps.has(it.eapCodigo));
+      if (!servicosProximos.length) return [];
+
+      const servicoCodigos = [...new Set(servicosProximos.map(it => it.servicoCodigo!))];
+      const insumosDb = await db.select({
+        composicaoCodigo: composicaoInsumos.composicaoCodigo,
+        insumoCodigo: composicaoInsumos.insumoCodigo,
+        insumoDescricao: composicaoInsumos.insumoDescricao,
+        unidade: composicaoInsumos.unidade,
+        quantidade: composicaoInsumos.quantidade,
+        alocacaoMat: composicaoInsumos.alocacaoMat,
+        alocacaoMdo: composicaoInsumos.alocacaoMdo,
+      }).from(composicaoInsumos)
+        .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
+
+      const materiaisOnly = insumosDb.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+
+      const sugestoes: Record<string, { insumoCodigo: string; descricao: string; unidade: string; qtdNecessaria: number; atividades: string[] }> = {};
+      for (const ins of materiaisOnly) {
+        const svcs = servicosProximos.filter(s => s.servicoCodigo === ins.composicaoCodigo);
+        for (const svc of svcs) {
+          const key = ins.insumoCodigo || ins.insumoDescricao || "";
+          if (!sugestoes[key]) {
+            sugestoes[key] = { insumoCodigo: ins.insumoCodigo || "", descricao: ins.insumoDescricao || "", unidade: ins.unidade || "un", qtdNecessaria: 0, atividades: [] };
+          }
+          sugestoes[key].qtdNecessaria += n(svc.quantidade) * n(ins.quantidade);
+          const atv = atividades.find(a => a.eapCodigo === svc.eapCodigo);
+          if (atv && !sugestoes[key].atividades.includes(atv.nome || svc.descricao)) {
+            sugestoes[key].atividades.push(atv.nome || svc.descricao);
+          }
+        }
+      }
+
+      return Object.values(sugestoes).filter(s => s.qtdNecessaria > 0).sort((a, b) => b.qtdNecessaria - a.qtdNecessaria).slice(0, 20);
+    }),
+
+  getAlertasEstoque: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const conditions = [eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)];
+      if (input.obraId) conditions.push(eq(almoxarifadoItens.obraId, input.obraId));
+
+      const itens = await db.select({
+        id: almoxarifadoItens.id,
+        nome: almoxarifadoItens.nome,
+        unidade: almoxarifadoItens.unidade,
+        quantidadeAtual: almoxarifadoItens.quantidadeAtual,
+        quantidadeMinima: almoxarifadoItens.quantidadeMinima,
+        obraId: almoxarifadoItens.obraId,
+      }).from(almoxarifadoItens)
+        .where(and(...conditions));
+
+      const alertas = itens.filter(it => {
+        const minimo = n(it.quantidadeMinima);
+        if (minimo <= 0) return false;
+        return n(it.quantidadeAtual) <= minimo;
+      });
+
+      return alertas.map(it => ({
+        id: it.id,
+        nome: it.nome,
+        unidade: it.unidade || "un",
+        quantidadeAtual: n(it.quantidadeAtual),
+        estoqueMinimo: n(it.quantidadeMinima),
+        obraId: it.obraId,
+        percentual: n(it.quantidadeMinima) > 0 ? Math.round((n(it.quantidadeAtual) / n(it.quantidadeMinima)) * 100) : 0,
+      })).sort((a, b) => a.percentual - b.percentual);
+    }),
+
+  getSCsPendentesAgrupamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const conditions = [
+        eq(comprasSolicitacoes.companyId, input.companyId),
+        inArray(comprasSolicitacoes.status, ["pendente", "aprovado"]),
+      ];
+      if (input.obraId) conditions.push(eq(comprasSolicitacoes.obraId, input.obraId));
+
+      const scItens = await db.select({
+        scId: comprasSolicitacoes.id,
+        scNumero: comprasSolicitacoes.numeroSc,
+        scTitulo: comprasSolicitacoes.titulo,
+        itemId: comprasSolicitacoesItens.id,
+        descricao: comprasSolicitacoesItens.descricao,
+        insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+        unidade: comprasSolicitacoesItens.unidade,
+        quantidade: comprasSolicitacoesItens.quantidade,
+      }).from(comprasSolicitacoesItens)
+        .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
+        .where(and(...conditions));
+
+      const grouped: Record<string, { descricao: string; unidade: string; insumoCodigo: string; totalQtd: number; scs: { scId: number; scNumero: string | null; scTitulo: string | null; quantidade: number }[] }> = {};
+      for (const it of scItens) {
+        const key = it.insumoCodigo || it.descricao?.toLowerCase().trim() || "";
+        if (!key) continue;
+        if (!grouped[key]) {
+          grouped[key] = { descricao: it.descricao || "", unidade: it.unidade || "un", insumoCodigo: it.insumoCodigo || "", totalQtd: 0, scs: [] };
+        }
+        grouped[key].totalQtd += n(it.quantidade);
+        const existing = grouped[key].scs.find(s => s.scId === it.scId);
+        if (existing) { existing.quantidade += n(it.quantidade); }
+        else { grouped[key].scs.push({ scId: it.scId, scNumero: it.scNumero, scTitulo: it.scTitulo, quantidade: n(it.quantidade) }); }
+      }
+
+      return Object.values(grouped).filter(g => g.scs.length >= 2).sort((a, b) => b.scs.length - a.scs.length);
+    }),
+
   getEapParaObra: protectedProcedure
     .input(z.object({ obraId: z.number(), companyId: z.number() }))
     .query(async ({ input }) => {

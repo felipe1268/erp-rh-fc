@@ -5712,4 +5712,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 22:45:00",
   },
+  {
+    version: 839,
+    titulo: "Compras: 6 melhorias inteligentes no modulo de Solicitacoes",
+    descricao: "1) Conversao automatica de unidades (cimento→sacos 50kg, areia→caminhoes 6m3, tinta→latas 18L, blocos→milheiros, etc). 2) Compra Consolidada por Insumo: novo modo que busca e agrega insumos de todas as composicoes do orcamento, permitindo comprar em volume. 3) Sugestao automatica de compra baseada no cronograma (atividades proximas 2 semanas). 4) Historico de precos por insumo ja existente integrado ao fluxo. 5) Alerta de estoque minimo do almoxarifado. 6) Oportunidade de agrupamento de SCs com mesmo insumo.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 22:55:00",
+  },
 ];

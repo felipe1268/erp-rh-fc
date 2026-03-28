@@ -43,6 +43,29 @@ const PRIORIDADE_COR: Record<string, string> = {
 };
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
 
+const CONVERSOES_UNIDADE: { padrao: RegExp; unidade: string; fator: number; nomeConversao: string }[] = [
+  { padrao: /cimento/i, unidade: "kg", fator: 50, nomeConversao: "sacos de 50kg" },
+  { padrao: /cal\s|cal$/i, unidade: "kg", fator: 20, nomeConversao: "sacos de 20kg" },
+  { padrao: /argamassa/i, unidade: "kg", fator: 20, nomeConversao: "sacos de 20kg" },
+  { padrao: /areia|brita|pedra|pedrisco/i, unidade: "m³", fator: 6, nomeConversao: "caminhões (6m³)" },
+  { padrao: /tinta.*18|18.*litro|lata.*18/i, unidade: "L", fator: 18, nomeConversao: "latas de 18L" },
+  { padrao: /tinta.*3[,.]?6|galão|galao/i, unidade: "L", fator: 3.6, nomeConversao: "galões de 3,6L" },
+  { padrao: /tinta/i, unidade: "L", fator: 18, nomeConversao: "latas de 18L" },
+  { padrao: /bloco|tijolo/i, unidade: "un", fator: 1000, nomeConversao: "milheiros" },
+  { padrao: /vergalhão|vergalhao|aço.*ca-?50|aço.*ca-?60|barra.*aço/i, unidade: "kg", fator: 12, nomeConversao: "barras (~12m)" },
+];
+
+function getConversao(descricao: string, unidade: string, quantidade: number): string | null {
+  if (quantidade <= 0) return null;
+  for (const conv of CONVERSOES_UNIDADE) {
+    if (conv.padrao.test(descricao) && conv.unidade === unidade) {
+      const qtdConvertida = quantidade / conv.fator;
+      return `≈ ${qtdConvertida < 1 ? qtdConvertida.toFixed(2) : Math.ceil(qtdConvertida).toLocaleString("pt-BR")} ${conv.nomeConversao}`;
+    }
+  }
+  return null;
+}
+
 interface ItemForm {
   descricao: string; unidade: string; quantidade: string; observacoes: string;
   orcamentoItemId?: number; eapCodigo?: string;
@@ -125,7 +148,9 @@ export default function Solicitacoes() {
   const [recebQtd, setRecebQtd] = useState<Record<number, string>>({});
   const [selectedEapIds, setSelectedEapIds] = useState<Set<number>>(new Set());
   const [eapSearch, setEapSearch] = useState("");
-  const [modoSC, setModoSC] = useState<"eap" | "manual">("eap");
+  const [modoSC, setModoSC] = useState<"eap" | "manual" | "insumo">("eap");
+  const [insumoBusca, setInsumoBusca] = useState("");
+  const [insumoQtds, setInsumoQtds] = useState<Record<string, string>>({});
   const [eapExpanded, setEapExpanded] = useState<number | null>(null);
   const [eapQtdServico, setEapQtdServico] = useState<Record<number, string>>({});
   const [eapInsumos, setEapInsumos] = useState<Record<number, any[]>>({});
@@ -151,6 +176,26 @@ export default function Solicitacoes() {
   const eapQ = trpc.compras.getEapParaObra.useQuery(
     { obraId: parseInt(form.obraId), companyId },
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 }
+  );
+
+  const insumosConsolidadosQ = trpc.compras.getInsumosConsolidados.useQuery(
+    { companyId, obraId: parseInt(form.obraId), busca: insumoBusca || undefined },
+    { enabled: modoSC === "insumo" && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 30_000 }
+  );
+
+  const sugestoesQ = trpc.compras.getSugestoesCompra.useQuery(
+    { companyId, obraId: parseInt(form.obraId) },
+    { enabled: showNova && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 60_000 }
+  );
+
+  const alertasEstoqueQ = trpc.compras.getAlertasEstoque.useQuery(
+    { companyId, obraId: parseInt(form.obraId) || undefined },
+    { enabled: showNova && companyId > 0, staleTime: 60_000 }
+  );
+
+  const agrupamentoQ = trpc.compras.getSCsPendentesAgrupamento.useQuery(
+    { companyId, obraId: parseInt(form.obraId) || undefined },
+    { enabled: showNova && companyId > 0, staleTime: 30_000 }
   );
 
   const uploadImagem = trpc.compras.uploadImagemReferenciaSC.useMutation();
@@ -267,6 +312,7 @@ export default function Solicitacoes() {
     setSelectedEapIds(new Set());
     setEapSearch(""); setModoSC("eap");
     setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({});
+    setInsumoBusca(""); setInsumoQtds({});
     setImagemPreview(null); setImagemBase64(null); setImagemNome("");
   }
 
@@ -379,7 +425,27 @@ export default function Solicitacoes() {
   async function handleSalvar() {
     if (!form.titulo.trim()) return toast.error("Informe o título da solicitação.");
     if (!form.obraId || form.obraId === "none") return toast.error("Selecione a Obra (centro de custo) para esta solicitação.");
-    const validos = itens.filter(i => i.descricao.trim());
+
+    let itensParaSalvar = itens;
+    if (modoSC === "insumo") {
+      const insumosComQtd = Object.entries(insumoQtds).filter(([, v]) => parseFloat(v) > 0);
+      if (insumosComQtd.length === 0) return toast.error("Informe a quantidade de pelo menos um insumo.");
+      const consolidadosData = insumosConsolidadosQ.data ?? [];
+      itensParaSalvar = insumosComQtd.map(([codigo, qtd]) => {
+        const ins = consolidadosData.find((c: any) => c.insumoCodigo === codigo);
+        return {
+          descricao: ins?.descricao || codigo,
+          unidade: ins?.unidade || "un",
+          quantidade: qtd,
+          observacoes: `Compra consolidada (${ins?.composicoes?.length || 0} composições)`,
+          insumoCodigo: codigo,
+          precoMeta: ins?.precoMedio || 0,
+          origemEap: true,
+        };
+      });
+    }
+
+    const validos = itensParaSalvar.filter(i => i.descricao.trim());
     if (validos.length === 0) return toast.error("Adicione pelo menos um item.");
 
     const consolidados = new Map<string, ItemForm>();
@@ -761,6 +827,13 @@ export default function Solicitacoes() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setModoSC("insumo")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${modoSC === "insumo" ? "bg-white text-gray-700 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}
+                  >
+                    <Package className="h-3 w-3" /> Por Insumo
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setModoSC("manual")}
                     className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${modoSC === "manual" ? "bg-white text-gray-700 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}
                   >
@@ -941,6 +1014,7 @@ export default function Solicitacoes() {
                                                   <div className="text-right shrink-0">
                                                     <div className="font-semibold text-gray-700">{qtdCalc.toLocaleString("pt-BR")} {ins.unidade}</div>
                                                     {qtdCalc > 0 && <div className="text-[10px] text-gray-400">R$ {(qtdCalc * parseFloat(ins.precoUnitario || "0")).toFixed(2)}</div>}
+                                                    {(() => { const c = getConversao(ins.descricao, ins.unidade, qtdCalc); return c ? <div className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 mt-0.5 font-medium">{c}</div> : null; })()}
                                                   </div>
                                                 </div>
                                               );
@@ -983,11 +1057,170 @@ export default function Solicitacoes() {
                   </div>
                 )}
 
+                {modoSC === "insumo" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                        <Package className="h-3.5 w-3.5 text-purple-600" />
+                        Compra Consolidada por Insumo
+                      </label>
+                    </div>
+                    <div className="text-[10px] text-gray-500 bg-purple-50 border border-purple-200 rounded px-2.5 py-1.5">
+                      Busque um insumo (cimento, areia, etc.) para ver o total consolidado de todas as composições do orçamento. Permite comprar em volume.
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                        <input
+                          className="w-full h-8 pl-8 pr-3 text-xs rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-300"
+                          placeholder="Buscar insumo... ex: cimento, areia, brita, aço"
+                          value={insumoBusca}
+                          onChange={e => setInsumoBusca(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    {!form.obraId ? (
+                      <div className="text-xs text-gray-400 py-2">Selecione uma obra acima para visualizar os insumos.</div>
+                    ) : insumosConsolidadosQ.isLoading ? (
+                      <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Consolidando insumos do orçamento...
+                      </div>
+                    ) : (insumosConsolidadosQ.data ?? []).length === 0 ? (
+                      <div className="text-xs text-gray-400 py-2">
+                        {insumoBusca ? "Nenhum insumo encontrado para esta busca." : "Digite pelo menos 2 caracteres para buscar."}
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-3 py-1.5 text-[10px] text-gray-500 font-medium uppercase tracking-wide border-b border-gray-200 grid grid-cols-12 gap-1">
+                          <span className="col-span-4">Insumo</span>
+                          <span className="col-span-1 text-center">Un</span>
+                          <span className="col-span-1 text-right">Orçado</span>
+                          <span className="col-span-1 text-right">Solic.</span>
+                          <span className="col-span-1 text-right">Saldo</span>
+                          <span className="col-span-1 text-right">Comp.</span>
+                          <span className="col-span-1 text-center">Qtd</span>
+                          <span className="col-span-2 text-center">Conversão</span>
+                        </div>
+                        <div className="max-h-52 overflow-y-auto divide-y divide-gray-100">
+                          {(insumosConsolidadosQ.data ?? []).map((ins: any) => {
+                            const qtdStr = insumoQtds[ins.insumoCodigo] || "";
+                            const qtdVal = parseFloat(qtdStr) || 0;
+                            const conv = getConversao(ins.descricao, ins.unidade, qtdVal > 0 ? qtdVal : ins.qtdTotalOrcada);
+                            const saldoNeg = ins.saldoDisponivel < 0;
+                            return (
+                              <div key={ins.insumoCodigo} className="grid grid-cols-12 gap-1 px-3 py-2 text-xs items-center hover:bg-gray-50">
+                                <div className="col-span-4 min-w-0">
+                                  <div className="text-gray-900 truncate font-medium">{ins.descricao}</div>
+                                  <div className="text-[9px] text-gray-400">{ins.insumoCodigo} · {ins.composicoes.length} composiç{ins.composicoes.length > 1 ? "ões" : "ão"}</div>
+                                </div>
+                                <div className="col-span-1 text-center">
+                                  <span className="text-[9px] font-bold text-gray-600 bg-gray-100 rounded px-1 py-0.5">{ins.unidade}</span>
+                                </div>
+                                <div className="col-span-1 text-right font-semibold text-gray-700">{ins.qtdTotalOrcada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                <div className="col-span-1 text-right text-blue-600">{ins.qtdJaSolicitada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                <div className={`col-span-1 text-right font-bold ${saldoNeg ? "text-red-600" : "text-emerald-600"}`}>{ins.saldoDisponivel.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                <div className="col-span-1 text-right text-purple-600">{ins.qtdComprada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                <div className="col-span-1">
+                                  <input
+                                    type="number" min="0" step="0.01"
+                                    className="w-full h-6 px-1 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 text-center"
+                                    placeholder="0"
+                                    value={qtdStr}
+                                    onChange={e => setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: e.target.value }))}
+                                  />
+                                </div>
+                                <div className="col-span-2 text-center">
+                                  {conv && <span className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 font-medium">{conv}</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {modoSC === "manual" && (
                   <div className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
                     <FileText className="h-3 w-3 text-blue-500 shrink-0" />
                     Modo manual — adicione os itens livremente na seção abaixo.
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Painéis inteligentes: Sugestões, Alertas Estoque, Agrupamento */}
+            {form.obraId && parseInt(form.obraId) > 0 && (
+              <div className="space-y-2">
+                {(sugestoesQ.data ?? []).length > 0 && (
+                  <details className="border border-amber-200 rounded-lg bg-amber-50 overflow-hidden">
+                    <summary className="px-3 py-2 text-xs font-semibold text-amber-800 cursor-pointer hover:bg-amber-100 flex items-center gap-1.5">
+                      <CalendarDays className="h-3.5 w-3.5 text-amber-600" />
+                      Sugestão de Compra — {(sugestoesQ.data ?? []).length} insumos para atividades das próximas 2 semanas
+                    </summary>
+                    <div className="border-t border-amber-200 max-h-32 overflow-y-auto divide-y divide-amber-100">
+                      {(sugestoesQ.data ?? []).map((s: any, i: number) => {
+                        const conv = getConversao(s.descricao, s.unidade, s.qtdNecessaria);
+                        return (
+                          <div key={i} className="px-3 py-1.5 text-xs flex items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <span className="text-gray-900 font-medium truncate block">{s.descricao}</span>
+                              <span className="text-[9px] text-amber-600">{s.atividades.slice(0, 2).join(", ")}{s.atividades.length > 2 ? ` +${s.atividades.length - 2}` : ""}</span>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="font-bold text-gray-700">{s.qtdNecessaria.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {s.unidade}</span>
+                              {conv && <div className="text-[9px] text-purple-600">{conv}</div>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                )}
+
+                {(alertasEstoqueQ.data ?? []).length > 0 && (
+                  <details className="border border-red-200 rounded-lg bg-red-50 overflow-hidden">
+                    <summary className="px-3 py-2 text-xs font-semibold text-red-800 cursor-pointer hover:bg-red-100 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+                      Estoque Baixo — {(alertasEstoqueQ.data ?? []).length} ite{(alertasEstoqueQ.data ?? []).length > 1 ? "ns" : "m"} abaixo do mínimo
+                    </summary>
+                    <div className="border-t border-red-200 max-h-28 overflow-y-auto divide-y divide-red-100">
+                      {(alertasEstoqueQ.data ?? []).map((a: any) => (
+                        <div key={a.id} className="px-3 py-1.5 text-xs flex items-center justify-between gap-2">
+                          <span className="text-gray-900 font-medium truncate">{a.nome}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-red-700 font-bold">{a.quantidadeAtual.toLocaleString("pt-BR")} {a.unidade}</span>
+                            <span className="text-[9px] text-red-500">mín: {a.estoqueMinimo.toLocaleString("pt-BR")}</span>
+                            <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${a.percentual < 30 ? "bg-red-200 text-red-800" : "bg-amber-200 text-amber-800"}`}>{a.percentual}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+
+                {(agrupamentoQ.data ?? []).length > 0 && (
+                  <details className="border border-blue-200 rounded-lg bg-blue-50 overflow-hidden">
+                    <summary className="px-3 py-2 text-xs font-semibold text-blue-800 cursor-pointer hover:bg-blue-100 flex items-center gap-1.5">
+                      <ShoppingCart className="h-3.5 w-3.5 text-blue-600" />
+                      Oportunidade de Agrupamento — {(agrupamentoQ.data ?? []).length} insumos em múltiplas SCs
+                    </summary>
+                    <div className="border-t border-blue-200 max-h-28 overflow-y-auto divide-y divide-blue-100">
+                      {(agrupamentoQ.data ?? []).map((g: any, i: number) => (
+                        <div key={i} className="px-3 py-1.5 text-xs flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <span className="text-gray-900 font-medium truncate block">{g.descricao}</span>
+                            <span className="text-[9px] text-blue-600">{g.scs.map((s: any) => s.scNumero).join(", ")}</span>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="font-bold text-gray-700">{g.totalQtd.toLocaleString("pt-BR")} {g.unidade}</span>
+                            <div className="text-[9px] text-blue-600">{g.scs.length} SCs</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 )}
               </div>
             )}
