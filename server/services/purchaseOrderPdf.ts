@@ -156,25 +156,17 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
 
   const logoSrc = resolveLogoSource(company?.logoUrl);
   let logoRendered = false;
-  const logoW = 55;
-  const logoH = 55;
+  const logoSize = 50;
   if (logoSrc) {
     try {
-      doc.save();
-      const logoX = mL + 10;
-      const logoY = 8;
-      const r = 6;
-      doc.roundedRect(logoX, logoY, logoW, logoH, r).clip();
-      doc.rect(logoX, logoY, logoW, logoH).fill(white);
-      doc.image(logoSrc, logoX + 4, logoY + 4, { fit: [logoW - 8, logoH - 8] });
-      doc.restore();
+      doc.image(logoSrc, mL, 18, { fit: [logoSize, logoSize] });
       logoRendered = true;
     } catch {
       logoRendered = false;
     }
   }
 
-  const nameX = logoRendered ? mL + logoW + 22 : mL + 10;
+  const nameX = logoRendered ? mL + logoSize + 12 : mL + 10;
   const ocBlockW = 155;
   const nameW = pageW - nameX - ocBlockW - mR - 15;
 
