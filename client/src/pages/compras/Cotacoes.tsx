@@ -1476,8 +1476,14 @@ export default function Cotacoes() {
       const wResp = mapa?.respostaMap?.[wKey];
       const precoForn = parseFloat(wResp?.precoUnitario ?? "0");
       const custoCompra = precoForn * qtdItem;
-      if ((it as any).semVerba) {
-        return { saldo: -custoCompra, hasMeta: true };
+      const qtdOrcada = parseFloat((it as any).qtdOrcada ?? "0");
+      const qtdTotalSolicitada = parseFloat((it as any).qtdTotalSolicitada ?? "0");
+      const estourou = (it as any).semVerba || (qtdOrcada > 0 && qtdTotalSolicitada > qtdOrcada);
+      if (estourou) {
+        const qtdExcedente = qtdTotalSolicitada - qtdOrcada;
+        const qtdCoberta = Math.max(0, qtdItem - qtdExcedente);
+        const verbaCoberta = metaUnit * qtdCoberta;
+        return { saldo: verbaCoberta - custoCompra, hasMeta: true };
       }
       const metaTot = metaUnit * qtdItem;
       return { saldo: metaTot - custoCompra, hasMeta: true };
