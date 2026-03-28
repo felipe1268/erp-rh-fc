@@ -112,26 +112,61 @@ function DailyChart({ data }: { data: Array<{ dia: string; total: string | numbe
   );
 }
 
-function HourChart({ data }: { data: Array<{ hora: number; total: string | number }> }) {
+function HourChart({ data, companyId, periodo }: { data: Array<{ hora: number; total: string | number }>; companyId?: number; periodo?: string }) {
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const hours = Array.from({ length: 24 }, (_, i) => {
     const found = data?.find(d => Number(d.hora) === i);
     return { hora: i, total: Number(found?.total ?? 0) };
   });
   const max = Math.max(...hours.map(h => h.total));
+
+  const usuariosQ = trpc.telemetria.getUsuariosPorHora.useQuery(
+    { companyId: companyId ?? 0, hora: selectedHour ?? 0, periodo },
+    { enabled: selectedHour !== null && (companyId ?? 0) > 0 }
+  );
+
   return (
-    <div className="flex items-end gap-1 h-32">
-      {hours.map((h) => {
-        const pct = max > 0 ? (h.total / max) * 100 : 0;
-        return (
-          <div key={h.hora} className="flex flex-col items-center flex-1 group relative">
-            <div className="absolute -top-5 text-xs font-medium text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
-              {h.total}
+    <div className="space-y-2">
+      <div className="flex items-end gap-1 h-32">
+        {hours.map((h) => {
+          const pct = max > 0 ? (h.total / max) * 100 : 0;
+          const isSelected = selectedHour === h.hora;
+          return (
+            <div key={h.hora} className="flex flex-col items-center flex-1 group relative cursor-pointer" onClick={() => setSelectedHour(isSelected ? null : h.hora)}>
+              <div className="absolute -top-5 text-xs font-medium text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                {h.total}
+              </div>
+              <div className={`w-full rounded-t transition-all ${isSelected ? "bg-purple-700 ring-2 ring-purple-400" : "bg-purple-500 hover:bg-purple-600"}`} style={{ height: `${pct}%`, minHeight: pct > 0 ? 4 : 0 }} />
+              <span className={`text-[9px] mt-1 ${isSelected ? "text-purple-700 font-bold" : "text-gray-400"}`}>{h.hora}h</span>
             </div>
-            <div className="w-full bg-purple-500 rounded-t transition-all hover:bg-purple-600" style={{ height: `${pct}%`, minHeight: pct > 0 ? 4 : 0 }} />
-            <span className="text-[9px] text-gray-400 mt-1">{h.hora}h</span>
+          );
+        })}
+      </div>
+      {selectedHour !== null && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-purple-700">Usuários ativos às {selectedHour}h</span>
+            <button onClick={() => setSelectedHour(null)} className="text-xs text-gray-400 hover:text-gray-600">Fechar</button>
           </div>
-        );
-      })}
+          {usuariosQ.isLoading ? (
+            <p className="text-xs text-gray-400">Carregando...</p>
+          ) : (usuariosQ.data?.length ?? 0) === 0 ? (
+            <p className="text-xs text-gray-400">Nenhum usuário registrado neste horário.</p>
+          ) : (
+            <div className="space-y-1">
+              {(usuariosQ.data ?? []).map((u: any) => (
+                <div key={u.user_id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1.5 border border-purple-100">
+                  <div className="flex items-center gap-1.5">
+                    <User className="h-3 w-3 text-purple-500" />
+                    <span className="text-gray-800 font-medium">{u.user_name || `Usuário #${u.user_id}`}</span>
+                  </div>
+                  <span className="text-gray-400">{Number(u.total)} acessos</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -200,7 +235,7 @@ function PerfilUsuario({ userId, companyId, periodo, onBack }: {
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">Uso por Hora</CardTitle></CardHeader>
-          <CardContent><HourChart data={data.porHora} /></CardContent>
+          <CardContent><HourChart data={data.porHora} companyId={companyId} periodo={periodo} /></CardContent>
         </Card>
       </div>
 
@@ -334,7 +369,7 @@ export default function Telemetria() {
                   </Card>
                   <Card>
                     <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1"><Clock className="h-4 w-4" /> Uso por Hora</CardTitle></CardHeader>
-                    <CardContent><HourChart data={dash.usoPorHora} /></CardContent>
+                    <CardContent><HourChart data={dash.usoPorHora} companyId={companyId} periodo={periodo} /></CardContent>
                   </Card>
                 </div>
 

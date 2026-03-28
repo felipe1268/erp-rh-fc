@@ -163,14 +163,14 @@ export const telemetriaRouter = router({
           GROUP BY user_id, user_name ORDER BY total_paginas DESC LIMIT 50
         `),
         db.execute(sql`
-          SELECT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') as dia, COUNT(*) as total
+          SELECT DATE(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') as dia, COUNT(*) as total
           FROM user_activity_log
           WHERE company_id = ${cid} AND tipo = 'page_visit'
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
-          GROUP BY DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') ORDER BY dia
+          GROUP BY DATE(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') ORDER BY dia
         `),
         db.execute(sql`
-          SELECT EXTRACT(HOUR FROM criado_em AT TIME ZONE 'America/Sao_Paulo')::int as hora, COUNT(*) as total
+          SELECT EXTRACT(HOUR FROM criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::int as hora, COUNT(*) as total
           FROM user_activity_log
           WHERE company_id = ${cid}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
@@ -265,14 +265,14 @@ export const telemetriaRouter = router({
           GROUP BY acao, pagina ORDER BY total DESC LIMIT 30
         `),
         db.execute(sql`
-          SELECT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') as dia, COUNT(*) as total
+          SELECT DATE(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') as dia, COUNT(*) as total
           FROM user_activity_log
           WHERE company_id = ${cid} AND user_id = ${input.userId}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
           GROUP BY dia ORDER BY dia
         `),
         db.execute(sql`
-          SELECT EXTRACT(HOUR FROM criado_em AT TIME ZONE 'America/Sao_Paulo')::int as hora, COUNT(*) as total
+          SELECT EXTRACT(HOUR FROM criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::int as hora, COUNT(*) as total
           FROM user_activity_log
           WHERE company_id = ${cid} AND user_id = ${input.userId}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
@@ -409,6 +409,30 @@ export const telemetriaRouter = router({
           )) as score
         FROM user_stats
         ORDER BY score DESC
+      `);
+      return (rows as any).rows ?? [];
+    }),
+
+  getUsuariosPorHora: protectedProcedure
+    .input(z.object({
+      companyId: z.number().optional(),
+      hora: z.number().min(0).max(23),
+      periodo: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const cid = resolveCompanyId(ctx, input.companyId);
+      if (!cid) throw new TRPCError({ code: "BAD_REQUEST", message: "companyId obrigatório" });
+      const db = await getDb();
+      const interval = input.periodo || "30 days";
+      const rows = await db.execute(sql`
+        SELECT user_name, user_id, COUNT(*) as total,
+               MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') as ultimo_acesso
+        FROM user_activity_log
+        WHERE company_id = ${cid}
+          AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
+          AND EXTRACT(HOUR FROM criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::int = ${input.hora}
+        GROUP BY user_id, user_name
+        ORDER BY total DESC
       `);
       return (rows as any).rows ?? [];
     }),
