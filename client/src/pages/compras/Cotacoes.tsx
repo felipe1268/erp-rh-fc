@@ -1471,22 +1471,16 @@ export default function Cotacoes() {
       const metaUnit = parseFloat(it.metaUnitario ?? "0");
       if (metaUnit === 0) return { saldo: 0, hasMeta: false };
       const qtdItem = parseFloat(it.quantidade ?? "0");
-      const qtdOrcada = parseFloat((it as any).qtdOrcada ?? "0");
-      const qtdTotalSolicitada = parseFloat((it as any).qtdTotalSolicitada ?? "0");
       if (!melhorForn) return { saldo: 0, hasMeta: true };
       const wKey = `${it.id}_${melhorForn.fornecedorId}`;
       const wResp = mapa?.respostaMap?.[wKey];
       const precoForn = parseFloat(wResp?.precoUnitario ?? "0");
-      if (qtdOrcada > 0 && qtdTotalSolicitada > qtdOrcada) {
-        const qtdExcedente = qtdTotalSolicitada - qtdOrcada;
-        const qtdCoberta = Math.max(0, qtdItem - qtdExcedente);
-        const verbaCoberta = metaUnit * qtdCoberta;
-        const custoTotal = precoForn * qtdItem;
-        return { saldo: verbaCoberta - custoTotal, hasMeta: true };
+      const custoCompra = precoForn * qtdItem;
+      if ((it as any).semVerba) {
+        return { saldo: -custoCompra, hasMeta: true };
       }
       const metaTot = metaUnit * qtdItem;
-      const wTotal = parseFloat(wResp?.total ?? "0");
-      return { saldo: metaTot - wTotal, hasMeta: true };
+      return { saldo: metaTot - custoCompra, hasMeta: true };
     }
 
     const metaGrandTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
