@@ -1262,168 +1262,130 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
             )}
           </TabsContent>
 
-          {/* ═══ ABA COMPOSIÇÕES ════════════════════════════════════════ */}
+          {/* ═══ ABA COMPOSIÇÕES (espelho da aba CPUs da planilha) ════════ */}
           <TabsContent value="composicoes" className="mt-3">
             {composicoesQuery.isLoading ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin opacity-40" />
                 <p className="text-sm">Carregando composições...</p>
               </div>
-            ) : composicoesCatalogo.length === 0 && leafItems.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Wrench className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
-                <p className="text-sm font-medium">Nenhuma composição encontrada.</p>
-              </div>
             ) : composicoesCatalogo.length === 0 ? (
-              /* ── Fallback: itens-folha da EAP ordenados por custo desc ── */
-              (() => {
-                const sorted = [...leafItems].sort((a, b) => n(b.custoTotal) - n(a.custoTotal));
-                return (
-                  <Card>
-                    <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100 border-b border-slate-200">
-                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                        Composições / Serviços — {sorted.length} itens
-                      </span>
-                      <span className="text-xs text-muted-foreground">Ordenado por Custo Total ↓</span>
-                    </div>
-                    <CardContent className="py-0 px-0 overflow-x-auto">
-                      <table className="w-full text-xs min-w-[860px]">
-                        <thead>
-                          <tr className="bg-slate-700 text-white uppercase sticky top-0 z-10">
-                            <th className="text-left pl-2 py-1.5 w-28 border-r border-slate-600">EAP</th>
-                            <th className="text-left px-3 py-1.5 border-r border-slate-600">Descrição</th>
-                            <th className="text-center px-2 py-1.5 border-r border-slate-600 w-12">Un</th>
-                            <th className="text-right px-2 py-1.5 border-r border-slate-600 w-20">Qtd</th>
-                            <th className="text-right px-2 py-1.5 border-r border-slate-600 w-28 text-blue-200">Mat Total</th>
-                            <th className="text-right px-2 py-1.5 border-r border-slate-600 w-28 text-orange-200">MO Total</th>
-                            <th className="text-right px-2 py-1.5 border-r border-slate-600 w-28">Custo Total</th>
-                            <th className="text-right pr-3 py-1.5 w-14">%</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sorted.map((item, idx) => {
-                            const pct = totalCusto > 0 ? (n(item.custoTotal) / totalCusto) * 100 : 0;
-                            return (
-                              <tr key={item.id ?? idx} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
-                                <td className="pl-2 py-1 font-mono text-slate-400 border-r border-slate-100 whitespace-nowrap">{item.eapCodigo}</td>
-                                <td className="px-3 py-1 text-slate-700 border-r border-slate-100 max-w-xs">
-                                  <span className="line-clamp-2">{item.descricao}</span>
-                                  {item.servicoCodigo && <span className="block text-[10px] text-blue-400 font-mono">{item.servicoCodigo}</span>}
+              <div className="text-center py-16 text-muted-foreground space-y-3">
+                <Wrench className="h-10 w-10 mx-auto text-muted-foreground/30" />
+                <p className="text-sm font-medium">Nenhuma composição vinculada a este orçamento.</p>
+                <p className="text-xs max-w-md mx-auto">
+                  Use o botão <strong>"Vincular Composições"</strong> acima para importar as CPUs
+                  e insumos da planilha de custo.
+                </p>
+              </div>
+            ) : (() => {
+              const totalComps = composicoesCatalogo.length;
+              const totalIns = composicoesCatalogo.reduce((acc: number, c: any) => acc + (c.insumos?.length ?? 0), 0);
+              return (
+                <Card>
+                  <div className="flex items-center justify-between px-4 py-2 bg-slate-700 border-b">
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      TABELA GERAL DE SERVIÇOS — {totalComps} composições, {totalIns} insumos
+                    </span>
+                  </div>
+                  <CardContent className="py-0 px-0 overflow-x-auto max-h-[70vh] overflow-y-auto">
+                    <table className="w-full text-xs min-w-[1100px]">
+                      <thead className="sticky top-0 z-10">
+                        <tr className="bg-slate-600 text-white text-[11px] uppercase">
+                          <th className="text-left pl-3 py-2 w-24 border-r border-slate-500">Cód. Serviço</th>
+                          <th className="text-left px-2 py-2 w-20 border-r border-slate-500">Cód. Insumo</th>
+                          <th className="text-left px-3 py-2 border-r border-slate-500">Descrição</th>
+                          <th className="text-center px-2 py-2 w-12 border-r border-slate-500">Un</th>
+                          <th className="text-right px-2 py-2 w-16 border-r border-slate-500">Qtd</th>
+                          <th className="text-right px-2 py-2 w-24 border-r border-slate-500">PU Insumo</th>
+                          <th className="text-right px-2 py-2 w-24 border-r border-slate-500 text-blue-200">Alocação MAT</th>
+                          <th className="text-right px-2 py-2 w-24 border-r border-slate-500 text-orange-200">Alocação MO</th>
+                          <th className="text-right pr-3 py-2 w-28">Custo Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {composicoesCatalogo.map((comp: any, compIdx: number) => {
+                          const isExpanded = expandedComps.has(comp.eapCodigo ?? comp.servicoCodigo ?? '');
+                          const hasInsumos = (comp.insumos ?? []).length > 0;
+                          const compKey = comp.eapCodigo ?? comp.servicoCodigo ?? compIdx;
+                          return (
+                            <React.Fragment key={compKey}>
+                              <tr
+                                className={`border-b border-slate-200 ${hasInsumos ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50' : 'bg-slate-50 hover:bg-slate-100'}`}
+                                onClick={() => {
+                                  if (!hasInsumos) return;
+                                  setExpandedComps(prev => {
+                                    const s = new Set(prev);
+                                    const k = comp.eapCodigo ?? comp.servicoCodigo ?? '';
+                                    s.has(k) ? s.delete(k) : s.add(k);
+                                    return s;
+                                  });
+                                }}
+                              >
+                                <td className="pl-3 py-2 font-mono font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5">
+                                    {hasInsumos && (
+                                      <span className="text-slate-400 text-[10px]">{isExpanded ? "▾" : "▸"}</span>
+                                    )}
+                                    <span>{comp.servicoCodigo || comp.eapCodigo}</span>
+                                  </div>
                                 </td>
-                                <td className="px-2 py-1 text-center text-slate-500 border-r border-slate-100">{item.unidade}</td>
-                                <td className="px-2 py-1 text-right font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">{n(item.quantidade).toFixed(2)}</td>
-                                <td className="px-2 py-1 text-right font-mono text-blue-700 border-r border-slate-100 whitespace-nowrap">{formatBRL(n(item.custoTotalMat))}</td>
-                                <td className="px-2 py-1 text-right font-mono text-orange-600 border-r border-slate-100 whitespace-nowrap">{formatBRL(n(item.custoTotalMdo))}</td>
-                                <td className="px-2 py-1 text-right font-mono font-semibold text-amber-700 border-r border-slate-100 whitespace-nowrap">{formatBRL(n(item.custoTotal))}</td>
-                                <td className="pr-3 py-1 text-right text-slate-500 whitespace-nowrap">{pct.toFixed(2)}%</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </CardContent>
-                  </Card>
-                );
-              })()
-            ) : (
-              <Card>
-                <CardContent className="py-0 px-0 overflow-x-auto">
-                  <table className="w-full text-xs min-w-[900px]">
-                    <thead>
-                      <tr className="border-b bg-muted/50 text-muted-foreground">
-                        <th className="text-left pl-2 py-2 w-6"></th>
-                        <th className="text-left pl-2 py-2 w-28">EAP / CPU</th>
-                        <th className="text-left px-3 py-2">Descrição</th>
-                        <th className="text-left px-3 py-2 w-12">Un</th>
-                        <th className="text-right px-3 py-2 w-20">Qtd</th>
-                        <th className="text-right px-3 py-2 w-28 text-blue-700">Mat Total</th>
-                        <th className="text-right px-3 py-2 w-28 text-purple-700">MO Total</th>
-                        <th className="text-right px-3 py-2 w-28 text-amber-600">Custo Total</th>
-                        <th className="text-right pr-4 py-2 w-14">%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {composicoesCatalogo.map((comp: any) => {
-                        const pct = totalCusto > 0 ? (n(comp.custoTotal) / totalCusto) * 100 : 0;
-                        const isExpanded = expandedComps.has(comp.eapCodigo ?? '');
-                        const hasInsumos = (comp.insumos ?? []).length > 0;
-                        return (
-                          <React.Fragment key={comp.eapCodigo ?? comp.servicoCodigo}>
-                            {/* Linha da composição */}
-                            <tr
-                              className={`border-b ${hasInsumos ? 'cursor-pointer hover:bg-muted/30' : 'hover:bg-muted/20'} ${isExpanded ? 'bg-blue-50/40' : ''}`}
-                              onClick={() => {
-                                if (!hasInsumos) return;
-                                setExpandedComps(prev => {
-                                  const s = new Set(prev);
-                                  s.has(comp.eapCodigo) ? s.delete(comp.eapCodigo) : s.add(comp.eapCodigo);
-                                  return s;
-                                });
-                              }}
-                            >
-                              <td className="pl-2 py-1.5 text-center text-muted-foreground w-6">
-                                {hasInsumos ? (isExpanded ? "▾" : "▸") : ""}
-                              </td>
-                              <td className="pl-2 py-1.5 font-mono text-muted-foreground">
-                                <div>{comp.eapCodigo}</div>
-                                {comp.servicoCodigo && (
-                                  <div className="text-[10px] text-blue-500">{comp.servicoCodigo}</div>
-                                )}
-                              </td>
-                              <td className="px-3 py-1.5 font-medium max-w-xs">
-                                <span className="line-clamp-2">{comp.descricao}</span>
-                              </td>
-                              <td className="px-3 py-1.5 text-muted-foreground">{comp.unidade}</td>
-                              <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
-                                {n(comp.quantidade).toFixed(2)}
-                              </td>
-                              <td className="px-3 py-1.5 text-right tabular-nums text-blue-700">
-                                {formatBRL(n(comp.custoTotalMat))}
-                              </td>
-                              <td className="px-3 py-1.5 text-right tabular-nums text-purple-700">
-                                {formatBRL(n(comp.custoTotalMdo))}
-                              </td>
-                              <td className="px-3 py-1.5 text-right font-semibold text-amber-600 tabular-nums">
-                                {formatBRL(n(comp.custoTotal))}
-                              </td>
-                              <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
-                                {pct.toFixed(2)}%
-                              </td>
-                            </tr>
-                            {/* Linhas dos insumos — expandíveis */}
-                            {isExpanded && (comp.insumos ?? []).map((ins: any, idx: number) => (
-                              <tr key={idx} className="bg-slate-50 border-b border-dashed hover:bg-slate-100/80">
-                                <td className="pl-2 py-1"></td>
-                                <td className="pl-4 py-1 font-mono text-[10px] text-slate-400">{ins.insumoCodigo}</td>
-                                <td className="px-3 py-1 text-slate-600 max-w-xs">
-                                  <span className="line-clamp-2">{ins.insumoDescricao}</span>
+                                <td className="px-2 py-2 border-r border-slate-200"></td>
+                                <td className="px-3 py-2 font-semibold text-slate-800 border-r border-slate-200">
+                                  <span className="line-clamp-2">{comp.descricao}</span>
+                                  {comp.eapCodigo && comp.servicoCodigo && (
+                                    <span className="block text-[10px] text-slate-400 font-normal font-mono mt-0.5">EAP: {comp.eapCodigo}</span>
+                                  )}
                                 </td>
-                                <td className="px-3 py-1 text-slate-400 text-[10px]">{ins.unidade}</td>
-                                <td className="px-3 py-1 text-right tabular-nums text-slate-500">
-                                  {n(ins.quantidade).toFixed(4)}
+                                <td className="px-2 py-2 text-center font-semibold text-slate-700 border-r border-slate-200">{comp.unidade}</td>
+                                <td className="px-2 py-2 text-right border-r border-slate-200"></td>
+                                <td className="px-2 py-2 text-right border-r border-slate-200"></td>
+                                <td className="px-2 py-2 text-right font-mono font-semibold text-blue-700 border-r border-slate-200 whitespace-nowrap">
+                                  {n(comp.custoTotalMat) > 0 ? formatBRL(n(comp.custoTotalMat)) : ""}
                                 </td>
-                                <td className="px-3 py-1 text-right tabular-nums text-blue-600/70">
-                                  {n(ins.custoTotalMat) > 0 ? formatBRL(n(ins.custoTotalMat)) : "—"}
+                                <td className="px-2 py-2 text-right font-mono font-semibold text-orange-600 border-r border-slate-200 whitespace-nowrap">
+                                  {n(comp.custoTotalMdo) > 0 ? formatBRL(n(comp.custoTotalMdo)) : ""}
                                 </td>
-                                <td className="px-3 py-1 text-right tabular-nums text-purple-600/70">
-                                  {n(ins.custoTotalMdo) > 0 ? formatBRL(n(ins.custoTotalMdo)) : "—"}
-                                </td>
-                                <td className="px-3 py-1 text-right tabular-nums text-slate-500">
-                                  {formatBRL(n(ins.custoTotal))}
-                                </td>
-                                <td className="pr-4 py-1 text-right text-[10px] text-slate-400">
-                                  PU: {formatBRL(n(ins.precoUnitario))}
+                                <td className="pr-3 py-2 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                                  {formatBRL(n(comp.custoTotal))}
                                 </td>
                               </tr>
-                            ))}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </CardContent>
-              </Card>
-            )}
+                              {isExpanded && (comp.insumos ?? []).map((ins: any, idx: number) => (
+                                <tr key={idx} className="border-b border-slate-100 bg-white hover:bg-blue-50/30 transition-colors">
+                                  <td className="pl-3 py-1.5 border-r border-slate-100"></td>
+                                  <td className="px-2 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">
+                                    {ins.insumoCodigo}
+                                  </td>
+                                  <td className="px-3 py-1.5 text-slate-600 border-r border-slate-100">
+                                    <span className="line-clamp-2">{ins.insumoDescricao}</span>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center text-slate-500 border-r border-slate-100">{ins.unidade}</td>
+                                  <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">
+                                    {n(ins.quantidade) > 0 ? n(ins.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : ""}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">
+                                    {n(ins.precoUnitario) > 0 ? formatBRL(n(ins.precoUnitario)) : ""}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right font-mono text-blue-600 border-r border-slate-100 whitespace-nowrap">
+                                    {n(ins.alocacaoMat) > 0 ? formatBRL(n(ins.alocacaoMat)) : "—"}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right font-mono text-orange-500 border-r border-slate-100 whitespace-nowrap">
+                                    {n(ins.alocacaoMdo) > 0 ? formatBRL(n(ins.alocacaoMdo)) : "—"}
+                                  </td>
+                                  <td className="pr-3 py-1.5 text-right font-mono text-slate-700 whitespace-nowrap">
+                                    {n(ins.custoTotal) > 0 ? formatBRL(n(ins.custoTotal)) : "—"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              );
+            })()}
           </TabsContent>
 
           {/* ═══ ABA CURVA ABC ═════════════════════════════════════════ */}
