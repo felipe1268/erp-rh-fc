@@ -3189,7 +3189,23 @@ Responda APENAS com um objeto JSON no formato:
         ));
 
       const qtdJaSolicitada = scItens.reduce((acc, it) => acc + n(it.quantidadeServico), 0);
+      const qtdRecebidaSc = scItens.reduce((acc, it) => acc + n(it.quantidadeAtendida), 0);
       const saldoDisponivel = qtdOrcada - qtdJaSolicitada;
+
+      const ocItens = await db.select({
+        quantidade: comprasOrdensItens.quantidade,
+        quantidadeEntregue: comprasOrdensItens.quantidadeEntregue,
+      }).from(comprasOrdensItens)
+        .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+        .innerJoin(comprasSolicitacoesItens, eq(comprasOrdensItens.solicitacaoItemId, comprasSolicitacoesItens.id))
+        .where(and(
+          eq(comprasSolicitacoesItens.orcamentoItemId, input.orcamentoItemId),
+          eq(comprasOrdens.companyId, input.companyId),
+          sql`${comprasOrdens.status} NOT IN ('cancelada')`,
+        ));
+
+      const qtdComprada = ocItens.reduce((acc, it) => acc + n(it.quantidade), 0);
+      const qtdEntregue = ocItens.reduce((acc, it) => acc + n(it.quantidadeEntregue), 0);
 
       return {
         orcamentoItemId: orcItem.id,
@@ -3198,6 +3214,8 @@ Responda APENAS com um objeto JSON no formato:
         unidade: orcItem.unidade,
         qtdOrcada,
         qtdJaSolicitada,
+        qtdComprada,
+        qtdRecebida: Math.max(qtdRecebidaSc, qtdEntregue),
         saldoDisponivel,
         metaUnitTotal: n(orcItem.metaUnitTotal),
         metaTotal: n(orcItem.metaTotal),
@@ -4229,5 +4247,294 @@ Responda APENAS com um objeto JSON no formato:
         : result;
 
       return filtered;
+    }),
+
+  getSaldoInsumoPorObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      orcamentoItemIds: z.array(z.number()),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (input.orcamentoItemIds.length === 0) return [];
+
+      const orcItems = await db.select({
+        id: orcamentoItens.id,
+        eapCodigo: orcamentoItens.eapCodigo,
+        quantidade: orcamentoItens.quantidade,
+      }).from(orcamentoItens)
+        .where(and(
+          inArray(orcamentoItens.id, input.orcamentoItemIds),
+          eq(orcamentoItens.companyId, input.companyId),
+        ));
+
+      const result = [];
+      for (const orc of orcItems) {
+        const qtdOrcada = n(orc.quantidade);
+
+        const scItens = await db.select({
+          quantidade: comprasSolicitacoesItens.quantidade,
+          quantidadeServico: comprasSolicitacoesItens.quantidadeServico,
+          quantidadeAtendida: comprasSolicitacoesItens.quantidadeAtendida,
+        }).from(comprasSolicitacoesItens)
+          .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
+          .where(and(
+            eq(comprasSolicitacoesItens.orcamentoItemId, orc.id),
+            eq(comprasSolicitacoes.companyId, input.companyId),
+            sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`,
+          ));
+
+        const qtdSolicitada = scItens.reduce((acc, it) => acc + n(it.quantidadeServico), 0);
+        const qtdRecebida = scItens.reduce((acc, it) => acc + n(it.quantidadeAtendida), 0);
+
+        const ocItens = await db.select({
+          quantidade: comprasOrdensItens.quantidade,
+          quantidadeEntregue: comprasOrdensItens.quantidadeEntregue,
+        }).from(comprasOrdensItens)
+          .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+          .innerJoin(comprasSolicitacoesItens, eq(comprasOrdensItens.solicitacaoItemId, comprasSolicitacoesItens.id))
+          .where(and(
+            eq(comprasSolicitacoesItens.orcamentoItemId, orc.id),
+            eq(comprasOrdens.companyId, input.companyId),
+            sql`${comprasOrdens.status} NOT IN ('cancelada')`,
+          ));
+
+        const qtdComprada = ocItens.reduce((acc, it) => acc + n(it.quantidade), 0);
+        const qtdEntregue = ocItens.reduce((acc, it) => acc + n(it.quantidadeEntregue), 0);
+
+        result.push({
+          orcamentoItemId: orc.id,
+          qtdOrcada,
+          qtdSolicitada,
+          qtdComprada,
+          qtdRecebida: Math.max(qtdRecebida, qtdEntregue),
+          saldoDisponivel: qtdOrcada - qtdSolicitada,
+        });
+      }
+      return result;
+    }),
+
+  editarSolicitacao: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      titulo: z.string().optional(),
+      departamento: z.string().optional(),
+      prioridade: z.string().optional(),
+      dataNecessidade: z.string().optional(),
+      observacoes: z.string().optional(),
+      obraId: z.number().nullable().optional(),
+      itens: z.array(z.object({
+        id: z.number().optional(),
+        descricao: z.string(),
+        unidade: z.string().optional(),
+        quantidade: z.number(),
+        observacoes: z.string().optional(),
+        orcamentoItemId: z.number().optional(),
+        eapCodigo: z.string().optional(),
+        insumoCodigo: z.string().optional(),
+        composicaoCodigo: z.string().optional(),
+        precoMeta: z.number().optional(),
+        quantidadeServico: z.number().optional(),
+        coeficiente: z.number().optional(),
+        origemEap: z.boolean().optional(),
+      })).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      const [sc] = await db.select().from(comprasSolicitacoes)
+        .where(and(eq(comprasSolicitacoes.id, input.id), eq(comprasSolicitacoes.companyId, input.companyId)));
+      if (!sc) throw new TRPCError({ code: "NOT_FOUND", message: "SC não encontrada." });
+
+      if (!["pendente", "aprovado"].includes(sc.status ?? "") && sc.aprovacaoStatus !== "aguardando") {
+        const activeCots = await db.select({ id: comprasCotacoes.id })
+          .from(comprasCotacoes)
+          .where(and(
+            eq(comprasCotacoes.solicitacaoId, input.id),
+            sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`,
+          ));
+        const activeOCs = activeCots.length > 0
+          ? await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
+              .where(and(
+                inArray(comprasOrdens.cotacaoId, activeCots.map(c => c.id)),
+                sql`${comprasOrdens.status} NOT IN ('cancelada', 'recebido')`,
+              ))
+          : [];
+        if (activeOCs.length > 0) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Não é possível editar: SC possui OC em andamento." });
+        }
+      }
+
+      await db.update(comprasSolicitacoes).set({
+        titulo: input.titulo ?? sc.titulo,
+        departamento: input.departamento ?? sc.departamento,
+        prioridade: input.prioridade ?? sc.prioridade,
+        dataNecessidade: input.dataNecessidade ?? sc.dataNecessidade,
+        observacoes: input.observacoes !== undefined ? input.observacoes : sc.observacoes,
+        obraId: input.obraId !== undefined ? input.obraId : sc.obraId,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(comprasSolicitacoes.id, input.id));
+
+      if (input.itens) {
+        await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+
+        if (input.itens.length > 0) {
+          await db.insert(comprasSolicitacoesItens).values(
+            input.itens.map(it => ({
+              solicitacaoId: input.id,
+              descricao: it.descricao,
+              unidade: it.unidade,
+              quantidade: String(it.quantidade),
+              observacoes: it.observacoes,
+              statusItem: "pendente",
+              orcamentoItemId: it.orcamentoItemId ?? null,
+              eapCodigo: it.eapCodigo ?? null,
+              insumoCodigo: it.insumoCodigo ?? null,
+              composicaoCodigo: it.composicaoCodigo ?? null,
+              precoMeta: it.precoMeta ? String(it.precoMeta) : null,
+              quantidadeServico: it.quantidadeServico ? String(it.quantidadeServico) : null,
+              coeficiente: it.coeficiente ? String(it.coeficiente) : null,
+              origemEap: it.origemEap ?? false,
+            }))
+          );
+        }
+      }
+
+      return { ok: true };
+    }),
+
+  aprovarSolicitacoesEmLote: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.number()),
+      companyId: z.number(),
+      aprovacaoStatus: z.string(),
+      aprovadorId: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const resultados: { id: number; ok: boolean; cotacaoCriada?: any; erro?: string }[] = [];
+
+      for (const id of input.ids) {
+        try {
+          const [sc] = await db.select().from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, id), eq(comprasSolicitacoes.companyId, input.companyId)));
+          if (!sc) { resultados.push({ id, ok: false, erro: "SC não encontrada" }); continue; }
+          if (sc.aprovacaoStatus !== "aguardando") { resultados.push({ id, ok: false, erro: "SC já foi processada" }); continue; }
+
+          await db.update(comprasSolicitacoes).set({
+            aprovacaoStatus: input.aprovacaoStatus,
+            aprovadorId: input.aprovadorId ?? null,
+            aprovadoEm: input.aprovacaoStatus !== "aguardando" ? new Date().toISOString() : null,
+            atualizadoEm: new Date().toISOString(),
+          }).where(eq(comprasSolicitacoes.id, id));
+
+          let cotacaoCriada: any = null;
+
+          if (input.aprovacaoStatus === "aprovada") {
+            const existingCots = await db.select({ id: comprasCotacoes.id, status: comprasCotacoes.status })
+              .from(comprasCotacoes)
+              .where(eq(comprasCotacoes.solicitacaoId, id));
+            const activeCots = existingCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
+
+            if (activeCots.length === 0) {
+              const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, id));
+              const count = await db.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, sc.companyId));
+              const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+              const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
+
+              const [cot] = await db.insert(comprasCotacoes).values({
+                companyId: sc.companyId,
+                numeroCotacao,
+                descricao: sc.titulo || sc.departamento || "Cotação automática",
+                prioridade: sc.prioridade ?? "normal",
+                obraId: sc.obraId ?? null,
+                solicitacaoId: sc.id,
+                total: "0",
+                status: "pendente",
+              }).returning();
+
+              if (scItens.length > 0) {
+                await db.insert(comprasCotacoesItens).values(
+                  scItens.map(it => ({
+                    cotacaoId: cot.id,
+                    solicitacaoItemId: it.id,
+                    descricao: it.descricao,
+                    unidade: it.unidade ?? "un",
+                    quantidade: String(n(it.quantidade)),
+                    precoUnitario: "0",
+                    descontoPct: "0",
+                    total: "0",
+                  }))
+                );
+              }
+
+              await db.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, id));
+              cotacaoCriada = { id: cot.id, numeroCotacao };
+            }
+          }
+
+          resultados.push({ id, ok: true, cotacaoCriada });
+        } catch (err: any) {
+          resultados.push({ id, ok: false, erro: err.message });
+        }
+      }
+
+      return resultados;
+    }),
+
+  duplicarSolicitacao: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      const [sc] = await db.select().from(comprasSolicitacoes)
+        .where(and(eq(comprasSolicitacoes.id, input.id), eq(comprasSolicitacoes.companyId, input.companyId)));
+      if (!sc) throw new TRPCError({ code: "NOT_FOUND", message: "SC não encontrada." });
+
+      const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+
+      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
+      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+      const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
+
+      const [novaSc] = await db.insert(comprasSolicitacoes).values({
+        companyId: sc.companyId,
+        numeroSc,
+        obraId: sc.obraId,
+        projetoId: sc.projetoId,
+        solicitanteId: sc.solicitanteId,
+        departamento: sc.departamento,
+        titulo: sc.titulo ? `${sc.titulo} (cópia)` : undefined,
+        prioridade: sc.prioridade ?? "normal",
+        dataNecessidade: null,
+        observacoes: sc.observacoes,
+        imagemReferenciaUrl: sc.imagemReferenciaUrl,
+        status: "pendente",
+        aprovacaoStatus: "aguardando",
+      }).returning();
+
+      if (scItens.length > 0) {
+        await db.insert(comprasSolicitacoesItens).values(
+          scItens.map(it => ({
+            solicitacaoId: novaSc.id,
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: it.quantidade,
+            observacoes: it.observacoes,
+            statusItem: "pendente",
+            orcamentoItemId: it.orcamentoItemId,
+            eapCodigo: it.eapCodigo,
+            insumoCodigo: it.insumoCodigo,
+            composicaoCodigo: it.composicaoCodigo,
+            precoMeta: it.precoMeta,
+            quantidadeServico: it.quantidadeServico,
+            coeficiente: it.coeficiente,
+            origemEap: it.origemEap ?? false,
+          }))
+        );
+      }
+
+      return novaSc;
     }),
 });

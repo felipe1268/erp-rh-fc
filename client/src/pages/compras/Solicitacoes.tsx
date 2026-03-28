@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
-  Camera, ImageIcon, X, Briefcase, History, ShoppingBag,
+  Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -127,6 +127,10 @@ export default function Solicitacoes() {
   const [uploadingImagem, setUploadingImagem] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [selectedSCIds, setSelectedSCIds] = useState<Set<number>>(new Set());
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState<{ titulo: string; prioridade: string; dataNecessidade: string; observacoes: string } | null>(null);
+  const [editItens, setEditItens] = useState<any[]>([]);
 
   const q = trpc.compras.listarSolicitacoes.useQuery(
     { companyId, busca: busca || undefined, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -161,6 +165,24 @@ export default function Solicitacoes() {
   });
   const excluir = trpc.compras.excluirSolicitacao.useMutation({
     onSuccess: () => { toast.success("SC excluída!"); q.refetch(); setShowDetalhe(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const editar = trpc.compras.editarSolicitacao.useMutation({
+    onSuccess: () => { toast.success("SC atualizada!"); q.refetch(); detalheQ.refetch(); setEditMode(false); },
+    onError: (e) => toast.error(e.message),
+  });
+  const duplicar = trpc.compras.duplicarSolicitacao.useMutation({
+    onSuccess: (data) => { toast.success(`SC ${data.numeroSc} criada (cópia)!`); q.refetch(); setShowDetalhe(data.id); },
+    onError: (e) => toast.error(e.message),
+  });
+  const aprovarLote = trpc.compras.aprovarSolicitacoesEmLote.useMutation({
+    onSuccess: (res) => {
+      const ok = res.filter(r => r.ok).length;
+      const cots = res.filter(r => r.cotacaoCriada).length;
+      toast.success(`${ok} SC(s) aprovada(s)${cots > 0 ? `, ${cots} cotação(ões) criada(s)` : ""}`);
+      setSelectedSCIds(new Set());
+      q.refetch();
+    },
     onError: (e) => toast.error(e.message),
   });
   const cancelar = trpc.compras.atualizarStatusSolicitacao.useMutation({
@@ -457,11 +479,40 @@ export default function Solicitacoes() {
         </button>
       </div>
 
+      {selectedSCIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+          <CheckSquare className="h-4 w-4 text-amber-600" />
+          <span className="text-sm text-amber-800 font-medium">{selectedSCIds.size} selecionada(s)</span>
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1 ml-2"
+            disabled={aprovarLote.isPending}
+            onClick={() => aprovarLote.mutate({ ids: Array.from(selectedSCIds), companyId, aprovacaoStatus: "aprovada", aprovadorId: user?.id ? parseInt(String(user.id)) : undefined })}>
+            {aprovarLote.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+            Aprovar Selecionadas
+          </Button>
+          <Button size="sm" variant="outline" className="text-xs border-gray-300 text-gray-600"
+            onClick={() => setSelectedSCIds(new Set())}>
+            Limpar Seleção
+          </Button>
+        </div>
+      )}
+
       {/* Tabela */}
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
         <Table>
           <TableHeader>
             <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
+              <TableHead className="w-10">
+                <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-amber-600"
+                  checked={lista.length > 0 && lista.filter((s: any) => s.aprovacaoStatus === "aguardando").every((s: any) => selectedSCIds.has(s.id))}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedSCIds(new Set(lista.filter((s: any) => s.aprovacaoStatus === "aguardando").map((s: any) => s.id)));
+                    } else {
+                      setSelectedSCIds(new Set());
+                    }
+                  }}
+                />
+              </TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Número</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Título / Setor</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Obra</TableHead>
@@ -474,14 +525,28 @@ export default function Solicitacoes() {
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
             ) : lista.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
             ) : lista.map((sc: any) => {
               const itC = sc._itens ?? { total: 0, atendidos: 0 };
               const pct = itC.total > 0 ? Math.round((itC.atendidos / itC.total) * 100) : 0;
               return (
                 <TableRow key={sc.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setShowDetalhe(sc.id)}>
+                  <TableCell onClick={e => e.stopPropagation()}>
+                    {sc.aprovacaoStatus === "aguardando" ? (
+                      <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-amber-600"
+                        checked={selectedSCIds.has(sc.id)}
+                        onChange={e => {
+                          setSelectedSCIds(prev => {
+                            const n = new Set(prev);
+                            e.target.checked ? n.add(sc.id) : n.delete(sc.id);
+                            return n;
+                          });
+                        }}
+                      />
+                    ) : <span className="w-4 block" />}
+                  </TableCell>
                   <TableCell className="text-gray-900 font-mono font-semibold text-xs">{sc.numeroSc}</TableCell>
                   <TableCell>
                     <div className="text-gray-900 text-sm font-medium flex items-center gap-1.5">
@@ -516,6 +581,13 @@ export default function Solicitacoes() {
                   <TableCell><StatusBadge status={sc.status} /></TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
+                      <button
+                        title="Duplicar SC"
+                        className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); duplicar.mutate({ id: sc.id, companyId }); }}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
                       <button
                         title="Excluir SC"
                         className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
@@ -698,21 +770,29 @@ export default function Solicitacoes() {
                                   {expanded && (
                                     <div className="px-4 py-3 bg-gray-50 border-l-2 border-l-amber-500 space-y-3">
                                       {saldo && (
-                                        <div className="grid grid-cols-4 gap-2 text-[10px]">
-                                          <div className="bg-white rounded px-2 py-1.5 border border-gray-200 text-center">
+                                        <div className="grid grid-cols-6 gap-1.5 text-[10px]">
+                                          <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
                                             <div className="text-gray-400 uppercase font-medium">Orçado</div>
                                             <div className="text-gray-900 font-bold text-xs">{parseFloat(String(saldo.qtdOrcada)).toLocaleString("pt-BR")}</div>
                                           </div>
-                                          <div className="bg-white rounded px-2 py-1.5 border border-gray-200 text-center">
-                                            <div className="text-gray-400 uppercase font-medium">Solicitado</div>
+                                          <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
+                                            <div className="text-blue-400 uppercase font-medium">Solicit.</div>
                                             <div className="text-blue-600 font-bold text-xs">{parseFloat(String(saldo.qtdJaSolicitada)).toLocaleString("pt-BR")}</div>
                                           </div>
-                                          <div className={`rounded px-2 py-1.5 border text-center ${estouro ? "bg-red-50 border-red-200" : "bg-white border-gray-200"}`}>
-                                            <div className={`uppercase font-medium ${estouro ? "text-red-500" : "text-gray-400"}`}>Saldo</div>
-                                            <div className={`font-bold text-xs ${estouro ? "text-red-600" : "text-emerald-600"}`}>{parseFloat(String(saldo.saldoDisponivel)).toLocaleString("pt-BR")}</div>
+                                          <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
+                                            <div className="text-purple-400 uppercase font-medium">Comprado</div>
+                                            <div className="text-purple-600 font-bold text-xs">{parseFloat(String(saldo.qtdComprada ?? 0)).toLocaleString("pt-BR")}</div>
                                           </div>
-                                          <div className="bg-amber-50 rounded px-2 py-1.5 border border-amber-200 text-center">
-                                            <div className="text-amber-500 uppercase font-medium">Solicitando</div>
+                                          <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
+                                            <div className="text-teal-400 uppercase font-medium">Recebido</div>
+                                            <div className="text-teal-600 font-bold text-xs">{parseFloat(String(saldo.qtdRecebida ?? 0)).toLocaleString("pt-BR")}</div>
+                                          </div>
+                                          <div className={`rounded px-1.5 py-1.5 border text-center ${estouro ? "bg-red-50 border-red-200" : saldo.saldoDisponivel <= 0 ? "bg-gray-100 border-gray-300" : "bg-emerald-50 border-emerald-200"}`}>
+                                            <div className={`uppercase font-medium ${estouro ? "text-red-500" : saldo.saldoDisponivel <= 0 ? "text-gray-500" : "text-emerald-500"}`}>Saldo</div>
+                                            <div className={`font-bold text-xs ${estouro ? "text-red-600" : saldo.saldoDisponivel <= 0 ? "text-gray-600" : "text-emerald-600"}`}>{parseFloat(String(saldo.saldoDisponivel)).toLocaleString("pt-BR")}</div>
+                                          </div>
+                                          <div className="bg-amber-50 rounded px-1.5 py-1.5 border border-amber-200 text-center">
+                                            <div className="text-amber-500 uppercase font-medium">Solic.</div>
                                             <div className="text-amber-700 font-bold text-xs">{qtdVal.toLocaleString("pt-BR")}</div>
                                           </div>
                                         </div>
@@ -995,7 +1075,7 @@ export default function Solicitacoes() {
       </Dialog>
 
       {/* ── Dialog Detalhe SC ─────────────────────────────────────── */}
-      <Dialog open={showDetalhe !== null} onOpenChange={v => { if (!v) { setShowDetalhe(null); setRecebQtd({}); } }}>
+      <Dialog open={showDetalhe !== null} onOpenChange={v => { if (!v) { setShowDetalhe(null); setRecebQtd({}); setEditMode(false); setEditForm(null); setEditItens([]); } }}>
         <DialogContent className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           {detalheQ.isLoading ? (
             <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
@@ -1129,6 +1209,86 @@ export default function Solicitacoes() {
                   </span>
                 </div>
               )}
+              {editMode && editForm && (
+                <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 space-y-3">
+                  <div className="text-xs font-semibold text-blue-700 uppercase tracking-widest flex items-center gap-1">
+                    <Pencil className="h-3 w-3" /> Editando Solicitação
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs text-gray-700">Título</Label>
+                      <Input className="bg-white border-gray-300 text-gray-900 text-sm" value={editForm.titulo}
+                        onChange={e => setEditForm({ ...editForm, titulo: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-700">Prioridade</Label>
+                      <Select value={editForm.prioridade} onValueChange={v => setEditForm({ ...editForm, prioridade: v })}>
+                        <SelectTrigger className="bg-white border-gray-300 text-gray-900 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {["normal", "alta", "urgente", "baixa"].map(p => <SelectItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-700">Data de Necessidade</Label>
+                      <Input type="date" className="bg-white border-gray-300 text-gray-900 text-sm" value={editForm.dataNecessidade}
+                        onChange={e => setEditForm({ ...editForm, dataNecessidade: e.target.value })} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-700">Observações</Label>
+                    <Textarea className="bg-white border-gray-300 text-gray-900 text-sm" rows={2} value={editForm.observacoes}
+                      onChange={e => setEditForm({ ...editForm, observacoes: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-700">Itens (quantidades editáveis)</Label>
+                    {editItens.map((it, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-white rounded border border-gray-200 px-2.5 py-1.5">
+                        <div className="flex-1 text-xs text-gray-900 truncate">{it.descricao}</div>
+                        <span className="text-xs text-gray-400">{it.unidade || "un"}</span>
+                        <Input type="number" min="0.01" step="0.01" className="w-20 h-7 text-xs bg-white border-gray-300 text-gray-900"
+                          value={it.quantidade}
+                          onChange={e => setEditItens(prev => prev.map((p, i) => i === idx ? { ...p, quantidade: e.target.value } : p))} />
+                        <button onClick={() => setEditItens(prev => prev.filter((_, i) => i !== idx))}
+                          className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1"
+                      disabled={editar.isPending}
+                      onClick={() => editar.mutate({
+                        id: detalhe.id,
+                        companyId,
+                        titulo: editForm.titulo,
+                        prioridade: editForm.prioridade,
+                        dataNecessidade: editForm.dataNecessidade || undefined,
+                        observacoes: editForm.observacoes,
+                        itens: editItens.map(it => ({
+                          descricao: it.descricao,
+                          unidade: it.unidade || "un",
+                          quantidade: parseFloat(it.quantidade) || 0,
+                          observacoes: it.observacoes,
+                          orcamentoItemId: it.orcamentoItemId,
+                          eapCodigo: it.eapCodigo,
+                          insumoCodigo: it.insumoCodigo,
+                          composicaoCodigo: it.composicaoCodigo,
+                          precoMeta: it.precoMeta ? parseFloat(it.precoMeta) : undefined,
+                          quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
+                          coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
+                          origemEap: it.origemEap,
+                        })),
+                      })}>
+                      {editar.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Salvar Alterações"}
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-xs border-gray-300 text-gray-600"
+                      onClick={() => setEditMode(false)}>Cancelar Edição</Button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
                 {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus === "aprovada" && (
                   <>
@@ -1150,6 +1310,41 @@ export default function Solicitacoes() {
                     </Button>
                   </>
                 )}
+                {!editMode && !["cancelado", "aprovado", "cotacao"].includes(detalhe.status) && (
+                  <Button size="sm" variant="outline"
+                    onClick={() => {
+                      setEditForm({
+                        titulo: detalhe.titulo || "",
+                        prioridade: detalhe.prioridade || "normal",
+                        dataNecessidade: detalhe.dataNecessidade || "",
+                        observacoes: detalhe.observacoes || "",
+                      });
+                      setEditItens((detalhe.itens as any[]).map(it => ({
+                        descricao: it.descricao,
+                        unidade: it.unidade,
+                        quantidade: String(parseFloat(it.quantidade)),
+                        observacoes: it.observacoes,
+                        orcamentoItemId: it.orcamentoItemId,
+                        eapCodigo: it.eapCodigo,
+                        insumoCodigo: it.insumoCodigo,
+                        composicaoCodigo: it.composicaoCodigo,
+                        precoMeta: it.precoMeta,
+                        quantidadeServico: it.quantidadeServico,
+                        coeficiente: it.coeficiente,
+                        origemEap: it.origemEap,
+                      })));
+                      setEditMode(true);
+                    }}
+                    className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1">
+                    <Pencil className="h-3 w-3" /> Editar
+                  </Button>
+                )}
+                <Button size="sm" variant="outline"
+                  onClick={() => duplicar.mutate({ id: detalhe.id, companyId })}
+                  disabled={duplicar.isPending}
+                  className="border-gray-300 text-gray-600 hover:bg-gray-50 text-xs gap-1">
+                  <Copy className="h-3 w-3" /> Duplicar
+                </Button>
                 {!["cancelado", "aprovado"].includes(detalhe.status) && (
                   <Button size="sm" variant="outline"
                     onClick={() => cancelar.mutate({ id: detalhe.id, status: "cancelado" })}
