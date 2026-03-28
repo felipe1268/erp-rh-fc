@@ -1197,6 +1197,12 @@ Responda APENAS com um objeto JSON no formato:
           ));
       }
 
+      if (linkedCots.length > 0) {
+        await db.update(comprasCotacoes)
+          .set({ solicitacaoId: null })
+          .where(eq(comprasCotacoes.solicitacaoId, input.id));
+      }
+
       await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
       await db.delete(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
       return { ok: true };
