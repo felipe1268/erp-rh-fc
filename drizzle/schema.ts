@@ -5044,6 +5044,7 @@ export const comprasOrdens = pgTable("compras_ordens", {
   condicaoPagamento:  varchar("condicao_pagamento", { length: 100 }),
   tipoPagamento:      varchar("tipo_pagamento", { length: 30 }),
   observacoes:        text(),
+  pdfUrl:             text("pdf_url"),
   criadoEm:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });

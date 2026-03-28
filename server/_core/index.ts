@@ -10,6 +10,7 @@ import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerDownloadSSTRoute } from "../routers/downloadSST";
+import { registerDownloadOCRoute } from "../routers/downloadOC";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -59,6 +60,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Download de arquivos SST em ZIP
   registerDownloadSSTRoute(app);
+  registerDownloadOCRoute(app);
   // Arquivos de upload locais (fotos de funcionários, etc.)
   app.use("/uploads", express.static(path.join(process.cwd(), "server/uploads")));
   // tRPC API

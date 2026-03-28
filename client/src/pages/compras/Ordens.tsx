@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer } from "lucide-react";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
 
@@ -628,6 +628,47 @@ export default function Ordens() {
                   </div>
                 )}
 
+                {/* PDF */}
+                <div className="flex gap-3 border-t border-gray-200 pt-4">
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const resp = await fetch(`/api/download/oc/${detalhe.id}`);
+                        if (!resp.ok) {
+                          const err = await resp.json().catch(() => ({ error: "Erro ao gerar PDF" }));
+                          toast.error(err.error || "Erro ao gerar PDF");
+                          return;
+                        }
+                        const blob = await resp.blob();
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.href = url;
+                        link.download = `${detalhe.numeroOc || "OC"}.pdf`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        toast.success("PDF exportado com sucesso!");
+                      } catch {
+                        toast.error("Erro ao exportar PDF");
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1.5"
+                  >
+                    <FileDown className="h-3.5 w-3.5" /> Exportar PDF
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      window.open(`/api/download/oc/${detalhe.id}?mode=view`, "_blank");
+                    }}
+                    className="border-gray-300 text-gray-700 hover:bg-gray-50 text-xs gap-1.5"
+                  >
+                    <Printer className="h-3.5 w-3.5" /> Imprimir
+                  </Button>
+                </div>
+
+                {/* Alterar Status */}
                 {!["entregue", "cancelada"].includes(detalhe.status) && (
                   <div className="space-y-3 border-t border-gray-200 pt-4">
                     <Label className="text-gray-700 text-sm font-semibold">Atualizar Status</Label>
