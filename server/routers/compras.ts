@@ -1214,6 +1214,13 @@ Responda APENAS com um objeto JSON no formato:
           .where(eq(comprasCotacoes.solicitacaoId, input.id));
       }
 
+      const solItemIds = (await db.select({ id: comprasSolicitacoesItens.id }).from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id))).map(r => r.id);
+      if (solItemIds.length > 0) {
+        await db.update(comprasOrdensItens)
+          .set({ solicitacaoItemId: null })
+          .where(inArray(comprasOrdensItens.solicitacaoItemId, solItemIds));
+      }
+
       await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
       await db.delete(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
       return { ok: true };
