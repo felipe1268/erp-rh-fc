@@ -1055,6 +1055,20 @@ Responda APENAS com um objeto JSON no formato:
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
 
+      let fornecedorContato: { contatoNome: string | null; telefone: string | null; contatoCelular: string | null; contatoEmail: string | null; email: string | null; nomeFantasia: string | null; razaoSocial: string | null } | null = null;
+      if (cot.fornecedorId) {
+        const [f] = await db.select({
+          contatoNome: fornecedores.contatoNome,
+          telefone: fornecedores.telefone,
+          contatoCelular: fornecedores.contatoCelular,
+          contatoEmail: fornecedores.contatoEmail,
+          email: fornecedores.email,
+          nomeFantasia: fornecedores.nomeFantasia,
+          razaoSocial: fornecedores.razaoSocial,
+        }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId));
+        fornecedorContato = f ?? null;
+      }
+
       // Se há um fornecedor vencedor selecionado, enriquecer os itens com preços reais do Mapa
       if (cot.fornecedorId) {
         const respostas = await db.select().from(comprasCotacaoRespostas).where(
@@ -1076,11 +1090,11 @@ Responda APENAS com um objeto JSON no formato:
               total:         r.total         ?? it.total,
             };
           });
-          return { ...cot, itens: itensEnriquecidos };
+          return { ...cot, itens: itensEnriquecidos, fornecedorContato };
         }
       }
 
-      return { ...cot, itens };
+      return { ...cot, itens, fornecedorContato };
     }),
 
   criarCotacao: protectedProcedure
@@ -1929,7 +1943,16 @@ Responda APENAS com um objeto JSON no formato:
       const itens = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
       let fornecedor = null;
       if (oc.fornecedorId) {
-        const [f] = await db.select({ razaoSocial: fornecedores.razaoSocial, cnpj: fornecedores.cnpj, telefone: fornecedores.telefone, email: fornecedores.email }).from(fornecedores).where(eq(fornecedores.id, oc.fornecedorId));
+        const [f] = await db.select({
+          razaoSocial: fornecedores.razaoSocial,
+          nomeFantasia: fornecedores.nomeFantasia,
+          cnpj: fornecedores.cnpj,
+          telefone: fornecedores.telefone,
+          email: fornecedores.email,
+          contatoNome: fornecedores.contatoNome,
+          contatoCelular: fornecedores.contatoCelular,
+          contatoEmail: fornecedores.contatoEmail,
+        }).from(fornecedores).where(eq(fornecedores.id, oc.fornecedorId));
         fornecedor = f ?? null;
       }
       let proximaEntregaProgramada: string | null = null;

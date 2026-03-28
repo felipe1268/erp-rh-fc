@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -334,6 +334,93 @@ function RastreabilidadeTag({ scNumero, eapCodigo, origemEap }: { scNumero?: str
         </span>
       )}
     </div>
+  );
+}
+
+interface FornecedorContatoData {
+  contatoNome?: string | null;
+  telefone?: string | null;
+  contatoCelular?: string | null;
+  contatoEmail?: string | null;
+  email?: string | null;
+  nomeFantasia?: string | null;
+  razaoSocial?: string | null;
+}
+
+function FornecedorContatoCard({ contato, compact }: { contato: FornecedorContatoData | null | undefined; compact?: boolean }) {
+  if (!contato) return null;
+  const hasAnyContact = contato.contatoNome || contato.telefone || contato.contatoCelular || contato.contatoEmail || contato.email;
+  const hasPhone = !!(contato.telefone || contato.contatoCelular);
+  const hasEmail = !!(contato.contatoEmail || contato.email);
+  const isIncomplete = !hasPhone || !hasEmail;
+
+  if (!hasAnyContact) return (
+    <div className={`rounded-lg border border-amber-200 bg-amber-50 ${compact ? "p-2" : "p-3"} flex items-center gap-2`}>
+      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+      <span className="text-xs text-amber-700 font-medium">Cadastro incompleto - sem dados de contato</span>
+    </div>
+  );
+
+  return (
+    <div className={`rounded-lg border border-blue-200 bg-blue-50/60 ${compact ? "p-2 space-y-1" : "p-3 space-y-1.5"}`}>
+      <div className="flex items-center gap-1.5 mb-1">
+        <User className="h-3.5 w-3.5 text-blue-500" />
+        <span className={`font-semibold text-blue-800 ${compact ? "text-[11px]" : "text-xs"}`}>Contato do Fornecedor</span>
+        {isIncomplete && (
+          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+            <AlertTriangle className="h-2.5 w-2.5" /> Incompleto
+          </span>
+        )}
+      </div>
+      {contato.contatoNome && (
+        <div className="flex items-center gap-1.5">
+          <User className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <span className={`text-gray-700 ${compact ? "text-[11px]" : "text-xs"}`}>{contato.contatoNome}</span>
+        </div>
+      )}
+      {contato.telefone && (
+        <div className="flex items-center gap-1.5">
+          <Phone className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <a href={`tel:${contato.telefone}`} className={`text-blue-600 hover:text-blue-800 hover:underline ${compact ? "text-[11px]" : "text-xs"}`}>{contato.telefone}</a>
+        </div>
+      )}
+      {contato.contatoCelular && (
+        <div className="flex items-center gap-1.5">
+          <Smartphone className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <a href={`tel:${contato.contatoCelular}`} className={`text-blue-600 hover:text-blue-800 hover:underline ${compact ? "text-[11px]" : "text-xs"}`}>{contato.contatoCelular}</a>
+        </div>
+      )}
+      {(contato.contatoEmail || contato.email) && (
+        <div className="flex items-center gap-1.5">
+          <Mail className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <a href={`mailto:${contato.contatoEmail || contato.email}`} className={`text-blue-600 hover:text-blue-800 hover:underline ${compact ? "text-[11px]" : "text-xs"}`}>{contato.contatoEmail || contato.email}</a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FornecedorContatoPopover({ fornecedor, children }: { fornecedor: FornecedorContatoData | null | undefined; children?: React.ReactNode }) {
+  if (!fornecedor) return <>{children}</>;
+  const hasAnyContact = fornecedor.contatoNome || fornecedor.telefone || fornecedor.contatoCelular || fornecedor.contatoEmail || fornecedor.email;
+  const hasPhone = !!(fornecedor.telefone || fornecedor.contatoCelular);
+  const hasEmail = !!(fornecedor.contatoEmail || fornecedor.email);
+  const isIncomplete = !hasPhone || !hasEmail;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        {children || (
+          <button type="button" className={`p-0.5 rounded transition ${hasAnyContact ? (isIncomplete ? "text-amber-500 hover:text-amber-700" : "text-blue-500 hover:text-blue-700") : "text-amber-400 hover:text-amber-600"}`} title="Contato do fornecedor">
+            {!hasAnyContact ? <AlertTriangle className="h-3 w-3" /> : isIncomplete ? <AlertTriangle className="h-3 w-3" /> : <Phone className="h-3 w-3" />}
+          </button>
+        )}
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0 bg-white border-gray-200 shadow-lg" side="bottom" align="start">
+        <div className="p-3">
+          <FornecedorContatoCard contato={fornecedor} compact />
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -786,6 +873,10 @@ export default function Cotacoes() {
                     </div>
                   </div>
 
+                  {detalheFullscreen.fornecedorId && (
+                    <FornecedorContatoCard contato={(detalheFullscreen as { fornecedorContato?: FornecedorContatoData | null }).fornecedorContato} />
+                  )}
+
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
                       <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Itens</h2>
@@ -915,6 +1006,7 @@ export default function Cotacoes() {
                             <div key={p.fornecedorId} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${isMelhor ? "bg-emerald-50 border-emerald-300 text-emerald-700" : p.selecionado ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
                               {isMelhor && <Trophy className="h-3 w-3" />}
                               {nome}
+                              <FornecedorContatoPopover fornecedor={p.fornecedor} />
                               {parseFloat(p.totalOrcado ?? "0") > 0 && <span className="font-normal text-xs opacity-70">· {parseFloat(p.totalOrcado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
                               <button onClick={() => removerForn.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId })} className="ml-1 hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
                             </div>
@@ -1047,7 +1139,9 @@ export default function Cotacoes() {
                                     <div className="flex flex-col items-center gap-1">
                                       <div className="flex items-center gap-1">
                                         {isMelhor && <Trophy className="h-3 w-3 text-emerald-500" />}
-                                        <span>{nome}</span>
+                                        <FornecedorContatoPopover fornecedor={p.fornecedor}>
+                                          <button type="button" className="hover:underline hover:text-blue-600 transition-colors cursor-pointer">{nome}</button>
+                                        </FornecedorContatoPopover>
                                         {(p as any).arquivoUrl ? (
                                           <a href={(p as any).arquivoUrl} target="_blank" rel="noreferrer" className="ml-1 text-blue-500 hover:text-blue-700" title="Ver cotação anexada">
                                             <ExternalLink className="h-3 w-3" />

@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone } from "lucide-react";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
 
@@ -25,6 +26,69 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
 };
 
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
+
+interface FornecedorContatoData {
+  contatoNome?: string | null;
+  telefone?: string | null;
+  contatoCelular?: string | null;
+  contatoEmail?: string | null;
+  email?: string | null;
+  nomeFantasia?: string | null;
+  razaoSocial?: string | null;
+}
+
+function FornecedorContatoCard({ contato }: { contato: FornecedorContatoData | null | undefined }) {
+  if (!contato) return null;
+  const hasAnyContact = contato.contatoNome || contato.telefone || contato.contatoCelular || contato.contatoEmail || contato.email;
+  const hasPhone = !!(contato.telefone || contato.contatoCelular);
+  const hasEmail = !!(contato.contatoEmail || contato.email);
+  const isIncomplete = !hasPhone || !hasEmail;
+
+  if (!hasAnyContact) return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-center gap-2">
+      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+      <span className="text-xs text-amber-700 font-medium">Cadastro incompleto - sem dados de contato</span>
+    </div>
+  );
+
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 space-y-1.5">
+      <div className="flex items-center gap-1.5 mb-1">
+        <User className="h-3.5 w-3.5 text-blue-500" />
+        <span className="font-semibold text-blue-800 text-xs">Contato do Fornecedor</span>
+        {isIncomplete && (
+          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+            <AlertTriangle className="h-2.5 w-2.5" /> Incompleto
+          </span>
+        )}
+      </div>
+      {contato.contatoNome && (
+        <div className="flex items-center gap-1.5">
+          <User className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <span className="text-gray-700 text-xs">{contato.contatoNome}</span>
+        </div>
+      )}
+      {contato.telefone && (
+        <div className="flex items-center gap-1.5">
+          <Phone className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <a href={`tel:${contato.telefone}`} className="text-blue-600 hover:text-blue-800 hover:underline text-xs">{contato.telefone}</a>
+        </div>
+      )}
+      {contato.contatoCelular && (
+        <div className="flex items-center gap-1.5">
+          <Smartphone className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <a href={`tel:${contato.contatoCelular}`} className="text-blue-600 hover:text-blue-800 hover:underline text-xs">{contato.contatoCelular}</a>
+        </div>
+      )}
+      {(contato.contatoEmail || contato.email) && (
+        <div className="flex items-center gap-1.5">
+          <Mail className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <a href={`mailto:${contato.contatoEmail || contato.email}`} className="text-blue-600 hover:text-blue-800 hover:underline text-xs">{contato.contatoEmail || contato.email}</a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface ItemForm { descricao: string; unidade: string; quantidade: string; precoUnitario: string; }
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", precoUnitario: "" });
@@ -250,7 +314,30 @@ export default function Ordens() {
                       </div>
                     ) : <span className="text-gray-300 text-xs">—</span>}
                   </TableCell>
-                  <TableCell className="text-gray-600 text-sm">{forn?.nomeFantasia || forn?.razaoSocial || "—"}</TableCell>
+                  <TableCell className="text-gray-600 text-sm">
+                    <div className="flex items-center gap-1.5">
+                      {forn?.nomeFantasia || forn?.razaoSocial || "—"}
+                      {forn && (() => {
+                        const hasAny = forn.contatoNome || forn.telefone || forn.contatoCelular || forn.contatoEmail || forn.email;
+                        const hasPhoneCh = !!(forn.telefone || forn.contatoCelular);
+                        const hasEmailCh = !!(forn.contatoEmail || forn.email);
+                        const incomplete = !hasPhoneCh || !hasEmailCh;
+                        if (!hasAny) return <span title="Cadastro incompleto"><AlertTriangle className="h-3 w-3 text-amber-400" /></span>;
+                        return (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button type="button" onClick={e => e.stopPropagation()} className={`p-0.5 transition ${incomplete ? "text-amber-500 hover:text-amber-700" : "text-blue-400 hover:text-blue-600"}`} title={incomplete ? "Cadastro incompleto" : "Contato"}>
+                                {incomplete ? <AlertTriangle className="h-3 w-3" /> : <Phone className="h-3 w-3" />}
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 p-3 bg-white border-gray-200 shadow-lg" side="bottom" align="start" onClick={e => e.stopPropagation()}>
+                              <FornecedorContatoCard contato={forn} />
+                            </PopoverContent>
+                          </Popover>
+                        );
+                      })()}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-gray-400 text-xs">{oc.cotacaoId ? `COT #${oc.cotacaoId}` : "Manual"}</TableCell>
                   <TableCell className="text-emerald-700 font-semibold text-sm">
                     {parseFloat(oc.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
@@ -436,12 +523,16 @@ export default function Ordens() {
                 <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 rounded-lg p-3 border border-gray-200">
                   <div><span className="text-gray-400 text-xs">Obra</span><p className="text-gray-900 font-medium flex items-center gap-1"><Building2 className="h-3 w-3 text-gray-400" />{nomeObra((detalhe as any).obraId) ?? "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Status</span><p><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${st.cls}`}>{st.label}</span></p></div>
-                  <div><span className="text-gray-400 text-xs">Fornecedor</span><p className="text-gray-900 font-medium">{(detalhe as any).fornecedor?.nomeFantasia || (detalhe as any).fornecedor?.razaoSocial || "—"}</p></div>
+                  <div><span className="text-gray-400 text-xs">Fornecedor</span><p className="text-gray-900 font-medium">{(detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor?.nomeFantasia || (detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor?.razaoSocial || "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Entrega prevista</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaPrevista ? new Date(detalhe.dataEntregaPrevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Entrega real</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaReal ? new Date(detalhe.dataEntregaReal + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Origem</span><p className="text-gray-900 font-medium">{detalhe.cotacaoId ? `Cotação #${detalhe.cotacaoId}` : "Manual"}</p></div>
                   <div><span className="text-gray-400 text-xs">Criado em</span><p className="text-gray-900 font-medium">{new Date(detalhe.criadoEm).toLocaleDateString("pt-BR")}</p></div>
                 </div>
+
+                {(detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor && (
+                  <FornecedorContatoCard contato={(detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor} />
+                )}
 
                 {/* Composição */}
                 {(() => {
