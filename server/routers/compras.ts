@@ -1216,13 +1216,20 @@ Responda APENAS com um objeto JSON no formato:
     .input(z.object({ companyId: z.number(), status: z.string().optional(), solicitacaoId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      return db.select().from(comprasCotacoes)
-        .where(and(
-          eq(comprasCotacoes.companyId, input.companyId),
-          input.status ? eq(comprasCotacoes.status, input.status) : undefined,
-          input.solicitacaoId ? eq(comprasCotacoes.solicitacaoId, input.solicitacaoId) : undefined,
-        ))
-        .orderBy(desc(comprasCotacoes.criadoEm));
+      try {
+        const rows = await db.select().from(comprasCotacoes)
+          .where(and(
+            eq(comprasCotacoes.companyId, input.companyId),
+            input.status ? eq(comprasCotacoes.status, input.status) : undefined,
+            input.solicitacaoId ? eq(comprasCotacoes.solicitacaoId, input.solicitacaoId) : undefined,
+          ))
+          .orderBy(desc(comprasCotacoes.criadoEm));
+        console.log(`[listarCotacoes] companyId=${input.companyId} status=${input.status} => ${rows.length} rows`);
+        return rows;
+      } catch (err: any) {
+        console.error(`[listarCotacoes] ERROR:`, err.message, err.query || "");
+        throw err;
+      }
     }),
 
   getCotacao: protectedProcedure

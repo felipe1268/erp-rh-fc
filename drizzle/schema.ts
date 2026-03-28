@@ -4955,7 +4955,7 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   fornecedorId:     integer("fornecedor_id"),
   descricao:        varchar({ length: 200 }),
   prioridade:       varchar({ length: 20 }).default("normal"),
-  dataValidade:     varchar("data_validade", { length: 10 }),
+  dataValidade:     date("data_validade", { mode: "string" }),
   condicaoPagamento:varchar("condicao_pagamento", { length: 100 }),
   tipoPagamento:    varchar("tipo_pagamento", { length: 50 }),
   numeroParcelas:   integer("numero_parcelas").default(1),
