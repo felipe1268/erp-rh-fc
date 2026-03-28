@@ -529,6 +529,29 @@ export const purchaseRouter = router({
       }
       if (status === "total") {
         await db.update(purchaseOrders).set({ status: "recebido" } as any).where(eq(purchaseOrders.id, input.ordemId));
+        try {
+          const [oc] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.id, input.ordemId)).limit(1);
+          if (oc && (oc as any).compradorId && (oc as any).obraId) {
+            const compradorId = Number((oc as any).compradorId);
+            const obraId = Number((oc as any).obraId);
+            const valorComprado = n((oc as any).valorTotal);
+            const ocItens = await db.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.ordemId, input.ordemId));
+            const valorMeta = ocItens.reduce((s: number, i: any) => s + (n(i.quantidadePedida) * n(i.valorMetaUnitario)), 0);
+            const economia = Math.max(0, valorMeta - valorComprado);
+            if (economia > 0) {
+              const cfg = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
+              const pct = cfg.length ? Number(cfg[0].comissaoPercentual ?? 10) : 10;
+              const comissao = economia * (pct / 100);
+              await db.insert(buyerCommissions).values({
+                companyId: input.companyId, obraId, obraNome: (oc as any).obraNome,
+                compradorId, compradorNome: (oc as any).compradorNome,
+                valorMetaTotal: String(valorMeta.toFixed(2)), valorCompradoTotal: String(valorComprado.toFixed(2)),
+                economiaTotal: String(economia.toFixed(2)), percentualParticipacao: String(pct),
+                valorComissao: String(comissao.toFixed(2)), calculadoEm: new Date().toISOString(),
+              } as any);
+            }
+          }
+        } catch (_) {}
       }
       await onRecebimentoConfirmado(receb.id, input.ordemId, status as any, valorLiberado, input.userId, input.userName || "Sistema");
       return { ...receb, status };
