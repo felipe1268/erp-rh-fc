@@ -1882,11 +1882,22 @@ export default function Cotacoes() {
 
                           <div className="flex items-center justify-between">
                             <span className="text-[11px] text-gray-500">Parcelamento</span>
-                            {vCondPag || vTipoPag ? (
-                              <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-100 text-violet-700 border border-violet-300">{vCondPag || getTipoPagamentoInfo(vTipoPag)?.label || vTipoPag}</span>
-                            ) : (
-                              <span className="text-xs text-gray-300 italic">Não definido</span>
-                            )}
+                            {(() => {
+                              const modo = condModo[vFid];
+                              if (modo === "fechamento") {
+                                const numP = parseInt(condFechParc[vFid] ?? "1") || 1;
+                                const ciclo = condFechCiclo[vFid];
+                                const cicloLabel = ciclo === "fixo" ? "Dia fixo" : ciclo === "7" ? "Semanal" : ciclo === "15" ? "Quinzenal" : ciclo === "30" ? "Mensal" : "";
+                                return <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-100 text-blue-700 border border-blue-300">Fechamento {cicloLabel} · {numP}x</span>;
+                              }
+                              if (modo === "custom") {
+                                return <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-100 text-amber-700 border border-amber-300">Personalizado</span>;
+                              }
+                              if (vCondPag || vTipoPag) {
+                                return <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-100 text-violet-700 border border-violet-300">{vCondPag || getTipoPagamentoInfo(vTipoPag)?.label || vTipoPag}</span>;
+                              }
+                              return <span className="text-xs text-gray-300 italic">Não definido</span>;
+                            })()}
                           </div>
 
                           <div className="flex items-center justify-between">
