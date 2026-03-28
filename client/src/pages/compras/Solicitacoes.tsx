@@ -1065,8 +1065,27 @@ export default function Solicitacoes() {
                         Compra Consolidada por Insumo
                       </label>
                     </div>
-                    <div className="text-[10px] text-gray-500 bg-purple-50 border border-purple-200 rounded px-2.5 py-1.5">
-                      Busque um insumo (cimento, areia, etc.) para ver o total consolidado de todas as composições do orçamento. Permite comprar em volume.
+                    <div className="text-[10px] text-gray-500 bg-purple-50 border border-purple-200 rounded px-2.5 py-1.5 flex items-center justify-between gap-2">
+                      <span>Busque um insumo (cimento, areia, etc.) para ver o total consolidado de todas as composições do orçamento. Permite comprar em volume.</span>
+                      {(insumosConsolidadosQ.data ?? []).length > 0 && (
+                        <button
+                          type="button"
+                          className="shrink-0 flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+                          onClick={() => {
+                            const novos: Record<string, string> = {};
+                            for (const ins of (insumosConsolidadosQ.data ?? []) as any[]) {
+                              if (ins.saldoDisponivel > 0) {
+                                novos[ins.insumoCodigo] = String(ins.saldoDisponivel);
+                              }
+                            }
+                            setInsumoQtds(novos);
+                            toast.success(`Quantidade preenchida para ${Object.keys(novos).length} insumo(s) com saldo disponível.`);
+                          }}
+                        >
+                          <ShoppingCart className="h-3 w-3" />
+                          Comprar Tudo
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="relative flex-1">
