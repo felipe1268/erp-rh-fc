@@ -251,19 +251,27 @@ async function startServer() {
         if (!db) return;
         const { sql } = await import("drizzle-orm");
         const { normalizarTexto } = await import("../../shared/textNormalization");
-        const tables = ["compras_solicitacoes_itens", "compras_cotacoes_itens", "compras_ordens_itens"];
+        const tables = ["compras_solicitacoes_itens", "compras_cotacoes_itens", "compras_ordens_itens"] as const;
         let total = 0;
         for (const tbl of tables) {
           const rows = await db.execute(sql.raw(`SELECT id, descricao FROM ${tbl} WHERE descricao IS NOT NULL`));
           for (const row of (rows as any).rows || rows) {
             const norm = normalizarTexto(row.descricao);
             if (norm !== row.descricao) {
-              await db.execute(sql.raw(`UPDATE ${tbl} SET descricao = '${norm.replace(/'/g, "''")}' WHERE id = ${row.id}`));
+              await db.execute(sql`UPDATE ${sql.raw(tbl)} SET descricao = ${norm} WHERE id = ${row.id}`);
               total++;
             }
           }
         }
-        console.log(`[ColFix] Normalização descrições compras: ${total} registro(s) corrigido(s)`);
+        const titRows = await db.execute(sql.raw(`SELECT id, titulo FROM compras_solicitacoes WHERE titulo IS NOT NULL`));
+        for (const row of (titRows as any).rows || titRows) {
+          const norm = normalizarTexto(row.titulo);
+          if (norm !== row.titulo) {
+            await db.execute(sql`UPDATE compras_solicitacoes SET titulo = ${norm} WHERE id = ${row.id}`);
+            total++;
+          }
+        }
+        console.log(`[ColFix] Normalização textos compras: ${total} registro(s) corrigido(s)`);
       } catch (e: any) { console.warn("[ColFix] Normalização descrições:", e?.message ?? e); }
     });
     // Rev.641: criar tabelas do módulo Hora Extra (he_periods + he_period_employees)

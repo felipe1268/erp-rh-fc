@@ -1172,7 +1172,7 @@ Responda APENAS com um objeto JSON no formato:
         projetoId: input.projetoId ?? null,
         solicitanteId: input.solicitanteId ?? null,
         departamento: input.departamento,
-        titulo: input.titulo,
+        titulo: normalizarTexto(input.titulo),
         prioridade: input.prioridade ?? "normal",
         dataNecessidade: input.dataNecessidade,
         observacoes: input.observacoes,
@@ -5424,7 +5424,7 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       await db.update(comprasSolicitacoes).set({
-        titulo: input.titulo ?? sc.titulo,
+        titulo: input.titulo ? normalizarTexto(input.titulo) : sc.titulo,
         departamento: input.departamento ?? sc.departamento,
         prioridade: input.prioridade ?? sc.prioridade,
         dataNecessidade: input.dataNecessidade ?? sc.dataNecessidade,

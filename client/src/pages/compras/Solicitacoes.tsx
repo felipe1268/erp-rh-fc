@@ -811,6 +811,7 @@ export default function Solicitacoes() {
                 placeholder="Ex: Materiais de alvenaria - Bloco A"
                 value={form.titulo}
                 onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
+                onBlur={e => setForm(p => ({ ...p, titulo: normalizarTexto(e.target.value) }))}
               />
             </div>
 
