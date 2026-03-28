@@ -1330,14 +1330,33 @@ export default function Cotacoes() {
                 <div>
                   <label className="text-[11px] text-gray-500 mb-1 block">Prazo de Entrega</label>
                   <div className="relative">
-                    <input type="number" placeholder="Ex: 15" value={editPrazo[fId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [fId]: e.target.value }))}
+                    <input type="number" placeholder="Ex: 15" value={editPrazo[fId] ?? ""} onChange={e => {
+                        const dias = e.target.value;
+                        setEditPrazo(prev => ({ ...prev, [fId]: dias }));
+                        if (dias && parseInt(dias) > 0) {
+                          const dt = new Date();
+                          dt.setDate(dt.getDate() + parseInt(dias));
+                          setEditDataEntrega(prev => ({ ...prev, [fId]: dt.toISOString().split("T")[0] }));
+                        }
+                      }}
                       className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 pr-12 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">dias</span>
                   </div>
                 </div>
                 <div>
                   <label className="text-[11px] text-gray-500 mb-1 block">Data Prevista Entrega</label>
-                  <input type="date" value={editDataEntrega[fId] ?? ""} onChange={e => setEditDataEntrega(prev => ({ ...prev, [fId]: e.target.value }))}
+                  <input type="date" value={editDataEntrega[fId] ?? ""} onChange={e => {
+                      const dataStr = e.target.value;
+                      setEditDataEntrega(prev => ({ ...prev, [fId]: dataStr }));
+                      if (dataStr) {
+                        const hoje = new Date();
+                        hoje.setHours(0, 0, 0, 0);
+                        const dt = new Date(dataStr + "T00:00:00");
+                        const diffMs = dt.getTime() - hoje.getTime();
+                        const diffDias = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+                        setEditPrazo(prev => ({ ...prev, [fId]: String(diffDias) }));
+                      }
+                    }}
                     className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
                 </div>
                 <div>
@@ -2791,7 +2810,35 @@ export default function Cotacoes() {
               )}
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Prazo Entrega (dias)</Label>
-                <Input type="number" min="0" className="bg-white border-gray-300 text-gray-900" value={form.prazoEntregaDias} onChange={e => setForm(p => ({ ...p, prazoEntregaDias: e.target.value }))} />
+                <Input type="number" min="0" className="bg-white border-gray-300 text-gray-900" value={form.prazoEntregaDias} onChange={e => {
+                  const dias = e.target.value;
+                  setForm(p => {
+                    const upd: any = { ...p, prazoEntregaDias: dias };
+                    if (dias && parseInt(dias) > 0) {
+                      const dt = new Date();
+                      dt.setDate(dt.getDate() + parseInt(dias));
+                      upd.dataEntregaPrevista = dt.toISOString().split("T")[0];
+                    }
+                    return upd;
+                  });
+                }} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-gray-700 text-sm font-medium">Data Prevista Entrega</Label>
+                <Input type="date" className="bg-white border-gray-300 text-gray-900" value={(form as any).dataEntregaPrevista ?? ""} onChange={e => {
+                  const dataStr = e.target.value;
+                  setForm(p => {
+                    const upd: any = { ...p, dataEntregaPrevista: dataStr };
+                    if (dataStr) {
+                      const hoje = new Date();
+                      hoje.setHours(0, 0, 0, 0);
+                      const dt = new Date(dataStr + "T00:00:00");
+                      const diffDias = Math.max(0, Math.round((dt.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)));
+                      upd.prazoEntregaDias = String(diffDias);
+                    }
+                    return upd;
+                  });
+                }} />
               </div>
             </div>
             <div className="space-y-1.5">

@@ -414,10 +414,38 @@ export default function Ordens() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-gray-700 text-sm font-medium">Prazo Entrega (dias)</Label>
+                <Input type="number" min="0" className="bg-white border-gray-300 text-gray-900" value={(form as any).prazoEntregaDias ?? ""} onChange={e => {
+                  const dias = e.target.value;
+                  setForm(p => {
+                    const upd: any = { ...p, prazoEntregaDias: dias };
+                    if (dias && parseInt(dias) > 0) {
+                      const dt = new Date();
+                      dt.setDate(dt.getDate() + parseInt(dias));
+                      upd.dataEntregaPrevista = dt.toISOString().split("T")[0];
+                    }
+                    return upd;
+                  });
+                }} />
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Previsão de Entrega</Label>
-                <Input type="date" className="bg-white border-gray-300 text-gray-900" value={form.dataEntregaPrevista} onChange={e => setForm(p => ({ ...p, dataEntregaPrevista: e.target.value }))} />
+                <Input type="date" className="bg-white border-gray-300 text-gray-900" value={form.dataEntregaPrevista} onChange={e => {
+                  const dataStr = e.target.value;
+                  setForm(p => {
+                    const upd: any = { ...p, dataEntregaPrevista: dataStr };
+                    if (dataStr) {
+                      const hoje = new Date();
+                      hoje.setHours(0, 0, 0, 0);
+                      const dt = new Date(dataStr + "T00:00:00");
+                      const diffDias = Math.max(0, Math.round((dt.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)));
+                      upd.prazoEntregaDias = String(diffDias);
+                    }
+                    return upd;
+                  });
+                }} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium text-orange-700">Vencimento do Pagamento</Label>
